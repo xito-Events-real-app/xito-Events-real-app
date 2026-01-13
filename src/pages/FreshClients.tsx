@@ -248,49 +248,48 @@ export default function FreshClients() {
 
         {/* Swipe Navigation - Fixed above bottom nav */}
         {!isLoading && !error && activeStatuses.length > 0 && (
-          <div className="fixed bottom-20 left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border px-4 py-3 z-40">
-            <div className="max-w-lg mx-auto">
-              <div className="flex items-center justify-between gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={goToPrevPage}
-                  disabled={currentPageIndex === 0}
-                  className="shrink-0"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </Button>
-                
-                {/* Page Indicator Dots */}
-                <div className="flex justify-center gap-1.5 flex-1 flex-wrap max-w-[200px] mx-auto">
-                  {activeStatuses.map((status, idx) => (
-                    <button
-                      key={status}
-                      onClick={() => setCurrentPageIndex(idx)}
-                      className={cn(
-                        "w-2 h-2 rounded-full transition-all",
-                        idx === currentPageIndex 
-                          ? "bg-primary w-4" 
-                          : "bg-muted-foreground/30 hover:bg-muted-foreground/50"
-                      )}
-                      aria-label={`Go to ${status}`}
-                    />
-                  ))}
-                </div>
-                
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={goToNextPage}
-                  disabled={currentPageIndex === activeStatuses.length - 1}
-                  className="shrink-0"
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </Button>
+          <div className="fixed bottom-16 left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border px-4 py-2 z-40">
+            <div className="max-w-lg mx-auto flex items-center justify-between gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={goToPrevPage}
+                disabled={currentPageIndex === 0}
+                className="shrink-0 h-8 w-8 p-0"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              
+              {/* Page Indicator Dots */}
+              <div className="flex items-center gap-1.5 flex-wrap justify-center">
+                {activeStatuses.map((status, idx) => (
+                  <button
+                    key={status}
+                    onClick={() => setCurrentPageIndex(idx)}
+                    className={cn(
+                      "w-1.5 h-1.5 rounded-full transition-all",
+                      idx === currentPageIndex 
+                        ? "bg-primary w-3" 
+                        : "bg-muted-foreground/30"
+                    )}
+                    aria-label={`Go to ${status}`}
+                  />
+                ))}
               </div>
-              <p className="text-xs text-muted-foreground text-center mt-1">
-                Page {currentPageIndex + 1} of {activeStatuses.length} • Swipe to navigate
-              </p>
+
+              <span className="text-xs text-muted-foreground min-w-[40px] text-center">
+                {currentPageIndex + 1}/{activeStatuses.length}
+              </span>
+              
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={goToNextPage}
+                disabled={currentPageIndex === activeStatuses.length - 1}
+                className="shrink-0 h-8 w-8 p-0"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
             </div>
           </div>
         )}
