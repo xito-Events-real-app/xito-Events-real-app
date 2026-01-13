@@ -46,6 +46,24 @@ export function ClientDetailSheet({ client, isOpen, onClose, onSave }: ClientDet
   const [whoAdded, setWhoAdded] = useState("");
   const [inquiryDate, setInquiryDate] = useState<Date | undefined>(undefined);
 
+  // Combine all event options - MUST be before any conditional returns
+  const allEventOptions = useMemo(() => {
+    const eventsList: string[] = [];
+    if (dropdowns?.preweddingEvents) eventsList.push(...dropdowns.preweddingEvents);
+    if (dropdowns?.weddingEvents) eventsList.push(...dropdowns.weddingEvents);
+    if (dropdowns?.postweddingEvents) eventsList.push(...dropdowns.postweddingEvents);
+    return [...new Set(eventsList)];
+  }, [dropdowns]);
+
+  const sortedDates = useMemo(() => {
+    return [...selectedDates].sort((a, b) => {
+      if (a.year !== b.year) return a.year - b.year;
+      if (a.month !== b.month) return a.month - b.month;
+      return a.day - b.day;
+    });
+  }, [selectedDates]);
+
+  // Early return AFTER all hooks
   if (!client) return null;
 
   const initials = getHandlerInitials(client.whoAdded || '');
@@ -57,24 +75,7 @@ export function ClientDetailSheet({ client, isOpen, onClose, onSave }: ClientDet
   );
   const location = formatLocationDisplay(client.eventLocation || '', client.eventCity || '');
 
-  // Combine all event options
-  const allEventOptions = useMemo(() => {
-    const eventsList: string[] = [];
-    if (dropdowns?.preweddingEvents) eventsList.push(...dropdowns.preweddingEvents);
-    if (dropdowns?.weddingEvents) eventsList.push(...dropdowns.weddingEvents);
-    if (dropdowns?.postweddingEvents) eventsList.push(...dropdowns.postweddingEvents);
-    return [...new Set(eventsList)];
-  }, [dropdowns]);
-
   const getDateKey = (date: NepaliDateObject) => `${date.year}-${date.month}-${date.day}`;
-
-  const sortedDates = useMemo(() => {
-    return [...selectedDates].sort((a, b) => {
-      if (a.year !== b.year) return a.year - b.year;
-      if (a.month !== b.month) return a.month - b.month;
-      return a.day - b.day;
-    });
-  }, [selectedDates]);
 
   const handleEventChange = (date: NepaliDateObject, event: string) => {
     const key = getDateKey(date);
