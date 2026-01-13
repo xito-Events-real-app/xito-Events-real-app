@@ -53,7 +53,7 @@ async function getAccessToken(credentials: ServiceAccountCredentials): Promise<s
   const pemContents = credentials.private_key
     .replace(pemHeader, '')
     .replace(pemFooter, '')
-    .replace(/\\n/g, '')
+    .replace(/\n/g, '')  // Remove actual newlines (already converted from \\n)
     .replace(/\s/g, '');
   
   const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
@@ -98,6 +98,12 @@ async function getDropdowns(accessToken: string, spreadsheetId: string) {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (getDropdowns):', response.status, errorText);
+    throw new Error(`Google Sheets API error: ${response.status} - ${errorText.substring(0, 200)}`);
+  }
+
   const data = await response.json();
   if (!data.values) return { sources: [], whatsappOwners: [], clientLocations: [], eventLocations: [], teamMembers: [], oldClients: [] };
 
@@ -124,6 +130,12 @@ async function getClients(accessToken: string, spreadsheetId: string, limit = 50
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (getClients):', response.status, errorText);
+    throw new Error(`Google Sheets API error: ${response.status} - ${errorText.substring(0, 200)}`);
+  }
 
   const data = await response.json();
   if (!data.values) return [];
