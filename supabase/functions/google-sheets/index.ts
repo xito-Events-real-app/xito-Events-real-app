@@ -278,7 +278,17 @@ Deno.serve(async (req) => {
       throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON secret not configured');
     }
 
-    const credentials: ServiceAccountCredentials = JSON.parse(credentialsJson);
+    // Try to parse the credentials, handling potential double-encoding
+    let credentials: ServiceAccountCredentials;
+    try {
+      credentials = JSON.parse(credentialsJson);
+    } catch {
+      // If direct parse fails, try to handle if it was stored as a string
+      console.log('First parse attempt failed, trying to decode...');
+      console.log('First 50 chars:', credentialsJson.substring(0, 50));
+      throw new Error(`Invalid JSON in GOOGLE_SERVICE_ACCOUNT_JSON. First chars: ${credentialsJson.substring(0, 30)}`);
+    }
+    
     const accessToken = await getAccessToken(credentials);
 
     const body: SheetRequest = await req.json();
