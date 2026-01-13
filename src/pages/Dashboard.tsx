@@ -2,11 +2,9 @@ import { useState, useEffect } from "react";
 import { AppLayout, PageHeader } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Users, CalendarPlus, TrendingUp, Loader2, AlertTriangle, RefreshCw, ChevronRight, Menu } from "lucide-react";
+import { Users, CalendarPlus, TrendingUp, Loader2, Menu } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getClients, ClientData } from "@/lib/sheets-api";
-import { FreshClientCard } from "@/components/dashboard/FreshClientCard";
-import { ClientDetailSheet } from "@/components/dashboard/ClientDetailSheet";
 import { Sidebar } from "@/components/layout/Sidebar";
 
 export default function Dashboard() {
@@ -14,7 +12,6 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [selectedClient, setSelectedClient] = useState<ClientData | null>(null);
 
   const fetchClients = async () => {
     setIsLoading(true);
@@ -104,69 +101,6 @@ export default function Dashboard() {
           })}
         </div>
 
-        {/* Fresh Clients Section */}
-        <Card className="shadow-soft">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold text-foreground flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                Fresh Clients
-              </h2>
-              <Link to="/fresh-clients">
-                <Button variant="ghost" size="sm" className="text-xs gap-1">
-                  View All
-                  <ChevronRight className="w-3 h-3" />
-                </Button>
-              </Link>
-            </div>
-            
-            {isLoading && (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-primary" />
-              </div>
-            )}
-
-            {!isLoading && error && (
-              <div className="text-center py-6 space-y-3">
-                <AlertTriangle className="w-8 h-8 text-destructive mx-auto" />
-                <p className="text-sm text-muted-foreground">Failed to load clients</p>
-                <div className="flex gap-2 justify-center">
-                  <Button variant="outline" size="sm" onClick={fetchClients}>
-                    <RefreshCw className="w-4 h-4 mr-1" />
-                    Retry
-                  </Button>
-                  <Link to="/settings">
-                    <Button variant="outline" size="sm">
-                      Check Settings
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            )}
-
-            {!isLoading && !error && clients.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                No clients yet. Add your first client!
-              </p>
-            )}
-
-            {!isLoading && !error && clients.length > 0 && (
-              <div className="space-y-2 max-h-[45vh] overflow-y-auto">
-                {clients.slice(0, 10).map((client, i) => (
-                  <FreshClientCard key={i} client={client} onClick={setSelectedClient} />
-                ))}
-                {clients.length > 10 && (
-                  <Link to="/fresh-clients" className="block">
-                    <div className="text-center py-3 text-sm text-primary hover:underline">
-                      View all {clients.length} clients →
-                    </div>
-                  </Link>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
         {/* Show setup notice only on error */}
         {error && (
           <Card className="border-2 border-dashed border-destructive/30 bg-destructive/5">
@@ -187,17 +121,6 @@ export default function Dashboard() {
 
       {/* Sidebar */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      
-      {/* Client Detail Sheet */}
-      <ClientDetailSheet
-        client={selectedClient}
-        isOpen={!!selectedClient}
-        onClose={() => setSelectedClient(null)}
-        onSave={() => {
-          setSelectedClient(null);
-          fetchClients();
-        }}
-      />
     </AppLayout>
   );
 }
