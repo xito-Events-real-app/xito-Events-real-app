@@ -128,6 +128,7 @@ export function NepaliCalendar({
           
           return (
             <button
+              type="button"
               key={day}
               onClick={() => handleDayClick(day)}
               className={cn(
@@ -165,6 +166,7 @@ export function NepaliCalendar({
                     ({format(adDate, "MMM d")})
                   </span>
                   <button
+                    type="button"
                     onClick={() => handleDayClick(date.day)}
                     className="ml-1 text-muted-foreground hover:text-destructive"
                   >
