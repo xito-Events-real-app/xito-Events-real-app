@@ -141,20 +141,20 @@ export default function QuickAdd() {
         return a.day - b.day;
       });
 
-      // Format dates for saving - all in single row, comma separated
-      const eventDatesFormatted = sortedForSave.map(d => formatBSDate(d)).join(", ");
-      const eventADDates = sortedForSave.map(d => format(bsToAD(d.year, d.month, d.day), "yyyy-MM-dd")).join(", ");
+      // Format dates for saving - all in single row, newline separated for vertical stacking
+      const eventDatesFormatted = sortedForSave.map(d => formatBSDate(d)).join("\n");
+      const eventADDates = sortedForSave.map(d => format(bsToAD(d.year, d.month, d.day), "yyyy-MM-dd")).join("\n");
       
-      // Get years, months, days as comma-separated for single row
-      const eventYears = sortedForSave.map(d => d.year).join(", ");
-      const eventMonths = sortedForSave.map(d => d.month).join(", ");
-      const eventDays = sortedForSave.map(d => d.day).join(", ");
+      // Get years, months, days as newline-separated for vertical stacking in cells
+      const eventYears = sortedForSave.map(d => d.year).join("\n");
+      const eventMonths = sortedForSave.map(d => d.month).join("\n");
+      const eventDays = sortedForSave.map(d => d.day).join("\n");
 
-      // Combine events for all selected dates (in sorted order)
+      // Combine events for all selected dates (in sorted order), newline separated
       const eventsFormatted = sortedForSave
         .map(d => eventsByDate[getDateKey(d)] || "")
         .filter(Boolean)
-        .join(", ");
+        .join("\n");
 
       // Determine country value for Column F
       const countryForSheet = clientLocation === "INSIDE NEPAL" ? "Nepal" : currentCountry;
