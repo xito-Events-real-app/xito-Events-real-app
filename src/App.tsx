@@ -7,6 +7,7 @@ import Dashboard from "./pages/Dashboard";
 import QuickAdd from "./pages/QuickAdd";
 import Search from "./pages/Search";
 import Settings from "./pages/Settings";
+import FreshClients from "./pages/FreshClients";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,6 +23,7 @@ const App = () => (
           <Route path="/quick-add" element={<QuickAdd />} />
           <Route path="/search" element={<Search />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/fresh-clients" element={<FreshClients />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
