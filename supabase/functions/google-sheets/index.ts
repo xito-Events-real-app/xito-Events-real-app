@@ -197,12 +197,14 @@ async function addClient(accessToken: string, spreadsheetId: string, clientData:
   const now = new Date();
   const registeredDateTimeAD = now.toISOString();
   
-  // Convert AD to BS (simplified - you may want more accurate conversion)
-  const bsDate = adToBSSimple(now);
+  // Use BS dates sent from frontend (accurate conversion using nepali-date-converter)
+  // Fallback to simplified conversion only if not provided
+  const registeredBS = clientData.registeredDateBS || adToBSSimple(now);
+  const inquiryBS = clientData.inquiryDateBS || adToBSSimple(now);
   
   const values = [[
     registeredDateTimeAD,                    // A: registered_datetime_ad
-    bsDate,                                  // B: registered_date_bs
+    registeredBS,                            // B: registered_date_bs (from frontend)
     clientData.clientName || '',             // C: client_name
     clientData.source || '',                 // D: source
     clientData.clientLocation || '',         // E: client_current_country
@@ -219,7 +221,7 @@ async function addClient(accessToken: string, spreadsheetId: string, clientData:
     clientData.eventDateAD || '',            // P: event date AD
     clientData.whoAdded || '',               // Q: who_added
     clientData.inquiryDateAD || now.toISOString().split('T')[0], // R: inquiry_date_ad
-    clientData.inquiryDateBS || bsDate,      // S: inquiry_date_bs
+    inquiryBS,                               // S: inquiry_date_bs (from frontend)
     clientData.inquiryTime || '',            // T: inquiry_time
     clientData.description || '',            // U: basic_description
   ]];

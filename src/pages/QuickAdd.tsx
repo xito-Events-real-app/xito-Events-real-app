@@ -5,7 +5,7 @@ import { FormSection, FormInput, FormSelect, CountrySelector, PhoneInputField, N
 import { EventSelector } from "@/components/form/EventSelector";
 import { getCountryCodeFromName } from "@/components/form/CountrySelector";
 import { valleyCities, nepalCitiesOutsideValley, clientLocationOptions } from "@/lib/form-data";
-import { NepaliDateObject, bsToAD, formatBSDate } from "@/lib/nepali-date";
+import { NepaliDateObject, bsToAD, adToBS, formatBSDate } from "@/lib/nepali-date";
 import { useDropdownData } from "@/hooks/useDropdownData";
 import { addClient, isSheetsConfigured } from "@/lib/sheets-api";
 import { toast } from "@/hooks/use-toast";
@@ -159,6 +159,15 @@ export default function QuickAdd() {
       // Determine country value for Column F
       const countryForSheet = clientLocation === "INSIDE NEPAL" ? "Nepal" : currentCountry;
 
+      // Get current date/time for registration
+      const now = new Date();
+      const registeredBS = adToBS(now);
+      const registeredBSFormatted = `${registeredBS.year}-${String(registeredBS.month).padStart(2, '0')}-${String(registeredBS.day).padStart(2, '0')}`;
+      
+      // Inquiry date BS (based on current date if not specified)
+      const inquiryBS = adToBS(now);
+      const inquiryBSFormatted = `${inquiryBS.year}-${String(inquiryBS.month).padStart(2, '0')}-${String(inquiryBS.day).padStart(2, '0')}`;
+
       const clientData = {
         clientName,
         source: getSourceValue(),
@@ -176,6 +185,9 @@ export default function QuickAdd() {
         whoAdded,
         inquiryTime,
         description,
+        // Send accurate BS dates from frontend
+        registeredDateBS: registeredBSFormatted,
+        inquiryDateBS: inquiryBSFormatted,
       };
 
       if (isConfigured) {
