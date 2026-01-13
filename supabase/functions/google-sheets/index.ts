@@ -273,28 +273,29 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const credentialsJson = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_JSON');
-    if (!credentialsJson) {
-      throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON secret not configured');
+    // Load credentials from individual environment variables (to avoid 1024 char limit)
+    const clientEmail = Deno.env.get('GOOGLE_CLIENT_EMAIL');
+    const privateKeyRaw = Deno.env.get('GOOGLE_PRIVATE_KEY');
+    const projectId = Deno.env.get('GOOGLE_PROJECT_ID');
+    const privateKeyId = Deno.env.get('GOOGLE_PRIVATE_KEY_ID');
+
+    if (!clientEmail || !privateKeyRaw || !projectId) {
+      throw new Error('Missing required Google service account secrets (GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY, GOOGLE_PROJECT_ID)');
     }
 
-    // Try to parse the credentials, handling newlines in private key
-    let credentials: ServiceAccountCredentials;
-    try {
-      // The private_key may have actual newlines that need to be escaped for JSON parsing
-      // Replace actual newlines with escaped newlines, but only inside strings
-      let cleanedJson = credentialsJson.trim();
-      
-      // If the JSON has actual newline characters inside the private_key value,
-      // we need to escape them for proper parsing
-      cleanedJson = cleanedJson.replace(/\n/g, '\\n');
-      
-      credentials = JSON.parse(cleanedJson);
-    } catch (parseError) {
-      console.error('JSON parse error:', parseError);
-      console.log('Credentials length:', credentialsJson.length);
-      throw new Error(`Invalid JSON in GOOGLE_SERVICE_ACCOUNT_JSON: ${parseError instanceof Error ? parseError.message : 'Unknown parse error'}`);
-    }
+    // Handle the private key newlines - replace escaped newlines with actual newlines
+    const privateKey = privateKeyRaw.replace(/\\n/g, '\n');
+
+    const credentials: ServiceAccountCredentials = {
+      type: 'service_account',
+      project_id: projectId,
+      private_key_id: privateKeyId || '',
+      private_key: privateKey,
+      client_email: clientEmail,
+      client_id: '',
+      auth_uri: 'https://accounts.google.com/o/oauth2/auth',
+      token_uri: 'https://oauth2.googleapis.com/token',
+    };
     
     const accessToken = await getAccessToken(credentials);
 
