@@ -150,8 +150,9 @@ export function FreshClientCard({ client, onClick, statusOptions, onStatusChange
         )}
       </div>
 
-      {/* Status Dropdown - Bottom Right */}
-      <div className="flex justify-end">
+      {/* Status Dropdown - Bottom with Label */}
+      <div className="flex items-center justify-between border-t border-border/30 pt-2 mt-1">
+        <span className="text-xs text-muted-foreground font-medium">Client Status</span>
         <DropdownMenu>
           <DropdownMenuTrigger 
             onClick={(e) => e.stopPropagation()}
