@@ -21,6 +21,7 @@ export function useDropdownData() {
           postweddingEvents: mockDropdownData.eventTypes.postwedding,
           oldClients: [],
           whatsappOwners: mockDropdownData.whatsappOwners,
+          clientStatuses: ['UNTOUCHED', 'TEXTED : NOT CALLED', 'CALL NOT RECEIVED', 'CALLED : QUOTATION PENDING', 'QUOTATION SENT : REVIEW PENDING', 'BARGAINING IS ON', 'ADVANCE PENDING', 'BOOKED', 'CANCELLED', 'POSTPONED'],
         });
         setIsUsingMock(true);
         setIsLoading(false);
@@ -44,6 +45,7 @@ export function useDropdownData() {
           postweddingEvents: mockDropdownData.eventTypes.postwedding,
           oldClients: [],
           whatsappOwners: mockDropdownData.whatsappOwners,
+          clientStatuses: ['UNTOUCHED', 'TEXTED : NOT CALLED', 'CALL NOT RECEIVED', 'CALLED : QUOTATION PENDING', 'QUOTATION SENT : REVIEW PENDING', 'BARGAINING IS ON', 'ADVANCE PENDING', 'BOOKED', 'CANCELLED', 'POSTPONED'],
         });
         setIsUsingMock(true);
       } finally {
