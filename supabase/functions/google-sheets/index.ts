@@ -124,7 +124,7 @@ async function getDropdowns(accessToken: string, spreadsheetId: string) {
 
 // Get recent clients
 async function getClients(accessToken: string, spreadsheetId: string, limit = 50) {
-  const range = encodeURIComponent("'CLIENT TRACKER'!A2:U" + (limit + 1));
+  const range = encodeURIComponent("'WTN CLIENT TRACKER'!A2:U" + (limit + 1));
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   const response = await fetch(url, {
@@ -168,7 +168,7 @@ async function getClients(accessToken: string, spreadsheetId: string, limit = 50
 
 // Add new client at row 2
 async function addClient(accessToken: string, spreadsheetId: string, clientData: Record<string, unknown>) {
-  const sheetId = await getSheetId(accessToken, spreadsheetId, 'CLIENT TRACKER');
+  const sheetId = await getSheetId(accessToken, spreadsheetId, 'WTN CLIENT TRACKER');
   
   // First, insert a new row at position 2
   const insertUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
@@ -224,7 +224,7 @@ async function addClient(accessToken: string, spreadsheetId: string, clientData:
     clientData.description || '',            // U: basic_description
   ]];
 
-  const range = encodeURIComponent("'CLIENT TRACKER'!A2:U2");
+  const range = encodeURIComponent("'WTN CLIENT TRACKER'!A2:U2");
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
   
   const response = await fetch(updateUrl, {
