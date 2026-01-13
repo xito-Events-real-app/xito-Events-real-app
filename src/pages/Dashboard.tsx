@@ -6,6 +6,7 @@ import { Users, CalendarPlus, TrendingUp, Loader2, AlertTriangle, RefreshCw, Che
 import { Link } from "react-router-dom";
 import { getClients, ClientData } from "@/lib/sheets-api";
 import { FreshClientCard } from "@/components/dashboard/FreshClientCard";
+import { ClientDetailSheet } from "@/components/dashboard/ClientDetailSheet";
 import { Sidebar } from "@/components/layout/Sidebar";
 
 export default function Dashboard() {
@@ -13,6 +14,7 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<ClientData | null>(null);
 
   const fetchClients = async () => {
     setIsLoading(true);
@@ -151,7 +153,7 @@ export default function Dashboard() {
             {!isLoading && !error && clients.length > 0 && (
               <div className="space-y-2 max-h-[45vh] overflow-y-auto">
                 {clients.slice(0, 10).map((client, i) => (
-                  <FreshClientCard key={i} client={client} />
+                  <FreshClientCard key={i} client={client} onClick={setSelectedClient} />
                 ))}
                 {clients.length > 10 && (
                   <Link to="/fresh-clients" className="block">
@@ -185,6 +187,13 @@ export default function Dashboard() {
 
       {/* Sidebar */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      
+      {/* Client Detail Sheet */}
+      <ClientDetailSheet
+        client={selectedClient}
+        isOpen={!!selectedClient}
+        onClose={() => setSelectedClient(null)}
+      />
     </AppLayout>
   );
 }
