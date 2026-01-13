@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { ClientData, updateClientStatus, getCurrentStatus } from "@/lib/sheets-api";
 import { getHandlerInitials, parseEventDetails, formatLocationDisplay } from "@/lib/nepali-months";
 import { cn } from "@/lib/utils";
@@ -8,8 +8,63 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, Loader2 } from "lucide-react";
+import { ChevronDown, Loader2, Clock } from "lucide-react";
 import { toast } from "sonner";
+
+// Calculate time elapsed since inquiry
+function getEnquiryTimeInfo(inquiryDateAD?: string, inquiryTime?: string) {
+  if (!inquiryDateAD) return null;
+
+  try {
+    // Parse the date and time
+    let inquiryDateTime: Date;
+    
+    if (inquiryTime) {
+      // Combine date and time
+      inquiryDateTime = new Date(`${inquiryDateAD} ${inquiryTime}`);
+    } else {
+      inquiryDateTime = new Date(inquiryDateAD);
+    }
+
+    if (isNaN(inquiryDateTime.getTime())) return null;
+
+    const now = new Date();
+    const diffMs = now.getTime() - inquiryDateTime.getTime();
+    
+    if (diffMs < 0) return null; // Future date
+    
+    const diffHours = diffMs / (1000 * 60 * 60);
+    const diffDays = Math.floor(diffHours / 24);
+    const remainingHours = Math.floor(diffHours % 24);
+    const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+    // Format the display string
+    let displayText = "";
+    if (diffDays > 0) {
+      displayText = `${diffDays}d ${remainingHours}h ${diffMins}m ago`;
+    } else if (remainingHours > 0) {
+      displayText = `${remainingHours}h ${diffMins}m ago`;
+    } else {
+      displayText = `${diffMins}m ago`;
+    }
+
+    // Determine urgency level
+    let urgency: 'normal' | 'warning' | 'urgent' | 'critical' = 'normal';
+    if (diffHours >= 24) {
+      urgency = 'critical'; // Red + flashing
+    } else if (diffHours >= 12) {
+      urgency = 'urgent'; // Red
+    } else if (diffHours >= 3) {
+      urgency = 'warning'; // Orange/Yellow
+    }
+    // else normal = gray
+
+    return { displayText, urgency, totalHours: diffHours };
+  } catch (e) {
+    console.error("Error parsing inquiry date/time:", e);
+    return null;
+  }
+}
 
 interface FreshClientCardProps {
   client: ClientData;
@@ -86,6 +141,12 @@ export function FreshClientCard({ client, onClick, statusOptions, onStatusChange
     if (s.includes('POSTPONED')) return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
     return 'bg-muted text-muted-foreground';
   };
+
+  // Calculate enquiry time info
+  const enquiryInfo = useMemo(() => 
+    getEnquiryTimeInfo(client.inquiryDateAD, client.inquiryTime), 
+    [client.inquiryDateAD, client.inquiryTime]
+  );
 
   return (
     <div 
@@ -191,6 +252,23 @@ export function FreshClientCard({ client, onClick, statusOptions, onStatusChange
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* Enquiry Time Indicator */}
+      {enquiryInfo && (
+        <div className={cn(
+          "flex items-center gap-1.5 text-xs pt-1 border-t border-border/20",
+          enquiryInfo.urgency === 'normal' && "text-gray-500 dark:text-gray-400",
+          enquiryInfo.urgency === 'warning' && "text-amber-600 dark:text-amber-400",
+          enquiryInfo.urgency === 'urgent' && "text-red-500 dark:text-red-400",
+          enquiryInfo.urgency === 'critical' && "text-red-600 dark:text-red-400 animate-pulse font-medium"
+        )}>
+          <Clock className={cn(
+            "w-3 h-3",
+            enquiryInfo.urgency === 'critical' && "animate-pulse"
+          )} />
+          <span>Enquiry: {enquiryInfo.displayText}</span>
+        </div>
+      )}
     </div>
   );
 }
