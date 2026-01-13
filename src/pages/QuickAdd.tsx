@@ -35,6 +35,7 @@ export default function QuickAdd() {
   const [selectedDates, setSelectedDates] = useState<NepaliDateObject[]>([]);
   const [eventsByDate, setEventsByDate] = useState<Record<string, string>>({});
   const [whoAdded, setWhoAdded] = useState("");
+  const [inquiryDate, setInquiryDate] = useState<Date | undefined>(new Date());
   const [inquiryTime, setInquiryTime] = useState("");
   const [description, setDescription] = useState("");
 
@@ -164,8 +165,10 @@ export default function QuickAdd() {
       const registeredBS = adToBS(now);
       const registeredBSFormatted = `${registeredBS.year}-${String(registeredBS.month).padStart(2, '0')}-${String(registeredBS.day).padStart(2, '0')}`;
       
-      // Inquiry date BS (based on current date if not specified)
-      const inquiryBS = adToBS(now);
+      // Inquiry date - use selected date or default to today
+      const inquiryDateValue = inquiryDate || now;
+      const inquiryDateADFormatted = format(inquiryDateValue, "yyyy-MM-dd");
+      const inquiryBS = adToBS(inquiryDateValue);
       const inquiryBSFormatted = `${inquiryBS.year}-${String(inquiryBS.month).padStart(2, '0')}-${String(inquiryBS.day).padStart(2, '0')}`;
 
       const clientData = {
@@ -183,6 +186,7 @@ export default function QuickAdd() {
         eventDay: eventDays,
         eventDateAD: eventADDates,
         whoAdded,
+        inquiryDateAD: inquiryDateADFormatted,
         inquiryTime,
         description,
         // Send accurate BS dates from frontend
@@ -216,6 +220,7 @@ export default function QuickAdd() {
       setSelectedDates([]);
       setEventsByDate({});
       setWhoAdded("");
+      setInquiryDate(new Date());
       setInquiryTime("");
       setDescription("");
 
@@ -394,6 +399,15 @@ export default function QuickAdd() {
             onChange={setWhoAdded} 
             options={dropdowns?.whatsappOwners || []} 
           />
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Inquiry Date</label>
+            <input
+              type="date"
+              value={inquiryDate ? format(inquiryDate, "yyyy-MM-dd") : ""}
+              onChange={(e) => setInquiryDate(e.target.value ? new Date(e.target.value) : undefined)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            />
+          </div>
           <FormInput label="Inquiry Time" value={inquiryTime} onChange={setInquiryTime} type="time" />
           <FormInput 
             label="Description" 
