@@ -124,6 +124,8 @@ export default function QuickAdd() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     if (!clientName.trim()) {
       toast({ title: "Error", description: "Client name is required", variant: "destructive" });
       return;
