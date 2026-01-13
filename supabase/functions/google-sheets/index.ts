@@ -18,10 +18,11 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
+  limit?: number;
 }
 
 // Get access token using service account
@@ -91,7 +92,7 @@ async function getAccessToken(credentials: ServiceAccountCredentials): Promise<s
 
 // Get dropdown values from setup sheet
 async function getDropdowns(accessToken: string, spreadsheetId: string) {
-  const range = encodeURIComponent("'CLIENT TRACKER SETUP DATA'!A2:H100");
+  const range = encodeURIComponent("'CLIENT TRACKER SETUP DATA'!A2:I100");
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   const response = await fetch(url, {
@@ -105,7 +106,7 @@ async function getDropdowns(accessToken: string, spreadsheetId: string) {
   }
 
   const data = await response.json();
-  if (!data.values) return { sources: [], whatsappOwners: [], clientLocations: [], eventLocations: [], teamMembers: [], oldClients: [] };
+  if (!data.values) return { sources: [], whatsappOwners: [], clientLocations: [], eventLocations: [], teamMembers: [], oldClients: [], clientStatuses: [] };
 
   const rows = data.values;
   const getColumn = (idx: number) => rows.map((row: string[]) => row[idx]).filter(Boolean);
@@ -119,12 +120,78 @@ async function getDropdowns(accessToken: string, spreadsheetId: string) {
     postweddingEvents: getColumn(5),  // Column F
     oldClients: getColumn(6),         // Column G
     whatsappOwners: getColumn(7),     // Column H (also team members)
+    clientStatuses: getColumn(8),     // Column I - Client Status dropdown options
   };
 }
 
-// Get recent clients
+// Get client statuses from Column I of setup data
+async function getClientStatuses(accessToken: string, spreadsheetId: string) {
+  const range = encodeURIComponent("'CLIENT TRACKER SETUP DATA'!I2:I100");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (getClientStatuses):', response.status, errorText);
+    throw new Error(`Google Sheets API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  if (!data.values) return [];
+  
+  return data.values.flat().filter(Boolean);
+}
+
+// Update client status in Column W with timestamp log
+async function updateClientStatus(accessToken: string, spreadsheetId: string, rowNumber: number, newStatus: string, existingStatusLog: string) {
+  if (!rowNumber || rowNumber < 2) {
+    throw new Error('Valid rowNumber is required for updating status');
+  }
+
+  const now = new Date();
+  const timestamp = now.toLocaleString('en-US', { 
+    year: 'numeric', 
+    month: '2-digit', 
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false 
+  });
+  
+  // Append new status with timestamp to existing log
+  const newLogEntry = `${newStatus} - ${timestamp}`;
+  const updatedLog = existingStatusLog 
+    ? `${existingStatusLog}\n${newLogEntry}` 
+    : newLogEntry;
+
+  const range = encodeURIComponent(`'CLIENT TRACKER'!W${rowNumber}`);
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  
+  const response = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [[updatedLog]] }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (updateClientStatus):', response.status, errorText);
+    throw new Error(`Failed to update client status: ${response.status}`);
+  }
+
+  return { success: true, statusLog: updatedLog };
+}
+
+// Get recent clients (now including Column W for status)
 async function getClients(accessToken: string, spreadsheetId: string, limit = 50) {
-  const range = encodeURIComponent("'CLIENT TRACKER'!A2:U" + (limit + 1));
+  const range = encodeURIComponent("'CLIENT TRACKER'!A2:W" + (limit + 1));
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   const response = await fetch(url, {
@@ -163,6 +230,8 @@ async function getClients(accessToken: string, spreadsheetId: string, limit = 50
     inquiryDateBS: row[18] || '',
     inquiryTime: row[19] || '',
     description: row[20] || '',
+    // Column V (index 21) - might be empty
+    statusLog: row[22] || '', // Column W (index 22) - Status log with timestamps
   }));
 }
 
@@ -443,7 +512,7 @@ Deno.serve(async (req) => {
         result = await getDropdowns(accessToken, spreadsheetId);
         break;
       case 'getClients':
-        result = await getClients(accessToken, spreadsheetId);
+        result = await getClients(accessToken, spreadsheetId, body.limit);
         break;
       case 'addClient':
         if (!data) throw new Error('data is required for addClient');
@@ -456,6 +525,19 @@ Deno.serve(async (req) => {
       case 'searchClients':
         if (!searchQuery) throw new Error('searchQuery is required for searchClients');
         result = await searchClients(accessToken, spreadsheetId, searchQuery);
+        break;
+      case 'getClientStatuses':
+        result = await getClientStatuses(accessToken, spreadsheetId);
+        break;
+      case 'updateClientStatus':
+        if (!data) throw new Error('data is required for updateClientStatus');
+        result = await updateClientStatus(
+          accessToken, 
+          spreadsheetId, 
+          data.rowNumber as number, 
+          data.newStatus as string, 
+          data.existingStatusLog as string || ''
+        );
         break;
       default:
         throw new Error(`Unknown action: ${action}`);

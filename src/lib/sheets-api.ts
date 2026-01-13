@@ -11,6 +11,7 @@ export interface DropdownData {
   postweddingEvents: string[];
   oldClients: string[];
   whatsappOwners: string[];
+  clientStatuses: string[];
 }
 
 export interface ClientData {
@@ -35,6 +36,7 @@ export interface ClientData {
   inquiryDateBS?: string;
   inquiryTime?: string;
   description?: string;
+  statusLog?: string;
 }
 
 // Spreadsheet ID is now configured as a backend secret
@@ -89,6 +91,20 @@ export async function searchClients(query: string): Promise<ClientData[]> {
   return callSheetsFunction<ClientData[]>("searchClients", { searchQuery: query });
 }
 
+export async function getClientStatuses(): Promise<string[]> {
+  return callSheetsFunction<string[]>("getClientStatuses");
+}
+
+export async function updateClientStatus(
+  rowNumber: number,
+  newStatus: string,
+  existingStatusLog: string
+): Promise<{ success: boolean; statusLog: string }> {
+  return callSheetsFunction<{ success: boolean; statusLog: string }>("updateClientStatus", {
+    data: { rowNumber, newStatus, existingStatusLog },
+  });
+}
+
 export interface ConnectionTestResult {
   title: string;
   sheets: string[];
@@ -104,4 +120,15 @@ export async function testConnection(): Promise<ConnectionTestResult> {
 // Now always returns true since it's configured via backend secret
 export function isSheetsConfigured(): boolean {
   return true;
+}
+
+// Helper to get current status from status log
+export function getCurrentStatus(statusLog: string): string {
+  if (!statusLog) return 'UNTOUCHED';
+  const lines = statusLog.split('\n').filter(Boolean);
+  if (lines.length === 0) return 'UNTOUCHED';
+  // Get the last line and extract status (format: "STATUS - timestamp")
+  const lastLine = lines[lines.length - 1];
+  const statusPart = lastLine.split(' - ')[0];
+  return statusPart.trim().toUpperCase();
 }
