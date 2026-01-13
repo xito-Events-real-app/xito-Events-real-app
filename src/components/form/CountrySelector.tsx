@@ -15,23 +15,31 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useState } from "react";
-import { priorityCountries } from "@/lib/form-data";
+import { allCountries, priorityCountries } from "@/lib/form-data";
 
 interface CountrySelectorProps {
   value: string;
-  onChange: (value: string) => void;
+  onChange: (value: string, countryCode?: string) => void;
   placeholder?: string;
+  showAllCountries?: boolean;
 }
 
-export function CountrySelector({ value, onChange, placeholder = "Select country..." }: CountrySelectorProps) {
+export function CountrySelector({ 
+  value, 
+  onChange, 
+  placeholder = "Select country...",
+  showAllCountries = false 
+}: CountrySelectorProps) {
   const [open, setOpen] = useState(false);
 
-  const selectedCountry = priorityCountries.find((c) => c.name === value);
+  const countries = showAllCountries ? allCountries : priorityCountries;
+  const selectedCountry = countries.find((c) => c.name === value);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
+          type="button"
           variant="outline"
           role="combobox"
           aria-expanded={open}
@@ -53,13 +61,13 @@ export function CountrySelector({ value, onChange, placeholder = "Select country
           <CommandInput placeholder="Search country..." />
           <CommandList>
             <CommandEmpty>No country found.</CommandEmpty>
-            <CommandGroup>
-              {priorityCountries.map((country) => (
+            <CommandGroup heading={showAllCountries ? "Priority Countries" : undefined}>
+              {(showAllCountries ? priorityCountries : countries).map((country) => (
                 <CommandItem
                   key={country.code}
                   value={country.name}
                   onSelect={() => {
-                    onChange(country.name);
+                    onChange(country.name, country.code);
                     setOpen(false);
                   }}
                 >
@@ -74,6 +82,29 @@ export function CountrySelector({ value, onChange, placeholder = "Select country
                 </CommandItem>
               ))}
             </CommandGroup>
+            {showAllCountries && (
+              <CommandGroup heading="All Countries">
+                {allCountries.filter(c => !priorityCountries.find(p => p.code === c.code)).map((country) => (
+                  <CommandItem
+                    key={country.code}
+                    value={country.name}
+                    onSelect={() => {
+                      onChange(country.name, country.code);
+                      setOpen(false);
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        value === country.name ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    <span className="text-lg mr-2">{getCountryFlag(country.code)}</span>
+                    {country.name}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>
@@ -82,10 +113,16 @@ export function CountrySelector({ value, onChange, placeholder = "Select country
 }
 
 // Simple country code to flag emoji converter
-function getCountryFlag(countryCode: string): string {
+export function getCountryFlag(countryCode: string): string {
   const codePoints = countryCode
     .toUpperCase()
     .split("")
     .map((char) => 127397 + char.charCodeAt(0));
   return String.fromCodePoint(...codePoints);
+}
+
+// Get country code from country name
+export function getCountryCodeFromName(countryName: string): string {
+  const country = allCountries.find((c) => c.name === countryName);
+  return country?.code || "NP";
 }
