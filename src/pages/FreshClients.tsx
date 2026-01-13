@@ -126,6 +126,10 @@ export default function FreshClients() {
           client={selectedClient}
           isOpen={!!selectedClient}
           onClose={() => setSelectedClient(null)}
+          onSave={() => {
+            setSelectedClient(null);
+            fetchClients();
+          }}
         />
       </div>
     </AppLayout>
