@@ -257,6 +257,13 @@ async function getSheetId(accessToken: string, spreadsheetId: string, sheetName:
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (getSheetId):', response.status, errorText);
+    throw new Error(`Google Sheets API error: ${response.status} - ${errorText.substring(0, 200)}`);
+  }
+  
   const data = await response.json();
   const sheet = data.sheets?.find((s: { properties: { title: string } }) => 
     s.properties.title === sheetName
@@ -312,10 +319,22 @@ Deno.serve(async (req) => {
     const accessToken = await getAccessToken(credentials);
 
     const body: SheetRequest = await req.json();
-    const { action, spreadsheetId, data, searchQuery } = body;
+    let { action, spreadsheetId, data, searchQuery } = body;
 
     if (!spreadsheetId) {
       throw new Error('spreadsheetId is required');
+    }
+
+    // Extract spreadsheet ID from full URL if provided
+    // Supports formats like: https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit
+    if (spreadsheetId.includes('docs.google.com')) {
+      const match = spreadsheetId.match(/\/d\/([a-zA-Z0-9-_]+)/);
+      if (match && match[1]) {
+        spreadsheetId = match[1];
+        console.log('Extracted spreadsheet ID from URL:', spreadsheetId);
+      } else {
+        throw new Error('Could not extract spreadsheet ID from the provided URL');
+      }
     }
 
     let result;
