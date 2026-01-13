@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { AppLayout, PageHeader } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { FormSection, FormInput, FormSelect, CountrySelector, PhoneInputField, NepaliCalendar } from "@/components/form";
+import { EventSelector } from "@/components/form/EventSelector";
 import { valleyCities, nepalCitiesOutsideValley } from "@/lib/form-data";
 import { NepaliDateObject, bsToAD, formatBSDate } from "@/lib/nepali-date";
 import { useDropdownData } from "@/hooks/useDropdownData";
@@ -28,11 +29,41 @@ export default function QuickAdd() {
   const [eventLocation, setEventLocation] = useState("");
   const [eventCity, setEventCity] = useState("");
   const [selectedDates, setSelectedDates] = useState<NepaliDateObject[]>([]);
+  const [eventsByDate, setEventsByDate] = useState<Record<string, string>>({});
   const [whoAdded, setWhoAdded] = useState("");
   const [inquiryTime, setInquiryTime] = useState("");
   const [description, setDescription] = useState("");
 
   const isConfigured = isSheetsConfigured();
+
+  // Combine all event options from D, E, F columns
+  const allEventOptions = useMemo(() => {
+    const events: string[] = [];
+    if (dropdowns?.preweddingEvents) events.push(...dropdowns.preweddingEvents);
+    if (dropdowns?.weddingEvents) events.push(...dropdowns.weddingEvents);
+    if (dropdowns?.postweddingEvents) events.push(...dropdowns.postweddingEvents);
+    return [...new Set(events)]; // Remove duplicates
+  }, [dropdowns]);
+
+  // Helper to get unique key for a date
+  const getDateKey = (date: NepaliDateObject) => `${date.year}-${date.month}-${date.day}`;
+
+  // Handle event change for a specific date
+  const handleEventChange = (date: NepaliDateObject, event: string) => {
+    const key = getDateKey(date);
+    setEventsByDate(prev => ({ ...prev, [key]: event }));
+  };
+
+  // Handle removing a date
+  const handleRemoveDate = (date: NepaliDateObject) => {
+    const key = getDateKey(date);
+    setSelectedDates(prev => prev.filter(d => getDateKey(d) !== key));
+    setEventsByDate(prev => {
+      const updated = { ...prev };
+      delete updated[key];
+      return updated;
+    });
+  };
 
   const getCityOptions = () => {
     if (eventLocation === "INSIDE VALLEY") return valleyCities;
@@ -61,6 +92,12 @@ export default function QuickAdd() {
       const eventADDates = selectedDates.map(d => format(bsToAD(d.year, d.month, d.day), "yyyy-MM-dd")).join(", ");
       const firstDate = selectedDates[0];
 
+      // Combine events for all selected dates
+      const eventsFormatted = selectedDates
+        .map(d => eventsByDate[getDateKey(d)] || "")
+        .filter(Boolean)
+        .join(", ");
+
       const clientData = {
         clientName,
         source: getSourceValue(),
@@ -70,7 +107,7 @@ export default function QuickAdd() {
         whatsappNo,
         eventLocation,
         eventCity,
-        events: "", // TODO: Add event types per date
+        events: eventsFormatted,
         eventYear: firstDate?.year?.toString() || "",
         eventMonth: firstDate?.month?.toString() || "",
         eventDay: firstDate?.day?.toString() || "",
@@ -101,6 +138,7 @@ export default function QuickAdd() {
       setEventLocation("");
       setEventCity("");
       setSelectedDates([]);
+      setEventsByDate({});
       setWhoAdded("");
       setInquiryTime("");
       setDescription("");
@@ -222,6 +260,24 @@ export default function QuickAdd() {
         <FormSection title="Event Dates (BS Calendar)">
           <NepaliCalendar selectedDates={selectedDates} onDateSelect={setSelectedDates} multiSelect />
         </FormSection>
+
+        {/* Event Selection for Each Date */}
+        {selectedDates.length > 0 && (
+          <FormSection title={`Events (${selectedDates.length} date${selectedDates.length > 1 ? "s" : ""} selected)`}>
+            <div className="space-y-3">
+              {selectedDates.map((date) => (
+                <EventSelector
+                  key={getDateKey(date)}
+                  date={date}
+                  selectedEvent={eventsByDate[getDateKey(date)] || ""}
+                  onEventChange={(event) => handleEventChange(date, event)}
+                  eventOptions={allEventOptions}
+                  onRemoveDate={() => handleRemoveDate(date)}
+                />
+              ))}
+            </div>
+          </FormSection>
+        )}
 
         {/* Inquiry Meta */}
         <FormSection title="Inquiry Details">
