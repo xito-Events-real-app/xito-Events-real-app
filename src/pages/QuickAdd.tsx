@@ -3,7 +3,8 @@ import { AppLayout, PageHeader } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { FormSection, FormInput, FormSelect, CountrySelector, PhoneInputField, NepaliCalendar } from "@/components/form";
 import { EventSelector } from "@/components/form/EventSelector";
-import { valleyCities, nepalCitiesOutsideValley } from "@/lib/form-data";
+import { getCountryCodeFromName } from "@/components/form/CountrySelector";
+import { valleyCities, nepalCitiesOutsideValley, clientLocationOptions } from "@/lib/form-data";
 import { NepaliDateObject, bsToAD, formatBSDate } from "@/lib/nepali-date";
 import { useDropdownData } from "@/hooks/useDropdownData";
 import { addClient, isSheetsConfigured } from "@/lib/sheets-api";
@@ -24,10 +25,13 @@ export default function QuickAdd() {
   const [oldClientName, setOldClientName] = useState("");
   const [clientLocation, setClientLocation] = useState("");
   const [currentCountry, setCurrentCountry] = useState("");
+  const [currentCountryCode, setCurrentCountryCode] = useState("NP");
   const [contactNo, setContactNo] = useState("");
   const [whatsappNo, setWhatsappNo] = useState("");
   const [eventLocation, setEventLocation] = useState("");
   const [eventCity, setEventCity] = useState("");
+  const [eventFromCity, setEventFromCity] = useState("");
+  const [eventToCity, setEventToCity] = useState("");
   const [selectedDates, setSelectedDates] = useState<NepaliDateObject[]>([]);
   const [eventsByDate, setEventsByDate] = useState<Record<string, string>>({});
   const [whoAdded, setWhoAdded] = useState("");
@@ -48,6 +52,15 @@ export default function QuickAdd() {
   // Helper to get unique key for a date
   const getDateKey = (date: NepaliDateObject) => `${date.year}-${date.month}-${date.day}`;
 
+  // Sort dates in ascending order
+  const sortedDates = useMemo(() => {
+    return [...selectedDates].sort((a, b) => {
+      if (a.year !== b.year) return a.year - b.year;
+      if (a.month !== b.month) return a.month - b.month;
+      return a.day - b.day;
+    });
+  }, [selectedDates]);
+
   // Handle event change for a specific date
   const handleEventChange = (date: NepaliDateObject, event: string) => {
     const key = getDateKey(date);
@@ -65,10 +78,42 @@ export default function QuickAdd() {
     });
   };
 
+  // Handle client location change
+  const handleClientLocationChange = (location: string) => {
+    setClientLocation(location);
+    if (location === "INSIDE NEPAL") {
+      setCurrentCountry("Nepal");
+      setCurrentCountryCode("NP");
+    } else {
+      setCurrentCountry("");
+      setCurrentCountryCode("NP");
+    }
+  };
+
+  // Handle country change
+  const handleCountryChange = (countryName: string, countryCode?: string) => {
+    setCurrentCountry(countryName);
+    setCurrentCountryCode(countryCode || getCountryCodeFromName(countryName));
+  };
+
   const getCityOptions = () => {
     if (eventLocation === "INSIDE VALLEY") return valleyCities;
     if (eventLocation === "OUTSIDE VALLEY") return nepalCitiesOutsideValley;
     return [];
+  };
+
+  // Get event city/location value for saving
+  const getEventCityValue = () => {
+    if (eventLocation === "INSIDE VALLEY" || eventLocation === "OUTSIDE VALLEY") {
+      return eventCity;
+    }
+    if (eventLocation === "MIXED" || eventLocation === "ABROAD") {
+      if (eventFromCity && eventToCity) {
+        return `${eventFromCity} - ${eventToCity}`;
+      }
+      return eventFromCity || eventToCity || "";
+    }
+    return "";
   };
 
   const getSourceValue = () => {
@@ -87,30 +132,44 @@ export default function QuickAdd() {
     setIsSubmitting(true);
 
     try {
-      // Format dates for saving
-      const eventDatesFormatted = selectedDates.map(d => formatBSDate(d)).join(", ");
-      const eventADDates = selectedDates.map(d => format(bsToAD(d.year, d.month, d.day), "yyyy-MM-dd")).join(", ");
-      const firstDate = selectedDates[0];
+      // Sort dates and format for saving (ascending order, single row)
+      const sortedForSave = [...selectedDates].sort((a, b) => {
+        if (a.year !== b.year) return a.year - b.year;
+        if (a.month !== b.month) return a.month - b.month;
+        return a.day - b.day;
+      });
 
-      // Combine events for all selected dates
-      const eventsFormatted = selectedDates
+      // Format dates for saving - all in single row, comma separated
+      const eventDatesFormatted = sortedForSave.map(d => formatBSDate(d)).join(", ");
+      const eventADDates = sortedForSave.map(d => format(bsToAD(d.year, d.month, d.day), "yyyy-MM-dd")).join(", ");
+      
+      // Get years, months, days as comma-separated for single row
+      const eventYears = sortedForSave.map(d => d.year).join(", ");
+      const eventMonths = sortedForSave.map(d => d.month).join(", ");
+      const eventDays = sortedForSave.map(d => d.day).join(", ");
+
+      // Combine events for all selected dates (in sorted order)
+      const eventsFormatted = sortedForSave
         .map(d => eventsByDate[getDateKey(d)] || "")
         .filter(Boolean)
         .join(", ");
+
+      // Determine country value for Column F
+      const countryForSheet = clientLocation === "INSIDE NEPAL" ? "Nepal" : currentCountry;
 
       const clientData = {
         clientName,
         source: getSourceValue(),
         clientLocation,
-        currentCountry: clientLocation === "ABROAD" ? currentCountry : "Nepal",
+        currentCountry: countryForSheet,
         contactNo,
         whatsappNo,
         eventLocation,
-        eventCity,
+        eventCity: getEventCityValue(),
         events: eventsFormatted,
-        eventYear: firstDate?.year?.toString() || "",
-        eventMonth: firstDate?.month?.toString() || "",
-        eventDay: firstDate?.day?.toString() || "",
+        eventYear: eventYears,
+        eventMonth: eventMonths,
+        eventDay: eventDays,
         eventDateAD: eventADDates,
         whoAdded,
         inquiryTime,
@@ -133,10 +192,13 @@ export default function QuickAdd() {
       setOldClientName("");
       setClientLocation("");
       setCurrentCountry("");
+      setCurrentCountryCode("NP");
       setContactNo("");
       setWhatsappNo("");
       setEventLocation("");
       setEventCity("");
+      setEventFromCity("");
+      setEventToCity("");
       setSelectedDates([]);
       setEventsByDate({});
       setWhoAdded("");
@@ -217,15 +279,21 @@ export default function QuickAdd() {
         {/* Location & Contact */}
         <FormSection title="Location & Contact">
           <FormSelect 
-            label="Client Location" 
+            label="Client Current Location" 
             value={clientLocation} 
-            onChange={setClientLocation} 
-            options={dropdowns?.clientLocations || []} 
+            onChange={handleClientLocationChange} 
+            options={clientLocationOptions}
+            placeholder="Where is the client currently?"
           />
-          {clientLocation === "ABROAD" && (
+          {clientLocation === "OUTSIDE NEPAL" && (
             <div className="space-y-2">
-              <label className="text-sm font-medium">Current Country</label>
-              <CountrySelector value={currentCountry} onChange={setCurrentCountry} />
+              <label className="text-sm font-medium">Client Current Country</label>
+              <CountrySelector 
+                value={currentCountry} 
+                onChange={handleCountryChange}
+                showAllCountries={true}
+                placeholder="Select country..."
+              />
             </div>
           )}
           <div className="space-y-2">
@@ -234,7 +302,11 @@ export default function QuickAdd() {
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">WhatsApp Number</label>
-            <PhoneInputField value={whatsappNo} onChange={setWhatsappNo} defaultCountry={clientLocation === "ABROAD" ? "AU" : "NP"} />
+            <PhoneInputField 
+              value={whatsappNo} 
+              onChange={setWhatsappNo} 
+              defaultCountry={clientLocation === "OUTSIDE NEPAL" ? currentCountryCode : "NP"} 
+            />
           </div>
         </FormSection>
 
@@ -243,7 +315,12 @@ export default function QuickAdd() {
           <FormSelect 
             label="Event Location" 
             value={eventLocation} 
-            onChange={setEventLocation} 
+            onChange={(val) => {
+              setEventLocation(val);
+              setEventCity("");
+              setEventFromCity("");
+              setEventToCity("");
+            }} 
             options={dropdowns?.eventLocations || []} 
           />
           {(eventLocation === "INSIDE VALLEY" || eventLocation === "OUTSIDE VALLEY") && (
@@ -254,6 +331,22 @@ export default function QuickAdd() {
               options={getCityOptions()} 
             />
           )}
+          {(eventLocation === "MIXED" || eventLocation === "ABROAD") && (
+            <>
+              <FormInput 
+                label="From" 
+                value={eventFromCity} 
+                onChange={setEventFromCity} 
+                placeholder="Starting location/city" 
+              />
+              <FormInput 
+                label="To" 
+                value={eventToCity} 
+                onChange={setEventToCity} 
+                placeholder="Destination location/city" 
+              />
+            </>
+          )}
         </FormSection>
 
         {/* Event Dates */}
@@ -262,10 +355,10 @@ export default function QuickAdd() {
         </FormSection>
 
         {/* Event Selection for Each Date */}
-        {selectedDates.length > 0 && (
-          <FormSection title={`Events (${selectedDates.length} date${selectedDates.length > 1 ? "s" : ""} selected)`}>
+        {sortedDates.length > 0 && (
+          <FormSection title={`Events (${sortedDates.length} date${sortedDates.length > 1 ? "s" : ""} selected)`}>
             <div className="space-y-3">
-              {selectedDates.map((date) => (
+              {sortedDates.map((date) => (
                 <EventSelector
                   key={getDateKey(date)}
                   date={date}
