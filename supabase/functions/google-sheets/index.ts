@@ -18,8 +18,8 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients';
-  spreadsheetId: string;
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection';
+  spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
 }
@@ -251,6 +251,35 @@ async function searchClients(accessToken: string, spreadsheetId: string, query: 
   ).slice(0, 20);
 }
 
+// Test connection - validates spreadsheet access and returns metadata
+async function testConnection(accessToken: string, spreadsheetId: string, clientEmail: string) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=properties.title,sheets.properties.title`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (testConnection):', response.status, errorText);
+    
+    if (response.status === 404) {
+      throw new Error(`SHEET_NOT_FOUND: The spreadsheet was not found. Either the Spreadsheet ID is incorrect, or the spreadsheet is not shared with: ${clientEmail}`);
+    }
+    throw new Error(`Google Sheets API error: ${response.status} - ${errorText.substring(0, 200)}`);
+  }
+
+  const data = await response.json();
+  const sheetNames = data.sheets?.map((s: { properties: { title: string } }) => s.properties.title) || [];
+  
+  return {
+    title: data.properties?.title || 'Unknown',
+    sheets: sheetNames,
+    serviceAccountEmail: clientEmail,
+    spreadsheetIdMasked: `...${spreadsheetId.slice(-6)}`,
+  };
+}
+
 // Helper: Get sheet ID by name
 async function getSheetId(accessToken: string, spreadsheetId: string, sheetName: string): Promise<number> {
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties`;
@@ -343,6 +372,9 @@ Deno.serve(async (req) => {
     let result;
 
     switch (action) {
+      case 'testConnection':
+        result = await testConnection(accessToken, spreadsheetId, clientEmail);
+        break;
       case 'getDropdowns':
         result = await getDropdowns(accessToken, spreadsheetId);
         break;

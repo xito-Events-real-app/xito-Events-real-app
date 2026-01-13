@@ -85,6 +85,17 @@ export async function searchClients(query: string): Promise<ClientData[]> {
   return callSheetsFunction<ClientData[]>("searchClients", { searchQuery: query });
 }
 
+export interface ConnectionTestResult {
+  title: string;
+  sheets: string[];
+  serviceAccountEmail: string;
+  spreadsheetIdMasked: string;
+}
+
+export async function testConnection(): Promise<ConnectionTestResult> {
+  return callSheetsFunction<ConnectionTestResult>("testConnection");
+}
+
 // Check if the sheets integration is configured
 // Now always returns true since it's configured via backend secret
 export function isSheetsConfigured(): boolean {
