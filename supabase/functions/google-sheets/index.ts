@@ -241,6 +241,58 @@ async function addClient(accessToken: string, spreadsheetId: string, clientData:
   return response.json();
 }
 
+// Update existing client
+async function updateClient(accessToken: string, spreadsheetId: string, clientData: Record<string, unknown>) {
+  const rowNumber = clientData.rowNumber as number;
+  if (!rowNumber || rowNumber < 2) {
+    throw new Error('Valid rowNumber is required for updating client');
+  }
+
+  const values = [[
+    clientData.registeredDateTimeAD || '',   // A: registered_datetime_ad (keep original)
+    clientData.registeredDateBS || '',       // B: registered_date_bs (keep original)
+    clientData.clientName || '',             // C: client_name
+    clientData.source || '',                 // D: source
+    clientData.clientLocation || '',         // E: client_current_country
+    clientData.currentCountry || '',         // F: current_country_name
+    clientData.contactNo || '',              // G: contact_no
+    clientData.whatsappNo || '',             // H: whatsapp_no
+    '',                                      // I: (empty)
+    clientData.eventLocation || '',          // J: event_location_city
+    clientData.eventCity || '',              // K: event_city_name
+    clientData.events || '',                 // L: events
+    clientData.eventYear || '',              // M: event year
+    clientData.eventMonth || '',             // N: event month
+    clientData.eventDay || '',               // O: event day
+    clientData.eventDateAD || '',            // P: event date AD
+    clientData.whoAdded || '',               // Q: who_added
+    clientData.inquiryDateAD || '',          // R: inquiry_date_ad
+    clientData.inquiryDateBS || '',          // S: inquiry_date_bs
+    clientData.inquiryTime || '',            // T: inquiry_time
+    clientData.description || '',            // U: basic_description
+  ]];
+
+  const range = encodeURIComponent(`'CLIENT TRACKER'!A${rowNumber}:U${rowNumber}`);
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  
+  const response = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (updateClient):', response.status, errorText);
+    throw new Error(`Failed to update client: ${response.status}`);
+  }
+
+  return response.json();
+}
+
 // Search clients
 async function searchClients(accessToken: string, spreadsheetId: string, query: string) {
   const clients = await getClients(accessToken, spreadsheetId, 500);
@@ -396,6 +448,10 @@ Deno.serve(async (req) => {
       case 'addClient':
         if (!data) throw new Error('data is required for addClient');
         result = await addClient(accessToken, spreadsheetId, data);
+        break;
+      case 'updateClient':
+        if (!data) throw new Error('data is required for updateClient');
+        result = await updateClient(accessToken, spreadsheetId, data);
         break;
       case 'searchClients':
         if (!searchQuery) throw new Error('searchQuery is required for searchClients');

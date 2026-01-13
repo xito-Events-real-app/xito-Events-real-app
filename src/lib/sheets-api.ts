@@ -81,6 +81,10 @@ export async function addClient(clientData: ClientData): Promise<void> {
   await callSheetsFunction("addClient", { data: clientData });
 }
 
+export async function updateClient(clientData: ClientData): Promise<void> {
+  await callSheetsFunction("updateClient", { data: clientData });
+}
+
 export async function searchClients(query: string): Promise<ClientData[]> {
   return callSheetsFunction<ClientData[]>("searchClients", { searchQuery: query });
 }

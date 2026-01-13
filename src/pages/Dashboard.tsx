@@ -193,6 +193,10 @@ export default function Dashboard() {
         client={selectedClient}
         isOpen={!!selectedClient}
         onClose={() => setSelectedClient(null)}
+        onSave={() => {
+          setSelectedClient(null);
+          fetchClients();
+        }}
       />
     </AppLayout>
   );
