@@ -2,37 +2,32 @@ import { useState, useEffect } from "react";
 import { AppLayout, PageHeader } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Users, CalendarPlus, TrendingUp, Clock, Loader2, User, AlertTriangle } from "lucide-react";
+import { Users, CalendarPlus, TrendingUp, Clock, Loader2, User, AlertTriangle, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
-import { getClients, isSheetsConfigured, ClientData } from "@/lib/sheets-api";
+import { getClients, ClientData } from "@/lib/sheets-api";
 
 export default function Dashboard() {
   const [clients, setClients] = useState<ClientData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  const isConfigured = isSheetsConfigured();
+
+  const fetchClients = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await getClients(50);
+      setClients(data);
+    } catch (err) {
+      console.error("Failed to fetch clients:", err);
+      setError(err instanceof Error ? err.message : "Failed to load");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function fetchClients() {
-      if (!isConfigured) {
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        const data = await getClients(50);
-        setClients(data);
-      } catch (err) {
-        console.error("Failed to fetch clients:", err);
-        setError(err instanceof Error ? err.message : "Failed to load");
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
     fetchClients();
-  }, [isConfigured]);
+  }, []);
 
   // Calculate stats
   const totalClients = clients.length;
@@ -107,22 +102,33 @@ export default function Dashboard() {
               </div>
             )}
 
-            {!isLoading && !isConfigured && (
-              <div className="text-center py-8">
-                <AlertTriangle className="w-8 h-8 text-warning mx-auto mb-2" />
+            {!isLoading && error && (
+              <div className="text-center py-6 space-y-3">
+                <AlertTriangle className="w-8 h-8 text-destructive mx-auto" />
                 <p className="text-sm text-muted-foreground">
-                  <Link to="/settings" className="text-primary underline">Configure Google Sheets</Link> to see clients
+                  Failed to load clients
                 </p>
+                <div className="flex gap-2 justify-center">
+                  <Button variant="outline" size="sm" onClick={fetchClients}>
+                    <RefreshCw className="w-4 h-4 mr-1" />
+                    Retry
+                  </Button>
+                  <Link to="/settings">
+                    <Button variant="outline" size="sm">
+                      Check Settings
+                    </Button>
+                  </Link>
+                </div>
               </div>
             )}
 
-            {!isLoading && isConfigured && recentClients.length === 0 && (
+            {!isLoading && !error && recentClients.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-8">
                 No clients yet. Add your first client!
               </p>
             )}
 
-            {!isLoading && recentClients.length > 0 && (
+            {!isLoading && !error && recentClients.length > 0 && (
               <div className="space-y-3">
                 {recentClients.map((client, i) => (
                   <div key={i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors">
@@ -144,13 +150,13 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Setup Notice (only if not configured) */}
-        {!isConfigured && (
-          <Card className="border-2 border-dashed border-primary/30 bg-primary/5">
+        {/* Show setup notice only on error */}
+        {error && (
+          <Card className="border-2 border-dashed border-destructive/30 bg-destructive/5">
             <CardContent className="p-4">
-              <h3 className="font-semibold text-foreground mb-2">⚡ Setup Required</h3>
+              <h3 className="font-semibold text-foreground mb-2">⚠️ Connection Issue</h3>
               <p className="text-sm text-muted-foreground mb-3">
-                Connect your Google Sheets to enable data sync.
+                Check your Google Sheets configuration in Settings.
               </p>
               <Link to="/settings">
                 <Button variant="outline" size="sm" className="w-full">
