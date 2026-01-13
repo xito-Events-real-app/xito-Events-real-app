@@ -264,7 +264,7 @@ async function testConnection(accessToken: string, spreadsheetId: string, client
     console.error('Google Sheets API error (testConnection):', response.status, errorText);
     
     if (response.status === 404) {
-      throw new Error(`SHEET_NOT_FOUND: The spreadsheet was not found. Either the Spreadsheet ID is incorrect, or the spreadsheet is not shared with: ${clientEmail}`);
+      throw new Error(`SHEET_NOT_FOUND: ID used: ${spreadsheetId.substring(0, 8)}...${spreadsheetId.substring(spreadsheetId.length - 6)} (len: ${spreadsheetId.length}). Either incorrect ID or not shared with: ${clientEmail}`);
     }
     throw new Error(`Google Sheets API error: ${response.status} - ${errorText.substring(0, 200)}`);
   }
@@ -352,7 +352,17 @@ Deno.serve(async (req) => {
     const { action, spreadsheetId: requestSpreadsheetId, data, searchQuery } = body;
 
     // Use configured spreadsheet ID from backend secret, fall back to request
-    let spreadsheetId = configuredSpreadsheetId || requestSpreadsheetId || '';
+    let spreadsheetId = (configuredSpreadsheetId || requestSpreadsheetId || '').trim();
+
+    // Debug logging for spreadsheet ID
+    console.log('Spreadsheet ID config:', {
+      length: spreadsheetId.length,
+      prefix: spreadsheetId.substring(0, 8),
+      suffix: spreadsheetId.substring(Math.max(0, spreadsheetId.length - 6)),
+      looksLikeUrl: spreadsheetId.includes('docs.google.com'),
+      hasNewlines: spreadsheetId.includes('\n'),
+      hasSpaces: spreadsheetId.includes(' '),
+    });
 
     if (!spreadsheetId) {
       throw new Error('Spreadsheet ID not configured. Please contact admin.');
