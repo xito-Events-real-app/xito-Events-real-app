@@ -37,26 +37,22 @@ export interface ClientData {
   description?: string;
 }
 
-// Get spreadsheet ID from localStorage
+// Spreadsheet ID is now configured as a backend secret
+// These functions are kept for backward compatibility
 export function getSpreadsheetId(): string {
-  return localStorage.getItem("wtn_spreadsheet_id") || "";
+  return "configured"; // Return non-empty to indicate configured
 }
 
-export function setSpreadsheetId(id: string): void {
-  localStorage.setItem("wtn_spreadsheet_id", id);
+export function setSpreadsheetId(_id: string): void {
+  // No-op - spreadsheet ID is now managed as a backend secret
+  console.log("Spreadsheet ID is now configured as a backend secret");
 }
 
 async function callSheetsFunction<T>(action: string, data?: Record<string, unknown>): Promise<T> {
-  const spreadsheetId = getSpreadsheetId();
-  
-  if (!spreadsheetId) {
-    throw new Error("Spreadsheet ID not configured. Please set it in settings.");
-  }
-
+  // Spreadsheet ID is configured in the backend secret
   const { data: result, error } = await supabase.functions.invoke("google-sheets", {
     body: {
       action,
-      spreadsheetId,
       ...data,
     },
   });
@@ -90,6 +86,7 @@ export async function searchClients(query: string): Promise<ClientData[]> {
 }
 
 // Check if the sheets integration is configured
+// Now always returns true since it's configured via backend secret
 export function isSheetsConfigured(): boolean {
-  return !!getSpreadsheetId();
+  return true;
 }

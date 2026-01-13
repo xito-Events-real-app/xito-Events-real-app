@@ -297,6 +297,7 @@ Deno.serve(async (req) => {
     const privateKeyRaw = Deno.env.get('GOOGLE_PRIVATE_KEY');
     const projectId = Deno.env.get('GOOGLE_PROJECT_ID');
     const privateKeyId = Deno.env.get('GOOGLE_PRIVATE_KEY_ID');
+    const configuredSpreadsheetId = Deno.env.get('GOOGLE_SPREADSHEET_ID');
 
     if (!clientEmail || !privateKeyRaw || !projectId) {
       throw new Error('Missing required Google service account secrets (GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY, GOOGLE_PROJECT_ID)');
@@ -319,14 +320,16 @@ Deno.serve(async (req) => {
     const accessToken = await getAccessToken(credentials);
 
     const body: SheetRequest = await req.json();
-    let { action, spreadsheetId, data, searchQuery } = body;
+    const { action, spreadsheetId: requestSpreadsheetId, data, searchQuery } = body;
+
+    // Use configured spreadsheet ID from backend secret, fall back to request
+    let spreadsheetId = configuredSpreadsheetId || requestSpreadsheetId || '';
 
     if (!spreadsheetId) {
-      throw new Error('spreadsheetId is required');
+      throw new Error('Spreadsheet ID not configured. Please contact admin.');
     }
 
     // Extract spreadsheet ID from full URL if provided
-    // Supports formats like: https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit
     if (spreadsheetId.includes('docs.google.com')) {
       const match = spreadsheetId.match(/\/d\/([a-zA-Z0-9-_]+)/);
       if (match && match[1]) {
