@@ -6,11 +6,13 @@ import { Loader2, AlertTriangle, RefreshCw, ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getClients, ClientData } from "@/lib/sheets-api";
 import { FreshClientCard } from "@/components/dashboard/FreshClientCard";
+import { ClientDetailSheet } from "@/components/dashboard/ClientDetailSheet";
 
 export default function FreshClients() {
   const [clients, setClients] = useState<ClientData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedClient, setSelectedClient] = useState<ClientData | null>(null);
 
   const fetchClients = async () => {
     setIsLoading(true);
@@ -89,7 +91,7 @@ export default function FreshClients() {
                 ) : (
                   <div className="space-y-2 max-h-[40vh] overflow-y-auto">
                     {todaysClients.map((client, i) => (
-                      <FreshClientCard key={i} client={client} />
+                      <FreshClientCard key={i} client={client} onClick={setSelectedClient} />
                     ))}
                   </div>
                 )}
@@ -110,7 +112,7 @@ export default function FreshClients() {
                 ) : (
                   <div className="space-y-2 max-h-[50vh] overflow-y-auto">
                     {otherClients.map((client, i) => (
-                      <FreshClientCard key={i} client={client} />
+                      <FreshClientCard key={i} client={client} onClick={setSelectedClient} />
                     ))}
                   </div>
                 )}
@@ -118,6 +120,13 @@ export default function FreshClients() {
             </Card>
           </>
         )}
+        
+        {/* Client Detail Sheet */}
+        <ClientDetailSheet
+          client={selectedClient}
+          isOpen={!!selectedClient}
+          onClose={() => setSelectedClient(null)}
+        />
       </div>
     </AppLayout>
   );

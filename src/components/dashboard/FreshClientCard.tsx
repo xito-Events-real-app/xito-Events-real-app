@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 interface FreshClientCardProps {
   client: ClientData;
-  onClick?: () => void;
+  onClick?: (client: ClientData) => void;
 }
 
 export function FreshClientCard({ client, onClick }: FreshClientCardProps) {
@@ -17,10 +17,16 @@ export function FreshClientCard({ client, onClick }: FreshClientCardProps) {
   );
   const location = formatLocationDisplay(client.eventLocation || '', client.eventCity || '');
 
+  const handleClick = () => {
+    if (onClick) {
+      onClick(client);
+    }
+  };
+
   return (
     <div 
-      className="flex gap-3 p-3 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer border border-border/50"
-      onClick={onClick}
+      className="flex gap-3 p-3 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer border border-border/50 active:scale-[0.98]"
+      onClick={handleClick}
     >
       {/* Handler Initials Avatar */}
       <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center shrink-0">
