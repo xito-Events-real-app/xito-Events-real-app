@@ -278,15 +278,22 @@ Deno.serve(async (req) => {
       throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON secret not configured');
     }
 
-    // Try to parse the credentials, handling potential double-encoding
+    // Try to parse the credentials, handling newlines in private key
     let credentials: ServiceAccountCredentials;
     try {
-      credentials = JSON.parse(credentialsJson);
-    } catch {
-      // If direct parse fails, try to handle if it was stored as a string
-      console.log('First parse attempt failed, trying to decode...');
-      console.log('First 50 chars:', credentialsJson.substring(0, 50));
-      throw new Error(`Invalid JSON in GOOGLE_SERVICE_ACCOUNT_JSON. First chars: ${credentialsJson.substring(0, 30)}`);
+      // The private_key may have actual newlines that need to be escaped for JSON parsing
+      // Replace actual newlines with escaped newlines, but only inside strings
+      let cleanedJson = credentialsJson.trim();
+      
+      // If the JSON has actual newline characters inside the private_key value,
+      // we need to escape them for proper parsing
+      cleanedJson = cleanedJson.replace(/\n/g, '\\n');
+      
+      credentials = JSON.parse(cleanedJson);
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError);
+      console.log('Credentials length:', credentialsJson.length);
+      throw new Error(`Invalid JSON in GOOGLE_SERVICE_ACCOUNT_JSON: ${parseError instanceof Error ? parseError.message : 'Unknown parse error'}`);
     }
     
     const accessToken = await getAccessToken(credentials);
