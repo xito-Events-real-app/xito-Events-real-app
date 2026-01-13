@@ -24,7 +24,8 @@ export const PhoneInputField = forwardRef<HTMLInputElement, PhoneInputFieldProps
       <div className={cn("phone-input-wrapper", className)}>
         <PhoneInput
           key={key}
-          international
+          international={false}
+          withCountryCallingCode={false}
           defaultCountry={defaultCountry as any}
           value={value}
           onChange={(val) => onChange(val || "")}
