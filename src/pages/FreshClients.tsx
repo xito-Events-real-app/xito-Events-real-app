@@ -82,6 +82,22 @@ export default function FreshClients() {
     return orderedStatuses;
   }, [clientsByStatus, statusOptions]);
 
+  // Get status color based on current status
+  const getStatusColor = (status: string) => {
+    const s = status.toUpperCase();
+    if (s.includes('UNTOUCHED')) return 'bg-gray-500 text-white';
+    if (s.includes('TEXTED')) return 'bg-yellow-500 text-white';
+    if (s.includes('CALL NOT')) return 'bg-orange-500 text-white';
+    if (s.includes('CALLED') && s.includes('QUOTATION PENDING')) return 'bg-blue-500 text-white';
+    if (s.includes('QUOTATION SENT')) return 'bg-indigo-500 text-white';
+    if (s.includes('BARGAINING')) return 'bg-purple-500 text-white';
+    if (s.includes('ADVANCE PENDING')) return 'bg-pink-500 text-white';
+    if (s.includes('BOOKED')) return 'bg-green-500 text-white';
+    if (s.includes('CANCELLED')) return 'bg-red-500 text-white';
+    if (s.includes('POSTPONED')) return 'bg-slate-500 text-white';
+    return 'bg-muted text-foreground';
+  };
+
   // Handle status change - update client in local state
   const handleStatusChange = (client: ClientData, newStatus: string, newStatusLog: string) => {
     setClients(prev => prev.map(c => 
@@ -142,131 +158,141 @@ export default function FreshClients() {
         subtitle={`${clients.length} total clients`}
       />
       
-      <div className="px-4 py-6 max-w-lg mx-auto space-y-4 animate-fade-in pb-24">
-        {/* Back Button */}
-        <Link to="/">
-          <Button variant="ghost" size="sm" className="gap-2">
-            <ArrowLeft className="w-4 h-4" />
-            Back to Dashboard
-          </Button>
-        </Link>
+      <div className="flex flex-col h-[calc(100vh-180px)]">
+        <div className="px-4 py-4 max-w-lg mx-auto w-full space-y-4 animate-fade-in flex-1 overflow-hidden">
+          {/* Back Button */}
+          <Link to="/">
+            <Button variant="ghost" size="sm" className="gap-2">
+              <ArrowLeft className="w-4 h-4" />
+              Back to Dashboard
+            </Button>
+          </Link>
 
-        {/* Loading State */}
-        {isLoading && (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          </div>
-        )}
-
-        {/* Error State */}
-        {!isLoading && error && (
-          <Card className="border-destructive/30 bg-destructive/5">
-            <CardContent className="p-6 text-center space-y-3">
-              <AlertTriangle className="w-10 h-10 text-destructive mx-auto" />
-              <p className="text-sm text-muted-foreground">Failed to load clients</p>
-              <Button variant="outline" size="sm" onClick={fetchData}>
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Retry
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Swipeable Status Pages */}
-        {!isLoading && !error && activeStatuses.length > 0 && (
-          <>
-            {/* Status Header with Navigation */}
-            <div className="flex items-center justify-between gap-2 py-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={goToPrevPage}
-                disabled={currentPageIndex === 0}
-                className="shrink-0"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </Button>
-              
-              <div className="flex-1 text-center">
-                <h2 className="text-sm font-bold text-foreground uppercase tracking-wide">
-                  {currentStatus}
-                </h2>
-                <p className="text-xs text-muted-foreground">
-                  {currentClients.length} client{currentClients.length !== 1 ? 's' : ''} • Page {currentPageIndex + 1} of {activeStatuses.length}
-                </p>
-              </div>
-              
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={goToNextPage}
-                disabled={currentPageIndex === activeStatuses.length - 1}
-                className="shrink-0"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </Button>
+          {/* Loading State */}
+          {isLoading && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
+          )}
 
-            {/* Page Indicator Dots */}
-            <div className="flex justify-center gap-1.5 py-2">
-              {activeStatuses.map((status, idx) => (
-                <button
-                  key={status}
-                  onClick={() => setCurrentPageIndex(idx)}
-                  className={cn(
-                    "w-2 h-2 rounded-full transition-all",
-                    idx === currentPageIndex 
-                      ? "bg-primary w-4" 
-                      : "bg-muted-foreground/30 hover:bg-muted-foreground/50"
-                  )}
-                  aria-label={`Go to ${status}`}
-                />
-              ))}
-            </div>
-
-            {/* Client Cards with Swipe */}
-            <Card className="shadow-soft overflow-hidden">
-              <CardContent 
-                ref={containerRef}
-                className="p-4"
-                onTouchStart={onTouchStart}
-                onTouchMove={onTouchMove}
-                onTouchEnd={onTouchEnd}
-              >
-                {currentClients.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-6">
-                    No clients in this category
-                  </p>
-                ) : (
-                  <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-                    {currentClients.map((client, i) => (
-                      <FreshClientCard 
-                        key={client.rowNumber || i} 
-                        client={client} 
-                        onClick={setSelectedClient}
-                        statusOptions={statusOptions}
-                        onStatusChange={handleStatusChange}
-                      />
-                    ))}
-                  </div>
-                )}
+          {/* Error State */}
+          {!isLoading && error && (
+            <Card className="border-destructive/30 bg-destructive/5">
+              <CardContent className="p-6 text-center space-y-3">
+                <AlertTriangle className="w-10 h-10 text-destructive mx-auto" />
+                <p className="text-sm text-muted-foreground">Failed to load clients</p>
+                <Button variant="outline" size="sm" onClick={fetchData}>
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Retry
+                </Button>
               </CardContent>
             </Card>
+          )}
 
-            {/* Swipe Hint */}
-            <p className="text-xs text-muted-foreground text-center">
-              ← Swipe left or right to change category →
-            </p>
-          </>
-        )}
+          {/* Swipeable Status Pages */}
+          {!isLoading && !error && activeStatuses.length > 0 && (
+            <>
+              {/* Colored Status Header */}
+              <div className={cn(
+                "rounded-xl px-4 py-3 text-center",
+                getStatusColor(currentStatus)
+              )}>
+                <h2 className="text-lg font-bold uppercase tracking-wide">
+                  {currentStatus}
+                </h2>
+                <p className="text-xs opacity-80">
+                  {currentClients.length} client{currentClients.length !== 1 ? 's' : ''}
+                </p>
+              </div>
 
-        {/* Empty State */}
-        {!isLoading && !error && activeStatuses.length === 0 && (
-          <Card className="shadow-soft">
-            <CardContent className="p-6 text-center">
-              <p className="text-sm text-muted-foreground">No clients found</p>
-            </CardContent>
-          </Card>
+              {/* Client Cards with Swipe */}
+              <Card className="shadow-soft overflow-hidden flex-1">
+                <CardContent 
+                  ref={containerRef}
+                  className="p-4 h-full"
+                  onTouchStart={onTouchStart}
+                  onTouchMove={onTouchMove}
+                  onTouchEnd={onTouchEnd}
+                >
+                  {currentClients.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-6">
+                      No clients in this category
+                    </p>
+                  ) : (
+                    <div className="space-y-2 max-h-[45vh] overflow-y-auto">
+                      {currentClients.map((client, i) => (
+                        <FreshClientCard 
+                          key={client.rowNumber || i} 
+                          client={client} 
+                          onClick={setSelectedClient}
+                          statusOptions={statusOptions}
+                          onStatusChange={handleStatusChange}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {/* Empty State */}
+          {!isLoading && !error && activeStatuses.length === 0 && (
+            <Card className="shadow-soft">
+              <CardContent className="p-6 text-center">
+                <p className="text-sm text-muted-foreground">No clients found</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Swipe Navigation - Fixed above bottom nav */}
+        {!isLoading && !error && activeStatuses.length > 0 && (
+          <div className="fixed bottom-20 left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border px-4 py-3 z-40">
+            <div className="max-w-lg mx-auto">
+              <div className="flex items-center justify-between gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={goToPrevPage}
+                  disabled={currentPageIndex === 0}
+                  className="shrink-0"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </Button>
+                
+                {/* Page Indicator Dots */}
+                <div className="flex justify-center gap-1.5 flex-1 flex-wrap max-w-[200px] mx-auto">
+                  {activeStatuses.map((status, idx) => (
+                    <button
+                      key={status}
+                      onClick={() => setCurrentPageIndex(idx)}
+                      className={cn(
+                        "w-2 h-2 rounded-full transition-all",
+                        idx === currentPageIndex 
+                          ? "bg-primary w-4" 
+                          : "bg-muted-foreground/30 hover:bg-muted-foreground/50"
+                      )}
+                      aria-label={`Go to ${status}`}
+                    />
+                  ))}
+                </div>
+                
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={goToNextPage}
+                  disabled={currentPageIndex === activeStatuses.length - 1}
+                  className="shrink-0"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground text-center mt-1">
+                Page {currentPageIndex + 1} of {activeStatuses.length} • Swipe to navigate
+              </p>
+            </div>
+          </div>
         )}
         
         {/* Client Detail Sheet */}
