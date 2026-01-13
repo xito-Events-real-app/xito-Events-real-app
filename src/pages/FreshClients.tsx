@@ -2,8 +2,8 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { AppLayout, PageHeader } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, AlertTriangle, RefreshCw, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Loader2, AlertTriangle, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
+
 import { getClients, ClientData, getCurrentStatus, getDropdowns } from "@/lib/sheets-api";
 import { FreshClientCard } from "@/components/dashboard/FreshClientCard";
 import { ClientDetailSheet } from "@/components/dashboard/ClientDetailSheet";
@@ -158,15 +158,8 @@ export default function FreshClients() {
         subtitle={`${clients.length} total clients`}
       />
       
-      <div className="flex flex-col h-[calc(100vh-180px)]">
+      <div className="flex flex-col h-[calc(100vh-140px)]">
         <div className="px-4 py-4 max-w-lg mx-auto w-full space-y-4 animate-fade-in flex-1 overflow-hidden">
-          {/* Back Button */}
-          <Link to="/">
-            <Button variant="ghost" size="sm" className="gap-2">
-              <ArrowLeft className="w-4 h-4" />
-              Back to Dashboard
-            </Button>
-          </Link>
 
           {/* Loading State */}
           {isLoading && (
@@ -192,6 +185,50 @@ export default function FreshClients() {
           {/* Swipeable Status Pages */}
           {!isLoading && !error && activeStatuses.length > 0 && (
             <>
+              {/* Top Navigation Bar */}
+              <div className="flex items-center justify-between gap-2 bg-muted/50 rounded-lg px-2 py-1.5">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={goToPrevPage}
+                  disabled={currentPageIndex === 0}
+                  className="shrink-0 h-7 w-7 p-0"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                
+                {/* Page Indicator Dots */}
+                <div className="flex items-center gap-1.5 flex-wrap justify-center">
+                  {activeStatuses.map((status, idx) => (
+                    <button
+                      key={status}
+                      onClick={() => setCurrentPageIndex(idx)}
+                      className={cn(
+                        "w-1.5 h-1.5 rounded-full transition-all",
+                        idx === currentPageIndex 
+                          ? "bg-primary w-3" 
+                          : "bg-muted-foreground/30"
+                      )}
+                      aria-label={`Go to ${status}`}
+                    />
+                  ))}
+                </div>
+
+                <span className="text-xs text-muted-foreground min-w-[32px] text-center">
+                  {currentPageIndex + 1}/{activeStatuses.length}
+                </span>
+                
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={goToNextPage}
+                  disabled={currentPageIndex === activeStatuses.length - 1}
+                  className="shrink-0 h-7 w-7 p-0"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+
               {/* Colored Status Header */}
               <div className={cn(
                 "rounded-xl px-4 py-3 text-center",
@@ -219,7 +256,7 @@ export default function FreshClients() {
                       No clients in this category
                     </p>
                   ) : (
-                    <div className="space-y-2 max-h-[45vh] overflow-y-auto">
+                    <div className="space-y-2 max-h-[50vh] overflow-y-auto">
                       {currentClients.map((client, i) => (
                         <FreshClientCard 
                           key={client.rowNumber || i} 
@@ -246,53 +283,6 @@ export default function FreshClients() {
           )}
         </div>
 
-        {/* Swipe Navigation - Fixed above bottom nav */}
-        {!isLoading && !error && activeStatuses.length > 0 && (
-          <div className="fixed bottom-16 left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border px-4 py-2 z-40">
-            <div className="max-w-lg mx-auto flex items-center justify-between gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={goToPrevPage}
-                disabled={currentPageIndex === 0}
-                className="shrink-0 h-8 w-8 p-0"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              
-              {/* Page Indicator Dots */}
-              <div className="flex items-center gap-1.5 flex-wrap justify-center">
-                {activeStatuses.map((status, idx) => (
-                  <button
-                    key={status}
-                    onClick={() => setCurrentPageIndex(idx)}
-                    className={cn(
-                      "w-1.5 h-1.5 rounded-full transition-all",
-                      idx === currentPageIndex 
-                        ? "bg-primary w-3" 
-                        : "bg-muted-foreground/30"
-                    )}
-                    aria-label={`Go to ${status}`}
-                  />
-                ))}
-              </div>
-
-              <span className="text-xs text-muted-foreground min-w-[40px] text-center">
-                {currentPageIndex + 1}/{activeStatuses.length}
-              </span>
-              
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={goToNextPage}
-                disabled={currentPageIndex === activeStatuses.length - 1}
-                className="shrink-0 h-8 w-8 p-0"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-        )}
         
         {/* Client Detail Sheet */}
         <ClientDetailSheet
