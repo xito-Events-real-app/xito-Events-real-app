@@ -168,6 +168,32 @@ export function NepaliCalendar({
             </button>
           );
         })}
+        
+        {/* Trailing empty cells with ** option */}
+        {(() => {
+          const totalCells = firstDayWeekday + daysInMonth;
+          const rows = Math.ceil(totalCells / 7);
+          const totalGridCells = rows * 7;
+          const trailingEmpty = totalGridCells - totalCells;
+          const unknownSelected = isUnknownDaySelected();
+          
+          return Array.from({ length: trailingEmpty }).map((_, i) => (
+            <button
+              type="button"
+              key={`trailing-${i}`}
+              onClick={() => handleDayClick("**")}
+              className={cn(
+                "h-10 rounded-lg text-sm font-bold transition-all press-effect border-2 border-dashed",
+                unknownSelected
+                  ? "gradient-primary text-white border-transparent"
+                  : "border-muted-foreground/30 text-muted-foreground hover:bg-muted hover:border-primary/50"
+              )}
+              title="Unknown date - select if day is not confirmed"
+            >
+              **
+            </button>
+          ));
+        })()}
       </div>
 
       {/* Selected Dates Display */}
