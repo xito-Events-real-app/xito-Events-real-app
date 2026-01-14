@@ -124,29 +124,25 @@ export function NepaliCalendar({
 
       {/* Days Grid */}
       <div className="grid grid-cols-7 gap-1">
-        {/* Empty cells with ** option in one of them */}
+        {/* Empty cells with ** option in ALL of them */}
         {Array.from({ length: firstDayWeekday }).map((_, i) => {
-          // Show ** button in the first empty cell
-          if (i === 0) {
-            const unknownSelected = isUnknownDaySelected();
-            return (
-              <button
-                type="button"
-                key={`empty-${i}`}
-                onClick={() => handleDayClick("**")}
-                className={cn(
-                  "h-10 rounded-lg text-sm font-bold transition-all press-effect border-2 border-dashed",
-                  unknownSelected
-                    ? "gradient-primary text-white border-transparent"
-                    : "border-muted-foreground/30 text-muted-foreground hover:bg-muted hover:border-primary/50"
-                )}
-                title="Unknown date - select if day is not confirmed"
-              >
-                **
-              </button>
-            );
-          }
-          return <div key={`empty-${i}`} />;
+          const unknownSelected = isUnknownDaySelected();
+          return (
+            <button
+              type="button"
+              key={`empty-${i}`}
+              onClick={() => handleDayClick("**")}
+              className={cn(
+                "h-10 rounded-lg text-sm font-bold transition-all press-effect border-2 border-dashed",
+                unknownSelected
+                  ? "gradient-primary text-white border-transparent"
+                  : "border-muted-foreground/30 text-muted-foreground hover:bg-muted hover:border-primary/50"
+              )}
+              title="Unknown date - select if day is not confirmed"
+            >
+              **
+            </button>
+          );
         })}
         
         {/* Day cells */}
