@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { NepaliDateObject, formatBSDate, nepaliMonthsEnglish } from "@/lib/nepali-date";
+import { NepaliDateObject, formatBSDate, nepaliMonthsEnglish, isUnknownDay, getDayDisplay } from "@/lib/nepali-date";
 import { Search, X, Calendar, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -48,8 +48,8 @@ export function EventSelector({
     }
   };
 
-  const isUnknownDay = date.day === "**";
-  const dateDisplay = `${nepaliMonthsEnglish[date.month - 1]} ${isUnknownDay ? "**" : date.day}`;
+  const isUnknown = isUnknownDay(date.day);
+  const dateDisplay = `${nepaliMonthsEnglish[date.month - 1]} ${getDayDisplay(date.day)}`;
 
   return (
     <div className="bg-muted/50 rounded-lg p-3 border border-border">

@@ -146,25 +146,17 @@ export function NepaliCalendar({
       {/* Days Grid */}
       <div className="grid grid-cols-7 gap-1">
         {/* Empty cells with ** option in ALL of them */}
-        {Array.from({ length: firstDayWeekday }).map((_, i) => {
-          const unknownCount = getUnknownDayCount();
-          return (
-            <button
-              type="button"
-              key={`empty-${i}`}
-              onClick={handleUnknownDayClick}
-              className={cn(
-                "h-10 rounded-lg text-sm font-bold transition-all press-effect border-2 border-dashed",
-                unknownCount > 0
-                  ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-600"
-                  : "border-muted-foreground/30 text-muted-foreground hover:bg-muted hover:border-primary/50"
-              )}
-              title="Unknown date - click to add an event with unconfirmed date"
-            >
-              **
-            </button>
-          );
-        })}
+        {Array.from({ length: firstDayWeekday }).map((_, i) => (
+          <button
+            type="button"
+            key={`empty-${i}`}
+            onClick={handleUnknownDayClick}
+            className="h-10 rounded-lg text-sm font-bold transition-all press-effect border-2 border-dashed border-muted-foreground/30 text-muted-foreground hover:bg-muted hover:border-primary/50"
+            title="Unknown date - click to add an event with unconfirmed date"
+          >
+            **
+          </button>
+        ))}
         
         {/* Day cells */}
         {days.map((day) => {
@@ -196,19 +188,13 @@ export function NepaliCalendar({
           const rows = Math.ceil(totalCells / 7);
           const totalGridCells = rows * 7;
           const trailingEmpty = totalGridCells - totalCells;
-          const unknownCount = getUnknownDayCount();
           
           return Array.from({ length: trailingEmpty }).map((_, i) => (
             <button
               type="button"
               key={`trailing-${i}`}
               onClick={handleUnknownDayClick}
-              className={cn(
-                "h-10 rounded-lg text-sm font-bold transition-all press-effect border-2 border-dashed",
-                unknownCount > 0
-                  ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-600"
-                  : "border-muted-foreground/30 text-muted-foreground hover:bg-muted hover:border-primary/50"
-              )}
+              className="h-10 rounded-lg text-sm font-bold transition-all press-effect border-2 border-dashed border-muted-foreground/30 text-muted-foreground hover:bg-muted hover:border-primary/50"
               title="Unknown date - click to add an event with unconfirmed date"
             >
               **
