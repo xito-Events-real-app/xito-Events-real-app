@@ -48,7 +48,8 @@ export function EventSelector({
     }
   };
 
-  const dateDisplay = `${nepaliMonthsEnglish[date.month - 1]} ${date.day}`;
+  const isUnknownDay = date.day === "**";
+  const dateDisplay = `${nepaliMonthsEnglish[date.month - 1]} ${isUnknownDay ? "**" : date.day}`;
 
   return (
     <div className="bg-muted/50 rounded-lg p-3 border border-border">

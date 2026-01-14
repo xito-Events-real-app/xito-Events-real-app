@@ -45,6 +45,7 @@ export function ClientDetailSheet({ client, isOpen, onClose, onSave }: ClientDet
   const [oldClientName, setOldClientName] = useState("");
   const [whoAdded, setWhoAdded] = useState("");
   const [inquiryDate, setInquiryDate] = useState<Date | undefined>(undefined);
+  const [inquiryTime, setInquiryTime] = useState("");
 
   // Combine all event options - MUST be before any conditional returns
   const allEventOptions = useMemo(() => {
@@ -59,7 +60,10 @@ export function ClientDetailSheet({ client, isOpen, onClose, onSave }: ClientDet
     return [...selectedDates].sort((a, b) => {
       if (a.year !== b.year) return a.year - b.year;
       if (a.month !== b.month) return a.month - b.month;
-      return a.day - b.day;
+      // Handle ** (unknown day) - treat as 99 for sorting
+      const dayA = a.day === "**" ? 99 : a.day;
+      const dayB = b.day === "**" ? 99 : b.day;
+      return dayA - dayB;
     });
   }, [selectedDates]);
 
@@ -106,10 +110,12 @@ export function ClientDetailSheet({ client, isOpen, onClose, onSave }: ClientDet
     
     for (let i = 0; i < years.length; i++) {
       if (years[i] && months[i] && days[i]) {
+        // Handle ** (unknown day)
+        const dayValue = days[i].trim();
         const date: NepaliDateObject = {
           year: parseInt(years[i]),
           month: parseInt(months[i]),
-          day: parseInt(days[i])
+          day: dayValue === "**" ? "**" : parseInt(dayValue)
         };
         dates.push(date);
         if (eventNames[i]) {
@@ -188,6 +194,7 @@ export function ClientDetailSheet({ client, isOpen, onClose, onSave }: ClientDet
     if (client.inquiryDateAD) {
       setInquiryDate(new Date(client.inquiryDateAD));
     }
+    setInquiryTime(client.inquiryTime || '');
     
     setIsEditing(true);
   };
@@ -215,6 +222,7 @@ export function ClientDetailSheet({ client, isOpen, onClose, onSave }: ClientDet
     setOldClientName("");
     setWhoAdded("");
     setInquiryDate(undefined);
+    setInquiryTime("");
   };
 
   const handleClientLocationChange = (location: string) => {
@@ -265,13 +273,22 @@ export function ClientDetailSheet({ client, isOpen, onClose, onSave }: ClientDet
       const sortedForSave = [...selectedDates].sort((a, b) => {
         if (a.year !== b.year) return a.year - b.year;
         if (a.month !== b.month) return a.month - b.month;
-        return a.day - b.day;
+        // Handle ** (unknown day) - treat as 99 for sorting
+        const dayA = a.day === "**" ? 99 : a.day;
+        const dayB = b.day === "**" ? 99 : b.day;
+        return (dayA as number) - (dayB as number);
       });
 
       const eventYears = sortedForSave.map(d => d.year).join("\n");
       const eventMonths = sortedForSave.map(d => d.month).join("\n");
-      const eventDays = sortedForSave.map(d => d.day).join("\n");
-      const eventADDates = sortedForSave.map(d => format(bsToAD(d.year, d.month, d.day), "yyyy-MM-dd")).join("\n");
+      const eventDays = sortedForSave.map(d => d.day === "**" ? "**" : d.day).join("\n");
+      const eventADDates = sortedForSave.map(d => {
+        const adResult = bsToAD(d.year, d.month, d.day);
+        if (d.day === "**") {
+          return adResult as string;
+        }
+        return format(adResult as Date, "yyyy-MM-dd");
+      }).join("\n");
       const eventsFormatted = sortedForSave
         .map(d => eventsByDate[getDateKey(d)] || "")
         .filter(Boolean)
@@ -297,6 +314,7 @@ export function ClientDetailSheet({ client, isOpen, onClose, onSave }: ClientDet
         whoAdded,
         description: editedClient.description,
         inquiryDateAD: inquiryDate ? format(inquiryDate, "yyyy-MM-dd") : editedClient.inquiryDateAD,
+        inquiryTime,
       };
 
       await updateClient(updatedClient);
@@ -522,6 +540,12 @@ export function ClientDetailSheet({ client, isOpen, onClose, onSave }: ClientDet
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 />
               </div>
+              <FormInput 
+                label="Inquiry Time" 
+                value={inquiryTime} 
+                onChange={setInquiryTime} 
+                type="time" 
+              />
               <FormInput 
                 label="Description" 
                 value={editedClient?.description || ''} 
