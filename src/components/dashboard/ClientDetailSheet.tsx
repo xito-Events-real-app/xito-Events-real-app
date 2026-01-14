@@ -8,7 +8,7 @@ import { FormSection, FormInput, FormSelect, CountrySelector, PhoneInputField, N
 import { EventSelector } from "@/components/form/EventSelector";
 import { getCountryCodeFromName } from "@/components/form/CountrySelector";
 import { valleyCities, nepalCitiesOutsideValley, clientLocationOptions } from "@/lib/form-data";
-import { NepaliDateObject, bsToAD, formatBSDate } from "@/lib/nepali-date";
+import { NepaliDateObject, bsToAD, formatBSDate, isUnknownDay, getDayForStorage } from "@/lib/nepali-date";
 import { useDropdownData } from "@/hooks/useDropdownData";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -60,9 +60,9 @@ export function ClientDetailSheet({ client, isOpen, onClose, onSave }: ClientDet
     return [...selectedDates].sort((a, b) => {
       if (a.year !== b.year) return a.year - b.year;
       if (a.month !== b.month) return a.month - b.month;
-      // Handle ** (unknown day) - treat as 99 for sorting
-      const dayA = a.day === "**" ? 99 : a.day;
-      const dayB = b.day === "**" ? 99 : b.day;
+      // Handle unknown day - treat as 99 for sorting
+      const dayA: number = isUnknownDay(a.day) ? 99 : (a.day as number);
+      const dayB: number = isUnknownDay(b.day) ? 99 : (b.day as number);
       return dayA - dayB;
     });
   }, [selectedDates]);
@@ -281,10 +281,10 @@ export function ClientDetailSheet({ client, isOpen, onClose, onSave }: ClientDet
 
       const eventYears = sortedForSave.map(d => d.year).join("\n");
       const eventMonths = sortedForSave.map(d => d.month).join("\n");
-      const eventDays = sortedForSave.map(d => d.day === "**" ? "**" : d.day).join("\n");
+      const eventDays = sortedForSave.map(d => getDayForStorage(d.day)).join("\n");
       const eventADDates = sortedForSave.map(d => {
         const adResult = bsToAD(d.year, d.month, d.day);
-        if (d.day === "**") {
+        if (isUnknownDay(d.day)) {
           return adResult as string;
         }
         return format(adResult as Date, "yyyy-MM-dd");

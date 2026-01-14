@@ -5,7 +5,7 @@ import { FormSection, FormInput, FormSelect, CountrySelector, PhoneInputField, N
 import { EventSelector } from "@/components/form/EventSelector";
 import { getCountryCodeFromName } from "@/components/form/CountrySelector";
 import { valleyCities, nepalCitiesOutsideValley, clientLocationOptions } from "@/lib/form-data";
-import { NepaliDateObject, bsToAD, adToBS, formatBSDate } from "@/lib/nepali-date";
+import { NepaliDateObject, bsToAD, adToBS, formatBSDate, isUnknownDay, getDayForStorage } from "@/lib/nepali-date";
 import { useDropdownData } from "@/hooks/useDropdownData";
 import { addClient, isSheetsConfigured } from "@/lib/sheets-api";
 import { toast } from "@/hooks/use-toast";
@@ -53,14 +53,14 @@ export default function QuickAdd() {
   // Helper to get unique key for a date
   const getDateKey = (date: NepaliDateObject) => `${date.year}-${date.month}-${date.day}`;
 
-  // Sort dates in ascending order (** dates go to end of their month)
+  // Sort dates in ascending order (unknown dates go to end of their month)
   const sortedDates = useMemo(() => {
     return [...selectedDates].sort((a, b) => {
       if (a.year !== b.year) return a.year - b.year;
       if (a.month !== b.month) return a.month - b.month;
-      // Handle ** (unknown day) - treat as 99 for sorting
-      const dayA = a.day === "**" ? 99 : a.day;
-      const dayB = b.day === "**" ? 99 : b.day;
+      // Handle unknown day - treat as 99 for sorting
+      const dayA: number = isUnknownDay(a.day) ? 99 : (a.day as number);
+      const dayB: number = isUnknownDay(b.day) ? 99 : (b.day as number);
       return dayA - dayB;
     });
   }, [selectedDates]);
@@ -142,10 +142,10 @@ export default function QuickAdd() {
       const sortedForSave = [...selectedDates].sort((a, b) => {
         if (a.year !== b.year) return a.year - b.year;
         if (a.month !== b.month) return a.month - b.month;
-        // Handle ** (unknown day) - treat as 99 for sorting
-        const dayA = a.day === "**" ? 99 : a.day;
-        const dayB = b.day === "**" ? 99 : b.day;
-        return (dayA as number) - (dayB as number);
+        // Handle unknown day - treat as 99 for sorting
+        const dayA = isUnknownDay(a.day) ? 99 : (a.day as number);
+        const dayB = isUnknownDay(b.day) ? 99 : (b.day as number);
+        return dayA - dayB;
       });
 
       // Format dates for saving - all in single row, newline separated for vertical stacking
@@ -153,7 +153,7 @@ export default function QuickAdd() {
       const eventADDates = sortedForSave.map(d => {
         const adResult = bsToAD(d.year, d.month, d.day);
         // Handle unknown day case
-        if (d.day === "**") {
+        if (isUnknownDay(d.day)) {
           return adResult as string; // Already formatted as "YYYY-MM-**"
         }
         return format(adResult as Date, "yyyy-MM-dd");
@@ -162,7 +162,7 @@ export default function QuickAdd() {
       // Get years, months, days as newline-separated for vertical stacking in cells
       const eventYears = sortedForSave.map(d => d.year).join("\n");
       const eventMonths = sortedForSave.map(d => d.month).join("\n");
-      const eventDays = sortedForSave.map(d => d.day === "**" ? "**" : d.day).join("\n");
+      const eventDays = sortedForSave.map(d => getDayForStorage(d.day)).join("\n");
 
       // Combine events for all selected dates (in sorted order), newline separated
       const eventsFormatted = sortedForSave

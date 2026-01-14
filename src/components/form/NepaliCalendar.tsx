@@ -9,6 +9,8 @@ import {
   nepaliMonthsEnglish,
   bsToAD,
   formatBSDate,
+  isUnknownDay,
+  getDayDisplay,
 } from "@/lib/nepali-date";
 import { ChevronLeft, ChevronRight, Calendar, X } from "lucide-react";
 import { format } from "date-fns";
@@ -37,7 +39,7 @@ export function NepaliCalendar({
   const firstDayWeekday = firstDayAD.getDay();
 
   const isSelected = useCallback(
-    (day: number | "**") => {
+    (day: number) => {
       return selectedDates.some(
         (d) => d.year === viewYear && d.month === viewMonth && d.day === day
       );
@@ -45,14 +47,14 @@ export function NepaliCalendar({
     [selectedDates, viewYear, viewMonth]
   );
 
-  // Check if unknown day (**) is selected for current view
-  const isUnknownDaySelected = useCallback(() => {
-    return selectedDates.some(
-      (d) => d.year === viewYear && d.month === viewMonth && d.day === "**"
-    );
+  // Count how many unknown dates are selected for current month/year
+  const getUnknownDayCount = useCallback(() => {
+    return selectedDates.filter(
+      (d) => d.year === viewYear && d.month === viewMonth && isUnknownDay(d.day)
+    ).length;
   }, [selectedDates, viewYear, viewMonth]);
 
-  const handleDayClick = (day: number | "**") => {
+  const handleDayClick = (day: number) => {
     const newDate: NepaliDateObject = { year: viewYear, month: viewMonth, day };
     
     if (multiSelect) {
@@ -70,6 +72,25 @@ export function NepaliCalendar({
     } else {
       onDateSelect([newDate]);
     }
+  };
+
+  // Handle unknown date click - always adds a new entry with unique ID
+  const handleUnknownDayClick = () => {
+    const uniqueId = `**-${Date.now()}`;
+    const newDate: NepaliDateObject = { year: viewYear, month: viewMonth, day: uniqueId };
+    
+    if (multiSelect) {
+      onDateSelect([...selectedDates, newDate]);
+    } else {
+      onDateSelect([newDate]);
+    }
+  };
+
+  // Remove a specific date by its exact day value (including unique ID for **)
+  const handleRemoveDate = (date: NepaliDateObject) => {
+    onDateSelect(selectedDates.filter(
+      (d) => !(d.year === date.year && d.month === date.month && d.day === date.day)
+    ));
   };
 
   const goToPrevMonth = () => {
@@ -126,19 +147,19 @@ export function NepaliCalendar({
       <div className="grid grid-cols-7 gap-1">
         {/* Empty cells with ** option in ALL of them */}
         {Array.from({ length: firstDayWeekday }).map((_, i) => {
-          const unknownSelected = isUnknownDaySelected();
+          const unknownCount = getUnknownDayCount();
           return (
             <button
               type="button"
               key={`empty-${i}`}
-              onClick={() => handleDayClick("**")}
+              onClick={handleUnknownDayClick}
               className={cn(
                 "h-10 rounded-lg text-sm font-bold transition-all press-effect border-2 border-dashed",
-                unknownSelected
-                  ? "gradient-primary text-white border-transparent"
+                unknownCount > 0
+                  ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-600"
                   : "border-muted-foreground/30 text-muted-foreground hover:bg-muted hover:border-primary/50"
               )}
-              title="Unknown date - select if day is not confirmed"
+              title="Unknown date - click to add an event with unconfirmed date"
             >
               **
             </button>
@@ -175,20 +196,20 @@ export function NepaliCalendar({
           const rows = Math.ceil(totalCells / 7);
           const totalGridCells = rows * 7;
           const trailingEmpty = totalGridCells - totalCells;
-          const unknownSelected = isUnknownDaySelected();
+          const unknownCount = getUnknownDayCount();
           
           return Array.from({ length: trailingEmpty }).map((_, i) => (
             <button
               type="button"
               key={`trailing-${i}`}
-              onClick={() => handleDayClick("**")}
+              onClick={handleUnknownDayClick}
               className={cn(
                 "h-10 rounded-lg text-sm font-bold transition-all press-effect border-2 border-dashed",
-                unknownSelected
-                  ? "gradient-primary text-white border-transparent"
+                unknownCount > 0
+                  ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-600"
                   : "border-muted-foreground/30 text-muted-foreground hover:bg-muted hover:border-primary/50"
               )}
-              title="Unknown date - select if day is not confirmed"
+              title="Unknown date - click to add an event with unconfirmed date"
             >
               **
             </button>
@@ -204,9 +225,9 @@ export function NepaliCalendar({
           </p>
           <div className="flex flex-wrap gap-2">
             {selectedDates.map((date, i) => {
+              const isUnknown = isUnknownDay(date.day);
               const adResult = bsToAD(date.year, date.month, date.day);
-              const isUnknownDay = date.day === "**";
-              const adDisplay = isUnknownDay 
+              const adDisplay = isUnknown 
                 ? (adResult as string).split('-').slice(0, 2).join('-') + "-**"
                 : format(adResult as Date, "MMM d");
               
@@ -215,17 +236,17 @@ export function NepaliCalendar({
                   key={i}
                   className={cn(
                     "flex items-center gap-1 px-2 py-1 rounded-lg text-xs",
-                    isUnknownDay ? "bg-amber-100 dark:bg-amber-900/30" : "bg-primary/10"
+                    isUnknown ? "bg-amber-100 dark:bg-amber-900/30" : "bg-primary/10"
                   )}
                 >
-                  <Calendar className={cn("w-3 h-3", isUnknownDay ? "text-amber-600" : "text-primary")} />
+                  <Calendar className={cn("w-3 h-3", isUnknown ? "text-amber-600" : "text-primary")} />
                   <span className="text-foreground">{formatBSDate(date)}</span>
                   <span className="text-muted-foreground">
                     ({adDisplay})
                   </span>
                   <button
                     type="button"
-                    onClick={() => handleDayClick(date.day)}
+                    onClick={() => handleRemoveDate(date)}
                     className="ml-1 text-muted-foreground hover:text-destructive"
                   >
                     <X className="w-3 h-3" />
