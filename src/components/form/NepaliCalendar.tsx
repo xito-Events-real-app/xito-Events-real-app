@@ -32,11 +32,12 @@ export function NepaliCalendar({
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   
   // Get the weekday of the first day (0 = Sunday)
-  const firstDayAD = bsToAD(viewYear, viewMonth, 1);
+  // Always pass 1 (not **) to get the first day of month
+  const firstDayAD = bsToAD(viewYear, viewMonth, 1) as Date;
   const firstDayWeekday = firstDayAD.getDay();
 
   const isSelected = useCallback(
-    (day: number) => {
+    (day: number | "**") => {
       return selectedDates.some(
         (d) => d.year === viewYear && d.month === viewMonth && d.day === day
       );
@@ -44,7 +45,14 @@ export function NepaliCalendar({
     [selectedDates, viewYear, viewMonth]
   );
 
-  const handleDayClick = (day: number) => {
+  // Check if unknown day (**) is selected for current view
+  const isUnknownDaySelected = useCallback(() => {
+    return selectedDates.some(
+      (d) => d.year === viewYear && d.month === viewMonth && d.day === "**"
+    );
+  }, [selectedDates, viewYear, viewMonth]);
+
+  const handleDayClick = (day: number | "**") => {
     const newDate: NepaliDateObject = { year: viewYear, month: viewMonth, day };
     
     if (multiSelect) {
@@ -116,10 +124,30 @@ export function NepaliCalendar({
 
       {/* Days Grid */}
       <div className="grid grid-cols-7 gap-1">
-        {/* Empty cells for days before the 1st */}
-        {Array.from({ length: firstDayWeekday }).map((_, i) => (
-          <div key={`empty-${i}`} />
-        ))}
+        {/* Empty cells with ** option in one of them */}
+        {Array.from({ length: firstDayWeekday }).map((_, i) => {
+          // Show ** button in the first empty cell
+          if (i === 0) {
+            const unknownSelected = isUnknownDaySelected();
+            return (
+              <button
+                type="button"
+                key={`empty-${i}`}
+                onClick={() => handleDayClick("**")}
+                className={cn(
+                  "h-10 rounded-lg text-sm font-bold transition-all press-effect border-2 border-dashed",
+                  unknownSelected
+                    ? "gradient-primary text-white border-transparent"
+                    : "border-muted-foreground/30 text-muted-foreground hover:bg-muted hover:border-primary/50"
+                )}
+                title="Unknown date - select if day is not confirmed"
+              >
+                **
+              </button>
+            );
+          }
+          return <div key={`empty-${i}`} />;
+        })}
         
         {/* Day cells */}
         {days.map((day) => {
@@ -154,16 +182,24 @@ export function NepaliCalendar({
           </p>
           <div className="flex flex-wrap gap-2">
             {selectedDates.map((date, i) => {
-              const adDate = bsToAD(date.year, date.month, date.day);
+              const adResult = bsToAD(date.year, date.month, date.day);
+              const isUnknownDay = date.day === "**";
+              const adDisplay = isUnknownDay 
+                ? (adResult as string).split('-').slice(0, 2).join('-') + "-**"
+                : format(adResult as Date, "MMM d");
+              
               return (
                 <div
                   key={i}
-                  className="flex items-center gap-1 px-2 py-1 bg-primary/10 rounded-lg text-xs"
+                  className={cn(
+                    "flex items-center gap-1 px-2 py-1 rounded-lg text-xs",
+                    isUnknownDay ? "bg-amber-100 dark:bg-amber-900/30" : "bg-primary/10"
+                  )}
                 >
-                  <Calendar className="w-3 h-3 text-primary" />
+                  <Calendar className={cn("w-3 h-3", isUnknownDay ? "text-amber-600" : "text-primary")} />
                   <span className="text-foreground">{formatBSDate(date)}</span>
                   <span className="text-muted-foreground">
-                    ({format(adDate, "MMM d")})
+                    ({adDisplay})
                   </span>
                   <button
                     type="button"

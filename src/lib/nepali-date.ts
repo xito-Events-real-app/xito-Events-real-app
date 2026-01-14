@@ -4,7 +4,7 @@ import NepaliDate from "nepali-date-converter";
 export interface NepaliDateObject {
   year: number;
   month: number;
-  day: number;
+  day: number | "**"; // Support unknown day
 }
 
 export interface DateConversion {
@@ -35,7 +35,16 @@ export function adToBS(adDate: Date): NepaliDateObject {
 }
 
 // Convert BS to AD
-export function bsToAD(year: number, month: number, day: number): Date {
+export function bsToAD(year: number, month: number, day: number | "**"): Date | string {
+  // Handle unknown day - return formatted string
+  if (day === "**") {
+    // Use the first day to get the month/year, then format with **
+    const nepaliDate = new NepaliDate(year, month - 1, 1);
+    const jsDate = nepaliDate.toJsDate();
+    const adYear = jsDate.getFullYear();
+    const adMonth = String(jsDate.getMonth() + 1).padStart(2, '0');
+    return `${adYear}-${adMonth}-**`;
+  }
   const nepaliDate = new NepaliDate(year, month - 1, day);
   return nepaliDate.toJsDate();
 }
@@ -43,7 +52,14 @@ export function bsToAD(year: number, month: number, day: number): Date {
 // Format BS date as string
 export function formatBSDate(bs: NepaliDateObject): string {
   const monthName = nepaliMonthsEnglish[bs.month - 1];
-  return `${bs.day} ${monthName} ${bs.year}`;
+  const dayDisplay = bs.day === "**" ? "**" : bs.day;
+  return `${dayDisplay} ${monthName} ${bs.year}`;
+}
+
+// Format BS date for sheet storage (year month day format)
+export function formatBSDateForSheet(bs: NepaliDateObject): string {
+  const dayDisplay = bs.day === "**" ? "**" : bs.day;
+  return `${bs.year} ${bs.month} ${dayDisplay}`;
 }
 
 // Format BS date in Nepali

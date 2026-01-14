@@ -53,12 +53,15 @@ export default function QuickAdd() {
   // Helper to get unique key for a date
   const getDateKey = (date: NepaliDateObject) => `${date.year}-${date.month}-${date.day}`;
 
-  // Sort dates in ascending order
+  // Sort dates in ascending order (** dates go to end of their month)
   const sortedDates = useMemo(() => {
     return [...selectedDates].sort((a, b) => {
       if (a.year !== b.year) return a.year - b.year;
       if (a.month !== b.month) return a.month - b.month;
-      return a.day - b.day;
+      // Handle ** (unknown day) - treat as 99 for sorting
+      const dayA = a.day === "**" ? 99 : a.day;
+      const dayB = b.day === "**" ? 99 : b.day;
+      return dayA - dayB;
     });
   }, [selectedDates]);
 
@@ -139,17 +142,27 @@ export default function QuickAdd() {
       const sortedForSave = [...selectedDates].sort((a, b) => {
         if (a.year !== b.year) return a.year - b.year;
         if (a.month !== b.month) return a.month - b.month;
-        return a.day - b.day;
+        // Handle ** (unknown day) - treat as 99 for sorting
+        const dayA = a.day === "**" ? 99 : a.day;
+        const dayB = b.day === "**" ? 99 : b.day;
+        return (dayA as number) - (dayB as number);
       });
 
       // Format dates for saving - all in single row, newline separated for vertical stacking
       const eventDatesFormatted = sortedForSave.map(d => formatBSDate(d)).join("\n");
-      const eventADDates = sortedForSave.map(d => format(bsToAD(d.year, d.month, d.day), "yyyy-MM-dd")).join("\n");
+      const eventADDates = sortedForSave.map(d => {
+        const adResult = bsToAD(d.year, d.month, d.day);
+        // Handle unknown day case
+        if (d.day === "**") {
+          return adResult as string; // Already formatted as "YYYY-MM-**"
+        }
+        return format(adResult as Date, "yyyy-MM-dd");
+      }).join("\n");
       
       // Get years, months, days as newline-separated for vertical stacking in cells
       const eventYears = sortedForSave.map(d => d.year).join("\n");
       const eventMonths = sortedForSave.map(d => d.month).join("\n");
-      const eventDays = sortedForSave.map(d => d.day).join("\n");
+      const eventDays = sortedForSave.map(d => d.day === "**" ? "**" : d.day).join("\n");
 
       // Combine events for all selected dates (in sorted order), newline separated
       const eventsFormatted = sortedForSave
