@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -423,6 +423,56 @@ async function getSheetId(accessToken: string, spreadsheetId: string, sheetName:
   return sheet?.properties?.sheetId ?? 0;
 }
 
+// Add a new old client name to Column G of CLIENT TRACKER SETUP DATA
+async function addOldClient(accessToken: string, spreadsheetId: string, clientName: string) {
+  // First, get the current values in Column G to find the next empty row
+  const range = encodeURIComponent("'CLIENT TRACKER SETUP DATA'!G2:G100");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (addOldClient - read):', response.status, errorText);
+    throw new Error(`Google Sheets API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const values = data.values || [];
+  
+  // Check if the client name already exists
+  const existingNames = values.flat().map((v: string) => v?.toLowerCase().trim());
+  if (existingNames.includes(clientName.toLowerCase().trim())) {
+    return { success: true, message: 'Client already exists', alreadyExists: true };
+  }
+  
+  // Find the next empty row (values.length + 2 because we start from row 2)
+  const nextRow = values.length + 2;
+  
+  // Write the new client name
+  const writeRange = encodeURIComponent(`'CLIENT TRACKER SETUP DATA'!G${nextRow}`);
+  const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${writeRange}?valueInputOption=USER_ENTERED`;
+  
+  const writeResponse = await fetch(writeUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [[clientName.trim()]] }),
+  });
+
+  if (!writeResponse.ok) {
+    const errorText = await writeResponse.text();
+    console.error('Google Sheets API error (addOldClient - write):', writeResponse.status, errorText);
+    throw new Error(`Failed to add old client: ${writeResponse.status}`);
+  }
+
+  return { success: true, message: 'Client added successfully', alreadyExists: false };
+}
+
 // Simple AD to BS conversion (approximate)
 function adToBSSimple(date: Date): string {
   // This is a simplified conversion - the actual app uses nepali-date-converter on frontend
@@ -538,6 +588,10 @@ Deno.serve(async (req) => {
           data.newStatus as string, 
           data.existingStatusLog as string || ''
         );
+        break;
+      case 'addOldClient':
+        if (!data || !data.clientName) throw new Error('clientName is required for addOldClient');
+        result = await addOldClient(accessToken, spreadsheetId, data.clientName as string);
         break;
       default:
         throw new Error(`Unknown action: ${action}`);

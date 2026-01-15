@@ -1,13 +1,14 @@
 import { useState, useMemo } from "react";
 import { AppLayout, PageHeader } from "@/components/layout";
 import { Button } from "@/components/ui/button";
-import { FormSection, FormInput, FormSelect, FormCombobox, CountrySelector, PhoneInputField, NepaliCalendar } from "@/components/form";
+import { FormSection, FormInput, FormSelect, CountrySelector, PhoneInputField, NepaliCalendar } from "@/components/form";
+import { FormCombobox } from "@/components/form/FormCombobox";
 import { EventSelector } from "@/components/form/EventSelector";
 import { getCountryCodeFromName } from "@/components/form/CountrySelector";
 import { valleyCities, nepalCitiesOutsideValley, clientLocationOptions } from "@/lib/form-data";
 import { NepaliDateObject, bsToAD, adToBS, formatBSDate, isUnknownDay, getDayForStorage } from "@/lib/nepali-date";
 import { useDropdownData } from "@/hooks/useDropdownData";
-import { addClient, isSheetsConfigured } from "@/lib/sheets-api";
+import { addClient, addOldClient, isSheetsConfigured } from "@/lib/sheets-api";
 import { toast } from "@/hooks/use-toast";
 import { Save, Loader2, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
@@ -305,6 +306,25 @@ export default function QuickAdd() {
               onChange={setOldClientName} 
               options={dropdowns?.oldClients || []} 
               placeholder="Search or type old client name..."
+              searchPlaceholder="Search old clients..."
+              onAddNew={async (name) => {
+                try {
+                  const result = await addOldClient(name);
+                  if (result.alreadyExists) {
+                    toast({ title: "Info", description: "This client already exists in the list" });
+                  } else {
+                    toast({ title: "Success!", description: `"${name}" added to old clients list` });
+                  }
+                  return true;
+                } catch (error) {
+                  toast({ 
+                    title: "Error", 
+                    description: "Failed to add old client to the list", 
+                    variant: "destructive" 
+                  });
+                  return false;
+                }
+              }}
             />
           )}
         </FormSection>
