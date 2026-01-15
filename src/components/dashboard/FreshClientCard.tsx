@@ -143,8 +143,8 @@ function parseStatusTimestamp(statusEntry: string): Date | null {
   }
 }
 
-// Get time since status was set (compared to now)
-function getStatusTimeAgo(statusLog?: string): { displayText: string; timestamp: Date } | null {
+// Get time since status was set (compared to now) - returns hours for reminder check
+function getStatusTimeAgo(statusLog?: string): { displayText: string; timestamp: Date; hoursSinceStatus: number } | null {
   if (!statusLog) return null;
   
   const lines = statusLog.split('\n').filter(Boolean);
@@ -158,9 +158,13 @@ function getStatusTimeAgo(statusLog?: string): { displayText: string; timestamp:
   const diffMs = now.getTime() - timestamp.getTime();
   if (diffMs < 0) return null;
   
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  
   return {
     displayText: formatDuration(diffMs) + " AGO",
-    timestamp
+    timestamp,
+    hoursSinceStatus: diffHours + (diffMins % 60) / 60
   };
 }
 
@@ -445,15 +449,53 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
   const lastCallTimeAgo = lastCallInfo?.displayText || null;
   const isCallNotReceived = currentStatusCategory?.toUpperCase().includes('CALL NOT');
   
-  // Call reminder: alert if >6 hours since last call (or no calls made yet)
+  // Universal action reminder: alert if >6 hours in current status
   const REMINDER_THRESHOLD_HOURS = 6;
-  const needsCallReminder = useMemo(() => {
-    if (!isCallNotReceived) return false;
-    // If no calls made yet, always show reminder
-    if (callCount === 0) return true;
-    // If last call was more than 6 hours ago, show reminder
-    return lastCallInfo ? lastCallInfo.hoursSinceLastCall >= REMINDER_THRESHOLD_HOURS : false;
-  }, [isCallNotReceived, callCount, lastCallInfo]);
+  const STATUSES_EXCLUDED_FROM_REMINDER = ['BOOKED', 'CANCELLED'];
+  
+  const reminderInfo = useMemo(() => {
+    const category = currentStatusCategory?.toUpperCase() || '';
+    
+    // Skip reminder for BOOKED and CANCELLED clients
+    if (STATUSES_EXCLUDED_FROM_REMINDER.some(s => category.includes(s))) {
+      return null;
+    }
+    
+    // Special case for CALL NOT RECEIVED - use call log tracking
+    if (isCallNotReceived) {
+      if (callCount === 0) {
+        return { show: true, message: "NO CALLS MADE YET - CALL NOW!" };
+      }
+      if (lastCallInfo && lastCallInfo.hoursSinceLastCall >= REMINDER_THRESHOLD_HOURS) {
+        return { show: true, message: `CALL REMINDER: ${REMINDER_THRESHOLD_HOURS}+ HOURS SINCE LAST CALL` };
+      }
+      return null;
+    }
+    
+    // For all other categories - check time since status was set
+    if (!statusTimeAgo || statusTimeAgo.hoursSinceStatus < REMINDER_THRESHOLD_HOURS) {
+      return null;
+    }
+    
+    // Generate category-specific message
+    let message = `ACTION NEEDED: ${REMINDER_THRESHOLD_HOURS}+ HOURS IN THIS STATUS`;
+    
+    if (category.includes('JUST ENQUIRED')) {
+      message = "ACTION NEEDED: Client waiting 6+ hours!";
+    } else if (category.includes('NUMBER PROVIDED')) {
+      message = "FOLLOW UP NEEDED: 6+ hours since number provided!";
+    } else if (category.includes('TEXTED')) {
+      message = "NO RESPONSE: 6+ hours since texted!";
+    } else if (category.includes('BARGAINING')) {
+      message = "FOLLOW UP: Bargaining ongoing 6+ hours!";
+    } else if (category.includes('ADVANCE')) {
+      message = "URGENT: Advance pending 6+ hours!";
+    } else if (category.includes('POSTPONED')) {
+      message = "RE-ENGAGE: Client postponed 6+ hours ago!";
+    }
+    
+    return { show: true, message };
+  }, [currentStatusCategory, isCallNotReceived, callCount, lastCallInfo, statusTimeAgo]);
 
   // Handle call action
   const handleCallAgain = async (e: React.MouseEvent, callType: 'DIRECT' | 'WHATSAPP') => {
@@ -692,14 +734,12 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
         </div>
       )}
 
-      {/* Call Reminder Alert - Only for CALL NOT RECEIVED when >6 hours since last call */}
-      {isCallNotReceived && needsCallReminder && (
+      {/* Universal Action Reminder Alert */}
+      {reminderInfo?.show && (
         <div className="flex items-center gap-2 text-xs bg-red-50 dark:bg-red-900/30 px-2 py-2 rounded-md border border-red-300 dark:border-red-700 animate-pulse">
           <Bell className="w-4 h-4 text-red-600 dark:text-red-400" />
           <span className="font-semibold text-red-700 dark:text-red-400">
-            {callCount === 0 
-              ? "⚠️ NO CALLS MADE YET - CALL NOW!" 
-              : `⚠️ CALL REMINDER: ${REMINDER_THRESHOLD_HOURS}+ HOURS SINCE LAST CALL`}
+            ⚠️ {reminderInfo.message}
           </span>
         </div>
       )}
