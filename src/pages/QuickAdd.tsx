@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { AppLayout, PageHeader } from "@/components/layout";
 import { Button } from "@/components/ui/button";
-import { FormSection, FormInput, FormSelect, CountrySelector, PhoneInputField, NepaliCalendar } from "@/components/form";
+import { FormSection, FormInput, FormSelect, CountrySelector, NepaliCalendar } from "@/components/form";
 import { FormCombobox } from "@/components/form/FormCombobox";
 import { EventSelector } from "@/components/form/EventSelector";
 import { getCountryCodeFromName } from "@/components/form/CountrySelector";
@@ -349,18 +349,18 @@ export default function QuickAdd() {
               />
             </div>
           )}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Contact Number</label>
-            <PhoneInputField value={contactNo} onChange={setContactNo} defaultCountry="NP" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">WhatsApp Number</label>
-            <PhoneInputField 
-              value={whatsappNo} 
-              onChange={setWhatsappNo} 
-              defaultCountry={clientLocation === "OUTSIDE NEPAL" ? currentCountryCode : "NP"} 
-            />
-          </div>
+          <FormInput 
+            label="Contact Number" 
+            value={contactNo} 
+            onChange={setContactNo} 
+            placeholder="Enter contact number (e.g., +977-9841234567)" 
+          />
+          <FormInput 
+            label="WhatsApp Number" 
+            value={whatsappNo} 
+            onChange={setWhatsappNo} 
+            placeholder="Enter WhatsApp number" 
+          />
         </FormSection>
 
         {/* Event Location */}
