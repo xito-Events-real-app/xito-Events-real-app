@@ -91,6 +91,14 @@ export function EventSelector({
           value={searchQuery}
           onChange={(e) => handleInputChange(e.target.value)}
           onFocus={() => setIsOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              if (searchQuery.trim()) {
+                handleCustomEvent();
+              }
+            }
+          }}
           placeholder="Search or type event..."
           className="pl-9 h-9 text-sm"
         />
