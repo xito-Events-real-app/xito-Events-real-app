@@ -38,6 +38,7 @@ export interface ClientData {
   description?: string;
   statusLog?: string;
   initialStatus?: string;
+  clientHandler?: string; // Column X - who is handling this client
 }
 
 // Spreadsheet ID is now configured as a backend secret
@@ -125,6 +126,15 @@ export async function addOldClient(clientName: string): Promise<{ success: boole
 export async function bulkUpdateStatus(fromStatus: string, toStatus: string): Promise<{ success: boolean; updatedCount: number }> {
   return callSheetsFunction<{ success: boolean; updatedCount: number }>("bulkUpdateStatus", {
     data: { fromStatus, toStatus },
+  });
+}
+
+export async function updateClientHandler(
+  rowNumber: number,
+  handler: string
+): Promise<{ success: boolean }> {
+  return callSheetsFunction<{ success: boolean }>("updateClientHandler", {
+    data: { rowNumber, handler },
   });
 }
 

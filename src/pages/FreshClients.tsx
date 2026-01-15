@@ -8,6 +8,7 @@ import { getClients, ClientData, getCurrentStatus, getDropdowns } from "@/lib/sh
 import { FreshClientCard } from "@/components/dashboard/FreshClientCard";
 import { ClientDetailSheet } from "@/components/dashboard/ClientDetailSheet";
 import { cn } from "@/lib/utils";
+import { DropdownData } from "@/lib/sheets-api";
 
 export default function FreshClients() {
   const [clients, setClients] = useState<ClientData[]>([]);
@@ -15,6 +16,7 @@ export default function FreshClients() {
   const [error, setError] = useState<string | null>(null);
   const [selectedClient, setSelectedClient] = useState<ClientData | null>(null);
   const [statusOptions, setStatusOptions] = useState<string[]>([]);
+  const [handlerOptions, setHandlerOptions] = useState<string[]>([]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -30,6 +32,7 @@ export default function FreshClients() {
       ]);
       setClients(clientsData);
       setStatusOptions(dropdowns.clientStatuses || []);
+      setHandlerOptions(dropdowns.whatsappOwners || []); // Column H - team members/handlers
     } catch (err) {
       console.error("Failed to fetch data:", err);
       setError(err instanceof Error ? err.message : "Failed to load");
@@ -111,6 +114,15 @@ export default function FreshClients() {
     setClients(prev => prev.map(c => 
       c.rowNumber === client.rowNumber 
         ? { ...c, statusLog: newStatusLog }
+        : c
+    ));
+  };
+
+  // Handle handler change - update client in local state
+  const handleHandlerChange = (client: ClientData, handler: string) => {
+    setClients(prev => prev.map(c => 
+      c.rowNumber === client.rowNumber 
+        ? { ...c, clientHandler: handler }
         : c
     ));
   };
@@ -271,7 +283,10 @@ export default function FreshClients() {
                           client={client} 
                           onClick={setSelectedClient}
                           statusOptions={statusOptions}
+                          handlerOptions={handlerOptions}
+                          currentStatusCategory={currentStatus}
                           onStatusChange={handleStatusChange}
+                          onHandlerChange={handleHandlerChange}
                         />
                       ))}
                     </div>
