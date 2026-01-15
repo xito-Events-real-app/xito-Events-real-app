@@ -281,6 +281,12 @@ async function addClient(accessToken: string, spreadsheetId: string, clientData:
   const registeredBS = clientData.registeredDateBS || adToBSSimple(now);
   const inquiryBS = clientData.inquiryDateBS || adToBSSimple(now);
   
+  // Create initial status log with "JUST ENQUIRED" status and Nepal timezone timestamp
+  const nepalOffset = 5.75 * 60 * 60 * 1000; // UTC+5:45 in milliseconds
+  const nepalTime = new Date(now.getTime() + nepalOffset);
+  const nepalTimeStr = nepalTime.toISOString().replace('T', ' ').substring(0, 19);
+  const initialStatusLog = `JUST ENQUIRED [${nepalTimeStr}]`;
+  
   const values = [[
     registeredDateTimeAD,                    // A: registered_datetime_ad
     registeredBS,                            // B: registered_date_bs (from frontend)
@@ -303,9 +309,11 @@ async function addClient(accessToken: string, spreadsheetId: string, clientData:
     inquiryBS,                               // S: inquiry_date_bs (from frontend)
     clientData.inquiryTime || '',            // T: inquiry_time
     clientData.description || '',            // U: basic_description
+    '',                                      // V: (empty)
+    initialStatusLog,                        // W: status_log - Initial "JUST ENQUIRED" status
   ]];
 
-  const range = encodeURIComponent("'CLIENT TRACKER'!A2:U2");
+  const range = encodeURIComponent("'CLIENT TRACKER'!A2:W2");
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
   
   const response = await fetch(updateUrl, {
