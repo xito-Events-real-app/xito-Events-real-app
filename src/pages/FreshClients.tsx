@@ -57,24 +57,24 @@ export default function FreshClients() {
     return grouped;
   }, [clients]);
 
-  // Get unique statuses that have clients (in order of statusOptions)
+  // Get unique statuses that have clients (in order of statusOptions), excluding UNTOUCHED
   const activeStatuses = useMemo(() => {
     const statusesWithClients = Object.keys(clientsByStatus);
     
     // Maintain order based on statusOptions, then add any not in options
     const orderedStatuses: string[] = [];
     
-    // First add statuses from options that have clients
+    // First add statuses from options that have clients (excluding UNTOUCHED)
     statusOptions.forEach(status => {
       const normalizedStatus = status.toUpperCase();
-      if (statusesWithClients.includes(normalizedStatus)) {
+      if (statusesWithClients.includes(normalizedStatus) && normalizedStatus !== 'UNTOUCHED') {
         orderedStatuses.push(normalizedStatus);
       }
     });
     
-    // Add any remaining statuses not in options
+    // Add any remaining statuses not in options (excluding UNTOUCHED)
     statusesWithClients.forEach(status => {
-      if (!orderedStatuses.includes(status)) {
+      if (!orderedStatuses.includes(status) && status.toUpperCase() !== 'UNTOUCHED') {
         orderedStatuses.push(status);
       }
     });

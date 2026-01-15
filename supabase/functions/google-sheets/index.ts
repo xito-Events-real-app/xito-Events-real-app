@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -473,6 +473,61 @@ async function addOldClient(accessToken: string, spreadsheetId: string, clientNa
   return { success: true, message: 'Client added successfully', alreadyExists: false };
 }
 
+// Bulk update status for clients matching a specific status
+async function bulkUpdateStatus(accessToken: string, spreadsheetId: string, fromStatus: string, toStatus: string) {
+  // First, get all clients
+  const clients = await getClients(accessToken, spreadsheetId, 500);
+  
+  const now = new Date();
+  const timestamp = now.toLocaleString('en-US', { 
+    year: 'numeric', 
+    month: '2-digit', 
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false 
+  });
+  
+  let updatedCount = 0;
+  
+  // Find clients with matching status and update them
+  for (const client of clients) {
+    const statusLog = client.statusLog || '';
+    const currentStatus = getCurrentStatusFromLog(statusLog);
+    
+    if (currentStatus.toUpperCase() === fromStatus.toUpperCase()) {
+      const newLogEntry = `${toStatus} - ${timestamp}`;
+      const updatedLog = statusLog ? `${statusLog}\n${newLogEntry}` : newLogEntry;
+      
+      const range = encodeURIComponent(`'CLIENT TRACKER'!W${client.rowNumber}`);
+      const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+      
+      await fetch(updateUrl, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ values: [[updatedLog]] }),
+      });
+      
+      updatedCount++;
+    }
+  }
+  
+  return { success: true, updatedCount };
+}
+
+// Helper to get current status from status log
+function getCurrentStatusFromLog(statusLog: string): string {
+  if (!statusLog) return 'UNTOUCHED';
+  const lines = statusLog.split('\n');
+  const lastLine = lines[lines.length - 1];
+  const match = lastLine.match(/^(.+?)\s*-\s*\d/);
+  return match ? match[1].trim() : 'UNTOUCHED';
+}
+
 // Simple AD to BS conversion (approximate)
 function adToBSSimple(date: Date): string {
   // This is a simplified conversion - the actual app uses nepali-date-converter on frontend
@@ -592,6 +647,10 @@ Deno.serve(async (req) => {
       case 'addOldClient':
         if (!data || !data.clientName) throw new Error('clientName is required for addOldClient');
         result = await addOldClient(accessToken, spreadsheetId, data.clientName as string);
+        break;
+      case 'bulkUpdateStatus':
+        if (!data || !data.fromStatus || !data.toStatus) throw new Error('fromStatus and toStatus are required for bulkUpdateStatus');
+        result = await bulkUpdateStatus(accessToken, spreadsheetId, data.fromStatus as string, data.toStatus as string);
         break;
       default:
         throw new Error(`Unknown action: ${action}`);
