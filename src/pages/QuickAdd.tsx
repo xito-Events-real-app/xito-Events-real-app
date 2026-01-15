@@ -165,9 +165,9 @@ export default function QuickAdd() {
       const eventDays = sortedForSave.map(d => getDayForStorage(d.day)).join("\n");
 
       // Combine events for all selected dates (in sorted order), newline separated
+      // Don't filter - maintain alignment with dates (empty entries stay as empty strings)
       const eventsFormatted = sortedForSave
         .map(d => eventsByDate[getDateKey(d)] || "")
-        .filter(Boolean)
         .join("\n");
 
       // Determine country value for Column F
