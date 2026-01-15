@@ -120,7 +120,7 @@ export function FormCombobox({
         </div>
         
         {isOpen && (
-          <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-60 overflow-auto">
+          <div className="absolute z-[9999] w-full mt-1 bg-background border border-border rounded-md shadow-xl max-h-60 overflow-auto">
             {filteredOptions.length > 0 ? (
               filteredOptions.map((option) => (
                 <button
@@ -128,7 +128,7 @@ export function FormCombobox({
                   type="button"
                   onClick={() => handleSelect(option)}
                   className={cn(
-                    "w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center justify-between",
+                    "w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center justify-between bg-background",
                     value === option && "bg-accent"
                   )}
                 >
@@ -137,7 +137,7 @@ export function FormCombobox({
                 </button>
               ))
             ) : (
-              <div className="px-3 py-2 text-sm text-muted-foreground">
+              <div className="px-3 py-2 text-sm text-muted-foreground bg-background">
                 {searchQuery ? `Use "${searchQuery}" as custom value` : "No options available"}
               </div>
             )}
