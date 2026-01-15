@@ -18,8 +18,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ChevronDown, Loader2, Clock, AlertTriangle, UserCog } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Clock, AlertTriangle, UserCog, Phone, MessageCircle, Edit } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 
 // Format time duration as "X DAY Y HR Z MIN"
 function formatDuration(diffMs: number): string {
@@ -198,7 +199,7 @@ function getEnquiryTimeInfo(inquiryDateAD?: string, inquiryTime?: string) {
 
 interface FreshClientCardProps {
   client: ClientData;
-  onClick?: (client: ClientData) => void;
+  onEditClick?: (client: ClientData) => void;
   statusOptions: string[];
   handlerOptions?: string[];
   currentStatusCategory?: string;
@@ -206,13 +207,14 @@ interface FreshClientCardProps {
   onHandlerChange?: (client: ClientData, handler: string) => void;
 }
 
-export function FreshClientCard({ client, onClick, statusOptions, handlerOptions = [], currentStatusCategory, onStatusChange, onHandlerChange }: FreshClientCardProps) {
+export function FreshClientCard({ client, onEditClick, statusOptions, handlerOptions = [], currentStatusCategory, onStatusChange, onHandlerChange }: FreshClientCardProps) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isUpdatingHandler, setIsUpdatingHandler] = useState(false);
   const [currentStatusLog, setCurrentStatusLog] = useState(client.statusLog || '');
   const [currentHandler, setCurrentHandler] = useState(client.clientHandler || '');
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   
   // Use handler initials if set, otherwise fall back to who added
   const displayInitials = getHandlerInitials(currentHandler || client.whoAdded || '');
@@ -236,10 +238,16 @@ export function FreshClientCard({ client, onClick, statusOptions, handlerOptions
   const statusesWithHandlerOption = ['NUMBER PROVIDED', ...statusesRequiringHandler];
   const showHandlerDropdown = currentStatusCategory && statusesWithHandlerOption.some(s => currentStatusCategory.toUpperCase().includes(s.toUpperCase()));
 
-  const handleClick = () => {
-    if (onClick) {
-      onClick(client);
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onEditClick) {
+      onEditClick(client);
     }
+  };
+
+  const toggleExpand = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsExpanded(!isExpanded);
   };
 
   const handleStatusClick = (e: React.MouseEvent, newStatus: string) => {
@@ -355,8 +363,7 @@ export function FreshClientCard({ client, onClick, statusOptions, handlerOptions
 
   return (
     <div 
-      className="flex flex-col gap-2 p-3 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer border border-border/50 active:scale-[0.98]"
-      onClick={handleClick}
+      className="flex flex-col gap-2 p-3 rounded-xl hover:bg-muted/50 transition-colors border border-border/50"
     >
       <div className="flex gap-3">
         {/* Handler Initials Avatar - highlighted if handler assigned */}
@@ -538,8 +545,15 @@ export function FreshClientCard({ client, onClick, statusOptions, handlerOptions
           </div>
         )}
         
-        {/* Status Time Ago - Right */}
-        {statusTimeAgo && (
+        {/* ADDED X AGO - Right (for JUST ENQUIRED and NUMBER PROVIDED) */}
+        {(currentStatusCategory === 'JUST ENQUIRED' || currentStatusCategory === 'NUMBER PROVIDED') && enquiryInfo && (
+          <div className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 font-medium ml-auto">
+            <span>ADDED {enquiryInfo.displayText.toUpperCase().replace(' AGO', '')} AGO</span>
+          </div>
+        )}
+        
+        {/* Status Time Ago - Right (for other categories) */}
+        {currentStatusCategory !== 'JUST ENQUIRED' && currentStatusCategory !== 'NUMBER PROVIDED' && statusTimeAgo && (
           <div className="flex items-center gap-1 text-xs text-muted-foreground ml-auto">
             <span>{currentStatus}: {statusTimeAgo.displayText}</span>
           </div>
@@ -551,6 +565,90 @@ export function FreshClientCard({ client, onClick, statusOptions, handlerOptions
         <div className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded-md">
           <Clock className="w-3 h-3" />
           <span>TOTAL TIME: {totalTimeInfo}</span>
+        </div>
+      )}
+
+      {/* Expand/Collapse Touch Area */}
+      <div 
+        className="flex items-center justify-center py-2 cursor-pointer border-t border-border/30 mt-1 hover:bg-muted/30 rounded-md transition-colors"
+        onClick={toggleExpand}
+      >
+        {isExpanded ? (
+          <ChevronUp className="w-4 h-4 text-muted-foreground" />
+        ) : (
+          <ChevronDown className="w-4 h-4 text-muted-foreground" />
+        )}
+        <span className="text-xs text-muted-foreground ml-1">
+          {isExpanded ? "Tap to collapse" : "Tap to expand"}
+        </span>
+      </div>
+
+      {/* Expanded Content */}
+      {isExpanded && (
+        <div className="mt-2 pt-3 border-t border-border/50 space-y-3 animate-fade-in">
+          {/* Contact Information */}
+          <div className="space-y-2">
+            {client.contactNo && (
+              <a 
+                href={`tel:${client.contactNo}`} 
+                className="flex items-center gap-2 text-sm text-primary hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Phone className="w-4 h-4" />
+                {client.contactNo}
+              </a>
+            )}
+            {client.whatsappNo && (
+              <a 
+                href={`https://wa.me/${client.whatsappNo.replace(/\D/g, '')}`} 
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MessageCircle className="w-4 h-4" />
+                {client.whatsappNo}
+              </a>
+            )}
+          </div>
+          
+          {/* Location Details */}
+          {client.currentCountry && (
+            <div className="text-sm">
+              <span className="text-muted-foreground">Location:</span> {client.currentCountry}
+            </div>
+          )}
+          
+          {/* Full Event Details */}
+          {events.length > 0 && (
+            <div className="text-sm space-y-1">
+              <span className="text-muted-foreground font-medium">All Events:</span>
+              {events.map((event, i) => (
+                <p key={i} className="text-sm pl-2 text-foreground">
+                  {event.year} {event.monthName} {event.day} - {event.eventName}
+                </p>
+              ))}
+            </div>
+          )}
+          
+          {/* Description */}
+          {client.description && (
+            <div className="text-sm">
+              <span className="text-muted-foreground">Notes:</span>
+              <p className="text-foreground mt-1 whitespace-pre-wrap">{client.description}</p>
+            </div>
+          )}
+          
+          {/* Edit Button */}
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="w-full"
+            onClick={handleEditClick}
+          >
+            <Edit className="w-4 h-4 mr-2" />
+            Edit Client
+          </Button>
         </div>
       )}
 

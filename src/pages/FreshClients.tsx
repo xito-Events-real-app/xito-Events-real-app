@@ -179,7 +179,7 @@ export default function FreshClients() {
       />
       
       <div className="flex flex-col h-[calc(100vh-140px)]">
-        <div className="px-4 py-4 max-w-lg mx-auto w-full space-y-4 animate-fade-in flex-1 overflow-hidden">
+        <div className="px-4 py-4 w-full space-y-4 animate-fade-in flex-1 flex flex-col overflow-hidden">
 
           {/* Loading State */}
           {isLoading && (
@@ -263,10 +263,10 @@ export default function FreshClients() {
               </div>
 
               {/* Client Cards with Swipe */}
-              <Card className="shadow-soft overflow-hidden flex-1">
+              <Card className="shadow-soft overflow-hidden flex-1 flex flex-col">
                 <CardContent 
                   ref={containerRef}
-                  className="p-4 h-full"
+                  className="p-4 flex-1 flex flex-col overflow-hidden"
                   onTouchStart={onTouchStart}
                   onTouchMove={onTouchMove}
                   onTouchEnd={onTouchEnd}
@@ -276,12 +276,12 @@ export default function FreshClients() {
                       No clients in this category
                     </p>
                   ) : (
-                    <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                    <div className="space-y-2 overflow-y-auto flex-1">
                       {currentClients.map((client, i) => (
                         <FreshClientCard 
                           key={client.rowNumber || i} 
                           client={client} 
-                          onClick={setSelectedClient}
+                          onEditClick={setSelectedClient}
                           statusOptions={statusOptions}
                           handlerOptions={handlerOptions}
                           currentStatusCategory={currentStatus}
