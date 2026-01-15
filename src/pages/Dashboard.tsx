@@ -2,9 +2,9 @@ import { useState, useEffect } from "react";
 import { AppLayout, PageHeader } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Users, CalendarPlus, TrendingUp, Loader2, Menu } from "lucide-react";
+import { Users, CalendarPlus, TrendingUp, Loader2, Menu, FileText, SendHorizontal } from "lucide-react";
 import { Link } from "react-router-dom";
-import { getClients, ClientData } from "@/lib/sheets-api";
+import { getClients, ClientData, getCurrentStatus } from "@/lib/sheets-api";
 import { Sidebar } from "@/components/layout/Sidebar";
 
 export default function Dashboard() {
@@ -43,10 +43,23 @@ export default function Dashboard() {
     return month === currentMonth || month === currentMonth + 1;
   }).length;
 
+  // Quotation stats
+  const quotationPendingCount = clients.filter(c => 
+    getCurrentStatus(c.statusLog || '').toUpperCase().includes('QUOTATION PENDING')
+  ).length;
+  const quotationSentCount = clients.filter(c => 
+    getCurrentStatus(c.statusLog || '').toUpperCase().includes('QUOTATION SENT')
+  ).length;
+
   const stats = [
     { label: "Total", value: totalClients, icon: Users, color: "gradient-primary" },
     { label: "This Month", value: thisMonthClients, icon: CalendarPlus, color: "gradient-secondary" },
     { label: "Today", value: todaysClients.length, icon: TrendingUp, color: "gradient-accent" },
+  ];
+
+  const quotationStats = [
+    { label: "Quotation Pending", value: quotationPendingCount, icon: FileText, color: "bg-blue-600" },
+    { label: "Quotation Sent", value: quotationSentCount, icon: SendHorizontal, color: "bg-purple-600" },
   ];
 
   return (
@@ -95,6 +108,30 @@ export default function Dashboard() {
                     {isLoading ? "—" : stat.value}
                   </p>
                   <p className="text-xs text-muted-foreground">{stat.label}</p>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+
+        {/* Quotation Stats */}
+        <div className="grid grid-cols-2 gap-3">
+          {quotationStats.map((stat) => {
+            const Icon = stat.icon;
+            return (
+              <Card key={stat.label} className="shadow-soft border-0">
+                <CardContent className="p-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl ${stat.color} flex items-center justify-center shrink-0`}>
+                      <Icon className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-xl font-bold text-foreground">
+                        {isLoading ? "—" : stat.value}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{stat.label}</p>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             );
