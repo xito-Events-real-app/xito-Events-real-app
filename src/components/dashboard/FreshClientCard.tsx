@@ -746,27 +746,29 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
 
       {/* Call Tracking Info - Only for CALL NOT RECEIVED */}
       {isCallNotReceived && (
-        <div className="flex items-center justify-between text-xs bg-orange-50 dark:bg-orange-900/20 px-2 py-1.5 rounded-md border border-orange-200 dark:border-orange-800">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-orange-700 dark:text-orange-400">
-              CALLED: {callCount} {callCount === 1 ? 'TIME' : 'TIMES'}
-            </span>
-            {callCount > 0 && (
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowCallHistoryDialog(true);
-                }}
-                className="text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-300"
-              >
-                <History className="w-3.5 h-3.5" />
-              </button>
-            )}
+        <div className="flex flex-col gap-1 text-xs bg-orange-50 dark:bg-orange-900/20 px-2 py-1.5 rounded-md border border-orange-200 dark:border-orange-800">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-orange-700 dark:text-orange-400">
+                CALLED: {callCount} {callCount === 1 ? 'TIME' : 'TIMES'}
+              </span>
+              {callCount > 0 && (
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowCallHistoryDialog(true);
+                  }}
+                  className="text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-300"
+                >
+                  <History className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           </div>
           {lastCallTimeAgo && (
-            <span className="text-orange-600 dark:text-orange-400 font-medium">
+            <div className="text-orange-600 dark:text-orange-400 font-medium text-right">
               LAST CALLED {lastCallTimeAgo}
-            </span>
+            </div>
           )}
         </div>
       )}
