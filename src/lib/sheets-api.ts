@@ -111,6 +111,12 @@ export async function addOldClient(clientName: string): Promise<{ success: boole
   });
 }
 
+export async function bulkUpdateStatus(fromStatus: string, toStatus: string): Promise<{ success: boolean; updatedCount: number }> {
+  return callSheetsFunction<{ success: boolean; updatedCount: number }>("bulkUpdateStatus", {
+    data: { fromStatus, toStatus },
+  });
+}
+
 export interface ConnectionTestResult {
   title: string;
   sheets: string[];
