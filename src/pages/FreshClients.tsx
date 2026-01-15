@@ -57,24 +57,31 @@ export default function FreshClients() {
     return grouped;
   }, [clients]);
 
-  // Get unique statuses that have clients (in order of statusOptions), excluding UNTOUCHED
+  // Get unique statuses that have clients, with JUST ENQUIRED first, excluding UNTOUCHED
   const activeStatuses = useMemo(() => {
     const statusesWithClients = Object.keys(clientsByStatus);
-    
-    // Maintain order based on statusOptions, then add any not in options
     const orderedStatuses: string[] = [];
     
-    // First add statuses from options that have clients (excluding UNTOUCHED)
+    // JUST ENQUIRED always comes first if it has clients
+    if (statusesWithClients.includes('JUST ENQUIRED')) {
+      orderedStatuses.push('JUST ENQUIRED');
+    }
+    
+    // Then add other statuses from options that have clients (excluding UNTOUCHED and JUST ENQUIRED)
     statusOptions.forEach(status => {
       const normalizedStatus = status.toUpperCase();
-      if (statusesWithClients.includes(normalizedStatus) && normalizedStatus !== 'UNTOUCHED') {
+      if (statusesWithClients.includes(normalizedStatus) && 
+          normalizedStatus !== 'UNTOUCHED' && 
+          normalizedStatus !== 'JUST ENQUIRED') {
         orderedStatuses.push(normalizedStatus);
       }
     });
     
-    // Add any remaining statuses not in options (excluding UNTOUCHED)
+    // Add any remaining statuses not in options (excluding UNTOUCHED and JUST ENQUIRED)
     statusesWithClients.forEach(status => {
-      if (!orderedStatuses.includes(status) && status.toUpperCase() !== 'UNTOUCHED') {
+      if (!orderedStatuses.includes(status) && 
+          status.toUpperCase() !== 'UNTOUCHED' && 
+          status.toUpperCase() !== 'JUST ENQUIRED') {
         orderedStatuses.push(status);
       }
     });
@@ -85,6 +92,7 @@ export default function FreshClients() {
   // Get status color based on current status
   const getStatusColor = (status: string) => {
     const s = status.toUpperCase();
+    if (s.includes('JUST ENQUIRED')) return 'bg-emerald-600 text-white';
     if (s.includes('UNTOUCHED')) return 'bg-gray-500 text-white';
     if (s.includes('TEXTED')) return 'bg-yellow-500 text-white';
     if (s.includes('CALL NOT')) return 'bg-orange-500 text-white';
