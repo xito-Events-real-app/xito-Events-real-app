@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { ClientData, updateClientStatus, updateClientHandler, logCallAttempt, getCurrentStatus, updateClientQuotation } from "@/lib/sheets-api";
+import { ClientData, updateClientStatus, updateClientHandler, logCallAttempt, getCurrentStatus, updateClientQuotation, updateClientMindset, updateBargainingRates } from "@/lib/sheets-api";
 import { getHandlerInitials, parseEventDetails, formatLocationDisplay } from "@/lib/nepali-months";
 import { cn } from "@/lib/utils";
 import {
@@ -26,11 +26,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ChevronDown, ChevronUp, Loader2, Clock, AlertTriangle, UserCog, Phone, MessageCircle, Edit, History, Bell, ExternalLink, FileText } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Clock, AlertTriangle, UserCog, Phone, MessageCircle, Edit, History, Bell, ExternalLink, FileText, Brain } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 
 // Parse call log to get structured entries
 interface CallEntry {
@@ -308,12 +309,14 @@ interface FreshClientCardProps {
   onEditClick?: (client: ClientData) => void;
   statusOptions: string[];
   handlerOptions?: string[];
+  mindsetOptions?: string[];
   currentStatusCategory?: string;
   onStatusChange?: (client: ClientData, newStatus: string, newStatusLog: string) => void;
   onHandlerChange?: (client: ClientData, handler: string) => void;
+  onMindsetChange?: (client: ClientData, mindset: string) => void;
 }
 
-export function FreshClientCard({ client, onEditClick, statusOptions, handlerOptions = [], currentStatusCategory, onStatusChange, onHandlerChange }: FreshClientCardProps) {
+export function FreshClientCard({ client, onEditClick, statusOptions, handlerOptions = [], mindsetOptions = [], currentStatusCategory, onStatusChange, onHandlerChange, onMindsetChange }: FreshClientCardProps) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isUpdatingHandler, setIsUpdatingHandler] = useState(false);
   const [isLoggingCall, setIsLoggingCall] = useState(false);
@@ -337,6 +340,17 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
   const [quotationWtnSpecial, setQuotationWtnSpecial] = useState('');
   const [isSavingQuotation, setIsSavingQuotation] = useState(false);
   const [currentQuotationData, setCurrentQuotationData] = useState(client.quotationData || '');
+  
+  // Mindset feature states
+  const [currentMindset, setCurrentMindset] = useState(client.mindset || '');
+  const [isUpdatingMindset, setIsUpdatingMindset] = useState(false);
+  const [showBargainingDialog, setShowBargainingDialog] = useState(false);
+  const [selectedBargainPackages, setSelectedBargainPackages] = useState<string[]>([]);
+  const [clientBargainRates, setClientBargainRates] = useState<Record<string, string>>({});
+  const [ourBargainRates, setOurBargainRates] = useState<Record<string, string>>({});
+  const [isSavingBargain, setIsSavingBargain] = useState(false);
+  const [currentOurBargainedRates, setCurrentOurBargainedRates] = useState(client.ourBargainedRates || '');
+  const [currentClientBargainedRates, setCurrentClientBargainedRates] = useState(client.clientBargainedRates || '');
   
   // Use handler initials if set, otherwise fall back to who added
   const displayInitials = getHandlerInitials(currentHandler || client.whoAdded || '');
@@ -504,6 +518,114 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
   const isJustEnquired = currentStatusCategory?.toUpperCase() === 'JUST ENQUIRED';
   const isQuotationPending = currentStatusCategory?.toUpperCase().includes('QUOTATION PENDING');
   const isQuotationSent = currentStatusCategory?.toUpperCase().includes('QUOTATION SENT');
+
+  // Parse mindset entry to get name and timestamp
+  const parsedMindset = useMemo(() => {
+    if (!currentMindset) return { name: '', timestamp: null as Date | null, hoursAgo: 0 };
+    const parts = currentMindset.split(' - ');
+    const name = parts[0]?.trim() || '';
+    let timestamp: Date | null = null;
+    let hoursAgo = 0;
+    if (parts.length >= 2) {
+      const ts = parseStatusTimestamp(currentMindset);
+      if (ts) {
+        timestamp = ts;
+        const diffMs = Date.now() - ts.getTime();
+        hoursAgo = diffMs / (1000 * 60 * 60);
+      }
+    }
+    return { name, timestamp, hoursAgo };
+  }, [currentMindset]);
+
+  const getMindsetColor = (mindset: string): string => {
+    const m = mindset.toUpperCase();
+    if (m.includes('NOT SEEN')) return 'bg-gray-500 text-white';
+    if (m.includes('IGNORED')) return 'bg-red-500 text-white';
+    if (m.includes('BARGAINING')) return 'bg-amber-500 text-white';
+    if (m.includes('EXPENSIVE')) return 'bg-pink-500 text-white';
+    if (m.includes('READY TO PAY')) return 'bg-green-500 text-white';
+    if (m.includes('NEED TIME') || m.includes('NEED MORE TIME')) return 'bg-blue-500 text-white';
+    if (m.includes('FAMILY')) return 'bg-purple-500 text-white';
+    if (m.includes('OFFICE')) return 'bg-indigo-500 text-white';
+    if (m.includes('POSTPONED')) return 'bg-slate-500 text-white';
+    if (m.includes('BOOKED SOMEWHERE')) return 'bg-red-600 text-white';
+    return 'bg-gray-400 text-white';
+  };
+
+  const handleMindsetChange = async (e: React.MouseEvent, newMindset: string) => {
+    e.stopPropagation();
+    if (!client.rowNumber) {
+      toast.error("Cannot update: missing row number");
+      return;
+    }
+
+    // For BARGAINING, show the bargaining dialog
+    if (newMindset.toUpperCase().includes('BARGAINING')) {
+      setShowBargainingDialog(true);
+      return;
+    }
+
+    setIsUpdatingMindset(true);
+    try {
+      const result = await updateClientMindset(client.rowNumber, newMindset);
+      setCurrentMindset(result.mindset);
+      toast.success(`Mindset set to ${newMindset}`);
+      if (onMindsetChange) onMindsetChange(client, result.mindset);
+    } catch (err) {
+      console.error("Failed to update mindset:", err);
+      toast.error("Failed to update mindset");
+    } finally {
+      setIsUpdatingMindset(false);
+    }
+  };
+
+  const handleSaveBargaining = async () => {
+    if (!client.rowNumber) {
+      toast.error("Cannot save: missing row number");
+      return;
+    }
+    if (selectedBargainPackages.length === 0) {
+      toast.error("Please select at least one package");
+      return;
+    }
+
+    setIsSavingBargain(true);
+    try {
+      // Build rate strings
+      const ourLines: string[] = [];
+      const clientLines: string[] = [];
+      selectedBargainPackages.forEach(tier => {
+        if (ourBargainRates[tier]) ourLines.push(`${tier}: NPR ${formatNPR(ourBargainRates[tier])}/-`);
+        if (clientBargainRates[tier]) clientLines.push(`${tier}: NPR ${formatNPR(clientBargainRates[tier])}/-`);
+      });
+
+      await updateBargainingRates(client.rowNumber, ourLines.join('\n'), clientLines.join('\n'));
+      const mindsetResult = await updateClientMindset(client.rowNumber, 'BARGAINING');
+      
+      setCurrentMindset(mindsetResult.mindset);
+      setCurrentOurBargainedRates(ourLines.join('\n'));
+      setCurrentClientBargainedRates(clientLines.join('\n'));
+      setShowBargainingDialog(false);
+      
+      // Reset form
+      setSelectedBargainPackages([]);
+      setClientBargainRates({});
+      setOurBargainRates({});
+
+      // Ask to move to BARGAINING IS ON
+      const bargainingStatus = statusOptions.find(s => s.toUpperCase().includes('BARGAINING IS ON'));
+      if (bargainingStatus) {
+        setPendingStatus(bargainingStatus);
+        setShowConfirmDialog(true);
+      }
+      toast.success("Bargaining details saved");
+    } catch (err) {
+      console.error("Failed to save bargaining:", err);
+      toast.error("Failed to save bargaining details");
+    } finally {
+      setIsSavingBargain(false);
+    }
+  };
   
   // Check if client has contact info
   const hasContactNumber = !!(client.contactNo || client.whatsappNo);
@@ -931,6 +1053,45 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
                     <>
                       <Phone className="w-3 h-3 mr-1" />
                       Call Again
+                      <ChevronDown className="w-3 h-3 ml-1" />
+                    </>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-popover z-50">
+                <DropdownMenuItem 
+                  onClick={(e) => handleCallAgain(e, 'DIRECT')}
+                  className="cursor-pointer"
+                >
+                  <Phone className="w-4 h-4 mr-2" /> Direct Call
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={(e) => handleCallAgain(e, 'WHATSAPP')}
+                  className="cursor-pointer"
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" /> WhatsApp Call
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+          {/* CALL Button - For QUOTATION SENT (similar to CALL NOT RECEIVED) */}
+          {isQuotationSent && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="default" 
+                  size="sm" 
+                  className="h-7 px-2 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                  onClick={(e) => e.stopPropagation()}
+                  disabled={isLoggingCall}
+                >
+                  {isLoggingCall ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <>
+                      <Phone className="w-3 h-3 mr-1" />
+                      Call
                       <ChevronDown className="w-3 h-3 ml-1" />
                     </>
                   )}

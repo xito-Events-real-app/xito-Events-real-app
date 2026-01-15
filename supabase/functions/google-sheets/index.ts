@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -92,7 +92,7 @@ async function getAccessToken(credentials: ServiceAccountCredentials): Promise<s
 
 // Get dropdown values from setup sheet
 async function getDropdowns(accessToken: string, spreadsheetId: string) {
-  const range = encodeURIComponent("'CLIENT TRACKER SETUP DATA'!A2:I100");
+  const range = encodeURIComponent("'CLIENT TRACKER SETUP DATA'!A2:K100");
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   const response = await fetch(url, {
@@ -106,7 +106,7 @@ async function getDropdowns(accessToken: string, spreadsheetId: string) {
   }
 
   const data = await response.json();
-  if (!data.values) return { sources: [], whatsappOwners: [], clientLocations: [], eventLocations: [], teamMembers: [], oldClients: [], clientStatuses: [] };
+  if (!data.values) return { sources: [], whatsappOwners: [], clientLocations: [], eventLocations: [], teamMembers: [], oldClients: [], clientStatuses: [], mindsetOptions: [] };
 
   const rows = data.values;
   const getColumn = (idx: number) => rows.map((row: string[]) => row[idx]).filter(Boolean);
@@ -121,6 +121,7 @@ async function getDropdowns(accessToken: string, spreadsheetId: string) {
     oldClients: getColumn(6),         // Column G
     whatsappOwners: getColumn(7),     // Column H (also team members)
     clientStatuses: getColumn(8),     // Column I - Client Status dropdown options
+    mindsetOptions: getColumn(10),    // Column K - Mindset options for QUOTATION SENT
   };
 }
 
@@ -199,9 +200,9 @@ async function updateClientStatus(accessToken: string, spreadsheetId: string, ro
   return { success: true, statusLog: updatedLog };
 }
 
-// Get recent clients (now including Column W for status, Column X for handler, Column Y for call log)
+// Get recent clients (now including Column W for status, Column X for handler, Column Y for call log, Column Z for mindset, AA/AB for bargaining)
 async function getClients(accessToken: string, spreadsheetId: string, limit = 50) {
-  const range = encodeURIComponent("'CLIENT TRACKER'!A2:Y" + (limit + 1));
+  const range = encodeURIComponent("'CLIENT TRACKER'!A2:AB" + (limit + 1));
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   const response = await fetch(url, {
@@ -244,6 +245,9 @@ async function getClients(accessToken: string, spreadsheetId: string, limit = 50
     statusLog: row[22] || '', // Column W (index 22) - Status log with timestamps
     clientHandler: row[23] || '', // Column X (index 23) - Client handler
     callLog: row[24] || '', // Column Y (index 24) - Call attempt history
+    mindset: row[25] || '', // Column Z (index 25) - Mindset with timestamp
+    ourBargainedRates: row[26] || '', // Column AA (index 26) - Our bargained rates
+    clientBargainedRates: row[27] || '', // Column AB (index 27) - Client bargained rates
   }));
 }
 
@@ -605,6 +609,70 @@ async function updateClientQuotation(accessToken: string, spreadsheetId: string,
   return { success: true };
 }
 
+// Update client mindset in Column Z with timestamp
+async function updateClientMindset(accessToken: string, spreadsheetId: string, rowNumber: number, mindset: string, clientTimestamp: string) {
+  if (!rowNumber || rowNumber < 2) {
+    throw new Error('Valid rowNumber is required for updating mindset');
+  }
+
+  // Store as "MINDSET - MM/DD/YYYY, HH:MM:SS"
+  const mindsetWithTimestamp = `${mindset} - ${clientTimestamp}`;
+
+  const range = encodeURIComponent(`'CLIENT TRACKER'!Z${rowNumber}`);
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  
+  const response = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [[mindsetWithTimestamp]] }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (updateClientMindset):', response.status, errorText);
+    throw new Error(`Failed to update mindset: ${response.status}`);
+  }
+
+  return { success: true, mindset: mindsetWithTimestamp };
+}
+
+// Update bargaining rates in Columns AA (our rates) and AB (client rates)
+async function updateBargainingRates(
+  accessToken: string, 
+  spreadsheetId: string, 
+  rowNumber: number, 
+  ourRates: string, 
+  clientRates: string
+) {
+  if (!rowNumber || rowNumber < 2) {
+    throw new Error('Valid rowNumber is required for updating bargaining rates');
+  }
+
+  // Update both columns in one batch
+  const range = encodeURIComponent(`'CLIENT TRACKER'!AA${rowNumber}:AB${rowNumber}`);
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  
+  const response = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [[ourRates, clientRates]] }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (updateBargainingRates):', response.status, errorText);
+    throw new Error(`Failed to update bargaining rates: ${response.status}`);
+  }
+
+  return { success: true, ourBargainedRates: ourRates, clientBargainedRates: clientRates };
+}
+
 // Bulk update status for clients matching a specific status
 async function bulkUpdateStatus(accessToken: string, spreadsheetId: string, fromStatus: string, toStatus: string) {
   // First, get all clients
@@ -808,6 +876,26 @@ Deno.serve(async (req) => {
           spreadsheetId, 
           data.rowNumber as number, 
           data.quotationData as string || ''
+        );
+        break;
+      case 'updateClientMindset':
+        if (!data || !data.rowNumber || !data.mindset) throw new Error('rowNumber and mindset are required for updateClientMindset');
+        result = await updateClientMindset(
+          accessToken, 
+          spreadsheetId, 
+          data.rowNumber as number, 
+          data.mindset as string,
+          data.clientTimestamp as string
+        );
+        break;
+      case 'updateBargainingRates':
+        if (!data || !data.rowNumber) throw new Error('rowNumber is required for updateBargainingRates');
+        result = await updateBargainingRates(
+          accessToken, 
+          spreadsheetId, 
+          data.rowNumber as number, 
+          data.ourRates as string || '',
+          data.clientRates as string || ''
         );
         break;
       default:
