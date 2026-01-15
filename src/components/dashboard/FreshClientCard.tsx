@@ -1228,6 +1228,53 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
         )}
       </div>
 
+        {/* Mindset Dropdown - Only for QUOTATION SENT */}
+        {isQuotationSent && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-muted-foreground font-medium">Mindset:</span>
+            <DropdownMenu>
+              <DropdownMenuTrigger 
+                onClick={(e) => e.stopPropagation()}
+                className={cn(
+                  "flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-md transition-colors",
+                  parsedMindset.name 
+                    ? getMindsetColor(parsedMindset.name)
+                    : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+                  isUpdatingMindset && "opacity-50"
+                )}
+                disabled={isUpdatingMindset}
+              >
+                {isUpdatingMindset ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <>
+                    <Brain className="w-3 h-3" />
+                    {parsedMindset.name || "Select"}
+                    <ChevronDown className="w-3 h-3" />
+                  </>
+                )}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent 
+                align="end" 
+                className="max-h-60 overflow-y-auto z-50 bg-background"
+              >
+                {mindsetOptions.map((mindset) => (
+                  <DropdownMenuItem
+                    key={mindset}
+                    onClick={(e) => handleMindsetChange(e, mindset)}
+                    className={cn(
+                      "text-xs cursor-pointer",
+                      mindset.toUpperCase() === parsedMindset.name.toUpperCase() && "bg-primary/10 font-medium"
+                    )}
+                  >
+                    {mindset}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
+
       {/* Handler Warning */}
       {showHandlerWarning && (
         <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-1.5 rounded-md">
@@ -1244,6 +1291,50 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
             ⚠️ {reminderInfo.message}
           </span>
         </div>
+      )}
+
+      {/* Mindset Display and Warning - Only for QUOTATION SENT */}
+      {isQuotationSent && parsedMindset.name && (
+        <>
+          {/* Mindset Tag with Time Tracking for NOT SEEN / IGNORED */}
+          {(parsedMindset.name.toUpperCase().includes('NOT SEEN') || parsedMindset.name.toUpperCase().includes('IGNORED')) && (
+            <div className="flex flex-col gap-1.5">
+              <div className={cn(
+                "flex items-center gap-2 text-xs px-3 py-2 rounded-md",
+                parsedMindset.name.toUpperCase().includes('NOT SEEN') 
+                  ? "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
+                  : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+              )}>
+                <Brain className="w-3.5 h-3.5" />
+                <span className="font-semibold">{parsedMindset.name.toUpperCase()} FROM {formatDuration(parsedMindset.timestamp ? Date.now() - parsedMindset.timestamp.getTime() : 0)} AGO</span>
+              </div>
+              
+              {/* 6 Hour Warning Banner */}
+              {parsedMindset.hoursAgo >= 6 && (
+                <div className="flex items-center gap-2 text-xs bg-red-50 dark:bg-red-900/30 px-3 py-2 rounded-md border border-red-300 dark:border-red-700 animate-pulse">
+                  <Bell className="w-4 h-4 text-red-600 dark:text-red-400" />
+                  <span className="font-semibold text-red-700 dark:text-red-400">
+                    ⚠️ FOLLOW UP NEEDED - {parsedMindset.name.toUpperCase()} FOR {formatDuration(parsedMindset.timestamp ? Date.now() - parsedMindset.timestamp.getTime() : 0)}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* Other Mindset Tags (not NOT SEEN or IGNORED) */}
+          {!parsedMindset.name.toUpperCase().includes('NOT SEEN') && !parsedMindset.name.toUpperCase().includes('IGNORED') && (
+            <div className={cn(
+              "flex items-center gap-2 text-xs px-3 py-2 rounded-md",
+              getMindsetColor(parsedMindset.name)
+            )}>
+              <Brain className="w-3.5 h-3.5" />
+              <span className="font-semibold">{parsedMindset.name.toUpperCase()}</span>
+              {parsedMindset.timestamp && (
+                <span className="opacity-70">({formatDuration(Date.now() - parsedMindset.timestamp.getTime())} ago)</span>
+              )}
+            </div>
+          )}
+        </>
       )}
 
       {/* Call Tracking Info - Only for CALL NOT RECEIVED */}
@@ -1605,6 +1696,133 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
                 <FileText className="w-4 h-4 mr-2" />
               )}
               Send to Quotation Sent
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bargaining Dialog - For QUOTATION SENT mindset */}
+      <Dialog open={showBargainingDialog} onOpenChange={setShowBargainingDialog}>
+        <DialogContent onClick={(e) => e.stopPropagation()} className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Brain className="w-5 h-5 text-amber-600" />
+              Bargaining Details
+            </DialogTitle>
+            <DialogDescription>
+              Which packages is {client.clientName} bargaining about? Select packages and enter bargaining rates.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-2">
+            {/* Package Selection from Quotation Data */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Select Package(s)</Label>
+              {parseQuotationData(currentQuotationData).length > 0 ? (
+                <div className="space-y-2">
+                  {parseQuotationData(currentQuotationData).map((q, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Checkbox 
+                        id={`pkg-${q.tier}`}
+                        checked={selectedBargainPackages.includes(q.tier)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedBargainPackages([...selectedBargainPackages, q.tier]);
+                          } else {
+                            setSelectedBargainPackages(selectedBargainPackages.filter(t => t !== q.tier));
+                            // Clear rates for unchecked package
+                            const newClientRates = { ...clientBargainRates };
+                            const newOurRates = { ...ourBargainRates };
+                            delete newClientRates[q.tier];
+                            delete newOurRates[q.tier];
+                            setClientBargainRates(newClientRates);
+                            setOurBargainRates(newOurRates);
+                          }
+                        }}
+                      />
+                      <label 
+                        htmlFor={`pkg-${q.tier}`}
+                        className={cn(
+                          "text-sm font-medium cursor-pointer px-2 py-1 rounded",
+                          getQuotationTierColor(q.tier)
+                        )}
+                      >
+                        {q.tier}: {q.amount}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No quotation data available</p>
+              )}
+            </div>
+            
+            {/* Rate Inputs for Selected Packages */}
+            {selectedBargainPackages.length > 0 && (
+              <div className="space-y-4 pt-2 border-t">
+                <Label className="text-sm font-medium">Enter Bargaining Rates</Label>
+                {selectedBargainPackages.map((tier) => (
+                  <div key={tier} className="space-y-2 p-3 bg-muted/30 rounded-lg">
+                    <span className={cn(
+                      "text-xs font-semibold px-2 py-0.5 rounded",
+                      getQuotationTierColor(tier)
+                    )}>
+                      {tier}
+                    </span>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Client's Rate</Label>
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs text-muted-foreground">NPR</span>
+                          <Input
+                            type="number"
+                            placeholder="Client's rate"
+                            value={clientBargainRates[tier] || ''}
+                            onChange={(e) => setClientBargainRates({ ...clientBargainRates, [tier]: e.target.value })}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Our New Rate</Label>
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs text-muted-foreground">NPR</span>
+                          <Input
+                            type="number"
+                            placeholder="Our new rate"
+                            value={ourBargainRates[tier] || ''}
+                            onChange={(e) => setOurBargainRates({ ...ourBargainRates, [tier]: e.target.value })}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => {
+              setShowBargainingDialog(false);
+              setSelectedBargainPackages([]);
+              setClientBargainRates({});
+              setOurBargainRates({});
+            }}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSaveBargaining}
+              disabled={selectedBargainPackages.length === 0 || isSavingBargain}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {isSavingBargain ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <Brain className="w-4 h-4 mr-2" />
+              )}
+              Save & Move to Bargaining
             </Button>
           </DialogFooter>
         </DialogContent>
