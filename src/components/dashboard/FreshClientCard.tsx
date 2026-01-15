@@ -24,7 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ChevronDown, ChevronUp, Loader2, Clock, AlertTriangle, UserCog, Phone, MessageCircle, Edit, History } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Clock, AlertTriangle, UserCog, Phone, MessageCircle, Edit, History, Bell } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
@@ -66,8 +66,8 @@ function parseCallLog(callLog: string): CallEntry[] {
   });
 }
 
-// Get time since last call
-function getLastCallTimeAgo(callLog: string): string | null {
+// Get time since last call - returns both display text and hours for reminder check
+function getLastCallInfo(callLog: string): { displayText: string; hoursSinceLastCall: number } | null {
   const entries = parseCallLog(callLog);
   if (entries.length === 0) return null;
   
@@ -84,13 +84,16 @@ function getLastCallTimeAgo(callLog: string): string | null {
   const remainingHours = diffHours % 24;
   const remainingMins = diffMins % 60;
 
+  let displayText: string;
   if (diffDays > 0) {
-    return `${diffDays}D ${remainingHours}H ${remainingMins}M AGO`;
+    displayText = `${diffDays}D ${remainingHours}H ${remainingMins}M AGO`;
   } else if (remainingHours > 0) {
-    return `${remainingHours}H ${remainingMins}M AGO`;
+    displayText = `${remainingHours}H ${remainingMins}M AGO`;
   } else {
-    return `${remainingMins}M AGO`;
+    displayText = `${remainingMins}M AGO`;
   }
+
+  return { displayText, hoursSinceLastCall: diffHours + (diffMins / 60) };
 }
 
 // Format time duration as "X DAY Y HR Z MIN"
@@ -438,8 +441,19 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
   // Call log info for CALL NOT RECEIVED category
   const callEntries = useMemo(() => parseCallLog(currentCallLog), [currentCallLog]);
   const callCount = callEntries.length;
-  const lastCallTimeAgo = useMemo(() => getLastCallTimeAgo(currentCallLog), [currentCallLog]);
+  const lastCallInfo = useMemo(() => getLastCallInfo(currentCallLog), [currentCallLog]);
+  const lastCallTimeAgo = lastCallInfo?.displayText || null;
   const isCallNotReceived = currentStatusCategory?.toUpperCase().includes('CALL NOT');
+  
+  // Call reminder: alert if >6 hours since last call (or no calls made yet)
+  const REMINDER_THRESHOLD_HOURS = 6;
+  const needsCallReminder = useMemo(() => {
+    if (!isCallNotReceived) return false;
+    // If no calls made yet, always show reminder
+    if (callCount === 0) return true;
+    // If last call was more than 6 hours ago, show reminder
+    return lastCallInfo ? lastCallInfo.hoursSinceLastCall >= REMINDER_THRESHOLD_HOURS : false;
+  }, [isCallNotReceived, callCount, lastCallInfo]);
 
   // Handle call action
   const handleCallAgain = async (e: React.MouseEvent, callType: 'DIRECT' | 'WHATSAPP') => {
@@ -675,6 +689,18 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
         <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-1.5 rounded-md">
           <AlertTriangle className="w-3.5 h-3.5" />
           <span>Handler not selected</span>
+        </div>
+      )}
+
+      {/* Call Reminder Alert - Only for CALL NOT RECEIVED when >6 hours since last call */}
+      {isCallNotReceived && needsCallReminder && (
+        <div className="flex items-center gap-2 text-xs bg-red-50 dark:bg-red-900/30 px-2 py-2 rounded-md border border-red-300 dark:border-red-700 animate-pulse">
+          <Bell className="w-4 h-4 text-red-600 dark:text-red-400" />
+          <span className="font-semibold text-red-700 dark:text-red-400">
+            {callCount === 0 
+              ? "⚠️ NO CALLS MADE YET - CALL NOW!" 
+              : `⚠️ CALL REMINDER: ${REMINDER_THRESHOLD_HOURS}+ HOURS SINCE LAST CALL`}
+          </span>
         </div>
       )}
 
