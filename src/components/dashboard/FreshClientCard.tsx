@@ -38,6 +38,22 @@ interface CallEntry {
   timestamp: Date | null;
 }
 
+// Safari-compatible time parsing helper
+function parseTimeString(timeStr: string): { hours: number; minutes: number } | null {
+  // Parse "12:53 PM" or "1:30 AM" format
+  const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  if (!match) return null;
+  
+  let hours = parseInt(match[1]);
+  const minutes = parseInt(match[2]);
+  const period = match[3].toUpperCase();
+  
+  if (period === 'PM' && hours !== 12) hours += 12;
+  if (period === 'AM' && hours === 12) hours = 0;
+  
+  return { hours, minutes };
+}
+
 function parseCallLog(callLog: string): CallEntry[] {
   if (!callLog) return [];
   const lines = callLog.split('\n').filter(Boolean);
@@ -48,8 +64,16 @@ function parseCallLog(callLog: string): CallEntry[] {
       const [, num, type, time, date] = match;
       let timestamp: Date | null = null;
       try {
-        timestamp = new Date(`${date} ${time}`);
-        if (isNaN(timestamp.getTime())) timestamp = null;
+        // Safari-compatible date parsing
+        const timeParsed = parseTimeString(time.trim());
+        const dateParts = date.trim().split('-');
+        if (timeParsed && dateParts.length === 3) {
+          const year = parseInt(dateParts[0]);
+          const month = parseInt(dateParts[1]) - 1; // JS months are 0-indexed
+          const day = parseInt(dateParts[2]);
+          timestamp = new Date(year, month, day, timeParsed.hours, timeParsed.minutes);
+          if (isNaN(timestamp.getTime())) timestamp = null;
+        }
       } catch {
         timestamp = null;
       }
