@@ -79,10 +79,11 @@ function getStatusTimeAgo(statusLog?: string): { displayText: string; timestamp:
   };
 }
 
-// Get total time from registration to a specific status (for ADVANCE PENDING, BOOKED, POSTPONED)
+// Get total time from enquiry to when status was set (for ADVANCE PENDING, BOOKED, POSTPONED)
 function getTotalTimeInfo(
   statusLog?: string,
-  registeredDateTimeAD?: string,
+  inquiryDateAD?: string,
+  inquiryTime?: string,
   currentStatus?: string
 ): string | null {
   // Only show for specific statuses
@@ -91,13 +92,17 @@ function getTotalTimeInfo(
     return null;
   }
   
-  if (!registeredDateTimeAD || !statusLog) return null;
+  if (!inquiryDateAD || !statusLog) return null;
   
-  // Parse registration date
-  let regDate: Date;
+  // Parse enquiry datetime
+  let enquiryDateTime: Date;
   try {
-    regDate = new Date(registeredDateTimeAD);
-    if (isNaN(regDate.getTime())) return null;
+    if (inquiryTime) {
+      enquiryDateTime = new Date(`${inquiryDateAD} ${inquiryTime}`);
+    } else {
+      enquiryDateTime = new Date(inquiryDateAD);
+    }
+    if (isNaN(enquiryDateTime.getTime())) return null;
   } catch {
     return null;
   }
@@ -119,7 +124,8 @@ function getTotalTimeInfo(
   
   if (!targetTimestamp) return null;
   
-  const diffMs = targetTimestamp.getTime() - regDate.getTime();
+  // Calculate time from enquiry to when status was set
+  const diffMs = targetTimestamp.getTime() - enquiryDateTime.getTime();
   if (diffMs < 0) return null;
   
   return formatDuration(diffMs);
@@ -268,10 +274,10 @@ export function FreshClientCard({ client, onClick, statusOptions, onStatusChange
     [currentStatusLog]
   );
 
-  // Calculate total time for specific statuses
+  // Calculate total time from enquiry to status set (for specific statuses)
   const totalTimeInfo = useMemo(() => 
-    getTotalTimeInfo(currentStatusLog, client.registeredDateTimeAD, currentStatus), 
-    [currentStatusLog, client.registeredDateTimeAD, currentStatus]
+    getTotalTimeInfo(currentStatusLog, client.inquiryDateAD, client.inquiryTime, currentStatus), 
+    [currentStatusLog, client.inquiryDateAD, client.inquiryTime, currentStatus]
   );
 
   return (
