@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { AppLayout, PageHeader } from "@/components/layout";
 import { Button } from "@/components/ui/button";
-import { FormSection, FormInput, FormSelect, CountrySelector, PhoneInputField, NepaliCalendar } from "@/components/form";
+import { FormSection, FormInput, FormSelect, FormCombobox, CountrySelector, PhoneInputField, NepaliCalendar } from "@/components/form";
 import { EventSelector } from "@/components/form/EventSelector";
 import { getCountryCodeFromName } from "@/components/form/CountrySelector";
 import { valleyCities, nepalCitiesOutsideValley, clientLocationOptions } from "@/lib/form-data";
@@ -283,7 +283,7 @@ export default function QuickAdd() {
         {/* Client Basic Details */}
         <FormSection title="Client Basic Details">
           <FormInput label="Client Name" value={clientName} onChange={setClientName} placeholder="Enter client name" required />
-          <FormSelect 
+          <FormCombobox 
             label="Source" 
             value={source} 
             onChange={setSource} 
