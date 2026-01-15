@@ -321,6 +321,10 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
   const [showCallHistoryDialog, setShowCallHistoryDialog] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   
+  // NUMBER PROVIDED post-call dialog states
+  const [showPostCallDialog, setShowPostCallDialog] = useState(false);
+  const [showStatusSelectionDialog, setShowStatusSelectionDialog] = useState(false);
+  
   // Use handler initials if set, otherwise fall back to who added
   const displayInitials = getHandlerInitials(currentHandler || client.whoAdded || '');
   const hasHandler = !!currentHandler;
@@ -472,6 +476,7 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
   const lastCallInfo = useMemo(() => getLastCallInfo(currentCallLog), [currentCallLog]);
   const lastCallTimeAgo = lastCallInfo?.displayText || null;
   const isCallNotReceived = currentStatusCategory?.toUpperCase().includes('CALL NOT');
+  const isNumberProvided = currentStatusCategory?.toUpperCase().includes('NUMBER PROVIDED');
   
   // Universal action reminder: alert if >6 hours in current status
   const REMINDER_THRESHOLD_HOURS = 6;
@@ -521,7 +526,7 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
     return { show: true, message };
   }, [currentStatusCategory, isCallNotReceived, callCount, lastCallInfo, statusTimeAgo]);
 
-  // Handle call action
+  // Handle call action for CALL NOT RECEIVED
   const handleCallAgain = async (e: React.MouseEvent, callType: 'DIRECT' | 'WHATSAPP') => {
     e.stopPropagation();
     
@@ -549,6 +554,64 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
     } finally {
       setIsLoggingCall(false);
     }
+  };
+
+  // Handle call action for NUMBER PROVIDED (with post-call follow-up)
+  const handleNumberProvidedCall = async (e: React.MouseEvent, callType: 'DIRECT' | 'WHATSAPP') => {
+    e.stopPropagation();
+    
+    if (!client.rowNumber) {
+      toast.error("Cannot log call: missing row number");
+      return;
+    }
+
+    setIsLoggingCall(true);
+    try {
+      // Log the call to Column Y
+      const result = await logCallAttempt(client.rowNumber, callType, currentCallLog);
+      setCurrentCallLog(result.callLog);
+      toast.success(`${callType} call logged`);
+      
+      // Open the appropriate app
+      if (callType === 'DIRECT' && client.contactNo) {
+        window.location.href = `tel:${client.contactNo}`;
+      } else if (callType === 'WHATSAPP' && client.whatsappNo) {
+        const cleanNumber = client.whatsappNo.replace(/\D/g, '');
+        window.open(`https://wa.me/${cleanNumber}`, '_blank');
+      }
+      
+      // Show post-call dialog after a short delay (to allow phone app to open)
+      setTimeout(() => {
+        setShowPostCallDialog(true);
+      }, 500);
+      
+    } catch (err) {
+      console.error("Failed to log call:", err);
+      toast.error("Failed to log call");
+    } finally {
+      setIsLoggingCall(false);
+    }
+  };
+
+  // Handle "No" - Client didn't pick up
+  const handleCallNotPicked = () => {
+    setShowPostCallDialog(false);
+    // Offer to move to CALL NOT RECEIVED
+    setPendingStatus('CALL NOT RECEIVED');
+    setShowConfirmDialog(true);
+  };
+
+  // Handle "Yes" - Client picked up
+  const handleCallPicked = () => {
+    setShowPostCallDialog(false);
+    setShowStatusSelectionDialog(true);
+  };
+
+  // Handle status selection after call was picked
+  const handleNewStatusSelection = (newStatus: string) => {
+    setShowStatusSelectionDialog(false);
+    setPendingStatus(newStatus);
+    setShowConfirmDialog(true);
   };
 
   return (
@@ -597,7 +660,46 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
 
         {/* Right Side Container - Call Again Button + Location Badge */}
         <div className="shrink-0 flex flex-col items-end gap-2">
-          {/* CALL AGAIN Button - Only for CALL NOT RECEIVED */}
+          {/* CALL Button - For NUMBER PROVIDED (Green) */}
+          {isNumberProvided && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="default" 
+                  size="sm" 
+                  className="h-7 px-2 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                  onClick={(e) => e.stopPropagation()}
+                  disabled={isLoggingCall}
+                >
+                  {isLoggingCall ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <>
+                      <Phone className="w-3 h-3 mr-1" />
+                      Call
+                      <ChevronDown className="w-3 h-3 ml-1" />
+                    </>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-popover z-50">
+                <DropdownMenuItem 
+                  onClick={(e) => handleNumberProvidedCall(e, 'DIRECT')}
+                  className="cursor-pointer"
+                >
+                  <Phone className="w-4 h-4 mr-2" /> Direct Call
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={(e) => handleNumberProvidedCall(e, 'WHATSAPP')}
+                  className="cursor-pointer"
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" /> WhatsApp Call
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+          {/* CALL AGAIN Button - Only for CALL NOT RECEIVED (Red) */}
           {isCallNotReceived && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -814,10 +916,17 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
           </div>
         )}
         
-        {/* ADDED X AGO - Right (for JUST ENQUIRED and NUMBER PROVIDED) */}
-        {(currentStatusCategory === 'JUST ENQUIRED' || currentStatusCategory === 'NUMBER PROVIDED') && enquiryInfo && (
+        {/* ADDED X AGO - Right (for JUST ENQUIRED only) */}
+        {currentStatusCategory === 'JUST ENQUIRED' && enquiryInfo && (
           <div className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 font-medium ml-auto">
             <span>ADDED {enquiryInfo.displayText.toUpperCase().replace(' AGO', '')} AGO</span>
+          </div>
+        )}
+        
+        {/* NUMBER PROVIDED X AGO - Right (for NUMBER PROVIDED) */}
+        {isNumberProvided && statusTimeAgo && (
+          <div className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium ml-auto">
+            <span>NUMBER PROVIDED {statusTimeAgo.displayText}</span>
           </div>
         )}
         
@@ -971,6 +1080,53 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
                 </div>
               ))
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Post-Call Follow-up Dialog - NUMBER PROVIDED */}
+      <AlertDialog open={showPostCallDialog} onOpenChange={setShowPostCallDialog}>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Phone className="w-5 h-5 text-emerald-600" />
+              Call Follow-up
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-base">
+              Did <strong className="text-foreground">{client.clientName}</strong> pick your call?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCallNotPicked}>No</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCallPicked} className="bg-emerald-600 hover:bg-emerald-700">
+              Yes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Status Selection Dialog - After call picked */}
+      <Dialog open={showStatusSelectionDialog} onOpenChange={setShowStatusSelectionDialog}>
+        <DialogContent onClick={(e) => e.stopPropagation()} className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>What is the new status for this client?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            {statusOptions
+              .filter(status => !['JUST ENQUIRED', 'NUMBER PROVIDED'].includes(status.toUpperCase()))
+              .map((status) => (
+                <Button
+                  key={status}
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left",
+                    getStatusColor(status)
+                  )}
+                  onClick={() => handleNewStatusSelection(status)}
+                >
+                  {status}
+                </Button>
+              ))}
           </div>
         </DialogContent>
       </Dialog>
