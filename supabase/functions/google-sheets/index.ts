@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -240,7 +240,7 @@ async function getClients(accessToken: string, spreadsheetId: string, limit = 50
     inquiryDateBS: row[18] || '',
     inquiryTime: row[19] || '',
     description: row[20] || '',
-    // Column V (index 21) - might be empty
+    quotationData: row[21] || '', // Column V (index 21) - Quotation amounts
     statusLog: row[22] || '', // Column W (index 22) - Status log with timestamps
     clientHandler: row[23] || '', // Column X (index 23) - Client handler
     callLog: row[24] || '', // Column Y (index 24) - Call attempt history
@@ -578,6 +578,33 @@ async function updateClientHandler(accessToken: string, spreadsheetId: string, r
   return { success: true };
 }
 
+// Update client quotation in Column V
+async function updateClientQuotation(accessToken: string, spreadsheetId: string, rowNumber: number, quotationData: string) {
+  if (!rowNumber || rowNumber < 2) {
+    throw new Error('Valid rowNumber is required for updating quotation');
+  }
+
+  const range = encodeURIComponent(`'CLIENT TRACKER'!V${rowNumber}`);
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  
+  const response = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [[quotationData]] }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (updateClientQuotation):', response.status, errorText);
+    throw new Error(`Failed to update quotation: ${response.status}`);
+  }
+
+  return { success: true };
+}
+
 // Bulk update status for clients matching a specific status
 async function bulkUpdateStatus(accessToken: string, spreadsheetId: string, fromStatus: string, toStatus: string) {
   // First, get all clients
@@ -772,6 +799,15 @@ Deno.serve(async (req) => {
           data.existingCallLog as string || '',
           data.clientTime as string,
           data.clientDate as string
+        );
+        break;
+      case 'updateClientQuotation':
+        if (!data || !data.rowNumber) throw new Error('rowNumber is required for updateClientQuotation');
+        result = await updateClientQuotation(
+          accessToken, 
+          spreadsheetId, 
+          data.rowNumber as number, 
+          data.quotationData as string || ''
         );
         break;
       default:

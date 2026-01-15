@@ -36,6 +36,7 @@ export interface ClientData {
   inquiryDateBS?: string;
   inquiryTime?: string;
   description?: string;
+  quotationData?: string; // Column V - quotation amounts
   statusLog?: string;
   initialStatus?: string;
   clientHandler?: string; // Column X - who is handling this client
@@ -158,6 +159,15 @@ export async function logCallAttempt(
   
   return callSheetsFunction<{ success: boolean; callLog: string }>("logCallAttempt", {
     data: { rowNumber, callType, existingCallLog, clientTime: timeStr, clientDate: dateStr },
+  });
+}
+
+export async function updateClientQuotation(
+  rowNumber: number,
+  quotationData: string
+): Promise<{ success: boolean }> {
+  return callSheetsFunction<{ success: boolean }>("updateClientQuotation", {
+    data: { rowNumber, quotationData },
   });
 }
 

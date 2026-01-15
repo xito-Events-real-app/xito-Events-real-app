@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { ClientData, updateClientStatus, updateClientHandler, logCallAttempt, getCurrentStatus } from "@/lib/sheets-api";
+import { ClientData, updateClientStatus, updateClientHandler, logCallAttempt, getCurrentStatus, updateClientQuotation } from "@/lib/sheets-api";
 import { getHandlerInitials, parseEventDetails, formatLocationDisplay } from "@/lib/nepali-months";
 import { cn } from "@/lib/utils";
 import {
@@ -21,12 +21,16 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ChevronDown, ChevronUp, Loader2, Clock, AlertTriangle, UserCog, Phone, MessageCircle, Edit, History, Bell, ExternalLink } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Clock, AlertTriangle, UserCog, Phone, MessageCircle, Edit, History, Bell, ExternalLink, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 // Parse call log to get structured entries
 interface CallEntry {
@@ -325,6 +329,15 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
   const [showPostCallDialog, setShowPostCallDialog] = useState(false);
   const [showStatusSelectionDialog, setShowStatusSelectionDialog] = useState(false);
   
+  // Quotation dialog states
+  const [showQuotationDialog, setShowQuotationDialog] = useState(false);
+  const [quotationBasic, setQuotationBasic] = useState('');
+  const [quotationStandard, setQuotationStandard] = useState('');
+  const [quotationPremium, setQuotationPremium] = useState('');
+  const [quotationWtnSpecial, setQuotationWtnSpecial] = useState('');
+  const [isSavingQuotation, setIsSavingQuotation] = useState(false);
+  const [currentQuotationData, setCurrentQuotationData] = useState(client.quotationData || '');
+  
   // Use handler initials if set, otherwise fall back to who added
   const displayInitials = getHandlerInitials(currentHandler || client.whoAdded || '');
   const hasHandler = !!currentHandler;
@@ -478,9 +491,14 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
   const isCallNotReceived = currentStatusCategory?.toUpperCase().includes('CALL NOT');
   const isNumberProvided = currentStatusCategory?.toUpperCase().includes('NUMBER PROVIDED');
   const isJustEnquired = currentStatusCategory?.toUpperCase() === 'JUST ENQUIRED';
+  const isQuotationPending = currentStatusCategory?.toUpperCase().includes('QUOTATION PENDING');
+  const isQuotationSent = currentStatusCategory?.toUpperCase().includes('QUOTATION SENT');
   
   // Check if client has contact info
   const hasContactNumber = !!(client.contactNo || client.whatsappNo);
+  
+  // Check if at least one quotation field is filled
+  const isAtLeastOneQuotationFilled = !!(quotationBasic || quotationStandard || quotationPremium || quotationWtnSpecial);
   
   // Universal action reminder: alert if >6 hours in current status
   const REMINDER_THRESHOLD_HOURS = 6;
@@ -630,6 +648,78 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
     setShowConfirmDialog(true);
   };
 
+  // Format number with Indian/Nepali comma format: 1,00,000
+  const formatNPR = (value: string): string => {
+    const num = parseInt(value.replace(/,/g, ''), 10);
+    if (isNaN(num)) return '';
+    // Use Indian numbering system (lakhs, crores)
+    return num.toLocaleString('en-IN');
+  };
+
+  // Parse quotation data for display
+  const parseQuotationData = (data: string): { tier: string; amount: string }[] => {
+    if (!data) return [];
+    return data.split('\n').map(line => {
+      const [tier, ...rest] = line.split(': ');
+      return { tier: tier?.trim() || '', amount: rest.join(': ')?.trim() || '' };
+    }).filter(q => q.tier && q.amount);
+  };
+
+  // Handle save quotation
+  const handleSaveQuotation = async () => {
+    if (!client.rowNumber) {
+      toast.error("Cannot save: missing row number");
+      return;
+    }
+    
+    if (!isAtLeastOneQuotationFilled) {
+      toast.error("Please fill at least one quotation field");
+      return;
+    }
+
+    setIsSavingQuotation(true);
+    
+    try {
+      // Build quotation string
+      const lines: string[] = [];
+      if (quotationBasic) lines.push(`BASIC: NPR ${formatNPR(quotationBasic)}/-`);
+      if (quotationStandard) lines.push(`STANDARD: NPR ${formatNPR(quotationStandard)}/-`);
+      if (quotationPremium) lines.push(`PREMIUM: NPR ${formatNPR(quotationPremium)}/-`);
+      if (quotationWtnSpecial) lines.push(`WTN SPECIAL: NPR ${formatNPR(quotationWtnSpecial)}/-`);
+      
+      const quotationData = lines.join('\n');
+      
+      // Save to Column V
+      await updateClientQuotation(client.rowNumber, quotationData);
+      
+      // Update local state
+      setCurrentQuotationData(quotationData);
+      
+      // Close dialog
+      setShowQuotationDialog(false);
+      
+      // Reset form
+      setQuotationBasic('');
+      setQuotationStandard('');
+      setQuotationPremium('');
+      setQuotationWtnSpecial('');
+      
+      // Trigger status change to "QUOTATION SENT: REVIEW PENDING"
+      const quotationSentStatus = statusOptions.find(s => s.toUpperCase().includes('QUOTATION SENT'));
+      if (quotationSentStatus) {
+        setPendingStatus(quotationSentStatus);
+        setShowConfirmDialog(true);
+      }
+      
+      toast.success("Quotation saved successfully");
+    } catch (err) {
+      console.error("Failed to save quotation:", err);
+      toast.error("Failed to save quotation");
+    } finally {
+      setIsSavingQuotation(false);
+    }
+  };
+
   return (
     <div 
       className="flex flex-col gap-2 p-3 rounded-xl hover:bg-muted/50 transition-colors border border-border/50"
@@ -649,6 +739,17 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
           <p className="text-sm font-semibold text-foreground truncate">
             {client.clientName}
           </p>
+
+          {/* Quotation Display - For QUOTATION SENT category */}
+          {isQuotationSent && currentQuotationData && (
+            <div className="flex flex-wrap gap-1 mt-1">
+              {parseQuotationData(currentQuotationData).map((q, i) => (
+                <span key={i} className="text-[10px] bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 px-1.5 py-0.5 rounded">
+                  {q.tier}: {q.amount}
+                </span>
+              ))}
+            </div>
+          )}
 
           {/* Event Details */}
           {events.length > 0 && (
@@ -805,7 +906,22 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          
+
+          {/* Enter Quotation Button - For CALLED: QUOTATION PENDING */}
+          {isQuotationPending && (
+            <Button
+              variant="default"
+              size="sm"
+              className="h-7 px-2 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowQuotationDialog(true);
+              }}
+            >
+              <FileText className="w-3 h-3 mr-1" />
+              Enter Quotation
+            </Button>
+          )}
           {/* Location Badge */}
           {location && (
             <div className="text-right">
@@ -1196,6 +1312,109 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
                 </Button>
               ))}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quotation Input Dialog - For CALLED: QUOTATION PENDING */}
+      <Dialog open={showQuotationDialog} onOpenChange={setShowQuotationDialog}>
+        <DialogContent onClick={(e) => e.stopPropagation()} className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-blue-600" />
+              Enter Quotation Amounts
+            </DialogTitle>
+            <DialogDescription>
+              Enter the prices quoted to {client.clientName}. At least one is required.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-2">
+            {/* BASIC */}
+            <div className="space-y-1.5">
+              <Label htmlFor="basic" className="text-sm font-medium">BASIC</Label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">NPR</span>
+                <Input
+                  id="basic"
+                  type="number"
+                  placeholder="e.g., 50000"
+                  value={quotationBasic}
+                  onChange={(e) => setQuotationBasic(e.target.value)}
+                  className="flex-1"
+                />
+                <span className="text-sm text-muted-foreground">/-</span>
+              </div>
+            </div>
+            
+            {/* STANDARD */}
+            <div className="space-y-1.5">
+              <Label htmlFor="standard" className="text-sm font-medium">STANDARD</Label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">NPR</span>
+                <Input
+                  id="standard"
+                  type="number"
+                  placeholder="e.g., 75000"
+                  value={quotationStandard}
+                  onChange={(e) => setQuotationStandard(e.target.value)}
+                  className="flex-1"
+                />
+                <span className="text-sm text-muted-foreground">/-</span>
+              </div>
+            </div>
+            
+            {/* PREMIUM */}
+            <div className="space-y-1.5">
+              <Label htmlFor="premium" className="text-sm font-medium">PREMIUM</Label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">NPR</span>
+                <Input
+                  id="premium"
+                  type="number"
+                  placeholder="e.g., 100000"
+                  value={quotationPremium}
+                  onChange={(e) => setQuotationPremium(e.target.value)}
+                  className="flex-1"
+                />
+                <span className="text-sm text-muted-foreground">/-</span>
+              </div>
+            </div>
+            
+            {/* WTN SPECIAL */}
+            <div className="space-y-1.5">
+              <Label htmlFor="wtnspecial" className="text-sm font-medium">WTN SPECIAL</Label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">NPR</span>
+                <Input
+                  id="wtnspecial"
+                  type="number"
+                  placeholder="e.g., 125000"
+                  value={quotationWtnSpecial}
+                  onChange={(e) => setQuotationWtnSpecial(e.target.value)}
+                  className="flex-1"
+                />
+                <span className="text-sm text-muted-foreground">/-</span>
+              </div>
+            </div>
+          </div>
+          
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setShowQuotationDialog(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSaveQuotation}
+              disabled={!isAtLeastOneQuotationFilled || isSavingQuotation}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+            >
+              {isSavingQuotation ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <FileText className="w-4 h-4 mr-2" />
+              )}
+              Send to Quotation Sent
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
