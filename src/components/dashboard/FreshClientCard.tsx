@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { ClientData, updateClientStatus, updateClientHandler, getCurrentStatus } from "@/lib/sheets-api";
+import { ClientData, updateClientStatus, updateClientHandler, logCallAttempt, getCurrentStatus } from "@/lib/sheets-api";
 import { getHandlerInitials, parseEventDetails, formatLocationDisplay } from "@/lib/nepali-months";
 import { cn } from "@/lib/utils";
 import {
@@ -18,9 +18,80 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ChevronDown, ChevronUp, Loader2, Clock, AlertTriangle, UserCog, Phone, MessageCircle, Edit } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ChevronDown, ChevronUp, Loader2, Clock, AlertTriangle, UserCog, Phone, MessageCircle, Edit, History } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+
+// Parse call log to get structured entries
+interface CallEntry {
+  number: number;
+  type: string;
+  time: string;
+  date: string;
+  label: string;
+  timestamp: Date | null;
+}
+
+function parseCallLog(callLog: string): CallEntry[] {
+  if (!callLog) return [];
+  const lines = callLog.split('\n').filter(Boolean);
+  return lines.map(line => {
+    // Parse "1ST DIRECT CALL AT 12:53 PM ON 2026-01-16"
+    const match = line.match(/(\d+)(?:ST|ND|RD|TH)\s+(DIRECT|WHATSAPP)\s+CALL\s+AT\s+(.+)\s+ON\s+(.+)/i);
+    if (match) {
+      const [, num, type, time, date] = match;
+      let timestamp: Date | null = null;
+      try {
+        timestamp = new Date(`${date} ${time}`);
+        if (isNaN(timestamp.getTime())) timestamp = null;
+      } catch {
+        timestamp = null;
+      }
+      return {
+        number: parseInt(num),
+        type: type.toUpperCase(),
+        time,
+        date,
+        label: line,
+        timestamp
+      };
+    }
+    return { number: 0, type: '', time: '', date: '', label: line, timestamp: null };
+  });
+}
+
+// Get time since last call
+function getLastCallTimeAgo(callLog: string): string | null {
+  const entries = parseCallLog(callLog);
+  if (entries.length === 0) return null;
+  
+  const lastEntry = entries[entries.length - 1];
+  if (!lastEntry.timestamp) return null;
+  
+  const now = new Date();
+  const diffMs = now.getTime() - lastEntry.timestamp.getTime();
+  if (diffMs < 0) return null;
+  
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffHours / 24);
+  const remainingHours = diffHours % 24;
+  const remainingMins = diffMins % 60;
+
+  if (diffDays > 0) {
+    return `${diffDays}D ${remainingHours}H ${remainingMins}M AGO`;
+  } else if (remainingHours > 0) {
+    return `${remainingHours}H ${remainingMins}M AGO`;
+  } else {
+    return `${remainingMins}M AGO`;
+  }
+}
 
 // Format time duration as "X DAY Y HR Z MIN"
 function formatDuration(diffMs: number): string {
@@ -210,10 +281,13 @@ interface FreshClientCardProps {
 export function FreshClientCard({ client, onEditClick, statusOptions, handlerOptions = [], currentStatusCategory, onStatusChange, onHandlerChange }: FreshClientCardProps) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isUpdatingHandler, setIsUpdatingHandler] = useState(false);
+  const [isLoggingCall, setIsLoggingCall] = useState(false);
   const [currentStatusLog, setCurrentStatusLog] = useState(client.statusLog || '');
   const [currentHandler, setCurrentHandler] = useState(client.clientHandler || '');
+  const [currentCallLog, setCurrentCallLog] = useState(client.callLog || '');
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showCallHistoryDialog, setShowCallHistoryDialog] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   
   // Use handler initials if set, otherwise fall back to who added
@@ -361,6 +435,42 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
     [currentStatusLog, client.inquiryDateAD, client.inquiryTime, currentStatus]
   );
 
+  // Call log info for CALL NOT RECEIVED category
+  const callEntries = useMemo(() => parseCallLog(currentCallLog), [currentCallLog]);
+  const callCount = callEntries.length;
+  const lastCallTimeAgo = useMemo(() => getLastCallTimeAgo(currentCallLog), [currentCallLog]);
+  const isCallNotReceived = currentStatusCategory?.toUpperCase().includes('CALL NOT');
+
+  // Handle call action
+  const handleCallAgain = async (e: React.MouseEvent, callType: 'DIRECT' | 'WHATSAPP') => {
+    e.stopPropagation();
+    
+    if (!client.rowNumber) {
+      toast.error("Cannot log call: missing row number");
+      return;
+    }
+
+    setIsLoggingCall(true);
+    try {
+      const result = await logCallAttempt(client.rowNumber, callType, currentCallLog);
+      setCurrentCallLog(result.callLog);
+      toast.success(`${callType} call logged`);
+      
+      // Open the appropriate app
+      if (callType === 'DIRECT' && client.contactNo) {
+        window.location.href = `tel:${client.contactNo}`;
+      } else if (callType === 'WHATSAPP' && client.whatsappNo) {
+        const cleanNumber = client.whatsappNo.replace(/\D/g, '');
+        window.open(`https://wa.me/${cleanNumber}`, '_blank');
+      }
+    } catch (err) {
+      console.error("Failed to log call:", err);
+      toast.error("Failed to log call");
+    } finally {
+      setIsLoggingCall(false);
+    }
+  };
+
   return (
     <div 
       className="flex flex-col gap-2 p-3 rounded-xl hover:bg-muted/50 transition-colors border border-border/50"
@@ -405,25 +515,67 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
           )}
         </div>
 
-        {/* Location Badge - Right Side */}
-        {location && (
-          <div className="shrink-0 text-right">
-            <span className={cn(
-              "text-xs font-medium px-2 py-1 rounded-md",
-              location.type === 'IV' && "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-              location.type === 'OV' && "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-              location.type === 'MX' && "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-              location.type === 'AB' && "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
-            )}>
-              {location.type}
-            </span>
-            {location.city && (
-              <p className="text-xs text-muted-foreground mt-1 max-w-20 truncate">
-                {location.city}
-              </p>
-            )}
-          </div>
-        )}
+        {/* Right Side Container - Call Again Button + Location Badge */}
+        <div className="shrink-0 flex flex-col items-end gap-2">
+          {/* CALL AGAIN Button - Only for CALL NOT RECEIVED */}
+          {isCallNotReceived && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="destructive" 
+                  size="sm" 
+                  className="h-7 px-2 text-xs bg-red-600 hover:bg-red-700"
+                  onClick={(e) => e.stopPropagation()}
+                  disabled={isLoggingCall}
+                >
+                  {isLoggingCall ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <>
+                      <Phone className="w-3 h-3 mr-1" />
+                      Call Again
+                      <ChevronDown className="w-3 h-3 ml-1" />
+                    </>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-popover z-50">
+                <DropdownMenuItem 
+                  onClick={(e) => handleCallAgain(e, 'DIRECT')}
+                  className="cursor-pointer"
+                >
+                  <Phone className="w-4 h-4 mr-2" /> Direct Call
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={(e) => handleCallAgain(e, 'WHATSAPP')}
+                  className="cursor-pointer"
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" /> WhatsApp Call
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          
+          {/* Location Badge */}
+          {location && (
+            <div className="text-right">
+              <span className={cn(
+                "text-xs font-medium px-2 py-1 rounded-md",
+                location.type === 'IV' && "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+                location.type === 'OV' && "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+                location.type === 'MX' && "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+                location.type === 'AB' && "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+              )}>
+                {location.type}
+              </span>
+              {location.city && (
+                <p className="text-xs text-muted-foreground mt-1 max-w-20 truncate">
+                  {location.city}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Status and Handler Row */}
@@ -526,6 +678,33 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
         </div>
       )}
 
+      {/* Call Tracking Info - Only for CALL NOT RECEIVED */}
+      {isCallNotReceived && (
+        <div className="flex items-center justify-between text-xs bg-orange-50 dark:bg-orange-900/20 px-2 py-1.5 rounded-md border border-orange-200 dark:border-orange-800">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-orange-700 dark:text-orange-400">
+              CALLED: {callCount} {callCount === 1 ? 'TIME' : 'TIMES'}
+            </span>
+            {callCount > 0 && (
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowCallHistoryDialog(true);
+                }}
+                className="text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-300"
+              >
+                <History className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          {lastCallTimeAgo && (
+            <span className="text-orange-600 dark:text-orange-400 font-medium">
+              LAST CALLED {lastCallTimeAgo}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Time Information Row */}
       <div className="flex items-center justify-between pt-1 border-t border-border/20 gap-2">
         {/* Enquiry Time - Left */}
@@ -552,8 +731,8 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
           </div>
         )}
         
-        {/* Status Time Ago - Right (for other categories) */}
-        {currentStatusCategory !== 'JUST ENQUIRED' && currentStatusCategory !== 'NUMBER PROVIDED' && statusTimeAgo && (
+        {/* Status Time Ago - Right (for other categories except CALL NOT RECEIVED which has its own display) */}
+        {currentStatusCategory !== 'JUST ENQUIRED' && currentStatusCategory !== 'NUMBER PROVIDED' && !isCallNotReceived && statusTimeAgo && (
           <div className="flex items-center gap-1 text-xs text-muted-foreground ml-auto">
             <span>{currentStatus}: {statusTimeAgo.displayText}</span>
           </div>
@@ -667,6 +846,44 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Call History Dialog */}
+      <Dialog open={showCallHistoryDialog} onOpenChange={setShowCallHistoryDialog}>
+        <DialogContent onClick={(e) => e.stopPropagation()} className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Phone className="w-4 h-4" />
+              Call History - {client.clientName}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            {callEntries.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No calls logged yet</p>
+            ) : (
+              callEntries.map((entry, i) => (
+                <div 
+                  key={i} 
+                  className={cn(
+                    "text-sm px-3 py-2 rounded-md",
+                    entry.type === 'WHATSAPP' 
+                      ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400"
+                      : "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400"
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    {entry.type === 'WHATSAPP' ? (
+                      <MessageCircle className="w-3.5 h-3.5" />
+                    ) : (
+                      <Phone className="w-3.5 h-3.5" />
+                    )}
+                    <span className="font-medium">{entry.label}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

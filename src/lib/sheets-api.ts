@@ -39,6 +39,7 @@ export interface ClientData {
   statusLog?: string;
   initialStatus?: string;
   clientHandler?: string; // Column X - who is handling this client
+  callLog?: string; // Column Y - call attempt history
 }
 
 // Spreadsheet ID is now configured as a backend secret
@@ -135,6 +136,28 @@ export async function updateClientHandler(
 ): Promise<{ success: boolean }> {
   return callSheetsFunction<{ success: boolean }>("updateClientHandler", {
     data: { rowNumber, handler },
+  });
+}
+
+export async function logCallAttempt(
+  rowNumber: number,
+  callType: 'DIRECT' | 'WHATSAPP',
+  existingCallLog: string
+): Promise<{ success: boolean; callLog: string }> {
+  // Generate timestamp on client side to ensure correct local time
+  const now = new Date();
+  const hours = now.getHours();
+  const mins = String(now.getMinutes()).padStart(2, '0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const displayHours = hours % 12 || 12;
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const year = now.getFullYear();
+  const timeStr = `${displayHours}:${mins} ${ampm}`;
+  const dateStr = `${year}-${month}-${day}`;
+  
+  return callSheetsFunction<{ success: boolean; callLog: string }>("logCallAttempt", {
+    data: { rowNumber, callType, existingCallLog, clientTime: timeStr, clientDate: dateStr },
   });
 }
 

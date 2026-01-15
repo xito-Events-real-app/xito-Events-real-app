@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -199,9 +199,9 @@ async function updateClientStatus(accessToken: string, spreadsheetId: string, ro
   return { success: true, statusLog: updatedLog };
 }
 
-// Get recent clients (now including Column W for status and Column X for handler)
+// Get recent clients (now including Column W for status, Column X for handler, Column Y for call log)
 async function getClients(accessToken: string, spreadsheetId: string, limit = 50) {
-  const range = encodeURIComponent("'CLIENT TRACKER'!A2:X" + (limit + 1));
+  const range = encodeURIComponent("'CLIENT TRACKER'!A2:Y" + (limit + 1));
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   const response = await fetch(url, {
@@ -243,7 +243,64 @@ async function getClients(accessToken: string, spreadsheetId: string, limit = 50
     // Column V (index 21) - might be empty
     statusLog: row[22] || '', // Column W (index 22) - Status log with timestamps
     clientHandler: row[23] || '', // Column X (index 23) - Client handler
+    callLog: row[24] || '', // Column Y (index 24) - Call attempt history
   }));
+}
+
+// Log call attempt to Column Y
+async function logCallAttempt(
+  accessToken: string, 
+  spreadsheetId: string, 
+  rowNumber: number, 
+  callType: 'DIRECT' | 'WHATSAPP',
+  existingCallLog: string,
+  clientTime: string,
+  clientDate: string
+) {
+  if (!rowNumber || rowNumber < 2) {
+    throw new Error('Valid rowNumber is required for logging call');
+  }
+
+  // Count existing calls to determine ordinal
+  const existingLines = existingCallLog ? existingCallLog.split('\n').filter(Boolean).length : 0;
+  const callNumber = existingLines + 1;
+  
+  // Get ordinal suffix
+  const getOrdinal = (n: number): string => {
+    if (n % 100 >= 11 && n % 100 <= 13) return 'TH';
+    switch (n % 10) {
+      case 1: return 'ST';
+      case 2: return 'ND';
+      case 3: return 'RD';
+      default: return 'TH';
+    }
+  };
+  
+  // Format: "1ST DIRECT CALL AT 12:53 PM ON 2026-01-16"
+  const newLogEntry = `${callNumber}${getOrdinal(callNumber)} ${callType} CALL AT ${clientTime} ON ${clientDate}`;
+  const updatedLog = existingCallLog 
+    ? `${existingCallLog}\n${newLogEntry}` 
+    : newLogEntry;
+
+  const range = encodeURIComponent(`'CLIENT TRACKER'!Y${rowNumber}`);
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  
+  const response = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [[updatedLog]] }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (logCallAttempt):', response.status, errorText);
+    throw new Error(`Failed to log call attempt: ${response.status}`);
+  }
+
+  return { success: true, callLog: updatedLog };
 }
 
 // Add new client at row 2
@@ -704,6 +761,18 @@ Deno.serve(async (req) => {
       case 'updateClientHandler':
         if (!data || !data.rowNumber || data.handler === undefined) throw new Error('rowNumber and handler are required for updateClientHandler');
         result = await updateClientHandler(accessToken, spreadsheetId, data.rowNumber as number, data.handler as string);
+        break;
+      case 'logCallAttempt':
+        if (!data || !data.rowNumber || !data.callType) throw new Error('rowNumber and callType are required for logCallAttempt');
+        result = await logCallAttempt(
+          accessToken, 
+          spreadsheetId, 
+          data.rowNumber as number, 
+          data.callType as 'DIRECT' | 'WHATSAPP',
+          data.existingCallLog as string || '',
+          data.clientTime as string,
+          data.clientDate as string
+        );
         break;
       default:
         throw new Error(`Unknown action: ${action}`);
