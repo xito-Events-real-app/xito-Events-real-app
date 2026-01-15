@@ -146,21 +146,31 @@ async function getClientStatuses(accessToken: string, spreadsheetId: string) {
 }
 
 // Update client status in Column W with timestamp log
-async function updateClientStatus(accessToken: string, spreadsheetId: string, rowNumber: number, newStatus: string, existingStatusLog: string) {
+async function updateClientStatus(accessToken: string, spreadsheetId: string, rowNumber: number, newStatus: string, existingStatusLog: string, clientTimestamp?: string) {
   if (!rowNumber || rowNumber < 2) {
     throw new Error('Valid rowNumber is required for updating status');
   }
 
-  const now = new Date();
-  const timestamp = now.toLocaleString('en-US', { 
-    year: 'numeric', 
-    month: '2-digit', 
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false 
-  });
+  // Use client-provided timestamp if available, otherwise generate server timestamp
+  let timestamp: string;
+  if (clientTimestamp) {
+    timestamp = clientTimestamp;
+  } else {
+    const now = new Date();
+    // Format as MM/DD/YYYY, HH:MM:SS in UTC+5:45 (Nepal timezone)
+    const nepalOffset = 5 * 60 + 45; // 5 hours 45 minutes in minutes
+    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const nepalTime = new Date(utcTime + (nepalOffset * 60000));
+    
+    const month = String(nepalTime.getMonth() + 1).padStart(2, '0');
+    const day = String(nepalTime.getDate()).padStart(2, '0');
+    const year = nepalTime.getFullYear();
+    const hours = String(nepalTime.getHours()).padStart(2, '0');
+    const mins = String(nepalTime.getMinutes()).padStart(2, '0');
+    const secs = String(nepalTime.getSeconds()).padStart(2, '0');
+    
+    timestamp = `${month}/${day}/${year}, ${hours}:${mins}:${secs}`;
+  }
   
   // Append new status with timestamp to existing log
   const newLogEntry = `${newStatus} - ${timestamp}`;
@@ -641,7 +651,8 @@ Deno.serve(async (req) => {
           spreadsheetId, 
           data.rowNumber as number, 
           data.newStatus as string, 
-          data.existingStatusLog as string || ''
+          data.existingStatusLog as string || '',
+          data.clientTimestamp as string | undefined
         );
         break;
       case 'addOldClient':

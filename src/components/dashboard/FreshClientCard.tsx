@@ -58,42 +58,24 @@ function parseStatusTimestamp(statusEntry: string): Date | null {
   }
 }
 
-// Get time from enquiry to when current status was set
-function getStatusSetTimeInfo(
-  statusLog?: string, 
-  inquiryDateAD?: string, 
-  inquiryTime?: string
-): { displayText: string; timestamp: Date } | null {
-  if (!statusLog || !inquiryDateAD) return null;
+// Get time since status was set (compared to now)
+function getStatusTimeAgo(statusLog?: string): { displayText: string; timestamp: Date } | null {
+  if (!statusLog) return null;
   
-  // Parse enquiry datetime
-  let enquiryDateTime: Date;
-  try {
-    if (inquiryTime) {
-      enquiryDateTime = new Date(`${inquiryDateAD} ${inquiryTime}`);
-    } else {
-      enquiryDateTime = new Date(inquiryDateAD);
-    }
-    if (isNaN(enquiryDateTime.getTime())) return null;
-  } catch {
-    return null;
-  }
-  
-  // Get last status entry timestamp
   const lines = statusLog.split('\n').filter(Boolean);
   if (lines.length === 0) return null;
   
   const lastLine = lines[lines.length - 1];
-  const statusTimestamp = parseStatusTimestamp(lastLine);
-  if (!statusTimestamp) return null;
+  const timestamp = parseStatusTimestamp(lastLine);
+  if (!timestamp) return null;
   
-  // Calculate time from enquiry to status set
-  const diffMs = statusTimestamp.getTime() - enquiryDateTime.getTime();
+  const now = new Date();
+  const diffMs = now.getTime() - timestamp.getTime();
   if (diffMs < 0) return null;
   
   return {
-    displayText: formatDuration(diffMs),
-    timestamp: statusTimestamp
+    displayText: formatDuration(diffMs) + " AGO",
+    timestamp
   };
 }
 
@@ -280,10 +262,10 @@ export function FreshClientCard({ client, onClick, statusOptions, onStatusChange
     [client.inquiryDateAD, client.inquiryTime]
   );
 
-  // Calculate time from enquiry to current status set
-  const statusSetTimeInfo = useMemo(() => 
-    getStatusSetTimeInfo(currentStatusLog, client.inquiryDateAD, client.inquiryTime), 
-    [currentStatusLog, client.inquiryDateAD, client.inquiryTime]
+  // Calculate time since status was set (compared to now)
+  const statusTimeAgo = useMemo(() => 
+    getStatusTimeAgo(currentStatusLog), 
+    [currentStatusLog]
   );
 
   // Calculate total time for specific statuses
@@ -416,10 +398,10 @@ export function FreshClientCard({ client, onClick, statusOptions, onStatusChange
           </div>
         )}
         
-        {/* Time from Enquiry to Status Set - Right */}
-        {statusSetTimeInfo && (
+        {/* Status Time Ago - Right */}
+        {statusTimeAgo && (
           <div className="flex items-center gap-1 text-xs text-muted-foreground ml-auto">
-            <span>Status set after: {statusSetTimeInfo.displayText}</span>
+            <span>{currentStatus}: {statusTimeAgo.displayText}</span>
           </div>
         )}
       </div>
