@@ -105,6 +105,12 @@ export async function updateClientStatus(
   });
 }
 
+export async function addOldClient(clientName: string): Promise<{ success: boolean; message: string; alreadyExists: boolean }> {
+  return callSheetsFunction<{ success: boolean; message: string; alreadyExists: boolean }>("addOldClient", {
+    data: { clientName },
+  });
+}
+
 export interface ConnectionTestResult {
   title: string;
   sheets: string[];

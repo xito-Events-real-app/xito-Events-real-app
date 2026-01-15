@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronsUpDown, Plus, Loader2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-interface FormComboboxProps {
+export interface FormComboboxProps {
   label: string;
   value: string;
   onChange: (value: string) => void;
@@ -23,6 +23,7 @@ interface FormComboboxProps {
   required?: boolean;
   className?: string;
   searchPlaceholder?: string;
+  onAddNew?: (value: string) => Promise<boolean>;
 }
 
 export function FormCombobox({
@@ -34,9 +35,11 @@ export function FormCombobox({
   searchPlaceholder = "Search...",
   required = false,
   className,
+  onAddNew,
 }: FormComboboxProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [isAdding, setIsAdding] = useState(false);
 
   const normalizedOptions = useMemo(() => {
     // Remove empty + duplicate options (keeps stable order)
@@ -58,6 +61,22 @@ export function FormCombobox({
     const qLower = q.toLowerCase();
     return !normalizedOptions.some((o) => o.toLowerCase() === qLower);
   }, [search, normalizedOptions]);
+
+  const handleAddNew = async () => {
+    if (!onAddNew || !search.trim() || isAdding) return;
+    
+    setIsAdding(true);
+    try {
+      const success = await onAddNew(search.trim());
+      if (success) {
+        onChange(search.trim());
+        setOpen(false);
+        setSearch("");
+      }
+    } finally {
+      setIsAdding(false);
+    }
+  };
 
   return (
     <div className={cn("space-y-2", className)}>
@@ -91,7 +110,7 @@ export function FormCombobox({
         </PopoverTrigger>
 
         {/* Portal-based content (prevents being clipped by overflow-hidden parents like FormSection) */}
-        <PopoverContent className="w-full p-0 z-50 bg-popover" align="start">
+        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[9999] bg-background border border-border shadow-xl" align="start">
           <Command>
             <CommandInput
               placeholder={searchPlaceholder}
@@ -102,18 +121,37 @@ export function FormCombobox({
                 if (e.key === "Enter") e.preventDefault();
               }}
             />
-            <CommandList>
+            <CommandList className="max-h-60">
               <CommandEmpty>
-                {search.trim() ? "No match. Use the typed value." : "No options found."}
+                {search.trim() ? "No match found." : "No options available."}
               </CommandEmpty>
 
               <CommandGroup>
-                {canCreate && (
+                {/* Add new option - only show if onAddNew is provided and value doesn't exist */}
+                {canCreate && onAddNew && (
+                  <CommandItem
+                    value={`add-new-${search.trim()}`}
+                    onSelect={handleAddNew}
+                    disabled={isAdding}
+                    className="text-primary font-medium"
+                  >
+                    {isAdding ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Plus className="mr-2 h-4 w-4" />
+                    )}
+                    <span className="truncate">
+                      {isAdding ? "Adding..." : `Add "${search.trim()}" to list`}
+                    </span>
+                  </CommandItem>
+                )}
+
+                {/* Just use the value without saving */}
+                {canCreate && !onAddNew && (
                   <CommandItem
                     value={search.trim()}
                     onSelect={() => {
-                      const v = search.trim();
-                      onChange(v);
+                      onChange(search.trim());
                       setOpen(false);
                       setSearch("");
                     }}
