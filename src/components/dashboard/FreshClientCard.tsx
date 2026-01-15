@@ -747,10 +747,40 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
     }
   };
 
+  // Get tier-specific colors for quotation display
+  const getQuotationTierColor = (tier: string): string => {
+    const upperTier = tier.toUpperCase();
+    if (upperTier.includes('BASIC')) return 'bg-slate-500 text-white';
+    if (upperTier.includes('STANDARD')) return 'bg-blue-600 text-white';
+    if (upperTier.includes('PREMIUM')) return 'bg-purple-600 text-white';
+    if (upperTier.includes('WTN') || upperTier.includes('SPECIAL')) return 'bg-gradient-to-r from-amber-500 to-orange-500 text-white';
+    return 'bg-gray-500 text-white';
+  };
+
   return (
     <div 
       className="flex flex-col gap-2 p-3 rounded-xl hover:bg-muted/50 transition-colors border border-border/50"
     >
+      {/* Quotation Display Banner - For QUOTATION SENT category - TOP OF CARD */}
+      {isQuotationSent && currentQuotationData && (
+        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/50 dark:to-purple-950/50 rounded-lg p-2 border border-indigo-200 dark:border-indigo-800">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <FileText className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+            <span className="text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 uppercase tracking-wide">Quotation Sent</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {parseQuotationData(currentQuotationData).map((q, i) => (
+              <div key={i} className={cn(
+                "px-2 py-1 rounded-md text-xs font-medium shadow-sm",
+                getQuotationTierColor(q.tier)
+              )}>
+                <span className="opacity-80">{q.tier}:</span> <span className="font-bold">{q.amount}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-3">
         {/* Handler Initials Avatar - highlighted if handler assigned */}
         <div className={cn(
@@ -766,17 +796,6 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
           <p className="text-sm font-semibold text-foreground truncate">
             {client.clientName}
           </p>
-
-          {/* Quotation Display - For QUOTATION SENT category */}
-          {isQuotationSent && currentQuotationData && (
-            <div className="flex flex-wrap gap-1 mt-1">
-              {parseQuotationData(currentQuotationData).map((q, i) => (
-                <span key={i} className="text-[10px] bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 px-1.5 py-0.5 rounded">
-                  {q.tier}: {q.amount}
-                </span>
-              ))}
-            </div>
-          )}
 
           {/* Event Details */}
           {events.length > 0 && (
