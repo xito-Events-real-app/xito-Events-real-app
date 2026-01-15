@@ -1,8 +1,18 @@
-import { useState, useRef, useEffect } from "react";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
+import { useMemo, useState } from "react";
+import { Check, ChevronsUpDown } from "lucide-react";
+
 import { cn } from "@/lib/utils";
-import { Check, ChevronDown, X } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface FormComboboxProps {
   label: string;
@@ -12,6 +22,7 @@ interface FormComboboxProps {
   placeholder?: string;
   required?: boolean;
   className?: string;
+  searchPlaceholder?: string;
 }
 
 export function FormCombobox({
@@ -19,131 +30,122 @@ export function FormCombobox({
   value,
   onChange,
   options,
-  placeholder = "Select or type...",
+  placeholder = "Select...",
+  searchPlaceholder = "Search...",
   required = false,
   className,
 }: FormComboboxProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
 
-  // Filter options based on search
-  const filteredOptions = options.filter((option) =>
-    option.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-        // If we have a search query but no selection, use the search query as custom value
-        if (searchQuery && !value) {
-          onChange(searchQuery);
-        }
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [searchQuery, value, onChange]);
-
-  const handleSelect = (option: string) => {
-    onChange(option);
-    setSearchQuery("");
-    setIsOpen(false);
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value;
-    setSearchQuery(newValue);
-    onChange(newValue); // Update value as user types for custom input
-    if (!isOpen) setIsOpen(true);
-  };
-
-  const handleClear = () => {
-    onChange("");
-    setSearchQuery("");
-    inputRef.current?.focus();
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      if (filteredOptions.length > 0 && searchQuery) {
-        // Select first matching option
-        handleSelect(filteredOptions[0]);
-      } else if (searchQuery) {
-        // Use custom value
-        onChange(searchQuery);
-        setIsOpen(false);
-      }
-    } else if (e.key === "Escape") {
-      setIsOpen(false);
+  const normalizedOptions = useMemo(() => {
+    // Remove empty + duplicate options (keeps stable order)
+    const seen = new Set<string>();
+    const cleaned: string[] = [];
+    for (const opt of options) {
+      const v = (opt ?? "").trim();
+      if (!v) continue;
+      if (seen.has(v)) continue;
+      seen.add(v);
+      cleaned.push(v);
     }
-  };
+    return cleaned;
+  }, [options]);
+
+  const canCreate = useMemo(() => {
+    const q = search.trim();
+    if (!q) return false;
+    const qLower = q.toLowerCase();
+    return !normalizedOptions.some((o) => o.toLowerCase() === qLower);
+  }, [search, normalizedOptions]);
 
   return (
-    <div className={cn("space-y-2", className)} ref={containerRef}>
+    <div className={cn("space-y-2", className)}>
       <Label className="text-sm font-medium">
         {label}
         {required && <span className="text-destructive ml-1">*</span>}
       </Label>
-      <div className="relative">
-        <Input
-          ref={inputRef}
-          value={value || searchQuery}
-          onChange={handleInputChange}
-          onFocus={() => setIsOpen(true)}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          className="h-12 text-base bg-background pr-16"
-        />
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-          {value && (
-            <button
-              type="button"
-              onClick={handleClear}
-              className="p-1 hover:bg-muted rounded"
-            >
-              <X className="h-4 w-4 text-muted-foreground" />
-            </button>
-          )}
-          <button
+
+      <Popover
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) setSearch("");
+        }}
+      >
+        <PopoverTrigger asChild>
+          <Button
             type="button"
-            onClick={() => setIsOpen(!isOpen)}
-            className="p-1 hover:bg-muted rounded"
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="w-full justify-between h-12 text-base"
           >
-            <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
-          </button>
-        </div>
-        
-        {isOpen && (
-          <div className="absolute z-[9999] w-full mt-1 bg-background border border-border rounded-md shadow-xl max-h-60 overflow-auto">
-            {filteredOptions.length > 0 ? (
-              filteredOptions.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => handleSelect(option)}
-                  className={cn(
-                    "w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center justify-between bg-background",
-                    value === option && "bg-accent"
-                  )}
-                >
-                  {option}
-                  {value === option && <Check className="h-4 w-4 text-primary" />}
-                </button>
-              ))
+            {value ? (
+              <span className="truncate">{value}</span>
             ) : (
-              <div className="px-3 py-2 text-sm text-muted-foreground bg-background">
-                {searchQuery ? `Use "${searchQuery}" as custom value` : "No options available"}
-              </div>
+              <span className="text-muted-foreground">{placeholder}</span>
             )}
-          </div>
-        )}
-      </div>
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+
+        {/* Portal-based content (prevents being clipped by overflow-hidden parents like FormSection) */}
+        <PopoverContent className="w-full p-0 z-50 bg-popover" align="start">
+          <Command>
+            <CommandInput
+              placeholder={searchPlaceholder}
+              value={search}
+              onValueChange={setSearch}
+              onKeyDown={(e) => {
+                // Prevent Enter from submitting the whole form
+                if (e.key === "Enter") e.preventDefault();
+              }}
+            />
+            <CommandList>
+              <CommandEmpty>
+                {search.trim() ? "No match. Use the typed value." : "No options found."}
+              </CommandEmpty>
+
+              <CommandGroup>
+                {canCreate && (
+                  <CommandItem
+                    value={search.trim()}
+                    onSelect={() => {
+                      const v = search.trim();
+                      onChange(v);
+                      setOpen(false);
+                      setSearch("");
+                    }}
+                  >
+                    <span className="truncate">Use "{search.trim()}"</span>
+                  </CommandItem>
+                )}
+
+                {normalizedOptions.map((option) => (
+                  <CommandItem
+                    key={option}
+                    value={option}
+                    onSelect={() => {
+                      onChange(option);
+                      setOpen(false);
+                      setSearch("");
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        value === option ? "opacity-100" : "opacity-0",
+                      )}
+                    />
+                    <span className="truncate">{option}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
