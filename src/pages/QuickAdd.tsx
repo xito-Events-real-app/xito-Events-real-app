@@ -40,6 +40,7 @@ export default function QuickAdd() {
   const [inquiryTime, setInquiryTime] = useState("");
   const [description, setDescription] = useState("");
   const [initialStatus, setInitialStatus] = useState("JUST ENQUIRED");
+  const [clientHandler, setClientHandler] = useState("");
 
   const isConfigured = isSheetsConfigured();
 
@@ -205,6 +206,7 @@ export default function QuickAdd() {
         inquiryTime,
         description,
         initialStatus,
+        clientHandler,
         // Send accurate BS dates from frontend
         registeredDateBS: registeredBSFormatted,
         inquiryDateBS: inquiryBSFormatted,
@@ -240,6 +242,7 @@ export default function QuickAdd() {
       setInquiryTime("");
       setDescription("");
       setInitialStatus("JUST ENQUIRED");
+      setClientHandler("");
 
     } catch (error) {
       console.error("Submit error:", error);
@@ -462,6 +465,17 @@ export default function QuickAdd() {
             </div>
           </FormSection>
         )}
+
+        {/* Client Handler */}
+        <FormSection title="Client Handler">
+          <FormSelect 
+            label="Who is handling this client?" 
+            value={clientHandler} 
+            onChange={setClientHandler} 
+            options={dropdowns?.whatsappOwners || []} 
+            placeholder="Select handler (optional)"
+          />
+        </FormSection>
 
         {/* Submit Button */}
         <Button 

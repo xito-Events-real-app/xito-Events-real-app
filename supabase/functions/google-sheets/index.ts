@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -199,9 +199,9 @@ async function updateClientStatus(accessToken: string, spreadsheetId: string, ro
   return { success: true, statusLog: updatedLog };
 }
 
-// Get recent clients (now including Column W for status)
+// Get recent clients (now including Column W for status and Column X for handler)
 async function getClients(accessToken: string, spreadsheetId: string, limit = 50) {
-  const range = encodeURIComponent("'CLIENT TRACKER'!A2:W" + (limit + 1));
+  const range = encodeURIComponent("'CLIENT TRACKER'!A2:X" + (limit + 1));
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   const response = await fetch(url, {
@@ -242,6 +242,7 @@ async function getClients(accessToken: string, spreadsheetId: string, limit = 50
     description: row[20] || '',
     // Column V (index 21) - might be empty
     statusLog: row[22] || '', // Column W (index 22) - Status log with timestamps
+    clientHandler: row[23] || '', // Column X (index 23) - Client handler
   }));
 }
 
@@ -312,9 +313,10 @@ async function addClient(accessToken: string, spreadsheetId: string, clientData:
     clientData.description || '',            // U: basic_description
     '',                                      // V: (empty)
     initialStatusLog,                        // W: status_log - Initial "JUST ENQUIRED" status
+    clientData.clientHandler || '',          // X: client_handler
   ]];
 
-  const range = encodeURIComponent("'CLIENT TRACKER'!A2:W2");
+  const range = encodeURIComponent("'CLIENT TRACKER'!A2:X2");
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
   
   const response = await fetch(updateUrl, {
@@ -490,6 +492,33 @@ async function addOldClient(accessToken: string, spreadsheetId: string, clientNa
   }
 
   return { success: true, message: 'Client added successfully', alreadyExists: false };
+}
+
+// Update client handler in Column X
+async function updateClientHandler(accessToken: string, spreadsheetId: string, rowNumber: number, handler: string) {
+  if (!rowNumber || rowNumber < 2) {
+    throw new Error('Valid rowNumber is required for updating handler');
+  }
+
+  const range = encodeURIComponent(`'CLIENT TRACKER'!X${rowNumber}`);
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  
+  const response = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [[handler]] }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (updateClientHandler):', response.status, errorText);
+    throw new Error(`Failed to update client handler: ${response.status}`);
+  }
+
+  return { success: true };
 }
 
 // Bulk update status for clients matching a specific status
@@ -671,6 +700,10 @@ Deno.serve(async (req) => {
       case 'bulkUpdateStatus':
         if (!data || !data.fromStatus || !data.toStatus) throw new Error('fromStatus and toStatus are required for bulkUpdateStatus');
         result = await bulkUpdateStatus(accessToken, spreadsheetId, data.fromStatus as string, data.toStatus as string);
+        break;
+      case 'updateClientHandler':
+        if (!data || !data.rowNumber || data.handler === undefined) throw new Error('rowNumber and handler are required for updateClientHandler');
+        result = await updateClientHandler(accessToken, spreadsheetId, data.rowNumber as number, data.handler as string);
         break;
       default:
         throw new Error(`Unknown action: ${action}`);

@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { ClientData, updateClientStatus, getCurrentStatus } from "@/lib/sheets-api";
+import { ClientData, updateClientStatus, updateClientHandler, getCurrentStatus } from "@/lib/sheets-api";
 import { getHandlerInitials, parseEventDetails, formatLocationDisplay } from "@/lib/nepali-months";
 import { cn } from "@/lib/utils";
 import {
@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, Loader2, Clock } from "lucide-react";
+import { ChevronDown, Loader2, Clock, AlertTriangle, UserCog } from "lucide-react";
 import { toast } from "sonner";
 
 // Format time duration as "X DAY Y HR Z MIN"
@@ -190,14 +190,22 @@ interface FreshClientCardProps {
   client: ClientData;
   onClick?: (client: ClientData) => void;
   statusOptions: string[];
+  handlerOptions?: string[];
+  currentStatusCategory?: string;
   onStatusChange?: (client: ClientData, newStatus: string, newStatusLog: string) => void;
+  onHandlerChange?: (client: ClientData, handler: string) => void;
 }
 
-export function FreshClientCard({ client, onClick, statusOptions, onStatusChange }: FreshClientCardProps) {
+export function FreshClientCard({ client, onClick, statusOptions, handlerOptions = [], currentStatusCategory, onStatusChange, onHandlerChange }: FreshClientCardProps) {
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isUpdatingHandler, setIsUpdatingHandler] = useState(false);
   const [currentStatusLog, setCurrentStatusLog] = useState(client.statusLog || '');
+  const [currentHandler, setCurrentHandler] = useState(client.clientHandler || '');
   
-  const initials = getHandlerInitials(client.whoAdded || '');
+  // Use handler initials if set, otherwise fall back to who added
+  const displayInitials = getHandlerInitials(currentHandler || client.whoAdded || '');
+  const hasHandler = !!currentHandler;
+  
   const events = parseEventDetails(
     client.events || '',
     client.eventYear || '',
@@ -206,6 +214,15 @@ export function FreshClientCard({ client, onClick, statusOptions, onStatusChange
   );
   const location = formatLocationDisplay(client.eventLocation || '', client.eventCity || '');
   const currentStatus = getCurrentStatus(currentStatusLog);
+
+  // Statuses that require handler to be set (after NUMBER PROVIDED)
+  const statusesRequiringHandler = ['TEXTED', 'CALL NOT PICKED', 'CALLED QUOTATION PENDING', 'QUOTATION SENT', 'BARGAINING IS ON', 'ADVANCE PENDING', 'BOOKED', 'CANCELLED', 'POSTPONED'];
+  const requiresHandler = statusesRequiringHandler.some(s => currentStatus.toUpperCase().includes(s.toUpperCase()));
+  const showHandlerWarning = requiresHandler && !currentHandler;
+
+  // Show handler dropdown for NUMBER PROVIDED and after
+  const statusesWithHandlerOption = ['NUMBER PROVIDED', ...statusesRequiringHandler];
+  const showHandlerDropdown = currentStatusCategory && statusesWithHandlerOption.some(s => currentStatusCategory.toUpperCase().includes(s.toUpperCase()));
 
   const handleClick = () => {
     if (onClick) {
@@ -243,6 +260,35 @@ export function FreshClientCard({ client, onClick, statusOptions, onStatusChange
       toast.error("Failed to update status");
     } finally {
       setIsUpdating(false);
+    }
+  };
+
+  const handleHandlerChange = async (e: React.MouseEvent, handler: string) => {
+    e.stopPropagation();
+    
+    if (!client.rowNumber) {
+      toast.error("Cannot update: missing row number");
+      return;
+    }
+
+    if (handler === currentHandler) {
+      return; // Same handler, no update needed
+    }
+
+    setIsUpdatingHandler(true);
+    try {
+      await updateClientHandler(client.rowNumber, handler);
+      setCurrentHandler(handler);
+      toast.success(`Handler set to ${handler}`);
+      
+      if (onHandlerChange) {
+        onHandlerChange(client, handler);
+      }
+    } catch (err) {
+      console.error("Failed to update handler:", err);
+      toast.error("Failed to update handler");
+    } finally {
+      setIsUpdatingHandler(false);
     }
   };
 
@@ -286,9 +332,12 @@ export function FreshClientCard({ client, onClick, statusOptions, onStatusChange
       onClick={handleClick}
     >
       <div className="flex gap-3">
-        {/* Handler Initials Avatar */}
-        <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center shrink-0">
-          <span className="text-xs font-bold text-white">{initials}</span>
+        {/* Handler Initials Avatar - highlighted if handler assigned */}
+        <div className={cn(
+          "w-10 h-10 rounded-full flex items-center justify-center shrink-0",
+          hasHandler ? "bg-gradient-to-br from-emerald-500 to-teal-600" : "gradient-primary"
+        )}>
+          <span className="text-xs font-bold text-white">{displayInitials}</span>
         </div>
 
         {/* Client Details */}
@@ -343,47 +392,105 @@ export function FreshClientCard({ client, onClick, statusOptions, onStatusChange
         )}
       </div>
 
-      {/* Status Dropdown - Bottom with Label */}
-      <div className="flex items-center justify-between border-t border-border/30 pt-2 mt-1">
-        <span className="text-xs text-muted-foreground font-medium">Client Status</span>
-        <DropdownMenu>
-          <DropdownMenuTrigger 
-            onClick={(e) => e.stopPropagation()}
-            className={cn(
-              "flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-md transition-colors",
-              getStatusColor(currentStatus),
-              isUpdating && "opacity-50"
-            )}
-            disabled={isUpdating}
-          >
-            {isUpdating ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
-            ) : (
-              <>
-                {currentStatus}
-                <ChevronDown className="w-3 h-3" />
-              </>
-            )}
-          </DropdownMenuTrigger>
-          <DropdownMenuContent 
-            align="end" 
-            className="max-h-60 overflow-y-auto z-50 bg-background"
-          >
-            {statusOptions.map((status) => (
-              <DropdownMenuItem
-                key={status}
-                onClick={(e) => handleStatusChange(e, status)}
+      {/* Status and Handler Row */}
+      <div className="flex items-center justify-between border-t border-border/30 pt-2 mt-1 gap-2">
+        {/* Status Dropdown */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-muted-foreground font-medium">Status:</span>
+          <DropdownMenu>
+            <DropdownMenuTrigger 
+              onClick={(e) => e.stopPropagation()}
+              className={cn(
+                "flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-md transition-colors",
+                getStatusColor(currentStatus),
+                isUpdating && "opacity-50"
+              )}
+              disabled={isUpdating}
+            >
+              {isUpdating ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <>
+                  {currentStatus}
+                  <ChevronDown className="w-3 h-3" />
+                </>
+              )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent 
+              align="start" 
+              className="max-h-60 overflow-y-auto z-50 bg-background"
+            >
+              {statusOptions.map((status) => (
+                <DropdownMenuItem
+                  key={status}
+                  onClick={(e) => handleStatusChange(e, status)}
+                  className={cn(
+                    "text-xs cursor-pointer",
+                    status.toUpperCase() === currentStatus && "bg-primary/10 font-medium"
+                  )}
+                >
+                  {status}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {/* Handler Dropdown - Only show for NUMBER PROVIDED and after */}
+        {showHandlerDropdown && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-muted-foreground font-medium">Handler:</span>
+            <DropdownMenu>
+              <DropdownMenuTrigger 
+                onClick={(e) => e.stopPropagation()}
                 className={cn(
-                  "text-xs cursor-pointer",
-                  status.toUpperCase() === currentStatus && "bg-primary/10 font-medium"
+                  "flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-md transition-colors",
+                  currentHandler 
+                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" 
+                    : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+                  isUpdatingHandler && "opacity-50"
                 )}
+                disabled={isUpdatingHandler}
               >
-                {status}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+                {isUpdatingHandler ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <>
+                    <UserCog className="w-3 h-3" />
+                    {currentHandler || "Select"}
+                    <ChevronDown className="w-3 h-3" />
+                  </>
+                )}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent 
+                align="end" 
+                className="max-h-60 overflow-y-auto z-50 bg-background"
+              >
+                {handlerOptions.map((handler) => (
+                  <DropdownMenuItem
+                    key={handler}
+                    onClick={(e) => handleHandlerChange(e, handler)}
+                    className={cn(
+                      "text-xs cursor-pointer",
+                      handler === currentHandler && "bg-primary/10 font-medium"
+                    )}
+                  >
+                    {handler}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
       </div>
+
+      {/* Handler Warning */}
+      {showHandlerWarning && (
+        <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-1.5 rounded-md">
+          <AlertTriangle className="w-3.5 h-3.5" />
+          <span>Handler not selected</span>
+        </div>
+      )}
 
       {/* Time Information Row */}
       <div className="flex items-center justify-between pt-1 border-t border-border/20 gap-2">
