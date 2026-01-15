@@ -37,6 +37,7 @@ export interface ClientData {
   inquiryTime?: string;
   description?: string;
   statusLog?: string;
+  initialStatus?: string;
 }
 
 // Spreadsheet ID is now configured as a backend secret

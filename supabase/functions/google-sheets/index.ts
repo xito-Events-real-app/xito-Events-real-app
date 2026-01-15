@@ -281,11 +281,12 @@ async function addClient(accessToken: string, spreadsheetId: string, clientData:
   const registeredBS = clientData.registeredDateBS || adToBSSimple(now);
   const inquiryBS = clientData.inquiryDateBS || adToBSSimple(now);
   
-  // Create initial status log with "JUST ENQUIRED" status and Nepal timezone timestamp
+  // Create initial status log with selected status (default: "JUST ENQUIRED") and Nepal timezone timestamp
   const nepalOffset = 5.75 * 60 * 60 * 1000; // UTC+5:45 in milliseconds
   const nepalTime = new Date(now.getTime() + nepalOffset);
   const nepalTimeStr = nepalTime.toISOString().replace('T', ' ').substring(0, 19);
-  const initialStatusLog = `JUST ENQUIRED [${nepalTimeStr}]`;
+  const selectedStatus = (clientData.initialStatus as string) || 'JUST ENQUIRED';
+  const initialStatusLog = `${selectedStatus.toUpperCase()} [${nepalTimeStr}]`;
   
   const values = [[
     registeredDateTimeAD,                    // A: registered_datetime_ad
