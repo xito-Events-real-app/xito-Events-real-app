@@ -8,6 +8,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ChevronDown, Loader2, Clock, AlertTriangle, UserCog } from "lucide-react";
 import { toast } from "sonner";
 
@@ -201,6 +211,8 @@ export function FreshClientCard({ client, onClick, statusOptions, handlerOptions
   const [isUpdatingHandler, setIsUpdatingHandler] = useState(false);
   const [currentStatusLog, setCurrentStatusLog] = useState(client.statusLog || '');
   const [currentHandler, setCurrentHandler] = useState(client.clientHandler || '');
+  const [pendingStatus, setPendingStatus] = useState<string | null>(null);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   
   // Use handler initials if set, otherwise fall back to who added
   const displayInitials = getHandlerInitials(currentHandler || client.whoAdded || '');
@@ -230,7 +242,7 @@ export function FreshClientCard({ client, onClick, statusOptions, handlerOptions
     }
   };
 
-  const handleStatusChange = async (e: React.MouseEvent, newStatus: string) => {
+  const handleStatusClick = (e: React.MouseEvent, newStatus: string) => {
     e.stopPropagation();
     
     if (!client.rowNumber) {
@@ -242,25 +254,40 @@ export function FreshClientCard({ client, onClick, statusOptions, handlerOptions
       return; // Same status, no update needed
     }
 
+    // Store pending status and show confirmation dialog
+    setPendingStatus(newStatus);
+    setShowConfirmDialog(true);
+  };
+
+  const confirmStatusChange = async () => {
+    if (!pendingStatus || !client.rowNumber) return;
+
     setIsUpdating(true);
     try {
       const result = await updateClientStatus(
         client.rowNumber,
-        newStatus,
+        pendingStatus,
         currentStatusLog
       );
       setCurrentStatusLog(result.statusLog);
-      toast.success(`Status updated to ${newStatus}`);
+      toast.success(`Status updated to ${pendingStatus}`);
       
       if (onStatusChange) {
-        onStatusChange(client, newStatus, result.statusLog);
+        onStatusChange(client, pendingStatus, result.statusLog);
       }
     } catch (err) {
       console.error("Failed to update status:", err);
       toast.error("Failed to update status");
     } finally {
       setIsUpdating(false);
+      setShowConfirmDialog(false);
+      setPendingStatus(null);
     }
+  };
+
+  const cancelStatusChange = () => {
+    setShowConfirmDialog(false);
+    setPendingStatus(null);
   };
 
   const handleHandlerChange = async (e: React.MouseEvent, handler: string) => {
@@ -423,7 +450,7 @@ export function FreshClientCard({ client, onClick, statusOptions, handlerOptions
               {statusOptions.map((status) => (
                 <DropdownMenuItem
                   key={status}
-                  onClick={(e) => handleStatusChange(e, status)}
+                  onClick={(e) => handleStatusClick(e, status)}
                   className={cn(
                     "text-xs cursor-pointer",
                     status.toUpperCase() === currentStatus && "bg-primary/10 font-medium"
@@ -526,6 +553,22 @@ export function FreshClientCard({ client, onClick, statusOptions, handlerOptions
           <span>TOTAL TIME: {totalTimeInfo}</span>
         </div>
       )}
+
+      {/* Status Change Confirmation Dialog */}
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Status Change</AlertDialogTitle>
+            <AlertDialogDescription className="text-base">
+              Do you want to change status of <strong className="text-foreground">{client.clientName}</strong> to <strong className="text-foreground">{pendingStatus?.toUpperCase()}</strong>?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={cancelStatusChange}>No</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmStatusChange}>Yes</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
