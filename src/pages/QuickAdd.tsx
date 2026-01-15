@@ -332,6 +332,41 @@ export default function QuickAdd() {
           )}
         </FormSection>
 
+        {/* Inquiry Details - Moved up */}
+        <FormSection title="Inquiry Details">
+          <FormSelect 
+            label="Status" 
+            value={initialStatus} 
+            onChange={setInitialStatus} 
+            options={dropdowns?.clientStatuses || []} 
+            placeholder="Select initial status"
+          />
+          <FormSelect 
+            label="Who Added" 
+            value={whoAdded} 
+            onChange={setWhoAdded} 
+            options={dropdowns?.whatsappOwners || []} 
+          />
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Inquiry Date</label>
+            <input
+              type="date"
+              value={inquiryDate ? format(inquiryDate, "yyyy-MM-dd") : ""}
+              onChange={(e) => setInquiryDate(e.target.value ? new Date(e.target.value) : undefined)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            />
+          </div>
+          <FormInput label="Inquiry Time" value={inquiryTime} onChange={setInquiryTime} type="time" />
+          <FormInput 
+            label="Description" 
+            value={description} 
+            onChange={setDescription} 
+            multiline 
+            maxLength={500} 
+            placeholder="Brief notes about the inquiry..." 
+          />
+        </FormSection>
+
         {/* Location & Contact */}
         <FormSection title="Location & Contact">
           <FormSelect 
@@ -427,41 +462,6 @@ export default function QuickAdd() {
             </div>
           </FormSection>
         )}
-
-        {/* Inquiry Meta */}
-        <FormSection title="Inquiry Details">
-          <FormSelect 
-            label="Status" 
-            value={initialStatus} 
-            onChange={setInitialStatus} 
-            options={dropdowns?.clientStatuses || []} 
-            placeholder="Select initial status"
-          />
-          <FormSelect 
-            label="Who Added" 
-            value={whoAdded} 
-            onChange={setWhoAdded} 
-            options={dropdowns?.whatsappOwners || []} 
-          />
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Inquiry Date</label>
-            <input
-              type="date"
-              value={inquiryDate ? format(inquiryDate, "yyyy-MM-dd") : ""}
-              onChange={(e) => setInquiryDate(e.target.value ? new Date(e.target.value) : undefined)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            />
-          </div>
-          <FormInput label="Inquiry Time" value={inquiryTime} onChange={setInquiryTime} type="time" />
-          <FormInput 
-            label="Description" 
-            value={description} 
-            onChange={setDescription} 
-            multiline 
-            maxLength={500} 
-            placeholder="Brief notes about the inquiry..." 
-          />
-        </FormSection>
 
         {/* Submit Button */}
         <Button 
