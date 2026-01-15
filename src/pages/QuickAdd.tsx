@@ -283,7 +283,7 @@ export default function QuickAdd() {
         {/* Client Basic Details */}
         <FormSection title="Client Basic Details">
           <FormInput label="Client Name" value={clientName} onChange={setClientName} placeholder="Enter client name" required />
-          <FormCombobox 
+          <FormSelect 
             label="Source" 
             value={source} 
             onChange={setSource} 
@@ -299,11 +299,12 @@ export default function QuickAdd() {
             />
           )}
           {source === "OLD CLIENT" && (
-            <FormInput 
-              label="Old Client Name" 
+            <FormCombobox 
+              label="Which Old Client?" 
               value={oldClientName} 
               onChange={setOldClientName} 
-              placeholder="Enter old client name" 
+              options={dropdowns?.oldClients || []} 
+              placeholder="Search or type old client name..."
             />
           )}
         </FormSection>
