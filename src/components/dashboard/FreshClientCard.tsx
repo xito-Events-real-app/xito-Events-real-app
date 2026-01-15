@@ -384,7 +384,18 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
       return; // Same status, no update needed
     }
 
-    // Store pending status and show confirmation dialog
+    // INTERCEPT: If moving from QUOTATION PENDING to QUOTATION SENT, show quotation dialog first
+    const isFromQuotationPending = currentStatus?.toUpperCase().includes('QUOTATION PENDING');
+    const isToQuotationSent = newStatus.toUpperCase().includes('QUOTATION SENT');
+    
+    if (isFromQuotationPending && isToQuotationSent) {
+      // Show quotation dialog - user must enter quotation before status change
+      setPendingStatus(newStatus);
+      setShowQuotationDialog(true);
+      return;
+    }
+
+    // Normal flow for other status changes
     setPendingStatus(newStatus);
     setShowConfirmDialog(true);
   };
@@ -665,6 +676,17 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
     }).filter(q => q.tier && q.amount);
   };
 
+  // Handle quotation dialog cancel
+  const handleQuotationDialogClose = () => {
+    setShowQuotationDialog(false);
+    setPendingStatus(null); // Clear pending status since user cancelled
+    // Reset form fields
+    setQuotationBasic('');
+    setQuotationStandard('');
+    setQuotationPremium('');
+    setQuotationWtnSpecial('');
+  };
+
   // Handle save quotation
   const handleSaveQuotation = async () => {
     if (!client.rowNumber) {
@@ -704,11 +726,16 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
       setQuotationPremium('');
       setQuotationWtnSpecial('');
       
-      // Trigger status change to "QUOTATION SENT: REVIEW PENDING"
-      const quotationSentStatus = statusOptions.find(s => s.toUpperCase().includes('QUOTATION SENT'));
-      if (quotationSentStatus) {
-        setPendingStatus(quotationSentStatus);
+      // If pendingStatus was set from handleStatusClick interception, show confirmation
+      // Otherwise find the QUOTATION SENT status
+      if (pendingStatus) {
         setShowConfirmDialog(true);
+      } else {
+        const quotationSentStatus = statusOptions.find(s => s.toUpperCase().includes('QUOTATION SENT'));
+        if (quotationSentStatus) {
+          setPendingStatus(quotationSentStatus);
+          setShowConfirmDialog(true);
+        }
       }
       
       toast.success("Quotation saved successfully");
@@ -907,21 +934,6 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
             </DropdownMenu>
           )}
 
-          {/* Enter Quotation Button - For CALLED: QUOTATION PENDING */}
-          {isQuotationPending && (
-            <Button
-              variant="default"
-              size="sm"
-              className="h-7 px-2 text-xs bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowQuotationDialog(true);
-              }}
-            >
-              <FileText className="w-3 h-3 mr-1" />
-              Enter Quotation
-            </Button>
-          )}
           {/* Location Badge */}
           {location && (
             <div className="text-right">
@@ -1316,7 +1328,7 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
       </Dialog>
 
       {/* Quotation Input Dialog - For CALLED: QUOTATION PENDING */}
-      <Dialog open={showQuotationDialog} onOpenChange={setShowQuotationDialog}>
+      <Dialog open={showQuotationDialog} onOpenChange={(open) => !open && handleQuotationDialogClose()}>
         <DialogContent onClick={(e) => e.stopPropagation()} className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1399,7 +1411,7 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
           </div>
           
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setShowQuotationDialog(false)}>
+            <Button variant="outline" onClick={handleQuotationDialogClose}>
               Cancel
             </Button>
             <Button 
