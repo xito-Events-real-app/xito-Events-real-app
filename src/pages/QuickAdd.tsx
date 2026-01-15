@@ -39,6 +39,7 @@ export default function QuickAdd() {
   const [inquiryDate, setInquiryDate] = useState<Date | undefined>(new Date());
   const [inquiryTime, setInquiryTime] = useState("");
   const [description, setDescription] = useState("");
+  const [initialStatus, setInitialStatus] = useState("JUST ENQUIRED");
 
   const isConfigured = isSheetsConfigured();
 
@@ -203,6 +204,7 @@ export default function QuickAdd() {
         inquiryDateAD: inquiryDateADFormatted,
         inquiryTime,
         description,
+        initialStatus,
         // Send accurate BS dates from frontend
         registeredDateBS: registeredBSFormatted,
         inquiryDateBS: inquiryBSFormatted,
@@ -237,6 +239,7 @@ export default function QuickAdd() {
       setInquiryDate(new Date());
       setInquiryTime("");
       setDescription("");
+      setInitialStatus("JUST ENQUIRED");
 
     } catch (error) {
       console.error("Submit error:", error);
@@ -427,6 +430,13 @@ export default function QuickAdd() {
 
         {/* Inquiry Meta */}
         <FormSection title="Inquiry Details">
+          <FormSelect 
+            label="Status" 
+            value={initialStatus} 
+            onChange={setInitialStatus} 
+            options={dropdowns?.clientStatuses || []} 
+            placeholder="Select initial status"
+          />
           <FormSelect 
             label="Who Added" 
             value={whoAdded} 
