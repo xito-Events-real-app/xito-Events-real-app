@@ -19,6 +19,7 @@ export default function FreshClients() {
   const [selectedClient, setSelectedClient] = useState<ClientData | null>(null);
   const [statusOptions, setStatusOptions] = useState<string[]>([]);
   const [handlerOptions, setHandlerOptions] = useState<string[]>([]);
+  const [mindsetOptions, setMindsetOptions] = useState<string[]>([]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [initialCategorySet, setInitialCategorySet] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -36,6 +37,7 @@ export default function FreshClients() {
       setClients(clientsData);
       setStatusOptions(dropdowns.clientStatuses || []);
       setHandlerOptions(dropdowns.whatsappOwners || []); // Column H - team members/handlers
+      setMindsetOptions(dropdowns.mindsetOptions || []); // Column K - mindset options
     } catch (err) {
       console.error("Failed to fetch data:", err);
       setError(err instanceof Error ? err.message : "Failed to load");
@@ -303,6 +305,7 @@ export default function FreshClients() {
                           onEditClick={setSelectedClient}
                           statusOptions={statusOptions}
                           handlerOptions={handlerOptions}
+                          mindsetOptions={mindsetOptions}
                           currentStatusCategory={currentStatus}
                           onStatusChange={handleStatusChange}
                           onHandlerChange={handleHandlerChange}

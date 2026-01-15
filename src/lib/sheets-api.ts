@@ -12,6 +12,7 @@ export interface DropdownData {
   oldClients: string[];
   whatsappOwners: string[];
   clientStatuses: string[];
+  mindsetOptions: string[]; // Column K - Mindset options for QUOTATION SENT
 }
 
 export interface ClientData {
@@ -41,6 +42,9 @@ export interface ClientData {
   initialStatus?: string;
   clientHandler?: string; // Column X - who is handling this client
   callLog?: string; // Column Y - call attempt history
+  mindset?: string; // Column Z - mindset with timestamp
+  ourBargainedRates?: string; // Column AA - our bargained rates
+  clientBargainedRates?: string; // Column AB - client bargained rates
 }
 
 // Spreadsheet ID is now configured as a backend secret
@@ -168,6 +172,35 @@ export async function updateClientQuotation(
 ): Promise<{ success: boolean }> {
   return callSheetsFunction<{ success: boolean }>("updateClientQuotation", {
     data: { rowNumber, quotationData },
+  });
+}
+
+export async function updateClientMindset(
+  rowNumber: number,
+  mindset: string
+): Promise<{ success: boolean; mindset: string }> {
+  // Generate timestamp on client side to ensure correct local time
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const year = now.getFullYear();
+  const hours = String(now.getHours()).padStart(2, '0');
+  const mins = String(now.getMinutes()).padStart(2, '0');
+  const secs = String(now.getSeconds()).padStart(2, '0');
+  const clientTimestamp = `${month}/${day}/${year}, ${hours}:${mins}:${secs}`;
+  
+  return callSheetsFunction<{ success: boolean; mindset: string }>("updateClientMindset", {
+    data: { rowNumber, mindset, clientTimestamp },
+  });
+}
+
+export async function updateBargainingRates(
+  rowNumber: number,
+  ourRates: string,
+  clientRates: string
+): Promise<{ success: boolean; ourBargainedRates: string; clientBargainedRates: string }> {
+  return callSheetsFunction<{ success: boolean; ourBargainedRates: string; clientBargainedRates: string }>("updateBargainingRates", {
+    data: { rowNumber, ourRates, clientRates },
   });
 }
 
