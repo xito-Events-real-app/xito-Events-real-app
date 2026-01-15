@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AppLayout, PageHeader } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { DropdownData } from "@/lib/sheets-api";
 
 export default function FreshClients() {
+  const [searchParams] = useSearchParams();
   const [clients, setClients] = useState<ClientData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -18,6 +20,7 @@ export default function FreshClients() {
   const [statusOptions, setStatusOptions] = useState<string[]>([]);
   const [handlerOptions, setHandlerOptions] = useState<string[]>([]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
+  const [initialCategorySet, setInitialCategorySet] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
@@ -91,6 +94,22 @@ export default function FreshClients() {
 
     return orderedStatuses;
   }, [clientsByStatus, statusOptions]);
+
+  // Navigate to category from URL query param
+  useEffect(() => {
+    if (initialCategorySet || activeStatuses.length === 0) return;
+    
+    const categoryParam = searchParams.get('category');
+    if (categoryParam) {
+      const categoryIndex = activeStatuses.findIndex(
+        s => s.toUpperCase() === categoryParam.toUpperCase()
+      );
+      if (categoryIndex !== -1) {
+        setCurrentPageIndex(categoryIndex);
+      }
+    }
+    setInitialCategorySet(true);
+  }, [searchParams, activeStatuses, initialCategorySet]);
 
   // Get status color based on current status
   const getStatusColor = (status: string) => {
