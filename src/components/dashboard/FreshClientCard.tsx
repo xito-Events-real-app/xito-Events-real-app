@@ -24,7 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ChevronDown, ChevronUp, Loader2, Clock, AlertTriangle, UserCog, Phone, MessageCircle, Edit, History, Bell } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Clock, AlertTriangle, UserCog, Phone, MessageCircle, Edit, History, Bell, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
@@ -477,6 +477,10 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
   const lastCallTimeAgo = lastCallInfo?.displayText || null;
   const isCallNotReceived = currentStatusCategory?.toUpperCase().includes('CALL NOT');
   const isNumberProvided = currentStatusCategory?.toUpperCase().includes('NUMBER PROVIDED');
+  const isJustEnquired = currentStatusCategory?.toUpperCase() === 'JUST ENQUIRED';
+  
+  // Check if client has contact info
+  const hasContactNumber = !!(client.contactNo || client.whatsappNo);
   
   // Universal action reminder: alert if >6 hours in current status
   const REMINDER_THRESHOLD_HOURS = 6;
@@ -556,8 +560,8 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
     }
   };
 
-  // Handle call action for NUMBER PROVIDED (with post-call follow-up)
-  const handleNumberProvidedCall = async (e: React.MouseEvent, callType: 'DIRECT' | 'WHATSAPP') => {
+  // Handle call action for NUMBER PROVIDED and JUST ENQUIRED (with post-call follow-up)
+  const handleCallWithFollowUp = async (e: React.MouseEvent, callType: 'DIRECT' | 'WHATSAPP') => {
     e.stopPropagation();
     
     if (!client.rowNumber) {
@@ -591,6 +595,18 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
     } finally {
       setIsLoggingCall(false);
     }
+  };
+
+  // Handle "Ask for Number" - Open Business Suite
+  const handleAskForNumber = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Try to open Business Suite app (Facebook/Meta Business Suite)
+    // On mobile, this will attempt to open the app or redirect to the web version
+    window.open('fb://business_suite', '_blank');
+    // Fallback to web version after a short delay if app doesn't open
+    setTimeout(() => {
+      window.open('https://business.facebook.com', '_blank');
+    }, 300);
   };
 
   // Handle "No" - Client didn't pick up
@@ -660,6 +676,58 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
 
         {/* Right Side Container - Call Again Button + Location Badge */}
         <div className="shrink-0 flex flex-col items-end gap-2">
+          {/* CALL Button - For JUST ENQUIRED (Green) - Only if has contact number */}
+          {isJustEnquired && hasContactNumber && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="default" 
+                  size="sm" 
+                  className="h-7 px-2 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                  onClick={(e) => e.stopPropagation()}
+                  disabled={isLoggingCall}
+                >
+                  {isLoggingCall ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <>
+                      <Phone className="w-3 h-3 mr-1" />
+                      Call
+                      <ChevronDown className="w-3 h-3 ml-1" />
+                    </>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-popover z-50">
+                <DropdownMenuItem 
+                  onClick={(e) => handleCallWithFollowUp(e, 'DIRECT')}
+                  className="cursor-pointer"
+                >
+                  <Phone className="w-4 h-4 mr-2" /> Direct Call
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={(e) => handleCallWithFollowUp(e, 'WHATSAPP')}
+                  className="cursor-pointer"
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" /> WhatsApp Call
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+          {/* ASK FOR NUMBER Button - For JUST ENQUIRED without contact */}
+          {isJustEnquired && !hasContactNumber && (
+            <Button 
+              variant="default" 
+              size="sm" 
+              className="h-7 px-2 text-xs bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={handleAskForNumber}
+            >
+              <ExternalLink className="w-3 h-3 mr-1" />
+              Ask for Number
+            </Button>
+          )}
+
           {/* CALL Button - For NUMBER PROVIDED (Green) */}
           {isNumberProvided && (
             <DropdownMenu>
@@ -684,13 +752,13 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-popover z-50">
                 <DropdownMenuItem 
-                  onClick={(e) => handleNumberProvidedCall(e, 'DIRECT')}
+                  onClick={(e) => handleCallWithFollowUp(e, 'DIRECT')}
                   className="cursor-pointer"
                 >
                   <Phone className="w-4 h-4 mr-2" /> Direct Call
                 </DropdownMenuItem>
                 <DropdownMenuItem 
-                  onClick={(e) => handleNumberProvidedCall(e, 'WHATSAPP')}
+                  onClick={(e) => handleCallWithFollowUp(e, 'WHATSAPP')}
                   className="cursor-pointer"
                 >
                   <MessageCircle className="w-4 h-4 mr-2" /> WhatsApp Call
