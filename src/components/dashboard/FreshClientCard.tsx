@@ -11,6 +11,120 @@ import {
 import { ChevronDown, Loader2, Clock } from "lucide-react";
 import { toast } from "sonner";
 
+// Format time duration as "X DAY Y HR Z MIN"
+function formatDuration(diffMs: number): string {
+  if (diffMs < 0) return "";
+  
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffHours / 24);
+  const remainingHours = diffHours % 24;
+  const remainingMins = diffMins % 60;
+
+  if (diffDays > 0) {
+    return `${diffDays} DAY ${remainingHours} HR ${remainingMins} MIN`;
+  } else if (remainingHours > 0) {
+    return `${remainingHours} HR ${remainingMins} MIN`;
+  } else {
+    return `${remainingMins} MIN`;
+  }
+}
+
+// Parse timestamp from status log entry like "bargaining is on - 01/13/2026, 19:43:24"
+function parseStatusTimestamp(statusEntry: string): Date | null {
+  try {
+    // Format: "STATUS - MM/DD/YYYY, HH:MM:SS"
+    const parts = statusEntry.split(' - ');
+    if (parts.length < 2) return null;
+    
+    const timestampStr = parts[parts.length - 1].trim();
+    // Parse MM/DD/YYYY, HH:MM:SS
+    const dateTimeMatch = timestampStr.match(/(\d{2})\/(\d{2})\/(\d{4}),?\s*(\d{2}):(\d{2}):(\d{2})/);
+    if (!dateTimeMatch) return null;
+    
+    const [, month, day, year, hour, min, sec] = dateTimeMatch;
+    const date = new Date(
+      parseInt(year),
+      parseInt(month) - 1,
+      parseInt(day),
+      parseInt(hour),
+      parseInt(min),
+      parseInt(sec)
+    );
+    
+    return isNaN(date.getTime()) ? null : date;
+  } catch {
+    return null;
+  }
+}
+
+// Get time since last status change from status log
+function getLastStatusTimeInfo(statusLog?: string): { displayText: string; timestamp: Date } | null {
+  if (!statusLog) return null;
+  
+  const lines = statusLog.split('\n').filter(Boolean);
+  if (lines.length === 0) return null;
+  
+  const lastLine = lines[lines.length - 1];
+  const timestamp = parseStatusTimestamp(lastLine);
+  if (!timestamp) return null;
+  
+  const now = new Date();
+  const diffMs = now.getTime() - timestamp.getTime();
+  if (diffMs < 0) return null;
+  
+  return {
+    displayText: formatDuration(diffMs) + " AGO",
+    timestamp
+  };
+}
+
+// Get total time from registration to a specific status (for ADVANCE PENDING, BOOKED, POSTPONED)
+function getTotalTimeInfo(
+  statusLog?: string,
+  registeredDateTimeAD?: string,
+  currentStatus?: string
+): string | null {
+  // Only show for specific statuses
+  const showForStatuses = ['ADVANCE PENDING', 'BOOKED', 'POSTPONED'];
+  if (!currentStatus || !showForStatuses.some(s => currentStatus.toUpperCase().includes(s))) {
+    return null;
+  }
+  
+  if (!registeredDateTimeAD || !statusLog) return null;
+  
+  // Parse registration date
+  let regDate: Date;
+  try {
+    regDate = new Date(registeredDateTimeAD);
+    if (isNaN(regDate.getTime())) return null;
+  } catch {
+    return null;
+  }
+  
+  // Find when client reached current status
+  const lines = statusLog.split('\n').filter(Boolean);
+  let targetTimestamp: Date | null = null;
+  
+  for (const line of lines) {
+    const statusPart = line.split(' - ')[0].trim().toUpperCase();
+    if (showForStatuses.some(s => statusPart.includes(s))) {
+      const timestamp = parseStatusTimestamp(line);
+      if (timestamp) {
+        targetTimestamp = timestamp;
+        break; // Use first occurrence of target status
+      }
+    }
+  }
+  
+  if (!targetTimestamp) return null;
+  
+  const diffMs = targetTimestamp.getTime() - regDate.getTime();
+  if (diffMs < 0) return null;
+  
+  return formatDuration(diffMs);
+}
+
 // Calculate time elapsed since inquiry
 function getEnquiryTimeInfo(inquiryDateAD?: string, inquiryTime?: string) {
   if (!inquiryDateAD) return null;
@@ -148,6 +262,18 @@ export function FreshClientCard({ client, onClick, statusOptions, onStatusChange
     [client.inquiryDateAD, client.inquiryTime]
   );
 
+  // Calculate last status change time
+  const lastStatusInfo = useMemo(() => 
+    getLastStatusTimeInfo(currentStatusLog), 
+    [currentStatusLog]
+  );
+
+  // Calculate total time for specific statuses
+  const totalTimeInfo = useMemo(() => 
+    getTotalTimeInfo(currentStatusLog, client.registeredDateTimeAD, currentStatus), 
+    [currentStatusLog, client.registeredDateTimeAD, currentStatus]
+  );
+
   return (
     <div 
       className="flex flex-col gap-2 p-3 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer border border-border/50 active:scale-[0.98]"
@@ -253,20 +379,38 @@ export function FreshClientCard({ client, onClick, statusOptions, onStatusChange
         </DropdownMenu>
       </div>
 
-      {/* Enquiry Time Indicator */}
-      {enquiryInfo && (
-        <div className={cn(
-          "flex items-center gap-1.5 text-xs pt-1 border-t border-border/20",
-          enquiryInfo.urgency === 'normal' && "text-gray-500 dark:text-gray-400",
-          enquiryInfo.urgency === 'warning' && "text-amber-600 dark:text-amber-400",
-          enquiryInfo.urgency === 'urgent' && "text-red-500 dark:text-red-400",
-          enquiryInfo.urgency === 'critical' && "text-red-600 dark:text-red-400 animate-pulse font-medium"
-        )}>
-          <Clock className={cn(
-            "w-3 h-3",
-            enquiryInfo.urgency === 'critical' && "animate-pulse"
-          )} />
-          <span>Enquiry: {enquiryInfo.displayText}</span>
+      {/* Time Information Row */}
+      <div className="flex items-center justify-between pt-1 border-t border-border/20 gap-2">
+        {/* Enquiry Time - Left */}
+        {enquiryInfo && (
+          <div className={cn(
+            "flex items-center gap-1 text-xs",
+            enquiryInfo.urgency === 'normal' && "text-gray-500 dark:text-gray-400",
+            enquiryInfo.urgency === 'warning' && "text-amber-600 dark:text-amber-400",
+            enquiryInfo.urgency === 'urgent' && "text-red-500 dark:text-red-400",
+            enquiryInfo.urgency === 'critical' && "text-red-600 dark:text-red-400 animate-pulse font-medium"
+          )}>
+            <Clock className={cn(
+              "w-3 h-3",
+              enquiryInfo.urgency === 'critical' && "animate-pulse"
+            )} />
+            <span>Enquiry: {enquiryInfo.displayText}</span>
+          </div>
+        )}
+        
+        {/* Last Status Change Time - Right */}
+        {lastStatusInfo && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground ml-auto">
+            <span>{lastStatusInfo.displayText}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Total Time for ADVANCE PENDING, BOOKED, POSTPONED */}
+      {totalTimeInfo && (
+        <div className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded-md">
+          <Clock className="w-3 h-3" />
+          <span>TOTAL TIME: {totalTimeInfo}</span>
         </div>
       )}
     </div>
