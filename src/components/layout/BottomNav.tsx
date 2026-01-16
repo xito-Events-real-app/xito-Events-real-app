@@ -5,8 +5,9 @@ import { cn } from "@/lib/utils";
 import { getCachedData, setCachedClients, setCachedDropdowns, notifyCacheUpdate } from "@/lib/cache-manager";
 import { supabase } from "@/integrations/supabase/client";
 
-// Relaxing sync music URL
-const SYNC_MUSIC_URL = "https://assets.mixkit.co/active_storage/sfx/123/123-preview.mp3";
+// Unique whoosh/teleport sound for sync
+const SYNC_START_URL = "https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3"; // Teleport whoosh
+const SYNC_COMPLETE_URL = "https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3"; // Success chime
 
 interface NavItem {
   icon?: typeof Home;
@@ -29,20 +30,7 @@ export function BottomNav() {
   const [showOverlay, setShowOverlay] = useState(false);
   const [syncComplete, setSyncComplete] = useState(false);
   const syncAudioRef = useRef<HTMLAudioElement | null>(null);
-
-  // Initialize sync audio
-  useEffect(() => {
-    syncAudioRef.current = new Audio(SYNC_MUSIC_URL);
-    syncAudioRef.current.loop = true;
-    syncAudioRef.current.volume = 0;
-    
-    return () => {
-      if (syncAudioRef.current) {
-        syncAudioRef.current.pause();
-        syncAudioRef.current = null;
-      }
-    };
-  }, []);
+  const completeAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Handle sync
   const handleSync = async () => {
@@ -52,22 +40,18 @@ export function BottomNav() {
     setShowOverlay(true);
     setSyncComplete(false);
     
-    // Start relaxing sync music with fade in
-    if (syncAudioRef.current) {
-      syncAudioRef.current.currentTime = 0;
-      syncAudioRef.current.volume = 0;
-      syncAudioRef.current.play().catch(() => {});
-      
-      // Fade in
-      let vol = 0;
-      const fadeIn = setInterval(() => {
-        vol += 0.05;
-        if (syncAudioRef.current && vol <= 0.4) {
-          syncAudioRef.current.volume = vol;
-        } else {
-          clearInterval(fadeIn);
-        }
-      }, 50);
+    // Play whoosh sound (not looping)
+    if (!syncAudioRef.current) {
+      syncAudioRef.current = new Audio(SYNC_START_URL);
+    }
+    syncAudioRef.current.currentTime = 0;
+    syncAudioRef.current.volume = 0.5;
+    syncAudioRef.current.loop = false;
+    syncAudioRef.current.play().catch(() => {});
+    
+    // Prepare completion sound
+    if (!completeAudioRef.current) {
+      completeAudioRef.current = new Audio(SYNC_COMPLETE_URL);
     }
     
     try {
@@ -93,31 +77,27 @@ export function BottomNav() {
       
       setSyncComplete(true);
       
-      // Fade out sync music
+      // Stop sync sound and play completion sound
       if (syncAudioRef.current) {
-        const fadeOut = setInterval(() => {
-          if (syncAudioRef.current && syncAudioRef.current.volume > 0.05) {
-            syncAudioRef.current.volume -= 0.05;
-          } else {
-            clearInterval(fadeOut);
-            if (syncAudioRef.current) {
-              syncAudioRef.current.pause();
-              syncAudioRef.current.currentTime = 0;
-            }
-          }
-        }, 50);
+        syncAudioRef.current.pause();
+        syncAudioRef.current.currentTime = 0;
       }
       
-      // Keep overlay for effect
+      if (completeAudioRef.current) {
+        completeAudioRef.current.currentTime = 0;
+        completeAudioRef.current.volume = 0.6;
+        completeAudioRef.current.play().catch(() => {});
+      }
+      
+      // Quick overlay dismiss
       setTimeout(() => {
         setShowOverlay(false);
         setSyncComplete(false);
-      }, 1500);
+      }, 800);
       
     } catch (error) {
       console.error("Sync failed:", error);
       setShowOverlay(false);
-      // Stop music on error
       if (syncAudioRef.current) {
         syncAudioRef.current.pause();
         syncAudioRef.current.currentTime = 0;
