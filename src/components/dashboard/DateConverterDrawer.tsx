@@ -37,13 +37,18 @@ export function DateConverterDrawer({ isOpen, onClose }: DateConverterDrawerProp
   const [textInput, setTextInput] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
   const [result, setResult] = useState<ConversionResult | null>(null);
-  const [isMuted, setIsMuted] = useState(() => {
-    // Remember mute preference
-    return localStorage.getItem('dateConverterMuted') === 'true';
-  });
+  const [isMuted, setIsMuted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [audioReady, setAudioReady] = useState(false);
   const [hasAutoStarted, setHasAutoStarted] = useState(false);
+  
+  // Load mute preference from localStorage on mount
+  useEffect(() => {
+    const savedMuted = localStorage.getItem('dateConverterMuted');
+    if (savedMuted === 'true') {
+      setIsMuted(true);
+    }
+  }, []);
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
