@@ -2,17 +2,27 @@ import { useState, useEffect } from "react";
 import { AppLayout, PageHeader } from "@/components/layout";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Search as SearchIcon, User, Phone, MapPin, Loader2 } from "lucide-react";
-import { searchClients, isSheetsConfigured, ClientData } from "@/lib/sheets-api";
-import { Link } from "react-router-dom";
+import { Search as SearchIcon, User, Phone, MapPin, Loader2, ChevronRight } from "lucide-react";
+import { searchClients, isSheetsConfigured, ClientData, getCurrentStatus } from "@/lib/sheets-api";
+import { Link, useNavigate } from "react-router-dom";
 
 export default function Search() {
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ClientData[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
   const isConfigured = isSheetsConfigured();
+
+  const handleClientClick = (client: ClientData) => {
+    const currentStatus = getCurrentStatus(client.statusLog || "");
+    if (currentStatus) {
+      navigate(`/fresh-clients?category=${encodeURIComponent(currentStatus)}`);
+    } else {
+      navigate("/fresh-clients");
+    }
+  };
 
   useEffect(() => {
     const timer = setTimeout(async () => {
@@ -96,37 +106,52 @@ export default function Search() {
 
         {results.length > 0 && (
           <div className="space-y-3">
-            {results.map((client, i) => (
-              <Card key={i} className="shadow-soft press-effect cursor-pointer hover:border-primary/50 transition-colors">
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center shrink-0">
-                      <User className="w-5 h-5 text-white" />
+            {results.map((client, i) => {
+              const currentStatus = getCurrentStatus(client.statusLog || "");
+              return (
+                <Card 
+                  key={i} 
+                  className="shadow-soft press-effect cursor-pointer hover:border-primary/50 transition-colors"
+                  onClick={() => handleClientClick(client)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center shrink-0">
+                        <User className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-foreground truncate">
+                          {client.clientName}
+                        </h3>
+                        {client.contactNo && (
+                          <p className="text-sm text-muted-foreground flex items-center gap-1">
+                            <Phone className="w-3 h-3" />
+                            {client.contactNo}
+                          </p>
+                        )}
+                        {client.eventLocation && (
+                          <p className="text-sm text-muted-foreground flex items-center gap-1">
+                            <MapPin className="w-3 h-3" />
+                            {client.eventLocation} {client.eventCity && `- ${client.eventCity}`}
+                          </p>
+                        )}
+                        <div className="flex items-center justify-between mt-1">
+                          <p className="text-xs text-muted-foreground">
+                            Added: {client.registeredDateBS || client.registeredDateTimeAD?.split("T")[0]}
+                          </p>
+                          {currentStatus && (
+                            <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
+                              {currentStatus}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-foreground truncate">
-                        {client.clientName}
-                      </h3>
-                      {client.contactNo && (
-                        <p className="text-sm text-muted-foreground flex items-center gap-1">
-                          <Phone className="w-3 h-3" />
-                          {client.contactNo}
-                        </p>
-                      )}
-                      {client.eventLocation && (
-                        <p className="text-sm text-muted-foreground flex items-center gap-1">
-                          <MapPin className="w-3 h-3" />
-                          {client.eventLocation} {client.eventCity && `- ${client.eventCity}`}
-                        </p>
-                      )}
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Added: {client.registeredDateBS || client.registeredDateTimeAD?.split("T")[0]}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
