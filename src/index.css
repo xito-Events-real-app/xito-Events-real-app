@@ -221,23 +221,23 @@
 @keyframes jackpot-entrance {
   0% {
     opacity: 0;
-    transform: scale(0.5) rotateX(20deg);
+    transform: scale(0.3) rotate(-15deg);
   }
-  50% {
-    transform: scale(1.05) rotateX(-5deg);
+  60% {
+    transform: scale(1.1) rotate(3deg);
   }
   100% {
     opacity: 1;
-    transform: scale(1) rotateX(0);
+    transform: scale(1) rotate(0deg);
   }
 }
 
 @keyframes jackpot-glow {
   0%, 100% {
-    box-shadow: 0 0 20px rgba(255, 215, 0, 0.5), 0 0 40px rgba(255, 215, 0, 0.3), 0 0 60px rgba(255, 215, 0, 0.1);
+    box-shadow: 0 0 30px #ffd700, 0 0 60px #ffd700, 0 0 90px #ff6b00;
   }
   50% {
-    box-shadow: 0 0 30px rgba(255, 107, 107, 0.6), 0 0 60px rgba(255, 107, 107, 0.4), 0 0 90px rgba(255, 107, 107, 0.2);
+    box-shadow: 0 0 50px #ff6b00, 0 0 100px #ffd700, 0 0 150px #ff00ff;
   }
 }
 
@@ -248,7 +248,7 @@
   }
   50% {
     opacity: 1;
-    transform: scale(1) rotate(180deg);
+    transform: scale(1.5) rotate(180deg);
   }
 }
 
@@ -272,85 +272,126 @@
 
 @keyframes jackpot-card-pulse {
   0%, 100% {
-    box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+    transform: scale(1);
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
   }
   50% {
-    box-shadow: 0 0 25px rgba(255, 215, 0, 0.6);
+    transform: scale(1.03);
+    box-shadow: 0 0 35px rgba(255, 215, 0, 0.8);
   }
 }
 
 @keyframes jackpot-confetti {
   0% {
-    transform: translateY(-100vh) rotate(0deg);
+    transform: translateY(-20vh) rotate(0deg) scale(1);
     opacity: 1;
   }
   100% {
-    transform: translateY(100vh) rotate(720deg);
+    transform: translateY(100vh) rotate(1080deg) scale(0.3);
     opacity: 0;
   }
 }
 
 @keyframes jackpot-avatar-glow {
   0%, 100% {
-    filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.4));
+    filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.7));
   }
   50% {
-    filter: drop-shadow(0 0 16px rgba(255, 215, 0, 0.8));
+    filter: drop-shadow(0 0 25px rgba(255, 215, 0, 1));
+  }
+}
+
+@keyframes electric-bolt {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scaleY(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleY(1.1);
+  }
+}
+
+@keyframes neon-flicker {
+  0%, 100% {
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+  }
+  93% {
+    opacity: 0.3;
+  }
+  94% {
+    opacity: 1;
+  }
+  96% {
+    opacity: 0.5;
+  }
+  97% {
+    opacity: 1;
   }
 }
 
 .animate-jackpot-entrance {
-  animation: jackpot-entrance 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: jackpot-entrance 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
 .jackpot-border-glow {
-  animation: jackpot-glow 2s ease-in-out infinite;
-  background: linear-gradient(135deg, #FFD700, #FF6B6B, #A855F7, #4ECDC4, #FFD700);
+  animation: jackpot-glow 1.5s ease-in-out infinite, jackpot-marquee 2s linear infinite, neon-flicker 4s linear infinite;
+  background: linear-gradient(135deg, #ffd700 0%, #ff6b00 20%, #ff00ff 40%, #00ffff 60%, #00ff00 80%, #ffd700 100%);
   background-size: 400% 400%;
 }
 
 .jackpot-sparkle {
-  animation: jackpot-sparkle 2s ease-in-out infinite;
+  animation: jackpot-sparkle 1.2s ease-in-out infinite;
 }
 
 .jackpot-rays {
   background: conic-gradient(
     from 0deg,
     transparent 0deg,
-    rgba(255, 215, 0, 0.1) 10deg,
-    transparent 20deg,
-    transparent 30deg,
-    rgba(255, 107, 107, 0.1) 40deg,
-    transparent 50deg
+    rgba(255, 215, 0, 0.2) 8deg,
+    transparent 16deg,
+    transparent 24deg,
+    rgba(255, 107, 0, 0.2) 32deg,
+    transparent 40deg,
+    transparent 48deg,
+    rgba(255, 0, 255, 0.15) 56deg,
+    transparent 64deg
   );
-  animation: jackpot-rays 10s linear infinite;
+  animation: jackpot-rays 6s linear infinite;
 }
 
 .jackpot-marquee {
   background: linear-gradient(
     90deg,
-    #FFD700 0%,
-    #FF6B6B 25%,
-    #A855F7 50%,
-    #4ECDC4 75%,
-    #FFD700 100%
+    #ff0000 0%,
+    #ff7f00 14%,
+    #ffff00 28%,
+    #00ff00 42%,
+    #0000ff 57%,
+    #4b0082 71%,
+    #9400d3 85%,
+    #ff0000 100%
   );
   background-size: 200% 100%;
-  animation: jackpot-marquee 2s linear infinite;
+  animation: jackpot-marquee 0.8s linear infinite;
 }
 
 .jackpot-card {
-  animation: jackpot-card-pulse 2s ease-in-out infinite;
+  animation: jackpot-card-pulse 1.5s ease-in-out infinite;
 }
 
 .jackpot-confetti {
-  animation: jackpot-confetti 1.5s ease-out forwards;
+  animation: jackpot-confetti 2s ease-out forwards;
 }
 
 .jackpot-avatar {
-  animation: jackpot-avatar-glow 2s ease-in-out infinite;
+  animation: jackpot-avatar-glow 1.2s ease-in-out infinite;
 }
 
 .jackpot-text-glow {
-  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5), 0 0 20px rgba(255, 215, 0, 0.3);
+  text-shadow: 0 0 10px #ffd700, 0 0 20px #ffd700, 0 0 40px #ff6b00, 0 0 60px #ff6b00;
+  animation: neon-flicker 3s linear infinite;
 }
