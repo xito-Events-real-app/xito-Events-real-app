@@ -209,17 +209,20 @@ export default function Dashboard() {
     if (containerRef.current) {
       scrollTop.current = containerRef.current.scrollTop;
     }
-    touchStartY.current = e.touches[0].clientY;
+    const startY = e.touches[0].clientY;
+    touchStartY.current = startY;
     setIsPulling(true);
     setIsSwipingUp(true);
+    
+    // Check if touch started from bottom edge of screen (for date converter)
+    const screenHeight = window.innerHeight;
+    swipeStartedFromBottom.current = startY > screenHeight - 100;
   }, [initAudio]);
 
-  // Check if at bottom of scroll
-  const isAtBottom = useCallback(() => {
-    if (!containerRef.current) return false;
-    const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
-    return scrollTop + clientHeight >= scrollHeight - 10;
-  }, []);
+  // Track if swipe started from bottom edge of screen
+  const swipeStartedFromBottom = useRef(false);
+  const screenHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
+  const bottomEdgeThreshold = 100; // pixels from bottom edge
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     const currentY = e.touches[0].clientY;
@@ -267,8 +270,8 @@ export default function Dashboard() {
         setPullDistance(0);
       }
     }
-    // SWIPE UP - Date Converter
-    else if (diff < 0 && isSwipingUp && isAtBottom()) {
+    // SWIPE UP - Date Converter (only if started from bottom edge)
+    else if (diff < 0 && isSwipingUp && swipeStartedFromBottom.current) {
       const upDiff = Math.abs(diff);
       const resistance = 0.6;
       const distance = Math.min(upDiff * resistance, swipeUpThreshold + 20);
@@ -279,9 +282,10 @@ export default function Dashboard() {
       if (distance >= swipeUpThreshold && !showDateConverter) {
         setShowDateConverter(true);
         setSwipeUpDistance(0);
+        swipeStartedFromBottom.current = false;
       }
     }
-  }, [isPulling, isSwipingUp, showJackpot, showDateConverter, handlers, isAtBottom]);
+  }, [isPulling, isSwipingUp, showJackpot, showDateConverter, handlers, screenHeight]);
 
   const handleTouchEnd = useCallback(() => {
     setIsPulling(false);
