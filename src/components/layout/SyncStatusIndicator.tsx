@@ -17,11 +17,9 @@ export function SyncStatusIndicator({
   lastSyncedAt,
   isOnline = true
 }: SyncStatusIndicatorProps) {
-  // Don't show anything if everything is synced and online
-  if (!isSyncing && pendingSyncs === 0 && isOnline && !isFromCache) {
-    return null;
-  }
-
+  // Only show indicator for important states - offline, syncing, or pending syncs
+  // Don't show "cached" status - let caching happen silently
+  
   // Offline mode
   if (!isOnline) {
     return (
@@ -53,16 +51,6 @@ export function SyncStatusIndicator({
       <div className="fixed top-3 right-3 z-50 flex items-center gap-1.5 bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 px-2.5 py-1 rounded-full text-xs font-medium shadow-sm animate-fade-in">
         <Cloud className="w-3.5 h-3.5" />
         <span>{pendingSyncs} pending</span>
-      </div>
-    );
-  }
-
-  // Showing cached data (but online)
-  if (isFromCache && lastSyncedAt) {
-    return (
-      <div className="fixed top-3 right-3 z-50 flex items-center gap-1.5 bg-muted text-muted-foreground px-2.5 py-1 rounded-full text-xs font-medium shadow-sm animate-fade-in">
-        <Check className="w-3.5 h-3.5" />
-        <span>Cached {getCacheAge(lastSyncedAt.getTime())}</span>
       </div>
     );
   }
