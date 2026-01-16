@@ -1,9 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Home, Plus, Search, Users, RefreshCw } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { getCachedData, setCachedClients, setCachedDropdowns, notifyCacheUpdate } from "@/lib/cache-manager";
 import { supabase } from "@/integrations/supabase/client";
+
+// Relaxing sync music URL
+const SYNC_MUSIC_URL = "https://assets.mixkit.co/active_storage/sfx/123/123-preview.mp3";
 
 interface NavItem {
   icon?: typeof Home;
@@ -25,6 +28,21 @@ export function BottomNav() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [showOverlay, setShowOverlay] = useState(false);
   const [syncComplete, setSyncComplete] = useState(false);
+  const syncAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Initialize sync audio
+  useEffect(() => {
+    syncAudioRef.current = new Audio(SYNC_MUSIC_URL);
+    syncAudioRef.current.loop = true;
+    syncAudioRef.current.volume = 0;
+    
+    return () => {
+      if (syncAudioRef.current) {
+        syncAudioRef.current.pause();
+        syncAudioRef.current = null;
+      }
+    };
+  }, []);
 
   // Handle sync
   const handleSync = async () => {
@@ -33,6 +51,24 @@ export function BottomNav() {
     setIsSyncing(true);
     setShowOverlay(true);
     setSyncComplete(false);
+    
+    // Start relaxing sync music with fade in
+    if (syncAudioRef.current) {
+      syncAudioRef.current.currentTime = 0;
+      syncAudioRef.current.volume = 0;
+      syncAudioRef.current.play().catch(() => {});
+      
+      // Fade in
+      let vol = 0;
+      const fadeIn = setInterval(() => {
+        vol += 0.05;
+        if (syncAudioRef.current && vol <= 0.4) {
+          syncAudioRef.current.volume = vol;
+        } else {
+          clearInterval(fadeIn);
+        }
+      }, 50);
+    }
     
     try {
       // Fetch fresh data from Google Sheets
@@ -57,6 +93,21 @@ export function BottomNav() {
       
       setSyncComplete(true);
       
+      // Fade out sync music
+      if (syncAudioRef.current) {
+        const fadeOut = setInterval(() => {
+          if (syncAudioRef.current && syncAudioRef.current.volume > 0.05) {
+            syncAudioRef.current.volume -= 0.05;
+          } else {
+            clearInterval(fadeOut);
+            if (syncAudioRef.current) {
+              syncAudioRef.current.pause();
+              syncAudioRef.current.currentTime = 0;
+            }
+          }
+        }, 50);
+      }
+      
       // Keep overlay for effect
       setTimeout(() => {
         setShowOverlay(false);
@@ -66,6 +117,11 @@ export function BottomNav() {
     } catch (error) {
       console.error("Sync failed:", error);
       setShowOverlay(false);
+      // Stop music on error
+      if (syncAudioRef.current) {
+        syncAudioRef.current.pause();
+        syncAudioRef.current.currentTime = 0;
+      }
     } finally {
       setIsSyncing(false);
     }
