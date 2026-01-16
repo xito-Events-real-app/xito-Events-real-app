@@ -9,6 +9,7 @@ import Search from "./pages/Search";
 import Settings from "./pages/Settings";
 import FreshClients from "./pages/FreshClients";
 import Today from "./pages/Today";
+import HandlerClients from "./pages/HandlerClients";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/settings" element={<Settings />} />
           <Route path="/fresh-clients" element={<FreshClients />} />
           <Route path="/today" element={<Today />} />
+          <Route path="/handler/:handlerName" element={<HandlerClients />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
