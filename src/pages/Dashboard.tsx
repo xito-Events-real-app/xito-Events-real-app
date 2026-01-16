@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { AppLayout, PageHeader } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,7 +6,7 @@ import {
   Users, CalendarPlus, TrendingUp, Menu, 
   MessageSquare, PhoneOff, FileText, SendHorizontal, 
   Scale, Clock, CheckCircle, XCircle, CalendarX,
-  Phone, ChevronRight, RefreshCw, User
+  Phone, ChevronRight, RefreshCw
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { getCurrentStatus } from "@/lib/sheets-api";
@@ -14,6 +14,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
 import { useCachedData } from "@/hooks/useCachedData";
 import { cn } from "@/lib/utils";
+import { HandlerJackpotPopup } from "@/components/dashboard/HandlerJackpotPopup";
 
 // Get icon and color for each status category
 const getStatusConfig = (status: string) => {
@@ -42,6 +43,9 @@ const handlerColors = [
   'from-amber-500 to-yellow-600',
 ];
 
+// Casino audio URL
+const CASINO_AUDIO_URL = "https://assets.mixkit.co/active_storage/sfx/212/212-preview.mp3";
+
 export default function Dashboard() {
   const { 
     clients, 
@@ -62,11 +66,15 @@ export default function Dashboard() {
   // Pull to refresh state
   const [pullDistance, setPullDistance] = useState(0);
   const [isPulling, setIsPulling] = useState(false);
-  const [showHandlers, setShowHandlers] = useState(false);
+  const [showJackpot, setShowJackpot] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const touchStartY = useRef(0);
   const scrollTop = useRef(0);
   const pullThreshold = 120;
+  
+  // Audio refs
+  const casinoAudioRef = useRef<HTMLAudioElement | null>(null);
+  const audioInitialized = useRef(false);
 
   // Listen for online/offline status
   useState(() => {
@@ -160,18 +168,36 @@ export default function Dashboard() {
     navigate(`/fresh-clients?category=${encodeURIComponent(status)}`);
   };
 
-  const handleHandlerClick = (handler: string) => {
-    navigate(`/handler/${encodeURIComponent(handler)}`);
-  };
 
-  // Pull to refresh handlers
+  // Initialize audio on first touch
+  const initAudio = useCallback(() => {
+    if (!audioInitialized.current) {
+      casinoAudioRef.current = new Audio(CASINO_AUDIO_URL);
+      casinoAudioRef.current.loop = true;
+      casinoAudioRef.current.volume = 0;
+      audioInitialized.current = true;
+    }
+  }, []);
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (casinoAudioRef.current) {
+        casinoAudioRef.current.pause();
+        casinoAudioRef.current = null;
+      }
+    };
+  }, []);
+
+  // Pull to refresh handlers with audio fade-in
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    initAudio();
     if (containerRef.current) {
       scrollTop.current = containerRef.current.scrollTop;
     }
     touchStartY.current = e.touches[0].clientY;
     setIsPulling(true);
-  }, []);
+  }, [initAudio]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!isPulling || scrollTop.current > 0) return;
@@ -185,28 +211,67 @@ export default function Dashboard() {
       const distance = Math.min(diff * resistance, pullThreshold + 30);
       setPullDistance(distance);
       
-      if (distance >= pullThreshold && !showHandlers) {
-        setShowHandlers(true);
+      // Calculate pull progress (0 to 1)
+      const pullProgress = distance / pullThreshold;
+      
+      // Start fading in audio at 10% pull
+      if (pullProgress > 0.1 && casinoAudioRef.current) {
+        // Volume increases from 0 to 0.4 as we pull
+        const targetVolume = Math.min(pullProgress * 0.5, 0.4);
+        casinoAudioRef.current.volume = targetVolume;
+        
+        // Start playing if not already
+        if (casinoAudioRef.current.paused) {
+          casinoAudioRef.current.play().catch(() => {});
+        }
+      }
+      
+      // Show jackpot popup when threshold reached
+      if (distance >= pullThreshold && !showJackpot) {
+        setShowJackpot(true);
+        setPullDistance(0); // Reset pull distance when popup opens
       }
     }
-  }, [isPulling, showHandlers]);
+  }, [isPulling, showJackpot]);
 
   const handleTouchEnd = useCallback(() => {
     setIsPulling(false);
     
     if (pullDistance < pullThreshold) {
       setPullDistance(0);
-      setShowHandlers(false);
-    } else {
-      // Snap to revealed position
-      setPullDistance(pullThreshold);
+      
+      // Fade out audio if didn't reach threshold
+      if (casinoAudioRef.current && !showJackpot) {
+        const fadeOut = setInterval(() => {
+          if (casinoAudioRef.current && casinoAudioRef.current.volume > 0.05) {
+            casinoAudioRef.current.volume -= 0.05;
+          } else {
+            clearInterval(fadeOut);
+            if (casinoAudioRef.current) {
+              casinoAudioRef.current.pause();
+              casinoAudioRef.current.currentTime = 0;
+            }
+          }
+        }, 30);
+      }
     }
-  }, [pullDistance]);
+  }, [pullDistance, showJackpot]);
 
-  const hideHandlers = () => {
-    setPullDistance(0);
-    setShowHandlers(false);
+  const handleJackpotSelect = (handler: string) => {
+    setShowJackpot(false);
+    navigate(`/handler/${encodeURIComponent(handler)}`);
   };
+
+  const handleJackpotClose = () => {
+    setShowJackpot(false);
+  };
+
+  // Prepare handlers data for jackpot popup
+  const jackpotHandlers = handlers.map((handler, idx) => ({
+    name: handler,
+    clientCount: handlerCounts[handler] || 0,
+    colorClass: handlerColors[idx % handlerColors.length],
+  }));
 
   return (
     <AppLayout>
@@ -219,68 +284,14 @@ export default function Dashboard() {
         isOnline={isOnline}
       />
 
-      {/* Hidden Handler Panel - Revealed on Pull */}
-      <div 
-        className={cn(
-          "fixed top-0 left-0 right-0 z-40 transition-all duration-300 ease-out overflow-hidden",
-          showHandlers ? "opacity-100" : "opacity-0 pointer-events-none"
-        )}
-        style={{ 
-          height: showHandlers ? `${pullThreshold}px` : '0px',
-          background: 'linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary)/0.8) 100%)'
-        }}
-      >
-        <div className="px-4 py-3 h-full flex flex-col">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-semibold text-white/90 uppercase tracking-wider">
-              Team Handlers
-            </p>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={hideHandlers}
-              className="text-white/80 hover:text-white hover:bg-white/10 h-6 px-2 text-xs"
-            >
-              Hide
-            </Button>
-          </div>
-          
-          <div className="flex gap-3 overflow-x-auto flex-1 items-center pb-1 scrollbar-hide">
-            {handlers.map((handler, idx) => {
-              const initials = handler.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
-              const clientCount = handlerCounts[handler] || 0;
-              const colorClass = handlerColors[idx % handlerColors.length];
-              
-              return (
-                <button
-                  key={handler}
-                  onClick={() => handleHandlerClick(handler)}
-                  className="flex flex-col items-center gap-1 shrink-0 group"
-                >
-                  <div className={cn(
-                    "w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center text-white font-bold text-sm shadow-lg",
-                    "transform transition-all group-active:scale-95",
-                    "ring-2 ring-white/30",
-                    colorClass
-                  )}>
-                    {initials || <User className="w-5 h-5" />}
-                  </div>
-                  <span className="text-[10px] text-white font-medium max-w-[60px] truncate">
-                    {handler.split(' ')[0]}
-                  </span>
-                  <span className="text-[9px] text-white/70 -mt-0.5">
-                    {clientCount} client{clientCount !== 1 ? 's' : ''}
-                  </span>
-                </button>
-              );
-            })}
-            
-            {handlers.length === 0 && (
-              <p className="text-white/70 text-sm">No handlers configured</p>
-            )}
-          </div>
-        </div>
-      </div>
+      {/* Jackpot Handler Popup */}
+      <HandlerJackpotPopup
+        isOpen={showJackpot}
+        handlers={jackpotHandlers}
+        onSelectHandler={handleJackpotSelect}
+        onClose={handleJackpotClose}
+        casinoAudioRef={casinoAudioRef}
+      />
 
       {/* Main Content - Moves down when pulled */}
       <div 
@@ -293,27 +304,45 @@ export default function Dashboard() {
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        {/* Pull indicator */}
-        {isPulling && pullDistance > 0 && !showHandlers && (
+        {/* Pull indicator with casino theme */}
+        {isPulling && pullDistance > 0 && !showJackpot && (
           <div 
             className="absolute left-1/2 -translate-x-1/2 z-50 flex flex-col items-center"
             style={{ top: Math.max(pullDistance - 40, 10) }}
           >
             <div className={cn(
-              "w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center transition-all",
-              pullDistance >= pullThreshold * 0.8 && "bg-primary/40 scale-110"
+              "w-10 h-10 rounded-full flex items-center justify-center transition-all",
+              pullDistance >= pullThreshold * 0.8 
+                ? "bg-gradient-to-br from-yellow-400 to-amber-500 scale-110 shadow-lg shadow-yellow-400/50" 
+                : "bg-gradient-to-br from-yellow-400/20 to-amber-500/20"
             )}>
-              <ChevronRight 
-                className={cn(
-                  "w-5 h-5 text-primary rotate-90 transition-transform",
-                  pullDistance >= pullThreshold * 0.8 && "rotate-[270deg]"
-                )} 
-              />
+              <span className={cn(
+                "text-lg transition-all",
+                pullDistance >= pullThreshold * 0.8 ? "animate-bounce" : ""
+              )}>
+                🎰
+              </span>
             </div>
-            <span className="text-[10px] text-muted-foreground mt-1">
-              {pullDistance >= pullThreshold * 0.8 ? "Release" : "Pull for handlers"}
+            <span className={cn(
+              "text-[10px] mt-1 font-medium transition-colors",
+              pullDistance >= pullThreshold * 0.8 
+                ? "text-yellow-500" 
+                : "text-muted-foreground"
+            )}>
+              {pullDistance >= pullThreshold * 0.8 ? "🎉 Release!" : "Pull for handlers"}
             </span>
           </div>
+        )}
+
+        {/* Golden glow effect near threshold */}
+        {isPulling && pullDistance >= pullThreshold * 0.7 && !showJackpot && (
+          <div 
+            className="fixed inset-0 pointer-events-none z-40 transition-opacity duration-300"
+            style={{
+              background: `radial-gradient(circle at 50% 0%, rgba(255, 215, 0, ${(pullDistance / pullThreshold) * 0.3}) 0%, transparent 50%)`,
+              opacity: (pullDistance - pullThreshold * 0.7) / (pullThreshold * 0.3),
+            }}
+          />
         )}
 
         {/* Header with Menu Button */}
