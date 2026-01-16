@@ -1,17 +1,40 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { AppLayout, PageHeader } from "@/components/layout";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Search as SearchIcon, User, Phone, MapPin, Loader2, ChevronRight } from "lucide-react";
-import { searchClients, isSheetsConfigured, ClientData, getCurrentStatus } from "@/lib/sheets-api";
+import { isSheetsConfigured, ClientData, getCurrentStatus } from "@/lib/sheets-api";
+import { useCachedData } from "@/hooks/useCachedData";
+import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
 import { Link, useNavigate } from "react-router-dom";
 
 export default function Search() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<ClientData[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [hasSearched, setHasSearched] = useState(false);
+  const { 
+    clients, 
+    isLoading, 
+    isFromCache, 
+    isSyncing, 
+    lastSyncedAt,
+    pendingSyncs 
+  } = useCachedData();
+  
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  // Online/offline listener
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const isConfigured = isSheetsConfigured();
 
@@ -24,31 +47,35 @@ export default function Search() {
     }
   };
 
-  useEffect(() => {
-    const timer = setTimeout(async () => {
-      if (query.trim().length >= 2 && isConfigured) {
-        setIsSearching(true);
-        try {
-          const clients = await searchClients(query);
-          setResults(clients);
-        } catch (error) {
-          console.error("Search error:", error);
-          setResults([]);
-        } finally {
-          setIsSearching(false);
-          setHasSearched(true);
-        }
-      } else if (query.trim().length < 2) {
-        setResults([]);
-        setHasSearched(false);
-      }
-    }, 300);
+  // Search from cached data locally (instant search)
+  const results = useMemo(() => {
+    if (query.trim().length < 2) return [];
+    
+    const searchLower = query.toLowerCase();
+    
+    return clients.filter(client => {
+      const nameMatch = client.clientName?.toLowerCase().includes(searchLower);
+      const phoneMatch = client.contactNo?.includes(query);
+      const locationMatch = client.eventLocation?.toLowerCase().includes(searchLower);
+      const cityMatch = client.eventCity?.toLowerCase().includes(searchLower);
+      
+      return nameMatch || phoneMatch || locationMatch || cityMatch;
+    });
+  }, [query, clients]);
 
-    return () => clearTimeout(timer);
-  }, [query, isConfigured]);
+  const hasSearched = query.trim().length >= 2;
 
   return (
     <AppLayout>
+      {/* Sync Status Indicator */}
+      <SyncStatusIndicator 
+        pendingSyncs={pendingSyncs}
+        isSyncing={isSyncing}
+        isFromCache={isFromCache}
+        lastSyncedAt={lastSyncedAt}
+        isOnline={isOnline}
+      />
+
       <PageHeader 
         title="Search Clients" 
         subtitle="Find by name or phone"
@@ -65,7 +92,7 @@ export default function Search() {
             onChange={(e) => setQuery(e.target.value)}
             className="pl-10 h-12 text-base"
           />
-          {isSearching && (
+          {isLoading && clients.length === 0 && (
             <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground animate-spin" />
           )}
         </div>
@@ -90,11 +117,16 @@ export default function Search() {
             <p className="text-muted-foreground">
               Start typing to search clients
             </p>
+            {isFromCache && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Searching from {clients.length} cached clients
+              </p>
+            )}
           </div>
         )}
 
         {/* Results */}
-        {hasSearched && query && results.length === 0 && !isSearching && (
+        {hasSearched && query && results.length === 0 && (
           <Card className="shadow-soft">
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground text-center py-4">
@@ -106,6 +138,9 @@ export default function Search() {
 
         {results.length > 0 && (
           <div className="space-y-3">
+            <p className="text-xs text-muted-foreground px-1">
+              {results.length} result{results.length !== 1 ? 's' : ''}
+            </p>
             {results.map((client, i) => {
               const currentStatus = getCurrentStatus(client.statusLog || "");
               return (
