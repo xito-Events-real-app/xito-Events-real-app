@@ -65,7 +65,6 @@ export function useVoiceDateConverter() {
   });
   
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const onResultCallback = useRef<((transcript: string) => void) | null>(null);
 
   // Initialize recognition
   const initRecognition = useCallback(() => {
@@ -84,15 +83,17 @@ export function useVoiceDateConverter() {
     recognition.lang = 'en-US';
     
     recognition.onstart = () => {
+      console.log('Voice recognition started');
       setState(prev => ({ ...prev, isListening: true, error: null }));
     };
     
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       const result = event.results[event.resultIndex];
+      const transcript = result[0].transcript;
+      console.log('Voice result:', transcript, 'isFinal:', result.isFinal);
+      
       if (result.isFinal) {
-        const transcript = result[0].transcript;
-        setState(prev => ({ ...prev, transcript }));
-        onResultCallback.current?.(transcript);
+        setState(prev => ({ ...prev, transcript, isListening: false }));
       }
     };
     
@@ -123,7 +124,7 @@ export function useVoiceDateConverter() {
   }, [state.isSupported]);
 
   // Start listening
-  const startListening = useCallback((onResult?: (transcript: string) => void) => {
+  const startListening = useCallback(() => {
     if (!state.isSupported) {
       setState(prev => ({ 
         ...prev, 
@@ -134,22 +135,25 @@ export function useVoiceDateConverter() {
     
     // Stop any existing recognition
     if (recognitionRef.current) {
-      recognitionRef.current.abort();
+      try {
+        recognitionRef.current.abort();
+      } catch (e) {
+        // Ignore
+      }
     }
-    
-    // Store callback
-    onResultCallback.current = onResult || null;
     
     // Create new recognition instance
     recognitionRef.current = initRecognition();
     
     if (recognitionRef.current) {
       try {
+        console.log('Starting voice recognition...');
         recognitionRef.current.start();
       } catch (e) {
+        console.error('Failed to start recognition:', e);
         setState(prev => ({ 
           ...prev, 
-          error: 'Failed to start voice recognition.' 
+          error: 'Failed to start voice recognition. Try again.' 
         }));
       }
     }
