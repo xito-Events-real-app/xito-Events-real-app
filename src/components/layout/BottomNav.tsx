@@ -1,19 +1,23 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Home, Plus, Search, Users, RefreshCw } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { getCachedData, setCachedClients, setCachedDropdowns, notifyCacheUpdate } from "@/lib/cache-manager";
 import { supabase } from "@/integrations/supabase/client";
+import { DateConverterDrawer } from "@/components/dashboard/DateConverterDrawer";
 
 // Unique whoosh/teleport sound for sync
 const SYNC_START_URL = "https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3"; // Teleport whoosh
 const SYNC_COMPLETE_URL = "https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3"; // Success chime
 
+// Long press duration in ms
+const LONG_PRESS_DURATION = 500;
+
 interface NavItem {
   icon?: typeof Home;
   label?: string;
   path?: string;
-  type?: "sync";
+  type?: "sync" | "search";
 }
 
 const navItems: NavItem[] = [
@@ -21,16 +25,51 @@ const navItems: NavItem[] = [
   { icon: Users, label: "Fresh Clients", path: "/fresh-clients" },
   { type: "sync" },
   { icon: Plus, label: "Add Client", path: "/quick-add" },
-  { icon: Search, label: "Search", path: "/search" },
+  { type: "search", icon: Search, label: "Search", path: "/search" },
 ];
 
 export function BottomNav() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isSyncing, setIsSyncing] = useState(false);
   const [showOverlay, setShowOverlay] = useState(false);
   const [syncComplete, setSyncComplete] = useState(false);
+  const [showDateConverter, setShowDateConverter] = useState(false);
   const syncAudioRef = useRef<HTMLAudioElement | null>(null);
   const completeAudioRef = useRef<HTMLAudioElement | null>(null);
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isLongPressRef = useRef(false);
+
+  // Long press handlers for Search button
+  const handleSearchTouchStart = useCallback(() => {
+    isLongPressRef.current = false;
+    longPressTimerRef.current = setTimeout(() => {
+      isLongPressRef.current = true;
+      // Vibrate for haptic feedback if available
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+      setShowDateConverter(true);
+    }, LONG_PRESS_DURATION);
+  }, []);
+
+  const handleSearchTouchEnd = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    // If it wasn't a long press, navigate to search
+    if (!isLongPressRef.current) {
+      navigate("/search");
+    }
+  }, [navigate]);
+
+  const handleSearchTouchCancel = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
 
   // Handle sync
   const handleSync = async () => {
@@ -259,6 +298,47 @@ export function BottomNav() {
               );
             }
 
+            // Special handling for Search button with long-press
+            if (item.type === "search") {
+              const isActive = location.pathname === item.path;
+              const Icon = item.icon!;
+              
+              return (
+                <button
+                  key="search"
+                  onTouchStart={handleSearchTouchStart}
+                  onTouchEnd={handleSearchTouchEnd}
+                  onTouchCancel={handleSearchTouchCancel}
+                  onMouseDown={handleSearchTouchStart}
+                  onMouseUp={handleSearchTouchEnd}
+                  onMouseLeave={handleSearchTouchCancel}
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-xl transition-all press-effect",
+                    isActive
+                      ? "text-primary"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "p-2 rounded-xl transition-all relative",
+                      isActive && "gradient-primary"
+                    )}
+                  >
+                    <Icon
+                      className={cn(
+                        "w-5 h-5 transition-colors",
+                        isActive && "text-white"
+                      )}
+                    />
+                    {/* Small indicator for long-press feature */}
+                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+                  </div>
+                  <span className="text-xs font-medium">{item.label}</span>
+                </button>
+              );
+            }
+
             const isActive = location.pathname === item.path;
             const Icon = item.icon!;
 
@@ -337,6 +417,12 @@ export function BottomNav() {
           animation: flash 0.5s ease-out forwards;
         }
       `}</style>
+
+      {/* Date Converter Drawer - opens on Search long-press */}
+      <DateConverterDrawer 
+        isOpen={showDateConverter} 
+        onClose={() => setShowDateConverter(false)} 
+      />
     </>
   );
 }
