@@ -216,3 +216,141 @@
 .PhoneInputInput {
   @apply flex-1 px-3 py-2 rounded-lg border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring;
 }
+
+/* Jackpot Popup Animations */
+@keyframes jackpot-entrance {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) rotateX(20deg);
+  }
+  50% {
+    transform: scale(1.05) rotateX(-5deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotateX(0);
+  }
+}
+
+@keyframes jackpot-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.5), 0 0 40px rgba(255, 215, 0, 0.3), 0 0 60px rgba(255, 215, 0, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(255, 107, 107, 0.6), 0 0 60px rgba(255, 107, 107, 0.4), 0 0 90px rgba(255, 107, 107, 0.2);
+  }
+}
+
+@keyframes jackpot-sparkle {
+  0%, 100% {
+    opacity: 0;
+    transform: scale(0) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1) rotate(180deg);
+  }
+}
+
+@keyframes jackpot-rays {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes jackpot-marquee {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+@keyframes jackpot-card-pulse {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(255, 215, 0, 0.6);
+  }
+}
+
+@keyframes jackpot-confetti {
+  0% {
+    transform: translateY(-100vh) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+@keyframes jackpot-avatar-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.4));
+  }
+  50% {
+    filter: drop-shadow(0 0 16px rgba(255, 215, 0, 0.8));
+  }
+}
+
+.animate-jackpot-entrance {
+  animation: jackpot-entrance 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.jackpot-border-glow {
+  animation: jackpot-glow 2s ease-in-out infinite;
+  background: linear-gradient(135deg, #FFD700, #FF6B6B, #A855F7, #4ECDC4, #FFD700);
+  background-size: 400% 400%;
+}
+
+.jackpot-sparkle {
+  animation: jackpot-sparkle 2s ease-in-out infinite;
+}
+
+.jackpot-rays {
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgba(255, 215, 0, 0.1) 10deg,
+    transparent 20deg,
+    transparent 30deg,
+    rgba(255, 107, 107, 0.1) 40deg,
+    transparent 50deg
+  );
+  animation: jackpot-rays 10s linear infinite;
+}
+
+.jackpot-marquee {
+  background: linear-gradient(
+    90deg,
+    #FFD700 0%,
+    #FF6B6B 25%,
+    #A855F7 50%,
+    #4ECDC4 75%,
+    #FFD700 100%
+  );
+  background-size: 200% 100%;
+  animation: jackpot-marquee 2s linear infinite;
+}
+
+.jackpot-card {
+  animation: jackpot-card-pulse 2s ease-in-out infinite;
+}
+
+.jackpot-confetti {
+  animation: jackpot-confetti 1.5s ease-out forwards;
+}
+
+.jackpot-avatar {
+  animation: jackpot-avatar-glow 2s ease-in-out infinite;
+}
+
+.jackpot-text-glow {
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5), 0 0 20px rgba(255, 215, 0, 0.3);
+}
