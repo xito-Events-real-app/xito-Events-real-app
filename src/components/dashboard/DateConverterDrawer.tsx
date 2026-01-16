@@ -10,10 +10,10 @@ import {
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Mic, MicOff, Keyboard, X, Volume2, VolumeX } from 'lucide-react';
+import { Mic, MicOff, Keyboard, Volume2, VolumeX, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useVoiceDateConverter } from '@/hooks/useVoiceDateConverter';
-import { parseDateFromInput, numberToNepali, getNepaliMonthName, getEnglishMonthName } from '@/lib/date-parser';
+import { parseDateFromInput, numberToNepali, getNepaliMonthName } from '@/lib/date-parser';
 import { adToBS, bsToAD, getCurrentBSDate, nepaliMonthsEnglish } from '@/lib/nepali-date';
 
 // Om meditation sound (free audio)
@@ -37,8 +37,13 @@ export function DateConverterDrawer({ isOpen, onClose }: DateConverterDrawerProp
   const [textInput, setTextInput] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
   const [result, setResult] = useState<ConversionResult | null>(null);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(() => {
+    // Remember mute preference
+    return localStorage.getItem('dateConverterMuted') === 'true';
+  });
   const [isProcessing, setIsProcessing] = useState(false);
+  const [audioReady, setAudioReady] = useState(false);
+  const [hasAutoStarted, setHasAutoStarted] = useState(false);
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -53,51 +58,16 @@ export function DateConverterDrawer({ isOpen, onClose }: DateConverterDrawerProp
     clearTranscript,
   } = useVoiceDateConverter();
 
-  // Initialize and play Om sound
-  useEffect(() => {
-    if (isOpen && !isMuted) {
-      audioRef.current = new Audio(OM_AUDIO_URL);
-      audioRef.current.loop = true;
-      audioRef.current.volume = 0.15;
-      audioRef.current.play().catch(() => {});
-    }
-    
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-    };
-  }, [isOpen, isMuted]);
-
-  // Auto-start listening when drawer opens
-  useEffect(() => {
-    if (isOpen && voiceSupported && !isListening && !result) {
-      const timer = setTimeout(() => {
-        clearTranscript();
-        startListening((text) => {
-          processInput(text);
-        });
-      }, 400);
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen, voiceSupported]);
-
-  // Process voice transcript when received
-  useEffect(() => {
-    if (transcript && !isListening) {
-      processInput(transcript);
-    }
-  }, [transcript, isListening]);
-
-  // Convert and get result
+  // Convert and get result - defined before useEffects
   const processInput = useCallback((input: string) => {
     if (!input.trim()) return;
     
+    console.log('Processing input:', input);
     setIsProcessing(true);
     
     // Parse the input (instant - no network)
     const parsed = parseDateFromInput(input);
+    console.log('Parsed result:', parsed);
     
     let nepaliDate: { year: number; month: number; day: number };
     let englishDate: Date;
@@ -152,6 +122,8 @@ export function DateConverterDrawer({ isOpen, onClose }: DateConverterDrawerProp
       day: 'numeric',
     });
     
+    console.log('Setting result:', { nepaliFormatted, englishFormatted });
+    
     setResult({
       nepaliDate,
       englishDate,
@@ -164,11 +136,70 @@ export function DateConverterDrawer({ isOpen, onClose }: DateConverterDrawerProp
     setIsProcessing(false);
   }, []);
 
+  // Initialize audio on first user interaction
+  useEffect(() => {
+    if (isOpen && !audioRef.current) {
+      audioRef.current = new Audio(OM_AUDIO_URL);
+      audioRef.current.loop = true;
+      audioRef.current.volume = 0.15;
+      audioRef.current.addEventListener('canplaythrough', () => {
+        setAudioReady(true);
+      });
+      audioRef.current.load();
+    }
+  }, [isOpen]);
+
+  // Play/pause audio based on mute state
+  useEffect(() => {
+    if (isOpen && audioRef.current && audioReady && !isMuted) {
+      audioRef.current.play().catch((e) => {
+        console.log('Audio autoplay blocked:', e);
+      });
+    } else if (audioRef.current) {
+      audioRef.current.pause();
+    }
+    
+    return () => {
+      if (audioRef.current && !isOpen) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+    };
+  }, [isOpen, isMuted, audioReady]);
+
+  // Auto-start voice listening when drawer opens
+  useEffect(() => {
+    if (isOpen && voiceSupported && !hasAutoStarted && !result) {
+      setHasAutoStarted(true);
+      const timer = setTimeout(() => {
+        console.log('Auto-starting voice recognition...');
+        clearTranscript();
+        startListening();
+      }, 600);
+      return () => clearTimeout(timer);
+    }
+    
+    // Reset auto-start flag when drawer closes
+    if (!isOpen) {
+      setHasAutoStarted(false);
+    }
+  }, [isOpen, voiceSupported, hasAutoStarted, result, clearTranscript, startListening]);
+
+  // Process voice transcript when received
+  useEffect(() => {
+    if (transcript && transcript.trim()) {
+      console.log('Transcript received:', transcript);
+      processInput(transcript);
+    }
+  }, [transcript, processInput]);
+
   // Handle text input submit
   const handleTextSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('Text submit:', textInput);
     if (textInput.trim()) {
       processInput(textInput);
+      setTextInput(''); // Clear after processing
     }
   };
 
@@ -179,20 +210,21 @@ export function DateConverterDrawer({ isOpen, onClose }: DateConverterDrawerProp
     } else {
       clearTranscript();
       setResult(null);
-      startListening((text) => {
-        processInput(text);
-      });
+      startListening();
     }
   };
 
-  // Toggle mute
+  // Toggle mute and save preference
   const handleMuteToggle = () => {
-    setIsMuted(!isMuted);
+    const newMuted = !isMuted;
+    setIsMuted(newMuted);
+    localStorage.setItem('dateConverterMuted', String(newMuted));
+    
     if (audioRef.current) {
-      if (isMuted) {
-        audioRef.current.play().catch(() => {});
-      } else {
+      if (newMuted) {
         audioRef.current.pause();
+      } else {
+        audioRef.current.play().catch(() => {});
       }
     }
   };
@@ -203,9 +235,20 @@ export function DateConverterDrawer({ isOpen, onClose }: DateConverterDrawerProp
       setTextInput('');
       setResult(null);
       setShowTextInput(false);
+      setHasAutoStarted(false);
       clearTranscript();
+      if (isListening) {
+        stopListening();
+      }
       onClose();
     }
+  };
+
+  // Retry voice recognition
+  const handleRetryVoice = () => {
+    clearTranscript();
+    setResult(null);
+    startListening();
   };
 
   return (
@@ -265,9 +308,18 @@ export function DateConverterDrawer({ isOpen, onClose }: DateConverterDrawerProp
               {isListening ? "Listening..." : voiceSupported ? "Tap to speak" : "Voice not supported"}
             </p>
             
-            {/* Voice error */}
+            {/* Voice error with retry */}
             {voiceError && (
-              <p className="text-red-400 text-xs mt-2">{voiceError}</p>
+              <div className="flex flex-col items-center gap-2 mt-2">
+                <p className="text-red-400 text-xs">{voiceError}</p>
+                <button
+                  onClick={handleRetryVoice}
+                  className="flex items-center gap-1 px-3 py-1 text-xs bg-purple-700 hover:bg-purple-600 text-white rounded-full transition-colors"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  Try Again
+                </button>
+              </div>
             )}
           </div>
 
