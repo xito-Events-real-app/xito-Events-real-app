@@ -7,7 +7,7 @@ import { EventSelector } from "@/components/form/EventSelector";
 import { getCountryCodeFromName } from "@/components/form/CountrySelector";
 import { valleyCities, nepalCitiesOutsideValley, clientLocationOptions } from "@/lib/form-data";
 import { NepaliDateObject, bsToAD, adToBS, formatBSDate, isUnknownDay, getDayForStorage } from "@/lib/nepali-date";
-import { useDropdownData } from "@/hooks/useDropdownData";
+import { useCachedData } from "@/hooks/useCachedData";
 import { addClient, addOldClient, isSheetsConfigured } from "@/lib/sheets-api";
 import { toast } from "@/hooks/use-toast";
 import { Save, Loader2, AlertTriangle } from "lucide-react";
@@ -16,7 +16,7 @@ import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function QuickAdd() {
-  const { data: dropdowns, isLoading: dropdownsLoading, isUsingMock } = useDropdownData();
+  const { dropdowns, isLoading: dropdownsLoading, isFromCache } = useCachedData();
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Form state
