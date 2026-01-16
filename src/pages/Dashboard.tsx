@@ -15,7 +15,8 @@ import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
 import { useCachedData } from "@/hooks/useCachedData";
 import { cn } from "@/lib/utils";
 import { HandlerJackpotPopup } from "@/components/dashboard/HandlerJackpotPopup";
-
+import { getDeviceHandler, saveDeviceHandler } from "@/lib/handler-memory";
+import { toast } from "sonner";
 // Get icon and color for each status category
 const getStatusConfig = (status: string) => {
   const s = status.toUpperCase();
@@ -59,9 +60,25 @@ export default function Dashboard() {
     error 
   } = useCachedData();
   
+  const navigate = useNavigate();
+  
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const navigate = useNavigate();
+  const hasCheckedDevice = useRef(false);
+
+  // Check for saved device handler on mount - auto-redirect
+  useEffect(() => {
+    if (hasCheckedDevice.current) return;
+    hasCheckedDevice.current = true;
+    
+    const savedHandler = getDeviceHandler();
+    if (savedHandler) {
+      toast.success(`Welcome back, ${savedHandler.name}!`, { duration: 1500 });
+      setTimeout(() => {
+        navigate(`/handler/${encodeURIComponent(savedHandler.name)}`);
+      }, 300);
+    }
+  }, [navigate]);
 
   // Pull to refresh state
   const [pullDistance, setPullDistance] = useState(0);
@@ -257,8 +274,14 @@ export default function Dashboard() {
     }
   }, [pullDistance, showJackpot]);
 
-  const handleJackpotSelect = (handler: string) => {
+  const handleJackpotSelect = (handler: string, shouldRemember: boolean) => {
     setShowJackpot(false);
+    
+    if (shouldRemember) {
+      saveDeviceHandler(handler);
+      toast.success(`Device registered to ${handler}!`, { duration: 2000 });
+    }
+    
     navigate(`/handler/${encodeURIComponent(handler)}`);
   };
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { User, Sparkles, Trophy, Star, Zap } from "lucide-react";
+import { User, Sparkles, Trophy, Star, Zap, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 interface Handler {
   name: string;
@@ -11,7 +12,7 @@ interface Handler {
 interface HandlerJackpotPopupProps {
   isOpen: boolean;
   handlers: Handler[];
-  onSelectHandler: (handler: string) => void;
+  onSelectHandler: (handler: string, shouldRemember: boolean) => void;
   onClose: () => void;
   casinoAudioRef: React.RefObject<HTMLAudioElement | null>;
 }
@@ -36,6 +37,8 @@ export function HandlerJackpotPopup({
   const [showWinEffect, setShowWinEffect] = useState(false);
   const [spinIndex, setSpinIndex] = useState(0);
   const [isSpinning, setIsSpinning] = useState(true);
+  const [showRememberPrompt, setShowRememberPrompt] = useState(false);
+  const [pendingHandler, setPendingHandler] = useState<string | null>(null);
   const spinIntervalRef = useRef<number | null>(null);
   const spinCountRef = useRef(0);
 
@@ -135,10 +138,20 @@ export function HandlerJackpotPopup({
       winAudioRef.current.play().catch(() => {});
     }
 
-    // INSTANT redirect - only 400ms delay for visual feedback
+    // Show remember prompt after brief win effect
     setTimeout(() => {
-      onSelectHandler(handler);
-    }, 400);
+      setShowWinEffect(false);
+      setPendingHandler(handler);
+      setShowRememberPrompt(true);
+    }, 600);
+  };
+
+  const handleRememberChoice = (shouldRemember: boolean) => {
+    if (pendingHandler) {
+      onSelectHandler(pendingHandler, shouldRemember);
+    }
+    setShowRememberPrompt(false);
+    setPendingHandler(null);
   };
 
   const handleSkip = () => {
@@ -319,6 +332,50 @@ export function HandlerJackpotPopup({
               }}
             />
           ))}
+        </div>
+      )}
+
+      {/* Remember Me Prompt */}
+      {showRememberPrompt && pendingHandler && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+          <div className="relative z-10 w-[85%] max-w-xs bg-gradient-to-b from-gray-900 to-black rounded-2xl p-5 border-2 border-yellow-500/50 shadow-2xl animate-jackpot-entrance">
+            {/* Handler Display */}
+            <div className="flex flex-col items-center mb-4">
+              <div className={cn(
+                "w-16 h-16 rounded-full flex items-center justify-center text-white font-black text-xl bg-gradient-to-br mb-2",
+                handlers.find(h => h.name === pendingHandler)?.colorClass || "from-violet-500 to-purple-600"
+              )} style={{ boxShadow: '0 0 25px rgba(255,215,0,0.5)' }}>
+                {getInitials(pendingHandler)}
+              </div>
+              <h3 className="text-xl font-black text-yellow-400">{pendingHandler}</h3>
+            </div>
+
+            {/* Question */}
+            <div className="text-center mb-5">
+              <p className="text-sm text-gray-300 mb-1">Is this <span className="font-bold text-white">YOUR</span> device?</p>
+              <p className="text-[10px] text-gray-500">App will auto-open your tasks next time</p>
+            </div>
+
+            {/* Buttons */}
+            <div className="flex gap-3">
+              <Button
+                onClick={() => handleRememberChoice(false)}
+                variant="outline"
+                className="flex-1 bg-gray-800 border-gray-600 text-gray-300 hover:bg-gray-700"
+              >
+                <X className="w-4 h-4 mr-1.5" />
+                No, Skip
+              </Button>
+              <Button
+                onClick={() => handleRememberChoice(true)}
+                className="flex-1 bg-gradient-to-r from-yellow-500 to-amber-500 text-black font-bold hover:from-yellow-400 hover:to-amber-400"
+              >
+                <Check className="w-4 h-4 mr-1.5" />
+                Yes, Remember
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
