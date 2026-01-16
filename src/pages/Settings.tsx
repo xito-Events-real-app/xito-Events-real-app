@@ -1,16 +1,36 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { AppLayout, PageHeader } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { testConnection, ConnectionTestResult } from "@/lib/sheets-api";
 import { toast } from "@/hooks/use-toast";
-import { Settings as SettingsIcon, Link, CheckCircle, AlertCircle, Loader2, RefreshCw, Copy, FileSpreadsheet } from "lucide-react";
+import { Settings as SettingsIcon, Link, CheckCircle, AlertCircle, Loader2, RefreshCw, Copy, FileSpreadsheet, User, Trash2, UserCog } from "lucide-react";
+import { getDeviceHandler, clearDeviceHandler, DeviceHandler } from "@/lib/handler-memory";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export default function Settings() {
+  const navigate = useNavigate();
   const [connectionStatus, setConnectionStatus] = useState<'loading' | 'connected' | 'error'>('loading');
   const [connectionData, setConnectionData] = useState<ConnectionTestResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isTesting, setIsTesting] = useState(false);
+  const [deviceHandler, setDeviceHandler] = useState<DeviceHandler | null>(null);
+
+  // Load device handler on mount
+  useEffect(() => {
+    setDeviceHandler(getDeviceHandler());
+  }, []);
 
   const runConnectionTest = async () => {
     setIsTesting(true);
@@ -46,6 +66,25 @@ export default function Settings() {
     });
   };
 
+  const handleClearDevice = () => {
+    clearDeviceHandler();
+    setDeviceHandler(null);
+    toast({
+      title: "Device cleared",
+      description: "You'll need to select your handler again",
+    });
+  };
+
+  const handleChangeHandler = () => {
+    clearDeviceHandler();
+    setDeviceHandler(null);
+    navigate('/');
+    toast({
+      title: "Handler cleared",
+      description: "Pull down on Dashboard to select new handler",
+    });
+  };
+
   const isSheetNotFound = errorMessage.includes('SHEET_NOT_FOUND');
 
   return (
@@ -57,6 +96,77 @@ export default function Settings() {
       />
       
       <div className="px-4 py-6 max-w-lg mx-auto space-y-6 animate-fade-in">
+        {/* Device Handler Section */}
+        <Card className={deviceHandler ? "border-primary/30 bg-primary/5" : ""}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <UserCog className="w-5 h-5" />
+              Device Handler
+            </CardTitle>
+            <CardDescription>
+              {deviceHandler 
+                ? "This device auto-opens your tasks" 
+                : "No handler registered for this device"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {deviceHandler ? (
+              <>
+                <div className="bg-background rounded-lg p-4 flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white font-bold">
+                    {deviceHandler.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-lg">{deviceHandler.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Registered {new Date(deviceHandler.setAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    className="flex-1"
+                    onClick={handleChangeHandler}
+                  >
+                    <User className="w-4 h-4 mr-2" />
+                    Change Handler
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="icon">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Clear Device Registration?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will remove {deviceHandler.name} from this device. 
+                          You'll need to select a handler again on next visit.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleClearDevice}>Clear</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-sm text-muted-foreground mb-3">
+                  Go to Dashboard and pull down to trigger handler selection
+                </p>
+                <Button variant="outline" onClick={() => navigate('/')}>
+                  Go to Dashboard
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Connection Status */}
         {connectionStatus === 'loading' && (
           <Card className="border-muted">

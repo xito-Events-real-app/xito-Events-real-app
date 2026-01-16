@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { AppLayout, PageHeader } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, AlertTriangle, RefreshCw, ChevronLeft, ChevronRight, ArrowLeft } from "lucide-react";
+import { Loader2, AlertTriangle, RefreshCw, ChevronLeft, ChevronRight, ArrowLeft, LayoutDashboard } from "lucide-react";
 
 import { ClientData, getCurrentStatus } from "@/lib/sheets-api";
 import { FreshClientCard } from "@/components/dashboard/FreshClientCard";
@@ -12,6 +12,7 @@ import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
 import { useCachedData } from "@/hooks/useCachedData";
 import { updateClientInCache } from "@/lib/cache-manager";
 import { cn } from "@/lib/utils";
+import { getDeviceHandler } from "@/lib/handler-memory";
 
 export default function HandlerClients() {
   const { handlerName } = useParams<{ handlerName: string }>();
@@ -208,20 +209,34 @@ export default function HandlerClients() {
         isOnline={isOnline}
       />
 
-      {/* Header with Back Button */}
-      <div className="flex items-center gap-3 px-4 pt-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => navigate('/')}
-          className="shrink-0"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </Button>
-        <PageHeader 
-          title={`${decodedHandlerName}'s Clients`} 
-          subtitle={`${localClients.length} total clients`}
-        />
+      {/* Header with Back Button and Dashboard Link */}
+      <div className="flex items-center justify-between px-4 pt-4">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate('/')}
+            className="shrink-0"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <PageHeader 
+            title={`${decodedHandlerName}'s Clients`} 
+            subtitle={`${localClients.length} total clients`}
+          />
+        </div>
+        {/* Dashboard button - only show if this is the registered device handler */}
+        {getDeviceHandler()?.name === decodedHandlerName && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('/')}
+            className="shrink-0"
+          >
+            <LayoutDashboard className="w-4 h-4 mr-1.5" />
+            Dashboard
+          </Button>
+        )}
       </div>
       
       <div className="flex flex-col h-[calc(100vh-140px)]">
