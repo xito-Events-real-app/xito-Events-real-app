@@ -8,14 +8,14 @@ import {
   Scale, Clock, CheckCircle, XCircle, CalendarX,
   Phone, ChevronRight, RefreshCw
 } from "lucide-react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { getCurrentStatus } from "@/lib/sheets-api";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
 import { useCachedData } from "@/hooks/useCachedData";
 import { cn } from "@/lib/utils";
 import { HandlerJackpotPopup } from "@/components/dashboard/HandlerJackpotPopup";
-import { getDeviceHandler, saveDeviceHandler } from "@/lib/handler-memory";
+import { getDeviceHandler, saveDeviceHandler, isDeviceHandlerValid } from "@/lib/handler-memory";
 import { toast } from "sonner";
 // Get icon and color for each status category
 const getStatusConfig = (status: string) => {
@@ -61,38 +61,13 @@ export default function Dashboard() {
   } = useCachedData();
   
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const hasCheckedDevice = useRef(false);
+  const [soloHandler, setSoloHandler] = useState<{ name: string; colorClass: string } | null>(null);
 
-  // Check for saved device handler on mount - auto-redirect ONLY on fresh app load
-  // Skip redirect if user explicitly navigated here (via ?stay=true or from handler page)
-  useEffect(() => {
-    if (hasCheckedDevice.current) return;
-    hasCheckedDevice.current = true;
-    
-    // Don't redirect if user explicitly came to dashboard
-    const stayOnDashboard = searchParams.get('stay') === 'true';
-    const hasVisitedThisSession = sessionStorage.getItem('wtn_session_started');
-    
-    if (stayOnDashboard || hasVisitedThisSession) {
-      // Mark session as started but don't redirect
-      sessionStorage.setItem('wtn_session_started', 'true');
-      return;
-    }
-    
-    // First visit this session - check for saved handler
-    sessionStorage.setItem('wtn_session_started', 'true');
-    const savedHandler = getDeviceHandler();
-    if (savedHandler) {
-      toast.success(`Welcome back, ${savedHandler.name}!`, { duration: 1500 });
-      setTimeout(() => {
-        navigate(`/handler/${encodeURIComponent(savedHandler.name)}`);
-      }, 300);
-    }
-  }, [navigate, searchParams]);
+  // NO auto-redirect on mount - app always opens to Dashboard
+  // Handler selection happens on pull-to-refresh
 
   // Pull to refresh state
   const [pullDistance, setPullDistance] = useState(0);
@@ -259,11 +234,24 @@ export default function Dashboard() {
       
       // Show jackpot popup when threshold reached
       if (distance >= pullThreshold && !showJackpot) {
+        // Check if device has a valid handler (within 24 hours)
+        const savedHandler = getDeviceHandler();
+        const isValid = isDeviceHandlerValid();
+        
+        if (savedHandler && isValid) {
+          // SOLO MODE - Show only their handler, auto-redirect
+          const handlerIdx = handlers.findIndex(h => h === savedHandler.name);
+          setSoloHandler({
+            name: savedHandler.name,
+            colorClass: handlerColors[handlerIdx >= 0 ? handlerIdx % handlerColors.length : 0],
+          });
+        }
+        
         setShowJackpot(true);
         setPullDistance(0); // Reset pull distance when popup opens
       }
     }
-  }, [isPulling, showJackpot]);
+  }, [isPulling, showJackpot, handlers]);
 
   const handleTouchEnd = useCallback(() => {
     setIsPulling(false);
@@ -290,6 +278,7 @@ export default function Dashboard() {
 
   const handleJackpotSelect = (handler: string, shouldRemember: boolean) => {
     setShowJackpot(false);
+    setSoloHandler(null);
     
     if (shouldRemember) {
       saveDeviceHandler(handler);
@@ -301,6 +290,7 @@ export default function Dashboard() {
 
   const handleJackpotClose = () => {
     setShowJackpot(false);
+    setSoloHandler(null);
   };
 
   // Prepare handlers data for jackpot popup
@@ -328,6 +318,7 @@ export default function Dashboard() {
         onSelectHandler={handleJackpotSelect}
         onClose={handleJackpotClose}
         casinoAudioRef={casinoAudioRef}
+        soloHandler={soloHandler}
       />
 
       {/* Main Content - Moves down when pulled */}

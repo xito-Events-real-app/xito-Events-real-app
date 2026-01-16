@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { testConnection, ConnectionTestResult } from "@/lib/sheets-api";
 import { toast } from "@/hooks/use-toast";
-import { Settings as SettingsIcon, Link, CheckCircle, AlertCircle, Loader2, RefreshCw, Copy, FileSpreadsheet, User, Trash2, UserCog } from "lucide-react";
-import { getDeviceHandler, clearDeviceHandler, DeviceHandler } from "@/lib/handler-memory";
+import { Settings as SettingsIcon, Link, CheckCircle, AlertCircle, Loader2, RefreshCw, Copy, FileSpreadsheet, User, Trash2, UserCog, Clock } from "lucide-react";
+import { getDeviceHandler, clearDeviceHandler, DeviceHandler, getHandlerExpiryHours } from "@/lib/handler-memory";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,10 +26,12 @@ export default function Settings() {
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isTesting, setIsTesting] = useState(false);
   const [deviceHandler, setDeviceHandler] = useState<DeviceHandler | null>(null);
+  const [expiryHours, setExpiryHours] = useState<number | null>(null);
 
   // Load device handler on mount
   useEffect(() => {
     setDeviceHandler(getDeviceHandler());
+    setExpiryHours(getHandlerExpiryHours());
   }, []);
 
   const runConnectionTest = async () => {
@@ -121,6 +123,12 @@ export default function Settings() {
                     <p className="text-xs text-muted-foreground">
                       Registered {new Date(deviceHandler.setAt).toLocaleDateString()}
                     </p>
+                    {expiryHours !== null && expiryHours > 0 && (
+                      <div className="flex items-center gap-1 mt-1 text-xs text-amber-500">
+                        <Clock className="w-3 h-3" />
+                        <span>Resets in ~{expiryHours} hour{expiryHours !== 1 ? 's' : ''}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-2">

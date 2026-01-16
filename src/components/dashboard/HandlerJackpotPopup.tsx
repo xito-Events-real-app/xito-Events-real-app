@@ -15,6 +15,7 @@ interface HandlerJackpotPopupProps {
   onSelectHandler: (handler: string, shouldRemember: boolean) => void;
   onClose: () => void;
   casinoAudioRef: React.RefObject<HTMLAudioElement | null>;
+  soloHandler?: { name: string; colorClass: string } | null; // For device-registered handler
 }
 
 // Audio URLs
@@ -29,6 +30,7 @@ export function HandlerJackpotPopup({
   onSelectHandler,
   onClose,
   casinoAudioRef,
+  soloHandler,
 }: HandlerJackpotPopupProps) {
   const winAudioRef = useRef<HTMLAudioElement | null>(null);
   const tickAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -54,9 +56,44 @@ export function HandlerJackpotPopup({
     }
   }, [casinoAudioRef]);
 
-  // Ultra fast slot spin effect
+  // SOLO MODE: Auto-redirect for registered device handler
   useEffect(() => {
-    if (!isOpen || handlers.length === 0) return;
+    if (!isOpen || !soloHandler) return;
+    
+    // Stop casino music, play win sound
+    if (casinoAudioRef.current) {
+      casinoAudioRef.current.pause();
+      casinoAudioRef.current.currentTime = 0;
+    }
+    
+    // Prepare win sound
+    if (!winAudioRef.current) {
+      winAudioRef.current = new Audio(AUDIO_URLS.win);
+    }
+    
+    // Brief celebration then auto-redirect
+    setShowWinEffect(true);
+    setSelectedHandler(soloHandler.name);
+    setIsSpinning(false);
+    
+    // Play win sound
+    if (winAudioRef.current) {
+      winAudioRef.current.currentTime = 0;
+      winAudioRef.current.volume = 0.7;
+      winAudioRef.current.play().catch(() => {});
+    }
+    
+    // Auto-redirect after brief celebration (800ms)
+    const timer = setTimeout(() => {
+      onSelectHandler(soloHandler.name, false); // Already remembered, no need to save again
+    }, 800);
+    
+    return () => clearTimeout(timer);
+  }, [isOpen, soloHandler, casinoAudioRef, onSelectHandler]);
+
+  // NORMAL MODE: Ultra fast slot spin effect (only when no soloHandler)
+  useEffect(() => {
+    if (!isOpen || handlers.length === 0 || soloHandler) return;
 
     setIsSpinning(true);
     setSelectedHandler(null);
@@ -113,7 +150,7 @@ export function HandlerJackpotPopup({
         clearTimeout(spinIntervalRef.current);
       }
     };
-  }, [isOpen, handlers, casinoAudioRef]);
+  }, [isOpen, handlers, casinoAudioRef, soloHandler]);
 
   // Cleanup
   useEffect(() => {
@@ -166,6 +203,91 @@ export function HandlerJackpotPopup({
     name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
 
   const currentHandler = handlers[spinIndex];
+
+  // SOLO MODE: Show simplified welcome back view
+  if (soloHandler) {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center">
+        {/* Backdrop */}
+        <div className="absolute inset-0 bg-black/90 backdrop-blur-lg" />
+
+        {/* Background effects */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute inset-0 jackpot-rays opacity-40" />
+          {[...Array(30)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute rounded-full jackpot-sparkle"
+              style={{
+                width: `${6 + Math.random() * 8}px`,
+                height: `${6 + Math.random() * 8}px`,
+                background: ['#FFD700', '#FF6B6B', '#4ECDC4', '#A855F7'][i % 4],
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 2}s`,
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Solo handler display */}
+        <div className="relative z-10 w-[85%] max-w-xs animate-jackpot-entrance text-center">
+          <div className="mb-4">
+            <h2 className="text-lg font-bold text-yellow-400 mb-2">🎰 WELCOME BACK 🎰</h2>
+          </div>
+          
+          {/* Handler avatar - large */}
+          <div className={cn(
+            "w-24 h-24 rounded-full flex items-center justify-center text-white font-black text-3xl bg-gradient-to-br mx-auto mb-4",
+            soloHandler.colorClass
+          )} style={{ boxShadow: '0 0 40px rgba(255,215,0,0.7)' }}>
+            {getInitials(soloHandler.name)}
+          </div>
+          
+          <h3 className="text-2xl font-black text-white mb-2">{soloHandler.name}</h3>
+          <p className="text-sm text-yellow-400 animate-pulse">Opening your tasks...</p>
+          
+          {/* Loading bar */}
+          <div className="mt-4 w-48 h-2 bg-gray-800 rounded-full mx-auto overflow-hidden">
+            <div 
+              className="h-full bg-gradient-to-r from-yellow-400 to-amber-500 rounded-full"
+              style={{ 
+                width: '100%',
+                animation: 'loadingBar 0.8s ease-out forwards'
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Win overlay effect */}
+        {showWinEffect && (
+          <div className="absolute inset-0 pointer-events-none z-20">
+            <Trophy className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 text-yellow-400 animate-bounce" style={{ filter: 'drop-shadow(0 0 20px gold)' }} />
+            {[...Array(30)].map((_, i) => (
+              <div
+                key={i}
+                className="absolute rounded-full jackpot-confetti"
+                style={{
+                  left: `${Math.random() * 100}%`,
+                  width: `${6 + Math.random() * 10}px`,
+                  height: `${6 + Math.random() * 10}px`,
+                  backgroundColor: ["#FFD700", "#FF6B6B", "#4ECDC4", "#A855F7", "#F59E0B"][i % 5],
+                  animationDelay: `${Math.random() * 0.3}s`,
+                }}
+              />
+            ))}
+          </div>
+        )}
+
+        <style>{`
+          @keyframes loadingBar {
+            0% { width: 0%; }
+            100% { width: 100%; }
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
