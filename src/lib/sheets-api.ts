@@ -45,6 +45,7 @@ export interface ClientData {
   mindset?: string; // Column Z - mindset with timestamp
   ourBargainedRates?: string; // Column AA - our bargained rates
   clientBargainedRates?: string; // Column AB - client bargained rates
+  comments?: string; // Column AC - comments with timestamps
 }
 
 // Spreadsheet ID is now configured as a backend secret
@@ -201,6 +202,25 @@ export async function updateBargainingRates(
 ): Promise<{ success: boolean; ourBargainedRates: string; clientBargainedRates: string }> {
   return callSheetsFunction<{ success: boolean; ourBargainedRates: string; clientBargainedRates: string }>("updateBargainingRates", {
     data: { rowNumber, ourRates, clientRates },
+  });
+}
+
+export async function addClientComment(
+  rowNumber: number,
+  comment: string,
+  existingComments: string
+): Promise<{ success: boolean; comments: string }> {
+  // Generate timestamp on client side to ensure correct local time
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const year = now.getFullYear();
+  const hours = String(now.getHours()).padStart(2, '0');
+  const mins = String(now.getMinutes()).padStart(2, '0');
+  const clientTimestamp = `${month}/${day}/${year} ${hours}:${mins}`;
+  
+  return callSheetsFunction<{ success: boolean; comments: string }>("addClientComment", {
+    data: { rowNumber, comment, existingComments, clientTimestamp },
   });
 }
 

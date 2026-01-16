@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'addClientComment';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -200,9 +200,9 @@ async function updateClientStatus(accessToken: string, spreadsheetId: string, ro
   return { success: true, statusLog: updatedLog };
 }
 
-// Get recent clients (now including Column W for status, Column X for handler, Column Y for call log, Column Z for mindset, AA/AB for bargaining)
+// Get recent clients (now including Column W for status, Column X for handler, Column Y for call log, Column Z for mindset, AA/AB for bargaining, AC for comments)
 async function getClients(accessToken: string, spreadsheetId: string, limit = 50) {
-  const range = encodeURIComponent("'CLIENT TRACKER'!A2:AB" + (limit + 1));
+  const range = encodeURIComponent("'CLIENT TRACKER'!A2:AC" + (limit + 1));
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   const response = await fetch(url, {
@@ -248,6 +248,7 @@ async function getClients(accessToken: string, spreadsheetId: string, limit = 50
     mindset: row[25] || '', // Column Z (index 25) - Mindset with timestamp
     ourBargainedRates: row[26] || '', // Column AA (index 26) - Our bargained rates
     clientBargainedRates: row[27] || '', // Column AB (index 27) - Client bargained rates
+    comments: row[28] || '', // Column AC (index 28) - Client comments with timestamps
   }));
 }
 
@@ -639,6 +640,46 @@ async function updateClientMindset(accessToken: string, spreadsheetId: string, r
   return { success: true, mindset: mindsetWithTimestamp };
 }
 
+// Add comment to Column AC with timestamp
+async function addClientComment(
+  accessToken: string,
+  spreadsheetId: string,
+  rowNumber: number,
+  comment: string,
+  existingComments: string,
+  clientTimestamp: string
+) {
+  if (!rowNumber || rowNumber < 2) {
+    throw new Error('Valid rowNumber is required for adding comment');
+  }
+
+  // Format: "[MM/DD/YYYY HH:MM] Comment text"
+  const newCommentEntry = `[${clientTimestamp}] ${comment}`;
+  const updatedComments = existingComments 
+    ? `${existingComments}\n${newCommentEntry}` 
+    : newCommentEntry;
+
+  const range = encodeURIComponent(`'CLIENT TRACKER'!AC${rowNumber}`);
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  
+  const response = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [[updatedComments]] }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (addClientComment):', response.status, errorText);
+    throw new Error(`Failed to add comment: ${response.status}`);
+  }
+
+  return { success: true, comments: updatedComments };
+}
+
 // Update bargaining rates in Columns AA (our rates) and AB (client rates)
 async function updateBargainingRates(
   accessToken: string, 
@@ -896,6 +937,17 @@ Deno.serve(async (req) => {
           data.rowNumber as number, 
           data.ourRates as string || '',
           data.clientRates as string || ''
+        );
+        break;
+      case 'addClientComment':
+        if (!data || !data.rowNumber || !data.comment) throw new Error('rowNumber and comment are required for addClientComment');
+        result = await addClientComment(
+          accessToken, 
+          spreadsheetId, 
+          data.rowNumber as number, 
+          data.comment as string,
+          data.existingComments as string || '',
+          data.clientTimestamp as string
         );
         break;
       default:

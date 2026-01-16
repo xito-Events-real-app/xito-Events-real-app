@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { ClientData, updateClientStatus, updateClientHandler, logCallAttempt, getCurrentStatus, updateClientQuotation, updateClientMindset, updateBargainingRates } from "@/lib/sheets-api";
+import { ClientData, updateClientStatus, updateClientHandler, logCallAttempt, getCurrentStatus, updateClientQuotation, updateClientMindset, updateBargainingRates, addClientComment } from "@/lib/sheets-api";
 import { getHandlerInitials, parseEventDetails, formatLocationDisplay } from "@/lib/nepali-months";
 import { cn } from "@/lib/utils";
 import {
@@ -26,12 +26,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ChevronDown, ChevronUp, Loader2, Clock, AlertTriangle, UserCog, Phone, MessageCircle, Edit, History, Bell, ExternalLink, FileText, Brain } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Clock, AlertTriangle, UserCog, Phone, MessageCircle, Edit, History, Bell, ExternalLink, FileText, Brain, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 // Parse call log to get structured entries
 interface CallEntry {
@@ -352,6 +354,12 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
   const [currentOurBargainedRates, setCurrentOurBargainedRates] = useState(client.ourBargainedRates || '');
   const [currentClientBargainedRates, setCurrentClientBargainedRates] = useState(client.clientBargainedRates || '');
   
+  // Comment feature states
+  const [currentComments, setCurrentComments] = useState(client.comments || '');
+  const [showCommentDialog, setShowCommentDialog] = useState(false);
+  const [newComment, setNewComment] = useState('');
+  const [isAddingComment, setIsAddingComment] = useState(false);
+  
   // Use handler initials if set, otherwise fall back to who added
   const displayInitials = getHandlerInitials(currentHandler || client.whoAdded || '');
   const hasHandler = !!currentHandler;
@@ -537,6 +545,28 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
     return { name, timestamp, hoursAgo };
   }, [currentMindset]);
 
+  // Parse comments to get structured entries
+  interface CommentEntry {
+    text: string;
+    timestamp: string;
+  }
+  
+  const parsedComments = useMemo((): CommentEntry[] => {
+    if (!currentComments) return [];
+    const lines = currentComments.split('\n').filter(Boolean);
+    return lines.map(line => {
+      // Parse "[MM/DD/YYYY HH:MM] Comment text"
+      const match = line.match(/^\[([^\]]+)\]\s*(.+)$/);
+      if (match) {
+        return { timestamp: match[1], text: match[2] };
+      }
+      return { timestamp: '', text: line };
+    });
+  }, [currentComments]);
+  
+  const commentCount = parsedComments.length;
+  const lastComment = parsedComments.length > 0 ? parsedComments[parsedComments.length - 1] : null;
+
   const getMindsetColor = (mindset: string): string => {
     const m = mindset.toUpperCase();
     if (m.includes('NOT SEEN')) return 'bg-gray-500 text-white';
@@ -624,6 +654,32 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
       toast.error("Failed to save bargaining details");
     } finally {
       setIsSavingBargain(false);
+    }
+  };
+  
+  // Handle adding a new comment
+  const handleAddComment = async () => {
+    if (!client.rowNumber) {
+      toast.error("Cannot add comment: missing row number");
+      return;
+    }
+    
+    if (!newComment.trim()) {
+      toast.error("Please enter a comment");
+      return;
+    }
+
+    setIsAddingComment(true);
+    try {
+      const result = await addClientComment(client.rowNumber, newComment.trim(), currentComments);
+      setCurrentComments(result.comments);
+      setNewComment('');
+      toast.success("Comment added");
+    } catch (err) {
+      console.error("Failed to add comment:", err);
+      toast.error("Failed to add comment");
+    } finally {
+      setIsAddingComment(false);
     }
   };
   
@@ -1442,6 +1498,37 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
         </div>
       )}
 
+      {/* Comment Section - Universal for all cards */}
+      <div className="flex items-center gap-2 pt-1 border-t border-border/20">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowCommentDialog(true);
+          }}
+        >
+          <MessageSquare className="w-3.5 h-3.5" />
+          {commentCount > 0 ? (
+            <span className="font-medium">{commentCount}</span>
+          ) : (
+            <span>+</span>
+          )}
+        </Button>
+        {lastComment && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowCommentDialog(true);
+            }}
+            className="flex-1 text-left text-xs text-muted-foreground truncate hover:text-foreground transition-colors"
+          >
+            💬 {lastComment.text}
+          </button>
+        )}
+      </div>
+
       {/* Expand/Collapse Touch Area */}
       <div 
         className="flex items-center justify-center py-2 cursor-pointer border-t border-border/30 mt-1 hover:bg-muted/30 rounded-md transition-colors"
@@ -1854,6 +1941,80 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
               Save & Move to Bargaining
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Comments Dialog */}
+      <Dialog open={showCommentDialog} onOpenChange={setShowCommentDialog}>
+        <DialogContent className="max-w-md max-h-[80vh]" onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="w-5 h-5" />
+              Comments for {client.clientName}
+            </DialogTitle>
+            <DialogDescription>
+              {commentCount > 0 ? `${commentCount} comment${commentCount > 1 ? 's' : ''}` : 'No comments yet'}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {/* Comment History */}
+          <ScrollArea className="h-64 pr-4">
+            {parsedComments.length > 0 ? (
+              <div className="space-y-2">
+                {parsedComments.map((comment, idx) => (
+                  <div key={idx} className="p-2.5 bg-muted/50 rounded-lg border border-border/50">
+                    <div className="text-[10px] text-muted-foreground font-medium mb-1">
+                      📅 {comment.timestamp}
+                    </div>
+                    <div className="text-sm text-foreground whitespace-pre-wrap">
+                      {comment.text}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                <MessageSquare className="w-8 h-8 mb-2 opacity-50" />
+                <p className="text-sm">No comments yet</p>
+              </div>
+            )}
+          </ScrollArea>
+          
+          {/* Add New Comment */}
+          <div className="space-y-3 pt-3 border-t border-border">
+            <Textarea
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              placeholder="Add a comment..."
+              className="min-h-[80px] resize-none"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <div className="flex justify-end gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  setShowCommentDialog(false);
+                  setNewComment('');
+                }}
+              >
+                Close
+              </Button>
+              <Button 
+                size="sm"
+                onClick={handleAddComment}
+                disabled={isAddingComment || !newComment.trim()}
+                className="bg-primary hover:bg-primary/90"
+              >
+                {isAddingComment ? (
+                  <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                ) : (
+                  <MessageSquare className="w-4 h-4 mr-1" />
+                )}
+                Add Comment
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
