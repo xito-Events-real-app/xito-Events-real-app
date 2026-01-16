@@ -83,6 +83,7 @@ export default function Dashboard() {
   const containerRef = useRef<HTMLDivElement>(null);
   const touchStartY = useRef(0);
   const scrollTop = useRef(0);
+  const swipeStartedFromBottom = useRef(false);
   const pullThreshold = 120;
   const swipeUpThreshold = 80;
   
@@ -219,11 +220,6 @@ export default function Dashboard() {
     swipeStartedFromBottom.current = startY > screenHeight - 100;
   }, [initAudio]);
 
-  // Track if swipe started from bottom edge of screen
-  const swipeStartedFromBottom = useRef(false);
-  const screenHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
-  const bottomEdgeThreshold = 100; // pixels from bottom edge
-
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     const currentY = e.touches[0].clientY;
     const diff = currentY - touchStartY.current;
@@ -285,7 +281,7 @@ export default function Dashboard() {
         swipeStartedFromBottom.current = false;
       }
     }
-  }, [isPulling, isSwipingUp, showJackpot, showDateConverter, handlers, screenHeight]);
+  }, [isPulling, isSwipingUp, showJackpot, showDateConverter, handlers]);
 
   const handleTouchEnd = useCallback(() => {
     setIsPulling(false);

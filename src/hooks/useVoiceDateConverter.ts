@@ -76,12 +76,12 @@ export function useVoiceDateConverter() {
     
     // Configure for quick response
     recognition.continuous = false;
-    recognition.interimResults = false; // Only final results for speed
+    recognition.interimResults = true; // Show interim results for faster feedback
     recognition.maxAlternatives = 1;
     
-    // Support both Nepali and English
-    // Note: Browser may not support all languages
-    recognition.lang = 'ne-NP'; // Primary Nepali, will also recognize English
+    // Use English for better browser compatibility
+    // The date parser will detect Nepali text from the transcript
+    recognition.lang = 'en-US';
     
     recognition.onstart = () => {
       setState(prev => ({ ...prev, isListening: true, error: null }));
