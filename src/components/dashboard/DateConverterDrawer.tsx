@@ -3,14 +3,14 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-} from '@/components/ui/drawer';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Mic, MicOff, Keyboard, Volume2, VolumeX, RefreshCw } from 'lucide-react';
+import { Mic, Keyboard, Volume2, VolumeX, RefreshCw, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useVoiceDateConverter } from '@/hooks/useVoiceDateConverter';
 import { parseDateFromInput, numberToNepali, getNepaliMonthName } from '@/lib/date-parser';
@@ -257,32 +257,40 @@ export function DateConverterDrawer({ isOpen, onClose }: DateConverterDrawerProp
   };
 
   return (
-    <Drawer open={isOpen} onOpenChange={handleOpenChange}>
-      <DrawerContent className="bg-gradient-to-b from-indigo-950 via-purple-950 to-slate-950 border-t border-purple-500/30 max-h-[85vh]">
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+      <DialogContent className="bg-gradient-to-b from-indigo-950 via-purple-950 to-slate-950 border border-purple-500/30 max-w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto p-0 rounded-2xl">
         {/* Sacred geometry background pattern */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-10">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-10 rounded-2xl">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full border border-purple-400/50" />
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full border border-indigo-400/50" />
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200px] h-[200px] rounded-full border border-violet-400/50" />
         </div>
 
+        {/* Close button */}
+        <button
+          onClick={() => handleOpenChange(false)}
+          className="absolute top-3 left-3 p-2 text-purple-300/70 hover:text-purple-200 transition-colors z-10"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
         {/* Mute button */}
         <button
           onClick={handleMuteToggle}
-          className="absolute top-4 right-4 p-2 text-purple-300/70 hover:text-purple-200 transition-colors z-10"
+          className="absolute top-3 right-3 p-2 text-purple-300/70 hover:text-purple-200 transition-colors z-10"
         >
           {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
         </button>
 
-        <DrawerHeader className="text-center pt-2 pb-4">
-          <DrawerTitle className="text-purple-200 flex items-center justify-center gap-2">
+        <DialogHeader className="text-center pt-10 pb-4 px-6">
+          <DialogTitle className="text-purple-200 flex items-center justify-center gap-2">
             <span className="text-2xl">🕉️</span>
             <span className="font-light tracking-wide">Date Converter</span>
-          </DrawerTitle>
+          </DialogTitle>
           <p className="text-purple-400/70 text-xs mt-1">
             Speak or type in any language
           </p>
-        </DrawerHeader>
+        </DialogHeader>
 
         <div className="px-6 pb-8 space-y-6 relative z-10">
           {/* Mic Button - Primary Action */}
@@ -431,7 +439,7 @@ export function DateConverterDrawer({ isOpen, onClose }: DateConverterDrawerProp
             </div>
           )}
         </div>
-      </DrawerContent>
-    </Drawer>
+      </DialogContent>
+    </Dialog>
   );
 }
