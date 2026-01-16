@@ -70,6 +70,19 @@ export function DateConverterDrawer({ isOpen, onClose }: DateConverterDrawerProp
     };
   }, [isOpen, isMuted]);
 
+  // Auto-start listening when drawer opens
+  useEffect(() => {
+    if (isOpen && voiceSupported && !isListening && !result) {
+      const timer = setTimeout(() => {
+        clearTranscript();
+        startListening((text) => {
+          processInput(text);
+        });
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, voiceSupported]);
+
   // Process voice transcript when received
   useEffect(() => {
     if (transcript && !isListening) {
