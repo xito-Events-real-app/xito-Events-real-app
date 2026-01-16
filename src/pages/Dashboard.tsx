@@ -159,8 +159,16 @@ export default function Dashboard() {
         <div className="grid grid-cols-3 gap-3">
           {basicStats.map((stat) => {
             const Icon = stat.icon;
+            const isClickable = stat.label === "Today";
             return (
-              <Card key={stat.label} className="shadow-soft border-0">
+              <Card 
+                key={stat.label} 
+                className={cn(
+                  "shadow-soft border-0",
+                  isClickable && "cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
+                )}
+                onClick={() => isClickable && navigate("/today")}
+              >
                 <CardContent className="p-3 text-center">
                   <div className={`w-9 h-9 rounded-xl ${stat.color} flex items-center justify-center mx-auto mb-1`}>
                     <Icon className="w-4 h-4 text-white" />
