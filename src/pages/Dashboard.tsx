@@ -15,6 +15,7 @@ import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
 import { useCachedData } from "@/hooks/useCachedData";
 import { cn } from "@/lib/utils";
 import { HandlerJackpotPopup } from "@/components/dashboard/HandlerJackpotPopup";
+import { DateConverterDrawer } from "@/components/dashboard/DateConverterDrawer";
 import { getDeviceHandler, saveDeviceHandler, isDeviceHandlerValid } from "@/lib/handler-memory";
 import { toast } from "sonner";
 // Get icon and color for each status category
@@ -65,18 +66,25 @@ export default function Dashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [soloHandler, setSoloHandler] = useState<{ name: string; colorClass: string } | null>(null);
+  const [showDateConverter, setShowDateConverter] = useState(false);
 
   // NO auto-redirect on mount - app always opens to Dashboard
   // Handler selection happens on pull-to-refresh
 
-  // Pull to refresh state
+  // Pull to refresh state (pull DOWN for handler jackpot)
   const [pullDistance, setPullDistance] = useState(0);
   const [isPulling, setIsPulling] = useState(false);
   const [showJackpot, setShowJackpot] = useState(false);
+  
+  // Swipe up state (for date converter)
+  const [swipeUpDistance, setSwipeUpDistance] = useState(0);
+  const [isSwipingUp, setIsSwipingUp] = useState(false);
+  
   const containerRef = useRef<HTMLDivElement>(null);
   const touchStartY = useRef(0);
   const scrollTop = useRef(0);
   const pullThreshold = 120;
+  const swipeUpThreshold = 80;
   
   // Audio refs
   const casinoAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -203,19 +211,27 @@ export default function Dashboard() {
     }
     touchStartY.current = e.touches[0].clientY;
     setIsPulling(true);
+    setIsSwipingUp(true);
   }, [initAudio]);
 
+  // Check if at bottom of scroll
+  const isAtBottom = useCallback(() => {
+    if (!containerRef.current) return false;
+    const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
+    return scrollTop + clientHeight >= scrollHeight - 10;
+  }, []);
+
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!isPulling || scrollTop.current > 0) return;
-    
     const currentY = e.touches[0].clientY;
     const diff = currentY - touchStartY.current;
     
-    if (diff > 0) {
+    // PULL DOWN - Handler Jackpot (existing behavior)
+    if (diff > 0 && isPulling && scrollTop.current <= 0) {
       // Resistance factor for natural feel
       const resistance = 0.5;
       const distance = Math.min(diff * resistance, pullThreshold + 30);
       setPullDistance(distance);
+      setSwipeUpDistance(0);
       
       // Calculate pull progress (0 to 1)
       const pullProgress = distance / pullThreshold;
@@ -248,14 +264,30 @@ export default function Dashboard() {
         }
         
         setShowJackpot(true);
-        setPullDistance(0); // Reset pull distance when popup opens
+        setPullDistance(0);
       }
     }
-  }, [isPulling, showJackpot, handlers]);
+    // SWIPE UP - Date Converter
+    else if (diff < 0 && isSwipingUp && isAtBottom()) {
+      const upDiff = Math.abs(diff);
+      const resistance = 0.6;
+      const distance = Math.min(upDiff * resistance, swipeUpThreshold + 20);
+      setSwipeUpDistance(distance);
+      setPullDistance(0);
+      
+      // Open date converter when threshold reached
+      if (distance >= swipeUpThreshold && !showDateConverter) {
+        setShowDateConverter(true);
+        setSwipeUpDistance(0);
+      }
+    }
+  }, [isPulling, isSwipingUp, showJackpot, showDateConverter, handlers, isAtBottom]);
 
   const handleTouchEnd = useCallback(() => {
     setIsPulling(false);
+    setIsSwipingUp(false);
     
+    // Reset pull distance if didn't reach threshold
     if (pullDistance < pullThreshold) {
       setPullDistance(0);
       
@@ -274,7 +306,12 @@ export default function Dashboard() {
         }, 30);
       }
     }
-  }, [pullDistance, showJackpot]);
+    
+    // Reset swipe up distance
+    if (swipeUpDistance < swipeUpThreshold) {
+      setSwipeUpDistance(0);
+    }
+  }, [pullDistance, swipeUpDistance, showJackpot]);
 
   const handleJackpotSelect = (handler: string, shouldRemember: boolean) => {
     setShowJackpot(false);
@@ -319,6 +356,12 @@ export default function Dashboard() {
         onClose={handleJackpotClose}
         casinoAudioRef={casinoAudioRef}
         soloHandler={soloHandler}
+      />
+
+      {/* Date Converter Drawer */}
+      <DateConverterDrawer
+        isOpen={showDateConverter}
+        onClose={() => setShowDateConverter(false)}
       />
 
       {/* Main Content - Moves down when pulled */}
@@ -369,6 +412,49 @@ export default function Dashboard() {
             style={{
               background: `radial-gradient(circle at 50% 0%, rgba(255, 215, 0, ${(pullDistance / pullThreshold) * 0.3}) 0%, transparent 50%)`,
               opacity: (pullDistance - pullThreshold * 0.7) / (pullThreshold * 0.3),
+            }}
+          />
+        )}
+
+        {/* Swipe up indicator for Date Converter */}
+        {isSwipingUp && swipeUpDistance > 0 && !showDateConverter && (
+          <div 
+            className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center"
+            style={{ 
+              transform: `translateY(-${swipeUpDistance}px)`,
+            }}
+          >
+            <span className={cn(
+              "text-[10px] mb-1 font-medium transition-colors",
+              swipeUpDistance >= swipeUpThreshold * 0.8 
+                ? "text-purple-400" 
+                : "text-muted-foreground"
+            )}>
+              {swipeUpDistance >= swipeUpThreshold * 0.8 ? "Release for Date Converter" : "Swipe up"}
+            </span>
+            <div className={cn(
+              "w-10 h-10 rounded-full flex items-center justify-center transition-all",
+              swipeUpDistance >= swipeUpThreshold * 0.8 
+                ? "bg-gradient-to-br from-purple-500 to-indigo-600 scale-110 shadow-lg shadow-purple-500/50" 
+                : "bg-gradient-to-br from-purple-500/20 to-indigo-600/20"
+            )}>
+              <span className={cn(
+                "text-lg transition-all",
+                swipeUpDistance >= swipeUpThreshold * 0.8 ? "animate-bounce" : ""
+              )}>
+                🕉️
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Purple glow effect for swipe up */}
+        {isSwipingUp && swipeUpDistance >= swipeUpThreshold * 0.7 && !showDateConverter && (
+          <div 
+            className="fixed inset-0 pointer-events-none z-40 transition-opacity duration-300"
+            style={{
+              background: `radial-gradient(circle at 50% 100%, rgba(139, 92, 246, ${(swipeUpDistance / swipeUpThreshold) * 0.3}) 0%, transparent 50%)`,
+              opacity: (swipeUpDistance - swipeUpThreshold * 0.7) / (swipeUpThreshold * 0.3),
             }}
           />
         )}
