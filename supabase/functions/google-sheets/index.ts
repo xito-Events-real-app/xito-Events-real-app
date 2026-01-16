@@ -653,10 +653,10 @@ async function addClientComment(
     throw new Error('Valid rowNumber is required for adding comment');
   }
 
-  // Format: "[MM/DD/YYYY HH:MM] Comment text"
+  // Format: "[MM/DD/YYYY HH:MM] Comment text" - using ||| delimiter for multi-line support
   const newCommentEntry = `[${clientTimestamp}] ${comment}`;
   const updatedComments = existingComments 
-    ? `${existingComments}\n${newCommentEntry}` 
+    ? `${existingComments}|||${newCommentEntry}` 
     : newCommentEntry;
 
   const range = encodeURIComponent(`'CLIENT TRACKER'!AC${rowNumber}`);
