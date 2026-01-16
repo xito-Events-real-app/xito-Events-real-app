@@ -10,14 +10,11 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Mic, Keyboard, Volume2, VolumeX, RefreshCw, X } from 'lucide-react';
+import { Mic, Keyboard, RefreshCw, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useVoiceDateConverter } from '@/hooks/useVoiceDateConverter';
 import { parseDateFromInput, numberToNepali, getNepaliMonthName } from '@/lib/date-parser';
 import { adToBS, bsToAD, getCurrentBSDate, nepaliMonthsEnglish } from '@/lib/nepali-date';
-
-// Om meditation sound (free audio)
-const OM_AUDIO_URL = "https://assets.mixkit.co/active_storage/sfx/2515/2515-preview.mp3";
 
 interface DateConverterDrawerProps {
   isOpen: boolean;
@@ -37,20 +34,9 @@ export function DateConverterDrawer({ isOpen, onClose }: DateConverterDrawerProp
   const [textInput, setTextInput] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
   const [result, setResult] = useState<ConversionResult | null>(null);
-  const [isMuted, setIsMuted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [audioReady, setAudioReady] = useState(false);
   const [hasAutoStarted, setHasAutoStarted] = useState(false);
   
-  // Load mute preference from localStorage on mount
-  useEffect(() => {
-    const savedMuted = localStorage.getItem('dateConverterMuted');
-    if (savedMuted === 'true') {
-      setIsMuted(true);
-    }
-  }, []);
-  
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   
   const {
@@ -141,36 +127,6 @@ export function DateConverterDrawer({ isOpen, onClose }: DateConverterDrawerProp
     setIsProcessing(false);
   }, []);
 
-  // Initialize audio on first user interaction
-  useEffect(() => {
-    if (isOpen && !audioRef.current) {
-      audioRef.current = new Audio(OM_AUDIO_URL);
-      audioRef.current.loop = true;
-      audioRef.current.volume = 0.15;
-      audioRef.current.addEventListener('canplaythrough', () => {
-        setAudioReady(true);
-      });
-      audioRef.current.load();
-    }
-  }, [isOpen]);
-
-  // Play/pause audio based on mute state
-  useEffect(() => {
-    if (isOpen && audioRef.current && audioReady && !isMuted) {
-      audioRef.current.play().catch((e) => {
-        console.log('Audio autoplay blocked:', e);
-      });
-    } else if (audioRef.current) {
-      audioRef.current.pause();
-    }
-    
-    return () => {
-      if (audioRef.current && !isOpen) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-      }
-    };
-  }, [isOpen, isMuted, audioReady]);
 
   // Auto-start voice listening when drawer opens
   useEffect(() => {
@@ -219,20 +175,6 @@ export function DateConverterDrawer({ isOpen, onClose }: DateConverterDrawerProp
     }
   };
 
-  // Toggle mute and save preference
-  const handleMuteToggle = () => {
-    const newMuted = !isMuted;
-    setIsMuted(newMuted);
-    localStorage.setItem('dateConverterMuted', String(newMuted));
-    
-    if (audioRef.current) {
-      if (newMuted) {
-        audioRef.current.pause();
-      } else {
-        audioRef.current.play().catch(() => {});
-      }
-    }
-  };
 
   // Reset state when drawer closes
   const handleOpenChange = (open: boolean) => {
@@ -274,13 +216,6 @@ export function DateConverterDrawer({ isOpen, onClose }: DateConverterDrawerProp
           <X className="w-5 h-5" />
         </button>
 
-        {/* Mute button */}
-        <button
-          onClick={handleMuteToggle}
-          className="absolute top-3 right-3 p-2 text-purple-300/70 hover:text-purple-200 transition-colors z-10"
-        >
-          {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-        </button>
 
         <DialogHeader className="text-center pt-10 pb-4 px-6">
           <DialogTitle className="text-purple-200 flex items-center justify-center gap-2">
