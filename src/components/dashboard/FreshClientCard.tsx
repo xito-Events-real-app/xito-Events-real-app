@@ -633,8 +633,9 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
   // Check if at least one quotation field is filled
   const isAtLeastOneQuotationFilled = !!(quotationBasic || quotationStandard || quotationPremium || quotationWtnSpecial);
   
-  // Universal action reminder: alert if >6 hours in current status
-  const REMINDER_THRESHOLD_HOURS = 6;
+  // Universal action reminder: alert if >6 hours in current status (3 hours for NUMBER PROVIDED)
+  const DEFAULT_REMINDER_THRESHOLD_HOURS = 6;
+  const NUMBER_PROVIDED_THRESHOLD_HOURS = 3;
   const STATUSES_EXCLUDED_FROM_REMINDER = ['BOOKED', 'CANCELLED'];
   
   const reminderInfo = useMemo(() => {
@@ -650,24 +651,35 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
       if (callCount === 0) {
         return { show: true, message: "NO CALLS MADE YET - CALL NOW!" };
       }
-      if (lastCallInfo && lastCallInfo.hoursSinceLastCall >= REMINDER_THRESHOLD_HOURS) {
-        return { show: true, message: `CALL REMINDER: ${REMINDER_THRESHOLD_HOURS}+ HOURS SINCE LAST CALL` };
+      if (lastCallInfo && lastCallInfo.hoursSinceLastCall >= DEFAULT_REMINDER_THRESHOLD_HOURS) {
+        return { show: true, message: `CALL REMINDER: ${DEFAULT_REMINDER_THRESHOLD_HOURS}+ HOURS SINCE LAST CALL` };
       }
       return null;
     }
     
-    // For all other categories - check time since status was set
-    if (!statusTimeAgo || statusTimeAgo.hoursSinceStatus < REMINDER_THRESHOLD_HOURS) {
+    // Special case for NUMBER PROVIDED - 3 hour threshold if no calls made
+    if (isNumberProvided) {
+      // If calls have been made, don't show warning
+      if (callCount > 0) {
+        return null;
+      }
+      // Check if 3+ hours since number was provided and no calls made
+      if (statusTimeAgo && statusTimeAgo.hoursSinceStatus >= NUMBER_PROVIDED_THRESHOLD_HOURS) {
+        return { show: true, message: "FOLLOW UP NEEDED: 3+ hours since number provided and not called yet!" };
+      }
+      return null;
+    }
+    
+    // For all other categories - check time since status was set (6 hour threshold)
+    if (!statusTimeAgo || statusTimeAgo.hoursSinceStatus < DEFAULT_REMINDER_THRESHOLD_HOURS) {
       return null;
     }
     
     // Generate category-specific message
-    let message = `ACTION NEEDED: ${REMINDER_THRESHOLD_HOURS}+ HOURS IN THIS STATUS`;
+    let message = `ACTION NEEDED: ${DEFAULT_REMINDER_THRESHOLD_HOURS}+ HOURS IN THIS STATUS`;
     
     if (category.includes('JUST ENQUIRED')) {
       message = "ACTION NEEDED: Client waiting 6+ hours!";
-    } else if (category.includes('NUMBER PROVIDED')) {
-      message = "FOLLOW UP NEEDED: 6+ hours since number provided!";
     } else if (category.includes('TEXTED')) {
       message = "NO RESPONSE: 6+ hours since texted!";
     } else if (category.includes('BARGAINING')) {
@@ -679,7 +691,7 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
     }
     
     return { show: true, message };
-  }, [currentStatusCategory, isCallNotReceived, callCount, lastCallInfo, statusTimeAgo]);
+  }, [currentStatusCategory, isCallNotReceived, isNumberProvided, callCount, lastCallInfo, statusTimeAgo]);
 
   // Handle call action for CALL NOT RECEIVED
   const handleCallAgain = async (e: React.MouseEvent, callType: 'DIRECT' | 'WHATSAPP') => {
@@ -997,8 +1009,8 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
             </Button>
           )}
 
-          {/* CALL Button - For NUMBER PROVIDED (Green) */}
-          {isNumberProvided && (
+          {/* CALL Button - For NUMBER PROVIDED (Green, with follow-up) */}
+          {isNumberProvided && hasContactNumber && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button 
@@ -1036,8 +1048,8 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
             </DropdownMenu>
           )}
 
-          {/* CALL AGAIN Button - Only for CALL NOT RECEIVED (Red) */}
-          {isCallNotReceived && (
+          {/* CALL AGAIN Button - For CALL NOT RECEIVED (Red) */}
+          {isCallNotReceived && hasContactNumber && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button 
@@ -1075,8 +1087,8 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
             </DropdownMenu>
           )}
 
-          {/* CALL Button - For QUOTATION SENT (similar to CALL NOT RECEIVED) */}
-          {isQuotationSent && (
+          {/* Universal CALL Button - For ALL OTHER categories with contact (Green) */}
+          {!isJustEnquired && !isNumberProvided && !isCallNotReceived && hasContactNumber && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button 
@@ -1337,27 +1349,44 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
         </>
       )}
 
-      {/* Call Tracking Info - Only for CALL NOT RECEIVED */}
-      {isCallNotReceived && (
-        <div className="flex flex-col gap-1.5 text-xs bg-orange-50 dark:bg-orange-900/20 px-3 py-2 rounded-md border border-orange-200 dark:border-orange-800">
+      {/* Universal Call Tracking Info - Shows for ALL categories when calls exist */}
+      {callCount > 0 && (
+        <div className={cn(
+          "flex flex-col gap-1.5 text-xs px-3 py-2 rounded-md border",
+          isCallNotReceived 
+            ? "bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800"
+            : "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
+        )}>
           <div className="flex items-center gap-2">
-            <span className="font-medium text-orange-700 dark:text-orange-400">
+            <span className={cn(
+              "font-medium",
+              isCallNotReceived 
+                ? "text-orange-700 dark:text-orange-400"
+                : "text-blue-700 dark:text-blue-400"
+            )}>
               CALLED: {callCount} {callCount === 1 ? 'TIME' : 'TIMES'}
             </span>
-            {callCount > 0 && (
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowCallHistoryDialog(true);
-                }}
-                className="text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-300"
-              >
-                <History className="w-3.5 h-3.5" />
-              </button>
-            )}
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowCallHistoryDialog(true);
+              }}
+              className={cn(
+                isCallNotReceived 
+                  ? "text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-300"
+                  : "text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+              )}
+            >
+              <History className="w-3.5 h-3.5" />
+            </button>
           </div>
           {lastCallTimeAgo && (
-            <div className="text-sm font-bold text-orange-700 dark:text-orange-300 bg-orange-100 dark:bg-orange-800/40 px-2 py-1 rounded">
+            <div className={cn(
+              "text-sm font-bold px-2 py-1 rounded",
+              isCallNotReceived 
+                ? "text-orange-700 dark:text-orange-300 bg-orange-100 dark:bg-orange-800/40"
+                : "text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-800/40"
+            )}>
               🕐 LAST CALLED {lastCallTimeAgo}
             </div>
           )}
