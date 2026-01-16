@@ -8,7 +8,7 @@ import {
   Scale, Clock, CheckCircle, XCircle, CalendarX,
   Phone, ChevronRight, RefreshCw
 } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { getCurrentStatus } from "@/lib/sheets-api";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
@@ -61,16 +61,30 @@ export default function Dashboard() {
   } = useCachedData();
   
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const hasCheckedDevice = useRef(false);
 
-  // Check for saved device handler on mount - auto-redirect
+  // Check for saved device handler on mount - auto-redirect ONLY on fresh app load
+  // Skip redirect if user explicitly navigated here (via ?stay=true or from handler page)
   useEffect(() => {
     if (hasCheckedDevice.current) return;
     hasCheckedDevice.current = true;
     
+    // Don't redirect if user explicitly came to dashboard
+    const stayOnDashboard = searchParams.get('stay') === 'true';
+    const hasVisitedThisSession = sessionStorage.getItem('wtn_session_started');
+    
+    if (stayOnDashboard || hasVisitedThisSession) {
+      // Mark session as started but don't redirect
+      sessionStorage.setItem('wtn_session_started', 'true');
+      return;
+    }
+    
+    // First visit this session - check for saved handler
+    sessionStorage.setItem('wtn_session_started', 'true');
     const savedHandler = getDeviceHandler();
     if (savedHandler) {
       toast.success(`Welcome back, ${savedHandler.name}!`, { duration: 1500 });
@@ -78,7 +92,7 @@ export default function Dashboard() {
         navigate(`/handler/${encodeURIComponent(savedHandler.name)}`);
       }, 300);
     }
-  }, [navigate]);
+  }, [navigate, searchParams]);
 
   // Pull to refresh state
   const [pullDistance, setPullDistance] = useState(0);

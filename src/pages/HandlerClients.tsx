@@ -215,7 +215,7 @@ export default function HandlerClients() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/?stay=true')}
             className="shrink-0"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -230,7 +230,7 @@ export default function HandlerClients() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/?stay=true')}
             className="shrink-0"
           >
             <LayoutDashboard className="w-4 h-4 mr-1.5" />
