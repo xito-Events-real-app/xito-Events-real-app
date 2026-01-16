@@ -5,56 +5,65 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, AlertTriangle, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
 
-import { getClients, ClientData, getCurrentStatus, getDropdowns } from "@/lib/sheets-api";
+import { ClientData, getCurrentStatus } from "@/lib/sheets-api";
 import { FreshClientCard } from "@/components/dashboard/FreshClientCard";
 import { ClientDetailSheet } from "@/components/dashboard/ClientDetailSheet";
+import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
+import { useCachedData } from "@/hooks/useCachedData";
+import { updateClientInCache } from "@/lib/cache-manager";
 import { cn } from "@/lib/utils";
-import { DropdownData } from "@/lib/sheets-api";
 
 export default function FreshClients() {
   const [searchParams] = useSearchParams();
-  const [clients, setClients] = useState<ClientData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { 
+    clients, 
+    dropdowns, 
+    isLoading, 
+    isFromCache,
+    isSyncing,
+    lastSyncedAt,
+    pendingSyncs,
+    refreshData,
+    error 
+  } = useCachedData();
+  
+  const [localClients, setLocalClients] = useState<ClientData[]>([]);
   const [selectedClient, setSelectedClient] = useState<ClientData | null>(null);
-  const [statusOptions, setStatusOptions] = useState<string[]>([]);
-  const [handlerOptions, setHandlerOptions] = useState<string[]>([]);
-  const [mindsetOptions, setMindsetOptions] = useState<string[]>([]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [initialCategorySet, setInitialCategorySet] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-  const fetchData = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const [clientsData, dropdowns] = await Promise.all([
-        getClients(200),
-        getDropdowns()
-      ]);
-      setClients(clientsData);
-      setStatusOptions(dropdowns.clientStatuses || []);
-      setHandlerOptions(dropdowns.whatsappOwners || []); // Column H - team members/handlers
-      setMindsetOptions(dropdowns.mindsetOptions || []); // Column K - mindset options
-    } catch (err) {
-      console.error("Failed to fetch data:", err);
-      setError(err instanceof Error ? err.message : "Failed to load");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
+  // Sync local clients with cached data
   useEffect(() => {
-    fetchData();
+    setLocalClients(clients);
+  }, [clients]);
+
+  // Online/offline listener
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
+
+  const statusOptions = dropdowns?.clientStatuses || [];
+  const handlerOptions = dropdowns?.whatsappOwners || [];
+  const mindsetOptions = dropdowns?.mindsetOptions || [];
 
   // Group clients by their current status
   const clientsByStatus = useMemo(() => {
     const grouped: Record<string, ClientData[]> = {};
     
-    clients.forEach(client => {
+    localClients.forEach(client => {
       const status = getCurrentStatus(client.statusLog || '');
       if (!grouped[status]) {
         grouped[status] = [];
@@ -63,7 +72,7 @@ export default function FreshClients() {
     });
 
     return grouped;
-  }, [clients]);
+  }, [localClients]);
 
   // Get unique statuses that have clients, with JUST ENQUIRED first, excluding UNTOUCHED
   const activeStatuses = useMemo(() => {
@@ -130,22 +139,34 @@ export default function FreshClients() {
     return 'bg-muted text-foreground';
   };
 
-  // Handle status change - update client in local state
-  const handleStatusChange = (client: ClientData, newStatus: string, newStatusLog: string) => {
-    setClients(prev => prev.map(c => 
+  // Handle status change - update client in local state AND cache
+  const handleStatusChange = async (client: ClientData, newStatus: string, newStatusLog: string) => {
+    // Update local state immediately
+    setLocalClients(prev => prev.map(c => 
       c.rowNumber === client.rowNumber 
         ? { ...c, statusLog: newStatusLog }
         : c
     ));
+    
+    // Update cache
+    if (client.rowNumber) {
+      await updateClientInCache(client.rowNumber, { statusLog: newStatusLog });
+    }
   };
 
-  // Handle handler change - update client in local state
-  const handleHandlerChange = (client: ClientData, handler: string) => {
-    setClients(prev => prev.map(c => 
+  // Handle handler change - update client in local state AND cache
+  const handleHandlerChange = async (client: ClientData, handler: string) => {
+    // Update local state immediately
+    setLocalClients(prev => prev.map(c => 
       c.rowNumber === client.rowNumber 
         ? { ...c, clientHandler: handler }
         : c
     ));
+    
+    // Update cache
+    if (client.rowNumber) {
+      await updateClientInCache(client.rowNumber, { clientHandler: handler });
+    }
   };
 
   // Touch handlers for swipe
@@ -194,28 +215,37 @@ export default function FreshClients() {
 
   return (
     <AppLayout>
+      {/* Sync Status Indicator */}
+      <SyncStatusIndicator 
+        pendingSyncs={pendingSyncs}
+        isSyncing={isSyncing}
+        isFromCache={isFromCache}
+        lastSyncedAt={lastSyncedAt}
+        isOnline={isOnline}
+      />
+
       <PageHeader 
         title="Fresh Clients" 
-        subtitle={`${clients.length} total clients`}
+        subtitle={`${localClients.length} total clients`}
       />
       
       <div className="flex flex-col h-[calc(100vh-140px)]">
         <div className="px-4 py-4 w-full space-y-4 animate-fade-in flex-1 flex flex-col overflow-hidden">
 
           {/* Loading State */}
-          {isLoading && (
+          {isLoading && localClients.length === 0 && (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
           )}
 
           {/* Error State */}
-          {!isLoading && error && (
+          {!isLoading && error && localClients.length === 0 && (
             <Card className="border-destructive/30 bg-destructive/5">
               <CardContent className="p-6 text-center space-y-3">
                 <AlertTriangle className="w-10 h-10 text-destructive mx-auto" />
                 <p className="text-sm text-muted-foreground">Failed to load clients</p>
-                <Button variant="outline" size="sm" onClick={fetchData}>
+                <Button variant="outline" size="sm" onClick={refreshData}>
                   <RefreshCw className="w-4 h-4 mr-2" />
                   Retry
                 </Button>
@@ -224,7 +254,7 @@ export default function FreshClients() {
           )}
 
           {/* Swipeable Status Pages */}
-          {!isLoading && !error && activeStatuses.length > 0 && (
+          {(localClients.length > 0 || !isLoading) && activeStatuses.length > 0 && (
             <>
               {/* Top Navigation Bar */}
               <div className="flex items-center justify-between gap-2 bg-muted/50 rounded-lg px-2 py-1.5">
@@ -319,7 +349,7 @@ export default function FreshClients() {
           )}
 
           {/* Empty State */}
-          {!isLoading && !error && activeStatuses.length === 0 && (
+          {!isLoading && !error && activeStatuses.length === 0 && localClients.length === 0 && (
             <Card className="shadow-soft">
               <CardContent className="p-6 text-center">
                 <p className="text-sm text-muted-foreground">No clients found</p>
@@ -336,7 +366,7 @@ export default function FreshClients() {
           onClose={() => setSelectedClient(null)}
           onSave={() => {
             setSelectedClient(null);
-            fetchData();
+            refreshData();
           }}
         />
       </div>

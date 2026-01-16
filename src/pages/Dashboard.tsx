@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { AppLayout, PageHeader } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,11 +6,13 @@ import {
   Users, CalendarPlus, TrendingUp, Menu, 
   MessageSquare, PhoneOff, FileText, SendHorizontal, 
   Scale, Clock, CheckCircle, XCircle, CalendarX,
-  Phone, ChevronRight
+  Phone, ChevronRight, RefreshCw
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { getClients, ClientData, getCurrentStatus, getDropdowns } from "@/lib/sheets-api";
+import { getCurrentStatus } from "@/lib/sheets-api";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
+import { useCachedData } from "@/hooks/useCachedData";
 import { cn } from "@/lib/utils";
 
 // Get icon and color for each status category
@@ -31,34 +33,37 @@ const getStatusConfig = (status: string) => {
 };
 
 export default function Dashboard() {
-  const [clients, setClients] = useState<ClientData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { 
+    clients, 
+    dropdowns, 
+    isLoading, 
+    isFromCache, 
+    isSyncing, 
+    lastSyncedAt,
+    pendingSyncs,
+    refreshData,
+    error 
+  } = useCachedData();
+  
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [statusOptions, setStatusOptions] = useState<string[]>([]);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
   const navigate = useNavigate();
 
-  const fetchData = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const [clientsData, dropdowns] = await Promise.all([
-        getClients(200),
-        getDropdowns()
-      ]);
-      setClients(clientsData);
-      setStatusOptions(dropdowns.clientStatuses || []);
-    } catch (err) {
-      console.error("Failed to fetch clients:", err);
-      setError(err instanceof Error ? err.message : "Failed to load");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Listen for online/offline status
+  useState(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const statusOptions = dropdowns?.clientStatuses || [];
 
   // Calculate basic stats
   const totalClients = clients.length;
@@ -125,6 +130,15 @@ export default function Dashboard() {
 
   return (
     <AppLayout>
+      {/* Sync Status Indicator */}
+      <SyncStatusIndicator 
+        pendingSyncs={pendingSyncs}
+        isSyncing={isSyncing}
+        isFromCache={isFromCache}
+        lastSyncedAt={lastSyncedAt}
+        isOnline={isOnline}
+      />
+
       {/* Header with Menu Button */}
       <div className="flex items-center justify-between px-4 pt-4">
         <div>
@@ -133,14 +147,25 @@ export default function Dashboard() {
             subtitle="Wedding & Event Management"
           />
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setSidebarOpen(true)}
-          className="shrink-0"
-        >
-          <Menu className="w-5 h-5" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={refreshData}
+            disabled={isSyncing}
+            className="shrink-0"
+          >
+            <RefreshCw className={cn("w-5 h-5", isSyncing && "animate-spin")} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSidebarOpen(true)}
+            className="shrink-0"
+          >
+            <Menu className="w-5 h-5" />
+          </Button>
+        </div>
       </div>
       
       <div className="px-4 py-4 max-w-lg mx-auto space-y-4 animate-fade-in">

@@ -12,7 +12,9 @@ import {
   MessageSquare, PhoneOff, FileText, SendHorizontal, 
   Scale, Clock, CheckCircle, XCircle, CalendarX
 } from "lucide-react";
-import { getClients, ClientData, getCurrentStatus } from "@/lib/sheets-api";
+import { getCurrentStatus } from "@/lib/sheets-api";
+import { useCachedData } from "@/hooks/useCachedData";
+import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
 import { cn } from "@/lib/utils";
 
 // Get icon and color for each status category
@@ -42,24 +44,31 @@ const getInitials = (name: string) => {
 
 export default function Today() {
   const navigate = useNavigate();
+  const { 
+    clients, 
+    isLoading, 
+    isFromCache, 
+    isSyncing, 
+    lastSyncedAt,
+    pendingSyncs 
+  } = useCachedData();
+  
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [searchQuery, setSearchQuery] = useState("");
-  const [clients, setClients] = useState<ClientData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
+  // Online/offline listener
   useEffect(() => {
-    const fetchClients = async () => {
-      setIsLoading(true);
-      try {
-        const data = await getClients(500);
-        setClients(data);
-      } catch (err) {
-        console.error("Failed to fetch clients:", err);
-      } finally {
-        setIsLoading(false);
-      }
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
-    fetchClients();
   }, []);
 
   const goToPreviousDay = () => {
@@ -94,7 +103,7 @@ export default function Today() {
     });
   }, [clients, selectedDate, searchQuery]);
 
-  const handleClientClick = (client: ClientData) => {
+  const handleClientClick = (client: { statusLog?: string }) => {
     const currentStatus = getCurrentStatus(client.statusLog || '').toUpperCase();
     navigate(`/fresh-clients?category=${encodeURIComponent(currentStatus)}`);
   };
@@ -103,6 +112,15 @@ export default function Today() {
 
   return (
     <AppLayout>
+      {/* Sync Status Indicator */}
+      <SyncStatusIndicator 
+        pendingSyncs={pendingSyncs}
+        isSyncing={isSyncing}
+        isFromCache={isFromCache}
+        lastSyncedAt={lastSyncedAt}
+        isOnline={isOnline}
+      />
+
       {/* Header with Date Navigation */}
       <div className="sticky top-0 z-40 glass border-b border-border safe-top">
         <div className="px-4 py-3">
@@ -170,7 +188,7 @@ export default function Today() {
 
       {/* Client List */}
       <div className="px-4 py-4 space-y-3 pb-24">
-        {isLoading ? (
+        {isLoading && clients.length === 0 ? (
           <div className="text-center py-12">
             <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
             <p className="text-muted-foreground">Loading clients...</p>
