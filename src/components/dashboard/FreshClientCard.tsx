@@ -26,6 +26,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { ChevronDown, ChevronUp, Loader2, Clock, AlertTriangle, UserCog, Phone, MessageCircle, Edit, History, Bell, ExternalLink, FileText, Brain, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -551,16 +558,56 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
     timestamp: string;
   }
   
+  // Helper to calculate relative time from timestamp
+  const getRelativeTime = (timestampStr: string): string => {
+    try {
+      // Parse "MM/DD/YYYY HH:MM" format
+      const match = timestampStr.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+      if (!match) return timestampStr;
+      
+      const [, month, day, year, hours, mins] = match;
+      const date = new Date(
+        parseInt(year),
+        parseInt(month) - 1,
+        parseInt(day),
+        parseInt(hours),
+        parseInt(mins)
+      );
+      
+      if (isNaN(date.getTime())) return timestampStr;
+      
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      if (diffMs < 0) return timestampStr;
+      
+      const diffMins = Math.floor(diffMs / (1000 * 60));
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      const diffDays = Math.floor(diffHours / 24);
+      
+      if (diffDays > 0) {
+        return `${diffDays}d ${diffHours % 24}h ago`;
+      } else if (diffHours > 0) {
+        return `${diffHours}h ${diffMins % 60}m ago`;
+      } else {
+        return `${diffMins}m ago`;
+      }
+    } catch {
+      return timestampStr;
+    }
+  };
+
   const parsedComments = useMemo((): CommentEntry[] => {
     if (!currentComments) return [];
-    const lines = currentComments.split('\n').filter(Boolean);
-    return lines.map(line => {
-      // Parse "[MM/DD/YYYY HH:MM] Comment text"
-      const match = line.match(/^\[([^\]]+)\]\s*(.+)$/);
+    // Support both ||| delimiter (new) and \n delimiter (legacy)
+    const delimiter = currentComments.includes('|||') ? '|||' : '\n';
+    const entries = currentComments.split(delimiter).filter(Boolean);
+    return entries.map(entry => {
+      // Parse "[MM/DD/YYYY HH:MM] Comment text" - text can be multi-line
+      const match = entry.match(/^\[([^\]]+)\]\s*([\s\S]+)$/);
       if (match) {
-        return { timestamp: match[1], text: match[2] };
+        return { timestamp: match[1], text: match[2].trim() };
       }
-      return { timestamp: '', text: line };
+      return { timestamp: '', text: entry.trim() };
     });
   }, [currentComments]);
   
@@ -1522,9 +1569,17 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
               e.stopPropagation();
               setShowCommentDialog(true);
             }}
-            className="flex-1 text-left text-xs text-muted-foreground truncate hover:text-foreground transition-colors"
+            className="flex-1 text-left text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
-            💬 {lastComment.text}
+            <div className="flex items-start gap-1">
+              <span>💬</span>
+              <span className="whitespace-pre-wrap break-words">{lastComment.text}</span>
+            </div>
+            {lastComment.timestamp && (
+              <span className="text-[10px] opacity-70 block mt-0.5">
+                🕐 {getRelativeTime(lastComment.timestamp)}
+              </span>
+            )}
           </button>
         )}
       </div>
@@ -1944,79 +1999,86 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
         </DialogContent>
       </Dialog>
 
-      {/* Comments Dialog */}
-      <Dialog open={showCommentDialog} onOpenChange={setShowCommentDialog}>
-        <DialogContent className="max-w-md max-h-[80vh]" onClick={(e) => e.stopPropagation()}>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+      {/* Comments Drawer - Better mobile keyboard handling */}
+      <Drawer open={showCommentDialog} onOpenChange={setShowCommentDialog}>
+        <DrawerContent onClick={(e) => e.stopPropagation()}>
+          <DrawerHeader className="text-left">
+            <DrawerTitle className="flex items-center gap-2">
               <MessageSquare className="w-5 h-5" />
               Comments for {client.clientName}
-            </DialogTitle>
-            <DialogDescription>
+            </DrawerTitle>
+            <DrawerDescription>
               {commentCount > 0 ? `${commentCount} comment${commentCount > 1 ? 's' : ''}` : 'No comments yet'}
-            </DialogDescription>
-          </DialogHeader>
+            </DrawerDescription>
+          </DrawerHeader>
           
-          {/* Comment History */}
-          <ScrollArea className="h-64 pr-4">
-            {parsedComments.length > 0 ? (
-              <div className="space-y-2">
-                {parsedComments.map((comment, idx) => (
-                  <div key={idx} className="p-2.5 bg-muted/50 rounded-lg border border-border/50">
-                    <div className="text-[10px] text-muted-foreground font-medium mb-1">
-                      📅 {comment.timestamp}
-                    </div>
-                    <div className="text-sm text-foreground whitespace-pre-wrap">
-                      {comment.text}
-                    </div>
-                  </div>
-                ))}
+          <div className="px-4 pb-4">
+            {/* Add New Comment - At top for easy access */}
+            <div className="space-y-3 pb-4 border-b border-border mb-4">
+              <Textarea
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Add a comment... (paste multi-line text here)"
+                className="min-h-[100px] resize-none text-base"
+                onClick={(e) => e.stopPropagation()}
+              />
+              <div className="flex justify-end gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => {
+                    setShowCommentDialog(false);
+                    setNewComment('');
+                  }}
+                >
+                  Close
+                </Button>
+                <Button 
+                  size="sm"
+                  onClick={handleAddComment}
+                  disabled={isAddingComment || !newComment.trim()}
+                  className="bg-primary hover:bg-primary/90"
+                >
+                  {isAddingComment ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                  ) : (
+                    <MessageSquare className="w-4 h-4 mr-1" />
+                  )}
+                  Add Comment
+                </Button>
               </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                <MessageSquare className="w-8 h-8 mb-2 opacity-50" />
-                <p className="text-sm">No comments yet</p>
-              </div>
-            )}
-          </ScrollArea>
-          
-          {/* Add New Comment */}
-          <div className="space-y-3 pt-3 border-t border-border">
-            <Textarea
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              placeholder="Add a comment..."
-              className="min-h-[80px] resize-none"
-              onClick={(e) => e.stopPropagation()}
-            />
-            <div className="flex justify-end gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => {
-                  setShowCommentDialog(false);
-                  setNewComment('');
-                }}
-              >
-                Close
-              </Button>
-              <Button 
-                size="sm"
-                onClick={handleAddComment}
-                disabled={isAddingComment || !newComment.trim()}
-                className="bg-primary hover:bg-primary/90"
-              >
-                {isAddingComment ? (
-                  <Loader2 className="w-4 h-4 animate-spin mr-1" />
-                ) : (
-                  <MessageSquare className="w-4 h-4 mr-1" />
-                )}
-                Add Comment
-              </Button>
             </div>
+            
+            {/* Comment History */}
+            <ScrollArea className="h-[40vh]">
+              {parsedComments.length > 0 ? (
+                <div className="space-y-2 pr-4">
+                  {[...parsedComments].reverse().map((comment, idx) => (
+                    <div key={idx} className="p-3 bg-muted/50 rounded-lg border border-border/50">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[10px] text-muted-foreground font-medium">
+                          📅 {comment.timestamp}
+                        </span>
+                        <span className="text-[10px] text-primary font-medium">
+                          🕐 {getRelativeTime(comment.timestamp)}
+                        </span>
+                      </div>
+                      <div className="text-sm text-foreground whitespace-pre-wrap break-words">
+                        {comment.text}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-8">
+                  <MessageSquare className="w-8 h-8 mb-2 opacity-50" />
+                  <p className="text-sm">No comments yet</p>
+                </div>
+              )}
+            </ScrollArea>
           </div>
-        </DialogContent>
-      </Dialog>
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 }
