@@ -76,16 +76,16 @@ export default function Dashboard() {
   const [isPulling, setIsPulling] = useState(false);
   const [showJackpot, setShowJackpot] = useState(false);
   
-  // Swipe up state (for date converter)
-  const [swipeUpDistance, setSwipeUpDistance] = useState(0);
-  const [isSwipingUp, setIsSwipingUp] = useState(false);
+  // Swipe left state (for date converter)
+  const [swipeLeftDistance, setSwipeLeftDistance] = useState(0);
+  const swipeStartedFromLeft = useRef(false);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const touchStartY = useRef(0);
+  const touchStartX = useRef(0);
   const scrollTop = useRef(0);
-  const swipeStartedFromBottom = useRef(false);
   const pullThreshold = 120;
-  const swipeUpThreshold = 80;
+  const swipeLeftThreshold = 60;
   
   // Audio refs
   const casinoAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -210,27 +210,43 @@ export default function Dashboard() {
     if (containerRef.current) {
       scrollTop.current = containerRef.current.scrollTop;
     }
+    const startX = e.touches[0].clientX;
     const startY = e.touches[0].clientY;
+    touchStartX.current = startX;
     touchStartY.current = startY;
     setIsPulling(true);
-    setIsSwipingUp(true);
     
-    // Check if touch started from bottom edge of screen (for date converter)
-    const screenHeight = window.innerHeight;
-    swipeStartedFromBottom.current = startY > screenHeight - 100;
+    // Check if touch started from left edge of screen (for date converter)
+    swipeStartedFromLeft.current = startX < 40;
   }, [initAudio]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    const currentX = e.touches[0].clientX;
     const currentY = e.touches[0].clientY;
-    const diff = currentY - touchStartY.current;
+    const diffY = currentY - touchStartY.current;
+    const diffX = currentX - touchStartX.current;
+    
+    // SWIPE RIGHT from left edge - Date Converter (priority check)
+    if (swipeStartedFromLeft.current && diffX > 0 && !showDateConverter) {
+      const resistance = 0.8;
+      const distance = Math.min(diffX * resistance, swipeLeftThreshold + 30);
+      setSwipeLeftDistance(distance);
+      
+      // Open date converter when threshold reached
+      if (distance >= swipeLeftThreshold) {
+        setShowDateConverter(true);
+        setSwipeLeftDistance(0);
+        swipeStartedFromLeft.current = false;
+      }
+      return; // Don't process other gestures
+    }
     
     // PULL DOWN - Handler Jackpot (existing behavior)
-    if (diff > 0 && isPulling && scrollTop.current <= 0) {
+    if (diffY > 0 && isPulling && scrollTop.current <= 0) {
       // Resistance factor for natural feel
       const resistance = 0.5;
-      const distance = Math.min(diff * resistance, pullThreshold + 30);
+      const distance = Math.min(diffY * resistance, pullThreshold + 30);
       setPullDistance(distance);
-      setSwipeUpDistance(0);
       
       // Calculate pull progress (0 to 1)
       const pullProgress = distance / pullThreshold;
@@ -266,26 +282,12 @@ export default function Dashboard() {
         setPullDistance(0);
       }
     }
-    // SWIPE UP - Date Converter (only if started from bottom edge)
-    else if (diff < 0 && isSwipingUp && swipeStartedFromBottom.current) {
-      const upDiff = Math.abs(diff);
-      const resistance = 0.6;
-      const distance = Math.min(upDiff * resistance, swipeUpThreshold + 20);
-      setSwipeUpDistance(distance);
-      setPullDistance(0);
-      
-      // Open date converter when threshold reached
-      if (distance >= swipeUpThreshold && !showDateConverter) {
-        setShowDateConverter(true);
-        setSwipeUpDistance(0);
-        swipeStartedFromBottom.current = false;
-      }
-    }
-  }, [isPulling, isSwipingUp, showJackpot, showDateConverter, handlers]);
+  }, [isPulling, showJackpot, showDateConverter, handlers]);
 
   const handleTouchEnd = useCallback(() => {
     setIsPulling(false);
-    setIsSwipingUp(false);
+    swipeStartedFromLeft.current = false;
+    setSwipeLeftDistance(0);
     
     // Reset pull distance if didn't reach threshold
     if (pullDistance < pullThreshold) {
@@ -306,12 +308,7 @@ export default function Dashboard() {
         }, 30);
       }
     }
-    
-    // Reset swipe up distance
-    if (swipeUpDistance < swipeUpThreshold) {
-      setSwipeUpDistance(0);
-    }
-  }, [pullDistance, swipeUpDistance, showJackpot]);
+  }, [pullDistance, showJackpot]);
 
   const handleJackpotSelect = (handler: string, shouldRemember: boolean) => {
     setShowJackpot(false);
@@ -416,47 +413,28 @@ export default function Dashboard() {
           />
         )}
 
-        {/* Swipe up indicator for Date Converter */}
-        {isSwipingUp && swipeUpDistance > 0 && !showDateConverter && (
+        {/* Swipe left indicator for Date Converter */}
+        {swipeLeftDistance > 0 && !showDateConverter && (
           <div 
-            className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center"
+            className="fixed left-0 top-1/2 -translate-y-1/2 z-50 flex items-center"
             style={{ 
-              transform: `translateY(-${swipeUpDistance}px)`,
+              transform: `translateX(${swipeLeftDistance}px) translateY(-50%)`,
             }}
           >
-            <span className={cn(
-              "text-[10px] mb-1 font-medium transition-colors",
-              swipeUpDistance >= swipeUpThreshold * 0.8 
-                ? "text-purple-400" 
-                : "text-muted-foreground"
-            )}>
-              {swipeUpDistance >= swipeUpThreshold * 0.8 ? "Release for Date Converter" : "Swipe up"}
-            </span>
             <div className={cn(
-              "w-10 h-10 rounded-full flex items-center justify-center transition-all",
-              swipeUpDistance >= swipeUpThreshold * 0.8 
+              "w-12 h-12 rounded-full flex items-center justify-center transition-all",
+              swipeLeftDistance >= swipeLeftThreshold * 0.8 
                 ? "bg-gradient-to-br from-purple-500 to-indigo-600 scale-110 shadow-lg shadow-purple-500/50" 
-                : "bg-gradient-to-br from-purple-500/20 to-indigo-600/20"
+                : "bg-gradient-to-br from-purple-500/30 to-indigo-600/30"
             )}>
               <span className={cn(
-                "text-lg transition-all",
-                swipeUpDistance >= swipeUpThreshold * 0.8 ? "animate-bounce" : ""
+                "text-xl transition-all",
+                swipeLeftDistance >= swipeLeftThreshold * 0.8 ? "animate-pulse" : ""
               )}>
                 🕉️
               </span>
             </div>
           </div>
-        )}
-
-        {/* Purple glow effect for swipe up */}
-        {isSwipingUp && swipeUpDistance >= swipeUpThreshold * 0.7 && !showDateConverter && (
-          <div 
-            className="fixed inset-0 pointer-events-none z-40 transition-opacity duration-300"
-            style={{
-              background: `radial-gradient(circle at 50% 100%, rgba(139, 92, 246, ${(swipeUpDistance / swipeUpThreshold) * 0.3}) 0%, transparent 50%)`,
-              opacity: (swipeUpDistance - swipeUpThreshold * 0.7) / (swipeUpThreshold * 0.3),
-            }}
-          />
         )}
 
         {/* Header with Menu Button */}
