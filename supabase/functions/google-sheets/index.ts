@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'addClientComment';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'addClientComment' | 'updateFinalQuotation';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -200,9 +200,9 @@ async function updateClientStatus(accessToken: string, spreadsheetId: string, ro
   return { success: true, statusLog: updatedLog };
 }
 
-// Get recent clients (now including Column W for status, Column X for handler, Column Y for call log, Column Z for mindset, AA/AB for bargaining, AC for comments)
+// Get recent clients (now including Column W for status, Column X for handler, Column Y for call log, Column Z for mindset, AA/AB for bargaining, AC for comments, AD for final quotation)
 async function getClients(accessToken: string, spreadsheetId: string, limit = 50) {
-  const range = encodeURIComponent("'CLIENT TRACKER'!A2:AC" + (limit + 1));
+  const range = encodeURIComponent("'CLIENT TRACKER'!A2:AD" + (limit + 1));
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   const response = await fetch(url, {
@@ -249,6 +249,7 @@ async function getClients(accessToken: string, spreadsheetId: string, limit = 50
     ourBargainedRates: row[26] || '', // Column AA (index 26) - Our bargained rates
     clientBargainedRates: row[27] || '', // Column AB (index 27) - Client bargained rates
     comments: row[28] || '', // Column AC (index 28) - Client comments with timestamps
+    finalQuotation: row[29] || '', // Column AD (index 29) - Final booked quotation
   }));
 }
 
@@ -783,6 +784,38 @@ function adToBSSimple(date: Date): string {
   return `${bsYear}-${String(bsMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
+// Update final quotation in Column AD (for BOOKED clients)
+async function updateFinalQuotation(
+  accessToken: string, 
+  spreadsheetId: string, 
+  rowNumber: number, 
+  finalQuotation: string
+) {
+  if (!rowNumber || rowNumber < 2) {
+    throw new Error('Valid rowNumber is required for updating final quotation');
+  }
+
+  const range = encodeURIComponent(`'CLIENT TRACKER'!AD${rowNumber}`);
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  
+  const response = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [[finalQuotation]] }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (updateFinalQuotation):', response.status, errorText);
+    throw new Error(`Failed to update final quotation: ${response.status}`);
+  }
+
+  return { success: true, finalQuotation };
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -948,6 +981,15 @@ Deno.serve(async (req) => {
           data.comment as string,
           data.existingComments as string || '',
           data.clientTimestamp as string
+        );
+        break;
+      case 'updateFinalQuotation':
+        if (!data || !data.rowNumber) throw new Error('rowNumber is required for updateFinalQuotation');
+        result = await updateFinalQuotation(
+          accessToken, 
+          spreadsheetId, 
+          data.rowNumber as number, 
+          data.finalQuotation as string || ''
         );
         break;
       default:
