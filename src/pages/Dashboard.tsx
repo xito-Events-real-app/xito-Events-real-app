@@ -6,7 +6,7 @@ import {
   Users, CalendarPlus, TrendingUp, Menu, 
   MessageSquare, PhoneOff, FileText, SendHorizontal, 
   Scale, Clock, CheckCircle, XCircle, CalendarX,
-  Phone, ChevronRight, RefreshCw
+  Phone, ChevronRight, RefreshCw, AlertTriangle, Bell
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { getCurrentStatus } from "@/lib/sheets-api";
@@ -178,6 +178,54 @@ export default function Dashboard() {
     { label: "This Month", value: thisMonthClients, icon: CalendarPlus, color: "gradient-secondary" },
     { label: "Today", value: todaysClients.length, icon: TrendingUp, color: "gradient-accent" },
   ];
+
+  // Get BOOKED clients with events in less than 7 days
+  const urgentBookedClients = useMemo(() => {
+    const now = new Date();
+    return clients
+      .filter(client => {
+        const status = getCurrentStatus(client.statusLog || '').toUpperCase();
+        if (!status.includes('BOOKED')) return false;
+        
+        // Parse event date (AD format: YYYY-MM-DD or similar)
+        const eventDateAD = client.eventDateAD;
+        if (!eventDateAD) return false;
+        
+        try {
+          // Parse date parts manually for Safari compatibility
+          const dateParts = eventDateAD.split('-');
+          if (dateParts.length < 3) return false;
+          
+          const year = parseInt(dateParts[0]);
+          const month = parseInt(dateParts[1]) - 1;
+          const day = parseInt(dateParts[2]);
+          
+          const eventDate = new Date(year, month, day);
+          if (isNaN(eventDate.getTime())) return false;
+          
+          const diffMs = eventDate.getTime() - now.getTime();
+          const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+          
+          return diffDays >= 0 && diffDays <= 7;
+        } catch {
+          return false;
+        }
+      })
+      .map(client => {
+        // Calculate days remaining
+        const eventDateAD = client.eventDateAD!;
+        const dateParts = eventDateAD.split('-');
+        const eventDate = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
+        const diffMs = eventDate.getTime() - now.getTime();
+        const daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        
+        return {
+          ...client,
+          daysRemaining
+        };
+      })
+      .sort((a, b) => a.daysRemaining - b.daysRemaining);
+  }, [clients]);
 
   const handleCategoryClick = (status: string) => {
     navigate(`/fresh-clients?category=${encodeURIComponent(status)}`);
@@ -477,6 +525,77 @@ export default function Dashboard() {
               Quick Add Client
             </Button>
           </Link>
+
+          {/* Urgent Events Alert - BOOKED clients with events in ≤7 days */}
+          {urgentBookedClients.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 px-1">
+                <div className="relative">
+                  <Bell className="w-4 h-4 text-red-500" />
+                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping" />
+                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
+                </div>
+                <h3 className="text-sm font-semibold text-red-500 uppercase tracking-wide">
+                  Urgent Events ({urgentBookedClients.length})
+                </h3>
+              </div>
+              <Card className="border-2 border-red-500/30 bg-gradient-to-br from-red-500/10 to-orange-500/10 shadow-lg overflow-hidden">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-20%,rgba(239,68,68,0.15),transparent_50%)]" />
+                <CardContent className="p-3 relative">
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {urgentBookedClients.map((client) => (
+                      <div 
+                        key={client.rowNumber}
+                        className={cn(
+                          "flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99]",
+                          client.daysRemaining <= 1 
+                            ? "bg-red-500/20 animate-pulse border border-red-500/40" 
+                            : client.daysRemaining <= 3 
+                              ? "bg-red-500/10 border border-red-500/20"
+                              : "bg-orange-500/10 border border-orange-500/20"
+                        )}
+                        onClick={() => handleCategoryClick('BOOKED')}
+                      >
+                        <div className={cn(
+                          "w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-bold text-white",
+                          client.daysRemaining <= 1 
+                            ? "bg-gradient-to-br from-red-500 to-red-700" 
+                            : client.daysRemaining <= 3 
+                              ? "bg-gradient-to-br from-red-500 to-orange-500"
+                              : "bg-gradient-to-br from-orange-500 to-amber-500"
+                        )}>
+                          {client.daysRemaining === 0 ? "TODAY" : client.daysRemaining}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-foreground truncate">
+                            {client.clientName || 'Unnamed Client'}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {client.events || 'Event'} • {client.eventDateAD}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-end shrink-0">
+                          <span className={cn(
+                            "text-xs font-bold uppercase",
+                            client.daysRemaining <= 1 ? "text-red-500" : 
+                            client.daysRemaining <= 3 ? "text-orange-500" : "text-amber-500"
+                          )}>
+                            {client.daysRemaining === 0 ? "TODAY!" : 
+                             client.daysRemaining === 1 ? "TOMORROW" : 
+                             `${client.daysRemaining} DAYS`}
+                          </span>
+                          <AlertTriangle className={cn(
+                            "w-4 h-4 mt-1",
+                            client.daysRemaining <= 1 ? "text-red-500 animate-bounce" : "text-orange-500"
+                          )} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
           {/* Stats Grid */}
           <div className="grid grid-cols-3 gap-3">
