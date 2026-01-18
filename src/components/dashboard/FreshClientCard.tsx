@@ -33,7 +33,7 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import { ChevronDown, ChevronUp, Loader2, Clock, AlertTriangle, UserCog, Phone, MessageCircle, Edit, History, Bell, ExternalLink, FileText, Brain, MessageSquare, Lock, Calendar, CreditCard, Plus, Banknote } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Clock, AlertTriangle, UserCog, Phone, MessageCircle, Edit, History, Bell, ExternalLink, FileText, Brain, MessageSquare, Lock, Calendar, CreditCard, Plus, Banknote, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,8 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { NepaliDateObject, getCurrentBSDate, nepaliMonthsEnglish } from "@/lib/nepali-date";
+import { NepaliCalendar } from "@/components/form/NepaliCalendar";
 
 // Parse call log to get structured entries
 interface CallEntry {
@@ -385,8 +387,9 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
   const [paymentAmount, setPaymentAmount] = useState('');
   const [selectedPaymentType, setSelectedPaymentType] = useState('');
   const [selectedBank, setSelectedBank] = useState('');
-  const [paymentNepaliDate, setPaymentNepaliDate] = useState('');
+  const [paymentNepaliDates, setPaymentNepaliDates] = useState<NepaliDateObject[]>([]);
   const [isAddingPayment, setIsAddingPayment] = useState(false);
+  const [showPaymentCalendar, setShowPaymentCalendar] = useState(false);
   
   // Use handler initials if set, otherwise fall back to who added
   const displayInitials = getHandlerInitials(currentHandler || client.whoAdded || '');
@@ -2472,18 +2475,63 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
               </div>
             </div>
 
-            {/* 3. Nepali Date */}
+            {/* 3. Nepali Date Calendar */}
             <div className="space-y-2">
               <Label className="text-sm font-medium">3. Date of Payment (BS) *</Label>
-              <Input
-                type="text"
-                placeholder="e.g., 2082-10-04"
-                value={paymentNepaliDate}
-                onChange={(e) => setPaymentNepaliDate(e.target.value)}
-                className="font-medium"
-                onClick={(e) => e.stopPropagation()}
-              />
-              <p className="text-xs text-muted-foreground">Enter in format: YYYY-MM-DD (e.g., 2082-10-04)</p>
+              {paymentNepaliDates.length > 0 ? (
+                <div className="flex items-center gap-2 p-2 bg-primary/10 rounded-lg">
+                  <CalendarDays className="w-4 h-4 text-primary" />
+                  <span className="font-medium text-foreground">
+                    {paymentNepaliDates[0].year}-{String(paymentNepaliDates[0].month).padStart(2, '0')}-{String(paymentNepaliDates[0].day).padStart(2, '0')}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    ({nepaliMonthsEnglish[paymentNepaliDates[0].month - 1]})
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="ml-auto h-6 px-2 text-xs"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowPaymentCalendar(true);
+                    }}
+                  >
+                    Change
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full h-10 justify-start text-muted-foreground"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowPaymentCalendar(true);
+                  }}
+                >
+                  <CalendarDays className="w-4 h-4 mr-2" />
+                  Select payment date
+                </Button>
+              )}
+              
+              {showPaymentCalendar && (
+                <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                  <NepaliCalendar
+                    selectedDates={paymentNepaliDates}
+                    onDateSelect={(dates) => {
+                      // Only take the last selected date (single select behavior)
+                      if (dates.length > 0) {
+                        setPaymentNepaliDates([dates[dates.length - 1]]);
+                        setShowPaymentCalendar(false);
+                      } else {
+                        setPaymentNepaliDates([]);
+                      }
+                    }}
+                    multiSelect={false}
+                  />
+                </div>
+              )}
             </div>
 
             {/* 4. Bank */}
@@ -2514,7 +2562,7 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
             {/* Submit Button */}
             <Button
               className="w-full h-12 text-base bg-blue-600 hover:bg-blue-700"
-              disabled={!paymentAmount || !selectedPaymentType || !paymentNepaliDate || !selectedBank || isAddingPayment}
+              disabled={!paymentAmount || !selectedPaymentType || paymentNepaliDates.length === 0 || !selectedBank || isAddingPayment}
               onClick={async (e) => {
                 e.stopPropagation();
                 if (!client.rowNumber) {
@@ -2531,13 +2579,17 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
                   return;
                 }
                 
+                // Format the Nepali date as YYYY-MM-DD
+                const selectedDate = paymentNepaliDates[0];
+                const formattedNepaliDate = `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`;
+                
                 setIsAddingPayment(true);
                 try {
                   const result = await addPayment(
                     client.rowNumber,
                     paymentAmount,
                     selectedPaymentType,
-                    paymentNepaliDate,
+                    formattedNepaliDate,
                     selectedBank,
                     currentPaymentsMade,
                     currentPaymentDatesAD,
@@ -2553,9 +2605,10 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
                   // Reset form
                   setPaymentAmount('');
                   setSelectedPaymentType('');
-                  setPaymentNepaliDate('');
+                  setPaymentNepaliDates([]);
                   setSelectedBank('');
                   setShowPaymentDrawer(false);
+                  setShowPaymentCalendar(false);
                   
                   if (onPaymentAdded) {
                     onPaymentAdded(client, result.paymentsMade, result.remainingPayment);

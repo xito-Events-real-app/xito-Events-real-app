@@ -539,8 +539,8 @@ export default function Dashboard() {
                   Urgent Events ({urgentBookedClients.length})
                 </h3>
               </div>
-              <Card className="border-2 border-red-500/30 bg-gradient-to-br from-red-500/10 to-orange-500/10 shadow-lg overflow-hidden">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-20%,rgba(239,68,68,0.15),transparent_50%)]" />
+              <Card className="border-2 border-red-500/30 bg-gradient-to-br from-red-500/10 to-orange-500/10 shadow-lg overflow-hidden relative">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-20%,rgba(239,68,68,0.15),transparent_50%)] pointer-events-none" />
                 <CardContent className="p-3 relative">
                   <div className="space-y-2 max-h-48 overflow-y-auto">
                     {urgentBookedClients.map((client) => (
