@@ -46,6 +46,7 @@ export interface ClientData {
   ourBargainedRates?: string; // Column AA - our bargained rates
   clientBargainedRates?: string; // Column AB - client bargained rates
   comments?: string; // Column AC - comments with timestamps
+  finalQuotation?: string; // Column AD - final booked quotation
 }
 
 // Spreadsheet ID is now configured as a backend secret
@@ -221,6 +222,15 @@ export async function addClientComment(
   
   return callSheetsFunction<{ success: boolean; comments: string }>("addClientComment", {
     data: { rowNumber, comment, existingComments, clientTimestamp },
+  });
+}
+
+export async function updateFinalQuotation(
+  rowNumber: number,
+  finalQuotation: string
+): Promise<{ success: boolean; finalQuotation: string }> {
+  return callSheetsFunction<{ success: boolean; finalQuotation: string }>("updateFinalQuotation", {
+    data: { rowNumber, finalQuotation },
   });
 }
 

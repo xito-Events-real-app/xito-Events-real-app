@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { ClientData, updateClientStatus, updateClientHandler, logCallAttempt, getCurrentStatus, updateClientQuotation, updateClientMindset, updateBargainingRates, addClientComment } from "@/lib/sheets-api";
+import { ClientData, updateClientStatus, updateClientHandler, logCallAttempt, getCurrentStatus, updateClientQuotation, updateClientMindset, updateBargainingRates, addClientComment, updateFinalQuotation } from "@/lib/sheets-api";
 import { getHandlerInitials, parseEventDetails, formatLocationDisplay } from "@/lib/nepali-months";
 import { cn } from "@/lib/utils";
 import {
@@ -33,7 +33,7 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import { ChevronDown, ChevronUp, Loader2, Clock, AlertTriangle, UserCog, Phone, MessageCircle, Edit, History, Bell, ExternalLink, FileText, Brain, MessageSquare } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Clock, AlertTriangle, UserCog, Phone, MessageCircle, Edit, History, Bell, ExternalLink, FileText, Brain, MessageSquare, Lock, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -367,6 +367,12 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
   const [newComment, setNewComment] = useState('');
   const [isAddingComment, setIsAddingComment] = useState(false);
   
+  // Final quotation state for BOOKED clients
+  const [currentFinalQuotation, setCurrentFinalQuotation] = useState(client.finalQuotation || '');
+  const [showFinalQuotationDialog, setShowFinalQuotationDialog] = useState(false);
+  const [newFinalQuotation, setNewFinalQuotation] = useState('');
+  const [isSavingFinalQuotation, setIsSavingFinalQuotation] = useState(false);
+  
   // Use handler initials if set, otherwise fall back to who added
   const displayInitials = getHandlerInitials(currentHandler || client.whoAdded || '');
   const hasHandler = !!currentHandler;
@@ -379,6 +385,9 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
   );
   const location = formatLocationDisplay(client.eventLocation || '', client.eventCity || '');
   const currentStatus = getCurrentStatus(currentStatusLog);
+  
+  // Check if this is BOOKED category
+  const isBooked = currentStatusCategory?.toUpperCase().includes('BOOKED') || currentStatus.toUpperCase().includes('BOOKED');
 
   // Statuses that require handler to be set (after NUMBER PROVIDED)
   const statusesRequiringHandler = ['TEXTED', 'CALL NOT PICKED', 'CALLED QUOTATION PENDING', 'QUOTATION SENT', 'BARGAINING IS ON', 'ADVANCE PENDING', 'BOOKED', 'CANCELLED', 'POSTPONED'];
@@ -994,6 +1003,101 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
     return 'bg-gray-500 text-white';
   };
 
+  // Calculate days remaining until first event for BOOKED clients
+  const getDaysRemainingInfo = useMemo(() => {
+    if (!isBooked || events.length === 0) return null;
+    
+    // Get the first event date
+    const firstEvent = events[0];
+    if (!firstEvent.year || !firstEvent.monthName || !firstEvent.day) return null;
+    
+    // Try to get event date from AD date column
+    const eventDateStr = client.eventDateAD;
+    if (eventDateStr) {
+      // Parse the first AD date (might have multiple dates separated by newlines)
+      const firstDateStr = eventDateStr.split('\n')[0].trim();
+      if (firstDateStr && firstDateStr !== '**') {
+        try {
+          // Handle date formats like "2026-02-15" or "2026-2-**"
+          const dateParts = firstDateStr.split('-');
+          if (dateParts.length >= 2) {
+            const year = parseInt(dateParts[0]);
+            const month = parseInt(dateParts[1]) - 1; // JS months are 0-indexed
+            const day = dateParts[2] === '**' ? 15 : parseInt(dateParts[2]); // Use middle of month if unknown day
+            
+            const eventDate = new Date(year, month, day);
+            const now = new Date();
+            now.setHours(0, 0, 0, 0);
+            eventDate.setHours(0, 0, 0, 0);
+            
+            const diffMs = eventDate.getTime() - now.getTime();
+            const daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+            
+            if (!isNaN(daysRemaining)) {
+              // Determine urgency based on days remaining
+              let urgency: 'critical' | 'urgent' | 'warning' | 'safe' = 'safe';
+              if (daysRemaining <= 7) urgency = 'critical';
+              else if (daysRemaining <= 30) urgency = 'urgent';
+              else if (daysRemaining <= 60) urgency = 'warning';
+              
+              return { daysRemaining, urgency };
+            }
+          }
+        } catch {
+          return null;
+        }
+      }
+    }
+    return null;
+  }, [isBooked, events, client.eventDateAD]);
+
+  // Handle save final quotation
+  const handleSaveFinalQuotation = async () => {
+    if (!client.rowNumber) {
+      toast.error("Cannot save: missing row number");
+      return;
+    }
+    
+    if (!newFinalQuotation.trim()) {
+      toast.error("Please enter the final quotation amount");
+      return;
+    }
+
+    setIsSavingFinalQuotation(true);
+    
+    try {
+      // Format the amount
+      const formattedAmount = `NPR ${formatNPR(newFinalQuotation)}/-`;
+      
+      // Save to Column AD
+      await updateFinalQuotation(client.rowNumber, formattedAmount);
+      
+      // Update local state
+      setCurrentFinalQuotation(formattedAmount);
+      
+      // Close dialog and reset
+      setShowFinalQuotationDialog(false);
+      setNewFinalQuotation('');
+      
+      toast.success("Final quotation saved");
+    } catch (err) {
+      console.error("Failed to save final quotation:", err);
+      toast.error("Failed to save final quotation");
+    } finally {
+      setIsSavingFinalQuotation(false);
+    }
+  };
+
+  // Get color classes for days remaining display
+  const getDaysRemainingColor = (urgency: 'critical' | 'urgent' | 'warning' | 'safe'): string => {
+    switch (urgency) {
+      case 'critical': return 'bg-red-500 text-white border-red-600 animate-pulse';
+      case 'urgent': return 'bg-orange-500 text-white border-orange-600';
+      case 'warning': return 'bg-amber-400 text-amber-900 border-amber-500';
+      case 'safe': return 'bg-green-500 text-white border-green-600';
+    }
+  };
+
   return (
     <div 
       className="flex flex-col gap-2 p-3 rounded-xl hover:bg-muted/50 transition-colors border border-border/50"
@@ -1014,6 +1118,63 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
                 <span className="opacity-80">{q.tier}:</span> <span className="font-bold">{q.amount}</span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* BOOKED Banner - Final Quotation + Days Remaining */}
+      {isBooked && (
+        <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/50 dark:to-emerald-950/50 rounded-lg p-3 border border-green-300 dark:border-green-700">
+          <div className="flex items-center justify-between gap-3">
+            {/* Final Quotation Section */}
+            <div className="flex-1">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Lock className="w-3 h-3 text-green-700 dark:text-green-400" />
+                <span className="text-[10px] font-semibold text-green-800 dark:text-green-300 uppercase tracking-wide">Final Quote</span>
+              </div>
+              {currentFinalQuotation ? (
+                <div 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setNewFinalQuotation(currentFinalQuotation.replace(/[^0-9]/g, ''));
+                    setShowFinalQuotationDialog(true);
+                  }}
+                  className="cursor-pointer group"
+                >
+                  <div className="text-lg font-bold text-green-800 dark:text-green-200 flex items-center gap-2">
+                    🔒 {currentFinalQuotation}
+                    <Edit className="w-3 h-3 opacity-0 group-hover:opacity-70 transition-opacity" />
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs border-green-400 text-green-700 hover:bg-green-100 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900/40"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowFinalQuotationDialog(true);
+                  }}
+                >
+                  <Lock className="w-3 h-3 mr-1" />
+                  Set Final Quote
+                </Button>
+              )}
+            </div>
+            
+            {/* Days Remaining Section */}
+            {getDaysRemainingInfo && (
+              <div className={cn(
+                "flex flex-col items-center justify-center px-3 py-2 rounded-lg border-2 min-w-[80px]",
+                getDaysRemainingColor(getDaysRemainingInfo.urgency)
+              )}>
+                <Calendar className="w-4 h-4 mb-0.5" />
+                <span className="text-2xl font-bold leading-none">{getDaysRemainingInfo.daysRemaining}</span>
+                <span className="text-[10px] font-medium uppercase">
+                  {getDaysRemainingInfo.daysRemaining === 1 ? 'Day' : 'Days'}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2079,6 +2240,58 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
           </div>
         </DrawerContent>
       </Drawer>
+
+      {/* Final Quotation Dialog - For BOOKED clients */}
+      <Dialog open={showFinalQuotationDialog} onOpenChange={setShowFinalQuotationDialog}>
+        <DialogContent onClick={(e) => e.stopPropagation()} className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="w-5 h-5 text-green-600" />
+              Final Quotation
+            </DialogTitle>
+            <DialogDescription>
+              Enter the final confirmed price for {client.clientName}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="finalQuote" className="text-sm font-medium">Final Amount</Label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground font-medium">NPR</span>
+                <Input
+                  id="finalQuote"
+                  type="number"
+                  placeholder="e.g., 85000"
+                  value={newFinalQuotation}
+                  onChange={(e) => setNewFinalQuotation(e.target.value)}
+                  className="flex-1 text-lg font-semibold"
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <span className="text-sm text-muted-foreground">/-</span>
+              </div>
+            </div>
+          </div>
+          
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setShowFinalQuotationDialog(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSaveFinalQuotation}
+              disabled={!newFinalQuotation.trim() || isSavingFinalQuotation}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              {isSavingFinalQuotation ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <Lock className="w-4 h-4 mr-2" />
+              )}
+              Save Final Quote
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
