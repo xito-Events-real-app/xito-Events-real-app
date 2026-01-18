@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { ClientData, updateClientStatus, updateClientHandler, logCallAttempt, getCurrentStatus, updateClientQuotation, updateClientMindset, updateBargainingRates, addClientComment, updateFinalQuotation } from "@/lib/sheets-api";
+import { ClientData, updateClientStatus, updateClientHandler, logCallAttempt, getCurrentStatus, updateClientQuotation, updateClientMindset, updateBargainingRates, addClientComment, updateFinalQuotation, addPayment } from "@/lib/sheets-api";
 import { getHandlerInitials, parseEventDetails, formatLocationDisplay } from "@/lib/nepali-months";
 import { cn } from "@/lib/utils";
 import {
@@ -33,7 +33,7 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import { ChevronDown, ChevronUp, Loader2, Clock, AlertTriangle, UserCog, Phone, MessageCircle, Edit, History, Bell, ExternalLink, FileText, Brain, MessageSquare, Lock, Calendar } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Clock, AlertTriangle, UserCog, Phone, MessageCircle, Edit, History, Bell, ExternalLink, FileText, Brain, MessageSquare, Lock, Calendar, CreditCard, Plus, Banknote } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -319,13 +319,16 @@ interface FreshClientCardProps {
   statusOptions: string[];
   handlerOptions?: string[];
   mindsetOptions?: string[];
+  paymentTypes?: string[];
+  banks?: string[];
   currentStatusCategory?: string;
   onStatusChange?: (client: ClientData, newStatus: string, newStatusLog: string) => void;
   onHandlerChange?: (client: ClientData, handler: string) => void;
   onMindsetChange?: (client: ClientData, mindset: string) => void;
+  onPaymentAdded?: (client: ClientData, paymentsMade: string, remainingPayment: string) => void;
 }
 
-export function FreshClientCard({ client, onEditClick, statusOptions, handlerOptions = [], mindsetOptions = [], currentStatusCategory, onStatusChange, onHandlerChange, onMindsetChange }: FreshClientCardProps) {
+export function FreshClientCard({ client, onEditClick, statusOptions, handlerOptions = [], mindsetOptions = [], paymentTypes = [], banks = [], currentStatusCategory, onStatusChange, onHandlerChange, onMindsetChange, onPaymentAdded }: FreshClientCardProps) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isUpdatingHandler, setIsUpdatingHandler] = useState(false);
   const [isLoggingCall, setIsLoggingCall] = useState(false);
@@ -373,6 +376,17 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
   const [newFinalQuotation, setNewFinalQuotation] = useState('');
   const [selectedFinalPackage, setSelectedFinalPackage] = useState<string>('');
   const [isSavingFinalQuotation, setIsSavingFinalQuotation] = useState(false);
+  
+  // Payment tracking states for BOOKED clients
+  const [currentPaymentsMade, setCurrentPaymentsMade] = useState(client.paymentsMade || '');
+  const [currentPaymentDatesAD, setCurrentPaymentDatesAD] = useState(client.paymentDatesAD || '');
+  const [currentRemainingPayment, setCurrentRemainingPayment] = useState(client.remainingPayment || '');
+  const [showPaymentDrawer, setShowPaymentDrawer] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [selectedPaymentType, setSelectedPaymentType] = useState('');
+  const [selectedBank, setSelectedBank] = useState('');
+  const [paymentNepaliDate, setPaymentNepaliDate] = useState('');
+  const [isAddingPayment, setIsAddingPayment] = useState(false);
   
   // Use handler initials if set, otherwise fall back to who added
   const displayInitials = getHandlerInitials(currentHandler || client.whoAdded || '');
@@ -1149,77 +1163,104 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
         </div>
       )}
 
-      {/* BOOKED Banner - Final Quotation + Days Remaining */}
+      {/* BOOKED Banner - Final Quotation + Payments + Days Remaining */}
       {isBooked && (
-        <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/50 dark:to-emerald-950/50 rounded-lg p-3 border border-green-300 dark:border-green-700">
-          <div className="flex items-center justify-between gap-3">
-            {/* Final Quotation Section */}
+        <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/50 dark:to-emerald-950/50 rounded-lg p-3 border border-green-300 dark:border-green-700 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            {/* Final Quotation + Paid Section */}
             <div className="flex-1">
-              <div className="flex items-center gap-1.5 mb-1">
-                <Lock className="w-3 h-3 text-green-700 dark:text-green-400" />
-                <span className="text-[10px] font-semibold text-green-800 dark:text-green-300 uppercase tracking-wide">Final Quote</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Package Badge */}
+                {parsedFinalQuotation?.package && (
+                  <span className={cn(
+                    "inline-flex px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide",
+                    getQuotationTierColor(parsedFinalQuotation.package)
+                  )}>
+                    {parsedFinalQuotation.package}
+                  </span>
+                )}
+                {/* Total Package */}
+                {parsedFinalQuotation ? (
+                  <span 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const parsed = parseFinalQuotation(currentFinalQuotation);
+                      if (parsed) {
+                        setNewFinalQuotation(parsed.amount.replace(/[^0-9]/g, ''));
+                        setSelectedFinalPackage(parsed.package);
+                      }
+                      setShowFinalQuotationDialog(true);
+                    }}
+                    className="text-sm font-bold text-green-800 dark:text-green-200 cursor-pointer hover:underline"
+                  >
+                    🔒 {parsedFinalQuotation.amount}
+                  </span>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-xs text-green-700 hover:bg-green-100 dark:text-green-400 p-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowFinalQuotationDialog(true);
+                    }}
+                  >
+                    <Lock className="w-3 h-3 mr-1" />
+                    Set Quote
+                  </Button>
+                )}
+                
+                {/* Paid Amount Display */}
+                {currentPaymentsMade && (
+                  <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded">
+                    💰 PAID: {(() => {
+                      const payments = currentPaymentsMade.split('\n').filter(Boolean);
+                      let total = 0;
+                      for (const entry of payments) {
+                        const match = entry.match(/NPR\s*([\d,]+)\/-/);
+                        if (match) total += parseInt(match[1].replace(/,/g, ''));
+                      }
+                      return `NPR ${total.toLocaleString('en-IN')}/-`;
+                    })()}
+                  </span>
+                )}
               </div>
-              {parsedFinalQuotation ? (
-                <div 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // Pre-fill existing values
-                    const parsed = parseFinalQuotation(currentFinalQuotation);
-                    if (parsed) {
-                      setNewFinalQuotation(parsed.amount.replace(/[^0-9]/g, ''));
-                      setSelectedFinalPackage(parsed.package);
-                    }
-                    setShowFinalQuotationDialog(true);
-                  }}
-                  className="cursor-pointer group"
-                >
-                  <div className="flex flex-col gap-1">
-                    {/* Package Badge */}
-                    {parsedFinalQuotation.package && (
-                      <span className={cn(
-                        "inline-flex w-fit px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide shadow-sm",
-                        getQuotationTierColor(parsedFinalQuotation.package)
-                      )}>
-                        {parsedFinalQuotation.package}
-                      </span>
-                    )}
-                    {/* Amount */}
-                    <div className="text-lg font-bold text-green-800 dark:text-green-200 flex items-center gap-2">
-                      🔒 {parsedFinalQuotation.amount}
-                      <Edit className="w-3 h-3 opacity-0 group-hover:opacity-70 transition-opacity" />
-                    </div>
-                  </div>
+              
+              {/* Remaining Payment */}
+              {currentRemainingPayment && (
+                <div className="text-xs text-orange-600 dark:text-orange-400 font-medium mt-1">
+                  ⏳ Remaining: {currentRemainingPayment}
                 </div>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs border-green-400 text-green-700 hover:bg-green-100 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900/40"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowFinalQuotationDialog(true);
-                  }}
-                >
-                  <Lock className="w-3 h-3 mr-1" />
-                  Set Final Quote
-                </Button>
               )}
             </div>
             
-            {/* Days Remaining Section */}
+            {/* Days Remaining */}
             {getDaysRemainingInfo && (
               <div className={cn(
-                "flex flex-col items-center justify-center px-3 py-2 rounded-lg border-2 min-w-[80px]",
+                "flex flex-col items-center justify-center px-2 py-1 rounded-lg border-2 min-w-[60px]",
                 getDaysRemainingColor(getDaysRemainingInfo.urgency)
               )}>
-                <Calendar className="w-4 h-4 mb-0.5" />
-                <span className="text-2xl font-bold leading-none">{getDaysRemainingInfo.daysRemaining}</span>
-                <span className="text-[10px] font-medium uppercase">
-                  {getDaysRemainingInfo.daysRemaining === 1 ? 'Day' : 'Days'}
-                </span>
+                <span className="text-xl font-bold leading-none">{getDaysRemainingInfo.daysRemaining}</span>
+                <span className="text-[9px] font-medium uppercase">Days</span>
               </div>
             )}
           </div>
+          
+          {/* Add Payment Button */}
+          {parsedFinalQuotation && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full h-8 text-xs border-blue-400 text-blue-700 hover:bg-blue-50 dark:border-blue-600 dark:text-blue-400 dark:hover:bg-blue-900/40"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowPaymentDrawer(true);
+              }}
+            >
+              <Plus className="w-3 h-3 mr-1" />
+              Add Payment
+            </Button>
+          )}
         </div>
       )}
 

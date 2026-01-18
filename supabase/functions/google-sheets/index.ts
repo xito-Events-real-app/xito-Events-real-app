@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'addClientComment' | 'updateFinalQuotation';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -92,7 +92,7 @@ async function getAccessToken(credentials: ServiceAccountCredentials): Promise<s
 
 // Get dropdown values from setup sheet
 async function getDropdowns(accessToken: string, spreadsheetId: string) {
-  const range = encodeURIComponent("'CLIENT TRACKER SETUP DATA'!A2:K100");
+  const range = encodeURIComponent("'CLIENT TRACKER SETUP DATA'!A2:Q100");
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   const response = await fetch(url, {
@@ -106,7 +106,7 @@ async function getDropdowns(accessToken: string, spreadsheetId: string) {
   }
 
   const data = await response.json();
-  if (!data.values) return { sources: [], whatsappOwners: [], clientLocations: [], eventLocations: [], teamMembers: [], oldClients: [], clientStatuses: [], mindsetOptions: [] };
+  if (!data.values) return { sources: [], whatsappOwners: [], clientLocations: [], eventLocations: [], teamMembers: [], oldClients: [], clientStatuses: [], mindsetOptions: [], paymentTypes: [], banks: [] };
 
   const rows = data.values;
   const getColumn = (idx: number) => rows.map((row: string[]) => row[idx]).filter(Boolean);
@@ -122,6 +122,8 @@ async function getDropdowns(accessToken: string, spreadsheetId: string) {
     whatsappOwners: getColumn(7),     // Column H (also team members)
     clientStatuses: getColumn(8),     // Column I - Client Status dropdown options
     mindsetOptions: getColumn(10),    // Column K - Mindset options for QUOTATION SENT
+    paymentTypes: getColumn(15),      // Column P - Payment types (ADVANCE, PARTIAL, FULL)
+    banks: getColumn(16),             // Column Q - Bank names
   };
 }
 
@@ -200,9 +202,9 @@ async function updateClientStatus(accessToken: string, spreadsheetId: string, ro
   return { success: true, statusLog: updatedLog };
 }
 
-// Get recent clients (now including Column W for status, Column X for handler, Column Y for call log, Column Z for mindset, AA/AB for bargaining, AC for comments, AD for final quotation)
+// Get recent clients (now including Column W for status, Column X for handler, Column Y for call log, Column Z for mindset, AA/AB for bargaining, AC for comments, AD for final quotation, AE/AF/AG for payments)
 async function getClients(accessToken: string, spreadsheetId: string, limit = 50) {
-  const range = encodeURIComponent("'CLIENT TRACKER'!A2:AD" + (limit + 1));
+  const range = encodeURIComponent("'CLIENT TRACKER'!A2:AG" + (limit + 1));
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   const response = await fetch(url, {
@@ -250,6 +252,9 @@ async function getClients(accessToken: string, spreadsheetId: string, limit = 50
     clientBargainedRates: row[27] || '', // Column AB (index 27) - Client bargained rates
     comments: row[28] || '', // Column AC (index 28) - Client comments with timestamps
     finalQuotation: row[29] || '', // Column AD (index 29) - Final booked quotation
+    paymentsMade: row[30] || '', // Column AE (index 30) - Payments made log
+    paymentDatesAD: row[31] || '', // Column AF (index 31) - Payment dates in AD
+    remainingPayment: row[32] || '', // Column AG (index 32) - Remaining payment
   }));
 }
 
@@ -816,6 +821,87 @@ async function updateFinalQuotation(
   return { success: true, finalQuotation };
 }
 
+// Add payment entry to Columns AE, AF, AG for BOOKED clients
+async function addPayment(
+  accessToken: string, 
+  spreadsheetId: string, 
+  rowNumber: number,
+  paymentAmount: string,
+  paymentType: string,
+  nepaliDate: string,
+  bank: string,
+  existingPaymentsMade: string,
+  existingPaymentDatesAD: string,
+  finalQuotationAmount: number
+) {
+  if (!rowNumber || rowNumber < 2) {
+    throw new Error('Valid rowNumber is required for adding payment');
+  }
+
+  // Get current date for AD format
+  const now = new Date();
+  const adDate = now.toISOString().split('T')[0];
+  
+  // Get weekday abbreviation
+  const weekdays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+  const weekday = weekdays[now.getDay()];
+  
+  // Format the payment entry: "NPR 30,000/- AS ADVANCE PAYMENT ON SUN 2082-10-04 IN MASTER BARUN"
+  const formattedAmount = `NPR ${parseInt(paymentAmount).toLocaleString('en-IN')}/-`;
+  const newPaymentEntry = `${formattedAmount} AS ${paymentType} ON ${weekday} ${nepaliDate} IN ${bank}`;
+  
+  // Append to existing payments with newline
+  const updatedPaymentsMade = existingPaymentsMade 
+    ? `${existingPaymentsMade}\n${newPaymentEntry}` 
+    : newPaymentEntry;
+  
+  // Update payment dates AD
+  const updatedPaymentDatesAD = existingPaymentDatesAD 
+    ? `${existingPaymentDatesAD}\n${adDate}` 
+    : adDate;
+  
+  // Calculate remaining payment
+  // Parse all payment amounts from the payment log
+  const allPayments = updatedPaymentsMade.split('\n').filter(Boolean);
+  let totalPaid = 0;
+  for (const entry of allPayments) {
+    const match = entry.match(/NPR\s*([\d,]+)\/-/);
+    if (match) {
+      totalPaid += parseInt(match[1].replace(/,/g, ''));
+    }
+  }
+  
+  const remaining = finalQuotationAmount - totalPaid;
+  const remainingFormatted = `NPR ${remaining.toLocaleString('en-IN')}/-`;
+  
+  // Update all three columns at once (AE, AF, AG)
+  const range = encodeURIComponent(`'CLIENT TRACKER'!AE${rowNumber}:AG${rowNumber}`);
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  
+  const response = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [[updatedPaymentsMade, updatedPaymentDatesAD, remainingFormatted]] }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (addPayment):', response.status, errorText);
+    throw new Error(`Failed to add payment: ${response.status}`);
+  }
+
+  return { 
+    success: true, 
+    paymentsMade: updatedPaymentsMade, 
+    paymentDatesAD: updatedPaymentDatesAD,
+    remainingPayment: remainingFormatted,
+    totalPaid
+  };
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -990,6 +1076,23 @@ Deno.serve(async (req) => {
           spreadsheetId, 
           data.rowNumber as number, 
           data.finalQuotation as string || ''
+        );
+        break;
+      case 'addPayment':
+        if (!data || !data.rowNumber || !data.paymentAmount || !data.paymentType || !data.nepaliDate || !data.bank) {
+          throw new Error('rowNumber, paymentAmount, paymentType, nepaliDate, and bank are required for addPayment');
+        }
+        result = await addPayment(
+          accessToken, 
+          spreadsheetId, 
+          data.rowNumber as number, 
+          data.paymentAmount as string,
+          data.paymentType as string,
+          data.nepaliDate as string,
+          data.bank as string,
+          data.existingPaymentsMade as string || '',
+          data.existingPaymentDatesAD as string || '',
+          data.finalQuotationAmount as number || 0
         );
         break;
       default:
