@@ -122,8 +122,8 @@ async function getDropdowns(accessToken: string, spreadsheetId: string) {
     whatsappOwners: getColumn(7),     // Column H (also team members)
     clientStatuses: getColumn(8),     // Column I - Client Status dropdown options
     mindsetOptions: getColumn(10),    // Column K - Mindset options for QUOTATION SENT
-    paymentTypes: getColumn(15),      // Column P - Payment types (ADVANCE, PARTIAL, FULL)
-    banks: getColumn(16),             // Column Q - Bank names
+    banks: getColumn(15),             // Column P - Bank names
+    paymentTypes: getColumn(16),      // Column Q - Payment types (ADVANCE, PARTIAL, FULL)
   };
 }
 
@@ -829,6 +829,7 @@ async function addPayment(
   paymentAmount: string,
   paymentType: string,
   nepaliDate: string,
+  nepaliDateAD: string, // AD equivalent of the selected Nepali date
   bank: string,
   existingPaymentsMade: string,
   existingPaymentDatesAD: string,
@@ -838,15 +839,15 @@ async function addPayment(
     throw new Error('Valid rowNumber is required for adding payment');
   }
 
-  // Get current date for AD format
-  const now = new Date();
-  const adDate = now.toISOString().split('T')[0];
+  // Use the AD date that corresponds to the selected Nepali date
+  const adDate = nepaliDateAD;
   
-  // Get weekday abbreviation
+  // Get weekday abbreviation from the AD date
   const weekdays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-  const weekday = weekdays[now.getDay()];
+  const adDateObj = new Date(nepaliDateAD);
+  const weekday = weekdays[adDateObj.getDay()];
   
-  // Format the payment entry: "NPR 30,000/- AS ADVANCE PAYMENT ON SUN 2082-10-04 IN MASTER BARUN"
+  // Format the payment entry: "NPR 30,000/- AS ADVANCE ON SUN 2082-10-04 IN MASTER BARUN"
   const formattedAmount = `NPR ${parseInt(paymentAmount).toLocaleString('en-IN')}/-`;
   const newPaymentEntry = `${formattedAmount} AS ${paymentType} ON ${weekday} ${nepaliDate} IN ${bank}`;
   
@@ -1079,8 +1080,8 @@ Deno.serve(async (req) => {
         );
         break;
       case 'addPayment':
-        if (!data || !data.rowNumber || !data.paymentAmount || !data.paymentType || !data.nepaliDate || !data.bank) {
-          throw new Error('rowNumber, paymentAmount, paymentType, nepaliDate, and bank are required for addPayment');
+        if (!data || !data.rowNumber || !data.paymentAmount || !data.paymentType || !data.nepaliDate || !data.nepaliDateAD || !data.bank) {
+          throw new Error('rowNumber, paymentAmount, paymentType, nepaliDate, nepaliDateAD, and bank are required for addPayment');
         }
         result = await addPayment(
           accessToken, 
@@ -1089,6 +1090,7 @@ Deno.serve(async (req) => {
           data.paymentAmount as string,
           data.paymentType as string,
           data.nepaliDate as string,
+          data.nepaliDateAD as string,
           data.bank as string,
           data.existingPaymentsMade as string || '',
           data.existingPaymentDatesAD as string || '',
