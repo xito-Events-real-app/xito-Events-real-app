@@ -843,8 +843,11 @@ async function addPayment(
   const adDate = nepaliDateAD;
   
   // Get weekday abbreviation from the AD date
+  // Parse date parts manually to avoid timezone issues with new Date("YYYY-MM-DD")
   const weekdays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-  const adDateObj = new Date(nepaliDateAD);
+  const [yearPart, monthPart, dayPart] = nepaliDateAD.split('-').map(Number);
+  // Create date using local timezone (month is 0-indexed in Date constructor)
+  const adDateObj = new Date(yearPart, monthPart - 1, dayPart);
   const weekday = weekdays[adDateObj.getDay()];
   
   // Format the payment entry: "NPR 30,000/- AS ADVANCE ON SUN 2082-10-04 IN MASTER BARUN"
