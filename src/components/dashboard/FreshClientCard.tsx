@@ -2415,6 +2415,169 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Payment Drawer - For BOOKED clients */}
+      <Drawer open={showPaymentDrawer} onOpenChange={setShowPaymentDrawer}>
+        <DrawerContent onClick={(e) => e.stopPropagation()}>
+          <DrawerHeader>
+            <DrawerTitle className="flex items-center gap-2">
+              <Banknote className="w-5 h-5 text-blue-600" />
+              Add Payment - {client.clientName}
+            </DrawerTitle>
+            <DrawerDescription>
+              Record a new payment for this booking
+            </DrawerDescription>
+          </DrawerHeader>
+          
+          <div className="p-4 space-y-4">
+            {/* 1. Payment Amount */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">1. Received Amount *</Label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground font-medium">NPR</span>
+                <Input
+                  type="number"
+                  placeholder="e.g., 30000"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  className="flex-1 text-lg font-semibold"
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <span className="text-sm text-muted-foreground">/-</span>
+              </div>
+            </div>
+
+            {/* 2. Payment Type */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">2. Amount Type *</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {paymentTypes.map((type) => (
+                  <Button
+                    key={type}
+                    type="button"
+                    variant={selectedPaymentType === type ? 'default' : 'outline'}
+                    size="sm"
+                    className={cn(
+                      "h-10 text-xs font-semibold",
+                      selectedPaymentType === type && "bg-blue-600 hover:bg-blue-700"
+                    )}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedPaymentType(type);
+                    }}
+                  >
+                    {type}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* 3. Nepali Date */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">3. Date of Payment (BS) *</Label>
+              <Input
+                type="text"
+                placeholder="e.g., 2082-10-04"
+                value={paymentNepaliDate}
+                onChange={(e) => setPaymentNepaliDate(e.target.value)}
+                className="font-medium"
+                onClick={(e) => e.stopPropagation()}
+              />
+              <p className="text-xs text-muted-foreground">Enter in format: YYYY-MM-DD (e.g., 2082-10-04)</p>
+            </div>
+
+            {/* 4. Bank */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">4. Bank *</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {banks.map((bank) => (
+                  <Button
+                    key={bank}
+                    type="button"
+                    variant={selectedBank === bank ? 'default' : 'outline'}
+                    size="sm"
+                    className={cn(
+                      "h-10 text-xs font-semibold",
+                      selectedBank === bank && "bg-emerald-600 hover:bg-emerald-700"
+                    )}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedBank(bank);
+                    }}
+                  >
+                    {bank}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Submit Button */}
+            <Button
+              className="w-full h-12 text-base bg-blue-600 hover:bg-blue-700"
+              disabled={!paymentAmount || !selectedPaymentType || !paymentNepaliDate || !selectedBank || isAddingPayment}
+              onClick={async (e) => {
+                e.stopPropagation();
+                if (!client.rowNumber) {
+                  toast.error("Cannot add payment: missing row number");
+                  return;
+                }
+                
+                // Extract numeric amount from final quotation
+                const parsed = parseFinalQuotation(currentFinalQuotation);
+                const finalAmount = parsed ? parseInt(parsed.amount.replace(/[^0-9]/g, '')) : 0;
+                
+                if (!finalAmount) {
+                  toast.error("No final quotation set");
+                  return;
+                }
+                
+                setIsAddingPayment(true);
+                try {
+                  const result = await addPayment(
+                    client.rowNumber,
+                    paymentAmount,
+                    selectedPaymentType,
+                    paymentNepaliDate,
+                    selectedBank,
+                    currentPaymentsMade,
+                    currentPaymentDatesAD,
+                    finalAmount
+                  );
+                  
+                  setCurrentPaymentsMade(result.paymentsMade);
+                  setCurrentPaymentDatesAD(result.paymentDatesAD);
+                  setCurrentRemainingPayment(result.remainingPayment);
+                  
+                  toast.success(`Payment of NPR ${parseInt(paymentAmount).toLocaleString('en-IN')}/- recorded!`);
+                  
+                  // Reset form
+                  setPaymentAmount('');
+                  setSelectedPaymentType('');
+                  setPaymentNepaliDate('');
+                  setSelectedBank('');
+                  setShowPaymentDrawer(false);
+                  
+                  if (onPaymentAdded) {
+                    onPaymentAdded(client, result.paymentsMade, result.remainingPayment);
+                  }
+                } catch (err) {
+                  console.error("Failed to add payment:", err);
+                  toast.error("Failed to record payment");
+                } finally {
+                  setIsAddingPayment(false);
+                }
+              }}
+            >
+              {isAddingPayment ? (
+                <Loader2 className="w-5 h-5 animate-spin mr-2" />
+              ) : (
+                <CreditCard className="w-5 h-5 mr-2" />
+              )}
+              Save Payment
+            </Button>
+          </div>
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 }
