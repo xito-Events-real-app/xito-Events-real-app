@@ -244,6 +244,7 @@ export async function addPayment(
   paymentAmount: string,
   paymentType: string,
   nepaliDate: string,
+  nepaliDateAD: string, // AD equivalent of the selected Nepali date
   bank: string,
   existingPaymentsMade: string,
   existingPaymentDatesAD: string,
@@ -267,6 +268,7 @@ export async function addPayment(
       paymentAmount, 
       paymentType, 
       nepaliDate, 
+      nepaliDateAD,
       bank, 
       existingPaymentsMade, 
       existingPaymentDatesAD,

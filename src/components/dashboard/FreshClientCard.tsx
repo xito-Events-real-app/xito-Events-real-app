@@ -41,7 +41,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { NepaliDateObject, getCurrentBSDate, nepaliMonthsEnglish } from "@/lib/nepali-date";
+import { NepaliDateObject, getCurrentBSDate, nepaliMonthsEnglish, bsToAD } from "@/lib/nepali-date";
 import { NepaliCalendar } from "@/components/form/NepaliCalendar";
 
 // Parse call log to get structured entries
@@ -2421,214 +2421,222 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
 
       {/* Payment Drawer - For BOOKED clients */}
       <Drawer open={showPaymentDrawer} onOpenChange={setShowPaymentDrawer}>
-        <DrawerContent onClick={(e) => e.stopPropagation()}>
-          <DrawerHeader>
-            <DrawerTitle className="flex items-center gap-2">
-              <Banknote className="w-5 h-5 text-blue-600" />
+        <DrawerContent onClick={(e) => e.stopPropagation()} className="max-h-[90vh]">
+          <DrawerHeader className="pb-2">
+            <DrawerTitle className="flex items-center gap-2 text-base">
+              <Banknote className="w-4 h-4 text-blue-600" />
               Add Payment - {client.clientName}
             </DrawerTitle>
-            <DrawerDescription>
+            <DrawerDescription className="text-xs">
               Record a new payment for this booking
             </DrawerDescription>
           </DrawerHeader>
           
-          <div className="p-4 space-y-4">
-            {/* 1. Payment Amount */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">1. Received Amount *</Label>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground font-medium">NPR</span>
-                <Input
-                  type="number"
-                  placeholder="e.g., 30000"
-                  value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(e.target.value)}
-                  className="flex-1 text-lg font-semibold"
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <span className="text-sm text-muted-foreground">/-</span>
+          <ScrollArea className="flex-1 max-h-[calc(90vh-120px)] px-4">
+            <div className="space-y-3 pb-4">
+              {/* 1. Payment Amount */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">1. Received Amount *</Label>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground font-medium">NPR</span>
+                  <Input
+                    type="number"
+                    placeholder="e.g., 30000"
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(e.target.value)}
+                    className="flex-1 text-base font-semibold h-9"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <span className="text-xs text-muted-foreground">/-</span>
+                </div>
               </div>
-            </div>
-
-            {/* 2. Payment Type */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">2. Amount Type *</Label>
-              <div className="grid grid-cols-2 gap-2">
-                {paymentTypes.map((type) => (
-                  <Button
-                    key={type}
-                    type="button"
-                    variant={selectedPaymentType === type ? 'default' : 'outline'}
-                    size="sm"
-                    className={cn(
-                      "h-10 text-xs font-semibold",
-                      selectedPaymentType === type && "bg-blue-600 hover:bg-blue-700"
-                    )}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedPaymentType(type);
-                    }}
-                  >
-                    {type}
-                  </Button>
-                ))}
+              {/* 2. Payment Type */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">2. Amount Type *</Label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {paymentTypes.map((type) => (
+                    <Button
+                      key={type}
+                      type="button"
+                      variant={selectedPaymentType === type ? 'default' : 'outline'}
+                      size="sm"
+                      className={cn(
+                        "h-8 text-xs font-semibold",
+                        selectedPaymentType === type && "bg-blue-600 hover:bg-blue-700"
+                      )}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedPaymentType(type);
+                      }}
+                    >
+                      {type}
+                    </Button>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            {/* 3. Nepali Date Calendar */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">3. Date of Payment (BS) *</Label>
-              {paymentNepaliDates.length > 0 ? (
-                <div className="flex items-center gap-2 p-2 bg-primary/10 rounded-lg">
-                  <CalendarDays className="w-4 h-4 text-primary" />
-                  <span className="font-medium text-foreground">
-                    {paymentNepaliDates[0].year}-{String(paymentNepaliDates[0].month).padStart(2, '0')}-{String(paymentNepaliDates[0].day).padStart(2, '0')}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    ({nepaliMonthsEnglish[paymentNepaliDates[0].month - 1]})
-                  </span>
+              {/* 3. Nepali Date Calendar */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">3. Date of Payment (BS) *</Label>
+                {paymentNepaliDates.length > 0 ? (
+                  <div className="flex items-center gap-2 p-2 bg-primary/10 rounded-lg">
+                    <CalendarDays className="w-3.5 h-3.5 text-primary" />
+                    <span className="font-medium text-foreground text-sm">
+                      {paymentNepaliDates[0].year}-{String(paymentNepaliDates[0].month).padStart(2, '0')}-{String(paymentNepaliDates[0].day).padStart(2, '0')}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      ({nepaliMonthsEnglish[paymentNepaliDates[0].month - 1]})
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="ml-auto h-6 px-2 text-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowPaymentCalendar(true);
+                      }}
+                    >
+                      Change
+                    </Button>
+                  </div>
+                ) : (
                   <Button
                     type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="ml-auto h-6 px-2 text-xs"
+                    variant="outline"
+                    className="w-full h-9 justify-start text-muted-foreground text-sm"
                     onClick={(e) => {
                       e.stopPropagation();
                       setShowPaymentCalendar(true);
                     }}
                   >
-                    Change
+                    <CalendarDays className="w-3.5 h-3.5 mr-2" />
+                    Select payment date
                   </Button>
-                </div>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full h-10 justify-start text-muted-foreground"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowPaymentCalendar(true);
-                  }}
-                >
-                  <CalendarDays className="w-4 h-4 mr-2" />
-                  Select payment date
-                </Button>
-              )}
-              
-              {showPaymentCalendar && (
-                <div className="mt-2" onClick={(e) => e.stopPropagation()}>
-                  <NepaliCalendar
-                    selectedDates={paymentNepaliDates}
-                    onDateSelect={(dates) => {
-                      // Only take the last selected date (single select behavior)
-                      if (dates.length > 0) {
-                        setPaymentNepaliDates([dates[dates.length - 1]]);
-                        setShowPaymentCalendar(false);
-                      } else {
-                        setPaymentNepaliDates([]);
-                      }
-                    }}
-                    multiSelect={false}
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* 4. Bank */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">4. Bank *</Label>
-              <div className="grid grid-cols-2 gap-2">
-                {banks.map((bank) => (
-                  <Button
-                    key={bank}
-                    type="button"
-                    variant={selectedBank === bank ? 'default' : 'outline'}
-                    size="sm"
-                    className={cn(
-                      "h-10 text-xs font-semibold",
-                      selectedBank === bank && "bg-emerald-600 hover:bg-emerald-700"
-                    )}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedBank(bank);
-                    }}
-                  >
-                    {bank}
-                  </Button>
-                ))}
+                )}
+                
+                {showPaymentCalendar && (
+                  <div className="mt-2 border rounded-lg p-2 bg-background" onClick={(e) => e.stopPropagation()}>
+                    <NepaliCalendar
+                      selectedDates={paymentNepaliDates}
+                      onDateSelect={(dates) => {
+                        // Only take the last selected date (single select behavior)
+                        if (dates.length > 0) {
+                          setPaymentNepaliDates([dates[dates.length - 1]]);
+                          setShowPaymentCalendar(false);
+                        } else {
+                          setPaymentNepaliDates([]);
+                        }
+                      }}
+                      multiSelect={false}
+                    />
+                  </div>
+                )}
               </div>
-            </div>
 
-            {/* Submit Button */}
-            <Button
-              className="w-full h-12 text-base bg-blue-600 hover:bg-blue-700"
-              disabled={!paymentAmount || !selectedPaymentType || paymentNepaliDates.length === 0 || !selectedBank || isAddingPayment}
-              onClick={async (e) => {
-                e.stopPropagation();
-                if (!client.rowNumber) {
-                  toast.error("Cannot add payment: missing row number");
-                  return;
-                }
-                
-                // Extract numeric amount from final quotation
-                const parsed = parseFinalQuotation(currentFinalQuotation);
-                const finalAmount = parsed ? parseInt(parsed.amount.replace(/[^0-9]/g, '')) : 0;
-                
-                if (!finalAmount) {
-                  toast.error("No final quotation set");
-                  return;
-                }
-                
-                // Format the Nepali date as YYYY-MM-DD
-                const selectedDate = paymentNepaliDates[0];
-                const formattedNepaliDate = `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`;
-                
-                setIsAddingPayment(true);
-                try {
-                  const result = await addPayment(
-                    client.rowNumber,
-                    paymentAmount,
-                    selectedPaymentType,
-                    formattedNepaliDate,
-                    selectedBank,
-                    currentPaymentsMade,
-                    currentPaymentDatesAD,
-                    finalAmount
-                  );
-                  
-                  setCurrentPaymentsMade(result.paymentsMade);
-                  setCurrentPaymentDatesAD(result.paymentDatesAD);
-                  setCurrentRemainingPayment(result.remainingPayment);
-                  
-                  toast.success(`Payment of NPR ${parseInt(paymentAmount).toLocaleString('en-IN')}/- recorded!`);
-                  
-                  // Reset form
-                  setPaymentAmount('');
-                  setSelectedPaymentType('');
-                  setPaymentNepaliDates([]);
-                  setSelectedBank('');
-                  setShowPaymentDrawer(false);
-                  setShowPaymentCalendar(false);
-                  
-                  if (onPaymentAdded) {
-                    onPaymentAdded(client, result.paymentsMade, result.remainingPayment);
+              {/* 4. Bank */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">4. Bank *</Label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {banks.map((bank) => (
+                    <Button
+                      key={bank}
+                      type="button"
+                      variant={selectedBank === bank ? 'default' : 'outline'}
+                      size="sm"
+                      className={cn(
+                        "h-8 text-xs font-semibold",
+                        selectedBank === bank && "bg-emerald-600 hover:bg-emerald-700"
+                      )}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedBank(bank);
+                      }}
+                    >
+                      {bank}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <Button
+                className="w-full h-10 text-sm bg-blue-600 hover:bg-blue-700 mt-2"
+                disabled={!paymentAmount || !selectedPaymentType || paymentNepaliDates.length === 0 || !selectedBank || isAddingPayment}
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  if (!client.rowNumber) {
+                    toast.error("Cannot add payment: missing row number");
+                    return;
                   }
-                } catch (err) {
-                  console.error("Failed to add payment:", err);
-                  toast.error("Failed to record payment");
-                } finally {
-                  setIsAddingPayment(false);
-                }
-              }}
-            >
-              {isAddingPayment ? (
-                <Loader2 className="w-5 h-5 animate-spin mr-2" />
-              ) : (
-                <CreditCard className="w-5 h-5 mr-2" />
-              )}
-              Save Payment
-            </Button>
-          </div>
+                  
+                  // Extract numeric amount from final quotation
+                  const parsed = parseFinalQuotation(currentFinalQuotation);
+                  const finalAmount = parsed ? parseInt(parsed.amount.replace(/[^0-9]/g, '')) : 0;
+                  
+                  if (!finalAmount) {
+                    toast.error("No final quotation set");
+                    return;
+                  }
+                  
+                  // Format the Nepali date as YYYY-MM-DD
+                  const selectedDate = paymentNepaliDates[0];
+                  const formattedNepaliDate = `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`;
+                  
+                  // Convert Nepali date to AD for storage
+                  const adDateResult = bsToAD(selectedDate.year, selectedDate.month, selectedDate.day as number);
+                  const formattedADDate = adDateResult instanceof Date 
+                    ? adDateResult.toISOString().split('T')[0]
+                    : new Date().toISOString().split('T')[0]; // Fallback to today if conversion fails
+                  
+                  setIsAddingPayment(true);
+                  try {
+                    const result = await addPayment(
+                      client.rowNumber,
+                      paymentAmount,
+                      selectedPaymentType,
+                      formattedNepaliDate,
+                      formattedADDate,
+                      selectedBank,
+                      currentPaymentsMade,
+                      currentPaymentDatesAD,
+                      finalAmount
+                    );
+                    
+                    setCurrentPaymentsMade(result.paymentsMade);
+                    setCurrentPaymentDatesAD(result.paymentDatesAD);
+                    setCurrentRemainingPayment(result.remainingPayment);
+                    
+                    toast.success(`Payment of NPR ${parseInt(paymentAmount).toLocaleString('en-IN')}/- recorded!`);
+                    
+                    // Reset form
+                    setPaymentAmount('');
+                    setSelectedPaymentType('');
+                    setPaymentNepaliDates([]);
+                    setSelectedBank('');
+                    setShowPaymentDrawer(false);
+                    setShowPaymentCalendar(false);
+                    
+                    if (onPaymentAdded) {
+                      onPaymentAdded(client, result.paymentsMade, result.remainingPayment);
+                    }
+                  } catch (err) {
+                    console.error("Failed to add payment:", err);
+                    toast.error("Failed to record payment");
+                  } finally {
+                    setIsAddingPayment(false);
+                  }
+                }}
+              >
+                {isAddingPayment ? (
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                ) : (
+                  <CreditCard className="w-4 h-4 mr-2" />
+                )}
+                Save Payment
+              </Button>
+            </div>
+          </ScrollArea>
         </DrawerContent>
       </Drawer>
     </div>
