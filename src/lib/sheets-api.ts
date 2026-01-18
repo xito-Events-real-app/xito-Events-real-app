@@ -13,6 +13,8 @@ export interface DropdownData {
   whatsappOwners: string[];
   clientStatuses: string[];
   mindsetOptions: string[]; // Column K - Mindset options for QUOTATION SENT
+  paymentTypes: string[]; // Column P - Payment types
+  banks: string[]; // Column Q - Bank names
 }
 
 export interface ClientData {
@@ -47,6 +49,9 @@ export interface ClientData {
   clientBargainedRates?: string; // Column AB - client bargained rates
   comments?: string; // Column AC - comments with timestamps
   finalQuotation?: string; // Column AD - final booked quotation
+  paymentsMade?: string; // Column AE - payments made log
+  paymentDatesAD?: string; // Column AF - payment dates in AD format
+  remainingPayment?: string; // Column AG - remaining payment
 }
 
 // Spreadsheet ID is now configured as a backend secret
@@ -231,6 +236,42 @@ export async function updateFinalQuotation(
 ): Promise<{ success: boolean; finalQuotation: string }> {
   return callSheetsFunction<{ success: boolean; finalQuotation: string }>("updateFinalQuotation", {
     data: { rowNumber, finalQuotation },
+  });
+}
+
+export async function addPayment(
+  rowNumber: number,
+  paymentAmount: string,
+  paymentType: string,
+  nepaliDate: string,
+  bank: string,
+  existingPaymentsMade: string,
+  existingPaymentDatesAD: string,
+  finalQuotationAmount: number
+): Promise<{ 
+  success: boolean; 
+  paymentsMade: string; 
+  paymentDatesAD: string;
+  remainingPayment: string;
+  totalPaid: number;
+}> {
+  return callSheetsFunction<{ 
+    success: boolean; 
+    paymentsMade: string; 
+    paymentDatesAD: string;
+    remainingPayment: string;
+    totalPaid: number;
+  }>("addPayment", {
+    data: { 
+      rowNumber, 
+      paymentAmount, 
+      paymentType, 
+      nepaliDate, 
+      bank, 
+      existingPaymentsMade, 
+      existingPaymentDatesAD,
+      finalQuotationAmount
+    },
   });
 }
 

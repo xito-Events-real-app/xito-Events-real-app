@@ -23,6 +23,8 @@ export function useDropdownData() {
           whatsappOwners: mockDropdownData.whatsappOwners,
           clientStatuses: ['UNTOUCHED', 'TEXTED : NOT CALLED', 'CALL NOT RECEIVED', 'CALLED : QUOTATION PENDING', 'QUOTATION SENT : REVIEW PENDING', 'BARGAINING IS ON', 'ADVANCE PENDING', 'BOOKED', 'CANCELLED', 'POSTPONED'],
           mindsetOptions: ['NOT SEEN', 'IGNORED', 'BARGAINING', 'EXPENSIVE', 'READY TO PAY ADVANCE', 'NEED TIME', 'NEED MORE TIME', 'FAMILY DISCUSSION', 'OFFICE VISIT', 'DATE POSTPONED', 'BOOKED SOMEWHERE ELSE'],
+          paymentTypes: ['ADVANCE PAYMENT', 'PARTIAL PAYMENT', 'FULL PAYMENT'],
+          banks: ['MASTER BARUN', 'KRIPA SAVINGS', 'KRIPA CURRENT', 'ESEWA', 'KHALTI'],
         });
         setIsUsingMock(true);
         setIsLoading(false);
@@ -48,6 +50,8 @@ export function useDropdownData() {
           whatsappOwners: mockDropdownData.whatsappOwners,
           clientStatuses: ['UNTOUCHED', 'TEXTED : NOT CALLED', 'CALL NOT RECEIVED', 'CALLED : QUOTATION PENDING', 'QUOTATION SENT : REVIEW PENDING', 'BARGAINING IS ON', 'ADVANCE PENDING', 'BOOKED', 'CANCELLED', 'POSTPONED'],
           mindsetOptions: ['NOT SEEN', 'IGNORED', 'BARGAINING', 'EXPENSIVE', 'READY TO PAY ADVANCE', 'NEED TIME', 'NEED MORE TIME', 'FAMILY DISCUSSION', 'OFFICE VISIT', 'DATE POSTPONED', 'BOOKED SOMEWHERE ELSE'],
+          paymentTypes: ['ADVANCE PAYMENT', 'PARTIAL PAYMENT', 'FULL PAYMENT'],
+          banks: ['MASTER BARUN', 'KRIPA SAVINGS', 'KRIPA CURRENT', 'ESEWA', 'KHALTI'],
         });
         setIsUsingMock(true);
       } finally {
