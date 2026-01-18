@@ -371,6 +371,7 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
   const [currentFinalQuotation, setCurrentFinalQuotation] = useState(client.finalQuotation || '');
   const [showFinalQuotationDialog, setShowFinalQuotationDialog] = useState(false);
   const [newFinalQuotation, setNewFinalQuotation] = useState('');
+  const [selectedFinalPackage, setSelectedFinalPackage] = useState<string>('');
   const [isSavingFinalQuotation, setIsSavingFinalQuotation] = useState(false);
   
   // Use handler initials if set, otherwise fall back to who added
@@ -1051,6 +1052,26 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
     return null;
   }, [isBooked, events, client.eventDateAD]);
 
+  // Parse final quotation to extract package and amount
+  const parseFinalQuotation = (data: string): { package: string; amount: string } | null => {
+    if (!data) return null;
+    // Format: "PACKAGE: NPR X,XX,XXX/-" or just "NPR X,XX,XXX/-"
+    const match = data.match(/^(?:([A-Z\s]+):\s*)?NPR\s+([\d,]+)\/-$/);
+    if (match) {
+      return { 
+        package: match[1]?.trim() || '', 
+        amount: `NPR ${match[2]}/-` 
+      };
+    }
+    // Fallback - just return the data as amount
+    return { package: '', amount: data };
+  };
+
+  // Get parsed final quotation for display
+  const parsedFinalQuotation = useMemo(() => {
+    return parseFinalQuotation(currentFinalQuotation);
+  }, [currentFinalQuotation]);
+
   // Handle save final quotation
   const handleSaveFinalQuotation = async () => {
     if (!client.rowNumber) {
@@ -1062,12 +1083,17 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
       toast.error("Please enter the final quotation amount");
       return;
     }
+    
+    if (!selectedFinalPackage) {
+      toast.error("Please select a package");
+      return;
+    }
 
     setIsSavingFinalQuotation(true);
     
     try {
-      // Format the amount
-      const formattedAmount = `NPR ${formatNPR(newFinalQuotation)}/-`;
+      // Format: "PACKAGE: NPR X,XX,XXX/-"
+      const formattedAmount = `${selectedFinalPackage}: NPR ${formatNPR(newFinalQuotation)}/-`;
       
       // Save to Column AD
       await updateFinalQuotation(client.rowNumber, formattedAmount);
@@ -1078,6 +1104,7 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
       // Close dialog and reset
       setShowFinalQuotationDialog(false);
       setNewFinalQuotation('');
+      setSelectedFinalPackage('');
       
       toast.success("Final quotation saved");
     } catch (err) {
@@ -1132,18 +1159,35 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
                 <Lock className="w-3 h-3 text-green-700 dark:text-green-400" />
                 <span className="text-[10px] font-semibold text-green-800 dark:text-green-300 uppercase tracking-wide">Final Quote</span>
               </div>
-              {currentFinalQuotation ? (
+              {parsedFinalQuotation ? (
                 <div 
                   onClick={(e) => {
                     e.stopPropagation();
-                    setNewFinalQuotation(currentFinalQuotation.replace(/[^0-9]/g, ''));
+                    // Pre-fill existing values
+                    const parsed = parseFinalQuotation(currentFinalQuotation);
+                    if (parsed) {
+                      setNewFinalQuotation(parsed.amount.replace(/[^0-9]/g, ''));
+                      setSelectedFinalPackage(parsed.package);
+                    }
                     setShowFinalQuotationDialog(true);
                   }}
                   className="cursor-pointer group"
                 >
-                  <div className="text-lg font-bold text-green-800 dark:text-green-200 flex items-center gap-2">
-                    🔒 {currentFinalQuotation}
-                    <Edit className="w-3 h-3 opacity-0 group-hover:opacity-70 transition-opacity" />
+                  <div className="flex flex-col gap-1">
+                    {/* Package Badge */}
+                    {parsedFinalQuotation.package && (
+                      <span className={cn(
+                        "inline-flex w-fit px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide shadow-sm",
+                        getQuotationTierColor(parsedFinalQuotation.package)
+                      )}>
+                        {parsedFinalQuotation.package}
+                      </span>
+                    )}
+                    {/* Amount */}
+                    <div className="text-lg font-bold text-green-800 dark:text-green-200 flex items-center gap-2">
+                      🔒 {parsedFinalQuotation.amount}
+                      <Edit className="w-3 h-3 opacity-0 group-hover:opacity-70 transition-opacity" />
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -2242,7 +2286,13 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
       </Drawer>
 
       {/* Final Quotation Dialog - For BOOKED clients */}
-      <Dialog open={showFinalQuotationDialog} onOpenChange={setShowFinalQuotationDialog}>
+      <Dialog open={showFinalQuotationDialog} onOpenChange={(open) => {
+        if (!open) {
+          setShowFinalQuotationDialog(false);
+          setNewFinalQuotation('');
+          setSelectedFinalPackage('');
+        }
+      }}>
         <DialogContent onClick={(e) => e.stopPropagation()} className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -2250,11 +2300,39 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
               Final Quotation
             </DialogTitle>
             <DialogDescription>
-              Enter the final confirmed price for {client.clientName}
+              Select package and enter the final confirmed price for {client.clientName}
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4 py-2">
+            {/* Package Selection */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Select Package</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {['BASIC', 'STANDARD', 'PREMIUM', 'WTN SPECIAL'].map((pkg) => (
+                  <Button
+                    key={pkg}
+                    type="button"
+                    variant={selectedFinalPackage === pkg ? 'default' : 'outline'}
+                    size="sm"
+                    className={cn(
+                      "h-10 text-xs font-semibold transition-all",
+                      selectedFinalPackage === pkg 
+                        ? getQuotationTierColor(pkg)
+                        : "hover:border-primary"
+                    )}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedFinalPackage(pkg);
+                    }}
+                  >
+                    {pkg}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Amount Input */}
             <div className="space-y-2">
               <Label htmlFor="finalQuote" className="text-sm font-medium">Final Amount</Label>
               <div className="flex items-center gap-2">
@@ -2274,12 +2352,16 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
           </div>
           
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setShowFinalQuotationDialog(false)}>
+            <Button variant="outline" onClick={() => {
+              setShowFinalQuotationDialog(false);
+              setNewFinalQuotation('');
+              setSelectedFinalPackage('');
+            }}>
               Cancel
             </Button>
             <Button 
               onClick={handleSaveFinalQuotation}
-              disabled={!newFinalQuotation.trim() || isSavingFinalQuotation}
+              disabled={!newFinalQuotation.trim() || !selectedFinalPackage || isSavingFinalQuotation}
               className="bg-green-600 hover:bg-green-700 text-white"
             >
               {isSavingFinalQuotation ? (
