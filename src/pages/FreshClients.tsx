@@ -58,6 +58,8 @@ export default function FreshClients() {
   const statusOptions = dropdowns?.clientStatuses || [];
   const handlerOptions = dropdowns?.whatsappOwners || [];
   const mindsetOptions = dropdowns?.mindsetOptions || [];
+  const paymentTypes = dropdowns?.paymentTypes || [];
+  const banks = dropdowns?.banks || [];
 
   // Group clients by their current status
   const clientsByStatus = useMemo(() => {
@@ -336,6 +338,8 @@ export default function FreshClients() {
                           statusOptions={statusOptions}
                           handlerOptions={handlerOptions}
                           mindsetOptions={mindsetOptions}
+                          paymentTypes={paymentTypes}
+                          banks={banks}
                           currentStatusCategory={currentStatus}
                           onStatusChange={handleStatusChange}
                           onHandlerChange={handleHandlerChange}
