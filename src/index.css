@@ -2,77 +2,42 @@
 @tailwind components;
 @tailwind utilities;
 
-/* WTN Client Tracker - Modern Vibrant Design System */
+/* Desktop mode styles */
+.desktop-mode {
+  min-width: 1024px;
+}
+
+.desktop-mode body {
+  min-width: 1024px;
+  overflow-x: auto;
+}
+
+/* Desktop mode overrides */
+.desktop-mode .max-w-lg {
+  max-width: 100%;
+}
+
+.desktop-mode .pb-24 {
+  padding-bottom: 0;
+}
+
+/* Hide mobile bottom navigation in desktop mode - but keep sync button container */
+.desktop-mode .fixed.bottom-0.left-0.right-0.z-50.glass.border-t {
+  display: none;
+}
+
+/* Show sync as floating button in desktop mode */
+.desktop-mode .desktop-sync-button {
+  display: flex;
+}
+
+/* Expand grid layout in desktop mode */
+.desktop-mode .space-y-4 > .grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
 
 @layer base {
   :root {
-    /* Modern vibrant color palette */
-    --background: 0 0% 100%;
-    --foreground: 220 25% 10%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 220 25% 10%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 220 25% 10%;
-
-    /* Vibrant coral/orange primary */
-    --primary: 15 90% 55%;
-    --primary-foreground: 0 0% 100%;
-
-    /* Cool teal secondary */
-    --secondary: 175 60% 45%;
-    --secondary-foreground: 0 0% 100%;
-
-    /* Soft purple accent */
-    --accent: 270 60% 60%;
-    --accent-foreground: 0 0% 100%;
-
-    --muted: 220 15% 95%;
-    --muted-foreground: 220 10% 45%;
-
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 220 15% 90%;
-    --input: 220 15% 90%;
-    --ring: 15 90% 55%;
-
-    --radius: 0.75rem;
-
-    /* Custom gradient tokens */
-    --gradient-primary: linear-gradient(135deg, hsl(15 90% 55%) 0%, hsl(35 95% 55%) 100%);
-    --gradient-secondary: linear-gradient(135deg, hsl(175 60% 45%) 0%, hsl(195 70% 50%) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(270 60% 60%) 0%, hsl(290 65% 55%) 100%);
-    --gradient-hero: linear-gradient(135deg, hsl(220 25% 10%) 0%, hsl(240 20% 20%) 100%);
-    
-    /* Success color */
-    --success: 145 65% 42%;
-    --success-foreground: 0 0% 100%;
-    
-    /* Warning color */
-    --warning: 40 95% 50%;
-    --warning-foreground: 220 25% 10%;
-
-    /* Sidebar - using dark theme */
-    --sidebar-background: 220 25% 10%;
-    --sidebar-foreground: 220 15% 95%;
-    --sidebar-primary: 15 90% 55%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 20% 18%;
-    --sidebar-accent-foreground: 220 15% 95%;
-    --sidebar-border: 220 20% 18%;
-    --sidebar-ring: 15 90% 55%;
-
-    /* Chart colors */
-    --chart-1: 15 90% 55%;
-    --chart-2: 175 60% 45%;
-    --chart-3: 270 60% 60%;
-    --chart-4: 40 95% 50%;
-    --chart-5: 145 65% 42%;
-  }
-
-  .dark {
     --background: 220 25% 8%;
     --foreground: 220 15% 95%;
 
@@ -423,4 +388,36 @@
 .jackpot-text-glow {
   text-shadow: 0 0 10px #ffd700, 0 0 20px #ffd700, 0 0 40px #ff6b00, 0 0 60px #ff6b00;
   animation: neon-flicker 3s linear infinite;
+}
+
+/* Desktop mode styles */
+.desktop-mode {
+  min-width: 1024px;
+}
+
+.desktop-mode body {
+  min-width: 1024px;
+  overflow-x: auto;
+}
+
+/* Desktop mode overrides */
+.desktop-mode .max-w-lg {
+  max-width: 100%;
+}
+
+.desktop-mode .pb-24 {
+  padding-bottom: 2rem;
+}
+
+/* Expand grid layout in desktop mode */
+.desktop-mode .space-y-4 > .grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* Desktop mode - convert bottom nav to top nav style */
+.desktop-mode nav.fixed.bottom-0 {
+  bottom: auto;
+  top: 0;
+  border-top: none;
+  border-bottom: 1px solid hsl(var(--border));
 }

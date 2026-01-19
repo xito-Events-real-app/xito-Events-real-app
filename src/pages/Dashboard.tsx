@@ -20,6 +20,7 @@ import { DateConverterDrawer } from "@/components/dashboard/DateConverterDrawer"
 import { getDeviceHandler, saveDeviceHandler, isDeviceHandlerValid } from "@/lib/handler-memory";
 import { toast } from "sonner";
 import { useDesktopMode } from "@/contexts/DesktopModeContext";
+import { MuteButton } from "@/components/layout/MuteButton";
 // Get icon and color for each status category
 const getStatusConfig = (status: string) => {
   const s = status.toUpperCase();
@@ -491,6 +492,8 @@ export default function Dashboard() {
         {/* Header with Menu Button */}
         <div className="flex items-center justify-between px-4 pt-4">
           <div className="flex items-center gap-2">
+            {/* Music control button */}
+            <MuteButton fixed={false} className="shrink-0" />
             {/* Desktop Mode Toggle */}
             <Button
               variant={isDesktopMode ? "default" : "outline"}
