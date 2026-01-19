@@ -221,6 +221,16 @@ export async function updateClientBargainedRates(
   });
 }
 
+// Update only our counter rates (Column AA) - used in BARGAINING IS ON category
+export async function updateOurCounterRates(
+  rowNumber: number,
+  ourRates: string
+): Promise<{ success: boolean; ourBargainedRates: string }> {
+  return callSheetsFunction<{ success: boolean; ourBargainedRates: string }>("updateOurCounterRates", {
+    data: { rowNumber, ourRates },
+  });
+}
+
 export async function addClientComment(
   rowNumber: number,
   comment: string,
