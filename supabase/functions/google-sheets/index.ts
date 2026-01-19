@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -753,6 +753,39 @@ async function updateClientBargainedRates(
   return { success: true, clientBargainedRates: clientRates };
 }
 
+// Update only our counter rates in Column AA (for BARGAINING IS ON category)
+async function updateOurCounterRates(
+  accessToken: string, 
+  spreadsheetId: string, 
+  rowNumber: number, 
+  ourRates: string
+) {
+  if (!rowNumber || rowNumber < 2) {
+    throw new Error('Valid rowNumber is required for updating our counter rates');
+  }
+
+  // Update only Column AA
+  const range = encodeURIComponent(`'CLIENT TRACKER'!AA${rowNumber}`);
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  
+  const response = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [[ourRates]] }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (updateOurCounterRates):', response.status, errorText);
+    throw new Error(`Failed to update our counter rates: ${response.status}`);
+  }
+
+  return { success: true, ourBargainedRates: ourRates };
+}
+
 // Bulk update status for clients matching a specific status
 async function bulkUpdateStatus(accessToken: string, spreadsheetId: string, fromStatus: string, toStatus: string) {
   // First, get all clients
@@ -1122,6 +1155,15 @@ Deno.serve(async (req) => {
           spreadsheetId, 
           data.rowNumber as number, 
           data.finalQuotation as string || ''
+        );
+        break;
+      case 'updateOurCounterRates':
+        if (!data || !data.rowNumber) throw new Error('rowNumber is required for updateOurCounterRates');
+        result = await updateOurCounterRates(
+          accessToken, 
+          spreadsheetId, 
+          data.rowNumber as number, 
+          data.ourRates as string || ''
         );
         break;
       case 'addPayment':

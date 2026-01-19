@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { ClientData, updateClientStatus, updateClientHandler, logCallAttempt, getCurrentStatus, updateClientQuotation, updateClientMindset, updateBargainingRates, updateClientBargainedRates, addClientComment, updateFinalQuotation, addPayment } from "@/lib/sheets-api";
+import { ClientData, updateClientStatus, updateClientHandler, logCallAttempt, getCurrentStatus, updateClientQuotation, updateClientMindset, updateBargainingRates, updateClientBargainedRates, updateOurCounterRates, addClientComment, updateFinalQuotation, addPayment } from "@/lib/sheets-api";
 import { getHandlerInitials, parseEventDetails, formatLocationDisplay } from "@/lib/nepali-months";
 import { cn } from "@/lib/utils";
 import {
@@ -33,7 +33,7 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import { ChevronDown, ChevronUp, Loader2, Clock, AlertTriangle, UserCog, Phone, MessageCircle, Edit, History, Bell, ExternalLink, FileText, Brain, MessageSquare, Lock, Calendar, CreditCard, Plus, Banknote, CalendarDays } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Clock, AlertTriangle, UserCog, Phone, MessageCircle, Edit, History, Bell, ExternalLink, FileText, Brain, MessageSquare, Lock, Calendar, CreditCard, Plus, Banknote, CalendarDays, ArrowRightLeft } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -396,6 +396,12 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
   const [selectedClientBargainPackages, setSelectedClientBargainPackages] = useState<string[]>([]);
   const [clientBargainPrices, setClientBargainPrices] = useState<Record<string, string>>({});
   const [isSavingClientBargain, setIsSavingClientBargain] = useState(false);
+  
+  // Our Counter Rate dialog states
+  const [showOurCounterRateDialog, setShowOurCounterRateDialog] = useState(false);
+  const [selectedCounterPackages, setSelectedCounterPackages] = useState<string[]>([]);
+  const [ourCounterPrices, setOurCounterPrices] = useState<Record<string, string>>({});
+  const [isSavingOurCounter, setIsSavingOurCounter] = useState(false);
   
   // Use handler initials if set, otherwise fall back to who added
   const displayInitials = getHandlerInitials(currentHandler || client.whoAdded || '');
@@ -794,6 +800,65 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
       toast.error("Failed to save bargained prices");
     } finally {
       setIsSavingClientBargain(false);
+    }
+  };
+
+  // Handle saving our counter rates (for BARGAINING IS ON category)
+  const handleSaveOurCounterRate = async () => {
+    if (!client.rowNumber) {
+      toast.error("Cannot save: missing row number");
+      return;
+    }
+    if (selectedCounterPackages.length === 0) {
+      toast.error("Please select at least one package");
+      return;
+    }
+
+    // Check if at least one price is filled
+    const hasPrice = selectedCounterPackages.some(pkg => ourCounterPrices[pkg]?.trim());
+    if (!hasPrice) {
+      toast.error("Please enter at least one counter rate");
+      return;
+    }
+
+    setIsSavingOurCounter(true);
+    try {
+      // Build our rates string from existing + new values
+      const existingRates = parseQuotationData(currentOurBargainedRates);
+      const existingRatesMap: Record<string, string> = {};
+      existingRates.forEach(r => {
+        existingRatesMap[r.tier] = r.amount;
+      });
+
+      // Update with new values
+      selectedCounterPackages.forEach(tier => {
+        if (ourCounterPrices[tier]?.trim()) {
+          existingRatesMap[tier] = `NPR ${formatNPR(ourCounterPrices[tier])}/-`;
+        }
+      });
+
+      // Build final string
+      const ourLines = Object.entries(existingRatesMap)
+        .filter(([_, amount]) => amount)
+        .map(([tier, amount]) => `${tier}: ${amount}`);
+
+      const newOurRates = ourLines.join('\n');
+
+      await updateOurCounterRates(client.rowNumber, newOurRates);
+      
+      setCurrentOurBargainedRates(newOurRates);
+      setShowOurCounterRateDialog(false);
+      
+      // Reset form
+      setSelectedCounterPackages([]);
+      setOurCounterPrices({});
+
+      toast.success("Our counter rates saved");
+    } catch (err) {
+      console.error("Failed to save our counter rates:", err);
+      toast.error("Failed to save counter rates");
+    } finally {
+      setIsSavingOurCounter(false);
     }
   };
   
@@ -1296,31 +1361,108 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
             </div>
           )}
 
-          {/* Add/Edit Client Bargained Price Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full h-8 text-xs border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-400 dark:hover:bg-amber-900/40"
-            onClick={(e) => {
-              e.stopPropagation();
-              // Pre-fill existing bargained prices if any
-              if (currentClientBargainedRates) {
-                const existing = parseQuotationData(currentClientBargainedRates);
-                const prices: Record<string, string> = {};
-                const packages: string[] = [];
-                existing.forEach(r => {
-                  packages.push(r.tier);
-                  prices[r.tier] = r.amount.replace(/[^0-9]/g, '');
-                });
-                setSelectedClientBargainPackages(packages);
-                setClientBargainPrices(prices);
-              }
-              setShowClientBargainDialog(true);
-            }}
-          >
-            <Banknote className="w-3 h-3 mr-1" />
-            {currentClientBargainedRates ? 'Edit Client Bargained Price' : 'Add Client Bargained Price'}
-          </Button>
+          {/* Our Counter Rate Section */}
+          {currentOurBargainedRates && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <ArrowRightLeft className="w-3 h-3 text-green-600 dark:text-green-400" />
+                <span className="text-[10px] font-semibold text-green-700 dark:text-green-300 uppercase tracking-wide">Our Counter Rate</span>
+              </div>
+              <div className="space-y-1.5">
+                {parseQuotationData(currentOurBargainedRates).map((ourCounter, i) => {
+                  // Find corresponding client rate and original rate
+                  const originalQuote = parseQuotationData(currentQuotationData).find(q => q.tier === ourCounter.tier);
+                  const clientRate = parseQuotationData(currentClientBargainedRates).find(q => q.tier === ourCounter.tier);
+                  
+                  const originalAmount = originalQuote ? parseInt(originalQuote.amount.replace(/[^0-9]/g, '')) : 0;
+                  const counterAmount = parseInt(ourCounter.amount.replace(/[^0-9]/g, ''));
+                  const clientAmount = clientRate ? parseInt(clientRate.amount.replace(/[^0-9]/g, '')) : 0;
+                  
+                  const discountFromOriginal = originalAmount - counterAmount;
+                  const gapFromClient = counterAmount - clientAmount;
+                  
+                  return (
+                    <div key={i} className="flex items-center gap-2 flex-wrap bg-green-50/50 dark:bg-green-900/20 px-2 py-1.5 rounded-md">
+                      <span className={cn(
+                        "px-1.5 py-0.5 rounded text-[10px] font-bold",
+                        getQuotationTierColor(ourCounter.tier)
+                      )}>
+                        {ourCounter.tier}
+                      </span>
+                      <span className="text-xs font-medium text-green-700 dark:text-green-300">
+                        {ourCounter.amount}
+                      </span>
+                      {discountFromOriginal > 0 && (
+                        <span className="text-[10px] font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded">
+                          ↓ {discountFromOriginal.toLocaleString('en-IN')}/- off
+                        </span>
+                      )}
+                      {gapFromClient > 0 && clientAmount > 0 && (
+                        <span className="text-[10px] font-medium text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 px-1.5 py-0.5 rounded">
+                          Gap: {gapFromClient.toLocaleString('en-IN')}/-
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="grid grid-cols-2 gap-2">
+            {/* Add/Edit Client Bargained Price Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-400 dark:hover:bg-amber-900/40"
+              onClick={(e) => {
+                e.stopPropagation();
+                // Pre-fill existing bargained prices if any
+                if (currentClientBargainedRates) {
+                  const existing = parseQuotationData(currentClientBargainedRates);
+                  const prices: Record<string, string> = {};
+                  const packages: string[] = [];
+                  existing.forEach(r => {
+                    packages.push(r.tier);
+                    prices[r.tier] = r.amount.replace(/[^0-9]/g, '');
+                  });
+                  setSelectedClientBargainPackages(packages);
+                  setClientBargainPrices(prices);
+                }
+                setShowClientBargainDialog(true);
+              }}
+            >
+              <Banknote className="w-3 h-3 mr-1" />
+              {currentClientBargainedRates ? 'Edit Client' : 'Client Rate'}
+            </Button>
+
+            {/* Add/Edit Our Counter Rate Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs border-green-400 text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900/40"
+              onClick={(e) => {
+                e.stopPropagation();
+                // Pre-fill existing counter rates if any
+                if (currentOurBargainedRates) {
+                  const existing = parseQuotationData(currentOurBargainedRates);
+                  const prices: Record<string, string> = {};
+                  const packages: string[] = [];
+                  existing.forEach(r => {
+                    packages.push(r.tier);
+                    prices[r.tier] = r.amount.replace(/[^0-9]/g, '');
+                  });
+                  setSelectedCounterPackages(packages);
+                  setOurCounterPrices(prices);
+                }
+                setShowOurCounterRateDialog(true);
+              }}
+            >
+              <ArrowRightLeft className="w-3 h-3 mr-1" />
+              {currentOurBargainedRates ? 'Edit Counter' : 'Our Counter'}
+            </Button>
+          </div>
         </div>
       )}
 
@@ -2516,6 +2658,139 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
                 <Banknote className="w-4 h-4 mr-2" />
               )}
               Save Bargained Prices
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Our Counter Rate Dialog - For BARGAINING IS ON category */}
+      <Dialog open={showOurCounterRateDialog} onOpenChange={setShowOurCounterRateDialog}>
+        <DialogContent onClick={(e) => e.stopPropagation()} className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowRightLeft className="w-5 h-5 text-green-600" />
+              Our Counter Rate
+            </DialogTitle>
+            <DialogDescription>
+              Enter our counter-offer prices for {client.clientName}'s bargaining.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-2">
+            {/* Package Selection */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Select Package(s)</Label>
+              {parseQuotationData(currentQuotationData).length > 0 ? (
+                <div className="space-y-2">
+                  {parseQuotationData(currentQuotationData).map((q, i) => {
+                    const clientRate = parseQuotationData(currentClientBargainedRates).find(r => r.tier === q.tier);
+                    return (
+                      <div key={i} className="flex items-center gap-2">
+                        <Checkbox 
+                          id={`counter-pkg-${q.tier}`}
+                          checked={selectedCounterPackages.includes(q.tier)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedCounterPackages([...selectedCounterPackages, q.tier]);
+                            } else {
+                              setSelectedCounterPackages(selectedCounterPackages.filter(t => t !== q.tier));
+                              const newPrices = { ...ourCounterPrices };
+                              delete newPrices[q.tier];
+                              setOurCounterPrices(newPrices);
+                            }
+                          }}
+                        />
+                        <label 
+                          htmlFor={`counter-pkg-${q.tier}`}
+                          className="flex flex-col"
+                        >
+                          <span className={cn(
+                            "text-sm font-medium px-2 py-1 rounded",
+                            getQuotationTierColor(q.tier)
+                          )}>
+                            {q.tier}: {q.amount}
+                          </span>
+                          {clientRate && (
+                            <span className="text-[10px] text-amber-600 dark:text-amber-400 ml-2 mt-0.5">
+                              Client wants: {clientRate.amount}
+                            </span>
+                          )}
+                        </label>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No quotation data available</p>
+              )}
+            </div>
+            
+            {/* Price Inputs for Selected Packages */}
+            {selectedCounterPackages.length > 0 && (
+              <div className="space-y-3 pt-2 border-t">
+                <Label className="text-sm font-medium">Enter Our Counter Prices</Label>
+                {selectedCounterPackages.map((tier) => {
+                  const ourQuote = parseQuotationData(currentQuotationData).find(q => q.tier === tier);
+                  const clientRate = parseQuotationData(currentClientBargainedRates).find(q => q.tier === tier);
+                  return (
+                    <div key={tier} className="space-y-1 p-3 bg-green-50/50 dark:bg-green-900/20 rounded-lg">
+                      <div className="flex items-center justify-between flex-wrap gap-1">
+                        <span className={cn(
+                          "text-xs font-semibold px-2 py-0.5 rounded",
+                          getQuotationTierColor(tier)
+                        )}>
+                          {tier}
+                        </span>
+                        <div className="flex gap-2 text-[10px]">
+                          {ourQuote && (
+                            <span className="text-muted-foreground">
+                              Original: {ourQuote.amount}
+                            </span>
+                          )}
+                          {clientRate && (
+                            <span className="text-amber-600 dark:text-amber-400">
+                              Client: {clientRate.amount}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-muted-foreground">NPR</span>
+                        <Input
+                          type="number"
+                          placeholder="Our counter price"
+                          value={ourCounterPrices[tier] || ''}
+                          onChange={(e) => setOurCounterPrices({ ...ourCounterPrices, [tier]: e.target.value })}
+                          className="h-8 text-sm"
+                        />
+                        <span className="text-xs text-muted-foreground">/-</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => {
+              setShowOurCounterRateDialog(false);
+              setSelectedCounterPackages([]);
+              setOurCounterPrices({});
+            }}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSaveOurCounterRate}
+              disabled={selectedCounterPackages.length === 0 || isSavingOurCounter}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              {isSavingOurCounter ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <ArrowRightLeft className="w-4 h-4 mr-2" />
+              )}
+              Save Counter Rates
             </Button>
           </DialogFooter>
         </DialogContent>
