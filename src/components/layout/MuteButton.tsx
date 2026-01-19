@@ -10,7 +10,7 @@ export function MuteButton() {
       variant="ghost"
       size="icon"
       onClick={toggleMute}
-      className="fixed top-4 right-4 z-50 bg-background/80 backdrop-blur-sm border border-border shadow-lg hover:bg-background"
+      className="fixed top-4 left-4 z-50 bg-background/80 backdrop-blur-sm border border-border shadow-lg hover:bg-background"
       aria-label={isMuted ? "Unmute music" : "Mute music"}
     >
       {isMuted ? (
