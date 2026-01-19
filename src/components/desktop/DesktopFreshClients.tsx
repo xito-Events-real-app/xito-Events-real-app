@@ -122,7 +122,7 @@ export function DesktopFreshClients({
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         const name = (client.clientName || '').toLowerCase();
-        const phone = (client.whatsappNumber || '').toLowerCase();
+        const phone = (client.whatsappNo || client.contactNo || '').toLowerCase();
         const event = (client.events || '').toLowerCase();
         const location = (client.eventLocation || '').toLowerCase();
         
@@ -271,12 +271,12 @@ export function DesktopFreshClients({
                         </TableCell>
                         <TableCell>
                           <div className="text-sm">
-                            {client.whatsappNumber && (
+                            {(client.whatsappNo || client.contactNo) && (
                               <a 
-                                href={`tel:${client.whatsappNumber}`}
+                                href={`tel:${client.whatsappNo || client.contactNo}`}
                                 className="text-primary hover:underline"
                               >
-                                {client.whatsappNumber}
+                                {client.whatsappNo || client.contactNo}
                               </a>
                             )}
                           </div>
