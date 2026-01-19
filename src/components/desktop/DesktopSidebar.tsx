@@ -62,13 +62,14 @@ export function DesktopSidebar({ handlers, handlerCounts, onHandlerClick }: Desk
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 h-screen bg-sidebar-background text-sidebar-foreground border-r border-sidebar-border z-40 flex flex-col transition-all duration-300",
+        "fixed left-0 top-0 h-screen border-r z-40 flex flex-col transition-all duration-300",
+        "bg-[hsl(220,25%,10%)] text-[hsl(220,15%,95%)] border-[hsl(220,20%,18%)]",
         isCollapsed ? "w-16" : "w-64"
       )}
     >
       {/* Logo */}
       <div className={cn(
-        "h-16 flex items-center border-b border-sidebar-border px-4",
+        "h-16 flex items-center border-b border-[hsl(220,20%,18%)] px-4",
         isCollapsed ? "justify-center" : "justify-between"
       )}>
         {!isCollapsed && (
@@ -77,8 +78,8 @@ export function DesktopSidebar({ handlers, handlerCounts, onHandlerClick }: Desk
               <span className="text-white font-bold text-sm">W</span>
             </div>
             <div>
-              <h1 className="font-bold text-sm leading-tight">WTN Tracker</h1>
-              <p className="text-[10px] text-sidebar-foreground/60">Client Management</p>
+              <h1 className="font-bold text-sm leading-tight text-white">WTN Tracker</h1>
+              <p className="text-[10px] text-white/60">Client Management</p>
             </div>
           </div>
         )}
@@ -102,8 +103,8 @@ export function DesktopSidebar({ handlers, handlerCounts, onHandlerClick }: Desk
                 className={cn(
                   "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all",
                   active
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                    ? "bg-primary text-white"
+                    : "text-white/70 hover:bg-white/10 hover:text-white"
                 )}
               >
                 <Icon className="w-5 h-5 shrink-0" />
@@ -116,10 +117,10 @@ export function DesktopSidebar({ handlers, handlerCounts, onHandlerClick }: Desk
         {/* Handlers Section */}
         {handlers.length > 0 && (
           <>
-            <Separator className="my-4 bg-sidebar-border" />
+            <Separator className="my-4 bg-white/10" />
             <div className="px-4 mb-2">
               {!isCollapsed && (
-                <h3 className="text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider">
+                <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider">
                   Handlers
                 </h3>
               )}
@@ -136,7 +137,7 @@ export function DesktopSidebar({ handlers, handlerCounts, onHandlerClick }: Desk
                     onClick={() => onHandlerClick(handler)}
                     className={cn(
                       "w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all",
-                      "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                      "text-white/70 hover:bg-white/10 hover:text-white"
                     )}
                   >
                     <div className={cn(
@@ -148,7 +149,7 @@ export function DesktopSidebar({ handlers, handlerCounts, onHandlerClick }: Desk
                     {!isCollapsed && (
                       <>
                         <span className="text-sm font-medium flex-1 text-left truncate">{handler}</span>
-                        <span className="text-xs bg-sidebar-accent px-2 py-0.5 rounded-full">
+                        <span className="text-xs bg-white/10 px-2 py-0.5 rounded-full text-white/80">
                           {count}
                         </span>
                       </>
@@ -162,7 +163,7 @@ export function DesktopSidebar({ handlers, handlerCounts, onHandlerClick }: Desk
       </ScrollArea>
 
       {/* Bottom Section */}
-      <div className="border-t border-sidebar-border py-2 px-2">
+      <div className="border-t border-white/10 py-2 px-2">
         {bottomNavItems.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.path);
@@ -173,8 +174,8 @@ export function DesktopSidebar({ handlers, handlerCounts, onHandlerClick }: Desk
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all",
                 active
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                  ? "bg-primary text-white"
+                  : "text-white/70 hover:bg-white/10 hover:text-white"
               )}
             >
               <Icon className="w-5 h-5 shrink-0" />
