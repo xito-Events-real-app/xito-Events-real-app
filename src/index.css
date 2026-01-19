@@ -155,6 +155,35 @@
 }
 
 @layer utilities {
+  /* Desktop Mode - Force desktop layout on mobile */
+  .desktop-mode {
+    /* Force minimum width for desktop-like rendering */
+    min-width: 1024px;
+  }
+
+  .desktop-mode body {
+    min-width: 1024px;
+    overflow-x: auto;
+  }
+
+  .desktop-mode .max-w-lg {
+    max-width: 100% !important;
+  }
+
+  .desktop-mode .pb-24 {
+    padding-bottom: 0 !important;
+  }
+
+  /* Hide mobile bottom nav in desktop mode */
+  .desktop-mode .fixed.bottom-0 {
+    display: none !important;
+  }
+
+  /* Expand cards in desktop mode */
+  .desktop-mode .space-y-4 > .grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
   /* Gradient utilities */
   .gradient-primary {
     background: var(--gradient-primary);
