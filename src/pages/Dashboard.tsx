@@ -492,8 +492,14 @@ export default function Dashboard() {
         {/* Header with Menu Button */}
         <div className="flex items-center justify-between px-4 pt-4">
           <div className="flex items-center gap-2">
-            {/* Music control button */}
-            <MuteButton fixed={false} className="shrink-0" />
+            {/* Music control button - fixed position */}
+            <MuteButton fixed={true} />
+            <PageHeader 
+              title="WTN Client Tracker" 
+              subtitle="Wedding & Event Management"
+            />
+          </div>
+          <div className="flex items-center gap-2">
             {/* Desktop Mode Toggle */}
             <Button
               variant={isDesktopMode ? "default" : "outline"}
@@ -511,12 +517,6 @@ export default function Dashboard() {
                 <Monitor className="w-5 h-5" />
               )}
             </Button>
-            <PageHeader 
-              title="WTN Client Tracker" 
-              subtitle="Wedding & Event Management"
-            />
-          </div>
-          <div className="flex items-center gap-2">
             <Button
               variant="ghost"
               size="icon"
