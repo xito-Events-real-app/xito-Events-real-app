@@ -1,14 +1,8 @@
 import { Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAudio } from "@/contexts/AudioContext";
-import { cn } from "@/lib/utils";
 
-interface MuteButtonProps {
-  className?: string;
-  fixed?: boolean;
-}
-
-export function MuteButton({ className, fixed = true }: MuteButtonProps) {
+export function MuteButton() {
   const { isMuted, toggleMute } = useAudio();
 
   return (
@@ -16,11 +10,7 @@ export function MuteButton({ className, fixed = true }: MuteButtonProps) {
       variant="ghost"
       size="icon"
       onClick={toggleMute}
-      className={cn(
-        fixed && "fixed top-4 left-4 z-50",
-        "bg-background/80 backdrop-blur-sm border border-border shadow-lg hover:bg-background",
-        className
-      )}
+      className="fixed top-4 right-4 z-50 bg-background/80 backdrop-blur-sm border border-border shadow-lg hover:bg-background"
       aria-label={isMuted ? "Unmute music" : "Mute music"}
     >
       {isMuted ? (

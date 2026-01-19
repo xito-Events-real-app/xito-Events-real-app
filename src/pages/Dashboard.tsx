@@ -6,8 +6,7 @@ import {
   Users, CalendarPlus, TrendingUp, Menu, 
   MessageSquare, PhoneOff, FileText, SendHorizontal, 
   Scale, Clock, CheckCircle, XCircle, CalendarX,
-  Phone, ChevronRight, RefreshCw, AlertTriangle, Bell,
-  Monitor, Smartphone
+  Phone, ChevronRight, RefreshCw, AlertTriangle, Bell
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { getCurrentStatus } from "@/lib/sheets-api";
@@ -19,8 +18,6 @@ import { HandlerJackpotPopup } from "@/components/dashboard/HandlerJackpotPopup"
 import { DateConverterDrawer } from "@/components/dashboard/DateConverterDrawer";
 import { getDeviceHandler, saveDeviceHandler, isDeviceHandlerValid } from "@/lib/handler-memory";
 import { toast } from "sonner";
-import { useDesktopMode } from "@/contexts/DesktopModeContext";
-import { MuteButton } from "@/components/layout/MuteButton";
 // Get icon and color for each status category
 const getStatusConfig = (status: string) => {
   const s = status.toUpperCase();
@@ -52,7 +49,6 @@ const handlerColors = [
 const CASINO_AUDIO_URL = "https://assets.mixkit.co/active_storage/sfx/212/212-preview.mp3";
 
 export default function Dashboard() {
-  const { isDesktopMode, toggleDesktopMode } = useDesktopMode();
   const { 
     clients, 
     dropdowns, 
@@ -491,32 +487,13 @@ export default function Dashboard() {
 
         {/* Header with Menu Button */}
         <div className="flex items-center justify-between px-4 pt-4">
-          <div className="flex items-center gap-2">
-            {/* Music control button - fixed position */}
-            <MuteButton fixed={true} />
+          <div>
             <PageHeader 
               title="WTN Client Tracker" 
               subtitle="Wedding & Event Management"
             />
           </div>
           <div className="flex items-center gap-2">
-            {/* Desktop Mode Toggle */}
-            <Button
-              variant={isDesktopMode ? "default" : "outline"}
-              size="icon"
-              onClick={toggleDesktopMode}
-              className={cn(
-                "shrink-0 transition-all",
-                isDesktopMode && "bg-primary text-primary-foreground"
-              )}
-              title={isDesktopMode ? "Switch to Mobile View" : "Switch to Desktop View"}
-            >
-              {isDesktopMode ? (
-                <Smartphone className="w-5 h-5" />
-              ) : (
-                <Monitor className="w-5 h-5" />
-              )}
-            </Button>
             <Button
               variant="ghost"
               size="icon"
