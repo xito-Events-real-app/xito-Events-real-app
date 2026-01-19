@@ -1,13 +1,11 @@
 import { ReactNode, useEffect, useState } from "react";
 import { BottomNav } from "./BottomNav";
-import { MuteButton } from "./MuteButton";
-import { DesktopModeToggle } from "./DesktopModeToggle";
-import { DesktopNav } from "./DesktopNav";
 import { getDesktopMode } from "@/hooks/useDesktopMode";
 import { cn } from "@/lib/utils";
-import { Volume2, VolumeX } from "lucide-react";
+import { Volume2, VolumeX, Monitor, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAudio } from "@/contexts/AudioContext";
+import { useDesktopMode } from "@/hooks/useDesktopMode";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -16,6 +14,7 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const [isDesktopMode, setIsDesktopMode] = useState(false);
   const { isMuted, toggleMute } = useAudio();
+  const { toggleDesktopMode } = useDesktopMode();
 
   useEffect(() => {
     setIsDesktopMode(getDesktopMode());
@@ -42,14 +41,24 @@ export function AppLayout({ children }: AppLayoutProps) {
     }
   }, [isDesktopMode]);
 
+  // In desktop mode, render nothing here - Desktop pages handle their own layout
+  if (isDesktopMode) {
+    return <>{children}</>;
+  }
+
   return (
-    <div className={cn(
-      "min-h-screen bg-background",
-      isDesktopMode && "desktop-mode"
-    )}>
+    <div className="min-h-screen bg-background">
       {/* Top left controls - Desktop Mode Toggle + Mute side by side */}
       <div className="fixed top-4 left-4 z-50 flex items-center gap-2">
-        <DesktopModeToggle />
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleDesktopMode}
+          className="bg-background/80 backdrop-blur-sm border border-border shadow-lg hover:bg-background"
+          aria-label="Switch to Desktop view"
+        >
+          <Monitor className="h-5 w-5 text-muted-foreground" />
+        </Button>
         <Button
           variant="ghost"
           size="icon"
@@ -65,17 +74,12 @@ export function AppLayout({ children }: AppLayoutProps) {
         </Button>
       </div>
       
-      {/* Desktop mode: top nav */}
-      {isDesktopMode && <DesktopNav />}
-      
-      <main className={cn(
-        isDesktopMode ? "pt-20 pb-8" : "pb-24"
-      )}>
+      <main className="pb-24">
         {children}
       </main>
       
       {/* Mobile mode: bottom nav */}
-      {!isDesktopMode && <BottomNav />}
+      <BottomNav />
     </div>
   );
 }

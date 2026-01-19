@@ -19,6 +19,8 @@ import { DateConverterDrawer } from "@/components/dashboard/DateConverterDrawer"
 import { getDeviceHandler, saveDeviceHandler, isDeviceHandlerValid } from "@/lib/handler-memory";
 import { toast } from "sonner";
 import { getDesktopMode } from "@/hooks/useDesktopMode";
+import { DesktopAppLayout, DesktopDashboard } from "@/components/desktop";
+
 // Get icon and color for each status category
 const getStatusConfig = (status: string) => {
   const s = status.toUpperCase();
@@ -388,6 +390,22 @@ export default function Dashboard() {
     clientCount: handlerCounts[handler] || 0,
     colorClass: handlerColors[idx % handlerColors.length],
   }));
+
+  // Desktop Mode - Render completely different UI
+  if (isDesktopMode) {
+    return (
+      <DesktopAppLayout>
+        <DesktopDashboard
+          clients={clients}
+          handlers={handlers}
+          handlerCounts={handlerCounts}
+          isLoading={isLoading}
+          onSync={refreshData}
+          isSyncing={isSyncing}
+        />
+      </DesktopAppLayout>
+    );
+  }
 
   return (
     <AppLayout>
