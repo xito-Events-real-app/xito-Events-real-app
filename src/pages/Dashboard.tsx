@@ -18,6 +18,7 @@ import { HandlerJackpotPopup } from "@/components/dashboard/HandlerJackpotPopup"
 import { DateConverterDrawer } from "@/components/dashboard/DateConverterDrawer";
 import { getDeviceHandler, saveDeviceHandler, isDeviceHandlerValid } from "@/lib/handler-memory";
 import { toast } from "sonner";
+import { getDesktopMode } from "@/hooks/useDesktopMode";
 // Get icon and color for each status category
 const getStatusConfig = (status: string) => {
   const s = status.toUpperCase();
@@ -67,6 +68,12 @@ export default function Dashboard() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [soloHandler, setSoloHandler] = useState<{ name: string; colorClass: string } | null>(null);
   const [showDateConverter, setShowDateConverter] = useState(false);
+  const [isDesktopMode, setIsDesktopMode] = useState(false);
+
+  // Check desktop mode on mount
+  useEffect(() => {
+    setIsDesktopMode(getDesktopMode());
+  }, []);
 
   // NO auto-redirect on mount - app always opens to Dashboard
   // Handler selection happens on pull-to-refresh
@@ -485,38 +492,43 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Header with Menu Button */}
-        <div className="flex items-center justify-between px-4 pt-4">
-          <div>
-            <PageHeader 
-              title="WTN Client Tracker" 
-              subtitle="Wedding & Event Management"
-            />
+        {/* Header with Menu Button - Hide in desktop mode (top nav handles it) */}
+        {!isDesktopMode && (
+          <div className="flex items-center justify-between px-4 pt-4">
+            <div className="pl-24">
+              <PageHeader 
+                title="WTN Client Tracker" 
+                subtitle="Wedding & Event Management"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={refreshData}
+                disabled={isSyncing}
+                className="shrink-0"
+              >
+                <RefreshCw className={cn("w-5 h-5", isSyncing && "animate-spin")} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setSidebarOpen(true)}
+                className="shrink-0"
+              >
+                <Menu className="w-5 h-5" />
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={refreshData}
-              disabled={isSyncing}
-              className="shrink-0"
-            >
-              <RefreshCw className={cn("w-5 h-5", isSyncing && "animate-spin")} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSidebarOpen(true)}
-              className="shrink-0"
-            >
-              <Menu className="w-5 h-5" />
-            </Button>
-          </div>
-        </div>
+        )}
         
-        <div className="px-4 py-4 max-w-lg mx-auto space-y-4 animate-fade-in">
-          {/* Quick Action */}
-          <Link to="/quick-add">
+        <div className={cn(
+          "px-4 py-4 space-y-4 animate-fade-in",
+          isDesktopMode ? "max-w-7xl mx-auto" : "max-w-lg mx-auto"
+        )}>
+          {/* Quick Action - Smaller in desktop mode */}
+          <Link to="/quick-add" className={isDesktopMode ? "block max-w-md" : ""}>
             <Button 
               className="w-full h-14 text-lg font-semibold gradient-primary text-white shadow-lg press-effect"
               size="lg"
@@ -598,7 +610,10 @@ export default function Dashboard() {
           )}
 
           {/* Stats Grid */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className={cn(
+            "grid gap-3",
+            isDesktopMode ? "grid-cols-4" : "grid-cols-3"
+          )}>
             {basicStats.map((stat) => {
               const Icon = stat.icon;
               const isClickable = stat.label === "Today";
@@ -611,14 +626,30 @@ export default function Dashboard() {
                   )}
                   onClick={() => isClickable && navigate("/today")}
                 >
-                  <CardContent className="p-3 text-center">
-                    <div className={`w-9 h-9 rounded-xl ${stat.color} flex items-center justify-center mx-auto mb-1`}>
-                      <Icon className="w-4 h-4 text-white" />
+                  <CardContent className={cn(
+                    "text-center",
+                    isDesktopMode ? "p-4" : "p-3"
+                  )}>
+                    <div className={cn(
+                      "rounded-xl flex items-center justify-center mx-auto mb-1",
+                      stat.color,
+                      isDesktopMode ? "w-12 h-12" : "w-9 h-9"
+                    )}>
+                      <Icon className={cn(
+                        "text-white",
+                        isDesktopMode ? "w-6 h-6" : "w-4 h-4"
+                      )} />
                     </div>
-                    <p className="text-xl font-bold text-foreground">
+                    <p className={cn(
+                      "font-bold text-foreground",
+                      isDesktopMode ? "text-2xl" : "text-xl"
+                    )}>
                       {isLoading ? "—" : stat.value}
                     </p>
-                    <p className="text-xs text-muted-foreground">{stat.label}</p>
+                    <p className={cn(
+                      "text-muted-foreground",
+                      isDesktopMode ? "text-sm" : "text-xs"
+                    )}>{stat.label}</p>
                   </CardContent>
                 </Card>
               );
@@ -628,10 +659,16 @@ export default function Dashboard() {
           {/* Category Stats - Clickable */}
           {categoryStats.length > 0 && (
             <div className="space-y-2">
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide px-1">
+              <h3 className={cn(
+                "font-semibold text-muted-foreground uppercase tracking-wide px-1",
+                isDesktopMode ? "text-base" : "text-sm"
+              )}>
                 Client Categories
               </h3>
-              <div className="grid grid-cols-2 gap-2">
+              <div className={cn(
+                "grid gap-2",
+                isDesktopMode ? "grid-cols-4" : "grid-cols-2"
+              )}>
                 {categoryStats.map(({ status, count, config }) => {
                   const Icon = config.icon;
                   return (
@@ -640,19 +677,31 @@ export default function Dashboard() {
                       className="shadow-soft border-0 cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
                       onClick={() => handleCategoryClick(status)}
                     >
-                      <CardContent className="p-3">
+                      <CardContent className={cn(
+                        isDesktopMode ? "p-4" : "p-3"
+                      )}>
                         <div className="flex items-center gap-2">
                           <div className={cn(
-                            "w-9 h-9 rounded-lg flex items-center justify-center shrink-0",
-                            config.color
+                            "rounded-lg flex items-center justify-center shrink-0",
+                            config.color,
+                            isDesktopMode ? "w-12 h-12" : "w-9 h-9"
                           )}>
-                            <Icon className="w-4 h-4 text-white" />
+                            <Icon className={cn(
+                              "text-white",
+                              isDesktopMode ? "w-6 h-6" : "w-4 h-4"
+                            )} />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-lg font-bold text-foreground">
+                            <p className={cn(
+                              "font-bold text-foreground",
+                              isDesktopMode ? "text-xl" : "text-lg"
+                            )}>
                               {isLoading ? "—" : count}
                             </p>
-                            <p className="text-[10px] text-muted-foreground truncate leading-tight">
+                            <p className={cn(
+                              "text-muted-foreground truncate leading-tight",
+                              isDesktopMode ? "text-sm" : "text-[10px]"
+                            )}>
                               {config.label}
                             </p>
                           </div>
