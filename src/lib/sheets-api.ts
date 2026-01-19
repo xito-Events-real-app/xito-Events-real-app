@@ -211,6 +211,16 @@ export async function updateBargainingRates(
   });
 }
 
+// Update only client bargained rates (Column AB) - used in BARGAINING IS ON category
+export async function updateClientBargainedRates(
+  rowNumber: number,
+  clientRates: string
+): Promise<{ success: boolean; clientBargainedRates: string }> {
+  return callSheetsFunction<{ success: boolean; clientBargainedRates: string }>("updateClientBargainedRates", {
+    data: { rowNumber, clientRates },
+  });
+}
+
 export async function addClientComment(
   rowNumber: number,
   comment: string,

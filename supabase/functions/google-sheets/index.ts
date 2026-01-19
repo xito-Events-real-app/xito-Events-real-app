@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -720,6 +720,39 @@ async function updateBargainingRates(
   return { success: true, ourBargainedRates: ourRates, clientBargainedRates: clientRates };
 }
 
+// Update only client bargained rates in Column AB (for BARGAINING IS ON category)
+async function updateClientBargainedRates(
+  accessToken: string, 
+  spreadsheetId: string, 
+  rowNumber: number, 
+  clientRates: string
+) {
+  if (!rowNumber || rowNumber < 2) {
+    throw new Error('Valid rowNumber is required for updating client bargained rates');
+  }
+
+  // Update only Column AB
+  const range = encodeURIComponent(`'CLIENT TRACKER'!AB${rowNumber}`);
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  
+  const response = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [[clientRates]] }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (updateClientBargainedRates):', response.status, errorText);
+    throw new Error(`Failed to update client bargained rates: ${response.status}`);
+  }
+
+  return { success: true, clientBargainedRates: clientRates };
+}
+
 // Bulk update status for clients matching a specific status
 async function bulkUpdateStatus(accessToken: string, spreadsheetId: string, fromStatus: string, toStatus: string) {
   // First, get all clients
@@ -1059,6 +1092,15 @@ Deno.serve(async (req) => {
           spreadsheetId, 
           data.rowNumber as number, 
           data.ourRates as string || '',
+          data.clientRates as string || ''
+        );
+        break;
+      case 'updateClientBargainedRates':
+        if (!data || !data.rowNumber) throw new Error('rowNumber is required for updateClientBargainedRates');
+        result = await updateClientBargainedRates(
+          accessToken, 
+          spreadsheetId, 
+          data.rowNumber as number, 
           data.clientRates as string || ''
         );
         break;

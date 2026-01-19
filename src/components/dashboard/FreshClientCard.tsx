@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { ClientData, updateClientStatus, updateClientHandler, logCallAttempt, getCurrentStatus, updateClientQuotation, updateClientMindset, updateBargainingRates, addClientComment, updateFinalQuotation, addPayment } from "@/lib/sheets-api";
+import { ClientData, updateClientStatus, updateClientHandler, logCallAttempt, getCurrentStatus, updateClientQuotation, updateClientMindset, updateBargainingRates, updateClientBargainedRates, addClientComment, updateFinalQuotation, addPayment } from "@/lib/sheets-api";
 import { getHandlerInitials, parseEventDetails, formatLocationDisplay } from "@/lib/nepali-months";
 import { cn } from "@/lib/utils";
 import {
@@ -391,6 +391,12 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
   const [isAddingPayment, setIsAddingPayment] = useState(false);
   const [showPaymentCalendar, setShowPaymentCalendar] = useState(false);
   
+  // Bargaining IS ON category - dialog for client bargained rates
+  const [showClientBargainDialog, setShowClientBargainDialog] = useState(false);
+  const [selectedClientBargainPackages, setSelectedClientBargainPackages] = useState<string[]>([]);
+  const [clientBargainPrices, setClientBargainPrices] = useState<Record<string, string>>({});
+  const [isSavingClientBargain, setIsSavingClientBargain] = useState(false);
+  
   // Use handler initials if set, otherwise fall back to who added
   const displayInitials = getHandlerInitials(currentHandler || client.whoAdded || '');
   const hasHandler = !!currentHandler;
@@ -560,6 +566,7 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
   const isJustEnquired = currentStatusCategory?.toUpperCase() === 'JUST ENQUIRED';
   const isQuotationPending = currentStatusCategory?.toUpperCase().includes('QUOTATION PENDING');
   const isQuotationSent = currentStatusCategory?.toUpperCase().includes('QUOTATION SENT');
+  const isBargainingIsOn = currentStatusCategory?.toUpperCase().includes('BARGAINING IS ON');
 
   // Parse mindset entry to get name and timestamp
   const parsedMindset = useMemo(() => {
@@ -728,6 +735,65 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
       toast.error("Failed to save bargaining details");
     } finally {
       setIsSavingBargain(false);
+    }
+  };
+
+  // Handle saving client bargained rates (for BARGAINING IS ON category)
+  const handleSaveClientBargain = async () => {
+    if (!client.rowNumber) {
+      toast.error("Cannot save: missing row number");
+      return;
+    }
+    if (selectedClientBargainPackages.length === 0) {
+      toast.error("Please select at least one package");
+      return;
+    }
+
+    // Check if at least one price is filled
+    const hasPrice = selectedClientBargainPackages.some(pkg => clientBargainPrices[pkg]?.trim());
+    if (!hasPrice) {
+      toast.error("Please enter at least one bargained price");
+      return;
+    }
+
+    setIsSavingClientBargain(true);
+    try {
+      // Build client rates string from existing + new values
+      const existingRates = parseQuotationData(currentClientBargainedRates);
+      const existingRatesMap: Record<string, string> = {};
+      existingRates.forEach(r => {
+        existingRatesMap[r.tier] = r.amount;
+      });
+
+      // Update with new values
+      selectedClientBargainPackages.forEach(tier => {
+        if (clientBargainPrices[tier]?.trim()) {
+          existingRatesMap[tier] = `NPR ${formatNPR(clientBargainPrices[tier])}/-`;
+        }
+      });
+
+      // Build final string
+      const clientLines = Object.entries(existingRatesMap)
+        .filter(([_, amount]) => amount)
+        .map(([tier, amount]) => `${tier}: ${amount}`);
+
+      const newClientRates = clientLines.join('\n');
+
+      await updateClientBargainedRates(client.rowNumber, newClientRates);
+      
+      setCurrentClientBargainedRates(newClientRates);
+      setShowClientBargainDialog(false);
+      
+      // Reset form
+      setSelectedClientBargainPackages([]);
+      setClientBargainPrices({});
+
+      toast.success("Client bargained prices saved");
+    } catch (err) {
+      console.error("Failed to save client bargained rates:", err);
+      toast.error("Failed to save bargained prices");
+    } finally {
+      setIsSavingClientBargain(false);
     }
   };
   
@@ -1163,6 +1229,98 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* BARGAINING IS ON Banner - Show quotation comparison and client bargained prices */}
+      {isBargainingIsOn && currentQuotationData && (
+        <div className="bg-gradient-to-r from-purple-50 to-amber-50 dark:from-purple-950/50 dark:to-amber-950/50 rounded-lg p-3 border border-purple-300 dark:border-purple-700 space-y-3">
+          {/* Our Proposal Section */}
+          <div>
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <FileText className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+              <span className="text-[10px] font-semibold text-purple-700 dark:text-purple-300 uppercase tracking-wide">Our Proposal</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {parseQuotationData(currentQuotationData).map((q, i) => (
+                <div key={i} className={cn(
+                  "px-2 py-1 rounded-md text-xs font-medium shadow-sm",
+                  getQuotationTierColor(q.tier)
+                )}>
+                  <span className="opacity-80">{q.tier}:</span> <span className="font-bold">{q.amount}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Client Bargained Prices Section */}
+          {currentClientBargainedRates && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Banknote className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 uppercase tracking-wide">Client Bargaining For</span>
+              </div>
+              <div className="space-y-1.5">
+                {parseQuotationData(currentClientBargainedRates).map((clientRate, i) => {
+                  // Find corresponding our rate
+                  const ourQuote = parseQuotationData(currentQuotationData).find(q => q.tier === clientRate.tier);
+                  const ourAmount = ourQuote ? parseInt(ourQuote.amount.replace(/[^0-9]/g, '')) : 0;
+                  const clientAmount = parseInt(clientRate.amount.replace(/[^0-9]/g, ''));
+                  const difference = ourAmount - clientAmount;
+                  
+                  return (
+                    <div key={i} className="flex items-center gap-2 flex-wrap bg-white/50 dark:bg-black/20 px-2 py-1.5 rounded-md">
+                      <span className={cn(
+                        "px-1.5 py-0.5 rounded text-[10px] font-bold",
+                        getQuotationTierColor(clientRate.tier)
+                      )}>
+                        {clientRate.tier}
+                      </span>
+                      <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                        {clientRate.amount}
+                      </span>
+                      {difference > 0 && (
+                        <span className="text-[10px] font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-1.5 py-0.5 rounded">
+                          ↓ NPR {difference.toLocaleString('en-IN')}/- less
+                        </span>
+                      )}
+                      {difference < 0 && (
+                        <span className="text-[10px] font-medium text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-1.5 py-0.5 rounded">
+                          ↑ NPR {Math.abs(difference).toLocaleString('en-IN')}/- more
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Add/Edit Client Bargained Price Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full h-8 text-xs border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-400 dark:hover:bg-amber-900/40"
+            onClick={(e) => {
+              e.stopPropagation();
+              // Pre-fill existing bargained prices if any
+              if (currentClientBargainedRates) {
+                const existing = parseQuotationData(currentClientBargainedRates);
+                const prices: Record<string, string> = {};
+                const packages: string[] = [];
+                existing.forEach(r => {
+                  packages.push(r.tier);
+                  prices[r.tier] = r.amount.replace(/[^0-9]/g, '');
+                });
+                setSelectedClientBargainPackages(packages);
+                setClientBargainPrices(prices);
+              }
+              setShowClientBargainDialog(true);
+            }}
+          >
+            <Banknote className="w-3 h-3 mr-1" />
+            {currentClientBargainedRates ? 'Edit Client Bargained Price' : 'Add Client Bargained Price'}
+          </Button>
         </div>
       )}
 
@@ -2243,6 +2401,121 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
                 <Brain className="w-4 h-4 mr-2" />
               )}
               Save & Move to Bargaining
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Client Bargained Price Dialog - For BARGAINING IS ON category */}
+      <Dialog open={showClientBargainDialog} onOpenChange={setShowClientBargainDialog}>
+        <DialogContent onClick={(e) => e.stopPropagation()} className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Banknote className="w-5 h-5 text-amber-600" />
+              Client Bargained Price
+            </DialogTitle>
+            <DialogDescription>
+              Select packages and enter the prices {client.clientName} is bargaining for.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-2">
+            {/* Package Selection from Original Quotation */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Select Package(s) to Bargain</Label>
+              {parseQuotationData(currentQuotationData).length > 0 ? (
+                <div className="space-y-2">
+                  {parseQuotationData(currentQuotationData).map((q, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Checkbox 
+                        id={`client-pkg-${q.tier}`}
+                        checked={selectedClientBargainPackages.includes(q.tier)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedClientBargainPackages([...selectedClientBargainPackages, q.tier]);
+                          } else {
+                            setSelectedClientBargainPackages(selectedClientBargainPackages.filter(t => t !== q.tier));
+                            const newPrices = { ...clientBargainPrices };
+                            delete newPrices[q.tier];
+                            setClientBargainPrices(newPrices);
+                          }
+                        }}
+                      />
+                      <label 
+                        htmlFor={`client-pkg-${q.tier}`}
+                        className={cn(
+                          "text-sm font-medium cursor-pointer px-2 py-1 rounded",
+                          getQuotationTierColor(q.tier)
+                        )}
+                      >
+                        {q.tier}: {q.amount}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No quotation data available</p>
+              )}
+            </div>
+            
+            {/* Price Inputs for Selected Packages */}
+            {selectedClientBargainPackages.length > 0 && (
+              <div className="space-y-3 pt-2 border-t">
+                <Label className="text-sm font-medium">Enter Client's Bargained Prices</Label>
+                {selectedClientBargainPackages.map((tier) => {
+                  const ourQuote = parseQuotationData(currentQuotationData).find(q => q.tier === tier);
+                  return (
+                    <div key={tier} className="space-y-1 p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <span className={cn(
+                          "text-xs font-semibold px-2 py-0.5 rounded",
+                          getQuotationTierColor(tier)
+                        )}>
+                          {tier}
+                        </span>
+                        {ourQuote && (
+                          <span className="text-[10px] text-muted-foreground">
+                            Our: {ourQuote.amount}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-muted-foreground">NPR</span>
+                        <Input
+                          type="number"
+                          placeholder="Client's price"
+                          value={clientBargainPrices[tier] || ''}
+                          onChange={(e) => setClientBargainPrices({ ...clientBargainPrices, [tier]: e.target.value })}
+                          className="h-8 text-sm"
+                        />
+                        <span className="text-xs text-muted-foreground">/-</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => {
+              setShowClientBargainDialog(false);
+              setSelectedClientBargainPackages([]);
+              setClientBargainPrices({});
+            }}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSaveClientBargain}
+              disabled={selectedClientBargainPackages.length === 0 || isSavingClientBargain}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {isSavingClientBargain ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <Banknote className="w-4 h-4 mr-2" />
+              )}
+              Save Bargained Prices
             </Button>
           </DialogFooter>
         </DialogContent>
