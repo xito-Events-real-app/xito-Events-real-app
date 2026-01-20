@@ -954,12 +954,22 @@ async function addPayment(
   
   // Calculate remaining payment
   // Parse all payment amounts from the payment log
+  // Format: "NPR 30,000/- AS ADVANCE ON SUN 2082-10-04 IN MASTER BARUN"
+  // We extract the number between "NPR " and "/-" 
   const allPayments = updatedPaymentsMade.split('\n').filter(Boolean);
   let totalPaid = 0;
   for (const entry of allPayments) {
-    const match = entry.match(/NPR\s*([\d,]+)\/-/);
+    // Match "NPR X,XXX/-" - extract the numeric value between NPR and /-
+    // Also handles variations like "NPR 1000/-" or "NPR 1,00,000/-"
+    const match = entry.match(/NPR\s*([\d,]+)\s*\/-/i);
     if (match) {
       totalPaid += parseInt(match[1].replace(/,/g, ''));
+    } else {
+      // Fallback: try to find any "NPR X" pattern
+      const fallbackMatch = entry.match(/NPR\s*([\d,]+)/i);
+      if (fallbackMatch) {
+        totalPaid += parseInt(fallbackMatch[1].replace(/,/g, ''));
+      }
     }
   }
   
