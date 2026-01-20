@@ -1,7 +1,6 @@
 import { VendorData } from "@/lib/vendor-api";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { 
   MapPin, 
   Instagram, 
@@ -13,7 +12,8 @@ import {
   Phone,
   User,
   Building2,
-  ChevronRight
+  ChevronRight,
+  MessageCircle
 } from "lucide-react";
 
 interface VendorCardProps {
@@ -85,7 +85,23 @@ export function VendorCard({ vendor, onClick }: VendorCardProps) {
         {vendor.companyContactNo && (
           <div className="flex items-center gap-2 text-slate-300 text-sm">
             <Building2 className="h-4 w-4 text-slate-400" />
-            <span>{vendor.companyContactNo}</span>
+            <span className="flex-1">{vendor.companyContactNo}</span>
+            <a
+              href={`tel:${vendor.companyContactNo.replace(/\s/g, '')}`}
+              className="p-1.5 rounded-md bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/40 transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Phone className="h-3.5 w-3.5" />
+            </a>
+            <a
+              href={`https://wa.me/${vendor.companyContactNo.replace(/[^0-9]/g, '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-1.5 rounded-md bg-green-600/20 text-green-400 hover:bg-green-600/40 transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MessageCircle className="h-3.5 w-3.5" />
+            </a>
           </div>
         )}
 
@@ -93,12 +109,28 @@ export function VendorCard({ vendor, onClick }: VendorCardProps) {
         {vendor.owner1Name && (
           <div className="flex items-center gap-2 text-slate-300 text-sm">
             <User className="h-4 w-4 text-slate-400" />
-            <span>{vendor.owner1Name}</span>
+            <span className="flex-1">{vendor.owner1Name}</span>
             {vendor.owner1ContactNo && (
-              <>
-                <Phone className="h-3 w-3 text-slate-500 ml-2" />
-                <span className="text-slate-400">{vendor.owner1ContactNo}</span>
-              </>
+              <a
+                href={`tel:${vendor.owner1ContactNo.replace(/\s/g, '')}`}
+                className="p-1.5 rounded-md bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/40 transition-colors"
+                onClick={(e) => e.stopPropagation()}
+                title="Call"
+              >
+                <Phone className="h-3.5 w-3.5" />
+              </a>
+            )}
+            {vendor.owner1WhatsappNo && (
+              <a
+                href={`https://wa.me/${vendor.owner1WhatsappNo.replace(/[^0-9]/g, '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1.5 rounded-md bg-green-600/20 text-green-400 hover:bg-green-600/40 transition-colors"
+                onClick={(e) => e.stopPropagation()}
+                title="WhatsApp"
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+              </a>
             )}
           </div>
         )}

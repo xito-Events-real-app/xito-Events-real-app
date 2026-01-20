@@ -18,7 +18,8 @@ import {
   Globe, 
   Mail,
   Phone,
-  ExternalLink
+  ExternalLink,
+  MessageCircle
 } from "lucide-react";
 import {
   Tooltip,
@@ -140,14 +141,57 @@ export function VendorTable({ vendors, onRowClick }: VendorTableProps) {
                 </TableCell>
                 <TableCell className="text-slate-300">
                   {vendor.companyContactNo ? (
-                    <span className="flex items-center gap-1">
-                      <Phone className="h-3 w-3" />
-                      {vendor.companyContactNo}
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-sm">{vendor.companyContactNo}</span>
+                      <a
+                        href={`tel:${vendor.companyContactNo.replace(/\s/g, '')}`}
+                        className="p-1 rounded bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/40"
+                        onClick={(e) => e.stopPropagation()}
+                        title="Call"
+                      >
+                        <Phone className="h-3 w-3" />
+                      </a>
+                      <a
+                        href={`https://wa.me/${vendor.companyContactNo.replace(/[^0-9]/g, '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1 rounded bg-green-600/20 text-green-400 hover:bg-green-600/40"
+                        onClick={(e) => e.stopPropagation()}
+                        title="WhatsApp"
+                      >
+                        <MessageCircle className="h-3 w-3" />
+                      </a>
+                    </div>
                   ) : '-'}
                 </TableCell>
                 <TableCell className="text-slate-300">
-                  {vendor.owner1Name || '-'}
+                  {vendor.owner1Name ? (
+                    <div className="flex items-center gap-1">
+                      <span className="text-sm">{vendor.owner1Name}</span>
+                      {vendor.owner1ContactNo && (
+                        <a
+                          href={`tel:${vendor.owner1ContactNo.replace(/\s/g, '')}`}
+                          className="p-1 rounded bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/40"
+                          onClick={(e) => e.stopPropagation()}
+                          title="Call"
+                        >
+                          <Phone className="h-3 w-3" />
+                        </a>
+                      )}
+                      {vendor.owner1WhatsappNo && (
+                        <a
+                          href={`https://wa.me/${vendor.owner1WhatsappNo.replace(/[^0-9]/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1 rounded bg-green-600/20 text-green-400 hover:bg-green-600/40"
+                          onClick={(e) => e.stopPropagation()}
+                          title="WhatsApp"
+                        >
+                          <MessageCircle className="h-3 w-3" />
+                        </a>
+                      )}
+                    </div>
+                  ) : '-'}
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center justify-center gap-0.5">
