@@ -1030,19 +1030,24 @@ function getCurrentStatusFromLog(statusLog: string): string {
   if (lines.length === 0) return 'UNTOUCHED';
   
   // Get the last line for the current status
-  const lastLine = lines[lines.length - 1].trim();
+  const lastLine = lines[lines.length - 1].trim().toUpperCase();
   
-  // Try format: "STATUS - timestamp" (e.g., "BOOKED - 01/15/2026, 10:30:00")
-  const dashMatch = lastLine.match(/^(.+?)\s*-\s*\d/);
-  if (dashMatch) return dashMatch[1].trim().toUpperCase();
+  // FIRST: Check if line starts with "BOOKED" (most common case, be permissive)
+  if (lastLine.startsWith('BOOKED')) {
+    return 'BOOKED';
+  }
   
-  // Try format: "STATUS [timestamp]" (e.g., "BOOKED [2026-01-15 10:30:00]")
-  const bracketMatch = lastLine.match(/^(.+?)\s*\[/);
-  if (bracketMatch) return bracketMatch[1].trim().toUpperCase();
+  // Try format: "STATUS - timestamp" (e.g., "CANCELLED - 01/15/2026, 10:30:00")
+  const dashMatch = lastLine.match(/^([A-Z\s]+?)\s*-\s*/);
+  if (dashMatch) return dashMatch[1].trim();
+  
+  // Try format: "STATUS [timestamp]" (e.g., "CANCELLED [2026-01-15 10:30:00]")
+  const bracketMatch = lastLine.match(/^([A-Z\s]+?)\s*\[/);
+  if (bracketMatch) return bracketMatch[1].trim();
   
   // Fallback: return the first word as status
-  const firstWord = lastLine.split(/\s+/)[0];
-  return firstWord ? firstWord.toUpperCase() : 'UNTOUCHED';
+  const firstWord = lastLine.split(/[\s\-\[\(]/)[0];
+  return firstWord || 'UNTOUCHED';
 }
 
 // Copy a client from CLIENT TRACKER to BOOKED CLIENTS sheet (same column structure as CLIENT TRACKER)
@@ -1229,32 +1234,47 @@ async function migrateExistingBookedClients(accessToken: string, spreadsheetId: 
   
   let migratedCount = 0;
   let alreadyExistsCount = 0;
+  let skippedCount = 0;
   
   for (const client of clients) {
     const statusLog = client.statusLog || '';
     const currentStatus = getCurrentStatusFromLog(statusLog);
     
+    // Debug: Log any client whose status log contains "BOOKED" anywhere
+    if (statusLog.toUpperCase().includes('BOOKED')) {
+      console.log(`[DEBUG] Client "${client.clientName}" (row ${client.rowNumber}) - Detected status: "${currentStatus}" - StatusLog preview: "${statusLog.substring(0, 80).replace(/\n/g, ' | ')}"`);
+    }
+    
     // Check if client is BOOKED
     if (currentStatus === 'BOOKED') {
       // Check if already in BOOKED CLIENTS using registeredDateTimeAD as unique ID
+      const registeredDateTime = (client.registeredDateTimeAD || '').trim();
+      
+      if (!registeredDateTime) {
+        console.log(`[SKIP] Client "${client.clientName}" has no registeredDateTimeAD, skipping`);
+        skippedCount++;
+        continue;
+      }
+      
       const isAlreadyBooked = await checkIfAlreadyBooked(
         accessToken, 
         spreadsheetId, 
-        client.registeredDateTimeAD || ''
+        registeredDateTime
       );
       
       if (!isAlreadyBooked) {
         await copyToBookedClients(accessToken, spreadsheetId, client.rowNumber);
         migratedCount++;
-        console.log(`Migrated: ${client.clientName} (row ${client.rowNumber})`);
+        console.log(`[MIGRATED] ${client.clientName} (row ${client.rowNumber})`);
       } else {
         alreadyExistsCount++;
+        console.log(`[EXISTS] ${client.clientName} already in BOOKED CLIENTS`);
       }
     }
   }
   
-  console.log(`Migration complete: ${migratedCount} migrated, ${alreadyExistsCount} already existed`);
-  return { success: true, migratedCount };
+  console.log(`Migration complete: ${migratedCount} migrated, ${alreadyExistsCount} already existed, ${skippedCount} skipped`);
+  return { success: true, migratedCount, alreadyExistsCount, skippedCount };
 }
 
 // Update a booked client in both BOOKED CLIENTS and CLIENT TRACKER sheets
