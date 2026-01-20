@@ -12,6 +12,7 @@ import Settings from "./pages/Settings";
 import FreshClients from "./pages/FreshClients";
 import Today from "./pages/Today";
 import HandlerClients from "./pages/HandlerClients";
+import BookedClients from "./pages/BookedClients";
 import ComingSoon from "./pages/ComingSoon";
 import NotFound from "./pages/NotFound";
 
@@ -37,8 +38,10 @@ const App = () => (
             <Route path="/client-tracker/today" element={<Today />} />
             <Route path="/client-tracker/handler/:handlerName" element={<HandlerClients />} />
             
+            {/* Booked Clients Module */}
+            <Route path="/booked-clients" element={<BookedClients />} />
+            
             {/* Coming Soon Modules */}
-            <Route path="/booked-clients" element={<ComingSoon moduleId="booked-clients" />} />
             <Route path="/finance" element={<ComingSoon moduleId="finance-manager" />} />
             <Route path="/tasks" element={<ComingSoon moduleId="daily-task-manager" />} />
             <Route path="/video-edit" element={<ComingSoon moduleId="video-edit-tracker" />} />

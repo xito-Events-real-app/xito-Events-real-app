@@ -38,7 +38,7 @@ export const suiteModules: SuiteModule[] = [
     description: 'Track confirmed bookings',
     icon: CalendarCheck,
     path: '/booked-clients',
-    status: 'coming-soon',
+    status: 'active',
     gradient: 'from-blue-500 to-indigo-600',
   },
   {
