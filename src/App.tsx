@@ -15,6 +15,7 @@ import HandlerClients from "./pages/HandlerClients";
 import BookedClients from "./pages/BookedClients";
 import FinanceManager from "./pages/FinanceManager";
 import ComingSoon from "./pages/ComingSoon";
+import Vendors from "./pages/Vendors";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -49,7 +50,7 @@ const App = () => (
             <Route path="/photo-edit" element={<ComingSoon moduleId="photo-edit-tracker" />} />
             <Route path="/files" element={<ComingSoon moduleId="file-management" />} />
             <Route path="/media" element={<ComingSoon moduleId="album-media" />} />
-            <Route path="/vendors" element={<ComingSoon moduleId="vendors" />} />
+            <Route path="/vendors" element={<Vendors />} />
             <Route path="/freelancers" element={<ComingSoon moduleId="freelancers" />} />
             
             <Route path="*" element={<NotFound />} />
