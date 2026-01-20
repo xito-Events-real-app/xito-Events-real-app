@@ -202,27 +202,26 @@ async function updateClientStatus(accessToken: string, spreadsheetId: string, ro
   // If status is BOOKED, copy to BOOKED CLIENTS sheet
   let copiedToBooked = false;
   if (newStatus.toUpperCase() === 'BOOKED') {
-    // Fetch client name and contact for duplicate checking
-    const clientDataRange = encodeURIComponent(`'CLIENT TRACKER'!C${rowNumber}:G${rowNumber}`);
+    // Fetch registeredDateTimeAD (Column A) for duplicate checking - this is the unique identifier
+    const clientDataRange = encodeURIComponent(`'CLIENT TRACKER'!A${rowNumber}`);
     const clientDataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${clientDataRange}`;
     const clientDataResponse = await fetch(clientDataUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     
-    let clientName = '';
-    let contactNo = '';
+    let registeredDateTimeAD = '';
     if (clientDataResponse.ok) {
       const clientData = await clientDataResponse.json();
       if (clientData.values && clientData.values[0]) {
-        clientName = clientData.values[0][0] || ''; // Column C
-        contactNo = clientData.values[0][4] || ''; // Column G
+        registeredDateTimeAD = clientData.values[0][0] || ''; // Column A - unique identifier
       }
     }
     
-    const isAlreadyBooked = await checkIfAlreadyBooked(accessToken, spreadsheetId, clientName, contactNo);
+    const isAlreadyBooked = await checkIfAlreadyBooked(accessToken, spreadsheetId, registeredDateTimeAD);
     if (!isAlreadyBooked) {
       await copyToBookedClients(accessToken, spreadsheetId, rowNumber);
       copiedToBooked = true;
+      console.log(`Client at row ${rowNumber} copied to BOOKED CLIENTS`);
     }
   }
 
@@ -249,39 +248,39 @@ async function getClients(accessToken: string, spreadsheetId: string, limit = 50
 
   return data.values.map((row: string[], index: number) => ({
     rowNumber: index + 2,
-    registeredDateTimeAD: row[0] || '',
-    registeredDateBS: row[1] || '',
-    clientName: row[2] || '',
-    source: row[3] || '',
-    clientLocation: row[4] || '',
-    currentCountry: row[5] || '',
-    contactNo: row[6] || '',
-    whatsappNo: row[7] || '',
-    // Column I (index 8) - might be empty
-    eventLocation: row[9] || '',
-    eventCity: row[10] || '',
-    events: row[11] || '',
-    eventYear: row[12] || '',
-    eventMonth: row[13] || '',
-    eventDay: row[14] || '',
-    eventDateAD: row[15] || '',
-    whoAdded: row[16] || '',
-    inquiryDateAD: row[17] || '',
-    inquiryDateBS: row[18] || '',
-    inquiryTime: row[19] || '',
-    description: row[20] || '',
-    quotationData: row[21] || '', // Column V (index 21) - Quotation amounts
-    statusLog: row[22] || '', // Column W (index 22) - Status log with timestamps
-    clientHandler: row[23] || '', // Column X (index 23) - Client handler
-    callLog: row[24] || '', // Column Y (index 24) - Call attempt history
-    mindset: row[25] || '', // Column Z (index 25) - Mindset with timestamp
-    ourBargainedRates: row[26] || '', // Column AA (index 26) - Our bargained rates
-    clientBargainedRates: row[27] || '', // Column AB (index 27) - Client bargained rates
-    comments: row[28] || '', // Column AC (index 28) - Client comments with timestamps
-    finalQuotation: row[29] || '', // Column AD (index 29) - Final booked quotation
-    paymentsMade: row[30] || '', // Column AE (index 30) - Payments made log
-    paymentDatesAD: row[31] || '', // Column AF (index 31) - Payment dates in AD
-    remainingPayment: row[32] || '', // Column AG (index 32) - Remaining payment
+    registeredDateTimeAD: row[0] || '',  // Column A
+    registeredDateBS: row[1] || '',       // Column B
+    clientName: row[2] || '',             // Column C
+    source: row[3] || '',                 // Column D
+    clientLocation: row[4] || '',         // Column E
+    currentCountry: row[5] || '',         // Column F
+    contactNo: row[6] || '',              // Column G
+    whatsappNo: row[7] || '',             // Column H
+    email: row[8] || '',                  // Column I - Email
+    eventLocation: row[9] || '',          // Column J
+    eventCity: row[10] || '',             // Column K
+    events: row[11] || '',                // Column L
+    eventYear: row[12] || '',             // Column M
+    eventMonth: row[13] || '',            // Column N
+    eventDay: row[14] || '',              // Column O
+    eventDateAD: row[15] || '',           // Column P
+    whoAdded: row[16] || '',              // Column Q
+    inquiryDateAD: row[17] || '',         // Column R
+    inquiryDateBS: row[18] || '',         // Column S
+    inquiryTime: row[19] || '',           // Column T
+    description: row[20] || '',           // Column U
+    quotationData: row[21] || '',         // Column V - Quotation amounts
+    statusLog: row[22] || '',             // Column W - Status log with timestamps
+    clientHandler: row[23] || '',         // Column X - Client handler
+    callLog: row[24] || '',               // Column Y - Call attempt history
+    mindset: row[25] || '',               // Column Z - Mindset with timestamp
+    ourBargainedRates: row[26] || '',     // Column AA - Our bargained rates
+    clientBargainedRates: row[27] || '',  // Column AB - Client bargained rates
+    comments: row[28] || '',              // Column AC - Client comments with timestamps
+    finalQuotation: row[29] || '',        // Column AD - Final booked quotation
+    paymentsMade: row[30] || '',          // Column AE - Payments made log
+    paymentDatesAD: row[31] || '',        // Column AF - Payment dates in AD
+    remainingPayment: row[32] || '',      // Column AG - Remaining payment
   }));
 }
 
@@ -859,14 +858,7 @@ async function bulkUpdateStatus(accessToken: string, spreadsheetId: string, from
   return { success: true, updatedCount };
 }
 
-// Helper to get current status from status log
-function getCurrentStatusFromLog(statusLog: string): string {
-  if (!statusLog) return 'UNTOUCHED';
-  const lines = statusLog.split('\n');
-  const lastLine = lines[lines.length - 1];
-  const match = lastLine.match(/^(.+?)\s*-\s*\d/);
-  return match ? match[1].trim() : 'UNTOUCHED';
-}
+// Note: getCurrentStatusFromLog is defined below with checkIfAlreadyBooked
 
 // Simple AD to BS conversion (approximate)
 function adToBSSimple(date: Date): string {
@@ -999,9 +991,9 @@ async function addPayment(
   };
 }
 
-// Check if a client is already in the BOOKED CLIENTS sheet by client name and contact
-async function checkIfAlreadyBooked(accessToken: string, spreadsheetId: string, clientName: string, contactNo: string): Promise<boolean> {
-  const range = encodeURIComponent("'BOOKED CLIENTS'!C2:G500"); // Columns C (name) and G (contact)
+// Check if a client is already in the BOOKED CLIENTS sheet using registeredDateTimeAD (Column A) as unique identifier
+async function checkIfAlreadyBooked(accessToken: string, spreadsheetId: string, registeredDateTimeAD: string): Promise<boolean> {
+  const range = encodeURIComponent("'BOOKED CLIENTS'!A2:A1000"); // Column A - registeredDateTimeAD
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   try {
@@ -1018,19 +1010,39 @@ async function checkIfAlreadyBooked(accessToken: string, spreadsheetId: string, 
     const data = await response.json();
     if (!data.values) return false;
     
-    // Check if any row has this client name AND contact number (to prevent duplicates)
-    const normalizedName = clientName.toLowerCase().trim();
-    const normalizedContact = contactNo.replace(/\D/g, '');
+    // Check if any row has this exact registeredDateTimeAD (Column A is the unique identifier)
+    const normalizedDateTime = registeredDateTimeAD.trim();
     
     return data.values.some((row: string[]) => {
-      const rowName = (row[0] || '').toLowerCase().trim(); // Column C is index 0 in this range
-      const rowContact = (row[4] || '').replace(/\D/g, ''); // Column G is index 4 in this range
-      return rowName === normalizedName || (normalizedContact && rowContact === normalizedContact);
+      const rowDateTime = (row[0] || '').trim();
+      return rowDateTime === normalizedDateTime;
     });
   } catch (error) {
     console.error('Error checking if already booked:', error);
     return false;
   }
+}
+
+// Helper to get current status from status log (handles multiple formats)
+function getCurrentStatusFromLog(statusLog: string): string {
+  if (!statusLog) return 'UNTOUCHED';
+  const lines = statusLog.split('\n').filter(Boolean);
+  if (lines.length === 0) return 'UNTOUCHED';
+  
+  // Get the last line for the current status
+  const lastLine = lines[lines.length - 1].trim();
+  
+  // Try format: "STATUS - timestamp" (e.g., "BOOKED - 01/15/2026, 10:30:00")
+  const dashMatch = lastLine.match(/^(.+?)\s*-\s*\d/);
+  if (dashMatch) return dashMatch[1].trim().toUpperCase();
+  
+  // Try format: "STATUS [timestamp]" (e.g., "BOOKED [2026-01-15 10:30:00]")
+  const bracketMatch = lastLine.match(/^(.+?)\s*\[/);
+  if (bracketMatch) return bracketMatch[1].trim().toUpperCase();
+  
+  // Fallback: return the first word as status
+  const firstWord = lastLine.split(/\s+/)[0];
+  return firstWord ? firstWord.toUpperCase() : 'UNTOUCHED';
 }
 
 // Copy a client from CLIENT TRACKER to BOOKED CLIENTS sheet (same column structure as CLIENT TRACKER)
@@ -1170,76 +1182,85 @@ async function getBookedClients(accessToken: string, spreadsheetId: string, limi
   // Same column mapping as getClients (CLIENT TRACKER) - columns A-AG
   return data.values.map((row: string[], index: number) => ({
     bookedRowNumber: index + 2,
-    originalRowNumber: 0, // Not stored separately, use client name/contact for sync
-    registeredDateTimeAD: row[0] || '',
-    registeredDateBS: row[1] || '',
-    clientName: row[2] || '',
-    source: row[3] || '',
-    clientLocation: row[4] || '',
-    currentCountry: row[5] || '',
-    contactNo: row[6] || '',
-    whatsappNo: row[7] || '',
-    // Column I (index 8) - empty
-    eventLocation: row[9] || '',
-    eventCity: row[10] || '',
-    events: row[11] || '',
-    eventYear: row[12] || '',
-    eventMonth: row[13] || '',
-    eventDay: row[14] || '',
-    eventDateAD: row[15] || '',
-    whoAdded: row[16] || '',
-    inquiryDateAD: row[17] || '',
-    inquiryDateBS: row[18] || '',
-    inquiryTime: row[19] || '',
-    description: row[20] || '',
-    quotationData: row[21] || '',
-    statusLog: row[22] || '',
-    clientHandler: row[23] || '',
-    callLog: row[24] || '',
-    mindset: row[25] || '',
-    ourBargainedRates: row[26] || '',
-    clientBargainedRates: row[27] || '',
-    comments: row[28] || '',
-    finalQuotation: row[29] || '',
-    paymentsMade: row[30] || '',
-    paymentDatesAD: row[31] || '',
-    remainingPayment: row[32] || '',
-    bookedDateTime: '', // Not stored in this structure
+    originalRowNumber: 0, // Use registeredDateTimeAD for sync instead
+    registeredDateTimeAD: row[0] || '',  // Column A - unique identifier
+    registeredDateBS: row[1] || '',       // Column B
+    clientName: row[2] || '',             // Column C
+    source: row[3] || '',                 // Column D
+    clientLocation: row[4] || '',         // Column E
+    currentCountry: row[5] || '',         // Column F
+    contactNo: row[6] || '',              // Column G
+    whatsappNo: row[7] || '',             // Column H
+    email: row[8] || '',                  // Column I - Email
+    eventLocation: row[9] || '',          // Column J
+    eventCity: row[10] || '',             // Column K
+    events: row[11] || '',                // Column L
+    eventYear: row[12] || '',             // Column M
+    eventMonth: row[13] || '',            // Column N
+    eventDay: row[14] || '',              // Column O
+    eventDateAD: row[15] || '',           // Column P
+    whoAdded: row[16] || '',              // Column Q
+    inquiryDateAD: row[17] || '',         // Column R
+    inquiryDateBS: row[18] || '',         // Column S
+    inquiryTime: row[19] || '',           // Column T
+    description: row[20] || '',           // Column U
+    quotationData: row[21] || '',         // Column V
+    statusLog: row[22] || '',             // Column W
+    clientHandler: row[23] || '',         // Column X
+    callLog: row[24] || '',               // Column Y
+    mindset: row[25] || '',               // Column Z
+    ourBargainedRates: row[26] || '',     // Column AA
+    clientBargainedRates: row[27] || '',  // Column AB
+    comments: row[28] || '',              // Column AC
+    finalQuotation: row[29] || '',        // Column AD
+    paymentsMade: row[30] || '',          // Column AE
+    paymentDatesAD: row[31] || '',        // Column AF
+    remainingPayment: row[32] || '',      // Column AG
+    bookedDateTime: '',                   // Not stored separately
   }));
 }
 
 // Migrate existing BOOKED clients from CLIENT TRACKER to BOOKED CLIENTS
 async function migrateExistingBookedClients(accessToken: string, spreadsheetId: string) {
-  // Get all clients from CLIENT TRACKER
-  const clients = await getClients(accessToken, spreadsheetId, 500);
+  // Get ALL clients from CLIENT TRACKER (up to 2000 to ensure we don't miss any)
+  const clients = await getClients(accessToken, spreadsheetId, 2000);
+  
+  console.log(`Migration: Checking ${clients.length} clients for BOOKED status`);
   
   let migratedCount = 0;
+  let alreadyExistsCount = 0;
   
   for (const client of clients) {
     const statusLog = client.statusLog || '';
     const currentStatus = getCurrentStatusFromLog(statusLog);
     
     // Check if client is BOOKED
-    if (currentStatus.toUpperCase() === 'BOOKED') {
-      // Check if already in BOOKED CLIENTS by name and contact
+    if (currentStatus === 'BOOKED') {
+      // Check if already in BOOKED CLIENTS using registeredDateTimeAD as unique ID
       const isAlreadyBooked = await checkIfAlreadyBooked(
         accessToken, 
         spreadsheetId, 
-        client.clientName || '', 
-        client.contactNo || ''
+        client.registeredDateTimeAD || ''
       );
       
       if (!isAlreadyBooked) {
         await copyToBookedClients(accessToken, spreadsheetId, client.rowNumber);
         migratedCount++;
+        console.log(`Migrated: ${client.clientName} (row ${client.rowNumber})`);
+      } else {
+        alreadyExistsCount++;
       }
     }
   }
   
+  console.log(`Migration complete: ${migratedCount} migrated, ${alreadyExistsCount} already existed`);
   return { success: true, migratedCount };
 }
 
 // Update a booked client in both BOOKED CLIENTS and CLIENT TRACKER sheets
+// CORRECT COLUMN MAPPING (A-AG identical in both sheets):
+// AD = finalQuotation, AE = paymentsMade, AF = paymentDatesAD, AG = remainingPayment
+// X = clientHandler, AC = comments
 async function updateBookedClient(
   accessToken: string, 
   spreadsheetId: string, 
@@ -1247,34 +1268,29 @@ async function updateBookedClient(
   originalRowNumber: number,
   updates: Record<string, unknown>
 ) {
-  // Map of field names to column letters in BOOKED CLIENTS sheet
+  // BOTH sheets have IDENTICAL structure (A-AG), so same column letters
   const columnMap: Record<string, string> = {
-    finalQuotation: 'AE',
-    paymentsMade: 'AF',
-    paymentDatesAD: 'AG',
-    remainingPayment: 'AH',
-    clientHandler: 'Y',
-    comments: 'AD',
-  };
-
-  // Also map to CLIENT TRACKER columns (offset by 1 since BOOKED CLIENTS has originalRowNumber in Column A)
-  const trackerColumnMap: Record<string, string> = {
-    finalQuotation: 'AD',
-    paymentsMade: 'AE',
-    paymentDatesAD: 'AF',
-    remainingPayment: 'AG',
-    clientHandler: 'X',
-    comments: 'AC',
+    finalQuotation: 'AD',     // Column AD (index 29)
+    paymentsMade: 'AE',       // Column AE (index 30)
+    paymentDatesAD: 'AF',     // Column AF (index 31)
+    remainingPayment: 'AG',   // Column AG (index 32)
+    clientHandler: 'X',       // Column X (index 23)
+    comments: 'AC',           // Column AC (index 28)
+    mindset: 'Z',             // Column Z (index 25)
+    ourBargainedRates: 'AA',  // Column AA (index 26)
+    clientBargainedRates: 'AB', // Column AB (index 27)
+    callLog: 'Y',             // Column Y (index 24)
+    quotationData: 'V',       // Column V (index 21)
+    statusLog: 'W',           // Column W (index 22)
   };
 
   // Update each field in both sheets
   for (const [field, value] of Object.entries(updates)) {
-    const bookedColumn = columnMap[field];
-    const trackerColumn = trackerColumnMap[field];
+    const column = columnMap[field];
     
-    if (bookedColumn && value !== undefined) {
+    if (column && value !== undefined) {
       // Update BOOKED CLIENTS
-      const bookedRange = encodeURIComponent(`'BOOKED CLIENTS'!${bookedColumn}${bookedRowNumber}`);
+      const bookedRange = encodeURIComponent(`'BOOKED CLIENTS'!${column}${bookedRowNumber}`);
       const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}?valueInputOption=USER_ENTERED`;
       
       await fetch(bookedUrl, {
@@ -1286,9 +1302,9 @@ async function updateBookedClient(
         body: JSON.stringify({ values: [[value]] }),
       });
       
-      // Update CLIENT TRACKER
-      if (trackerColumn && originalRowNumber >= 2) {
-        const trackerRange = encodeURIComponent(`'CLIENT TRACKER'!${trackerColumn}${originalRowNumber}`);
+      // Update CLIENT TRACKER (same column letter since identical structure)
+      if (originalRowNumber >= 2) {
+        const trackerRange = encodeURIComponent(`'CLIENT TRACKER'!${column}${originalRowNumber}`);
         const trackerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}?valueInputOption=USER_ENTERED`;
         
         await fetch(trackerUrl, {
