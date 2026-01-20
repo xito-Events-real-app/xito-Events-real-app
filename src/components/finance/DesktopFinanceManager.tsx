@@ -491,6 +491,10 @@ const DesktopFinanceManager = () => {
           paymentsMade={selectedClient.paymentsMade || ''}
           finalQuotation={selectedClient.finalQuotation || ''}
           remainingPayment={selectedClient.remainingPayment || ''}
+          rowNumber={selectedClient.bookedRowNumber}
+          registeredDateTimeAD={selectedClient.registeredDateTimeAD}
+          paymentDatesAD={selectedClient.paymentDatesAD || ''}
+          onPaymentAdded={fetchClients}
         />
       )}
     </div>
