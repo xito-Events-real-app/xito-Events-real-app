@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Construction, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { suiteModules } from "@/lib/suite-modules";
+import { GlobalModeToggle } from "@/components/layout/GlobalModeToggle";
 
 interface ComingSoonProps {
   moduleId?: string;
@@ -14,6 +15,9 @@ export default function ComingSoon({ moduleId }: ComingSoonProps) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/30 flex flex-col">
+      {/* Global Mode Toggle */}
+      <GlobalModeToggle showMute={false} />
+
       {/* Header */}
       <header className="p-4 flex items-center gap-3">
         <Button 
