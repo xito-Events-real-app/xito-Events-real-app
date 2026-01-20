@@ -175,7 +175,7 @@ const PaymentHistorySheet = ({
   return (
     <>
       <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
-        <SheetContent className="bg-slate-900 border-slate-700 w-full sm:max-w-lg flex flex-col">
+        <SheetContent className="bg-slate-900 border-slate-700 w-full sm:max-w-2xl flex flex-col">
           <SheetHeader className="pb-4">
             <SheetTitle className="text-white flex items-center gap-2">
               <Receipt className="h-5 w-5 text-emerald-400" />
