@@ -972,8 +972,44 @@ async function addPayment(
   const primarySheet = sourceSheet === 'booked' ? 'BOOKED CLIENTS' : 'CLIENT TRACKER';
   const secondarySheet = sourceSheet === 'booked' ? 'CLIENT TRACKER' : 'BOOKED CLIENTS';
   
-  // Update primary sheet (the one the request came from)
-  const primaryRange = encodeURIComponent(`'${primarySheet}'!AE${rowNumber}:AG${rowNumber}`);
+  // Find the correct row in primary sheet using registeredDateTimeAD lookup
+  // This ensures we update the correct row even if row numbers have shifted
+  let actualRowNumber = rowNumber;
+  
+  if (registeredDateTimeAD) {
+    try {
+      const verifyRange = encodeURIComponent(`'${primarySheet}'!A2:A2000`);
+      const verifyUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${verifyRange}`;
+      
+      const verifyResponse = await fetch(verifyUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      
+      if (verifyResponse.ok) {
+        const verifyData = await verifyResponse.json();
+        if (verifyData.values) {
+          const normalizedDateTime = registeredDateTimeAD.trim();
+          
+          for (let i = 0; i < verifyData.values.length; i++) {
+            const rowDateTime = (verifyData.values[i][0] || '').trim();
+            if (rowDateTime === normalizedDateTime) {
+              const foundRow = i + 2; // Row 2 is index 0
+              if (foundRow !== rowNumber) {
+                console.log(`[PRIMARY] Row correction: ${rowNumber} -> ${foundRow} for ${registeredDateTimeAD}`);
+              }
+              actualRowNumber = foundRow;
+              break;
+            }
+          }
+        }
+      }
+    } catch (lookupError) {
+      console.error('Error looking up primary row, falling back to provided rowNumber:', lookupError);
+    }
+  }
+  
+  // Update primary sheet (the one the request came from) using verified row number
+  const primaryRange = encodeURIComponent(`'${primarySheet}'!AE${actualRowNumber}:AG${actualRowNumber}`);
   const primaryUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${primaryRange}?valueInputOption=USER_ENTERED`;
   
   const primaryResponse = await fetch(primaryUrl, {
@@ -990,6 +1026,8 @@ async function addPayment(
     console.error(`Google Sheets API error (addPayment to ${primarySheet}):`, primaryResponse.status, errorText);
     throw new Error(`Failed to add payment: ${primaryResponse.status}`);
   }
+  
+  console.log(`[PRIMARY] Payment updated in ${primarySheet} row ${actualRowNumber} (original: ${rowNumber})`);
 
   // Two-way sync: Update the corresponding row in the other sheet
   if (registeredDateTimeAD) {
