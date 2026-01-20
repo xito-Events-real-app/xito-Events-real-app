@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { getBookedClients, migrateExistingBookedClients, BookedClientData } from "@/lib/sheets-api";
 import BookedClientCard from "./BookedClientCard";
 import { getMonthName } from "@/lib/nepali-months";
-
+import NepaliDate from "nepali-date-converter";
 const DesktopBookedClients = () => {
   const navigate = useNavigate();
   const [clients, setClients] = useState<BookedClientData[]>([]);
@@ -75,10 +75,39 @@ const DesktopBookedClients = () => {
     return new Date(a.eventDateAD).getTime() - new Date(b.eventDateAD).getTime();
   });
 
-  // Calculate days until event
-  const getDaysUntilEvent = (eventDateAD: string | undefined): number | null => {
-    if (!eventDateAD) return null;
-    const eventDate = new Date(eventDateAD);
+  // Calculate days until event - use eventDateAD if available, otherwise convert from Nepali date
+  const getDaysUntilEvent = (client: BookedClientData): number | null => {
+    let eventDate: Date | null = null;
+    
+    // Try eventDateAD first
+    if (client.eventDateAD) {
+      const parsed = new Date(client.eventDateAD);
+      if (!isNaN(parsed.getTime())) {
+        eventDate = parsed;
+      }
+    }
+    
+    // Fallback: Convert from Nepali date (eventYear, eventMonth, eventDay)
+    if (!eventDate && client.eventYear && client.eventMonth && client.eventDay) {
+      try {
+        const bsYear = parseInt(client.eventYear);
+        const bsMonth = parseInt(client.eventMonth);
+        const bsDay = parseInt(client.eventDay);
+        
+        if (!isNaN(bsYear) && !isNaN(bsMonth) && !isNaN(bsDay)) {
+          const nepaliDate = new NepaliDate(bsYear, bsMonth - 1, bsDay); // month is 0-indexed
+          const adDate = nepaliDate.toJsDate();
+          if (adDate && !isNaN(adDate.getTime())) {
+            eventDate = adDate;
+          }
+        }
+      } catch (error) {
+        console.error('Error converting Nepali date:', error);
+      }
+    }
+    
+    if (!eventDate) return null;
+    
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     eventDate.setHours(0, 0, 0, 0);
@@ -86,7 +115,7 @@ const DesktopBookedClients = () => {
   };
 
   const getCountdownBadge = (days: number | null) => {
-    if (days === null) return null;
+    if (days === null) return <Badge variant="outline" className="text-slate-500 border-slate-500">TBD</Badge>;
     if (days <= 7) return <Badge className="bg-red-500 animate-pulse">⏰ {days}d</Badge>;
     if (days <= 30) return <Badge className="bg-orange-500">📅 {days}d</Badge>;
     if (days <= 60) return <Badge className="bg-amber-500">{days}d</Badge>;
@@ -269,7 +298,7 @@ const DesktopBookedClients = () => {
               </TableHeader>
               <TableBody>
                 {sortedClients.map((client) => {
-                  const days = getDaysUntilEvent(client.eventDateAD);
+                  const days = getDaysUntilEvent(client);
                   const quotationMatch = client.finalQuotation?.match(/NPR\s*([\d,]+)/);
                   const quotationAmount = quotationMatch ? parseInt(quotationMatch[1].replace(/,/g, '')) : 0;
                   
