@@ -19,39 +19,40 @@ export interface DropdownData {
 
 export interface ClientData {
   rowNumber?: number;
-  registeredDateTimeAD?: string;
-  registeredDateBS?: string;
-  clientName: string;
-  source: string;
-  clientLocation?: string;
-  currentCountry?: string;
-  contactNo?: string;
-  whatsappNo?: string;
-  eventLocation?: string;
-  eventCity?: string;
-  events?: string;
-  eventYear?: string;
-  eventMonth?: string;
-  eventDay?: string;
-  eventDateAD?: string;
-  whoAdded?: string;
-  inquiryDateAD?: string;
-  inquiryDateBS?: string;
-  inquiryTime?: string;
-  description?: string;
-  quotationData?: string; // Column V - quotation amounts
-  statusLog?: string;
-  initialStatus?: string;
-  clientHandler?: string; // Column X - who is handling this client
-  callLog?: string; // Column Y - call attempt history
-  mindset?: string; // Column Z - mindset with timestamp
-  ourBargainedRates?: string; // Column AA - our bargained rates
-  clientBargainedRates?: string; // Column AB - client bargained rates
-  comments?: string; // Column AC - comments with timestamps
-  finalQuotation?: string; // Column AD - final booked quotation
-  paymentsMade?: string; // Column AE - payments made log
-  paymentDatesAD?: string; // Column AF - payment dates in AD format
-  remainingPayment?: string; // Column AG - remaining payment
+  registeredDateTimeAD?: string;  // Column A
+  registeredDateBS?: string;       // Column B
+  clientName: string;              // Column C
+  source: string;                  // Column D
+  clientLocation?: string;         // Column E - INSIDE/OUTSIDE NEPAL
+  currentCountry?: string;         // Column F - Country name
+  contactNo?: string;              // Column G
+  whatsappNo?: string;             // Column H
+  email?: string;                  // Column I - Client email
+  eventLocation?: string;          // Column J
+  eventCity?: string;              // Column K
+  events?: string;                 // Column L
+  eventYear?: string;              // Column M
+  eventMonth?: string;             // Column N
+  eventDay?: string;               // Column O
+  eventDateAD?: string;            // Column P
+  whoAdded?: string;               // Column Q
+  inquiryDateAD?: string;          // Column R
+  inquiryDateBS?: string;          // Column S
+  inquiryTime?: string;            // Column T
+  description?: string;            // Column U
+  quotationData?: string;          // Column V - quotation amounts
+  statusLog?: string;              // Column W
+  initialStatus?: string;          // For initial status selection
+  clientHandler?: string;          // Column X - who is handling this client
+  callLog?: string;                // Column Y - call attempt history
+  mindset?: string;                // Column Z - mindset with timestamp
+  ourBargainedRates?: string;      // Column AA - our bargained rates
+  clientBargainedRates?: string;   // Column AB - client bargained rates
+  comments?: string;               // Column AC - comments with timestamps
+  finalQuotation?: string;         // Column AD - final booked quotation
+  paymentsMade?: string;           // Column AE - payments made log
+  paymentDatesAD?: string;         // Column AF - payment dates in AD format
+  remainingPayment?: string;       // Column AG - remaining payment
 }
 
 export interface BookedClientData extends ClientData {
