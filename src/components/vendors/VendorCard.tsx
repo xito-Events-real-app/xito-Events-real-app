@@ -22,16 +22,26 @@ interface VendorCardProps {
 }
 
 export function VendorCard({ vendor, onClick }: VendorCardProps) {
-  const openLink = (url: string, type: 'link' | 'email' = 'link') => {
+  const openLink = (e: React.MouseEvent, url: string, type: 'link' | 'email' = 'link') => {
+    e.preventDefault();
+    e.stopPropagation();
     if (!url) return;
+    
+    let finalUrl: string;
     if (type === 'email') {
-      window.open(`mailto:${url}`, '_blank');
+      finalUrl = `mailto:${url}`;
     } else {
-      let finalUrl = url;
+      finalUrl = url;
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
         finalUrl = 'https://' + url;
       }
-      window.open(finalUrl, '_blank');
+    }
+    
+    // Use window.open with noopener for security
+    const newWindow = window.open(finalUrl, '_blank', 'noopener,noreferrer');
+    if (!newWindow) {
+      // Fallback if popup blocked - open in same tab
+      window.location.href = finalUrl;
     }
   };
 
@@ -97,18 +107,16 @@ export function VendorCard({ vendor, onClick }: VendorCardProps) {
         {socialLinks.length > 0 && (
           <div className="flex items-center gap-2 pt-2 border-t border-slate-700">
             {socialLinks.map((link, index) => (
-              <Button
+              <a
                 key={index}
-                variant="ghost"
-                size="sm"
-                className={`p-1 h-8 w-8 ${link.color} hover:bg-slate-700`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  openLink(link.value, link.type);
-                }}
+                href={link.type === 'email' ? `mailto:${link.value}` : (link.value.startsWith('http') ? link.value : `https://${link.value}`)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`p-1 h-8 w-8 flex items-center justify-center rounded-md ${link.color} hover:bg-slate-700 transition-colors`}
+                onClick={(e) => e.stopPropagation()}
               >
                 <link.icon className="h-4 w-4" />
-              </Button>
+              </a>
             ))}
           </div>
         )}

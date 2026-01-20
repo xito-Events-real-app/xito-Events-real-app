@@ -74,20 +74,31 @@ export function SocialLinkInput({ platform, value, onChange, placeholder }: Soci
   const config = platformConfig[platform];
   const Icon = config.icon;
 
-  const handleOpen = () => {
+  const handleOpen = (e: React.MouseEvent) => {
+    e.preventDefault();
     if (!value) return;
     
+    let finalUrl: string;
     if (platform === 'gmail') {
-      window.open(`mailto:${value}`, '_blank');
+      finalUrl = `mailto:${value}`;
     } else {
-      // Ensure the URL has a protocol
-      let url = value;
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        url = 'https://' + url;
+      finalUrl = value;
+      if (!value.startsWith('http://') && !value.startsWith('https://')) {
+        finalUrl = 'https://' + value;
       }
-      window.open(url, '_blank');
+    }
+    
+    // Use window.open with noopener for security
+    const newWindow = window.open(finalUrl, '_blank', 'noopener,noreferrer');
+    if (!newWindow) {
+      // Fallback if popup blocked
+      window.location.href = finalUrl;
     }
   };
+
+  const href = platform === 'gmail' 
+    ? `mailto:${value}` 
+    : (value && value.startsWith('http') ? value : (value ? `https://${value}` : '#'));
 
   return (
     <div className="flex items-center gap-2">
@@ -101,16 +112,21 @@ export function SocialLinkInput({ platform, value, onChange, placeholder }: Soci
         onChange={(e) => onChange(e.target.value)}
         className="bg-slate-800 border-slate-600 text-white flex-1"
       />
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={handleOpen}
-        disabled={!value}
-        className="flex-shrink-0 text-slate-400 hover:text-white"
-      >
-        <ExternalLink className="h-4 w-4" />
-      </Button>
+      {value ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-shrink-0 p-2 text-slate-400 hover:text-white rounded-md hover:bg-slate-700 transition-colors"
+          onClick={handleOpen}
+        >
+          <ExternalLink className="h-4 w-4" />
+        </a>
+      ) : (
+        <div className="flex-shrink-0 p-2 text-slate-600 cursor-not-allowed">
+          <ExternalLink className="h-4 w-4" />
+        </div>
+      )}
     </div>
   );
 }
