@@ -202,7 +202,24 @@ async function updateClientStatus(accessToken: string, spreadsheetId: string, ro
   // If status is BOOKED, copy to BOOKED CLIENTS sheet
   let copiedToBooked = false;
   if (newStatus.toUpperCase() === 'BOOKED') {
-    const isAlreadyBooked = await checkIfAlreadyBooked(accessToken, spreadsheetId, rowNumber);
+    // Fetch client name and contact for duplicate checking
+    const clientDataRange = encodeURIComponent(`'CLIENT TRACKER'!C${rowNumber}:G${rowNumber}`);
+    const clientDataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${clientDataRange}`;
+    const clientDataResponse = await fetch(clientDataUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    
+    let clientName = '';
+    let contactNo = '';
+    if (clientDataResponse.ok) {
+      const clientData = await clientDataResponse.json();
+      if (clientData.values && clientData.values[0]) {
+        clientName = clientData.values[0][0] || ''; // Column C
+        contactNo = clientData.values[0][4] || ''; // Column G
+      }
+    }
+    
+    const isAlreadyBooked = await checkIfAlreadyBooked(accessToken, spreadsheetId, clientName, contactNo);
     if (!isAlreadyBooked) {
       await copyToBookedClients(accessToken, spreadsheetId, rowNumber);
       copiedToBooked = true;
@@ -982,9 +999,9 @@ async function addPayment(
   };
 }
 
-// Check if a client is already in the BOOKED CLIENTS sheet by original row number
-async function checkIfAlreadyBooked(accessToken: string, spreadsheetId: string, originalRowNumber: number): Promise<boolean> {
-  const range = encodeURIComponent("'BOOKED CLIENTS'!A2:A500");
+// Check if a client is already in the BOOKED CLIENTS sheet by client name and contact
+async function checkIfAlreadyBooked(accessToken: string, spreadsheetId: string, clientName: string, contactNo: string): Promise<boolean> {
+  const range = encodeURIComponent("'BOOKED CLIENTS'!C2:G500"); // Columns C (name) and G (contact)
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   try {
@@ -1001,15 +1018,22 @@ async function checkIfAlreadyBooked(accessToken: string, spreadsheetId: string, 
     const data = await response.json();
     if (!data.values) return false;
     
-    // Check if any row has this original row number
-    return data.values.some((row: string[]) => parseInt(row[0]) === originalRowNumber);
+    // Check if any row has this client name AND contact number (to prevent duplicates)
+    const normalizedName = clientName.toLowerCase().trim();
+    const normalizedContact = contactNo.replace(/\D/g, '');
+    
+    return data.values.some((row: string[]) => {
+      const rowName = (row[0] || '').toLowerCase().trim(); // Column C is index 0 in this range
+      const rowContact = (row[4] || '').replace(/\D/g, ''); // Column G is index 4 in this range
+      return rowName === normalizedName || (normalizedContact && rowContact === normalizedContact);
+    });
   } catch (error) {
     console.error('Error checking if already booked:', error);
     return false;
   }
 }
 
-// Copy a client from CLIENT TRACKER to BOOKED CLIENTS sheet
+// Copy a client from CLIENT TRACKER to BOOKED CLIENTS sheet (same column structure as CLIENT TRACKER)
 async function copyToBookedClients(accessToken: string, spreadsheetId: string, originalRowNumber: number) {
   // First, read the full client data from CLIENT TRACKER
   const clientRange = encodeURIComponent(`'CLIENT TRACKER'!A${originalRowNumber}:AG${originalRowNumber}`);
@@ -1064,49 +1088,46 @@ async function copyToBookedClients(accessToken: string, spreadsheetId: string, o
   const nepalTime = new Date(now.getTime() + nepalOffset);
   const bookedDateTime = nepalTime.toISOString().replace('T', ' ').substring(0, 19);
 
-  // Prepare the data for BOOKED CLIENTS (Column A = original row number, rest = client data)
-  // Column A: Original Row Number
-  // Columns B onwards: Same as CLIENT TRACKER columns A-AG
+  // Prepare the data for BOOKED CLIENTS - EXACT same structure as CLIENT TRACKER (A-AG)
+  // No extra columns - direct copy of all CLIENT TRACKER data
   const bookedValues = [[
-    originalRowNumber.toString(),  // A: Original Row Number from CLIENT TRACKER
-    clientRow[0] || '',   // B: Registered DateTime AD
-    clientRow[1] || '',   // C: Registered Date BS
-    clientRow[2] || '',   // D: Client Name
-    clientRow[3] || '',   // E: Source
-    clientRow[4] || '',   // F: Client Location
-    clientRow[5] || '',   // G: Current Country
-    clientRow[6] || '',   // H: Contact No
-    clientRow[7] || '',   // I: WhatsApp No
-    clientRow[8] || '',   // J: (empty)
-    clientRow[9] || '',   // K: Event Location
-    clientRow[10] || '',  // L: Event City
-    clientRow[11] || '',  // M: Events
-    clientRow[12] || '',  // N: Event Year
-    clientRow[13] || '',  // O: Event Month
-    clientRow[14] || '',  // P: Event Day
-    clientRow[15] || '',  // Q: Event Date AD
-    clientRow[16] || '',  // R: Who Added
-    clientRow[17] || '',  // S: Inquiry Date AD
-    clientRow[18] || '',  // T: Inquiry Date BS
-    clientRow[19] || '',  // U: Inquiry Time
-    clientRow[20] || '',  // V: Description
-    clientRow[21] || '',  // W: Quotation Data
-    clientRow[22] || '',  // X: Status Log
-    clientRow[23] || '',  // Y: Client Handler
-    clientRow[24] || '',  // Z: Call Log
-    clientRow[25] || '',  // AA: Mindset
-    clientRow[26] || '',  // AB: Our Bargained Rates
-    clientRow[27] || '',  // AC: Client Bargained Rates
-    clientRow[28] || '',  // AD: Comments
-    clientRow[29] || '',  // AE: Final Quotation
-    clientRow[30] || '',  // AF: Payments Made
-    clientRow[31] || '',  // AG: Payment Dates AD
-    clientRow[32] || '',  // AH: Remaining Payment
-    bookedDateTime,       // AI: Booked DateTime
+    clientRow[0] || '',   // A: Registered DateTime AD
+    clientRow[1] || '',   // B: Registered Date BS
+    clientRow[2] || '',   // C: Client Name
+    clientRow[3] || '',   // D: Source
+    clientRow[4] || '',   // E: Client Location
+    clientRow[5] || '',   // F: Current Country
+    clientRow[6] || '',   // G: Contact No
+    clientRow[7] || '',   // H: WhatsApp No
+    clientRow[8] || '',   // I: (empty)
+    clientRow[9] || '',   // J: Event Location
+    clientRow[10] || '',  // K: Event City
+    clientRow[11] || '',  // L: Events
+    clientRow[12] || '',  // M: Event Year
+    clientRow[13] || '',  // N: Event Month
+    clientRow[14] || '',  // O: Event Day
+    clientRow[15] || '',  // P: Event Date AD
+    clientRow[16] || '',  // Q: Who Added
+    clientRow[17] || '',  // R: Inquiry Date AD
+    clientRow[18] || '',  // S: Inquiry Date BS
+    clientRow[19] || '',  // T: Inquiry Time
+    clientRow[20] || '',  // U: Description
+    clientRow[21] || '',  // V: Quotation Data
+    clientRow[22] || '',  // W: Status Log
+    clientRow[23] || '',  // X: Client Handler
+    clientRow[24] || '',  // Y: Call Log
+    clientRow[25] || '',  // Z: Mindset
+    clientRow[26] || '',  // AA: Our Bargained Rates
+    clientRow[27] || '',  // AB: Client Bargained Rates
+    clientRow[28] || '',  // AC: Comments
+    clientRow[29] || '',  // AD: Final Quotation
+    clientRow[30] || '',  // AE: Payments Made
+    clientRow[31] || '',  // AF: Payment Dates AD
+    clientRow[32] || '',  // AG: Remaining Payment
   ]];
 
-  // Write the data to row 2 of BOOKED CLIENTS
-  const writeRange = encodeURIComponent("'BOOKED CLIENTS'!A2:AI2");
+  // Write the data to row 2 of BOOKED CLIENTS (same structure as CLIENT TRACKER: A-AG)
+  const writeRange = encodeURIComponent("'BOOKED CLIENTS'!A2:AG2");
   const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${writeRange}?valueInputOption=USER_ENTERED`;
   
   const writeResponse = await fetch(writeUrl, {
@@ -1128,9 +1149,9 @@ async function copyToBookedClients(accessToken: string, spreadsheetId: string, o
   return { success: true };
 }
 
-// Get all clients from BOOKED CLIENTS sheet
+// Get all clients from BOOKED CLIENTS sheet (same structure as CLIENT TRACKER: A-AG)
 async function getBookedClients(accessToken: string, spreadsheetId: string, limit = 100) {
-  const range = encodeURIComponent("'BOOKED CLIENTS'!A2:AI" + (limit + 1));
+  const range = encodeURIComponent("'BOOKED CLIENTS'!A2:AG" + (limit + 1));
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   const response = await fetch(url, {
@@ -1146,43 +1167,44 @@ async function getBookedClients(accessToken: string, spreadsheetId: string, limi
   const data = await response.json();
   if (!data.values) return [];
 
+  // Same column mapping as getClients (CLIENT TRACKER) - columns A-AG
   return data.values.map((row: string[], index: number) => ({
     bookedRowNumber: index + 2,
-    originalRowNumber: parseInt(row[0]) || 0,
-    registeredDateTimeAD: row[1] || '',
-    registeredDateBS: row[2] || '',
-    clientName: row[3] || '',
-    source: row[4] || '',
-    clientLocation: row[5] || '',
-    currentCountry: row[6] || '',
-    contactNo: row[7] || '',
-    whatsappNo: row[8] || '',
-    // Column J (index 9) - empty
-    eventLocation: row[10] || '',
-    eventCity: row[11] || '',
-    events: row[12] || '',
-    eventYear: row[13] || '',
-    eventMonth: row[14] || '',
-    eventDay: row[15] || '',
-    eventDateAD: row[16] || '',
-    whoAdded: row[17] || '',
-    inquiryDateAD: row[18] || '',
-    inquiryDateBS: row[19] || '',
-    inquiryTime: row[20] || '',
-    description: row[21] || '',
-    quotationData: row[22] || '',
-    statusLog: row[23] || '',
-    clientHandler: row[24] || '',
-    callLog: row[25] || '',
-    mindset: row[26] || '',
-    ourBargainedRates: row[27] || '',
-    clientBargainedRates: row[28] || '',
-    comments: row[29] || '',
-    finalQuotation: row[30] || '',
-    paymentsMade: row[31] || '',
-    paymentDatesAD: row[32] || '',
-    remainingPayment: row[33] || '',
-    bookedDateTime: row[34] || '',
+    originalRowNumber: 0, // Not stored separately, use client name/contact for sync
+    registeredDateTimeAD: row[0] || '',
+    registeredDateBS: row[1] || '',
+    clientName: row[2] || '',
+    source: row[3] || '',
+    clientLocation: row[4] || '',
+    currentCountry: row[5] || '',
+    contactNo: row[6] || '',
+    whatsappNo: row[7] || '',
+    // Column I (index 8) - empty
+    eventLocation: row[9] || '',
+    eventCity: row[10] || '',
+    events: row[11] || '',
+    eventYear: row[12] || '',
+    eventMonth: row[13] || '',
+    eventDay: row[14] || '',
+    eventDateAD: row[15] || '',
+    whoAdded: row[16] || '',
+    inquiryDateAD: row[17] || '',
+    inquiryDateBS: row[18] || '',
+    inquiryTime: row[19] || '',
+    description: row[20] || '',
+    quotationData: row[21] || '',
+    statusLog: row[22] || '',
+    clientHandler: row[23] || '',
+    callLog: row[24] || '',
+    mindset: row[25] || '',
+    ourBargainedRates: row[26] || '',
+    clientBargainedRates: row[27] || '',
+    comments: row[28] || '',
+    finalQuotation: row[29] || '',
+    paymentsMade: row[30] || '',
+    paymentDatesAD: row[31] || '',
+    remainingPayment: row[32] || '',
+    bookedDateTime: '', // Not stored in this structure
   }));
 }
 
@@ -1199,8 +1221,13 @@ async function migrateExistingBookedClients(accessToken: string, spreadsheetId: 
     
     // Check if client is BOOKED
     if (currentStatus.toUpperCase() === 'BOOKED') {
-      // Check if already in BOOKED CLIENTS
-      const isAlreadyBooked = await checkIfAlreadyBooked(accessToken, spreadsheetId, client.rowNumber);
+      // Check if already in BOOKED CLIENTS by name and contact
+      const isAlreadyBooked = await checkIfAlreadyBooked(
+        accessToken, 
+        spreadsheetId, 
+        client.clientName || '', 
+        client.contactNo || ''
+      );
       
       if (!isAlreadyBooked) {
         await copyToBookedClients(accessToken, spreadsheetId, client.rowNumber);
