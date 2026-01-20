@@ -105,7 +105,7 @@ export default function Today() {
 
   const handleClientClick = (client: { statusLog?: string }) => {
     const currentStatus = getCurrentStatus(client.statusLog || '').toUpperCase();
-    navigate(`/fresh-clients?category=${encodeURIComponent(currentStatus)}`);
+    navigate(`/client-tracker/fresh-clients?category=${encodeURIComponent(currentStatus)}`);
   };
 
   const canGoForward = addDays(selectedDate, 1) <= new Date();

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Home, Plus, Search, Users, RefreshCw } from "lucide-react";
+import { Home, Plus, Search, Users, RefreshCw, LayoutGrid } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { getCachedData, setCachedClients, setCachedDropdowns, notifyCacheUpdate } from "@/lib/cache-manager";
@@ -21,11 +21,11 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { icon: Home, label: "Dashboard", path: "/" },
-  { icon: Users, label: "Fresh Clients", path: "/fresh-clients" },
+  { icon: LayoutGrid, label: "Suite", path: "/" },
+  { icon: Home, label: "Dashboard", path: "/client-tracker" },
   { type: "sync" },
-  { icon: Plus, label: "Add Client", path: "/quick-add" },
-  { type: "search", icon: Search, label: "Search", path: "/search" },
+  { icon: Plus, label: "Add Client", path: "/client-tracker/quick-add" },
+  { type: "search", icon: Search, label: "Search", path: "/client-tracker/search" },
 ];
 
 export function BottomNav() {
@@ -60,7 +60,7 @@ export function BottomNav() {
     }
     // If it wasn't a long press, navigate to search
     if (!isLongPressRef.current) {
-      navigate("/search");
+      navigate("/client-tracker/search");
     }
   }, [navigate]);
 

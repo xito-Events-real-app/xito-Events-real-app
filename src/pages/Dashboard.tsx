@@ -237,7 +237,7 @@ export default function Dashboard() {
   }, [clients]);
 
   const handleCategoryClick = (status: string) => {
-    navigate(`/fresh-clients?category=${encodeURIComponent(status)}`);
+    navigate(`/client-tracker/fresh-clients?category=${encodeURIComponent(status)}`);
   };
 
 
@@ -376,7 +376,7 @@ export default function Dashboard() {
       toast.success(`Device registered to ${handler}!`, { duration: 2000 });
     }
     
-    navigate(`/handler/${encodeURIComponent(handler)}`);
+    navigate(`/client-tracker/handler/${encodeURIComponent(handler)}`);
   };
 
   const handleJackpotClose = () => {
@@ -642,7 +642,7 @@ export default function Dashboard() {
                     "shadow-soft border-0",
                     isClickable && "cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
                   )}
-                  onClick={() => isClickable && navigate("/today")}
+                  onClick={() => isClickable && navigate("/client-tracker/today")}
                 >
                   <CardContent className={cn(
                     "text-center",

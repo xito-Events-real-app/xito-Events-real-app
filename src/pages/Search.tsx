@@ -41,9 +41,9 @@ export default function Search() {
   const handleClientClick = (client: ClientData) => {
     const currentStatus = getCurrentStatus(client.statusLog || "");
     if (currentStatus) {
-      navigate(`/fresh-clients?category=${encodeURIComponent(currentStatus)}`);
+      navigate(`/client-tracker/fresh-clients?category=${encodeURIComponent(currentStatus)}`);
     } else {
-      navigate("/fresh-clients");
+      navigate("/client-tracker/fresh-clients");
     }
   };
 
