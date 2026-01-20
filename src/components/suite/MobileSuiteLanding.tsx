@@ -5,6 +5,7 @@ import { ChevronRight, Sparkles, Construction } from "lucide-react";
 import { suiteModules } from "@/lib/suite-modules";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { GlobalModeToggle } from "@/components/layout/GlobalModeToggle";
 
 export function MobileSuiteLanding() {
   const activeModules = suiteModules.filter(m => m.status === 'active');
@@ -18,6 +19,9 @@ export function MobileSuiteLanding() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Global Mode Toggle */}
+      <GlobalModeToggle />
+
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-4">
         <div>

@@ -48,8 +48,8 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Top left controls - Desktop Mode Toggle + Mute side by side */}
-      <div className="fixed top-4 left-4 z-50 flex items-center gap-2">
+      {/* Top right controls - Desktop Mode Toggle + Mute side by side */}
+      <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
         <Button
           variant="ghost"
           size="icon"
