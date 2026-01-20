@@ -44,10 +44,10 @@ export const suiteModules: SuiteModule[] = [
   {
     id: 'finance-manager',
     name: 'Finance Manager',
-    description: 'Manage income and expenses',
+    description: 'Track payments and collections',
     icon: DollarSign,
     path: '/finance',
-    status: 'coming-soon',
+    status: 'active',
     gradient: 'from-green-500 to-emerald-600',
   },
   {

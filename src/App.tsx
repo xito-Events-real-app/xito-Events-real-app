@@ -13,6 +13,7 @@ import FreshClients from "./pages/FreshClients";
 import Today from "./pages/Today";
 import HandlerClients from "./pages/HandlerClients";
 import BookedClients from "./pages/BookedClients";
+import FinanceManager from "./pages/FinanceManager";
 import ComingSoon from "./pages/ComingSoon";
 import NotFound from "./pages/NotFound";
 
@@ -42,7 +43,7 @@ const App = () => (
             <Route path="/booked-clients" element={<BookedClients />} />
             
             {/* Coming Soon Modules */}
-            <Route path="/finance" element={<ComingSoon moduleId="finance-manager" />} />
+            <Route path="/finance" element={<FinanceManager />} />
             <Route path="/tasks" element={<ComingSoon moduleId="daily-task-manager" />} />
             <Route path="/video-edit" element={<ComingSoon moduleId="video-edit-tracker" />} />
             <Route path="/photo-edit" element={<ComingSoon moduleId="photo-edit-tracker" />} />
