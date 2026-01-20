@@ -48,30 +48,44 @@ const SocialIcon = ({
   if (!value) return null;
 
   const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
+    
+    let finalUrl: string;
     if (type === 'email') {
-      window.open(`mailto:${value}`, '_blank');
+      finalUrl = `mailto:${value}`;
     } else {
-      let url = value;
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        url = 'https://' + url;
+      finalUrl = value;
+      if (!value.startsWith('http://') && !value.startsWith('https://')) {
+        finalUrl = 'https://' + value;
       }
-      window.open(url, '_blank');
+    }
+    
+    // Use window.open with noopener for security
+    const newWindow = window.open(finalUrl, '_blank', 'noopener,noreferrer');
+    if (!newWindow) {
+      // Fallback if popup blocked
+      window.location.href = finalUrl;
     }
   };
+
+  const href = type === 'email' 
+    ? `mailto:${value}` 
+    : (value.startsWith('http') ? value : `https://${value}`);
 
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className={`p-1 h-7 w-7 ${color} hover:bg-slate-700`}
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`p-1 h-7 w-7 flex items-center justify-center rounded-md ${color} hover:bg-slate-700 transition-colors`}
             onClick={handleClick}
           >
             <Icon className="h-3.5 w-3.5" />
-          </Button>
+          </a>
         </TooltipTrigger>
         <TooltipContent>
           <p>{tooltip}</p>
