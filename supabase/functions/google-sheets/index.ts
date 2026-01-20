@@ -1032,8 +1032,15 @@ function getCurrentStatusFromLog(statusLog: string): string {
   // Get the last line for the current status
   const lastLine = lines[lines.length - 1].trim().toUpperCase();
   
-  // FIRST: Check if line starts with "BOOKED" (most common case, be permissive)
-  if (lastLine.startsWith('BOOKED')) {
+  // Check for "BOOKED SOMEWHERE ELSE" first - this is NOT the same as "BOOKED"
+  if (lastLine.startsWith('BOOKED SOMEWHERE ELSE')) {
+    return 'BOOKED SOMEWHERE ELSE';
+  }
+  
+  // Check for exact "BOOKED" status (with optional timestamp/separator after)
+  // Matches: "BOOKED", "BOOKED - timestamp", "BOOKED [timestamp]", "BOOKED: note"
+  // Does NOT match: "BOOKED SOMEWHERE ELSE"
+  if (lastLine.match(/^BOOKED(?:\s*[-\[\(:,]|$)/)) {
     return 'BOOKED';
   }
   
