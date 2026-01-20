@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -1386,6 +1386,123 @@ async function migrateExistingBookedClients(accessToken: string, spreadsheetId: 
   return { success: true, migratedCount, alreadyExistsCount, skippedCount };
 }
 
+// Resync all booked clients: sync payment data from CLIENT TRACKER to BOOKED CLIENTS
+async function resyncAllBookedClients(accessToken: string, spreadsheetId: string) {
+  console.log('[RESYNC] Starting full resync of booked clients...');
+  
+  // Get all data from CLIENT TRACKER (columns A and AE-AG for payments)
+  const trackerRange = encodeURIComponent("'CLIENT TRACKER'!A2:AG2000");
+  const trackerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}`;
+  
+  const trackerResponse = await fetch(trackerUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  
+  if (!trackerResponse.ok) {
+    throw new Error('Failed to fetch CLIENT TRACKER data');
+  }
+  
+  const trackerData = await trackerResponse.json();
+  const trackerRows = trackerData.values || [];
+  
+  // Build a map of registeredDateTimeAD -> payment data from CLIENT TRACKER
+  // Column indices: A=0, AE=30, AF=31, AG=32
+  const trackerPaymentMap: Record<string, { paymentsMade: string; paymentDatesAD: string; remainingPayment: string; rowNumber: number }> = {};
+  
+  for (let i = 0; i < trackerRows.length; i++) {
+    const row = trackerRows[i];
+    const registeredDateTime = (row[0] || '').trim();
+    if (registeredDateTime) {
+      trackerPaymentMap[registeredDateTime] = {
+        paymentsMade: row[30] || '',
+        paymentDatesAD: row[31] || '',
+        remainingPayment: row[32] || '',
+        rowNumber: i + 2
+      };
+    }
+  }
+  
+  console.log(`[RESYNC] Built tracker map with ${Object.keys(trackerPaymentMap).length} entries`);
+  
+  // Get all data from BOOKED CLIENTS
+  const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:AG500");
+  const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}`;
+  
+  const bookedResponse = await fetch(bookedUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  
+  if (!bookedResponse.ok) {
+    throw new Error('Failed to fetch BOOKED CLIENTS data');
+  }
+  
+  const bookedData = await bookedResponse.json();
+  const bookedRows = bookedData.values || [];
+  
+  let syncedCount = 0;
+  let skippedCount = 0;
+  let notFoundCount = 0;
+  
+  for (let i = 0; i < bookedRows.length; i++) {
+    const row = bookedRows[i];
+    const registeredDateTime = (row[0] || '').trim();
+    const bookedRowNumber = i + 2;
+    
+    if (!registeredDateTime) {
+      skippedCount++;
+      continue;
+    }
+    
+    const trackerData = trackerPaymentMap[registeredDateTime];
+    
+    if (!trackerData) {
+      console.log(`[RESYNC] No match in tracker for booked row ${bookedRowNumber}: ${registeredDateTime.substring(0, 20)}...`);
+      notFoundCount++;
+      continue;
+    }
+    
+    // Current values in BOOKED CLIENTS
+    const bookedPaymentsMade = row[30] || '';
+    const bookedPaymentDatesAD = row[31] || '';
+    const bookedRemainingPayment = row[32] || '';
+    
+    // Check if data differs and needs update
+    const needsUpdate = 
+      bookedPaymentsMade !== trackerData.paymentsMade ||
+      bookedPaymentDatesAD !== trackerData.paymentDatesAD ||
+      bookedRemainingPayment !== trackerData.remainingPayment;
+    
+    if (needsUpdate) {
+      // Update BOOKED CLIENTS with data from CLIENT TRACKER
+      const updateRange = encodeURIComponent(`'BOOKED CLIENTS'!AE${bookedRowNumber}:AG${bookedRowNumber}`);
+      const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`;
+      
+      const updateResponse = await fetch(updateUrl, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          values: [[trackerData.paymentsMade, trackerData.paymentDatesAD, trackerData.remainingPayment]] 
+        }),
+      });
+      
+      if (updateResponse.ok) {
+        console.log(`[RESYNC] Synced row ${bookedRowNumber} from tracker row ${trackerData.rowNumber}`);
+        syncedCount++;
+      } else {
+        console.error(`[RESYNC] Failed to update row ${bookedRowNumber}:`, await updateResponse.text());
+      }
+    } else {
+      skippedCount++;
+    }
+  }
+  
+  console.log(`[RESYNC] Complete: ${syncedCount} synced, ${skippedCount} unchanged, ${notFoundCount} not found in tracker`);
+  return { success: true, syncedCount, skippedCount, notFoundCount, totalBooked: bookedRows.length };
+}
+
 // Update a booked client in both BOOKED CLIENTS and CLIENT TRACKER sheets
 // CORRECT COLUMN MAPPING (A-AG identical in both sheets):
 // AD = finalQuotation, AE = paymentsMade, AF = paymentDatesAD, AG = remainingPayment
@@ -1682,6 +1799,9 @@ Deno.serve(async (req) => {
           data.originalRowNumber as number,
           data.updates as Record<string, unknown> || {}
         );
+        break;
+      case 'resyncAllBookedClients':
+        result = await resyncAllBookedClients(accessToken, spreadsheetId);
         break;
       default:
         throw new Error(`Unknown action: ${action}`);
