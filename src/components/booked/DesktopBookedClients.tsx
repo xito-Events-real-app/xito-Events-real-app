@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Calendar, DollarSign, Users, TrendingUp, Phone, MessageCircle } from "lucide-react";
+import { ArrowLeft, RefreshCw, Calendar, DollarSign, Users, TrendingUp, Phone, MessageCircle, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "sonner";
 import { getBookedClients, migrateExistingBookedClients, BookedClientData } from "@/lib/sheets-api";
 import BookedClientCard from "./BookedClientCard";
+import { getMonthName } from "@/lib/nepali-months";
 
 const DesktopBookedClients = () => {
   const navigate = useNavigate();
@@ -90,6 +91,13 @@ const DesktopBookedClients = () => {
     if (days <= 30) return <Badge className="bg-orange-500">📅 {days}d</Badge>;
     if (days <= 60) return <Badge className="bg-amber-500">{days}d</Badge>;
     return <Badge variant="outline" className="text-green-400 border-green-400">{days}d</Badge>;
+  };
+
+  // Format event date in Nepali format (e.g., "2082 MAGH 12")
+  const formatNepaliEventDate = (eventYear: string, eventMonth: string, eventDay: string): string => {
+    if (!eventYear || !eventMonth || !eventDay) return 'TBD';
+    const monthName = getMonthName(eventMonth);
+    return `${eventYear} ${monthName} ${eventDay}`;
   };
 
   return (
@@ -283,22 +291,33 @@ const DesktopBookedClients = () => {
                         </div>
                       </TableCell>
                       <TableCell className="text-slate-300">
-                        {client.eventDateAD || 'TBD'}
+                        {formatNepaliEventDate(client.eventYear, client.eventMonth, client.eventDay)}
                       </TableCell>
                       <TableCell>
-                        {getCountdownBadge(days)}
+                        <div className="flex items-center gap-2">
+                          {getCountdownBadge(days)}
+                          {days !== null && (
+                            <span className="text-xs text-slate-500">
+                              ({days > 0 ? `${days} days left` : days === 0 ? 'Today!' : `${Math.abs(days)} days ago`})
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-slate-300 text-sm">
-                        {client.events?.split(',').slice(0, 2).join(', ') || '-'}
+                        <div className="flex flex-col gap-0.5">
+                          {client.events?.split('\n').filter(Boolean).map((event, idx) => (
+                            <span key={idx} className="whitespace-nowrap">{event}</span>
+                          )) || '-'}
+                        </div>
                       </TableCell>
-                      <TableCell className="text-emerald-400 font-medium">
-                        NPR {quotationAmount.toLocaleString('en-IN')}
+                      <TableCell className="text-emerald-400 font-medium whitespace-nowrap">
+                        NPR {quotationAmount.toLocaleString('en-IN')}/-
                       </TableCell>
-                      <TableCell className="text-green-400">
-                        NPR {paidAmount.toLocaleString('en-IN')}
+                      <TableCell className="text-green-400 whitespace-nowrap">
+                        NPR {paidAmount.toLocaleString('en-IN')}/-
                       </TableCell>
-                      <TableCell className="text-amber-400">
-                        {client.remainingPayment || `NPR ${(quotationAmount - paidAmount).toLocaleString('en-IN')}`}
+                      <TableCell className="text-amber-400 whitespace-nowrap">
+                        NPR {(quotationAmount - paidAmount).toLocaleString('en-IN')}/-
                       </TableCell>
                       <TableCell className="text-slate-300 text-sm">
                         {client.clientHandler || '-'}
