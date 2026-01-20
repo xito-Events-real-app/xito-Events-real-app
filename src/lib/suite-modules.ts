@@ -18,7 +18,7 @@ export interface SuiteModule {
   description: string;
   icon: LucideIcon;
   path: string;
-  status: 'active' | 'coming-soon';
+  status: "active" | "coming-soon";
   gradient: string;
 }
 
@@ -101,7 +101,7 @@ export const suiteModules: SuiteModule[] = [
     description: 'Manage vendor relationships',
     icon: Building2,
     path: '/vendors',
-    status: 'coming-soon',
+    status: 'active',
     gradient: 'from-slate-500 to-gray-600',
   },
   {
