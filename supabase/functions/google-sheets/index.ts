@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -1578,6 +1578,228 @@ async function updateBookedClient(
   return { success: true };
 }
 
+// ============= VENDOR MANAGEMENT FUNCTIONS =============
+
+// Get vendor types from Column X of setup data
+async function getVendorTypes(accessToken: string, spreadsheetId: string) {
+  const range = encodeURIComponent("'CLIENT TRACKER SETUP DATA'!X2:X100");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (getVendorTypes):', response.status, errorText);
+    throw new Error(`Google Sheets API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  if (!data.values) return [];
+  
+  return data.values.flat().filter(Boolean);
+}
+
+// Get all vendors from VENDORS sheet
+async function getVendors(accessToken: string, spreadsheetId: string, limit = 500) {
+  const range = encodeURIComponent("'VENDORS'!A2:R" + (limit + 1));
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (getVendors):', response.status, errorText);
+    throw new Error(`Google Sheets API error: ${response.status} - ${errorText.substring(0, 200)}`);
+  }
+
+  const data = await response.json();
+  if (!data.values) return [];
+
+  return data.values.map((row: string[], index: number) => ({
+    rowNumber: index + 2,
+    vendorName: row[0] || '',           // Column A
+    vendorType: row[1] || '',           // Column B
+    companyContactNo: row[2] || '',     // Column C
+    owner1Name: row[3] || '',           // Column D
+    owner1ContactNo: row[4] || '',      // Column E
+    owner1WhatsappNo: row[5] || '',     // Column F
+    owner2Name: row[6] || '',           // Column G
+    owner2ContactNo: row[7] || '',      // Column H
+    owner2WhatsappNo: row[8] || '',     // Column I
+    city: row[9] || '',                 // Column J
+    area: row[10] || '',                // Column K
+    googleMapLink: row[11] || '',       // Column L
+    instagramLink: row[12] || '',       // Column M
+    facebookLink: row[13] || '',        // Column N
+    tiktokLink: row[14] || '',          // Column O
+    youtubeLink: row[15] || '',         // Column P
+    websiteLink: row[16] || '',         // Column Q
+    email: row[17] || '',               // Column R
+  }));
+}
+
+// Add new vendor at row 2
+async function addVendor(accessToken: string, spreadsheetId: string, vendorData: Record<string, unknown>) {
+  const sheetId = await getSheetId(accessToken, spreadsheetId, 'VENDORS');
+  
+  // First, insert a new row at position 2
+  const insertUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+  await fetch(insertUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      requests: [{
+        insertDimension: {
+          range: {
+            sheetId,
+            dimension: 'ROWS',
+            startIndex: 1, // Row 2 (0-indexed)
+            endIndex: 2,
+          },
+          inheritFromBefore: false,
+        },
+      }],
+    }),
+  });
+
+  // Now write data to row 2
+  const values = [[
+    vendorData.vendorName || '',           // A: Vendor Name
+    vendorData.vendorType || '',           // B: Vendor Type
+    vendorData.companyContactNo || '',     // C: Company Contact No
+    vendorData.owner1Name || '',           // D: Owner 1 Name
+    vendorData.owner1ContactNo || '',      // E: Owner 1 Contact No
+    vendorData.owner1WhatsappNo || '',     // F: Owner 1 WhatsApp No
+    vendorData.owner2Name || '',           // G: Owner 2 Name
+    vendorData.owner2ContactNo || '',      // H: Owner 2 Contact No
+    vendorData.owner2WhatsappNo || '',     // I: Owner 2 WhatsApp No
+    vendorData.city || '',                 // J: City
+    vendorData.area || '',                 // K: Area
+    vendorData.googleMapLink || '',        // L: Google Map
+    vendorData.instagramLink || '',        // M: Instagram
+    vendorData.facebookLink || '',         // N: Facebook
+    vendorData.tiktokLink || '',           // O: TikTok
+    vendorData.youtubeLink || '',          // P: YouTube
+    vendorData.websiteLink || '',          // Q: Website
+    vendorData.email || '',                // R: Email
+  ]];
+
+  const range = encodeURIComponent("'VENDORS'!A2:R2");
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  
+  const response = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (addVendor):', response.status, errorText);
+    throw new Error(`Failed to add vendor: ${response.status}`);
+  }
+
+  return { success: true };
+}
+
+// Update existing vendor
+async function updateVendor(accessToken: string, spreadsheetId: string, vendorData: Record<string, unknown>) {
+  const rowNumber = vendorData.rowNumber as number;
+  if (!rowNumber || rowNumber < 2) {
+    throw new Error('Valid rowNumber is required for updating vendor');
+  }
+
+  const values = [[
+    vendorData.vendorName || '',           // A: Vendor Name
+    vendorData.vendorType || '',           // B: Vendor Type
+    vendorData.companyContactNo || '',     // C: Company Contact No
+    vendorData.owner1Name || '',           // D: Owner 1 Name
+    vendorData.owner1ContactNo || '',      // E: Owner 1 Contact No
+    vendorData.owner1WhatsappNo || '',     // F: Owner 1 WhatsApp No
+    vendorData.owner2Name || '',           // G: Owner 2 Name
+    vendorData.owner2ContactNo || '',      // H: Owner 2 Contact No
+    vendorData.owner2WhatsappNo || '',     // I: Owner 2 WhatsApp No
+    vendorData.city || '',                 // J: City
+    vendorData.area || '',                 // K: Area
+    vendorData.googleMapLink || '',        // L: Google Map
+    vendorData.instagramLink || '',        // M: Instagram
+    vendorData.facebookLink || '',         // N: Facebook
+    vendorData.tiktokLink || '',           // O: TikTok
+    vendorData.youtubeLink || '',          // P: YouTube
+    vendorData.websiteLink || '',          // Q: Website
+    vendorData.email || '',                // R: Email
+  ]];
+
+  const range = encodeURIComponent(`'VENDORS'!A${rowNumber}:R${rowNumber}`);
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  
+  const response = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (updateVendor):', response.status, errorText);
+    throw new Error(`Failed to update vendor: ${response.status}`);
+  }
+
+  return { success: true };
+}
+
+// Delete vendor (clear the row or delete it)
+async function deleteVendor(accessToken: string, spreadsheetId: string, rowNumber: number) {
+  if (!rowNumber || rowNumber < 2) {
+    throw new Error('Valid rowNumber is required for deleting vendor');
+  }
+
+  const sheetId = await getSheetId(accessToken, spreadsheetId, 'VENDORS');
+  
+  // Delete the row
+  const deleteUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+  const response = await fetch(deleteUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      requests: [{
+        deleteDimension: {
+          range: {
+            sheetId,
+            dimension: 'ROWS',
+            startIndex: rowNumber - 1, // 0-indexed
+            endIndex: rowNumber,
+          },
+        },
+      }],
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (deleteVendor):', response.status, errorText);
+    throw new Error(`Failed to delete vendor: ${response.status}`);
+  }
+
+  return { success: true };
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -1812,6 +2034,25 @@ Deno.serve(async (req) => {
         break;
       case 'resyncAllBookedClients':
         result = await resyncAllBookedClients(accessToken, spreadsheetId);
+        break;
+      // Vendor Management Actions
+      case 'getVendors':
+        result = await getVendors(accessToken, spreadsheetId, body.limit);
+        break;
+      case 'getVendorTypes':
+        result = await getVendorTypes(accessToken, spreadsheetId);
+        break;
+      case 'addVendor':
+        if (!data) throw new Error('data is required for addVendor');
+        result = await addVendor(accessToken, spreadsheetId, data);
+        break;
+      case 'updateVendor':
+        if (!data) throw new Error('data is required for updateVendor');
+        result = await updateVendor(accessToken, spreadsheetId, data);
+        break;
+      case 'deleteVendor':
+        if (!data || !data.rowNumber) throw new Error('rowNumber is required for deleteVendor');
+        result = await deleteVendor(accessToken, spreadsheetId, data.rowNumber as number);
         break;
       default:
         throw new Error(`Unknown action: ${action}`);
