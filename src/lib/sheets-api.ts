@@ -275,7 +275,9 @@ export async function addPayment(
   bank: string,
   existingPaymentsMade: string,
   existingPaymentDatesAD: string,
-  finalQuotationAmount: number
+  finalQuotationAmount: number,
+  registeredDateTimeAD?: string, // For two-way sync
+  sourceSheet?: 'tracker' | 'booked' // Which sheet the payment is coming from
 ): Promise<{ 
   success: boolean; 
   paymentsMade: string; 
@@ -299,7 +301,9 @@ export async function addPayment(
       bank, 
       existingPaymentsMade, 
       existingPaymentDatesAD,
-      finalQuotationAmount
+      finalQuotationAmount,
+      registeredDateTimeAD,
+      sourceSheet
     },
   });
 }

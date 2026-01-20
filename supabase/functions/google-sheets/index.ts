@@ -907,6 +907,7 @@ async function updateFinalQuotation(
 }
 
 // Add payment entry to Columns AE, AF, AG for BOOKED clients
+// Now supports two-way sync: CLIENT TRACKER + BOOKED CLIENTS sheet
 async function addPayment(
   accessToken: string, 
   spreadsheetId: string, 
@@ -918,7 +919,9 @@ async function addPayment(
   bank: string,
   existingPaymentsMade: string,
   existingPaymentDatesAD: string,
-  finalQuotationAmount: number
+  finalQuotationAmount: number,
+  registeredDateTimeAD?: string, // Used to find matching row in BOOKED CLIENTS
+  sourceSheet?: 'tracker' | 'booked' // Which sheet the payment is coming from
 ) {
   if (!rowNumber || rowNumber < 2) {
     throw new Error('Valid rowNumber is required for adding payment');
@@ -963,23 +966,84 @@ async function addPayment(
   const remaining = finalQuotationAmount - totalPaid;
   const remainingFormatted = `NPR ${remaining.toLocaleString('en-IN')}/-`;
   
-  // Update all three columns at once (AE, AF, AG)
-  const range = encodeURIComponent(`'CLIENT TRACKER'!AE${rowNumber}:AG${rowNumber}`);
-  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  const paymentValues = [[updatedPaymentsMade, updatedPaymentDatesAD, remainingFormatted]];
   
-  const response = await fetch(updateUrl, {
+  // Determine primary and secondary sheets based on source
+  const primarySheet = sourceSheet === 'booked' ? 'BOOKED CLIENTS' : 'CLIENT TRACKER';
+  const secondarySheet = sourceSheet === 'booked' ? 'CLIENT TRACKER' : 'BOOKED CLIENTS';
+  
+  // Update primary sheet (the one the request came from)
+  const primaryRange = encodeURIComponent(`'${primarySheet}'!AE${rowNumber}:AG${rowNumber}`);
+  const primaryUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${primaryRange}?valueInputOption=USER_ENTERED`;
+  
+  const primaryResponse = await fetch(primaryUrl, {
     method: 'PUT',
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ values: [[updatedPaymentsMade, updatedPaymentDatesAD, remainingFormatted]] }),
+    body: JSON.stringify({ values: paymentValues }),
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('Google Sheets API error (addPayment):', response.status, errorText);
-    throw new Error(`Failed to add payment: ${response.status}`);
+  if (!primaryResponse.ok) {
+    const errorText = await primaryResponse.text();
+    console.error(`Google Sheets API error (addPayment to ${primarySheet}):`, primaryResponse.status, errorText);
+    throw new Error(`Failed to add payment: ${primaryResponse.status}`);
+  }
+
+  // Two-way sync: Update the corresponding row in the other sheet
+  if (registeredDateTimeAD) {
+    try {
+      // Find the matching row in the secondary sheet using registeredDateTimeAD
+      const searchRange = encodeURIComponent(`'${secondarySheet}'!A2:A1000`);
+      const searchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${searchRange}`;
+      
+      const searchResponse = await fetch(searchUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (searchResponse.ok) {
+        const searchData = await searchResponse.json();
+        if (searchData.values) {
+          const normalizedDateTime = registeredDateTimeAD.trim();
+          let matchingRowIndex = -1;
+          
+          for (let i = 0; i < searchData.values.length; i++) {
+            const rowDateTime = (searchData.values[i][0] || '').trim();
+            if (rowDateTime === normalizedDateTime) {
+              matchingRowIndex = i;
+              break;
+            }
+          }
+          
+          if (matchingRowIndex !== -1) {
+            const secondaryRowNumber = matchingRowIndex + 2; // Row 2 is index 0
+            const secondaryRange = encodeURIComponent(`'${secondarySheet}'!AE${secondaryRowNumber}:AG${secondaryRowNumber}`);
+            const secondaryUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${secondaryRange}?valueInputOption=USER_ENTERED`;
+            
+            const secondaryResponse = await fetch(secondaryUrl, {
+              method: 'PUT',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ values: paymentValues }),
+            });
+            
+            if (secondaryResponse.ok) {
+              console.log(`Payment synced to ${secondarySheet} row ${secondaryRowNumber}`);
+            } else {
+              console.error(`Failed to sync payment to ${secondarySheet}:`, await secondaryResponse.text());
+            }
+          } else {
+            console.log(`No matching row found in ${secondarySheet} for registeredDateTimeAD: ${registeredDateTimeAD}`);
+          }
+        }
+      }
+    } catch (syncError) {
+      // Log but don't fail the primary update
+      console.error('Error syncing payment to secondary sheet:', syncError);
+    }
   }
 
   return { 
@@ -1558,7 +1622,9 @@ Deno.serve(async (req) => {
           data.bank as string,
           data.existingPaymentsMade as string || '',
           data.existingPaymentDatesAD as string || '',
-          data.finalQuotationAmount as number || 0
+          data.finalQuotationAmount as number || 0,
+          data.registeredDateTimeAD as string | undefined,
+          data.sourceSheet as 'tracker' | 'booked' | undefined
         );
         break;
       case 'getBookedClients':
