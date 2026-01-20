@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { Phone, MessageCircle, Calendar, DollarSign, User, MapPin, Lock } from "lucide-react";
+import { Phone, MessageCircle, Calendar, DollarSign, User, MapPin, Lock, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { BookedClientData } from "@/lib/sheets-api";
+import { getMonthName } from "@/lib/nepali-months";
+import NepaliDate from "nepali-date-converter";
 
 interface BookedClientCardProps {
   client: BookedClientData;
@@ -12,10 +14,39 @@ interface BookedClientCardProps {
 }
 
 const BookedClientCard = ({ client, onRefresh }: BookedClientCardProps) => {
-  // Calculate days until event
+  // Calculate days until event - use eventDateAD if available, otherwise convert from Nepali date
   const getDaysUntilEvent = (): number | null => {
-    if (!client.eventDateAD) return null;
-    const eventDate = new Date(client.eventDateAD);
+    let eventDate: Date | null = null;
+    
+    // Try eventDateAD first
+    if (client.eventDateAD) {
+      const parsed = new Date(client.eventDateAD);
+      if (!isNaN(parsed.getTime())) {
+        eventDate = parsed;
+      }
+    }
+    
+    // Fallback: Convert from Nepali date (eventYear, eventMonth, eventDay)
+    if (!eventDate && client.eventYear && client.eventMonth && client.eventDay) {
+      try {
+        const bsYear = parseInt(client.eventYear);
+        const bsMonth = parseInt(client.eventMonth);
+        const bsDay = parseInt(client.eventDay);
+        
+        if (!isNaN(bsYear) && !isNaN(bsMonth) && !isNaN(bsDay) && !client.eventDay.includes('*')) {
+          const nepaliDate = new NepaliDate(bsYear, bsMonth - 1, bsDay); // month is 0-indexed
+          const adDate = nepaliDate.toJsDate();
+          if (adDate && !isNaN(adDate.getTime())) {
+            eventDate = adDate;
+          }
+        }
+      } catch (error) {
+        console.error('Error converting Nepali date:', error);
+      }
+    }
+    
+    if (!eventDate) return null;
+    
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     eventDate.setHours(0, 0, 0, 0);
@@ -23,6 +54,14 @@ const BookedClientCard = ({ client, onRefresh }: BookedClientCardProps) => {
   };
 
   const days = getDaysUntilEvent();
+
+  // Format Nepali event date
+  const formatNepaliEventDate = (): string => {
+    if (!client.eventYear || !client.eventMonth || !client.eventDay) return 'Date TBD';
+    const monthName = getMonthName(client.eventMonth);
+    const dayDisplay = client.eventDay.includes('*') ? '**' : client.eventDay;
+    return `${client.eventYear} ${monthName} ${dayDisplay}`;
+  };
 
   // Parse quotation amount
   const quotationMatch = client.finalQuotation?.match(/NPR\s*([\d,]+)/);
@@ -81,29 +120,22 @@ const BookedClientCard = ({ client, onRefresh }: BookedClientCardProps) => {
               <span className="truncate">{client.eventLocation || client.eventCity}</span>
             </div>
           </div>
-          {days !== null && (
-            <Badge className={`${countdownStyle.bg} ${countdownStyle.text} ml-2 shrink-0`}>
-              {days <= 0 ? (days === 0 ? "TODAY!" : `${Math.abs(days)}d ago`) : `${days}d`}
-            </Badge>
-          )}
+          <Badge className={`${countdownStyle.bg} ${countdownStyle.text} ml-2 shrink-0`}>
+            {days === null 
+              ? "TBD" 
+              : days <= 0 
+                ? (days === 0 ? "TODAY!" : `${Math.abs(days)}d ago`) 
+                : `${days}d left`}
+          </Badge>
         </div>
 
-        {/* Event Date */}
+        {/* Event Date in Nepali format */}
         <div className="flex items-center gap-2 text-sm text-slate-300 mb-3">
           <Calendar className="h-4 w-4 text-blue-400" />
-          <span>
-            {client.eventDateAD 
-              ? new Date(client.eventDateAD).toLocaleDateString('en-US', { 
-                  month: 'short', 
-                  day: 'numeric', 
-                  year: 'numeric' 
-                })
-              : 'Date TBD'
-            }
-          </span>
+          <span className="font-medium">{formatNepaliEventDate()}</span>
           {client.events && (
             <Badge variant="outline" className="text-xs border-slate-600 text-slate-400 ml-auto">
-              {client.events.split(',').length} events
+              {client.events.split('\n').filter(Boolean).length} events
             </Badge>
           )}
         </div>
