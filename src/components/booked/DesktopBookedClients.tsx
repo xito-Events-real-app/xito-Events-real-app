@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Calendar, Users, Bell, AlertTriangle, Phone, MessageCircle, LayoutGrid, Table as TableIcon, Receipt } from "lucide-react";
+import { ArrowLeft, RefreshCw, Calendar, Users, Bell, AlertTriangle, Phone, MessageCircle, LayoutGrid, Table as TableIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,6 @@ import { toast } from "sonner";
 import { getBookedClients, migrateExistingBookedClients, BookedClientData } from "@/lib/sheets-api";
 import EventClientCard from "./EventClientCard";
 import NepaliDateFilter from "./NepaliDateFilter";
-import PaymentHistorySheet from "./PaymentHistorySheet";
 import { getMonthName, parseEventDetails } from "@/lib/nepali-months";
 import NepaliDate from "nepali-date-converter";
 
@@ -23,8 +22,6 @@ const DesktopBookedClients = () => {
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
-  const [selectedClient, setSelectedClient] = useState<BookedClientData | null>(null);
-  const [isPaymentHistoryOpen, setIsPaymentHistoryOpen] = useState(false);
 
   const fetchClients = async () => {
     try {
@@ -98,11 +95,6 @@ const DesktopBookedClients = () => {
   const missingDateClients = clients.filter(hasMissingDate);
 
   const resetFilters = () => { setFilterYear(null); setFilterMonth(null); };
-
-  const handleRowClick = (client: BookedClientData) => {
-    setSelectedClient(client);
-    setIsPaymentHistoryOpen(true);
-  };
 
   const getCountdownBadge = (days: number | null, hasMissing: boolean) => {
     if (hasMissing) return <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/50"><AlertTriangle className="h-3 w-3 mr-1" />Date!</Badge>;
@@ -185,8 +177,7 @@ const DesktopBookedClients = () => {
                     return (
                       <TableRow 
                         key={client.bookedRowNumber} 
-                        className="border-slate-700 hover:bg-slate-700/30 cursor-pointer"
-                        onClick={() => handleRowClick(client)}
+                        className="border-slate-700 hover:bg-slate-700/30"
                       >
                         <TableCell><p className="font-medium text-white">{client.clientName}</p></TableCell>
                         <TableCell className="text-slate-300">
@@ -207,7 +198,7 @@ const DesktopBookedClients = () => {
                         <TableCell className="text-slate-300">{client.eventCity || '-'}</TableCell>
                         <TableCell className="text-slate-300">{client.clientHandler || '-'}</TableCell>
                         <TableCell>
-                          <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex gap-1">
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => window.open(`tel:${client.contactNo}`, '_self')}>
@@ -228,16 +219,6 @@ const DesktopBookedClients = () => {
                                 <p>{client.whatsappNo || client.contactNo || 'No number'}</p>
                               </TooltipContent>
                             </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleRowClick(client)}>
-                                  <Receipt className="h-4 w-4 text-emerald-400" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>View Payments</p>
-                              </TooltipContent>
-                            </Tooltip>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -248,21 +229,6 @@ const DesktopBookedClients = () => {
             </Card>
           </TooltipProvider>}
       </div>
-
-      {/* Payment History Sheet */}
-      {selectedClient && (
-        <PaymentHistorySheet
-          isOpen={isPaymentHistoryOpen}
-          onClose={() => {
-            setIsPaymentHistoryOpen(false);
-            setSelectedClient(null);
-          }}
-          clientName={selectedClient.clientName}
-          paymentsMade={selectedClient.paymentsMade || ''}
-          finalQuotation={selectedClient.finalQuotation || ''}
-          remainingPayment={selectedClient.remainingPayment || ''}
-        />
-      )}
     </div>
   );
 };

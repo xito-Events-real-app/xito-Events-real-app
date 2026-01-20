@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, DollarSign, Users, TrendingUp, Phone, MessageCircle, Clock, Percent, LayoutGrid, Table as TableIcon } from "lucide-react";
+import { ArrowLeft, RefreshCw, DollarSign, Users, TrendingUp, Phone, MessageCircle, Clock, Percent, LayoutGrid, Table as TableIcon, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,9 +8,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { getBookedClients, resyncAllBookedClients, BookedClientData } from "@/lib/sheets-api";
 import FinanceClientCard from "./FinanceClientCard";
+import PaymentHistorySheet from "./PaymentHistorySheet";
 import NepaliDateFilter from "../booked/NepaliDateFilter";
 import { getMonthName } from "@/lib/nepali-months";
 
@@ -23,6 +25,8 @@ const DesktopFinanceManager = () => {
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
   const [paymentFilter, setPaymentFilter] = useState<'all' | 'fully-paid' | 'partial' | 'no-payment'>('all');
+  const [selectedClient, setSelectedClient] = useState<BookedClientData | null>(null);
+  const [isPaymentHistoryOpen, setIsPaymentHistoryOpen] = useState(false);
 
   const fetchClients = async () => {
     try {
@@ -130,6 +134,11 @@ const DesktopFinanceManager = () => {
     setFilterYear(null);
     setFilterMonth(null);
     setPaymentFilter('all');
+  };
+
+  const handleRowClick = (client: BookedClientData) => {
+    setSelectedClient(client);
+    setIsPaymentHistoryOpen(true);
   };
 
   const formatNepaliEventDate = (year: string, month: string, day: string): string => {
@@ -346,7 +355,8 @@ const DesktopFinanceManager = () => {
             ))}
           </div>
         ) : (
-          <Card className="bg-slate-800/50 border-slate-700/50">
+          <TooltipProvider>
+            <Card className="bg-slate-800/50 border-slate-700/50">
             <Table>
               <TableHeader>
                 <TableRow className="border-slate-700">
@@ -378,7 +388,11 @@ const DesktopFinanceManager = () => {
                   const status = getPaymentStatus(client);
                   
                   return (
-                    <TableRow key={client.bookedRowNumber} className="border-slate-700 hover:bg-slate-700/30">
+                    <TableRow 
+                      key={client.bookedRowNumber} 
+                      className="border-slate-700 hover:bg-slate-700/30 cursor-pointer"
+                      onClick={() => handleRowClick(client)}
+                    >
                       <TableCell>
                         <div>
                           <p className="font-medium text-white">{client.clientName}</p>
@@ -407,23 +421,52 @@ const DesktopFinanceManager = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => window.open(`tel:${client.contactNo}`, '_self')}
-                          >
-                            <Phone className="h-4 w-4 text-blue-400" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => window.open(`https://wa.me/${client.whatsappNo?.replace(/\D/g, '')}`, '_blank')}
-                          >
-                            <MessageCircle className="h-4 w-4 text-green-400" />
-                          </Button>
+                        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => window.open(`tel:${client.contactNo}`, '_self')}
+                              >
+                                <Phone className="h-4 w-4 text-blue-400" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{client.contactNo || 'No number'}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => window.open(`https://wa.me/${client.whatsappNo?.replace(/\D/g, '')}`, '_blank')}
+                              >
+                                <MessageCircle className="h-4 w-4 text-green-400" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{client.whatsappNo || client.contactNo || 'No number'}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => handleRowClick(client)}
+                              >
+                                <Receipt className="h-4 w-4 text-emerald-400" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>View Payment History</p>
+                            </TooltipContent>
+                          </Tooltip>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -432,8 +475,24 @@ const DesktopFinanceManager = () => {
               </TableBody>
             </Table>
           </Card>
+          </TooltipProvider>
         )}
       </div>
+
+      {/* Payment History Sheet */}
+      {selectedClient && (
+        <PaymentHistorySheet
+          isOpen={isPaymentHistoryOpen}
+          onClose={() => {
+            setIsPaymentHistoryOpen(false);
+            setSelectedClient(null);
+          }}
+          clientName={selectedClient.clientName}
+          paymentsMade={selectedClient.paymentsMade || ''}
+          finalQuotation={selectedClient.finalQuotation || ''}
+          remainingPayment={selectedClient.remainingPayment || ''}
+        />
+      )}
     </div>
   );
 };
