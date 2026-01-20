@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -13,7 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Calendar,
-  User,
+  LayoutGrid,
 } from "lucide-react";
 
 interface NavItem {
@@ -29,15 +29,15 @@ interface DesktopSidebarProps {
 }
 
 const navItems: NavItem[] = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/" },
-  { icon: Users, label: "Fresh Clients", path: "/fresh-clients" },
-  { icon: Calendar, label: "Today", path: "/today" },
-  { icon: UserPlus, label: "Add Client", path: "/quick-add" },
-  { icon: Search, label: "Search", path: "/search" },
+  { icon: LayoutDashboard, label: "Dashboard", path: "/client-tracker" },
+  { icon: Users, label: "Fresh Clients", path: "/client-tracker/fresh-clients" },
+  { icon: Calendar, label: "Today", path: "/client-tracker/today" },
+  { icon: UserPlus, label: "Add Client", path: "/client-tracker/quick-add" },
+  { icon: Search, label: "Search", path: "/client-tracker/search" },
 ];
 
 const bottomNavItems: NavItem[] = [
-  { icon: Settings, label: "Settings", path: "/settings" },
+  { icon: Settings, label: "Settings", path: "/client-tracker/settings" },
 ];
 
 // Handler avatar colors
@@ -52,10 +52,13 @@ const handlerColors = [
 
 export function DesktopSidebar({ handlers, handlerCounts, onHandlerClick }: DesktopSidebarProps) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const isActive = (path: string) => {
-    if (path === "/" && location.pathname !== "/") return false;
+    if (path === "/client-tracker" && location.pathname !== "/client-tracker") {
+      return location.pathname === "/client-tracker";
+    }
     return location.pathname.startsWith(path);
   };
 
@@ -67,25 +70,43 @@ export function DesktopSidebar({ handlers, handlerCounts, onHandlerClick }: Desk
         isCollapsed ? "w-16" : "w-64"
       )}
     >
-      {/* Logo */}
+      {/* Back to Suite */}
       <div className={cn(
-        "h-16 flex items-center border-b border-[hsl(220,20%,18%)] px-4",
-        isCollapsed ? "justify-center" : "justify-between"
+        "h-16 flex items-center border-b border-[hsl(220,20%,18%)] px-3 gap-2",
+        isCollapsed ? "justify-center" : "justify-start"
       )}>
-        {!isCollapsed && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate("/")}
+          className={cn(
+            "text-white/70 hover:text-white hover:bg-white/10",
+            isCollapsed ? "w-10 h-10 p-0" : "gap-2"
+          )}
+        >
+          <LayoutGrid className="w-5 h-5 shrink-0" />
+          {!isCollapsed && <span className="text-sm">Back to Suite</span>}
+        </Button>
+      </div>
+
+      {/* Module Title */}
+      <div className={cn(
+        "px-4 py-3 border-b border-[hsl(220,20%,18%)]",
+        isCollapsed && "px-2"
+      )}>
+        {!isCollapsed ? (
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
-              <span className="text-white font-bold text-sm">W</span>
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+              <Users className="w-4 h-4 text-white" />
             </div>
             <div>
-              <h1 className="font-bold text-sm leading-tight text-white">WTN Tracker</h1>
-              <p className="text-[10px] text-white/60">Client Management</p>
+              <h1 className="font-bold text-sm leading-tight text-white">Client Tracker</h1>
+              <p className="text-[10px] text-white/60">Manage leads & inquiries</p>
             </div>
           </div>
-        )}
-        {isCollapsed && (
-          <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
-            <span className="text-white font-bold text-sm">W</span>
+        ) : (
+          <div className="w-8 h-8 mx-auto rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+            <Users className="w-4 h-4 text-white" />
           </div>
         )}
       </div>

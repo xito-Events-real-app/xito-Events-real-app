@@ -154,7 +154,7 @@ export function DesktopDashboard({
   const booked = Object.keys(statusCounts).filter(s => s.includes('BOOKED')).reduce((sum, s) => sum + (statusCounts[s] || 0), 0);
 
   const handleCategoryClick = (status: string) => {
-    navigate(`/fresh-clients?category=${encodeURIComponent(status)}`);
+    navigate(`/client-tracker/fresh-clients?category=${encodeURIComponent(status)}`);
   };
 
   return (
@@ -193,7 +193,7 @@ export function DesktopDashboard({
 
           <Card 
             className="shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-            onClick={() => navigate("/today")}
+            onClick={() => navigate("/client-tracker/today")}
           >
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
@@ -225,7 +225,7 @@ export function DesktopDashboard({
 
         {/* Quick Actions */}
         <div className="col-span-3 space-y-3">
-          <Link to="/quick-add">
+          <Link to="/client-tracker/quick-add">
             <Button className="w-full h-12 text-base font-semibold gradient-primary text-white shadow-lg">
               <UserPlus className="w-5 h-5 mr-2" />
               Add New Client
@@ -294,7 +294,7 @@ export function DesktopDashboard({
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base font-semibold">Client Categories</CardTitle>
-                <Link to="/fresh-clients">
+                <Link to="/client-tracker/fresh-clients">
                   <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground">
                     View All <ChevronRight className="w-4 h-4" />
                   </Button>
@@ -394,7 +394,7 @@ export function DesktopDashboard({
                     return (
                       <Link
                         key={handler}
-                        to={`/handler/${encodeURIComponent(handler)}?stay=true`}
+                        to={`/client-tracker/handler/${encodeURIComponent(handler)}?stay=true`}
                         className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/30 hover:bg-muted/50 transition-all"
                       >
                         <div className={cn(
