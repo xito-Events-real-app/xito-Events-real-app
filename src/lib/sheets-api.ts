@@ -54,6 +54,12 @@ export interface ClientData {
   remainingPayment?: string; // Column AG - remaining payment
 }
 
+export interface BookedClientData extends ClientData {
+  bookedRowNumber: number;
+  originalRowNumber: number;
+  bookedDateTime: string;
+}
+
 // Spreadsheet ID is now configured as a backend secret
 // These functions are kept for backward compatibility
 export function getSpreadsheetId(): string {
@@ -312,6 +318,27 @@ export async function testConnection(): Promise<ConnectionTestResult> {
 // Now always returns true since it's configured via backend secret
 export function isSheetsConfigured(): boolean {
   return true;
+}
+
+// Get all booked clients from BOOKED CLIENTS sheet
+export async function getBookedClients(limit = 100): Promise<BookedClientData[]> {
+  return callSheetsFunction<BookedClientData[]>("getBookedClients", { limit });
+}
+
+// Migrate existing booked clients from CLIENT TRACKER to BOOKED CLIENTS
+export async function migrateExistingBookedClients(): Promise<{ success: boolean; migratedCount: number }> {
+  return callSheetsFunction<{ success: boolean; migratedCount: number }>("migrateExistingBookedClients");
+}
+
+// Update a booked client (syncs to both sheets)
+export async function updateBookedClient(
+  bookedRowNumber: number,
+  originalRowNumber: number,
+  updates: Partial<BookedClientData>
+): Promise<{ success: boolean }> {
+  return callSheetsFunction<{ success: boolean }>("updateBookedClient", {
+    data: { bookedRowNumber, originalRowNumber, updates },
+  });
 }
 
 // Helper to get current status from status log
