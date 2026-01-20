@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { getBookedClients, migrateExistingBookedClients, BookedClientData } from "@/lib/sheets-api";
+import { getBookedClients, migrateExistingBookedClients, resyncAllBookedClients, BookedClientData } from "@/lib/sheets-api";
 import BookedClientCard from "./BookedClientCard";
 import { getMonthName } from "@/lib/nepali-months";
 import NepaliDate from "nepali-date-converter";
@@ -17,6 +17,7 @@ const DesktopBookedClients = () => {
   const [clients, setClients] = useState<BookedClientData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isMigrating, setIsMigrating] = useState(false);
+  const [isResyncing, setIsResyncing] = useState(false);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
   const fetchClients = async () => {
@@ -43,6 +44,24 @@ const DesktopBookedClients = () => {
       toast.error("Failed to migrate clients");
     } finally {
       setIsMigrating(false);
+    }
+  };
+
+  const handleResyncAll = async () => {
+    try {
+      setIsResyncing(true);
+      const result = await resyncAllBookedClients();
+      if (result.syncedCount > 0) {
+        toast.success(`Synced ${result.syncedCount} clients with latest data`);
+      } else {
+        toast.info("All clients are already up to date");
+      }
+      await fetchClients();
+    } catch (error) {
+      console.error("Error resyncing clients:", error);
+      toast.error("Failed to resync clients");
+    } finally {
+      setIsResyncing(false);
     }
   };
 
@@ -166,18 +185,29 @@ const DesktopBookedClients = () => {
               </Button>
             </div>
             <Button
-              variant="outline"
-              onClick={handleMigrate}
-              disabled={isMigrating}
+              variant="default"
+              onClick={handleResyncAll}
+              disabled={isResyncing || isMigrating}
+              className="bg-blue-600 hover:bg-blue-700"
             >
-              {isMigrating ? (
+              {isResyncing ? (
                 <>
                   <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Syncing...
+                  Resyncing...
                 </>
               ) : (
-                "Sync Bookings"
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Resync All
+                </>
               )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleMigrate}
+              disabled={isMigrating || isResyncing}
+            >
+              {isMigrating ? "Migrating..." : "Migrate New"}
             </Button>
             <Button
               variant="ghost"

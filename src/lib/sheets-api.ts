@@ -335,6 +335,23 @@ export async function migrateExistingBookedClients(): Promise<{ success: boolean
   return callSheetsFunction<{ success: boolean; migratedCount: number }>("migrateExistingBookedClients");
 }
 
+// Resync all booked clients: sync payment data from CLIENT TRACKER to BOOKED CLIENTS
+export async function resyncAllBookedClients(): Promise<{ 
+  success: boolean; 
+  syncedCount: number; 
+  skippedCount: number; 
+  notFoundCount: number; 
+  totalBooked: number; 
+}> {
+  return callSheetsFunction<{ 
+    success: boolean; 
+    syncedCount: number; 
+    skippedCount: number; 
+    notFoundCount: number; 
+    totalBooked: number; 
+  }>("resyncAllBookedClients");
+}
+
 // Update a booked client (syncs to both sheets)
 export async function updateBookedClient(
   bookedRowNumber: number,

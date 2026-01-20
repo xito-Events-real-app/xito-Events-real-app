@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { getBookedClients, migrateExistingBookedClients, BookedClientData } from "@/lib/sheets-api";
+import { getBookedClients, migrateExistingBookedClients, resyncAllBookedClients, BookedClientData } from "@/lib/sheets-api";
 import BookedClientCard from "./BookedClientCard";
 import { GlobalModeToggle } from "@/components/layout/GlobalModeToggle";
 import NepaliDate from "nepali-date-converter";
@@ -17,6 +17,7 @@ const MobileBookedClients = () => {
   const [clients, setClients] = useState<BookedClientData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isMigrating, setIsMigrating] = useState(false);
+  const [isResyncing, setIsResyncing] = useState(false);
   const [viewMode, setViewMode] = useState<'dashboard' | 'list'>('dashboard');
 
   const fetchClients = async () => {
@@ -43,6 +44,24 @@ const MobileBookedClients = () => {
       toast.error("Failed to migrate clients");
     } finally {
       setIsMigrating(false);
+    }
+  };
+
+  const handleResyncAll = async () => {
+    try {
+      setIsResyncing(true);
+      const result = await resyncAllBookedClients();
+      if (result.syncedCount > 0) {
+        toast.success(`Synced ${result.syncedCount} clients with latest data`);
+      } else {
+        toast.info("All clients are already up to date");
+      }
+      await fetchClients();
+    } catch (error) {
+      console.error("Error resyncing clients:", error);
+      toast.error("Failed to resync clients");
+    } finally {
+      setIsResyncing(false);
     }
   };
 
@@ -337,27 +356,54 @@ const MobileBookedClients = () => {
                 </Card>
               )}
 
-              {/* Sync Button */}
+              {/* Sync Buttons */}
               <Card className="bg-slate-800/50 border-slate-700/50">
-                <CardContent className="p-4 text-center">
-                  <p className="text-sm text-slate-400 mb-3">
-                    Sync booked clients from Client Tracker
-                  </p>
-                  <Button
-                    variant="outline"
-                    onClick={handleMigrate}
-                    disabled={isMigrating}
-                    className="w-full"
-                  >
-                    {isMigrating ? (
-                      <>
-                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                        Syncing...
-                      </>
-                    ) : (
-                      "Sync Bookings"
-                    )}
-                  </Button>
+                <CardContent className="p-4 space-y-3">
+                  <div>
+                    <p className="text-sm text-slate-400 mb-2 text-center">
+                      Sync payment data from Client Tracker
+                    </p>
+                    <Button
+                      variant="default"
+                      onClick={handleResyncAll}
+                      disabled={isResyncing || isMigrating}
+                      className="w-full bg-blue-600 hover:bg-blue-700"
+                    >
+                      {isResyncing ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          Resyncing...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Resync All Data
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  
+                  <div className="border-t border-slate-700/50 pt-3">
+                    <p className="text-xs text-slate-500 mb-2 text-center">
+                      Add new booked clients from tracker
+                    </p>
+                    <Button
+                      variant="outline"
+                      onClick={handleMigrate}
+                      disabled={isMigrating || isResyncing}
+                      className="w-full"
+                      size="sm"
+                    >
+                      {isMigrating ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          Migrating...
+                        </>
+                      ) : (
+                        "Migrate New Bookings"
+                      )}
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
 
