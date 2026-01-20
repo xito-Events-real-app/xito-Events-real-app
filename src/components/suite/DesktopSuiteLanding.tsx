@@ -1,98 +1,140 @@
-import { Sparkles, Monitor } from "lucide-react";
-import { ModuleCard } from "./ModuleCard";
-import { suiteModules } from "@/lib/suite-modules";
+import { Link } from "react-router-dom";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ChevronRight, Sparkles, Construction, Smartphone } from "lucide-react";
+import { suiteModules } from "@/lib/suite-modules";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { useDesktopMode } from "@/hooks/useDesktopMode";
 
 export function DesktopSuiteLanding() {
   const { toggleDesktopMode } = useDesktopMode();
+  const activeModules = suiteModules.filter(m => m.status === 'active');
+  const comingSoonModules = suiteModules.filter(m => m.status === 'coming-soon');
+
+  const handleComingSoonClick = (moduleName: string) => {
+    toast.info(`${moduleName} is coming soon!`, {
+      description: "We're working hard to bring you this feature.",
+    });
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[hsl(220,25%,8%)] via-[hsl(220,25%,10%)] to-[hsl(220,25%,14%)]">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b border-white/10 bg-[hsl(220,25%,8%)]/80 backdrop-blur-sm sticky top-0 z-50">
+      <div className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg">
               <span className="text-white font-bold text-xl">X</span>
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white tracking-tight">
-                Xito Business Suite
-              </h1>
-              <p className="text-sm text-white/60">
-                Your complete business toolkit
-              </p>
+              <h1 className="text-2xl font-bold text-foreground">Xito Business Suite</h1>
+              <p className="text-sm text-muted-foreground">Your complete business toolkit</p>
             </div>
           </div>
-
           <Button
             variant="outline"
             size="sm"
             onClick={toggleDesktopMode}
-            className="gap-2 border-white/20 text-white hover:bg-white/10"
+            className="gap-2"
           >
-            <Monitor className="w-4 h-4" />
+            <Smartphone className="w-4 h-4" />
             Switch to Mobile
           </Button>
         </div>
-      </header>
+      </div>
 
-      {/* Hero Section */}
-      <section className="max-w-7xl mx-auto px-6 py-12">
-        <div className="text-center mb-12">
-          <h2 className="text-4xl font-bold text-white mb-4">
-            Welcome to Your Business Hub
-          </h2>
-          <p className="text-lg text-white/60 max-w-2xl mx-auto">
-            Manage all aspects of your business from one centralized dashboard. 
-            Click on a module to get started.
-          </p>
-        </div>
-
+      <div className="max-w-7xl mx-auto px-6 py-8 space-y-8 animate-fade-in">
         {/* Active Modules */}
-        <div className="mb-12">
-          <div className="flex items-center gap-2 mb-6">
-            <Sparkles className="w-5 h-5 text-green-400" />
-            <h3 className="text-lg font-semibold text-white">
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 px-1">
+            <Sparkles className="w-5 h-5 text-green-500" />
+            <h3 className="text-base font-semibold text-muted-foreground uppercase tracking-wide">
               Active Modules
             </h3>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {suiteModules
-              .filter(m => m.status === 'active')
-              .map(module => (
-                <ModuleCard key={module.id} module={module} size="lg" />
-              ))}
+          
+          <div className="grid grid-cols-3 gap-4">
+            {activeModules.map((module) => {
+              const Icon = module.icon;
+              return (
+                <Link key={module.id} to={module.path}>
+                  <Card className="shadow-soft border-0 cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] h-full">
+                    <CardContent className="p-6">
+                      <div className="flex items-center gap-4">
+                        <div className={cn(
+                          "w-16 h-16 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br shadow-lg",
+                          module.gradient
+                        )}>
+                          <Icon className="w-8 h-8 text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-xl text-foreground">
+                            {module.name}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {module.description}
+                          </p>
+                        </div>
+                        <ChevronRight className="w-6 h-6 text-muted-foreground/50" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              );
+            })}
           </div>
         </div>
 
         {/* Coming Soon Modules */}
-        <div>
-          <h3 className="text-lg font-semibold text-white/60 mb-6">
-            Coming Soon
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {suiteModules
-              .filter(m => m.status === 'coming-soon')
-              .map(module => (
-                <ModuleCard key={module.id} module={module} size="md" />
-              ))}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 px-1">
+            <Construction className="w-5 h-5 text-amber-500" />
+            <h3 className="text-base font-semibold text-muted-foreground uppercase tracking-wide">
+              Coming Soon
+            </h3>
+          </div>
+          
+          <div className="grid grid-cols-4 gap-3">
+            {comingSoonModules.map((module) => {
+              const Icon = module.icon;
+              return (
+                <Card 
+                  key={module.id}
+                  className="shadow-soft border-0 cursor-pointer hover:shadow-md transition-all active:scale-[0.98] opacity-60"
+                  onClick={() => handleComingSoonClick(module.name)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "w-12 h-12 rounded-lg flex items-center justify-center shrink-0 bg-gradient-to-br grayscale",
+                        module.gradient
+                      )}>
+                        <Icon className="w-6 h-6 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-foreground truncate">
+                          {module.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          Coming Soon
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
-      </section>
 
-      {/* Footer */}
-      <footer className="border-t border-white/10 mt-12">
-        <div className="max-w-7xl mx-auto px-6 py-6 flex items-center justify-between">
-          <p className="text-sm text-white/40">
-            Xito Business Suite v1.0
-          </p>
-          <p className="text-sm text-white/40">
-            © 2024 Xito. All rights reserved.
+        {/* Footer */}
+        <div className="text-center pt-8 pb-4">
+          <p className="text-sm text-muted-foreground">
+            Xito Business Suite v1.0 • © 2024 Xito. All rights reserved.
           </p>
         </div>
-      </footer>
+      </div>
     </div>
   );
 }
