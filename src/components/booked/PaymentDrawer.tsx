@@ -58,8 +58,50 @@ const PaymentDrawer = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentTypes, setPaymentTypes] = useState<string[]>([]);
   const [banks, setBanks] = useState<string[]>([]);
+  const [amountError, setAmountError] = useState("");
 
   const years = getBSYearsRange();
+
+  // Calculate remaining balance from existing payments
+  const calculateRemainingBalance = () => {
+    if (!existingPaymentsMade || !finalQuotationAmount) return finalQuotationAmount || 0;
+    
+    const payments = existingPaymentsMade.split('\n').filter(Boolean);
+    let totalPaid = 0;
+    for (const entry of payments) {
+      const match = entry.match(/NPR\s*([\d,]+)\s*\/-/i);
+      if (match) {
+        totalPaid += parseInt(match[1].replace(/,/g, ''));
+      } else {
+        const fallbackMatch = entry.match(/NPR\s*([\d,]+)/i);
+        if (fallbackMatch) {
+          totalPaid += parseInt(fallbackMatch[1].replace(/,/g, ''));
+        }
+      }
+    }
+    return finalQuotationAmount - totalPaid;
+  };
+
+  const remainingBalance = calculateRemainingBalance();
+
+  // Validate payment amount
+  const handleAmountChange = (value: string) => {
+    setPaymentAmount(value);
+    const numericAmount = parseInt(value.replace(/,/g, '')) || 0;
+    
+    if (numericAmount > remainingBalance) {
+      setAmountError(`Amount exceeds remaining balance of NPR ${remainingBalance.toLocaleString('en-IN')}`);
+    } else if (numericAmount <= 0 && value !== '') {
+      setAmountError('Amount must be greater than 0');
+    } else {
+      setAmountError('');
+    }
+  };
+
+  const isAmountValid = () => {
+    const numericAmount = parseInt(paymentAmount.replace(/,/g, '')) || 0;
+    return numericAmount > 0 && numericAmount <= remainingBalance;
+  };
 
   // Set default date to today's Nepali date
   useEffect(() => {
@@ -156,6 +198,14 @@ const PaymentDrawer = ({
         </DrawerHeader>
 
         <div className="px-4 space-y-4 max-h-[60vh] overflow-y-auto">
+          {/* Remaining Balance Info */}
+          <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+            <p className="text-xs text-slate-400">Remaining Balance</p>
+            <p className="text-lg font-semibold text-emerald-400">
+              NPR {remainingBalance.toLocaleString('en-IN')}
+            </p>
+          </div>
+
           {/* Payment Amount */}
           <div className="space-y-2">
             <Label className="text-slate-300">Amount (NPR)</Label>
@@ -163,9 +213,12 @@ const PaymentDrawer = ({
               type="number"
               placeholder="Enter amount"
               value={paymentAmount}
-              onChange={(e) => setPaymentAmount(e.target.value)}
-              className="bg-slate-800 border-slate-600 text-white"
+              onChange={(e) => handleAmountChange(e.target.value)}
+              className={`bg-slate-800 border-slate-600 text-white ${amountError ? 'border-red-500' : ''}`}
             />
+            {amountError && (
+              <p className="text-xs text-red-400">{amountError}</p>
+            )}
           </div>
 
           {/* Payment Type */}
@@ -272,7 +325,7 @@ const PaymentDrawer = ({
         <DrawerFooter className="pt-4">
           <Button
             onClick={handleSubmit}
-            disabled={isSubmitting || !paymentAmount || !paymentType || !bank || !selectedYear || !selectedMonth || !selectedDay}
+            disabled={isSubmitting || !isAmountValid() || !paymentType || !bank || !selectedYear || !selectedMonth || !selectedDay}
             className="bg-emerald-600 hover:bg-emerald-700 text-white"
           >
             {isSubmitting ? "Adding..." : "Add Payment"}
