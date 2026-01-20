@@ -3148,7 +3148,9 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
                       selectedBank,
                       currentPaymentsMade,
                       currentPaymentDatesAD,
-                      finalAmount
+                      finalAmount,
+                      client.registeredDateTimeAD,
+                      'tracker'
                     );
                     
                     setCurrentPaymentsMade(result.paymentsMade);
