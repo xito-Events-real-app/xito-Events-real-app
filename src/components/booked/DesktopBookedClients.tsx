@@ -6,11 +6,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { getBookedClients, migrateExistingBookedClients, BookedClientData } from "@/lib/sheets-api";
 import EventClientCard from "./EventClientCard";
 import NepaliDateFilter from "./NepaliDateFilter";
-import { getMonthName } from "@/lib/nepali-months";
+import { getMonthName, parseEventDetails } from "@/lib/nepali-months";
 import NepaliDate from "nepali-date-converter";
 
 const DesktopBookedClients = () => {
@@ -149,23 +150,81 @@ const DesktopBookedClients = () => {
         {isLoading ? <div className="grid grid-cols-3 gap-4">{[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-40 bg-slate-800/50" />)}</div>
         : sortedClients.length === 0 ? <Card className="bg-slate-800/50"><CardContent className="py-12 text-center"><Calendar className="h-16 w-16 text-slate-600 mx-auto mb-4" /><p className="text-slate-400 text-lg">No events found</p></CardContent></Card>
         : viewMode === 'cards' ? <div className="grid grid-cols-3 gap-4">{sortedClients.map(c => <EventClientCard key={c.bookedRowNumber} client={c} />)}</div>
-        : <Card className="bg-slate-800/50 border-slate-700/50"><Table><TableHeader><TableRow className="border-slate-700"><TableHead className="text-slate-400">Client</TableHead><TableHead className="text-slate-400">Event Date</TableHead><TableHead className="text-slate-400">Days Left</TableHead><TableHead className="text-slate-400">Events</TableHead><TableHead className="text-slate-400">Location</TableHead><TableHead className="text-slate-400">Handler</TableHead><TableHead className="text-slate-400">Actions</TableHead></TableRow></TableHeader><TableBody>
-          {sortedClients.map(client => {
-            const days = getDaysUntilEvent(client);
-            const missing = hasMissingDate(client);
-            return (
-              <TableRow key={client.bookedRowNumber} className="border-slate-700 hover:bg-slate-700/30">
-                <TableCell><p className="font-medium text-white">{client.clientName}</p></TableCell>
-                <TableCell className="text-slate-300">{formatNepaliEventDate(client.eventYear, client.eventMonth, client.eventDay)}</TableCell>
-                <TableCell>{getCountdownBadge(days, missing)}</TableCell>
-                <TableCell className="text-slate-300 text-sm"><div className="flex flex-col gap-0.5">{client.events?.split('\n').filter(Boolean).map((e, i) => <span key={i}>{e}</span>) || '-'}</div></TableCell>
-                <TableCell className="text-slate-300">{client.eventLocation || client.eventCity || '-'}</TableCell>
-                <TableCell className="text-slate-300">{client.clientHandler || '-'}</TableCell>
-                <TableCell><div className="flex gap-1"><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => window.open(`tel:${client.contactNo}`, '_self')}><Phone className="h-4 w-4 text-blue-400" /></Button><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => window.open(`https://wa.me/${client.whatsappNo?.replace(/\D/g, '')}`, '_blank')}><MessageCircle className="h-4 w-4 text-green-400" /></Button></div></TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody></Table></Card>}
+        : <TooltipProvider>
+            <Card className="bg-slate-800/50 border-slate-700/50">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-slate-700">
+                    <TableHead className="text-slate-400">Client</TableHead>
+                    <TableHead className="text-slate-400">Event Date</TableHead>
+                    <TableHead className="text-slate-400">Events</TableHead>
+                    <TableHead className="text-slate-400">Days Left</TableHead>
+                    <TableHead className="text-slate-400">Location</TableHead>
+                    <TableHead className="text-slate-400">Handler</TableHead>
+                    <TableHead className="text-slate-400">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sortedClients.map(client => {
+                    const days = getDaysUntilEvent(client);
+                    const missing = hasMissingDate(client);
+                    const parsedEvents = parseEventDetails(
+                      client.events || '',
+                      client.eventYear || '',
+                      client.eventMonth || '',
+                      client.eventDay || ''
+                    );
+                    return (
+                      <TableRow key={client.bookedRowNumber} className="border-slate-700 hover:bg-slate-700/30">
+                        <TableCell><p className="font-medium text-white">{client.clientName}</p></TableCell>
+                        <TableCell className="text-slate-300">
+                          <div className="flex flex-col gap-0.5">
+                            {parsedEvents.length > 0 ? parsedEvents.map((event, i) => (
+                              <span key={i} className="whitespace-nowrap">
+                                {event.year} {event.monthName} {event.day.includes('*') ? '**' : event.day}
+                              </span>
+                            )) : '-'}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-slate-300 text-sm">
+                          <div className="flex flex-col gap-0.5">
+                            {client.events?.split('\n').filter(Boolean).map((e, i) => <span key={i}>{e}</span>) || '-'}
+                          </div>
+                        </TableCell>
+                        <TableCell>{getCountdownBadge(days, missing)}</TableCell>
+                        <TableCell className="text-slate-300">{client.eventCity || '-'}</TableCell>
+                        <TableCell className="text-slate-300">{client.clientHandler || '-'}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => window.open(`tel:${client.contactNo}`, '_self')}>
+                                  <Phone className="h-4 w-4 text-blue-400" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{client.contactNo || 'No number'}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => window.open(`https://wa.me/${client.whatsappNo?.replace(/\D/g, '')}`, '_blank')}>
+                                  <MessageCircle className="h-4 w-4 text-green-400" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{client.whatsappNo || client.contactNo || 'No number'}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </Card>
+          </TooltipProvider>}
       </div>
     </div>
   );
