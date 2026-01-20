@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { X, Receipt, Calendar, Banknote, CreditCard, Clock } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Receipt, Banknote, Calendar } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -10,13 +10,16 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getMonthName } from "@/lib/nepali-months";
+import NepaliDate from "nepali-date-converter";
 
 interface ParsedPayment {
   amount: string;
   amountNumber: number;
   type: string;
-  date: string;
+  dateBS: string;
+  dateAD: string;
   bank: string;
   rawLine: string;
 }
@@ -41,7 +44,6 @@ function parsePayments(paymentsMade: string): ParsedPayment[] {
   const payments: ParsedPayment[] = [];
 
   for (const line of lines) {
-    // Try to parse the standard format
     // Pattern: NPR X,XXX/- AS TYPE ON DAY DATE IN BANK
     const match = line.match(/NPR\s*([\d,]+)\/?-?\s*AS\s+(\w+)\s+ON\s+(\d+)\s+([\d-]+)\s+IN\s+(.+)/i);
     
@@ -49,21 +51,37 @@ function parsePayments(paymentsMade: string): ParsedPayment[] {
       const [, amountStr, type, day, dateStr, bank] = match;
       const amountNumber = parseInt(amountStr.replace(/,/g, ''), 10);
       
-      // Parse date (format: YYYY-MM-DD)
+      // Parse BS date (format: YYYY-MM-DD)
       const [year, month] = dateStr.split('-').map(Number);
       const monthName = getMonthName(month);
-      const formattedDate = `${year} ${monthName} ${day}`;
+      const formattedDateBS = `${year} ${monthName} ${day}`;
+      
+      // Convert to AD date
+      let formattedDateAD = 'Unknown';
+      try {
+        const nepaliDate = new NepaliDate(year, month - 1, parseInt(day));
+        const adDate = nepaliDate.toJsDate();
+        if (adDate && !isNaN(adDate.getTime())) {
+          const adYear = adDate.getFullYear();
+          const adMonth = adDate.toLocaleString('en-US', { month: 'short' });
+          const adDay = adDate.getDate();
+          formattedDateAD = `${adDay} ${adMonth} ${adYear}`;
+        }
+      } catch (error) {
+        console.error('Error converting date:', error);
+      }
       
       payments.push({
         amount: `NPR ${amountNumber.toLocaleString('en-IN')}/-`,
         amountNumber,
         type: type.toUpperCase(),
-        date: formattedDate,
+        dateBS: formattedDateBS,
+        dateAD: formattedDateAD,
         bank: bank.trim().toUpperCase(),
         rawLine: line,
       });
     } else {
-      // Fallback: try simpler patterns or just show raw
+      // Fallback: try simpler patterns
       const simpleMatch = line.match(/NPR\s*([\d,]+)/i);
       if (simpleMatch) {
         const amountNumber = parseInt(simpleMatch[1].replace(/,/g, ''), 10);
@@ -71,7 +89,8 @@ function parsePayments(paymentsMade: string): ParsedPayment[] {
           amount: `NPR ${amountNumber.toLocaleString('en-IN')}/-`,
           amountNumber,
           type: 'PAYMENT',
-          date: 'Unknown',
+          dateBS: 'Unknown',
+          dateAD: 'Unknown',
           bank: 'Unknown',
           rawLine: line,
         });
@@ -99,6 +118,8 @@ const PaymentHistorySheet = ({
   finalQuotation,
   remainingPayment,
 }: PaymentHistorySheetProps) => {
+  const [showADDates, setShowADDates] = useState<Record<number, boolean>>({});
+  
   const payments = useMemo(() => parsePayments(paymentsMade), [paymentsMade]);
   
   const totalPaid = useMemo(() => 
@@ -112,6 +133,13 @@ const PaymentHistorySheet = ({
   const progressPercentage = quotationAmount > 0 
     ? Math.min(100, Math.round((totalPaid / quotationAmount) * 100)) 
     : 0;
+
+  const toggleDateFormat = (index: number) => {
+    setShowADDates(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }));
+  };
 
   const getTypeColor = (type: string) => {
     switch (type) {
@@ -128,7 +156,7 @@ const PaymentHistorySheet = ({
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="bg-slate-900 border-slate-700 w-full sm:max-w-md">
+      <SheetContent className="bg-slate-900 border-slate-700 w-full sm:max-w-lg">
         <SheetHeader className="pb-4">
           <SheetTitle className="text-white flex items-center gap-2">
             <Receipt className="h-5 w-5 text-emerald-400" />
@@ -140,16 +168,22 @@ const PaymentHistorySheet = ({
         </SheetHeader>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="grid grid-cols-3 gap-2 mb-4">
           <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
-            <p className="text-xs text-slate-400 mb-1">Total Paid</p>
-            <p className="text-lg font-bold text-emerald-400">
+            <p className="text-xs text-slate-400 mb-1">Quote</p>
+            <p className="text-sm font-bold text-emerald-400">
+              NPR {quotationAmount.toLocaleString('en-IN')}/-
+            </p>
+          </div>
+          <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
+            <p className="text-xs text-slate-400 mb-1">Paid</p>
+            <p className="text-sm font-bold text-green-400">
               NPR {totalPaid.toLocaleString('en-IN')}/-
             </p>
           </div>
           <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
             <p className="text-xs text-slate-400 mb-1">Remaining</p>
-            <p className="text-lg font-bold text-amber-400">
+            <p className="text-sm font-bold text-amber-400">
               NPR {remaining.toLocaleString('en-IN')}/-
             </p>
           </div>
@@ -168,56 +202,68 @@ const PaymentHistorySheet = ({
                 style={{ width: `${progressPercentage}%` }}
               />
             </div>
-            <p className="text-xs text-slate-500 mt-1 text-center">
-              of NPR {quotationAmount.toLocaleString('en-IN')}/- total
-            </p>
           </div>
         )}
 
         <Separator className="bg-slate-700 my-4" />
 
-        {/* Payment List */}
+        {/* Payment Table */}
         <div className="flex items-center gap-2 mb-3">
-          <Clock className="h-4 w-4 text-slate-400" />
+          <Calendar className="h-4 w-4 text-slate-400" />
           <h3 className="text-sm font-medium text-slate-300">
             {payments.length} Payment{payments.length !== 1 ? 's' : ''} Recorded
           </h3>
+          <span className="text-xs text-slate-500 ml-auto">Click date to toggle BS/AD</span>
         </div>
 
-        <ScrollArea className="h-[calc(100vh-380px)]">
+        <ScrollArea className="h-[calc(100vh-400px)]">
           {payments.length === 0 ? (
             <div className="text-center py-8">
               <Banknote className="h-12 w-12 text-slate-600 mx-auto mb-3" />
               <p className="text-slate-400">No payments recorded yet</p>
             </div>
           ) : (
-            <div className="space-y-3 pr-4">
-              {payments.map((payment, index) => (
-                <div 
-                  key={index}
-                  className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50 hover:border-slate-600 transition-colors"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <p className="text-lg font-bold text-white">
-                      {payment.amount}
-                    </p>
-                    <Badge className={getTypeColor(payment.type)}>
-                      {payment.type}
-                    </Badge>
-                  </div>
-                  
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Calendar className="h-3.5 w-3.5 text-slate-500" />
-                      <span className="text-slate-300">{payment.date}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <CreditCard className="h-3.5 w-3.5 text-slate-500" />
-                      <span className="text-slate-300">{payment.bank}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
+            <div className="border border-slate-700 rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-slate-700 bg-slate-800/50">
+                    <TableHead className="text-slate-400 text-xs">Amount</TableHead>
+                    <TableHead className="text-slate-400 text-xs">Type</TableHead>
+                    <TableHead className="text-slate-400 text-xs">Date</TableHead>
+                    <TableHead className="text-slate-400 text-xs">Bank</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {payments.map((payment, index) => (
+                    <TableRow key={index} className="border-slate-700 hover:bg-slate-800/30">
+                      <TableCell className="font-semibold text-white py-3">
+                        {payment.amount}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={`${getTypeColor(payment.type)} text-xs`}>
+                          {payment.type}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <button
+                          onClick={() => toggleDateFormat(index)}
+                          className="text-left hover:bg-slate-700/50 rounded px-2 py-1 -mx-2 -my-1 transition-colors group"
+                        >
+                          <span className="text-slate-300 text-sm">
+                            {showADDates[index] ? payment.dateAD : payment.dateBS}
+                          </span>
+                          <span className="text-xs text-slate-500 block group-hover:text-slate-400">
+                            {showADDates[index] ? 'AD' : 'BS'}
+                          </span>
+                        </button>
+                      </TableCell>
+                      <TableCell className="text-slate-300 text-sm">
+                        {payment.bank}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           )}
         </ScrollArea>
