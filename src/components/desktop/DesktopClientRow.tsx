@@ -215,30 +215,36 @@ export function DesktopClientRow({
     });
   }, [client.events, client.eventYear, client.eventMonth, client.eventDay]);
 
-  // Category flags
-  const isJustEnquired = category === 'JUST ENQUIRED';
-  const isNumberProvided = category === 'NUMBER PROVIDED';
-  const isCallNotReceived = category === 'CALL NOT RECEIVED';
-  const isQuotationPending = category === 'CALLED: QUOTATION PENDING';
-  const isQuotationSent = category === 'QUOTATION SENT';
-  const isBargainingOn = category === 'BARGAINING IS ON';
-  const isBooked = category === 'BOOKED';
+  // Category flags - use canonical status names from STATUS_ORDER
+  const categoryUpper = category.toUpperCase();
+  const isJustEnquired = categoryUpper.includes('JUST ENQUIRED');
+  const isNumberProvided = categoryUpper.includes('NUMBER PROVIDED');
+  const isTexted = categoryUpper.includes('TEXTED');
+  const isCallNotReceived = categoryUpper.includes('CALL NOT');
+  const isQuotationPending = categoryUpper.includes('QUOTATION PENDING');
+  const isQuotationSent = categoryUpper.includes('QUOTATION SENT');
+  const isBargainingOn = categoryUpper.includes('BARGAINING');
+  const isAdvancePending = categoryUpper.includes('ADVANCE PENDING');
+  const isBooked = categoryUpper.includes('BOOKED') && !categoryUpper.includes('BOOKED SOMEWHERE ELSE');
+  const isBookedElsewhere = categoryUpper.includes('BOOKED SOMEWHERE ELSE');
+  const isPostponed = categoryUpper.includes('POSTPONED');
+  const isCancelled = categoryUpper.includes('CANCELLED');
   const hasContact = !!(client.contactNo || client.whatsappNo);
 
   // Reminder logic
   const reminderInfo = useMemo(() => {
-    if (isBooked || category === 'CANCELLED' || category === 'BOOKED SOMEWHERE ELSE') return null;
+    if (isBooked || isCancelled || isBookedElsewhere) return null;
     if (callCount > 0) return null; // Don't show reminder if already called
     
     const threshold = isNumberProvided ? 3 : 6;
     if (statusTimeAgo && statusTimeAgo.hoursSinceStatus >= threshold) {
       return {
         show: true,
-        message: `FOLLOW UP NEEDED - ${threshold}+ HOURS IN ${category}`
+        message: `FOLLOW UP NEEDED - ${threshold}+ HOURS IN ${categoryUpper}`
       };
     }
     return null;
-  }, [category, isBooked, isNumberProvided, callCount, statusTimeAgo]);
+  }, [categoryUpper, isBooked, isCancelled, isBookedElsewhere, isNumberProvided, callCount, statusTimeAgo]);
 
   // Handlers
   const handleCall = async (type: 'DIRECT' | 'WHATSAPP') => {
