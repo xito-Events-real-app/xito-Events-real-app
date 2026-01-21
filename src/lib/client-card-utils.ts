@@ -420,3 +420,118 @@ export function getCurrentStatus(statusLog?: string): string {
   }
   return statusPart.trim().toUpperCase();
 }
+
+// Month color classes for inquiry month highlighting
+const monthColorMap: Record<number, { bg: string; text: string; dark: { bg: string; text: string } }> = {
+  1:  { bg: 'bg-rose-100', text: 'text-rose-700', dark: { bg: 'dark:bg-rose-900/30', text: 'dark:text-rose-400' } },
+  2:  { bg: 'bg-orange-100', text: 'text-orange-700', dark: { bg: 'dark:bg-orange-900/30', text: 'dark:text-orange-400' } },
+  3:  { bg: 'bg-amber-100', text: 'text-amber-700', dark: { bg: 'dark:bg-amber-900/30', text: 'dark:text-amber-400' } },
+  4:  { bg: 'bg-yellow-100', text: 'text-yellow-700', dark: { bg: 'dark:bg-yellow-900/30', text: 'dark:text-yellow-400' } },
+  5:  { bg: 'bg-lime-100', text: 'text-lime-700', dark: { bg: 'dark:bg-lime-900/30', text: 'dark:text-lime-400' } },
+  6:  { bg: 'bg-emerald-100', text: 'text-emerald-700', dark: { bg: 'dark:bg-emerald-900/30', text: 'dark:text-emerald-400' } },
+  7:  { bg: 'bg-teal-100', text: 'text-teal-700', dark: { bg: 'dark:bg-teal-900/30', text: 'dark:text-teal-400' } },
+  8:  { bg: 'bg-cyan-100', text: 'text-cyan-700', dark: { bg: 'dark:bg-cyan-900/30', text: 'dark:text-cyan-400' } },
+  9:  { bg: 'bg-sky-100', text: 'text-sky-700', dark: { bg: 'dark:bg-sky-900/30', text: 'dark:text-sky-400' } },
+  10: { bg: 'bg-blue-100', text: 'text-blue-700', dark: { bg: 'dark:bg-blue-900/30', text: 'dark:text-blue-400' } },
+  11: { bg: 'bg-violet-100', text: 'text-violet-700', dark: { bg: 'dark:bg-violet-900/30', text: 'dark:text-violet-400' } },
+  12: { bg: 'bg-fuchsia-100', text: 'text-fuchsia-700', dark: { bg: 'dark:bg-fuchsia-900/30', text: 'dark:text-fuchsia-400' } },
+};
+
+// Get color classes for a given inquiry month
+export function getMonthColorClasses(month: number): string {
+  const colors = monthColorMap[month];
+  if (!colors) return 'bg-muted text-muted-foreground';
+  return `${colors.bg} ${colors.text} ${colors.dark.bg} ${colors.dark.text}`;
+}
+
+// Parse inquiry month from BS date string (format: "2081 10 22")
+export function parseInquiryMonth(inquiryDateBS?: string): number | null {
+  if (!inquiryDateBS) return null;
+  const parts = inquiryDateBS.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    const month = parseInt(parts[1], 10);
+    if (month >= 1 && month <= 12) return month;
+  }
+  return null;
+}
+
+// Nepali month names for display
+const nepaliMonthNames = [
+  "Baisakh", "Jestha", "Ashadh", "Shrawan", "Bhadra", "Ashwin",
+  "Kartik", "Mangsir", "Poush", "Magh", "Falgun", "Chaitra"
+];
+
+// Get detailed inquiry info with BS date display and precise time breakdown
+export function getDetailedEnquiryInfo(
+  inquiryDateAD?: string,
+  inquiryTime?: string,
+  inquiryDateBS?: string
+): { bsDisplay: string; timeAgo: string; urgency: 'normal' | 'warning' | 'urgent' | 'critical' } | null {
+  if (!inquiryDateAD || !inquiryDateBS) return null;
+  
+  // Parse BS date for display (format: "2081 10 22")
+  const bsParts = inquiryDateBS.trim().split(/\s+/);
+  let bsDisplay = inquiryDateBS;
+  if (bsParts.length >= 3) {
+    const month = parseInt(bsParts[1], 10);
+    const day = bsParts[2];
+    const monthName = nepaliMonthNames[month - 1] || `Month ${month}`;
+    bsDisplay = `${monthName} ${day}`;
+  }
+  
+  // Calculate time difference
+  try {
+    const dateParts = inquiryDateAD.split('-');
+    if (dateParts.length !== 3) return null;
+    
+    const year = parseInt(dateParts[0]);
+    const month = parseInt(dateParts[1]) - 1;
+    const day = parseInt(dateParts[2]);
+    
+    let hours = 0;
+    let mins = 0;
+    
+    if (inquiryTime) {
+      const timeMatch = inquiryTime.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+      if (timeMatch) {
+        hours = parseInt(timeMatch[1]);
+        mins = parseInt(timeMatch[2]);
+        if (timeMatch[3]) {
+          const isPM = timeMatch[3].toUpperCase() === 'PM';
+          if (isPM && hours !== 12) hours += 12;
+          if (!isPM && hours === 12) hours = 0;
+        }
+      }
+    }
+    
+    const enquiryDate = new Date(year, month, day, hours, mins);
+    const now = new Date();
+    const diffMs = now.getTime() - enquiryDate.getTime();
+    const hoursAgo = diffMs / (1000 * 60 * 60);
+    
+    // Calculate detailed breakdown
+    const totalMins = Math.floor(diffMs / (1000 * 60));
+    const totalHours = Math.floor(totalMins / 60);
+    const days = Math.floor(totalHours / 24);
+    const remainingHours = totalHours % 24;
+    const remainingMins = totalMins % 60;
+    
+    let timeAgo = '';
+    if (days > 0) {
+      timeAgo = `${days}d ${remainingHours}h ${remainingMins}m`;
+    } else if (remainingHours > 0) {
+      timeAgo = `${remainingHours}h ${remainingMins}m`;
+    } else {
+      timeAgo = `${remainingMins}m`;
+    }
+    
+    let urgency: 'normal' | 'warning' | 'urgent' | 'critical' = 'normal';
+    if (hoursAgo >= 24) urgency = 'critical';
+    else if (hoursAgo >= 12) urgency = 'urgent';
+    else if (hoursAgo >= 3) urgency = 'warning';
+    
+    return { bsDisplay, timeAgo, urgency };
+  } catch {
+    return null;
+  }
+}

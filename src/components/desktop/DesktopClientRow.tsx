@@ -65,6 +65,9 @@ import {
   parseFinalQuotation,
   getTotalPaid,
   getCurrentStatus,
+  getMonthColorClasses,
+  parseInquiryMonth,
+  getDetailedEnquiryInfo,
 } from "@/lib/client-card-utils";
 import {
   updateClientStatus,
@@ -168,6 +171,8 @@ export function DesktopClientRow({
   const callCount = callEntries.length;
   const lastCallInfo = useMemo(() => getLastCallInfo(currentCallLog), [currentCallLog]);
   const enquiryInfo = useMemo(() => getEnquiryTimeInfo(client.inquiryDateAD, client.inquiryTime), [client.inquiryDateAD, client.inquiryTime]);
+  const detailedEnquiryInfo = useMemo(() => getDetailedEnquiryInfo(client.inquiryDateAD, client.inquiryTime, client.inquiryDateBS), [client.inquiryDateAD, client.inquiryTime, client.inquiryDateBS]);
+  const inquiryMonth = useMemo(() => parseInquiryMonth(client.inquiryDateBS), [client.inquiryDateBS]);
   const statusTimeAgo = useMemo(() => getStatusTimeAgo(currentStatusLog), [currentStatusLog]);
   const parsedMindset = useMemo(() => parseMindset(currentMindset), [currentMindset]);
   const parsedCommentsList = useMemo(() => parseComments(currentComments), [currentComments]);
@@ -700,8 +705,30 @@ export function DesktopClientRow({
         {/* Column 1: Client Info Block */}
         <TableCell className="py-3 align-top">
           <div className="space-y-1.5">
-            {/* Client Name */}
-            <span className="font-semibold text-sm text-foreground block">{client.clientName}</span>
+            {/* Client Name with Month Color */}
+            <span className={cn(
+              "font-semibold text-sm px-2 py-0.5 rounded-md inline-block",
+              inquiryMonth ? getMonthColorClasses(inquiryMonth) : "text-foreground"
+            )}>
+              {client.clientName}
+            </span>
+            
+            {/* Inquiry Date in BS with Time Ago */}
+            {detailedEnquiryInfo && (
+              <div className="text-[10px] leading-tight">
+                <span className="text-muted-foreground">enquired on {detailedEnquiryInfo.bsDisplay}</span>
+                <br />
+                <span className={cn(
+                  "font-medium",
+                  detailedEnquiryInfo.urgency === 'normal' && "text-gray-500",
+                  detailedEnquiryInfo.urgency === 'warning' && "text-amber-600",
+                  detailedEnquiryInfo.urgency === 'urgent' && "text-red-500",
+                  detailedEnquiryInfo.urgency === 'critical' && "text-red-600 animate-pulse"
+                )}>
+                  {detailedEnquiryInfo.timeAgo} ago
+                </span>
+              </div>
+            )}
             
             {/* City */}
             {client.eventCity && (
@@ -787,7 +814,7 @@ export function DesktopClientRow({
           </div>
         </TableCell>
         
-        {/* Column 2: Event */}
+        {/* Column 2: Events & Dates (Merged) */}
         <TableCell className="py-3 align-top">
           <div className="space-y-1.5">
             {events.map((event, i) => (
@@ -800,28 +827,9 @@ export function DesktopClientRow({
                 )}
               >
                 <span className="font-medium text-foreground">{event.eventName}</span>
-              </div>
-            ))}
-          </div>
-        </TableCell>
-
-        {/* Column 3: Date */}
-        <TableCell className="py-3 align-top">
-          <div className="space-y-1.5">
-            {events.map((event, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-md bg-muted/30"
-              >
-                <span className={cn("h-2 w-2 rounded-full", event.theme.dot)} />
-                <span className="text-muted-foreground whitespace-nowrap">
-                  {event.monthName} {event.day}
+                <span className="text-muted-foreground ml-1.5">
+                  {event.monthName} {event.day}, {event.year}
                 </span>
-                {event.year && (
-                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary">
-                    {event.year}
-                  </span>
-                )}
               </div>
             ))}
           </div>
