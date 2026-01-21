@@ -214,10 +214,16 @@ export function DesktopDashboard({
                     <TableHead className="w-[200px] font-bold text-foreground uppercase tracking-wide text-xs py-4">
                       Client Info
                     </TableHead>
-                    <TableHead className="w-[200px] font-bold text-foreground uppercase tracking-wide text-xs py-4">
+                    <TableHead className="w-[220px] font-bold text-foreground uppercase tracking-wide text-xs py-4">
                       <div className="flex items-center gap-2">
                         <Sparkles className="w-4 h-4 text-primary" />
-                        Events
+                        Event
+                      </div>
+                    </TableHead>
+                    <TableHead className="w-[140px] font-bold text-foreground uppercase tracking-wide text-xs py-4">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-primary" />
+                        Date
                       </div>
                     </TableHead>
                     <TableHead className="font-bold text-foreground uppercase tracking-wide text-xs py-4">
@@ -228,7 +234,7 @@ export function DesktopDashboard({
                 <TableBody>
                   {clients.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={3} className="text-center py-16">
+                      <TableCell colSpan={4} className="text-center py-16">
                         <div className="flex flex-col items-center gap-3">
                           <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
                             <Users className="w-8 h-8 text-muted-foreground" />
