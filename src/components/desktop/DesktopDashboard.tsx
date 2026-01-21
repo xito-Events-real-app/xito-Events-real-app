@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Table,
@@ -40,6 +41,9 @@ import {
   ArrowRight,
   RefreshCw,
   MessageCircle,
+  MapPin,
+  Calendar,
+  Sparkles,
 } from "lucide-react";
 
 interface DesktopDashboardProps {
@@ -83,6 +87,15 @@ const handlerColors = [
   'from-orange-500 to-red-600',
   'from-pink-500 to-rose-600',
   'from-amber-500 to-yellow-600',
+];
+
+// Event colors for variety
+const eventColors = [
+  'border-l-emerald-500 bg-emerald-500/5',
+  'border-l-blue-500 bg-blue-500/5',
+  'border-l-purple-500 bg-purple-500/5',
+  'border-l-amber-500 bg-amber-500/5',
+  'border-l-pink-500 bg-pink-500/5',
 ];
 
 export function DesktopDashboard({
@@ -187,27 +200,55 @@ export function DesktopDashboard({
     <div className="p-6 space-y-6">
       {/* Filtered Results Table - Full screen when filters active */}
       {hasActiveFilter ? (
-        <Card className="shadow-sm">
+        <Card className="shadow-lg border-0 overflow-hidden">
           <CardContent className="p-0">
-            <ScrollArea className="h-[calc(100vh-180px)]">
+            <ScrollArea className="h-[calc(100vh-220px)]">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[200px]">Client Name</TableHead>
-                    <TableHead className="w-[300px]">Events & Dates</TableHead>
-                    <TableHead className="w-[150px]">City</TableHead>
-                    <TableHead className="w-[100px] text-center">Actions</TableHead>
+                  <TableRow className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-b-2 border-primary/20">
+                    <TableHead className="w-[200px] font-bold text-foreground uppercase tracking-wide text-xs py-4">
+                      Client Name
+                    </TableHead>
+                    <TableHead className="w-[200px] font-bold text-foreground uppercase tracking-wide text-xs py-4">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-primary" />
+                        Event Name
+                      </div>
+                    </TableHead>
+                    <TableHead className="w-[180px] font-bold text-foreground uppercase tracking-wide text-xs py-4">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-amber-500" />
+                        Event Date
+                      </div>
+                    </TableHead>
+                    <TableHead className="w-[150px] font-bold text-foreground uppercase tracking-wide text-xs py-4">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-emerald-500" />
+                        City
+                      </div>
+                    </TableHead>
+                    <TableHead className="w-[120px] font-bold text-foreground uppercase tracking-wide text-xs py-4 text-center">
+                      Actions
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {clients.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">
-                        No clients match the selected filters
+                      <TableCell colSpan={5} className="text-center py-16">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+                            <Users className="w-8 h-8 text-muted-foreground" />
+                          </div>
+                          <p className="text-muted-foreground font-medium">No clients match the selected filters</p>
+                          <Button variant="outline" size="sm" onClick={onClearAllFilters}>
+                            Clear All Filters
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ) : (
-                    clients.map((client) => {
+                    clients.map((client, clientIdx) => {
                       // Parse events with their dates
                       const events = parseEventDetails(
                         client.events || '',
@@ -218,82 +259,202 @@ export function DesktopDashboard({
 
                       const contactNumber = client.whatsappNo || client.contactNo || '';
                       const whatsappNumber = formatWhatsAppNumber(contactNumber);
+                      // Fix: Use eventCity (Column K) instead of eventCityName
+                      const cityName = client.eventCity || client.eventLocation || '';
                       
-                      return (
-                        <TableRow key={client.rowNumber} className="hover:bg-muted/50">
-                          <TableCell className="font-medium align-top py-4">
-                            {client.clientName}
-                          </TableCell>
-                          <TableCell className="align-top py-4">
-                            <div className="space-y-3">
-                              {events.length > 0 ? (
-                                events.map((event, idx) => (
-                                  <div key={idx} className="border-l-2 border-primary/30 pl-3">
-                                    <div className="font-medium text-sm">{event.eventName || 'Event'}</div>
-                                    <div className="text-xs text-muted-foreground">
-                                      {event.monthName} {event.day}{event.year ? `, ${event.year}` : ''}
-                                    </div>
-                                  </div>
-                                ))
+                      // If no events, show single row
+                      if (events.length === 0) {
+                        return (
+                          <TableRow 
+                            key={client.rowNumber} 
+                            className="hover:bg-muted/50 transition-colors group"
+                          >
+                            <TableCell className="font-semibold py-4">
+                              <span className="text-foreground">{client.clientName || 'Unnamed Client'}</span>
+                            </TableCell>
+                            <TableCell className="py-4">
+                              <span className="text-muted-foreground italic text-sm">No events</span>
+                            </TableCell>
+                            <TableCell className="py-4">
+                              <span className="text-muted-foreground">—</span>
+                            </TableCell>
+                            <TableCell className="py-4">
+                              {cityName ? (
+                                <Badge variant="secondary" className="gap-1.5 bg-emerald-500/10 text-emerald-700 border-emerald-500/20">
+                                  <MapPin className="w-3 h-3" />
+                                  {cityName}
+                                </Badge>
                               ) : (
-                                <span className="text-muted-foreground text-sm">No events</span>
+                                <span className="text-muted-foreground">—</span>
                               )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="align-top py-4">
-                            <span className="text-sm">{client.eventCityName || client.eventLocation || '-'}</span>
-                          </TableCell>
-                          <TableCell className="align-top py-4">
-                            <TooltipProvider>
-                              <div className="flex items-center justify-center gap-2">
-                                {/* Call Button */}
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <a
-                                      href={contactNumber ? `tel:${contactNumber}` : undefined}
-                                      className={cn(
-                                        "w-9 h-9 rounded-full flex items-center justify-center transition-colors",
-                                        contactNumber 
-                                          ? "bg-green-500/10 text-green-600 hover:bg-green-500/20" 
-                                          : "bg-muted text-muted-foreground cursor-not-allowed"
-                                      )}
-                                      onClick={(e) => !contactNumber && e.preventDefault()}
-                                    >
-                                      <Phone className="w-4 h-4" />
-                                    </a>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>{contactNumber || 'No contact number'}</p>
-                                  </TooltipContent>
-                                </Tooltip>
+                            </TableCell>
+                            <TableCell className="py-4">
+                              <TooltipProvider>
+                                <div className="flex items-center justify-center gap-2">
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <a
+                                        href={contactNumber ? `tel:${contactNumber}` : undefined}
+                                        className={cn(
+                                          "w-10 h-10 rounded-full flex items-center justify-center transition-all",
+                                          contactNumber 
+                                            ? "bg-green-500/10 text-green-600 hover:bg-green-500/20 hover:scale-110 hover:shadow-lg hover:shadow-green-500/20" 
+                                            : "bg-muted text-muted-foreground cursor-not-allowed"
+                                        )}
+                                        onClick={(e) => !contactNumber && e.preventDefault()}
+                                      >
+                                        <Phone className="w-4 h-4" />
+                                      </a>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>{contactNumber || 'No contact number'}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
 
-                                {/* WhatsApp Button */}
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <a
-                                      href={whatsappNumber ? `https://wa.me/${whatsappNumber}` : undefined}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className={cn(
-                                        "w-9 h-9 rounded-full flex items-center justify-center transition-colors",
-                                        whatsappNumber 
-                                          ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20" 
-                                          : "bg-muted text-muted-foreground cursor-not-allowed"
-                                      )}
-                                      onClick={(e) => !whatsappNumber && e.preventDefault()}
-                                    >
-                                      <MessageCircle className="w-4 h-4" />
-                                    </a>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>{contactNumber || 'No contact number'}</p>
-                                  </TooltipContent>
-                                </Tooltip>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <a
+                                        href={whatsappNumber ? `https://wa.me/${whatsappNumber}` : undefined}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className={cn(
+                                          "w-10 h-10 rounded-full flex items-center justify-center transition-all",
+                                          whatsappNumber 
+                                            ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 hover:scale-110 hover:shadow-lg hover:shadow-emerald-500/20" 
+                                            : "bg-muted text-muted-foreground cursor-not-allowed"
+                                        )}
+                                        onClick={(e) => !whatsappNumber && e.preventDefault()}
+                                      >
+                                        <MessageCircle className="w-4 h-4" />
+                                      </a>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>{contactNumber || 'No contact number'}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </div>
+                              </TooltipProvider>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      }
+
+                      // Multiple events - render each event as a separate row
+                      return events.map((event, eventIdx) => {
+                        const colorClass = eventColors[eventIdx % eventColors.length];
+                        const isFirstRow = eventIdx === 0;
+                        const isLastRow = eventIdx === events.length - 1;
+                        
+                        return (
+                          <TableRow 
+                            key={`${client.rowNumber}-${eventIdx}`}
+                            className={cn(
+                              "transition-colors group",
+                              isFirstRow && "border-t-2 border-t-muted/50",
+                              !isLastRow && "border-b-0",
+                              "hover:bg-muted/30"
+                            )}
+                          >
+                            {/* Client Name - only on first row with rowSpan */}
+                            {isFirstRow && (
+                              <TableCell 
+                                className="font-semibold py-4 align-top"
+                                rowSpan={events.length}
+                              >
+                                <span className="text-foreground">{client.clientName || 'Unnamed Client'}</span>
+                              </TableCell>
+                            )}
+                            
+                            {/* Event Name - each row */}
+                            <TableCell className="py-3">
+                              <div className={cn(
+                                "px-3 py-2 rounded-lg border-l-4 transition-all group-hover:scale-[1.02]",
+                                colorClass
+                              )}>
+                                <div className="flex items-center gap-2">
+                                  <Sparkles className="w-3.5 h-3.5 text-primary/70" />
+                                  <span className="font-medium text-sm">{event.eventName || 'Event'}</span>
+                                </div>
                               </div>
-                            </TooltipProvider>
-                          </TableCell>
-                        </TableRow>
-                      );
+                            </TableCell>
+                            
+                            {/* Event Date - each row */}
+                            <TableCell className="py-3">
+                              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/5 border border-amber-500/10">
+                                <Calendar className="w-3.5 h-3.5 text-amber-600" />
+                                <span className="text-sm font-medium text-amber-700">
+                                  {event.monthName} {event.day}{event.year ? `, ${event.year}` : ''}
+                                </span>
+                              </div>
+                            </TableCell>
+                            
+                            {/* City - only on first row with rowSpan */}
+                            {isFirstRow && (
+                              <TableCell className="py-4 align-top" rowSpan={events.length}>
+                                {cityName ? (
+                                  <Badge variant="secondary" className="gap-1.5 bg-emerald-500/10 text-emerald-700 border-emerald-500/20 py-1.5 px-3">
+                                    <MapPin className="w-3.5 h-3.5" />
+                                    {cityName}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                            )}
+                            
+                            {/* Actions - only on first row with rowSpan */}
+                            {isFirstRow && (
+                              <TableCell className="py-4 align-top" rowSpan={events.length}>
+                                <TooltipProvider>
+                                  <div className="flex items-center justify-center gap-2">
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <a
+                                          href={contactNumber ? `tel:${contactNumber}` : undefined}
+                                          className={cn(
+                                            "w-10 h-10 rounded-full flex items-center justify-center transition-all",
+                                            contactNumber 
+                                              ? "bg-green-500/10 text-green-600 hover:bg-green-500/20 hover:scale-110 hover:shadow-lg hover:shadow-green-500/20" 
+                                              : "bg-muted text-muted-foreground cursor-not-allowed"
+                                          )}
+                                          onClick={(e) => !contactNumber && e.preventDefault()}
+                                        >
+                                          <Phone className="w-4 h-4" />
+                                        </a>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>{contactNumber || 'No contact number'}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <a
+                                          href={whatsappNumber ? `https://wa.me/${whatsappNumber}` : undefined}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className={cn(
+                                            "w-10 h-10 rounded-full flex items-center justify-center transition-all",
+                                            whatsappNumber 
+                                              ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 hover:scale-110 hover:shadow-lg hover:shadow-emerald-500/20" 
+                                              : "bg-muted text-muted-foreground cursor-not-allowed"
+                                          )}
+                                          onClick={(e) => !whatsappNumber && e.preventDefault()}
+                                        >
+                                          <MessageCircle className="w-4 h-4" />
+                                        </a>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>{contactNumber || 'No contact number'}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </div>
+                                </TooltipProvider>
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        );
+                      });
                     })
                   )}
                 </TableBody>
