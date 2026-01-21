@@ -296,9 +296,9 @@ export function setupOnlineListener(): void {
     console.log('Went offline - operations will be queued');
   });
   
-  // Process any pending operations on startup
+  // Process any pending operations on startup (delayed to avoid interfering with initial page load)
   if (navigator.onLine) {
-    setTimeout(() => processQueue(), 1000);
+    setTimeout(() => processQueue(), 10000);
   }
 }
 

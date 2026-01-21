@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { ClientData, DropdownData } from "@/lib/sheets-api";
 import { 
   getCachedData, 
@@ -25,6 +25,10 @@ interface UseCachedDataResult {
   error: string | null;
 }
 
+// Global singleton to prevent parallel fetches across component instances
+let globalFetchPromise: Promise<{ clients: ClientData[]; dropdowns: DropdownData }> | null = null;
+let hasTriggeredBackgroundRefresh = false;
+
 // Fetch fresh data from Google Sheets
 async function fetchFromSheets(): Promise<{ clients: ClientData[]; dropdowns: DropdownData }> {
   const [clientsResult, dropdownsResult] = await Promise.all([
@@ -46,6 +50,22 @@ async function fetchFromSheets(): Promise<{ clients: ClientData[]; dropdowns: Dr
     clients: clientsResult.data.data as ClientData[],
     dropdowns: dropdownsResult.data.data as DropdownData,
   };
+}
+
+// Deduplicated fetch - prevents multiple parallel API calls
+async function fetchFromSheetsWithDedup(): Promise<{ clients: ClientData[]; dropdowns: DropdownData }> {
+  if (globalFetchPromise) {
+    return globalFetchPromise;
+  }
+  
+  globalFetchPromise = fetchFromSheets();
+  
+  try {
+    const result = await globalFetchPromise;
+    return result;
+  } finally {
+    globalFetchPromise = null;
+  }
 }
 
 export function useCachedData(): UseCachedDataResult {
@@ -75,11 +95,19 @@ export function useCachedData(): UseCachedDataResult {
         // Check if cache is expired
         const expired = await isCacheExpired();
         
-        // Background refresh if expired or always after showing cache
-        if (expired || forceRefresh) {
+        // Background refresh only once per session if expired
+        if ((expired || forceRefresh) && !hasTriggeredBackgroundRefresh) {
+          hasTriggeredBackgroundRefresh = true;
           setIsSyncing(true);
+          
+          // Timeout safeguard - never let sync indicator stay stuck
+          const syncTimeout = setTimeout(() => {
+            setIsSyncing(false);
+            console.warn('Sync timeout reached - forcing isSyncing to false');
+          }, 30000); // 30 second max
+          
           try {
-            const fresh = await fetchFromSheets();
+            const fresh = await fetchFromSheetsWithDedup();
             
             // Only update if data changed
             if (JSON.stringify(fresh.clients) !== JSON.stringify(cached.clients)) {
@@ -101,6 +129,7 @@ export function useCachedData(): UseCachedDataResult {
             console.log('Background refresh failed, using cache:', err);
             // Keep using cache, don't show error
           } finally {
+            clearTimeout(syncTimeout);
             setIsSyncing(false);
           }
         }
@@ -109,7 +138,7 @@ export function useCachedData(): UseCachedDataResult {
         setIsLoading(true);
         
         try {
-          const fresh = await fetchFromSheets();
+          const fresh = await fetchFromSheetsWithDedup();
           
           setClients(fresh.clients);
           setDropdowns(fresh.dropdowns);
@@ -141,7 +170,7 @@ export function useCachedData(): UseCachedDataResult {
     setError(null);
     
     try {
-      const fresh = await fetchFromSheets();
+      const fresh = await fetchFromSheetsWithDedup();
       
       setClients(fresh.clients);
       setDropdowns(fresh.dropdowns);
@@ -194,15 +223,8 @@ export function useCachedData(): UseCachedDataResult {
     return () => window.removeEventListener('cache-updated', handleCacheUpdate as EventListener);
   }, []);
 
-  // Listen for sync status
-  useEffect(() => {
-    const handleSyncStatus = (e: CustomEvent<{ isSyncing: boolean }>) => {
-      setIsSyncing(e.detail.isSyncing);
-    };
-    
-    window.addEventListener('sync-status', handleSyncStatus as EventListener);
-    return () => window.removeEventListener('sync-status', handleSyncStatus as EventListener);
-  }, []);
+  // NOTE: Removed global sync-status listener that was overriding local isSyncing state
+  // The sync queue status should not affect the data loading indicator
 
   // Listen for queue changes
   useEffect(() => {
