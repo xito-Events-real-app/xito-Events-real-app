@@ -268,6 +268,16 @@ export function DesktopClientRow({
   const handleStatusChange = async (newStatus: string) => {
     if (!client.rowNumber) return;
     
+    // INTERCEPT: If moving to QUOTATION SENT from QUOTATION PENDING, show quotation dialog first
+    const isFromQuotationPending = currentStatus?.toUpperCase().includes('QUOTATION PENDING');
+    const isToQuotationSent = newStatus.toUpperCase().includes('QUOTATION SENT');
+    
+    if (isFromQuotationPending && isToQuotationSent) {
+      // Show quotation dialog - user must enter quotation before status change
+      setShowQuotationDialog(true);
+      return;
+    }
+    
     setIsUpdatingStatus(true);
     try {
       const result = await updateClientStatus(client.rowNumber, newStatus, currentStatusLog);
@@ -1161,41 +1171,87 @@ export function DesktopClientRow({
         </DialogContent>
       </Dialog>
       
-      {/* Quotation Dialog */}
-      <Dialog open={showQuotationDialog} onOpenChange={setShowQuotationDialog}>
-        <DialogContent className="max-w-md">
+      {/* Quotation Dialog - Matches mobile UI design */}
+      <Dialog open={showQuotationDialog} onOpenChange={(open) => {
+        if (!open) {
+          setShowQuotationDialog(false);
+          setQuotationAmounts({});
+        }
+      }}>
+        <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-indigo-600" />
-              Enter Quotation
+              <FileText className="w-5 h-5 text-primary" />
+              Enter Quotation Amounts
             </DialogTitle>
             <DialogDescription>
-              Enter pricing for {client.clientName}. At least one tier is required.
+              Enter the prices quoted to {client.clientName}. At least one is required.
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-3 py-2">
-            {['BASIC', 'STANDARD', 'PREMIUM', 'WTN SPECIAL'].map((tier) => (
-              <div key={tier} className="flex items-center gap-2">
-                <span className={cn("text-xs font-semibold px-2 py-1 rounded w-24 text-center", getQuotationTierColor(tier))}>
-                  {tier}
-                </span>
-                <div className="flex items-center gap-1 flex-1">
-                  <span className="text-xs text-muted-foreground">NPR</span>
-                  <Input
-                    type="number"
-                    placeholder="Amount"
-                    value={quotationAmounts[tier] || ''}
-                    onChange={(e) => setQuotationAmounts({ ...quotationAmounts, [tier]: e.target.value })}
-                    className="h-8 text-sm"
-                  />
-                  <span className="text-xs text-muted-foreground">/-</span>
-                </div>
+          <div className="space-y-4 py-2">
+            {/* BASIC */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">BASIC</label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">NPR</span>
+                <Input
+                  type="number"
+                  placeholder="e.g., 50000"
+                  value={quotationAmounts['BASIC'] || ''}
+                  onChange={(e) => setQuotationAmounts({ ...quotationAmounts, 'BASIC': e.target.value })}
+                  className="flex-1"
+                />
               </div>
-            ))}
+            </div>
+            
+            {/* STANDARD */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">STANDARD</label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">NPR</span>
+                <Input
+                  type="number"
+                  placeholder="e.g., 75000"
+                  value={quotationAmounts['STANDARD'] || ''}
+                  onChange={(e) => setQuotationAmounts({ ...quotationAmounts, 'STANDARD': e.target.value })}
+                  className="flex-1"
+                />
+              </div>
+            </div>
+            
+            {/* PREMIUM */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">PREMIUM</label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">NPR</span>
+                <Input
+                  type="number"
+                  placeholder="e.g., 100000"
+                  value={quotationAmounts['PREMIUM'] || ''}
+                  onChange={(e) => setQuotationAmounts({ ...quotationAmounts, 'PREMIUM': e.target.value })}
+                  className="flex-1"
+                />
+              </div>
+            </div>
+            
+            {/* WTN SPECIAL */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">WTN SPECIAL</label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">NPR</span>
+                <Input
+                  type="number"
+                  placeholder="e.g., 125000"
+                  value={quotationAmounts['WTN SPECIAL'] || ''}
+                  onChange={(e) => setQuotationAmounts({ ...quotationAmounts, 'WTN SPECIAL': e.target.value })}
+                  className="flex-1"
+                />
+              </div>
+            </div>
           </div>
           
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => {
               setShowQuotationDialog(false);
               setQuotationAmounts({});
@@ -1205,9 +1261,10 @@ export function DesktopClientRow({
             <Button 
               onClick={handleSaveQuotation}
               disabled={Object.values(quotationAmounts).every(v => !v.trim()) || isSavingQuotation}
-              className="bg-indigo-600 hover:bg-indigo-700"
+              className="bg-primary hover:bg-primary/90"
             >
               {isSavingQuotation && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+              <FileText className="w-4 h-4 mr-2" />
               Send to Quotation Sent
             </Button>
           </DialogFooter>
