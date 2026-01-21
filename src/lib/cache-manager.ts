@@ -1,10 +1,11 @@
 import { ClientData, DropdownData } from "./sheets-api";
-
-const DB_NAME = "wtn_client_tracker_db";
-const DB_VERSION = 2; // Incremented to force schema recreation
-const CACHE_STORE = "cache";
-const CACHE_KEY = "app_cache_v1";
-const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+import { 
+  getDatabase, 
+  CACHE_STORE, 
+  CACHE_KEY, 
+  CACHE_EXPIRY_MS,
+  forceResetDatabase 
+} from "./indexeddb-config";
 
 export interface CacheData {
   clients: ClientData[];
@@ -13,79 +14,13 @@ export interface CacheData {
   version: string;
 }
 
-let db: IDBDatabase | null = null;
-
-function deleteLocalDatabase(): Promise<void> {
-  try {
-    db?.close();
-  } catch {
-    // ignore
-  }
-  db = null;
-
-  return new Promise((resolve) => {
-    const request = indexedDB.deleteDatabase(DB_NAME);
-    request.onsuccess = () => resolve();
-    request.onerror = () => resolve();
-    request.onblocked = () => resolve();
-  });
-}
-
-function openDatabase(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onerror = () => {
-      console.error("Failed to open IndexedDB:", request.error);
-      reject(request.error);
-    };
-
-    request.onsuccess = () => {
-      const database = request.result;
-
-      // If the store is missing (can happen after a corrupted upgrade), force a rebuild.
-      if (!database.objectStoreNames.contains(CACHE_STORE)) {
-        database.close();
-        reject(new Error(`IndexedDB object store '${CACHE_STORE}' missing`));
-        return;
-      }
-
-      resolve(database);
-    };
-
-    request.onupgradeneeded = (event) => {
-      const database = (event.target as IDBOpenDBRequest).result;
-
-      // Delete old object store if it exists (handles schema migrations)
-      if (database.objectStoreNames.contains(CACHE_STORE)) {
-        database.deleteObjectStore(CACHE_STORE);
-      }
-
-      // Create fresh object store
-      database.createObjectStore(CACHE_STORE);
-    };
-  });
-}
-
-// Initialize IndexedDB
-export async function initDB(): Promise<IDBDatabase> {
-  if (db) return db;
-
-  try {
-    db = await openDatabase();
-    return db;
-  } catch (error) {
-    console.warn("IndexedDB init failed, resetting local cache DB:", error);
-    await deleteLocalDatabase();
-    db = await openDatabase();
-    return db;
-  }
-}
+// Re-export for backward compatibility
+export { forceResetDatabase };
 
 // Get cached data
 export async function getCachedData(): Promise<CacheData | null> {
   try {
-    const database = await initDB();
+    const database = await getDatabase();
     
     return new Promise((resolve) => {
       const transaction = database.transaction(CACHE_STORE, "readonly");
@@ -110,7 +45,7 @@ export async function getCachedData(): Promise<CacheData | null> {
 // Set cached data
 export async function setCachedData(data: CacheData): Promise<void> {
   try {
-    const database = await initDB();
+    const database = await getDatabase();
     
     return new Promise((resolve, reject) => {
       const transaction = database.transaction(CACHE_STORE, "readwrite");
@@ -213,7 +148,7 @@ export function getCacheAge(lastSyncedAt: number): string {
 // Clear all cached data
 export async function clearCache(): Promise<void> {
   try {
-    const database = await initDB();
+    const database = await getDatabase();
     
     return new Promise((resolve, reject) => {
       const transaction = database.transaction(CACHE_STORE, "readwrite");
