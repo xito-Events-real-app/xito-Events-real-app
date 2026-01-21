@@ -1,14 +1,22 @@
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useState, useMemo } from "react";
-import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, Calendar, User, Clock, DollarSign, FileText, Activity, MessageSquare, Briefcase, Pencil, X, Check, Loader2 } from "lucide-react";
+import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, Calendar, User, Clock, DollarSign, FileText, Activity, MessageSquare, Briefcase, Pencil, X, Check, Loader2, Plus, CreditCard, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 import { useCachedData } from "@/hooks/useCachedData";
 import { useDropdownData } from "@/hooks/useDropdownData";
-import { updateClient, ClientData } from "@/lib/sheets-api";
+import { updateClient, ClientData, updateClientStatus, logCallAttempt, addPayment } from "@/lib/sheets-api";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { 
@@ -30,12 +38,13 @@ import {
   parseInquiryMonth,
   getDetailedEnquiryInfo
 } from "@/lib/client-card-utils";
-import { nepaliMonthsEnglish, NepaliDateObject, bsToAD, isUnknownDay, getDayForStorage } from "@/lib/nepali-date";
+import { nepaliMonthsEnglish, NepaliDateObject, bsToAD, isUnknownDay, getDayForStorage, getCurrentBSDate } from "@/lib/nepali-date";
 import NepaliDate from "nepali-date-converter";
 import { FormSection, FormInput, FormSelect, CountrySelector, PhoneInputField, NepaliCalendar } from "@/components/form";
 import { EventSelector } from "@/components/form/EventSelector";
 import { getCountryCodeFromName } from "@/components/form/CountrySelector";
 import { valleyCities, nepalCitiesOutsideValley, clientLocationOptions } from "@/lib/form-data";
+import PaymentDrawer from "@/components/finance/PaymentDrawer";
 
 // Helper to convert AD date to BS formatted string
 function formatADtoBS(adDateStr: string): string {
@@ -135,6 +144,15 @@ const ClientDetail = () => {
   const [descriptionInput, setDescriptionInput] = useState("");
   const [emailInput, setEmailInput] = useState("");
   const [clientNameInput, setClientNameInput] = useState("");
+
+  // FAB state
+  const [showFab, setShowFab] = useState(false);
+  const [showPaymentDrawer, setShowPaymentDrawer] = useState(false);
+  const [isLoggingCall, setIsLoggingCall] = useState(false);
+  const [isChangingStatus, setIsChangingStatus] = useState(false);
+  const [currentStatusLog, setCurrentStatusLog] = useState("");
+  const [currentPaymentsMade, setCurrentPaymentsMade] = useState("");
+  const [currentRemainingPayment, setCurrentRemainingPayment] = useState("");
 
   // Get the from state to preserve filter position when going back
   const fromState = location.state as { from?: string; filters?: any; scrollPosition?: number } | null;
@@ -421,6 +439,64 @@ const ClientDetail = () => {
 
   const handleBack = () => {
     navigate(-1);
+  };
+
+  // FAB handlers
+  const handleCall = async (type: 'DIRECT' | 'WHATSAPP') => {
+    if (!client?.rowNumber) return;
+    
+    setIsLoggingCall(true);
+    try {
+      const result = await logCallAttempt(client.rowNumber, type, currentStatusLog || client.callLog || '');
+      setCurrentStatusLog(result.callLog);
+      
+      const phoneNumber = type === 'DIRECT' ? client.contactNo : client.whatsappNo;
+      if (type === 'DIRECT' && phoneNumber) {
+        window.location.href = `tel:${phoneNumber}`;
+      } else if (type === 'WHATSAPP' && phoneNumber) {
+        window.open(`https://wa.me/${phoneNumber.replace(/\D/g, '')}`, '_blank');
+      }
+      
+      toast({ title: "Success", description: `${type} call logged` });
+      if (updateClientCache) {
+        updateClientCache({ ...client, callLog: result.callLog });
+      }
+    } catch (err) {
+      console.error('Failed to log call:', err);
+      toast({ title: "Error", description: "Failed to log call", variant: "destructive" });
+    } finally {
+      setIsLoggingCall(false);
+      setShowFab(false);
+    }
+  };
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (!client?.rowNumber) return;
+    
+    setIsChangingStatus(true);
+    try {
+      const result = await updateClientStatus(client.rowNumber, newStatus, client.statusLog || '');
+      setCurrentStatusLog(result.statusLog);
+      toast({ title: "Success", description: `Status changed to ${newStatus}` });
+      if (updateClientCache) {
+        updateClientCache({ ...client, statusLog: result.statusLog });
+      }
+    } catch (err) {
+      console.error('Failed to update status:', err);
+      toast({ title: "Error", description: "Failed to update status", variant: "destructive" });
+    } finally {
+      setIsChangingStatus(false);
+      setShowFab(false);
+    }
+  };
+
+  const handlePaymentAdded = (paymentsMade: string, remainingPayment: string) => {
+    setCurrentPaymentsMade(paymentsMade);
+    setCurrentRemainingPayment(remainingPayment);
+    if (updateClientCache && client) {
+      updateClientCache({ ...client, paymentsMade, remainingPayment });
+    }
+    setShowPaymentDrawer(false);
   };
 
   // Parse events
@@ -1239,6 +1315,120 @@ const ClientDetail = () => {
           </TabsContent>
         </Tabs>
         </div>
+      )}
+
+      {/* Floating Action Button - Only show in view mode */}
+      {!isEditing && client && (
+        <>
+          {/* FAB Backdrop */}
+          {showFab && (
+            <div 
+              className="fixed inset-0 bg-black/20 z-40"
+              onClick={() => setShowFab(false)}
+            />
+          )}
+          
+          {/* FAB Menu */}
+          <div className="fixed bottom-6 right-6 z-50 flex flex-col-reverse items-end gap-3">
+            {/* Expanded actions */}
+            {showFab && (
+              <div className="flex flex-col-reverse gap-2 mb-2 animate-in fade-in slide-in-from-bottom-4 duration-200">
+                {/* Call Direct */}
+                {client.contactNo && (
+                  <Button
+                    size="lg"
+                    className="rounded-full shadow-lg gap-2 bg-blue-500 hover:bg-blue-600"
+                    onClick={() => handleCall('DIRECT')}
+                    disabled={isLoggingCall}
+                  >
+                    <Phone className="h-5 w-5" />
+                    <span className="text-sm">Call Direct</span>
+                  </Button>
+                )}
+                
+                {/* WhatsApp */}
+                {client.whatsappNo && (
+                  <Button
+                    size="lg"
+                    className="rounded-full shadow-lg gap-2 bg-green-500 hover:bg-green-600"
+                    onClick={() => handleCall('WHATSAPP')}
+                    disabled={isLoggingCall}
+                  >
+                    <MessageCircle className="h-5 w-5" />
+                    <span className="text-sm">WhatsApp</span>
+                  </Button>
+                )}
+                
+                {/* Add Payment */}
+                {finalQuotation && (
+                  <Button
+                    size="lg"
+                    className="rounded-full shadow-lg gap-2 bg-violet-500 hover:bg-violet-600"
+                    onClick={() => {
+                      setShowPaymentDrawer(true);
+                      setShowFab(false);
+                    }}
+                  >
+                    <CreditCard className="h-5 w-5" />
+                    <span className="text-sm">Add Payment</span>
+                  </Button>
+                )}
+                
+                {/* Change Status */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      size="lg"
+                      className="rounded-full shadow-lg gap-2 bg-amber-500 hover:bg-amber-600"
+                      disabled={isChangingStatus}
+                    >
+                      <RefreshCw className={`h-5 w-5 ${isChangingStatus ? 'animate-spin' : ''}`} />
+                      <span className="text-sm">Change Status</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="max-h-80 overflow-y-auto bg-background z-[60]">
+                    <DropdownMenuLabel>Change Status To</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {dropdowns?.clientStatuses?.map((status) => (
+                      <DropdownMenuItem 
+                        key={status} 
+                        onClick={() => handleStatusChange(status)}
+                        className="cursor-pointer"
+                      >
+                        {status}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
+            
+            {/* Main FAB button */}
+            <Button
+              size="lg"
+              className={`h-14 w-14 rounded-full shadow-xl transition-all duration-200 ${showFab ? 'bg-destructive hover:bg-destructive/90 rotate-45' : 'bg-primary hover:bg-primary/90'}`}
+              onClick={() => setShowFab(!showFab)}
+            >
+              <Plus className="h-6 w-6" />
+            </Button>
+          </div>
+
+          {/* Payment Drawer */}
+          {finalQuotation && (
+            <PaymentDrawer
+              isOpen={showPaymentDrawer}
+              onClose={() => setShowPaymentDrawer(false)}
+              clientName={client.clientName || ''}
+              rowNumber={client.rowNumber || 0}
+              registeredDateTimeAD={client.registeredDateTimeAD || ''}
+              existingPaymentsMade={currentPaymentsMade || client.paymentsMade || ''}
+              existingPaymentDatesAD={client.paymentDatesAD || ''}
+              finalQuotationAmount={parseInt(finalQuotation.amount.replace(/,/g, '')) || 0}
+              onPaymentAdded={handlePaymentAdded}
+              sourceSheet="tracker"
+            />
+          )}
+        </>
       )}
     </div>
   );
