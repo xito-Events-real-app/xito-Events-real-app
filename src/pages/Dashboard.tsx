@@ -113,7 +113,9 @@ export default function Dashboard() {
 
   // Calculate basic stats
   const totalClients = clients.length;
-  const today = new Date().toISOString().split("T")[0];
+  // Use local date for Nepal timezone (not UTC)
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const todaysClients = clients.filter(c => c.inquiryDateAD?.startsWith(today));
   
   const currentMonth = new Date().getMonth() + 1;
