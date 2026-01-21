@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { ClientData } from "@/lib/sheets-api";
+import { getMonthName } from "@/lib/nepali-months";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TableRow, TableCell } from "@/components/ui/table";
@@ -177,10 +178,12 @@ export function DesktopClientRow({
   // Parse events
   const events = useMemo(() => {
     if (!client.events) return [];
-    const eventList = client.events.split(',').map(e => e.trim()).filter(Boolean);
-    const years = client.eventYear?.split(',').map(e => e.trim()) || [];
-    const months = client.eventMonth?.split(',').map(e => e.trim()) || [];
-    const days = client.eventDay?.split(',').map(e => e.trim()) || [];
+    
+    // Use NEWLINE delimiter (matches how data is stored in sheets)
+    const eventList = client.events.split('\n').filter(Boolean);
+    const years = client.eventYear?.split('\n').filter(Boolean) || [];
+    const months = client.eventMonth?.split('\n').filter(Boolean) || [];
+    const days = client.eventDay?.split('\n').filter(Boolean) || [];
     
     const getEventTheme = (name: string) => {
       const n = name.toLowerCase();
@@ -197,13 +200,19 @@ export function DesktopClientRow({
       return { border: 'border-primary', bg: 'bg-muted/40', dot: 'bg-primary' };
     };
 
-    return eventList.map((eventName, i) => ({
-      eventName,
-      year: years[i] || '',
-      monthName: months[i] || '',
-      day: days[i] || '',
-      theme: getEventTheme(eventName),
-    }));
+    return eventList.map((eventName, i) => {
+      // Convert month number to name (1 → "Baisakh", 10 → "Magh")
+      const monthNum = parseInt(months[i] || '0', 10);
+      const monthName = getMonthName(monthNum);
+      
+      return {
+        eventName: eventName.trim(),
+        year: years[i] || '',
+        monthName, // Now shows "Baisakh" instead of "1"
+        day: days[i] || '',
+        theme: getEventTheme(eventName),
+      };
+    });
   }, [client.events, client.eventYear, client.eventMonth, client.eventDay]);
 
   // Category flags
