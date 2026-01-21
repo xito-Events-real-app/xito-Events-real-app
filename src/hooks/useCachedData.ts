@@ -6,7 +6,8 @@ import {
   setCachedDropdowns, 
   isCacheExpired,
   CacheData,
-  notifyCacheUpdate
+  notifyCacheUpdate,
+  updateClientInCache
 } from "@/lib/cache-manager";
 import { getQueueLength } from "@/lib/sync-queue";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,6 +21,7 @@ interface UseCachedDataResult {
   lastSyncedAt: Date | null;
   pendingSyncs: number;
   refreshData: () => Promise<void>;
+  updateClient: (updatedClient: ClientData) => Promise<void>;
   error: string | null;
 }
 
@@ -158,6 +160,20 @@ export function useCachedData(): UseCachedDataResult {
     }
   }, []);
 
+  // Update a single client in both state and cache
+  const updateClient = useCallback(async (updatedClient: ClientData) => {
+    // 1. Update local state immediately for instant UI feedback
+    setClients(prev => prev.map(c => 
+      c.rowNumber === updatedClient.rowNumber ? { ...c, ...updatedClient } : c
+    ));
+    
+    // 2. Update IndexedDB cache
+    await updateClientInCache(updatedClient.rowNumber, updatedClient);
+    
+    // 3. Notify other listeners (other components will sync)
+    notifyCacheUpdate('clients');
+  }, []);
+
   // Load data on mount
   useEffect(() => {
     loadData();
@@ -211,6 +227,7 @@ export function useCachedData(): UseCachedDataResult {
     lastSyncedAt,
     pendingSyncs,
     refreshData,
+    updateClient,
     error,
   };
 }
