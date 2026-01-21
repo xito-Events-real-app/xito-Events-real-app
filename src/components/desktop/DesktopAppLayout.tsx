@@ -6,7 +6,7 @@ import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
 import { useCachedData } from "@/hooks/useCachedData";
 import { getCurrentStatus } from "@/lib/sheets-api";
 import { cn } from "@/lib/utils";
-import { getStatusConfig, sortCategoriesByOrder } from "@/lib/status-config";
+import { getStatusConfig, sortCategoriesByOrder, normalizeStatus } from "@/lib/status-config";
 
 interface DesktopAppLayoutProps {
   children: ReactNode;
@@ -61,8 +61,10 @@ export function DesktopAppLayout({
   const categories = useMemo(() => {
     const statusCounts: Record<string, number> = {};
     clients.forEach(client => {
-      const status = getCurrentStatus(client.statusLog || '').toUpperCase();
-      if (status !== 'UNTOUCHED') {
+      const rawStatus = getCurrentStatus(client.statusLog || '').toUpperCase();
+      if (rawStatus !== 'UNTOUCHED') {
+        // Normalize to canonical status before counting
+        const status = normalizeStatus(rawStatus);
         statusCounts[status] = (statusCounts[status] || 0) + 1;
       }
     });
@@ -85,9 +87,9 @@ export function DesktopAppLayout({
         const handler = client.clientHandler || client.whoAdded || '';
         if (handler !== selectedHandler) return false;
       }
-      // Category filter
+      // Category filter - normalize both sides for matching
       if (selectedCategory) {
-        const status = getCurrentStatus(client.statusLog || '').toUpperCase();
+        const status = normalizeStatus(getCurrentStatus(client.statusLog || '').toUpperCase());
         if (status !== selectedCategory) return false;
       }
       // Date filters (BS dates from event columns)
