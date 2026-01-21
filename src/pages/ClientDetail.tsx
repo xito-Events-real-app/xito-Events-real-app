@@ -420,17 +420,7 @@ const ClientDetail = () => {
   };
 
   const handleBack = () => {
-    if (fromState?.from) {
-      // Navigate back to the original page with preserved state
-      navigate(fromState.from, { 
-        state: { 
-          ...fromState.filters,
-          scrollPosition: fromState.scrollPosition 
-        } 
-      });
-    } else {
-      navigate(-1);
-    }
+    navigate(-1);
   };
 
   // Parse events
