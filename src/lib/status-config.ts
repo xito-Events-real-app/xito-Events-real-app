@@ -64,7 +64,7 @@ export const getStatusConfig = (status: string): StatusConfig => {
 };
 
 // Normalize a status string to match canonical order
-const normalizeStatus = (status: string): string => {
+export const normalizeStatus = (status: string): string => {
   const s = status.toUpperCase();
   
   // Check specific matches first
