@@ -213,6 +213,7 @@ export function DesktopClientRow({
       return {
         eventName: eventName.trim(),
         year: years[i] || '',
+        month: months[i] || '', // Raw month number for color lookup
         monthName, // Now shows "Baisakh" instead of "1"
         day: days[i] || '',
         theme: getEventTheme(eventName),
@@ -704,26 +705,31 @@ export function DesktopClientRow({
       >
         {/* Column 1: Client Info Block */}
         <TableCell className="py-3 align-top">
-          <div className="space-y-1.5">
-            {/* Client Name with Month Color */}
-            <span className={cn(
-              "font-semibold text-sm px-2 py-0.5 rounded-md inline-block",
-              inquiryMonth ? getMonthColorClasses(inquiryMonth) : "text-foreground"
+          <div className="space-y-2">
+            {/* Client Name Box */}
+            <div className={cn(
+              "inline-flex items-center px-3 py-1.5 rounded-lg border-2 shadow-sm",
+              inquiryMonth ? getMonthColorClasses(inquiryMonth) : "bg-muted text-foreground border-border"
             )}>
-              {client.clientName}
-            </span>
+              <span className="font-bold text-sm tracking-tight">{client.clientName}</span>
+            </div>
             
-            {/* Inquiry Date in BS with Time Ago */}
+            {/* Inquiry Info Box */}
             {detailedEnquiryInfo && (
-              <div className="text-[10px] leading-tight">
-                <span className="text-muted-foreground">enquired on {detailedEnquiryInfo.bsDisplay}</span>
-                <br />
+              <div className={cn(
+                "inline-flex flex-col px-2.5 py-1.5 rounded-md text-[10px] leading-relaxed border",
+                detailedEnquiryInfo.urgency === 'normal' && "bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700",
+                detailedEnquiryInfo.urgency === 'warning' && "bg-amber-50 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700",
+                detailedEnquiryInfo.urgency === 'urgent' && "bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-700",
+                detailedEnquiryInfo.urgency === 'critical' && "bg-red-100 dark:bg-red-900/50 border-red-400 dark:border-red-600 animate-pulse"
+              )}>
+                <span className="text-muted-foreground">enquired on <span className="font-medium text-foreground">{detailedEnquiryInfo.bsDisplay}</span></span>
                 <span className={cn(
-                  "font-medium",
-                  detailedEnquiryInfo.urgency === 'normal' && "text-gray-500",
-                  detailedEnquiryInfo.urgency === 'warning' && "text-amber-600",
-                  detailedEnquiryInfo.urgency === 'urgent' && "text-red-500",
-                  detailedEnquiryInfo.urgency === 'critical' && "text-red-600 animate-pulse"
+                  "font-bold",
+                  detailedEnquiryInfo.urgency === 'normal' && "text-slate-600 dark:text-slate-400",
+                  detailedEnquiryInfo.urgency === 'warning' && "text-amber-700 dark:text-amber-400",
+                  detailedEnquiryInfo.urgency === 'urgent' && "text-red-600 dark:text-red-400",
+                  detailedEnquiryInfo.urgency === 'critical' && "text-red-700 dark:text-red-300"
                 )}>
                   {detailedEnquiryInfo.timeAgo} ago
                 </span>
@@ -817,21 +823,37 @@ export function DesktopClientRow({
         {/* Column 2: Events & Dates (Merged) */}
         <TableCell className="py-3 align-top">
           <div className="space-y-1.5">
-            {events.map((event, i) => (
-              <div
-                key={i}
-                className={cn(
-                  "text-xs px-2.5 py-1.5 rounded-md border-l-4",
-                  event.theme.bg,
-                  event.theme.border
-                )}
-              >
-                <span className="font-medium text-foreground">{event.eventName}</span>
-                <span className="text-muted-foreground ml-1.5">
-                  {event.monthName} {event.day}, {event.year}
-                </span>
-              </div>
-            ))}
+            {events.map((event, i) => {
+              // Get month number for coloring
+              const eventMonthNum = parseInt(event.month, 10);
+              const monthColors = eventMonthNum >= 1 && eventMonthNum <= 12 
+                ? getMonthColorClasses(eventMonthNum) 
+                : '';
+              
+              return (
+                <div
+                  key={i}
+                  className={cn(
+                    "flex items-center gap-2 text-xs px-2.5 py-2 rounded-lg border-l-4",
+                    event.theme.bg,
+                    event.theme.border
+                  )}
+                >
+                  <span className="font-semibold text-foreground">{event.eventName}</span>
+                  <span className={cn(
+                    "px-2 py-0.5 rounded-md font-medium",
+                    monthColors || "bg-muted text-muted-foreground"
+                  )}>
+                    {event.monthName} {event.day}
+                  </span>
+                  {event.year && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-primary text-primary-foreground">
+                      {event.year}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </TableCell>
         
