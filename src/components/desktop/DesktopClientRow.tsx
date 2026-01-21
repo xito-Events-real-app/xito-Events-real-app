@@ -718,7 +718,8 @@ export function DesktopClientRow({
               )}
               onClick={(e) => {
                 e.stopPropagation();
-                navigate(`/client-tracker/client/${client.rowNumber}`, {
+                const clientId = client.rowNumber || encodeURIComponent(client.registeredDateTimeAD || '');
+                navigate(`/client-tracker/client/${clientId}`, {
                   state: { from: location.pathname, filters: location.state }
                 });
               }}
