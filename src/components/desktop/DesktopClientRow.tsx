@@ -1017,6 +1017,97 @@ export function DesktopClientRow({
         </TableCell>
       </TableRow>
       
+      {/* Expandable Details Row */}
+      {isExpanded && (
+        <TableRow className="bg-muted/30 border-t-0">
+          <TableCell colSpan={4} className="py-3 px-4">
+            <div className="grid grid-cols-4 gap-4 text-xs">
+              {/* Source */}
+              <div className="space-y-1">
+                <div className="font-semibold text-muted-foreground uppercase tracking-wide text-[10px]">
+                  Source
+                </div>
+                <div className="text-foreground">
+                  {client.source || <span className="text-muted-foreground italic">Not specified</span>}
+                </div>
+              </div>
+              
+              {/* Description */}
+              <div className="space-y-1">
+                <div className="font-semibold text-muted-foreground uppercase tracking-wide text-[10px]">
+                  Description
+                </div>
+                <div className="text-foreground max-h-20 overflow-y-auto">
+                  {client.description || <span className="text-muted-foreground italic">No description</span>}
+                </div>
+              </div>
+              
+              {/* Full Call Log */}
+              <div className="space-y-1">
+                <div className="font-semibold text-muted-foreground uppercase tracking-wide text-[10px]">
+                  Call History ({callCount})
+                </div>
+                <div className="space-y-1 max-h-24 overflow-y-auto">
+                  {callEntries.length === 0 ? (
+                    <span className="text-muted-foreground italic">No calls logged</span>
+                  ) : (
+                    callEntries.map((entry, i) => (
+                      <div 
+                        key={i}
+                        className={cn(
+                          "flex items-center gap-1.5 px-2 py-1 rounded text-[10px]",
+                          entry.type === 'WHATSAPP' 
+                            ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400"
+                            : "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400"
+                        )}
+                      >
+                        {entry.type === 'WHATSAPP' ? (
+                          <MessageCircle className="w-3 h-3" />
+                        ) : (
+                          <Phone className="w-3 h-3" />
+                        )}
+                        <span>{entry.label}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+              
+              {/* Full Comments */}
+              <div className="space-y-1">
+                <div className="font-semibold text-muted-foreground uppercase tracking-wide text-[10px] flex items-center gap-1">
+                  Comments ({parsedCommentsList.length})
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-5 w-5 p-0 ml-1"
+                    onClick={() => setShowCommentDialog(true)}
+                  >
+                    <MessageSquare className="w-3 h-3" />
+                  </Button>
+                </div>
+                <div className="space-y-1.5 max-h-24 overflow-y-auto">
+                  {parsedCommentsList.length === 0 ? (
+                    <span className="text-muted-foreground italic">No comments yet</span>
+                  ) : (
+                    [...parsedCommentsList].reverse().map((comment, i) => (
+                      <div key={i} className="bg-background rounded px-2 py-1.5 border border-border/50">
+                        <p className="text-foreground leading-tight">{comment.text}</p>
+                        {comment.timestamp && (
+                          <p className="text-[9px] text-muted-foreground mt-0.5">
+                            {getRelativeTime(comment.timestamp)}
+                          </p>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </TableCell>
+        </TableRow>
+      )}
+      
       {/* Dialogs */}
       {/* Call History Dialog */}
       <Dialog open={showCallHistoryDialog} onOpenChange={setShowCallHistoryDialog}>
