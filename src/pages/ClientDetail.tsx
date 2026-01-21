@@ -1073,110 +1073,53 @@ const ClientDetail = () => {
           </TabsContent>
 
           {/* Events Tab - Now First with Nested Sub-Tabs */}
-          <TabsContent value="events" className="mt-4">
-            <Card className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm shadow-lg border-slate-200/50 dark:border-slate-700/50">
-              <CardContent className="pt-6 space-y-4">
-                {/* Event Location Header */}
-                <div className="grid grid-cols-2 gap-4 mb-4 p-3 rounded-xl bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/30 dark:to-pink-950/30 border border-purple-100/50 dark:border-purple-900/50">
-                  <div>
-                    <div className="text-xs text-purple-600 dark:text-purple-400 mb-1">Event Location Type</div>
-                    <div className="font-semibold text-purple-900 dark:text-purple-100">{client.eventLocation || 'Not specified'}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-purple-600 dark:text-purple-400 mb-1">Event City/Venue</div>
-                    <div className="font-semibold text-purple-900 dark:text-purple-100">{client.eventCity || 'Not specified'}</div>
-                  </div>
-                </div>
+          <TabsContent value="events" className="mt-2">
+            {/* Nested Event Sub-Tabs */}
+            {events.length > 0 ? (
+              <Tabs defaultValue={events[0]?.name.toLowerCase().replace(/\s+/g, '-') || 'event-0'} className="w-full">
+                <TabsList className="flex flex-wrap gap-1 h-auto p-1.5 bg-slate-100/80 dark:bg-slate-800/80 rounded-xl">
+                  {events.map((event, index) => (
+                    <TabsTrigger 
+                      key={index}
+                      value={event.name.toLowerCase().replace(/\s+/g, '-')}
+                      className={`gap-1.5 rounded-lg text-sm px-3 py-2 data-[state=active]:shadow-md ${
+                        event.name.toUpperCase().includes('WEDDING') ? 'data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-500 data-[state=active]:text-white' :
+                        event.name.toUpperCase().includes('RECEPTION') ? 'data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-violet-500 data-[state=active]:text-white' :
+                        event.name.toUpperCase().includes('ENGAGEMENT') ? 'data-[state=active]:bg-gradient-to-r data-[state=active]:from-pink-500 data-[state=active]:to-rose-500 data-[state=active]:text-white' :
+                        event.name.toUpperCase().includes('PRE') ? 'data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-amber-500 data-[state=active]:text-white' :
+                        'data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-500 data-[state=active]:to-slate-600 data-[state=active]:text-white'
+                      }`}
+                    >
+                      {event.name}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
                 
-                {/* Nested Event Sub-Tabs */}
-                {events.length > 0 ? (
-                  <Tabs defaultValue={events[0]?.name.toLowerCase().replace(/\s+/g, '-') || 'event-0'} className="w-full">
-                    <TabsList className="flex flex-wrap gap-1 h-auto p-1.5 bg-slate-100/80 dark:bg-slate-800/80 rounded-xl">
-                      {events.map((event, index) => (
-                        <TabsTrigger 
-                          key={index}
-                          value={event.name.toLowerCase().replace(/\s+/g, '-')}
-                          className={`gap-1.5 rounded-lg text-sm px-3 py-2 data-[state=active]:shadow-md ${
-                            event.name.toUpperCase().includes('WEDDING') ? 'data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-500 data-[state=active]:text-white' :
-                            event.name.toUpperCase().includes('RECEPTION') ? 'data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-violet-500 data-[state=active]:text-white' :
-                            event.name.toUpperCase().includes('ENGAGEMENT') ? 'data-[state=active]:bg-gradient-to-r data-[state=active]:from-pink-500 data-[state=active]:to-rose-500 data-[state=active]:text-white' :
-                            event.name.toUpperCase().includes('PRE') ? 'data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-amber-500 data-[state=active]:text-white' :
-                            'data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-500 data-[state=active]:to-slate-600 data-[state=active]:text-white'
-                          }`}
-                        >
-                          {event.name}
-                        </TabsTrigger>
-                      ))}
-                    </TabsList>
-                    
-                    {events.map((event, index) => (
-                      <TabsContent 
-                        key={index} 
-                        value={event.name.toLowerCase().replace(/\s+/g, '-')}
-                        className="mt-4"
-                      >
-                        {/* Event Detail Panel */}
-                        <div className={`p-4 rounded-xl border-2 space-y-4 ${
-                          event.name.toUpperCase().includes('WEDDING') ? 'bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200/50 dark:border-blue-800/50' :
-                          event.name.toUpperCase().includes('RECEPTION') ? 'bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-950/20 dark:to-violet-950/20 border-purple-200/50 dark:border-purple-800/50' :
-                          event.name.toUpperCase().includes('ENGAGEMENT') ? 'bg-gradient-to-br from-pink-50 to-rose-50 dark:from-pink-950/20 dark:to-rose-950/20 border-pink-200/50 dark:border-pink-800/50' :
-                          event.name.toUpperCase().includes('PRE') ? 'bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/20 dark:to-amber-950/20 border-orange-200/50 dark:border-orange-800/50' :
-                          'bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900/50 dark:to-slate-800/50 border-slate-200/50 dark:border-slate-700/50'
-                        }`}>
-                          {/* Event Date Header */}
-                          <div className="flex items-center justify-between">
-                            <Badge className={`${getEventTypeColor(event.name)} shadow-sm text-base px-3 py-1.5`}>
-                              {event.name}
-                            </Badge>
-                            <span className="font-bold text-lg text-slate-800 dark:text-slate-100">
-                              {event.formatted}
-                            </span>
-                          </div>
-                          
-                          {/* Event Date Details */}
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-slate-200/50 dark:border-slate-700/50">
-                            <div className="p-3 rounded-lg bg-white/60 dark:bg-slate-800/60">
-                              <div className="text-xs text-muted-foreground mb-1">Year (BS)</div>
-                              <div className="font-semibold text-lg">{event.year}</div>
-                            </div>
-                            <div className="p-3 rounded-lg bg-white/60 dark:bg-slate-800/60">
-                              <div className="text-xs text-muted-foreground mb-1">Month</div>
-                              <div className="font-semibold text-lg">
-                                {nepaliMonthsEnglish[parseInt(event.month) - 1] || event.month}
-                              </div>
-                            </div>
-                            <div className="p-3 rounded-lg bg-white/60 dark:bg-slate-800/60">
-                              <div className="text-xs text-muted-foreground mb-1">Day</div>
-                              <div className="font-semibold text-lg">{event.day || 'TBD'}</div>
-                            </div>
-                            <div className="p-3 rounded-lg bg-white/60 dark:bg-slate-800/60">
-                              <div className="text-xs text-muted-foreground mb-1">Venue</div>
-                              <div className="font-semibold text-lg truncate">{client.eventCity || 'TBD'}</div>
-                            </div>
-                          </div>
-                          
-                          {/* Placeholder for Future Event Details */}
-                          <div className="pt-4 border-t border-slate-200/50 dark:border-slate-700/50">
-                            <div className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
-                              <FileText className="h-4 w-4" />
-                              Additional Details
-                            </div>
-                            <div className="p-4 bg-white/50 dark:bg-slate-800/50 rounded-lg text-muted-foreground text-center text-sm">
-                              Event-specific details will appear here once configured in your sheet.
-                            </div>
-                          </div>
-                        </div>
-                      </TabsContent>
-                    ))}
-                  </Tabs>
-                ) : (
-                  <div className="text-center text-muted-foreground py-8 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-                    <Calendar className="h-12 w-12 mx-auto mb-3 text-slate-400" />
-                    <p>No events configured for this client</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                {events.map((event, index) => (
+                  <TabsContent 
+                    key={index} 
+                    value={event.name.toLowerCase().replace(/\s+/g, '-')}
+                    className="mt-3"
+                  >
+                    {/* Empty Event Detail Panel */}
+                    <div className={`min-h-[200px] p-4 rounded-xl border-2 ${
+                      event.name.toUpperCase().includes('WEDDING') ? 'bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200/50 dark:border-blue-800/50' :
+                      event.name.toUpperCase().includes('RECEPTION') ? 'bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-950/20 dark:to-violet-950/20 border-purple-200/50 dark:border-purple-800/50' :
+                      event.name.toUpperCase().includes('ENGAGEMENT') ? 'bg-gradient-to-br from-pink-50 to-rose-50 dark:from-pink-950/20 dark:to-rose-950/20 border-pink-200/50 dark:border-pink-800/50' :
+                      event.name.toUpperCase().includes('PRE') ? 'bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/20 dark:to-amber-950/20 border-orange-200/50 dark:border-orange-800/50' :
+                      'bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900/50 dark:to-slate-800/50 border-slate-200/50 dark:border-slate-700/50'
+                    }`}>
+                      {/* Empty - ready for future content */}
+                    </div>
+                  </TabsContent>
+                ))}
+              </Tabs>
+            ) : (
+              <div className="text-center text-muted-foreground py-8 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
+                <Calendar className="h-12 w-12 mx-auto mb-3 text-slate-400" />
+                <p>No events configured for this client</p>
+              </div>
+            )}
           </TabsContent>
 
           {/* Inquiry Tab */}
