@@ -15,36 +15,71 @@ export interface CacheData {
 
 let db: IDBDatabase | null = null;
 
-// Initialize IndexedDB
-export async function initDB(): Promise<IDBDatabase> {
-  if (db) return db;
+function deleteLocalDatabase(): Promise<void> {
+  try {
+    db?.close();
+  } catch {
+    // ignore
+  }
+  db = null;
 
+  return new Promise((resolve) => {
+    const request = indexedDB.deleteDatabase(DB_NAME);
+    request.onsuccess = () => resolve();
+    request.onerror = () => resolve();
+    request.onblocked = () => resolve();
+  });
+}
+
+function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onerror = () => {
-      db = null; // Reset so next attempt starts fresh
       console.error("Failed to open IndexedDB:", request.error);
       reject(request.error);
     };
 
     request.onsuccess = () => {
-      db = request.result;
-      resolve(db);
+      const database = request.result;
+
+      // If the store is missing (can happen after a corrupted upgrade), force a rebuild.
+      if (!database.objectStoreNames.contains(CACHE_STORE)) {
+        database.close();
+        reject(new Error(`IndexedDB object store '${CACHE_STORE}' missing`));
+        return;
+      }
+
+      resolve(database);
     };
 
     request.onupgradeneeded = (event) => {
       const database = (event.target as IDBOpenDBRequest).result;
-      
+
       // Delete old object store if it exists (handles schema migrations)
       if (database.objectStoreNames.contains(CACHE_STORE)) {
         database.deleteObjectStore(CACHE_STORE);
       }
-      
+
       // Create fresh object store
       database.createObjectStore(CACHE_STORE);
     };
   });
+}
+
+// Initialize IndexedDB
+export async function initDB(): Promise<IDBDatabase> {
+  if (db) return db;
+
+  try {
+    db = await openDatabase();
+    return db;
+  } catch (error) {
+    console.warn("IndexedDB init failed, resetting local cache DB:", error);
+    await deleteLocalDatabase();
+    db = await openDatabase();
+    return db;
+  }
 }
 
 // Get cached data
