@@ -1,4 +1,5 @@
 import { Phone, MessageCircle, Calendar, MapPin, AlertTriangle, User } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +12,8 @@ interface EventClientCardProps {
 }
 
 const EventClientCard = ({ client }: EventClientCardProps) => {
+  const navigate = useNavigate();
+
   // Calculate days until event
   const getDaysUntilEvent = (): number | null => {
     let eventDate: Date | null = null;
@@ -94,7 +97,12 @@ const EventClientCard = ({ client }: EventClientCardProps) => {
         {/* Header with countdown */}
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-white truncate">{client.clientName}</h3>
+            <button 
+              onClick={() => navigate(`/client-tracker/client/${client.rowNumber || client.bookedRowNumber}`)}
+              className="font-semibold text-white truncate hover:text-blue-400 transition-colors cursor-pointer text-left w-full"
+            >
+              {client.clientName}
+            </button>
             <div className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
               <MapPin className="h-3 w-3" />
               <span className="truncate">{client.eventLocation || client.eventCity}</span>

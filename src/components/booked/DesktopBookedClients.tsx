@@ -179,7 +179,14 @@ const DesktopBookedClients = () => {
                         key={client.bookedRowNumber} 
                         className="border-slate-700 hover:bg-slate-700/30"
                       >
-                        <TableCell><p className="font-medium text-white">{client.clientName}</p></TableCell>
+                        <TableCell>
+                          <button 
+                            onClick={() => navigate(`/client-tracker/client/${client.rowNumber || client.bookedRowNumber}`)}
+                            className="font-medium text-white hover:text-blue-400 transition-colors cursor-pointer text-left"
+                          >
+                            {client.clientName}
+                          </button>
+                        </TableCell>
                         <TableCell className="text-slate-300">
                           <div className="flex flex-col gap-0.5">
                             {parsedEvents.length > 0 ? parsedEvents.map((event, i) => (
