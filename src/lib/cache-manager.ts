@@ -1,7 +1,7 @@
 import { ClientData, DropdownData } from "./sheets-api";
 
 const DB_NAME = "wtn_client_tracker_db";
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Incremented to force schema recreation
 const CACHE_STORE = "cache";
 const CACHE_KEY = "app_cache_v1";
 const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -23,6 +23,7 @@ export async function initDB(): Promise<IDBDatabase> {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onerror = () => {
+      db = null; // Reset so next attempt starts fresh
       console.error("Failed to open IndexedDB:", request.error);
       reject(request.error);
     };
@@ -35,9 +36,13 @@ export async function initDB(): Promise<IDBDatabase> {
     request.onupgradeneeded = (event) => {
       const database = (event.target as IDBOpenDBRequest).result;
       
-      if (!database.objectStoreNames.contains(CACHE_STORE)) {
-        database.createObjectStore(CACHE_STORE);
+      // Delete old object store if it exists (handles schema migrations)
+      if (database.objectStoreNames.contains(CACHE_STORE)) {
+        database.deleteObjectStore(CACHE_STORE);
       }
+      
+      // Create fresh object store
+      database.createObjectStore(CACHE_STORE);
     };
   });
 }
