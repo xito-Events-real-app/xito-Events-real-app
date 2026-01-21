@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { getCurrentStatus } from "@/lib/sheets-api";
+import { getCurrentStatus, DropdownData } from "@/lib/sheets-api";
 import { parseEventDetails, getMonthName } from "@/lib/nepali-months";
+import { DesktopClientRow } from "./DesktopClientRow";
+import { ClientDetailSheet } from "@/components/dashboard/ClientDetailSheet";
 import {
   Users,
   CalendarPlus,
@@ -60,6 +62,7 @@ interface DesktopDashboardProps {
   onClearHandler?: () => void;
   onClearCategory?: () => void;
   onClearAllFilters?: () => void;
+  dropdowns?: DropdownData;
 }
 
 // Get icon and color for each status category
@@ -112,8 +115,10 @@ export function DesktopDashboard({
   onClearHandler,
   onClearCategory,
   onClearAllFilters,
+  dropdowns,
 }: DesktopDashboardProps) {
   const navigate = useNavigate();
+  const [selectedClient, setSelectedClient] = useState<any | null>(null);
 
   // Use allClients for stats if available, otherwise use filtered clients
   const statsClients = allClients || clients;
@@ -206,36 +211,30 @@ export function DesktopDashboard({
               <Table>
                 <TableHeader>
                   <TableRow className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-b-2 border-primary/20">
-                    <TableHead className="w-[200px] font-bold text-foreground uppercase tracking-wide text-xs py-4">
-                      Client Name
-                    </TableHead>
-                    <TableHead className="w-[200px] font-bold text-foreground uppercase tracking-wide text-xs py-4">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-primary" />
-                        Event Name
-                      </div>
-                    </TableHead>
                     <TableHead className="w-[180px] font-bold text-foreground uppercase tracking-wide text-xs py-4">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-amber-500" />
-                        Event Date
-                      </div>
+                      Client Info
                     </TableHead>
                     <TableHead className="w-[150px] font-bold text-foreground uppercase tracking-wide text-xs py-4">
                       <div className="flex items-center gap-2">
-                        <MapPin className="w-4 h-4 text-emerald-500" />
-                        City
+                        <Sparkles className="w-4 h-4 text-primary" />
+                        Event
                       </div>
                     </TableHead>
-                    <TableHead className="w-[120px] font-bold text-foreground uppercase tracking-wide text-xs py-4 text-center">
-                      Actions
+                    <TableHead className="w-[130px] font-bold text-foreground uppercase tracking-wide text-xs py-4">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-amber-500" />
+                        Date
+                      </div>
+                    </TableHead>
+                    <TableHead className="font-bold text-foreground uppercase tracking-wide text-xs py-4">
+                      Category Details
                     </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {clients.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-16">
+                      <TableCell colSpan={4} className="text-center py-16">
                         <div className="flex flex-col items-center gap-3">
                           <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
                             <Users className="w-8 h-8 text-muted-foreground" />
@@ -248,6 +247,20 @@ export function DesktopDashboard({
                       </TableCell>
                     </TableRow>
                   ) : (
+                    clients.map((client) => (
+                      <DesktopClientRow
+                        key={client.rowNumber}
+                        client={client}
+                        category={selectedCategory || getCurrentStatus(client.statusLog)}
+                        handlers={handlers}
+                        statuses={dropdowns?.clientStatuses || []}
+                        mindsetOptions={dropdowns?.mindsetOptions || []}
+                        paymentTypes={dropdowns?.paymentTypes || []}
+                        banks={dropdowns?.banks || []}
+                        onOpenDetail={(c) => setSelectedClient(c)}
+                      />
+                    ))
+                  )}
                     clients.map((client, clientIdx) => {
                       // Parse events with their dates
                       const events = parseEventDetails(
