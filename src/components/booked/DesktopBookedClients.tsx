@@ -181,7 +181,10 @@ const DesktopBookedClients = () => {
                       >
                         <TableCell>
                           <button 
-                            onClick={() => navigate(`/client-tracker/client/${client.originalRowNumber}`)}
+                            onClick={() => {
+                              const clientId = client.originalRowNumber || encodeURIComponent(client.registeredDateTimeAD || '');
+                              navigate(`/client-tracker/client/${clientId}`);
+                            }}
                             className="font-medium text-white hover:text-blue-400 transition-colors cursor-pointer text-left"
                           >
                             {client.clientName}

@@ -1286,7 +1286,9 @@ async function copyToBookedClients(accessToken: string, spreadsheetId: string, o
 }
 
 // Get all clients from BOOKED CLIENTS sheet (same structure as CLIENT TRACKER: A-AG)
+// Now includes a lookup to resolve originalRowNumber from CLIENT TRACKER
 async function getBookedClients(accessToken: string, spreadsheetId: string, limit = 100) {
+  // 1. Fetch booked clients data
   const range = encodeURIComponent("'BOOKED CLIENTS'!A2:AG" + (limit + 1));
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
@@ -1303,45 +1305,69 @@ async function getBookedClients(accessToken: string, spreadsheetId: string, limi
   const data = await response.json();
   if (!data.values) return [];
 
-  // Same column mapping as getClients (CLIENT TRACKER) - columns A-AG
-  return data.values.map((row: string[], index: number) => ({
-    bookedRowNumber: index + 2,
-    originalRowNumber: 0, // Use registeredDateTimeAD for sync instead
-    registeredDateTimeAD: row[0] || '',  // Column A - unique identifier
-    registeredDateBS: row[1] || '',       // Column B
-    clientName: row[2] || '',             // Column C
-    source: row[3] || '',                 // Column D
-    clientLocation: row[4] || '',         // Column E
-    currentCountry: row[5] || '',         // Column F
-    contactNo: row[6] || '',              // Column G
-    whatsappNo: row[7] || '',             // Column H
-    email: row[8] || '',                  // Column I - Email
-    eventLocation: row[9] || '',          // Column J
-    eventCity: row[10] || '',             // Column K
-    events: row[11] || '',                // Column L
-    eventYear: row[12] || '',             // Column M
-    eventMonth: row[13] || '',            // Column N
-    eventDay: row[14] || '',              // Column O
-    eventDateAD: row[15] || '',           // Column P
-    whoAdded: row[16] || '',              // Column Q
-    inquiryDateAD: row[17] || '',         // Column R
-    inquiryDateBS: row[18] || '',         // Column S
-    inquiryTime: row[19] || '',           // Column T
-    description: row[20] || '',           // Column U
-    quotationData: row[21] || '',         // Column V
-    statusLog: row[22] || '',             // Column W
-    clientHandler: row[23] || '',         // Column X
-    callLog: row[24] || '',               // Column Y
-    mindset: row[25] || '',               // Column Z
-    ourBargainedRates: row[26] || '',     // Column AA
-    clientBargainedRates: row[27] || '',  // Column AB
-    comments: row[28] || '',              // Column AC
-    finalQuotation: row[29] || '',        // Column AD
-    paymentsMade: row[30] || '',          // Column AE
-    paymentDatesAD: row[31] || '',        // Column AF
-    remainingPayment: row[32] || '',      // Column AG
-    bookedDateTime: '',                   // Not stored separately
-  }));
+  // 2. Fetch CLIENT TRACKER registeredDateTimeAD column (Column A) for lookup
+  const trackerRange = encodeURIComponent("'CLIENT TRACKER'!A2:A2000");
+  const trackerResponse = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  
+  // 3. Build a lookup map: registeredDateTimeAD -> rowNumber in CLIENT TRACKER
+  const rowLookup: Record<string, number> = {};
+  if (trackerResponse.ok) {
+    const trackerData = await trackerResponse.json();
+    if (trackerData.values) {
+      trackerData.values.forEach((row: string[], index: number) => {
+        const regDateTime = (row[0] || '').trim();
+        if (regDateTime) {
+          rowLookup[regDateTime] = index + 2; // Row numbers start at 2
+        }
+      });
+    }
+  }
+
+  // 4. Map booked clients with resolved originalRowNumber
+  return data.values.map((row: string[], index: number) => {
+    const registeredDateTimeAD = (row[0] || '').trim();
+    return {
+      bookedRowNumber: index + 2,
+      originalRowNumber: rowLookup[registeredDateTimeAD] || 0, // Resolved from CLIENT TRACKER!
+      registeredDateTimeAD,                 // Column A - unique identifier
+      registeredDateBS: row[1] || '',       // Column B
+      clientName: row[2] || '',             // Column C
+      source: row[3] || '',                 // Column D
+      clientLocation: row[4] || '',         // Column E
+      currentCountry: row[5] || '',         // Column F
+      contactNo: row[6] || '',              // Column G
+      whatsappNo: row[7] || '',             // Column H
+      email: row[8] || '',                  // Column I - Email
+      eventLocation: row[9] || '',          // Column J
+      eventCity: row[10] || '',             // Column K
+      events: row[11] || '',                // Column L
+      eventYear: row[12] || '',             // Column M
+      eventMonth: row[13] || '',            // Column N
+      eventDay: row[14] || '',              // Column O
+      eventDateAD: row[15] || '',           // Column P
+      whoAdded: row[16] || '',              // Column Q
+      inquiryDateAD: row[17] || '',         // Column R
+      inquiryDateBS: row[18] || '',         // Column S
+      inquiryTime: row[19] || '',           // Column T
+      description: row[20] || '',           // Column U
+      quotationData: row[21] || '',         // Column V
+      statusLog: row[22] || '',             // Column W
+      clientHandler: row[23] || '',         // Column X
+      callLog: row[24] || '',               // Column Y
+      mindset: row[25] || '',               // Column Z
+      ourBargainedRates: row[26] || '',     // Column AA
+      clientBargainedRates: row[27] || '',  // Column AB
+      comments: row[28] || '',              // Column AC
+      finalQuotation: row[29] || '',        // Column AD
+      paymentsMade: row[30] || '',          // Column AE
+      paymentDatesAD: row[31] || '',        // Column AF
+      remainingPayment: row[32] || '',      // Column AG
+      bookedDateTime: '',                   // Not stored separately
+    };
+  });
 }
 
 // Migrate existing BOOKED clients from CLIENT TRACKER to BOOKED CLIENTS
