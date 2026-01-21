@@ -181,7 +181,7 @@ const DesktopBookedClients = () => {
                       >
                         <TableCell>
                           <button 
-                            onClick={() => navigate(`/client-tracker/client/${client.rowNumber || client.bookedRowNumber}`)}
+                            onClick={() => navigate(`/client-tracker/client/${client.originalRowNumber}`)}
                             className="font-medium text-white hover:text-blue-400 transition-colors cursor-pointer text-left"
                           >
                             {client.clientName}
