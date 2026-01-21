@@ -558,52 +558,126 @@ const ClientDetail = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b">
-        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={handleBack}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div>
-              <h1 className={`text-lg font-bold px-3 py-1 rounded-md ${inquiryMonth ? getMonthColorClasses(inquiryMonth) : 'bg-muted'}`}>
-                {isEditing ? "Edit Client" : client.clientName}
-              </h1>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+      {/* Header with Quick Actions */}
+      <div className="sticky top-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-800/50 shadow-sm">
+        <div className="container mx-auto px-4 py-3">
+          {/* Top row: Back + Name + Edit */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={handleBack}
+                className="rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <div>
+                <h1 className={`text-lg font-bold px-4 py-1.5 rounded-xl shadow-sm ${inquiryMonth ? getMonthColorClasses(inquiryMonth) : 'bg-gradient-to-r from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700'}`}>
+                  {isEditing ? "Edit Client" : client.clientName}
+                </h1>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
             {isEditing ? (
-              <>
-                <Button variant="ghost" size="icon" onClick={handleCancel} disabled={isSaving}>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={handleCancel} 
+                  disabled={isSaving}
+                  className="rounded-full"
+                >
                   <X className="h-5 w-5" />
                 </Button>
-                <Button variant="default" size="icon" onClick={handleSave} disabled={isSaving}>
+                <Button 
+                  size="icon" 
+                  onClick={handleSave} 
+                  disabled={isSaving}
+                  className="rounded-full bg-emerald-500 hover:bg-emerald-600 shadow-lg"
+                >
                   {isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
                 </Button>
-              </>
+              </div>
             ) : (
-              <>
-                <Button variant="outline" size="icon" onClick={handleEdit}>
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                {client.contactNo && (
-                  <Button variant="outline" size="icon" asChild>
-                    <a href={`tel:${client.contactNo}`}>
-                      <Phone className="h-4 w-4" />
-                    </a>
-                  </Button>
-                )}
-                {client.whatsappNo && (
-                  <Button variant="outline" size="icon" asChild>
-                    <a href={`https://wa.me/${client.whatsappNo.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer">
-                      <MessageCircle className="h-4 w-4" />
-                    </a>
-                  </Button>
-                )}
-              </>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={handleEdit}
+                className="rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
             )}
           </div>
+          
+          {/* Quick Actions Row - Only in view mode */}
+          {!isEditing && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+              {/* Call Direct */}
+              {client.contactNo && (
+                <Button
+                  size="sm"
+                  className="rounded-full shadow-md gap-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shrink-0"
+                  onClick={() => handleCall('DIRECT')}
+                  disabled={isLoggingCall}
+                >
+                  <Phone className="h-4 w-4" />
+                  <span>Call</span>
+                </Button>
+              )}
+              
+              {/* WhatsApp */}
+              {client.whatsappNo && (
+                <Button
+                  size="sm"
+                  className="rounded-full shadow-md gap-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shrink-0"
+                  onClick={() => handleCall('WHATSAPP')}
+                  disabled={isLoggingCall}
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  <span>WhatsApp</span>
+                </Button>
+              )}
+              
+              {/* Add Payment - Always show if client is booked or has any payment history */}
+              <Button
+                size="sm"
+                className="rounded-full shadow-md gap-2 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white shrink-0"
+                onClick={() => setShowPaymentDrawer(true)}
+              >
+                <CreditCard className="h-4 w-4" />
+                <span>Payment</span>
+              </Button>
+              
+              {/* Change Status */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="sm"
+                    className="rounded-full shadow-md gap-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white shrink-0"
+                    disabled={isChangingStatus}
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isChangingStatus ? 'animate-spin' : ''}`} />
+                    <span>Status</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto bg-background z-[60] rounded-xl shadow-xl border-slate-200 dark:border-slate-700">
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">Change Status To</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {dropdowns?.clientStatuses?.map((status) => (
+                    <DropdownMenuItem 
+                      key={status} 
+                      onClick={() => handleStatusChange(status)}
+                      className="cursor-pointer rounded-lg"
+                    >
+                      {status}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
         </div>
       </div>
 
@@ -782,32 +856,34 @@ const ClientDetail = () => {
         {/* Hero Section - 3 Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Client Info Card */}
-          <Card>
+          <Card className="bg-gradient-to-br from-white to-blue-50/50 dark:from-slate-900 dark:to-blue-950/30 border-blue-100/50 dark:border-blue-900/50 shadow-lg shadow-blue-500/5">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <User className="h-4 w-4" />
+              <CardTitle className="text-sm font-medium flex items-center gap-2 text-blue-700 dark:text-blue-400">
+                <div className="p-1.5 rounded-lg bg-blue-500/10">
+                  <User className="h-4 w-4" />
+                </div>
                 Client Info
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm">
+            <CardContent className="space-y-2.5 text-sm">
               <div className="flex items-center gap-2">
-                <Badge variant="outline">{client.source || 'Unknown Source'}</Badge>
+                <Badge className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white border-0">{client.source || 'Unknown Source'}</Badge>
               </div>
               {client.contactNo && (
-                <a href={`tel:${client.contactNo}`} className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
-                  <Phone className="h-3 w-3" />
+                <a href={`tel:${client.contactNo}`} className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                  <Phone className="h-3.5 w-3.5" />
                   {client.contactNo}
                 </a>
               )}
               {client.whatsappNo && (
-                <a href={`https://wa.me/${client.whatsappNo.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
-                  <MessageCircle className="h-3 w-3" />
+                <a href={`https://wa.me/${client.whatsappNo.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-green-600 dark:hover:text-green-400 transition-colors">
+                  <MessageCircle className="h-3.5 w-3.5" />
                   {client.whatsappNo}
                 </a>
               )}
               {client.email && (
-                <a href={`mailto:${client.email}`} className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
-                  <Mail className="h-3 w-3" />
+                <a href={`mailto:${client.email}`} className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                  <Mail className="h-3.5 w-3.5" />
                   {client.email}
                 </a>
               )}
@@ -815,25 +891,27 @@ const ClientDetail = () => {
           </Card>
 
           {/* Events Card */}
-          <Card>
+          <Card className="bg-gradient-to-br from-white to-purple-50/50 dark:from-slate-900 dark:to-purple-950/30 border-purple-100/50 dark:border-purple-900/50 shadow-lg shadow-purple-500/5">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
+              <CardTitle className="text-sm font-medium flex items-center gap-2 text-purple-700 dark:text-purple-400">
+                <div className="p-1.5 rounded-lg bg-purple-500/10">
+                  <Calendar className="h-4 w-4" />
+                </div>
                 Events & Dates
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-2.5">
               {events.map((event, i) => (
-                <div key={i} className="flex items-center justify-between gap-2">
-                  <Badge variant="outline" className={getEventTypeColor(event.name)}>
+                <div key={i} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-white/50 dark:bg-slate-800/50">
+                  <Badge className={`${getEventTypeColor(event.name)} shadow-sm`}>
                     {event.name}
                   </Badge>
-                  <span className="text-sm font-medium">{event.formatted}</span>
+                  <span className="text-sm font-semibold text-purple-700 dark:text-purple-300">{event.formatted}</span>
                 </div>
               ))}
               {client.eventCity && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground pt-1">
-                  <MapPin className="h-3 w-3" />
+                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 pt-1">
+                  <MapPin className="h-3.5 w-3.5 text-purple-500" />
                   {client.eventCity}
                 </div>
               )}
@@ -841,27 +919,35 @@ const ClientDetail = () => {
           </Card>
 
           {/* Category Details Card */}
-          <Card>
+          <Card className="bg-gradient-to-br from-white to-emerald-50/50 dark:from-slate-900 dark:to-emerald-950/30 border-emerald-100/50 dark:border-emerald-900/50 shadow-lg shadow-emerald-500/5">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Activity className="h-4 w-4" />
+              <CardTitle className="text-sm font-medium flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
+                <div className="p-1.5 rounded-lg bg-emerald-500/10">
+                  <Activity className="h-4 w-4" />
+                </div>
                 Category Details
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              <Badge className={getStatusColor(currentStatus)}>
+            <CardContent className="space-y-3">
+              <Badge className={`${getStatusColor(currentStatus)} shadow-md text-sm px-3 py-1`}>
                 {currentStatus || 'UNTOUCHED'}
               </Badge>
               {client.clientHandler && (
-                <div className="text-sm">
-                  <span className="text-muted-foreground">Handler:</span>{' '}
+                <div className="flex items-center gap-2 text-sm p-2 rounded-lg bg-white/50 dark:bg-slate-800/50">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white text-xs font-bold shadow-md">
+                    {client.clientHandler.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                  </div>
                   <span className="font-medium">{client.clientHandler}</span>
                 </div>
               )}
               {inquiryInfo && (
                 <div className="text-sm">
-                  <span className="text-muted-foreground">Inquired:</span>{' '}
-                  <span className="font-medium">{inquiryInfo.timeAgo} ago</span>
+                  <span className="text-slate-500 dark:text-slate-400">Inquired:</span>{' '}
+                  <span className={`font-semibold ${
+                    inquiryInfo.urgency === 'critical' ? 'text-red-500' :
+                    inquiryInfo.urgency === 'urgent' ? 'text-orange-500' :
+                    inquiryInfo.urgency === 'warning' ? 'text-amber-500' : 'text-slate-700 dark:text-slate-300'
+                  }`}>{inquiryInfo.timeAgo} ago</span>
                 </div>
               )}
             </CardContent>
@@ -871,36 +957,36 @@ const ClientDetail = () => {
         {/* Tabs Section */}
         <Tabs defaultValue="registration" className="w-full">
           <ScrollArea className="w-full whitespace-nowrap">
-            <TabsList className="inline-flex w-max gap-1 p-1">
-              <TabsTrigger value="registration" className="gap-1.5">
+            <TabsList className="inline-flex w-max gap-1 p-1.5 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/50 dark:border-slate-700/50">
+              <TabsTrigger value="registration" className="gap-1.5 rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-500 data-[state=active]:text-white data-[state=active]:shadow-md">
                 <FileText className="h-3.5 w-3.5" />
                 Registration
               </TabsTrigger>
-              <TabsTrigger value="contact" className="gap-1.5">
+              <TabsTrigger value="contact" className="gap-1.5 rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-500 data-[state=active]:text-white data-[state=active]:shadow-md">
                 <Phone className="h-3.5 w-3.5" />
                 Contact
               </TabsTrigger>
-              <TabsTrigger value="events" className="gap-1.5">
+              <TabsTrigger value="events" className="gap-1.5 rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-md">
                 <Calendar className="h-3.5 w-3.5" />
                 Events
               </TabsTrigger>
-              <TabsTrigger value="inquiry" className="gap-1.5">
+              <TabsTrigger value="inquiry" className="gap-1.5 rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-md">
                 <Clock className="h-3.5 w-3.5" />
                 Inquiry
               </TabsTrigger>
-              <TabsTrigger value="sales" className="gap-1.5">
+              <TabsTrigger value="sales" className="gap-1.5 rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-rose-500 data-[state=active]:to-red-500 data-[state=active]:text-white data-[state=active]:shadow-md">
                 <Briefcase className="h-3.5 w-3.5" />
                 Sales
               </TabsTrigger>
-              <TabsTrigger value="activity" className="gap-1.5">
+              <TabsTrigger value="activity" className="gap-1.5 rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-md">
                 <Activity className="h-3.5 w-3.5" />
                 Activity
               </TabsTrigger>
-              <TabsTrigger value="comments" className="gap-1.5">
+              <TabsTrigger value="comments" className="gap-1.5 rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-500 data-[state=active]:to-slate-600 data-[state=active]:text-white data-[state=active]:shadow-md">
                 <MessageSquare className="h-3.5 w-3.5" />
                 Comments
               </TabsTrigger>
-              <TabsTrigger value="financials" className="gap-1.5">
+              <TabsTrigger value="financials" className="gap-1.5 rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-500 data-[state=active]:to-purple-500 data-[state=active]:text-white data-[state=active]:shadow-md">
                 <DollarSign className="h-3.5 w-3.5" />
                 Financials
               </TabsTrigger>
@@ -909,24 +995,24 @@ const ClientDetail = () => {
 
           {/* Registration Tab */}
           <TabsContent value="registration" className="mt-4">
-            <Card>
+            <Card className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm shadow-lg border-slate-200/50 dark:border-slate-700/50">
               <CardContent className="pt-6 space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-sm text-muted-foreground">Registered Date</div>
-                    <div className="font-medium">{formatADtoBSWithTime(client.registeredDateTimeAD)}</div>
+                  <div className="p-3 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900">
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Registered Date</div>
+                    <div className="font-semibold text-slate-700 dark:text-slate-200">{formatADtoBSWithTime(client.registeredDateTimeAD)}</div>
                   </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Registered Date (BS)</div>
-                    <div className="font-medium">{formatBSDateDisplay(client.registeredDateBS)}</div>
+                  <div className="p-3 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900">
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Registered Date (BS)</div>
+                    <div className="font-semibold text-slate-700 dark:text-slate-200">{formatBSDateDisplay(client.registeredDateBS)}</div>
                   </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Added By</div>
-                    <div className="font-medium">{client.whoAdded || 'Unknown'}</div>
+                  <div className="p-3 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900">
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Added By</div>
+                    <div className="font-semibold text-slate-700 dark:text-slate-200">{client.whoAdded || 'Unknown'}</div>
                   </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Source</div>
-                    <div className="font-medium">{client.source || 'Unknown'}</div>
+                  <div className="p-3 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900">
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Source</div>
+                    <div className="font-semibold text-slate-700 dark:text-slate-200">{client.source || 'Unknown'}</div>
                   </div>
                 </div>
               </CardContent>
@@ -1317,118 +1403,20 @@ const ClientDetail = () => {
         </div>
       )}
 
-      {/* Floating Action Button - Only show in view mode */}
+      {/* Payment Drawer - Always available */}
       {!isEditing && client && (
-        <>
-          {/* FAB Backdrop */}
-          {showFab && (
-            <div 
-              className="fixed inset-0 bg-black/20 z-40"
-              onClick={() => setShowFab(false)}
-            />
-          )}
-          
-          {/* FAB Menu */}
-          <div className="fixed bottom-6 right-6 z-50 flex flex-col-reverse items-end gap-3">
-            {/* Expanded actions */}
-            {showFab && (
-              <div className="flex flex-col-reverse gap-2 mb-2 animate-in fade-in slide-in-from-bottom-4 duration-200">
-                {/* Call Direct */}
-                {client.contactNo && (
-                  <Button
-                    size="lg"
-                    className="rounded-full shadow-lg gap-2 bg-blue-500 hover:bg-blue-600"
-                    onClick={() => handleCall('DIRECT')}
-                    disabled={isLoggingCall}
-                  >
-                    <Phone className="h-5 w-5" />
-                    <span className="text-sm">Call Direct</span>
-                  </Button>
-                )}
-                
-                {/* WhatsApp */}
-                {client.whatsappNo && (
-                  <Button
-                    size="lg"
-                    className="rounded-full shadow-lg gap-2 bg-green-500 hover:bg-green-600"
-                    onClick={() => handleCall('WHATSAPP')}
-                    disabled={isLoggingCall}
-                  >
-                    <MessageCircle className="h-5 w-5" />
-                    <span className="text-sm">WhatsApp</span>
-                  </Button>
-                )}
-                
-                {/* Add Payment */}
-                {finalQuotation && (
-                  <Button
-                    size="lg"
-                    className="rounded-full shadow-lg gap-2 bg-violet-500 hover:bg-violet-600"
-                    onClick={() => {
-                      setShowPaymentDrawer(true);
-                      setShowFab(false);
-                    }}
-                  >
-                    <CreditCard className="h-5 w-5" />
-                    <span className="text-sm">Add Payment</span>
-                  </Button>
-                )}
-                
-                {/* Change Status */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      size="lg"
-                      className="rounded-full shadow-lg gap-2 bg-amber-500 hover:bg-amber-600"
-                      disabled={isChangingStatus}
-                    >
-                      <RefreshCw className={`h-5 w-5 ${isChangingStatus ? 'animate-spin' : ''}`} />
-                      <span className="text-sm">Change Status</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="max-h-80 overflow-y-auto bg-background z-[60]">
-                    <DropdownMenuLabel>Change Status To</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {dropdowns?.clientStatuses?.map((status) => (
-                      <DropdownMenuItem 
-                        key={status} 
-                        onClick={() => handleStatusChange(status)}
-                        className="cursor-pointer"
-                      >
-                        {status}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            )}
-            
-            {/* Main FAB button */}
-            <Button
-              size="lg"
-              className={`h-14 w-14 rounded-full shadow-xl transition-all duration-200 ${showFab ? 'bg-destructive hover:bg-destructive/90 rotate-45' : 'bg-primary hover:bg-primary/90'}`}
-              onClick={() => setShowFab(!showFab)}
-            >
-              <Plus className="h-6 w-6" />
-            </Button>
-          </div>
-
-          {/* Payment Drawer */}
-          {finalQuotation && (
-            <PaymentDrawer
-              isOpen={showPaymentDrawer}
-              onClose={() => setShowPaymentDrawer(false)}
-              clientName={client.clientName || ''}
-              rowNumber={client.rowNumber || 0}
-              registeredDateTimeAD={client.registeredDateTimeAD || ''}
-              existingPaymentsMade={currentPaymentsMade || client.paymentsMade || ''}
-              existingPaymentDatesAD={client.paymentDatesAD || ''}
-              finalQuotationAmount={parseInt(finalQuotation.amount.replace(/,/g, '')) || 0}
-              onPaymentAdded={handlePaymentAdded}
-              sourceSheet="tracker"
-            />
-          )}
-        </>
+        <PaymentDrawer
+          isOpen={showPaymentDrawer}
+          onClose={() => setShowPaymentDrawer(false)}
+          clientName={client.clientName || ''}
+          rowNumber={client.rowNumber || 0}
+          registeredDateTimeAD={client.registeredDateTimeAD || ''}
+          existingPaymentsMade={currentPaymentsMade || client.paymentsMade || ''}
+          existingPaymentDatesAD={client.paymentDatesAD || ''}
+          finalQuotationAmount={finalQuotation ? parseInt(finalQuotation.amount.replace(/,/g, '')) : 0}
+          onPaymentAdded={handlePaymentAdded}
+          sourceSheet="tracker"
+        />
       )}
     </div>
   );
