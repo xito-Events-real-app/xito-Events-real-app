@@ -6,19 +6,7 @@ import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
 import { useCachedData } from "@/hooks/useCachedData";
 import { getCurrentStatus } from "@/lib/sheets-api";
 import { cn } from "@/lib/utils";
-import {
-  Users,
-  Phone,
-  MessageSquare,
-  PhoneOff,
-  FileText,
-  SendHorizontal,
-  Scale,
-  Clock,
-  CheckCircle,
-  XCircle,
-  CalendarX,
-} from "lucide-react";
+import { getStatusConfig, sortCategoriesByOrder } from "@/lib/status-config";
 
 interface DesktopAppLayoutProps {
   children: ReactNode;
@@ -26,23 +14,6 @@ interface DesktopAppLayoutProps {
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
 }
-
-// Get icon and color for each status category
-const getStatusConfig = (status: string) => {
-  const s = status.toUpperCase();
-  if (s.includes('JUST ENQUIRED')) return { icon: Users, color: 'bg-emerald-600', label: 'Just Enquired' };
-  if (s.includes('NUMBER PROVIDED')) return { icon: Phone, color: 'bg-teal-600', label: 'Number Provided' };
-  if (s.includes('TEXTED')) return { icon: MessageSquare, color: 'bg-yellow-500', label: 'Texted' };
-  if (s.includes('CALL NOT')) return { icon: PhoneOff, color: 'bg-orange-500', label: 'Call Not Received' };
-  if (s.includes('CALLED') && s.includes('QUOTATION PENDING')) return { icon: FileText, color: 'bg-blue-500', label: 'Quotation Pending' };
-  if (s.includes('QUOTATION SENT')) return { icon: SendHorizontal, color: 'bg-indigo-500', label: 'Quotation Sent' };
-  if (s.includes('BARGAINING')) return { icon: Scale, color: 'bg-purple-500', label: 'Bargaining' };
-  if (s.includes('ADVANCE PENDING')) return { icon: Clock, color: 'bg-pink-500', label: 'Advance Pending' };
-  if (s.includes('BOOKED')) return { icon: CheckCircle, color: 'bg-green-500', label: 'Booked' };
-  if (s.includes('CANCELLED')) return { icon: XCircle, color: 'bg-red-500', label: 'Cancelled' };
-  if (s.includes('POSTPONED')) return { icon: CalendarX, color: 'bg-slate-500', label: 'Postponed' };
-  return { icon: Users, color: 'bg-gray-500', label: status };
-};
 
 export function DesktopAppLayout({ 
   children, 
@@ -86,7 +57,7 @@ export function DesktopAppLayout({
     return counts;
   }, [clients]);
 
-  // Compute categories from clients
+  // Compute categories from clients with proper ordering
   const categories = useMemo(() => {
     const statusCounts: Record<string, number> = {};
     clients.forEach(client => {
@@ -96,13 +67,14 @@ export function DesktopAppLayout({
       }
     });
     
-    return Object.entries(statusCounts)
+    const categoryList = Object.entries(statusCounts)
       .map(([status, count]) => ({
         status,
         count,
         config: getStatusConfig(status)
-      }))
-      .sort((a, b) => b.count - a.count);
+      }));
+    
+    return sortCategoriesByOrder(categoryList);
   }, [clients]);
 
   // Filtered clients based on all filters

@@ -23,6 +23,7 @@ import { getCurrentStatus, DropdownData } from "@/lib/sheets-api";
 import { parseEventDetails, getMonthName } from "@/lib/nepali-months";
 import { DesktopClientRow } from "./DesktopClientRow";
 import { ClientDetailSheet } from "@/components/dashboard/ClientDetailSheet";
+import { getStatusConfig, sortCategoriesByOrder } from "@/lib/status-config";
 import {
   Users,
   CalendarPlus,
@@ -30,22 +31,13 @@ import {
   UserPlus,
   AlertTriangle,
   ChevronRight,
-  Phone,
-  MessageSquare,
-  PhoneOff,
-  FileText,
-  SendHorizontal,
-  Scale,
-  Clock,
-  CheckCircle,
-  XCircle,
-  CalendarX,
   ArrowRight,
   RefreshCw,
   MessageCircle,
   MapPin,
   Calendar,
   Sparkles,
+  CheckCircle,
 } from "lucide-react";
 
 interface DesktopDashboardProps {
@@ -65,23 +57,6 @@ interface DesktopDashboardProps {
   dropdowns?: DropdownData;
   onClientUpdate?: (updatedClient: any) => void;
 }
-
-// Get icon and color for each status category
-const getStatusConfig = (status: string) => {
-  const s = status.toUpperCase();
-  if (s.includes('JUST ENQUIRED')) return { icon: Users, color: 'bg-emerald-600', textColor: 'text-emerald-600', label: 'Just Enquired' };
-  if (s.includes('NUMBER PROVIDED')) return { icon: Phone, color: 'bg-teal-600', textColor: 'text-teal-600', label: 'Number Provided' };
-  if (s.includes('TEXTED')) return { icon: MessageSquare, color: 'bg-yellow-500', textColor: 'text-yellow-500', label: 'Texted' };
-  if (s.includes('CALL NOT')) return { icon: PhoneOff, color: 'bg-orange-500', textColor: 'text-orange-500', label: 'Call Not Received' };
-  if (s.includes('CALLED') && s.includes('QUOTATION PENDING')) return { icon: FileText, color: 'bg-blue-500', textColor: 'text-blue-500', label: 'Quotation Pending' };
-  if (s.includes('QUOTATION SENT')) return { icon: SendHorizontal, color: 'bg-indigo-500', textColor: 'text-indigo-500', label: 'Quotation Sent' };
-  if (s.includes('BARGAINING')) return { icon: Scale, color: 'bg-purple-500', textColor: 'text-purple-500', label: 'Bargaining' };
-  if (s.includes('ADVANCE PENDING')) return { icon: Clock, color: 'bg-pink-500', textColor: 'text-pink-500', label: 'Advance Pending' };
-  if (s.includes('BOOKED')) return { icon: CheckCircle, color: 'bg-green-500', textColor: 'text-green-500', label: 'Booked' };
-  if (s.includes('CANCELLED')) return { icon: XCircle, color: 'bg-red-500', textColor: 'text-red-500', label: 'Cancelled' };
-  if (s.includes('POSTPONED')) return { icon: CalendarX, color: 'bg-slate-500', textColor: 'text-slate-500', label: 'Postponed' };
-  return { icon: Users, color: 'bg-gray-500', textColor: 'text-gray-500', label: status };
-};
 
 // Handler avatar colors
 const handlerColors = [
@@ -146,7 +121,7 @@ export function DesktopDashboard({
     return counts;
   }, [statsClients]);
 
-  // Get ordered categories with counts
+  // Get ordered categories with counts (sorted by canonical order)
   const categoryStats = useMemo(() => {
     const stats: { status: string; count: number; config: ReturnType<typeof getStatusConfig> }[] = [];
     Object.keys(statusCounts).forEach(status => {
@@ -158,7 +133,7 @@ export function DesktopDashboard({
         });
       }
     });
-    return stats.sort((a, b) => b.count - a.count);
+    return sortCategoriesByOrder(stats);
   }, [statusCounts]);
 
   // Urgent booked clients (events in ≤7 days) - from ALL clients

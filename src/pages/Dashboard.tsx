@@ -4,9 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { 
   Users, CalendarPlus, TrendingUp, Menu, 
-  MessageSquare, PhoneOff, FileText, SendHorizontal, 
-  Scale, Clock, CheckCircle, XCircle, CalendarX,
-  Phone, ChevronRight, RefreshCw, AlertTriangle, Bell
+  ChevronRight, RefreshCw, AlertTriangle, Bell
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { getCurrentStatus } from "@/lib/sheets-api";
@@ -20,23 +18,7 @@ import { getDeviceHandler, saveDeviceHandler, isDeviceHandlerValid } from "@/lib
 import { toast } from "sonner";
 import { getDesktopMode } from "@/hooks/useDesktopMode";
 import { DesktopAppLayout, DesktopDashboard } from "@/components/desktop";
-
-// Get icon and color for each status category
-const getStatusConfig = (status: string) => {
-  const s = status.toUpperCase();
-  if (s.includes('JUST ENQUIRED')) return { icon: Users, color: 'bg-emerald-600', label: 'Just Enquired' };
-  if (s.includes('NUMBER PROVIDED')) return { icon: Phone, color: 'bg-teal-600', label: 'Number Provided' };
-  if (s.includes('TEXTED')) return { icon: MessageSquare, color: 'bg-yellow-500', label: 'Texted' };
-  if (s.includes('CALL NOT')) return { icon: PhoneOff, color: 'bg-orange-500', label: 'Call Not Received' };
-  if (s.includes('CALLED') && s.includes('QUOTATION PENDING')) return { icon: FileText, color: 'bg-blue-500', label: 'Quotation Pending' };
-  if (s.includes('QUOTATION SENT')) return { icon: SendHorizontal, color: 'bg-indigo-500', label: 'Quotation Sent' };
-  if (s.includes('BARGAINING')) return { icon: Scale, color: 'bg-purple-500', label: 'Bargaining' };
-  if (s.includes('ADVANCE PENDING')) return { icon: Clock, color: 'bg-pink-500', label: 'Advance Pending' };
-  if (s.includes('BOOKED')) return { icon: CheckCircle, color: 'bg-green-500', label: 'Booked' };
-  if (s.includes('CANCELLED')) return { icon: XCircle, color: 'bg-red-500', label: 'Cancelled' };
-  if (s.includes('POSTPONED')) return { icon: CalendarX, color: 'bg-slate-500', label: 'Postponed' };
-  return { icon: Users, color: 'bg-gray-500', label: status };
-};
+import { getStatusConfig, sortCategoriesByOrder } from "@/lib/status-config";
 
 // Handler avatar colors
 const handlerColors = [
@@ -152,7 +134,7 @@ export default function Dashboard() {
     return counts;
   }, [clients]);
 
-  // Get ordered categories with counts (excluding UNTOUCHED)
+  // Get ordered categories with counts (excluding UNTOUCHED, sorted by canonical order)
   const categoryStats = useMemo(() => {
     const stats: { status: string; count: number; config: ReturnType<typeof getStatusConfig> }[] = [];
     
@@ -179,7 +161,8 @@ export default function Dashboard() {
       }
     });
     
-    return stats;
+    // Sort by canonical order
+    return sortCategoriesByOrder(stats);
   }, [statusOptions, statusCounts]);
 
   const basicStats = [
