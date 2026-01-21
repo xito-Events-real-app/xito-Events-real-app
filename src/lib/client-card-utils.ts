@@ -469,8 +469,8 @@ export function getDetailedEnquiryInfo(
 ): { bsDisplay: string; timeAgo: string; urgency: 'normal' | 'warning' | 'urgent' | 'critical' } | null {
   if (!inquiryDateAD || !inquiryDateBS) return null;
   
-  // Parse BS date for display (format: "2081 10 22")
-  const bsParts = inquiryDateBS.trim().split(/\s+/);
+  // Parse BS date for display (format: "2081 10 22" or "2081-10-22")
+  const bsParts = inquiryDateBS.trim().split(/[\s\-]+/);
   let bsDisplay = inquiryDateBS;
   if (bsParts.length >= 3) {
     const year = bsParts[0];
