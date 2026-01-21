@@ -403,6 +403,7 @@ export default function Dashboard() {
           isLoading={isLoading}
           onSync={refreshData}
           isSyncing={isSyncing}
+          dropdowns={dropdowns}
         />
       </DesktopAppLayout>
     );
