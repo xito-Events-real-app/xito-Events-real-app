@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { ClientData } from "@/lib/sheets-api";
 import { getMonthName } from "@/lib/nepali-months";
 import { Button } from "@/components/ui/button";
@@ -114,7 +114,8 @@ export function DesktopClientRow({
   onOpenDetail,
 }: DesktopClientRowProps) {
   const navigate = useNavigate();
-  
+  const location = useLocation();
+
   // Expand state
   const [isExpanded, setIsExpanded] = useState(false);
   
@@ -717,7 +718,9 @@ export function DesktopClientRow({
               )}
               onClick={(e) => {
                 e.stopPropagation();
-                navigate(`/client-tracker/client/${client.rowNumber}`);
+                navigate(`/client-tracker/client/${client.rowNumber}`, {
+                  state: { from: location.pathname, filters: location.state }
+                });
               }}
             >
               <span className="font-bold text-sm tracking-tight">{client.clientName}</span>
