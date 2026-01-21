@@ -25,6 +25,7 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } f
 import { NepaliCalendar } from "@/components/form/NepaliCalendar";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import type { NepaliDateObject } from "@/lib/nepali-date";
 import {
   Phone,
   MessageCircle,
@@ -157,7 +158,7 @@ export function DesktopClientRow({
   const [newFinalQuotation, setNewFinalQuotation] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [selectedPaymentType, setSelectedPaymentType] = useState('');
-  const [paymentNepaliDates, setPaymentNepaliDates] = useState<Array<{ year: number; month: number; day: string | number }>>([]);
+  const [paymentNepaliDates, setPaymentNepaliDates] = useState<NepaliDateObject[]>([]);
   const [selectedBank, setSelectedBank] = useState('');
 
   // Derived values
@@ -181,11 +182,27 @@ export function DesktopClientRow({
     const months = client.eventMonth?.split(',').map(e => e.trim()) || [];
     const days = client.eventDay?.split(',').map(e => e.trim()) || [];
     
+    const getEventTheme = (name: string) => {
+      const n = name.toLowerCase();
+      // Use semantic tokens only
+      if (n.includes('reception')) {
+        return { border: 'border-accent', bg: 'bg-accent/10', dot: 'bg-accent' };
+      }
+      if (n.includes('engagement') || n.includes('pre')) {
+        return { border: 'border-secondary', bg: 'bg-secondary/10', dot: 'bg-secondary' };
+      }
+      if (n.includes('wedding')) {
+        return { border: 'border-primary', bg: 'bg-primary/10', dot: 'bg-primary' };
+      }
+      return { border: 'border-primary', bg: 'bg-muted/40', dot: 'bg-primary' };
+    };
+
     return eventList.map((eventName, i) => ({
       eventName,
       year: years[i] || '',
       monthName: months[i] || '',
-      day: days[i] || ''
+      day: days[i] || '',
+      theme: getEventTheme(eventName),
     }));
   }, [client.events, client.eventYear, client.eventMonth, client.eventDay]);
 
@@ -745,15 +762,33 @@ export function DesktopClientRow({
           </div>
         </TableCell>
         
-        {/* Column 2: Events (Name + Date Combined) */}
+        {/* Column 2: Event */}
         <TableCell className="py-3 align-top">
           <div className="space-y-1.5">
             {events.map((event, i) => (
-              <div 
+              <div
                 key={i}
-                className="flex items-center justify-between gap-4 text-xs px-2.5 py-1.5 rounded-md bg-muted/50 border-l-3 border-primary"
+                className={cn(
+                  "text-xs px-2.5 py-1.5 rounded-md border-l-4",
+                  event.theme.bg,
+                  event.theme.border
+                )}
               >
                 <span className="font-medium text-foreground">{event.eventName}</span>
+              </div>
+            ))}
+          </div>
+        </TableCell>
+
+        {/* Column 3: Date */}
+        <TableCell className="py-3 align-top">
+          <div className="space-y-1.5">
+            {events.map((event, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-md bg-muted/30"
+              >
+                <span className={cn("h-2 w-2 rounded-full", event.theme.dot)} />
                 <span className="text-muted-foreground whitespace-nowrap">
                   {event.monthName} {event.day}
                 </span>
