@@ -548,7 +548,9 @@ const ClientDetail = () => {
   const payments = client ? parsePayments(client.paymentsMade) : [];
   const totalPaid = client ? getTotalPaid(client.paymentsMade) : 0;
 
-  if (isLoading) {
+  // Only show loading if we have no clients AND still loading
+  // This allows rendering from cache immediately while background sync happens
+  if (isLoading && clients.length === 0) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-muted-foreground">Loading...</div>
