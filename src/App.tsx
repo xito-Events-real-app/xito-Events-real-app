@@ -17,6 +17,7 @@ import FinanceManager from "./pages/FinanceManager";
 import ComingSoon from "./pages/ComingSoon";
 import Vendors from "./pages/Vendors";
 import NotFound from "./pages/NotFound";
+import ClientDetail from "./pages/ClientDetail";
 
 const queryClient = new QueryClient();
 
@@ -39,6 +40,7 @@ const App = () => (
             <Route path="/client-tracker/fresh-clients" element={<FreshClients />} />
             <Route path="/client-tracker/today" element={<Today />} />
             <Route path="/client-tracker/handler/:handlerName" element={<HandlerClients />} />
+            <Route path="/client-tracker/client/:rowNumber" element={<ClientDetail />} />
             
             {/* Booked Clients Module */}
             <Route path="/booked-clients" element={<BookedClients />} />

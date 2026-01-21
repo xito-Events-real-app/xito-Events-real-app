@@ -536,3 +536,173 @@ export function getDetailedEnquiryInfo(
     return null;
   }
 }
+
+// Nepali month names (reused from nepali-date.ts for consistency)
+export const nepaliMonthsEnglish = [
+  "Baisakh", "Jestha", "Ashar", "Shrawan", "Bhadra", "Ashwin",
+  "Kartik", "Mangsir", "Poush", "Magh", "Falgun", "Chaitra"
+];
+
+// Format AD date/timestamp to Nepali BS format (e.g., "Magh 25, 2082")
+export function formatDateAsNepali(adDate: string | Date): string {
+  try {
+    let date: Date;
+    if (typeof adDate === 'string') {
+      // Handle various date formats manually for Safari/iOS compatibility
+      if (adDate.includes('T')) {
+        // ISO format: 2025-01-21T10:30:00
+        const [datePart, timePart] = adDate.split('T');
+        const [year, month, day] = datePart.split('-').map(Number);
+        const [hours, mins] = timePart.split(':').map(Number);
+        date = new Date(year, month - 1, day, hours || 0, mins || 0);
+      } else if (adDate.includes('-')) {
+        // Date only: 2025-01-21
+        const [year, month, day] = adDate.split('-').map(Number);
+        date = new Date(year, month - 1, day);
+      } else {
+        date = new Date(adDate);
+      }
+    } else {
+      date = adDate;
+    }
+    
+    if (isNaN(date.getTime())) return adDate.toString();
+    
+    // Use nepali-date-converter logic inline (to avoid circular imports)
+    // This is a simplified conversion - for full accuracy, import from nepali-date.ts
+    const NepaliDate = (window as any).NepaliDate;
+    if (typeof NepaliDate !== 'undefined') {
+      const np = new NepaliDate(date);
+      const month = np.getMonth(); // 0-indexed
+      const day = np.getDate();
+      const year = np.getYear();
+      return `${nepaliMonthsEnglish[month]} ${day}, ${year}`;
+    }
+    
+    // Fallback if NepaliDate not available
+    return adDate.toString();
+  } catch {
+    return typeof adDate === 'string' ? adDate : adDate.toString();
+  }
+}
+
+// Format AD timestamp to Nepali BS format with time (e.g., "Magh 25, 2082 at 10:30 AM")
+export function formatTimestampAsNepali(adDate: string | Date): string {
+  try {
+    let date: Date;
+    let timeStr = '';
+    
+    if (typeof adDate === 'string') {
+      if (adDate.includes('T')) {
+        const [datePart, timePart] = adDate.split('T');
+        const [year, month, day] = datePart.split('-').map(Number);
+        const timeMatch = timePart.match(/(\d{2}):(\d{2})/);
+        if (timeMatch) {
+          const hours = parseInt(timeMatch[1]);
+          const mins = parseInt(timeMatch[2]);
+          date = new Date(year, month - 1, day, hours, mins);
+          const isPM = hours >= 12;
+          const displayHours = hours % 12 || 12;
+          timeStr = ` at ${displayHours}:${String(mins).padStart(2, '0')} ${isPM ? 'PM' : 'AM'}`;
+        } else {
+          date = new Date(year, month - 1, day);
+        }
+      } else if (adDate.includes('-')) {
+        const [year, month, day] = adDate.split('-').map(Number);
+        date = new Date(year, month - 1, day);
+      } else {
+        date = new Date(adDate);
+      }
+    } else {
+      date = adDate;
+      const hours = date.getHours();
+      const mins = date.getMinutes();
+      if (hours !== 0 || mins !== 0) {
+        const isPM = hours >= 12;
+        const displayHours = hours % 12 || 12;
+        timeStr = ` at ${displayHours}:${String(mins).padStart(2, '0')} ${isPM ? 'PM' : 'AM'}`;
+      }
+    }
+    
+    if (isNaN(date.getTime())) return adDate.toString();
+    
+    const NepaliDate = (window as any).NepaliDate;
+    if (typeof NepaliDate !== 'undefined') {
+      const np = new NepaliDate(date);
+      const month = np.getMonth();
+      const day = np.getDate();
+      const year = np.getYear();
+      return `${nepaliMonthsEnglish[month]} ${day}, ${year}${timeStr}`;
+    }
+    
+    return adDate.toString();
+  } catch {
+    return typeof adDate === 'string' ? adDate : adDate.toString();
+  }
+}
+
+// Parse BS date string (e.g., "2082 10 25" or "2082-10-25") to formatted display
+export function formatBSDateDisplay(bsDateStr: string): string {
+  if (!bsDateStr) return '';
+  const parts = bsDateStr.trim().split(/[\s\-]+/);
+  if (parts.length >= 3) {
+    const year = parts[0];
+    const month = parseInt(parts[1], 10);
+    const day = parts[2];
+    const monthName = nepaliMonthsEnglish[month - 1] || `Month ${month}`;
+    return `${monthName} ${day}, ${year}`;
+  }
+  return bsDateStr;
+}
+
+// Parse payment entries from payment log string
+export interface ParsedPayment {
+  amount: string;
+  amountNum: number;
+  type: string;
+  weekday: string;
+  dateBS: string;
+  dateBSFormatted: string;
+  bank: string;
+}
+
+export function parsePayments(paymentsMade: string): ParsedPayment[] {
+  if (!paymentsMade) return [];
+  
+  const payments: ParsedPayment[] = [];
+  const lines = paymentsMade.split('\n').filter(Boolean);
+  
+  lines.forEach(line => {
+    // Pattern: NPR X,XXX/- AS TYPE ON WEEKDAY YYYY-MM-DD IN BANK
+    const match = line.match(/NPR\s*([\d,]+)\/?-?\s*AS\s+(\w+)\s+ON\s+(\w{3})\s+([\d-]+)\s+IN\s+(.+)/i);
+    if (match) {
+      const amount = match[1];
+      const dateBS = match[4];
+      payments.push({
+        amount: `NPR ${amount}/-`,
+        amountNum: parseInt(amount.replace(/,/g, '')),
+        type: match[2].toUpperCase(),
+        weekday: match[3].toUpperCase(),
+        dateBS: dateBS,
+        dateBSFormatted: formatBSDateDisplay(dateBS.replace(/-/g, ' ')),
+        bank: match[5].trim()
+      });
+    }
+  });
+  
+  return payments;
+}
+
+// Get payment type badge color
+export function getPaymentTypeBadgeColor(type: string): string {
+  switch (type.toUpperCase()) {
+    case 'ADVANCE':
+      return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
+    case 'PARTIAL':
+      return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
+    case 'FINAL':
+      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400';
+    default:
+      return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
+  }
+}

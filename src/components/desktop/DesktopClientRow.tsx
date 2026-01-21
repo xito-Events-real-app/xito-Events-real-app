@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { ClientData } from "@/lib/sheets-api";
 import { getMonthName } from "@/lib/nepali-months";
 import { Button } from "@/components/ui/button";
@@ -112,6 +113,8 @@ export function DesktopClientRow({
   onClientUpdate,
   onOpenDetail,
 }: DesktopClientRowProps) {
+  const navigate = useNavigate();
+  
   // Expand state
   const [isExpanded, setIsExpanded] = useState(false);
   
@@ -707,10 +710,16 @@ export function DesktopClientRow({
         <TableCell className="py-3 align-top">
           <div className="space-y-2">
             {/* Client Name Box */}
-            <div className={cn(
-              "inline-flex items-center px-3 py-1.5 rounded-lg border-2 shadow-sm",
-              inquiryMonth ? getMonthColorClasses(inquiryMonth) : "bg-muted text-foreground border-border"
-            )}>
+            <div 
+              className={cn(
+                "inline-flex items-center px-3 py-1.5 rounded-lg border-2 shadow-sm cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all",
+                inquiryMonth ? getMonthColorClasses(inquiryMonth) : "bg-muted text-foreground border-border"
+              )}
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/client-tracker/client/${client.rowNumber}`);
+              }}
+            >
               <span className="font-bold text-sm tracking-tight">{client.clientName}</span>
             </div>
             
