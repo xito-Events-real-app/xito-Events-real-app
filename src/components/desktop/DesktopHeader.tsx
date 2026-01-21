@@ -23,6 +23,7 @@ import {
   Home,
   X,
   Users,
+  MapPin,
 } from "lucide-react";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
 
@@ -183,63 +184,100 @@ export function DesktopHeader({
 
         {/* Filter row (always visible on client-tracker) */}
         {location.pathname.startsWith('/client-tracker') && (
-          <div className="h-12 flex items-center gap-4 px-6 border-t border-border/50 bg-muted/30">
-            {/* Handler Dropdown */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-muted-foreground">Handler:</span>
-              <Select
-                value={selectedHandler || "all"}
-                onValueChange={(value) => onHandlerFilter?.(value === "all" ? null : value)}
-              >
-                <SelectTrigger className="w-[180px] h-8 text-sm bg-background">
-                  <SelectValue placeholder="All Handlers" />
-                </SelectTrigger>
-                <SelectContent className="bg-background border shadow-lg z-50">
-                  <SelectItem value="all">
-                    <div className="flex items-center gap-2">
-                      <Users className="w-4 h-4" />
-                      <span>All Handlers</span>
-                      <span className="text-muted-foreground">({totalClients})</span>
-                    </div>
-                  </SelectItem>
-                  {handlers.map((handler) => (
-                    <SelectItem key={handler} value={handler}>
-                      <div className="flex items-center gap-2">
-                        <span>{handler}</span>
-                        <span className="text-muted-foreground">({handlerCounts[handler] || 0})</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <div className="py-3 px-6 border-t border-border/50 bg-muted/30 space-y-3">
+            {/* Row 1: Handler Buttons + Category Badge */}
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Handler Pills */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* All Handlers Button */}
+                <button
+                  onClick={() => onHandlerFilter?.(null)}
+                  className={cn(
+                    "px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2",
+                    selectedHandler === null
+                      ? "bg-primary text-primary-foreground shadow-md"
+                      : "bg-background border border-border hover:bg-muted hover:border-primary/30"
+                  )}
+                >
+                  <Users className="w-4 h-4" />
+                  <span>All</span>
+                  <span className={cn(
+                    "text-xs px-1.5 py-0.5 rounded-full",
+                    selectedHandler === null ? "bg-white/20" : "bg-muted"
+                  )}>
+                    {totalClients}
+                  </span>
+                </button>
+
+                {/* Individual Handler Buttons */}
+                {handlers.map((handler) => {
+                  const count = handlerCounts[handler] || 0;
+                  const isSelected = selectedHandler === handler;
+                  return (
+                    <button
+                      key={handler}
+                      onClick={() => onHandlerFilter?.(isSelected ? null : handler)}
+                      className={cn(
+                        "px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2",
+                        isSelected
+                          ? "bg-primary text-primary-foreground shadow-md"
+                          : "bg-background border border-border hover:bg-muted hover:border-primary/30"
+                      )}
+                    >
+                      <span>{handler}</span>
+                      <span className={cn(
+                        "text-xs px-1.5 py-0.5 rounded-full",
+                        isSelected ? "bg-white/20" : "bg-muted"
+                      )}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Separator + Category Badge */}
+              {selectedCategory && (
+                <>
+                  <div className="h-6 w-px bg-border" />
+                  <Badge 
+                    variant="secondary" 
+                    className="gap-1.5 py-1.5 px-4 bg-gradient-to-r from-primary/10 to-primary/5 border-primary/20"
+                  >
+                    <MapPin className="w-3.5 h-3.5 text-primary" />
+                    <span className="font-medium">{categoryLabel || selectedCategory}</span>
+                    <button 
+                      onClick={onClearCategory}
+                      className="ml-1 hover:bg-primary/20 rounded-full p-0.5 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                </>
+              )}
             </div>
 
-            {/* Category Badge (when selected) */}
-            {selectedCategory && (
-              <Badge variant="secondary" className="gap-1.5 py-1 px-3">
-                {categoryLabel || selectedCategory}
-                <button 
-                  onClick={onClearCategory}
-                  className="ml-1 hover:bg-white/20 rounded-full p-0.5"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </Badge>
-            )}
-
-            {/* Separator */}
-            <div className="h-6 w-px bg-border" />
-
-            {/* Date Filters */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-muted-foreground">Date:</span>
+            {/* Row 2: Date Filters (Enhanced Style) */}
+            <div className="flex items-center gap-3">
+              {/* Calendar Icon Label */}
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
+                  <Calendar className="w-4 h-4 text-white" />
+                </div>
+                <span className="text-sm font-medium">Event Date:</span>
+              </div>
               
-              {/* Year */}
+              {/* Year Selector */}
               <Select
                 value={selectedYear?.toString() || "all"}
                 onValueChange={(value) => onYearChange?.(value === "all" ? null : parseInt(value))}
               >
-                <SelectTrigger className="w-[100px] h-8 text-sm bg-background">
+                <SelectTrigger className={cn(
+                  "w-[120px] h-10 text-sm rounded-full border-2 transition-all",
+                  selectedYear 
+                    ? "bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-amber-500/50 font-medium" 
+                    : "bg-background border-border"
+                )}>
                   <SelectValue placeholder="Year" />
                 </SelectTrigger>
                 <SelectContent className="bg-background border shadow-lg z-50">
@@ -252,12 +290,17 @@ export function DesktopHeader({
                 </SelectContent>
               </Select>
 
-              {/* Month */}
+              {/* Month Selector */}
               <Select
                 value={selectedMonth?.toString() || "all"}
                 onValueChange={(value) => onMonthChange?.(value === "all" ? null : parseInt(value))}
               >
-                <SelectTrigger className="w-[120px] h-8 text-sm bg-background">
+                <SelectTrigger className={cn(
+                  "w-[140px] h-10 text-sm rounded-full border-2 transition-all",
+                  selectedMonth 
+                    ? "bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border-emerald-500/50 font-medium" 
+                    : "bg-background border-border"
+                )}>
                   <SelectValue placeholder="Month" />
                 </SelectTrigger>
                 <SelectContent className="bg-background border shadow-lg z-50">
@@ -270,12 +313,17 @@ export function DesktopHeader({
                 </SelectContent>
               </Select>
 
-              {/* Day */}
+              {/* Day Selector */}
               <Select
                 value={selectedDay?.toString() || "all"}
                 onValueChange={(value) => onDayChange?.(value === "all" ? null : parseInt(value))}
               >
-                <SelectTrigger className="w-[90px] h-8 text-sm bg-background">
+                <SelectTrigger className={cn(
+                  "w-[100px] h-10 text-sm rounded-full border-2 transition-all",
+                  selectedDay 
+                    ? "bg-gradient-to-r from-violet-500/10 to-purple-500/10 border-violet-500/50 font-medium" 
+                    : "bg-background border-border"
+                )}>
                   <SelectValue placeholder="Day" />
                 </SelectTrigger>
                 <SelectContent className="bg-background border shadow-lg z-50 max-h-[300px]">
@@ -287,26 +335,42 @@ export function DesktopHeader({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
 
-            {/* Clear All + Count */}
-            {hasActiveFilter && (
-              <>
-                <div className="h-6 w-px bg-border" />
+              {/* Clear Date Button */}
+              {(selectedYear || selectedMonth || selectedDay) && (
                 <Button 
                   variant="ghost" 
                   size="sm" 
-                  onClick={onClearAllFilters}
-                  className="text-muted-foreground hover:text-foreground gap-1"
+                  onClick={() => {
+                    onYearChange?.(null);
+                    onMonthChange?.(null);
+                    onDayChange?.(null);
+                  }}
+                  className="text-muted-foreground hover:text-foreground gap-1 rounded-full"
                 >
                   <X className="w-3 h-3" />
-                  Clear All
+                  Clear Dates
                 </Button>
-                <span className="text-sm text-muted-foreground ml-auto">
-                  Showing {filteredCount} client{filteredCount !== 1 ? 's' : ''}
-                </span>
-              </>
-            )}
+              )}
+
+              {/* Clear All + Count */}
+              {hasActiveFilter && (
+                <div className="flex items-center gap-3 ml-auto">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={onClearAllFilters}
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10 gap-1 rounded-full border-destructive/30"
+                  >
+                    <X className="w-3 h-3" />
+                    Clear All Filters
+                  </Button>
+                  <Badge variant="secondary" className="bg-primary/10 text-primary font-semibold px-3 py-1">
+                    {filteredCount} client{filteredCount !== 1 ? 's' : ''} found
+                  </Badge>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </header>
