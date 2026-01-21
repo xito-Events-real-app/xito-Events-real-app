@@ -33,15 +33,23 @@ import {
   CalendarX,
   ArrowRight,
   RefreshCw,
+  X,
 } from "lucide-react";
 
 interface DesktopDashboardProps {
   clients: any[];
+  allClients?: any[];
   handlers: string[];
   handlerCounts: Record<string, number>;
   isLoading: boolean;
   onSync: () => void;
   isSyncing: boolean;
+  hasActiveFilter?: boolean;
+  selectedHandler?: string | null;
+  selectedCategory?: string | null;
+  onClearHandler?: () => void;
+  onClearCategory?: () => void;
+  onClearAllFilters?: () => void;
 }
 
 // Get icon and color for each status category
@@ -73,34 +81,44 @@ const handlerColors = [
 
 export function DesktopDashboard({
   clients,
+  allClients,
   handlers,
   handlerCounts,
   isLoading,
   onSync,
   isSyncing,
+  hasActiveFilter = false,
+  selectedHandler,
+  selectedCategory,
+  onClearHandler,
+  onClearCategory,
+  onClearAllFilters,
 }: DesktopDashboardProps) {
   const navigate = useNavigate();
 
-  // Calculate stats
-  const totalClients = clients.length;
+  // Use allClients for stats if available, otherwise use filtered clients
+  const statsClients = allClients || clients;
+
+  // Calculate stats from ALL clients (not filtered)
+  const totalClients = statsClients.length;
   const today = new Date().toISOString().split("T")[0];
-  const todaysClients = clients.filter(c => c.inquiryDateAD?.startsWith(today));
+  const todaysClients = statsClients.filter(c => c.inquiryDateAD?.startsWith(today));
   
   const currentMonth = new Date().getMonth() + 1;
-  const thisMonthClients = clients.filter(c => {
+  const thisMonthClients = statsClients.filter(c => {
     const month = parseInt(c.eventMonth || "0");
     return month === currentMonth || month === currentMonth + 1;
   }).length;
 
-  // Group clients by status
+  // Group clients by status (from ALL clients for stats)
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    clients.forEach(client => {
+    statsClients.forEach(client => {
       const status = getCurrentStatus(client.statusLog || '').toUpperCase();
       counts[status] = (counts[status] || 0) + 1;
     });
     return counts;
-  }, [clients]);
+  }, [statsClients]);
 
   // Get ordered categories with counts
   const categoryStats = useMemo(() => {
@@ -117,10 +135,10 @@ export function DesktopDashboard({
     return stats.sort((a, b) => b.count - a.count);
   }, [statusCounts]);
 
-  // Urgent booked clients (events in ≤7 days)
+  // Urgent booked clients (events in ≤7 days) - from ALL clients
   const urgentBookedClients = useMemo(() => {
     const now = new Date();
-    return clients
+    return statsClients
       .filter(client => {
         const status = getCurrentStatus(client.statusLog || '').toUpperCase();
         if (!status.includes('BOOKED')) return false;
@@ -145,17 +163,13 @@ export function DesktopDashboard({
         return { ...client, daysRemaining };
       })
       .sort((a, b) => a.daysRemaining - b.daysRemaining);
-  }, [clients]);
+  }, [statsClients]);
 
-  // Pipeline stats
+  // Pipeline stats (from ALL clients)
   const quotationPending = statusCounts['CALLED: QUOTATION PENDING'] || 0;
   const quotationSent = statusCounts['QUOTATION SENT: REVIEW PENDING'] || 0;
   const bargaining = Object.keys(statusCounts).filter(s => s.includes('BARGAINING')).reduce((sum, s) => sum + (statusCounts[s] || 0), 0);
   const booked = Object.keys(statusCounts).filter(s => s.includes('BOOKED')).reduce((sum, s) => sum + (statusCounts[s] || 0), 0);
-
-  const handleCategoryClick = (status: string) => {
-    navigate(`/client-tracker/fresh-clients?category=${encodeURIComponent(status)}`);
-  };
 
   return (
     <div className="p-6 space-y-6">
@@ -191,10 +205,7 @@ export function DesktopDashboard({
             </CardContent>
           </Card>
 
-          <Card 
-            className="shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-            onClick={() => navigate("/client-tracker/today")}
-          >
+          <Card className="shadow-sm hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-xl gradient-accent flex items-center justify-center">
@@ -243,213 +254,305 @@ export function DesktopDashboard({
         </div>
       </div>
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-12 gap-6">
-        {/* Left Column: Pipeline + Categories */}
-        <div className="col-span-8 space-y-6">
-          {/* Sales Pipeline */}
-          <Card className="shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold">Sales Pipeline</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-                <div 
-                  className="flex-1 bg-blue-500/10 rounded-lg p-3 cursor-pointer hover:bg-blue-500/20 transition-colors"
-                  onClick={() => handleCategoryClick('CALLED: QUOTATION PENDING')}
-                >
-                  <p className="text-2xl font-bold text-blue-600">{quotationPending}</p>
-                  <p className="text-xs text-muted-foreground">Quotation Pending</p>
-                </div>
-                <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                <div 
-                  className="flex-1 bg-indigo-500/10 rounded-lg p-3 cursor-pointer hover:bg-indigo-500/20 transition-colors"
-                  onClick={() => handleCategoryClick('QUOTATION SENT: REVIEW PENDING')}
-                >
-                  <p className="text-2xl font-bold text-indigo-600">{quotationSent}</p>
-                  <p className="text-xs text-muted-foreground">Quotation Sent</p>
-                </div>
-                <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                <div 
-                  className="flex-1 bg-purple-500/10 rounded-lg p-3 cursor-pointer hover:bg-purple-500/20 transition-colors"
-                  onClick={() => handleCategoryClick('BARGAINING IS ON')}
-                >
-                  <p className="text-2xl font-bold text-purple-600">{bargaining}</p>
-                  <p className="text-xs text-muted-foreground">Bargaining</p>
-                </div>
-                <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                <div 
-                  className="flex-1 bg-green-500/10 rounded-lg p-3 cursor-pointer hover:bg-green-500/20 transition-colors"
-                  onClick={() => handleCategoryClick('BOOKED')}
-                >
-                  <p className="text-2xl font-bold text-green-600">{booked}</p>
-                  <p className="text-xs text-muted-foreground">Booked</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Client Categories Grid */}
-          <Card className="shadow-sm">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base font-semibold">Client Categories</CardTitle>
-                <Link to="/client-tracker/fresh-clients">
-                  <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground">
-                    View All <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </Link>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-4 gap-3">
-                {categoryStats.map(({ status, count, config }) => {
-                  const Icon = config.icon;
-                  return (
-                    <div
-                      key={status}
-                      onClick={() => handleCategoryClick(status)}
-                      className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/30 hover:bg-muted/50 cursor-pointer transition-all"
+      {/* Active Filters Bar */}
+      {hasActiveFilter && (
+        <Card className="shadow-sm border-primary/30 bg-primary/5">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-muted-foreground">Active Filters:</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                {selectedHandler && (
+                  <Badge variant="secondary" className="gap-1.5 py-1 px-2">
+                    Handler: {selectedHandler}
+                    <button 
+                      onClick={onClearHandler}
+                      className="ml-1 hover:bg-white/20 rounded-full p-0.5"
                     >
-                      <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", config.color)}>
-                        <Icon className="w-5 h-5 text-white" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-lg font-bold">{count}</p>
-                        <p className="text-xs text-muted-foreground truncate">{config.label}</p>
-                      </div>
-                    </div>
-                  );
-                })}
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                )}
+                {selectedCategory && (
+                  <Badge variant="secondary" className="gap-1.5 py-1 px-2">
+                    {getStatusConfig(selectedCategory).label}
+                    <button 
+                      onClick={onClearCategory}
+                      className="ml-1 hover:bg-white/20 rounded-full p-0.5"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                )}
               </div>
-            </CardContent>
-          </Card>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={onClearAllFilters}
+                className="ml-auto text-muted-foreground hover:text-foreground"
+              >
+                Clear All
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Showing {clients.length} client{clients.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-          {/* Urgent Events Table */}
-          {urgentBookedClients.length > 0 && (
-            <Card className="shadow-sm border-red-500/30">
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-red-500" />
-                  <CardTitle className="text-base font-semibold text-red-500">
-                    Urgent Events ({urgentBookedClients.length})
-                  </CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
+      {/* Filtered Results Table (when filters active) */}
+      {hasActiveFilter && (
+        <Card className="shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold">
+              Filtered Results ({clients.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <ScrollArea className="h-[500px]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Client Name</TableHead>
+                    <TableHead>Contact</TableHead>
+                    <TableHead>Event</TableHead>
+                    <TableHead>Location</TableHead>
+                    <TableHead>Handler</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {clients.length === 0 ? (
                     <TableRow>
-                      <TableHead>Client</TableHead>
-                      <TableHead>Event</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Days Left</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        No clients match the selected filters
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {urgentBookedClients.slice(0, 5).map((client) => (
-                      <TableRow key={client.rowNumber}>
-                        <TableCell className="font-medium">{client.clientName}</TableCell>
-                        <TableCell>{client.events || "Event"}</TableCell>
-                        <TableCell>{client.eventDateAD}</TableCell>
-                        <TableCell>
-                          <Badge variant={client.daysRemaining <= 1 ? "destructive" : "secondary"}>
-                            {client.daysRemaining === 0 ? "TODAY" : `${client.daysRemaining} days`}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleCategoryClick('BOOKED')}
-                          >
-                            View
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                  ) : (
+                    clients.map((client) => {
+                      const status = getCurrentStatus(client.statusLog || '').toUpperCase();
+                      const statusConfig = getStatusConfig(status);
+                      const StatusIcon = statusConfig.icon;
+                      
+                      return (
+                        <TableRow key={client.rowNumber} className="cursor-pointer hover:bg-muted/50">
+                          <TableCell className="font-medium">{client.clientName}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="text-sm">{client.whatsappNo || client.contactNo || '-'}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>{client.events || '-'}</TableCell>
+                          <TableCell>{client.eventLocation || '-'}</TableCell>
+                          <TableCell>
+                            <span className="text-sm">{client.clientHandler || client.whoAdded || '-'}</span>
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={cn("gap-1", statusConfig.color, "text-white border-0")}>
+                              <StatusIcon className="w-3 h-3" />
+                              {statusConfig.label}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {client.inquiryDateAD || '-'}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Main Content Grid (when no filters active) */}
+      {!hasActiveFilter && (
+        <div className="grid grid-cols-12 gap-6">
+          {/* Left Column: Pipeline + Categories */}
+          <div className="col-span-8 space-y-6">
+            {/* Sales Pipeline */}
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold">Sales Pipeline</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 bg-blue-500/10 rounded-lg p-3 cursor-pointer hover:bg-blue-500/20 transition-colors">
+                    <p className="text-2xl font-bold text-blue-600">{quotationPending}</p>
+                    <p className="text-xs text-muted-foreground">Quotation Pending</p>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <div className="flex-1 bg-indigo-500/10 rounded-lg p-3 cursor-pointer hover:bg-indigo-500/20 transition-colors">
+                    <p className="text-2xl font-bold text-indigo-600">{quotationSent}</p>
+                    <p className="text-xs text-muted-foreground">Quotation Sent</p>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <div className="flex-1 bg-purple-500/10 rounded-lg p-3 cursor-pointer hover:bg-purple-500/20 transition-colors">
+                    <p className="text-2xl font-bold text-purple-600">{bargaining}</p>
+                    <p className="text-xs text-muted-foreground">Bargaining</p>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <div className="flex-1 bg-green-500/10 rounded-lg p-3 cursor-pointer hover:bg-green-500/20 transition-colors">
+                    <p className="text-2xl font-bold text-green-600">{booked}</p>
+                    <p className="text-xs text-muted-foreground">Booked</p>
+                  </div>
+                </div>
               </CardContent>
             </Card>
-          )}
-        </div>
 
-        {/* Right Column: Handlers */}
-        <div className="col-span-4 space-y-6">
-          {/* Handlers Card */}
-          <Card className="shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold">Team Handlers</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[300px]">
-                <div className="space-y-2">
-                  {handlers.map((handler, idx) => {
-                    const count = handlerCounts[handler] || 0;
-                    const colorClass = handlerColors[idx % handlerColors.length];
-                    const initials = handler.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
-                    
+            {/* Client Categories Grid */}
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold">Client Categories</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-4 gap-3">
+                  {categoryStats.map(({ status, count, config }) => {
+                    const Icon = config.icon;
                     return (
-                      <Link
-                        key={handler}
-                        to={`/client-tracker/handler/${encodeURIComponent(handler)}?stay=true`}
-                        className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/30 hover:bg-muted/50 transition-all"
+                      <div
+                        key={status}
+                        className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/30 hover:bg-muted/50 cursor-pointer transition-all"
                       >
-                        <div className={cn(
-                          "w-10 h-10 rounded-full flex items-center justify-center bg-gradient-to-br text-white font-bold",
-                          colorClass
-                        )}>
-                          {initials}
+                        <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", config.color)}>
+                          <Icon className="w-5 h-5 text-white" />
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{handler}</p>
-                          <p className="text-xs text-muted-foreground">{count} clients</p>
+                        <div className="min-w-0">
+                          <p className="text-lg font-bold">{count}</p>
+                          <p className="text-xs text-muted-foreground truncate">{config.label}</p>
                         </div>
-                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                      </Link>
+                      </div>
                     );
                   })}
                 </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          {/* Today's Activity Summary */}
-          <Card className="shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold">Today's Enquiries</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {todaysClients.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  No enquiries today yet
-                </p>
-              ) : (
-                <ScrollArea className="h-[200px]">
+            {/* Urgent Events Table */}
+            {urgentBookedClients.length > 0 && (
+              <Card className="shadow-sm border-red-500/30">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-red-500" />
+                    <CardTitle className="text-base font-semibold text-red-500">
+                      Urgent Events ({urgentBookedClients.length})
+                    </CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Client</TableHead>
+                        <TableHead>Event</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Days Left</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {urgentBookedClients.slice(0, 5).map((client) => (
+                        <TableRow key={client.rowNumber}>
+                          <TableCell className="font-medium">{client.clientName}</TableCell>
+                          <TableCell>{client.events || "Event"}</TableCell>
+                          <TableCell>{client.eventDateAD}</TableCell>
+                          <TableCell>
+                            <Badge variant={client.daysRemaining <= 1 ? "destructive" : "secondary"}>
+                              {client.daysRemaining === 0 ? "TODAY" : `${client.daysRemaining} days`}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="sm">
+                              View
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* Right Column: Handlers + Today */}
+          <div className="col-span-4 space-y-6">
+            {/* Handlers Card */}
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold">Team Handlers</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[300px]">
                   <div className="space-y-2">
-                    {todaysClients.slice(0, 10).map((client, idx) => (
-                      <div
-                        key={client.rowNumber || idx}
-                        className="flex items-center gap-3 p-2 rounded-lg bg-muted/50"
-                      >
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          <Users className="w-4 h-4 text-primary" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{client.clientName}</p>
-                          <p className="text-xs text-muted-foreground truncate">{client.events || "No event"}</p>
-                        </div>
-                      </div>
-                    ))}
+                    {handlers.map((handler, idx) => {
+                      const count = handlerCounts[handler] || 0;
+                      const colorClass = handlerColors[idx % handlerColors.length];
+                      const initials = handler.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+                      
+                      return (
+                        <Link
+                          key={handler}
+                          to={`/client-tracker/handler/${encodeURIComponent(handler)}?stay=true`}
+                          className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/30 hover:bg-muted/50 transition-all"
+                        >
+                          <div className={cn(
+                            "w-10 h-10 rounded-full flex items-center justify-center bg-gradient-to-br text-white font-bold",
+                            colorClass
+                          )}>
+                            {initials}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{handler}</p>
+                            <p className="text-xs text-muted-foreground">{count} clients</p>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                        </Link>
+                      );
+                    })}
                   </div>
                 </ScrollArea>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+
+            {/* Today's Activity Summary */}
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold">Today's Enquiries</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {todaysClients.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No enquiries today yet
+                  </p>
+                ) : (
+                  <ScrollArea className="h-[200px]">
+                    <div className="space-y-2">
+                      {todaysClients.slice(0, 10).map((client, idx) => (
+                        <div
+                          key={client.rowNumber || idx}
+                          className="flex items-center gap-3 p-2 rounded-lg bg-muted/50"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                            <Users className="w-4 h-4 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{client.clientName}</p>
+                            <p className="text-xs text-muted-foreground truncate">{client.events || "No event"}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

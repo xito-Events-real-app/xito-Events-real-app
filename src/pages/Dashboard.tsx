@@ -392,6 +392,7 @@ export default function Dashboard() {
   }));
 
   // Desktop Mode - Render completely different UI
+  // DesktopAppLayout now handles filtering and passes props to DesktopDashboard
   if (isDesktopMode) {
     return (
       <DesktopAppLayout>
