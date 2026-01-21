@@ -1,6 +1,6 @@
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useState, useMemo } from "react";
-import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, Calendar, User, Clock, DollarSign, FileText, Activity, MessageSquare, Briefcase, Pencil, X, Check, Loader2, Plus, CreditCard, RefreshCw } from "lucide-react";
+import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, Calendar, User, Clock, DollarSign, FileText, Activity, MessageSquare, Briefcase, Pencil, X, Check, Loader2, Plus, CreditCard, RefreshCw, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -17,6 +17,7 @@ import {
 import { useCachedData } from "@/hooks/useCachedData";
 import { useDropdownData } from "@/hooks/useDropdownData";
 import { updateClient, ClientData, updateClientStatus, logCallAttempt, addPayment } from "@/lib/sheets-api";
+import { forceResetDatabase } from "@/lib/cache-manager";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { 
@@ -115,7 +116,7 @@ const ClientDetail = () => {
   const { rowNumber } = useParams<{ rowNumber: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { clients, isLoading, updateClient: updateClientCache } = useCachedData();
+  const { clients, isLoading, updateClient: updateClientCache, refreshData } = useCachedData();
   const { data: dropdowns } = useDropdownData();
 
   // Edit mode state
@@ -559,13 +560,36 @@ const ClientDetail = () => {
   }
 
   if (!client) {
+    const handleResetLocalData = async () => {
+      try {
+        await forceResetDatabase();
+        toast({ title: "Local data reset", description: "Reloading page..." });
+        window.location.reload();
+      } catch (error) {
+        toast({ title: "Reset failed", description: "Please try clearing browser data manually", variant: "destructive" });
+      }
+    };
+
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
-        <div className="text-muted-foreground">Client not found</div>
-        <Button onClick={() => navigate('/client-tracker')}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Clients
-        </Button>
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 p-4">
+        <div className="text-muted-foreground text-center">
+          <p className="text-lg mb-2">Client not found</p>
+          <p className="text-sm text-muted-foreground/70">This may be due to stale local data</p>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Button onClick={() => navigate('/client-tracker')}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Clients
+          </Button>
+          <Button variant="outline" onClick={refreshData}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh Data
+          </Button>
+          <Button variant="destructive" onClick={handleResetLocalData}>
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Reset Local Data
+          </Button>
+        </div>
       </div>
     );
   }

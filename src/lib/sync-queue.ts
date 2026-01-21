@@ -1,8 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-
-const DB_NAME = "wtn_client_tracker_db";
-const DB_VERSION = 1;
-const QUEUE_STORE = "sync_queue";
+import { getDatabase, SYNC_QUEUE_STORE } from "./indexeddb-config";
 
 export type OperationType = 
   | 'addClient' 
@@ -23,36 +20,8 @@ export interface PendingOperation {
   retries: number;
 }
 
-let db: IDBDatabase | null = null;
 let isProcessing = false;
 let onlineListener: (() => void) | null = null;
-
-// Initialize IndexedDB for sync queue
-async function initQueueDB(): Promise<IDBDatabase> {
-  if (db) return db;
-
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onerror = () => {
-      console.error("Failed to open IndexedDB for queue:", request.error);
-      reject(request.error);
-    };
-
-    request.onsuccess = () => {
-      db = request.result;
-      resolve(db);
-    };
-
-    request.onupgradeneeded = (event) => {
-      const database = (event.target as IDBOpenDBRequest).result;
-      
-      if (!database.objectStoreNames.contains(QUEUE_STORE)) {
-        database.createObjectStore(QUEUE_STORE, { keyPath: "id" });
-      }
-    };
-  });
-}
 
 // Generate unique ID
 function generateId(): string {
@@ -65,7 +34,7 @@ export async function addToQueue(
   data: Record<string, unknown>
 ): Promise<void> {
   try {
-    const database = await initQueueDB();
+    const database = await getDatabase();
     const operation: PendingOperation = {
       id: generateId(),
       type,
@@ -75,8 +44,8 @@ export async function addToQueue(
     };
 
     return new Promise((resolve, reject) => {
-      const transaction = database.transaction(QUEUE_STORE, "readwrite");
-      const store = transaction.objectStore(QUEUE_STORE);
+      const transaction = database.transaction(SYNC_QUEUE_STORE, "readwrite");
+      const store = transaction.objectStore(SYNC_QUEUE_STORE);
       const request = store.add(operation);
 
       request.onsuccess = () => {
@@ -98,11 +67,11 @@ export async function addToQueue(
 // Get all pending operations
 export async function getPendingOperations(): Promise<PendingOperation[]> {
   try {
-    const database = await initQueueDB();
+    const database = await getDatabase();
     
     return new Promise((resolve) => {
-      const transaction = database.transaction(QUEUE_STORE, "readonly");
-      const store = transaction.objectStore(QUEUE_STORE);
+      const transaction = database.transaction(SYNC_QUEUE_STORE, "readonly");
+      const store = transaction.objectStore(SYNC_QUEUE_STORE);
       const request = store.getAll();
 
       request.onsuccess = () => {
@@ -132,11 +101,11 @@ export async function getQueueLength(): Promise<number> {
 // Remove operation from queue
 async function removeFromQueue(id: string): Promise<void> {
   try {
-    const database = await initQueueDB();
+    const database = await getDatabase();
     
     return new Promise((resolve, reject) => {
-      const transaction = database.transaction(QUEUE_STORE, "readwrite");
-      const store = transaction.objectStore(QUEUE_STORE);
+      const transaction = database.transaction(SYNC_QUEUE_STORE, "readwrite");
+      const store = transaction.objectStore(SYNC_QUEUE_STORE);
       const request = store.delete(id);
 
       request.onsuccess = () => {
@@ -156,11 +125,11 @@ async function removeFromQueue(id: string): Promise<void> {
 // Update operation retry count
 async function updateRetryCount(operation: PendingOperation): Promise<void> {
   try {
-    const database = await initQueueDB();
+    const database = await getDatabase();
     
     return new Promise((resolve, reject) => {
-      const transaction = database.transaction(QUEUE_STORE, "readwrite");
-      const store = transaction.objectStore(QUEUE_STORE);
+      const transaction = database.transaction(SYNC_QUEUE_STORE, "readwrite");
+      const store = transaction.objectStore(SYNC_QUEUE_STORE);
       const request = store.put({ ...operation, retries: operation.retries + 1 });
 
       request.onsuccess = () => resolve();
@@ -305,11 +274,11 @@ export function setupOnlineListener(): void {
 // Clear all pending operations
 export async function clearQueue(): Promise<void> {
   try {
-    const database = await initQueueDB();
+    const database = await getDatabase();
     
     return new Promise((resolve, reject) => {
-      const transaction = database.transaction(QUEUE_STORE, "readwrite");
-      const store = transaction.objectStore(QUEUE_STORE);
+      const transaction = database.transaction(SYNC_QUEUE_STORE, "readwrite");
+      const store = transaction.objectStore(SYNC_QUEUE_STORE);
       const request = store.clear();
 
       request.onsuccess = () => {
