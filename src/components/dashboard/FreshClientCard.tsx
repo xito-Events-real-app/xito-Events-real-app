@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { ClientData, updateClientStatus, updateClientHandler, logCallAttempt, getCurrentStatus, updateClientQuotation, updateClientMindset, updateBargainingRates, updateClientBargainedRates, updateOurCounterRates, addClientComment, updateFinalQuotation, addPayment } from "@/lib/sheets-api";
 import { getHandlerInitials, parseEventDetails, formatLocationDisplay } from "@/lib/nepali-months";
 import { cn } from "@/lib/utils";
@@ -331,6 +332,7 @@ interface FreshClientCardProps {
 }
 
 export function FreshClientCard({ client, onEditClick, statusOptions, handlerOptions = [], mindsetOptions = [], paymentTypes = [], banks = [], currentStatusCategory, onStatusChange, onHandlerChange, onMindsetChange, onPaymentAdded }: FreshClientCardProps) {
+  const navigate = useNavigate();
   const [isUpdating, setIsUpdating] = useState(false);
   const [isUpdatingHandler, setIsUpdatingHandler] = useState(false);
   const [isLoggingCall, setIsLoggingCall] = useState(false);
@@ -1578,10 +1580,16 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
 
         {/* Client Details */}
         <div className="flex-1 min-w-0">
-          {/* Client Name */}
-          <p className="text-sm font-semibold text-foreground truncate">
+          {/* Client Name - Clickable to navigate to detail */}
+          <button 
+            onClick={() => {
+              const clientId = client.rowNumber || encodeURIComponent(client.registeredDateTimeAD || '');
+              navigate(`/client-tracker/client/${clientId}`);
+            }}
+            className="text-sm font-semibold text-foreground truncate hover:text-primary transition-colors text-left w-full"
+          >
             {client.clientName}
-          </p>
+          </button>
 
           {/* Event Details */}
           {events.length > 0 && (
