@@ -98,7 +98,7 @@ const EventClientCard = ({ client }: EventClientCardProps) => {
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1 min-w-0">
             <button 
-              onClick={() => navigate(`/client-tracker/client/${client.rowNumber || client.bookedRowNumber}`)}
+              onClick={() => navigate(`/client-tracker/client/${client.originalRowNumber}`)}
               className="font-semibold text-white truncate hover:text-blue-400 transition-colors cursor-pointer text-left w-full"
             >
               {client.clientName}
