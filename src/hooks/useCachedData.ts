@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ClientData, DropdownData } from "@/lib/sheets-api";
 import { 
   getCachedData, 
@@ -25,9 +25,12 @@ interface UseCachedDataResult {
   error: string | null;
 }
 
-// Global singleton to prevent parallel fetches across component instances
-let globalFetchPromise: Promise<{ clients: ClientData[]; dropdowns: DropdownData }> | null = null;
-let hasTriggeredBackgroundRefresh = false;
+// Use a WeakRef-like pattern with a simple object to track fetch state
+// This is HMR-safe because we don't mutate during render
+const fetchState = {
+  promise: null as Promise<{ clients: ClientData[]; dropdowns: DropdownData }> | null,
+  hasRefreshed: false,
+};
 
 // Fetch fresh data from Google Sheets
 async function fetchFromSheets(): Promise<{ clients: ClientData[]; dropdowns: DropdownData }> {
@@ -54,17 +57,17 @@ async function fetchFromSheets(): Promise<{ clients: ClientData[]; dropdowns: Dr
 
 // Deduplicated fetch - prevents multiple parallel API calls
 async function fetchFromSheetsWithDedup(): Promise<{ clients: ClientData[]; dropdowns: DropdownData }> {
-  if (globalFetchPromise) {
-    return globalFetchPromise;
+  if (fetchState.promise) {
+    return fetchState.promise;
   }
   
-  globalFetchPromise = fetchFromSheets();
+  fetchState.promise = fetchFromSheets();
   
   try {
-    const result = await globalFetchPromise;
+    const result = await fetchState.promise;
     return result;
   } finally {
-    globalFetchPromise = null;
+    fetchState.promise = null;
   }
 }
 
@@ -96,8 +99,8 @@ export function useCachedData(): UseCachedDataResult {
         const expired = await isCacheExpired();
         
         // Background refresh only once per session if expired
-        if ((expired || forceRefresh) && !hasTriggeredBackgroundRefresh) {
-          hasTriggeredBackgroundRefresh = true;
+        if ((expired || forceRefresh) && !fetchState.hasRefreshed) {
+          fetchState.hasRefreshed = true;
           setIsSyncing(true);
           
           // Timeout safeguard - never let sync indicator stay stuck
