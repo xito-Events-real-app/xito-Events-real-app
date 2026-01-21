@@ -31,6 +31,7 @@ import {
   MapPin,
   Clock,
   ChevronDown,
+  ChevronUp,
   User,
   FileText,
   Brain,
@@ -44,6 +45,7 @@ import {
   CalendarDays,
   MessageSquare,
   ArrowRightLeft,
+  Edit,
 } from "lucide-react";
 import {
   parseCallLog,
@@ -105,6 +107,9 @@ export function DesktopClientRow({
   onClientUpdate,
   onOpenDetail,
 }: DesktopClientRowProps) {
+  // Expand state
+  const [isExpanded, setIsExpanded] = useState(false);
+  
   // Local state for dynamic values
   const [currentStatusLog, setCurrentStatusLog] = useState(client.statusLog || '');
   const [currentHandler, setCurrentHandler] = useState(client.clientHandler || '');
@@ -708,28 +713,50 @@ export function DesktopClientRow({
               )}
             </div>
           </div>
-        </TableCell>
-        
-        {/* Column 2: Event Name */}
-        <TableCell className="py-3 align-top">
-          <div className="space-y-1">
-            {events.map((event, i) => (
-              <div 
-                key={i}
-                className="text-xs px-2 py-1 rounded bg-muted/50 border-l-2 border-primary inline-block mr-1"
-              >
-                {event.eventName}
-              </div>
-            ))}
+          {/* Edit & Expand Buttons */}
+          <div className="flex items-center gap-1 pt-1.5 border-t border-border/50 mt-1.5" onClick={(e) => e.stopPropagation()}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
+              onClick={() => onOpenDetail?.(client)}
+            >
+              <Edit className="w-3 h-3 mr-1" />
+              Edit
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
+              onClick={() => setIsExpanded(!isExpanded)}
+            >
+              {isExpanded ? (
+                <>
+                  <ChevronUp className="w-3 h-3 mr-1" />
+                  Less
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="w-3 h-3 mr-1" />
+                  More
+                </>
+              )}
+            </Button>
           </div>
         </TableCell>
         
-        {/* Column 3: Event Date */}
+        {/* Column 2: Events (Name + Date Combined) */}
         <TableCell className="py-3 align-top">
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             {events.map((event, i) => (
-              <div key={i} className="text-xs text-muted-foreground">
-                {event.monthName} {event.day}, {event.year}
+              <div 
+                key={i}
+                className="flex items-center justify-between gap-4 text-xs px-2.5 py-1.5 rounded-md bg-muted/50 border-l-3 border-primary"
+              >
+                <span className="font-medium text-foreground">{event.eventName}</span>
+                <span className="text-muted-foreground whitespace-nowrap">
+                  {event.monthName} {event.day}
+                </span>
               </div>
             ))}
           </div>
