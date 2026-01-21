@@ -66,6 +66,11 @@ export function DesktopAppLayout({
   // Filter state
   const [selectedHandler, setSelectedHandler] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  
+  // Date filter state
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
   // Get handlers and their counts
   const handlers = dropdowns?.whatsappOwners || [];
@@ -99,7 +104,7 @@ export function DesktopAppLayout({
       .sort((a, b) => b.count - a.count);
   }, [clients]);
 
-  // Filtered clients based on sidebar selections
+  // Filtered clients based on all filters
   const filteredClients = useMemo(() => {
     return clients.filter(client => {
       // Handler filter
@@ -112,15 +117,45 @@ export function DesktopAppLayout({
         const status = getCurrentStatus(client.statusLog || '').toUpperCase();
         if (status !== selectedCategory) return false;
       }
+      // Date filters (BS dates from event columns)
+      if (selectedYear) {
+        const years = (client.eventYear || '').split('\n').filter(Boolean);
+        if (!years.some(y => parseInt(y) === selectedYear)) return false;
+      }
+      if (selectedMonth) {
+        const months = (client.eventMonth || '').split('\n').filter(Boolean);
+        if (!months.some(m => parseInt(m) === selectedMonth)) return false;
+      }
+      if (selectedDay) {
+        const days = (client.eventDay || '').split('\n').filter(Boolean);
+        if (!days.some(d => parseInt(d) === selectedDay)) return false;
+      }
       return true;
     });
-  }, [clients, selectedHandler, selectedCategory]);
+  }, [clients, selectedHandler, selectedCategory, selectedYear, selectedMonth, selectedDay]);
 
   // Check if any filter is active
-  const hasActiveFilter = selectedHandler !== null || selectedCategory !== null;
+  const hasActiveFilter = selectedHandler !== null || 
+                          selectedCategory !== null || 
+                          selectedYear !== null || 
+                          selectedMonth !== null || 
+                          selectedDay !== null;
+
+  // Get category label for display
+  const categoryLabel = selectedCategory 
+    ? getStatusConfig(selectedCategory).label 
+    : undefined;
 
   const handleSync = async () => {
     await refreshData();
+  };
+
+  const handleClearAllFilters = () => {
+    setSelectedHandler(null);
+    setSelectedCategory(null);
+    setSelectedYear(null);
+    setSelectedMonth(null);
+    setSelectedDay(null);
   };
 
   // Clone children and pass filter-related props
@@ -134,10 +169,7 @@ export function DesktopAppLayout({
         selectedCategory,
         onClearHandler: () => setSelectedHandler(null),
         onClearCategory: () => setSelectedCategory(null),
-        onClearAllFilters: () => {
-          setSelectedHandler(null);
-          setSelectedCategory(null);
-        },
+        onClearAllFilters: handleClearAllFilters,
         handlers,
         handlerCounts,
         isLoading: false,
@@ -147,6 +179,8 @@ export function DesktopAppLayout({
     }
     return children;
   }, [children, filteredClients, clients, hasActiveFilter, selectedHandler, selectedCategory, handlers, handlerCounts, isSyncing]);
+
+  const totalClients = clients.length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -159,25 +193,36 @@ export function DesktopAppLayout({
         isOnline={isOnline}
       />
 
-      {/* Sidebar */}
+      {/* Sidebar - Categories Only */}
       <DesktopSidebar
-        handlers={handlers}
-        handlerCounts={handlerCounts}
         categories={categories}
-        selectedHandler={selectedHandler}
         selectedCategory={selectedCategory}
-        onHandlerFilter={setSelectedHandler}
         onCategoryFilter={setSelectedCategory}
+        totalClients={totalClients}
       />
 
       {/* Main Content Area */}
       <div className="ml-64 min-h-screen">
-        {/* Header */}
+        {/* Header with Handler + Date Filters */}
         <DesktopHeader
           onSync={handleSync}
           isSyncing={isSyncing}
-          searchQuery={showSearch ? searchQuery : undefined}
-          onSearchChange={showSearch ? onSearchChange : undefined}
+          handlers={handlers}
+          handlerCounts={handlerCounts}
+          selectedHandler={selectedHandler}
+          onHandlerFilter={setSelectedHandler}
+          selectedCategory={selectedCategory}
+          categoryLabel={categoryLabel}
+          onClearCategory={() => setSelectedCategory(null)}
+          selectedYear={selectedYear}
+          selectedMonth={selectedMonth}
+          selectedDay={selectedDay}
+          onYearChange={setSelectedYear}
+          onMonthChange={setSelectedMonth}
+          onDayChange={setSelectedDay}
+          onClearAllFilters={handleClearAllFilters}
+          hasActiveFilter={hasActiveFilter}
+          filteredCount={filteredClients.length}
         />
 
         {/* Content */}

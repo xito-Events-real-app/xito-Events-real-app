@@ -3,7 +3,6 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import {
   LayoutGrid,
   ChevronLeft,
@@ -37,24 +36,11 @@ interface CategoryStat {
 }
 
 interface DesktopSidebarProps {
-  handlers: string[];
-  handlerCounts: Record<string, number>;
   categories: CategoryStat[];
-  selectedHandler: string | null;
   selectedCategory: string | null;
-  onHandlerFilter: (handler: string | null) => void;
   onCategoryFilter: (category: string | null) => void;
+  totalClients?: number;
 }
-
-// Handler avatar colors
-const handlerColors = [
-  'from-violet-500 to-purple-600',
-  'from-cyan-500 to-blue-600',
-  'from-emerald-500 to-green-600',
-  'from-orange-500 to-red-600',
-  'from-pink-500 to-rose-600',
-  'from-amber-500 to-yellow-600',
-];
 
 // Get icon for status
 const getStatusIcon = (status: string) => {
@@ -74,20 +60,14 @@ const getStatusIcon = (status: string) => {
 };
 
 export function DesktopSidebar({ 
-  handlers, 
-  handlerCounts, 
   categories,
-  selectedHandler,
   selectedCategory,
-  onHandlerFilter,
-  onCategoryFilter 
+  onCategoryFilter,
+  totalClients = 0,
 }: DesktopSidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
-
-  // Calculate total clients
-  const totalClients = Object.values(handlerCounts).reduce((sum, count) => sum + count, 0);
 
   return (
     <aside
@@ -138,87 +118,8 @@ export function DesktopSidebar({
         )}
       </div>
 
-      {/* Scrollable Content */}
+      {/* Scrollable Content - Categories Only */}
       <ScrollArea className="flex-1 py-3">
-        {/* Handler Filter Section */}
-        <div className="px-3 mb-2">
-          {!isCollapsed && (
-            <h3 className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-2 px-1">
-              Handlers
-            </h3>
-          )}
-          <div className="space-y-1">
-            {/* All Handlers Option */}
-            <button
-              onClick={() => onHandlerFilter(null)}
-              className={cn(
-                "w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all",
-                selectedHandler === null
-                  ? "bg-primary text-white"
-                  : "text-white/70 hover:bg-white/10 hover:text-white"
-              )}
-            >
-              <div className={cn(
-                "w-7 h-7 rounded-full flex items-center justify-center shrink-0",
-                selectedHandler === null
-                  ? "bg-white/20"
-                  : "bg-white/10"
-              )}>
-                <Users className="w-4 h-4" />
-              </div>
-              {!isCollapsed && (
-                <>
-                  <span className="text-sm font-medium flex-1 text-left">All Handlers</span>
-                  <span className="text-xs bg-white/10 px-2 py-0.5 rounded-full">
-                    {totalClients}
-                  </span>
-                </>
-              )}
-            </button>
-
-            {/* Individual Handlers */}
-            {handlers.map((handler, idx) => {
-              const count = handlerCounts[handler] || 0;
-              const colorClass = handlerColors[idx % handlerColors.length];
-              const initials = handler.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
-              const isSelected = selectedHandler === handler;
-              
-              return (
-                <button
-                  key={handler}
-                  onClick={() => onHandlerFilter(isSelected ? null : handler)}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all",
-                    isSelected
-                      ? "bg-primary text-white"
-                      : "text-white/70 hover:bg-white/10 hover:text-white"
-                  )}
-                >
-                  <div className={cn(
-                    "w-7 h-7 rounded-full flex items-center justify-center shrink-0 bg-gradient-to-br text-white text-xs font-bold",
-                    colorClass
-                  )}>
-                    {initials}
-                  </div>
-                  {!isCollapsed && (
-                    <>
-                      <span className="text-sm font-medium flex-1 text-left truncate">{handler}</span>
-                      <span className={cn(
-                        "text-xs px-2 py-0.5 rounded-full",
-                        isSelected ? "bg-white/20" : "bg-white/10 text-white/80"
-                      )}>
-                        {count}
-                      </span>
-                    </>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <Separator className="my-3 bg-white/10" />
-
         {/* Category Filter Section */}
         <div className="px-3">
           {!isCollapsed && (
@@ -232,18 +133,27 @@ export function DesktopSidebar({
               onClick={() => onCategoryFilter(null)}
               className={cn(
                 "w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all",
-                selectedCategory === null && selectedHandler === null
-                  ? "bg-white/5 text-white/50"
-                  : selectedCategory === null
-                    ? "text-white/70 hover:bg-white/10 hover:text-white"
-                    : "text-white/70 hover:bg-white/10 hover:text-white"
+                selectedCategory === null
+                  ? "bg-primary text-white"
+                  : "text-white/70 hover:bg-white/10 hover:text-white"
               )}
             >
-              <div className="w-6 h-6 rounded-md bg-white/10 flex items-center justify-center shrink-0">
+              <div className={cn(
+                "w-6 h-6 rounded-md flex items-center justify-center shrink-0",
+                selectedCategory === null ? "bg-white/20" : "bg-white/10"
+              )}>
                 <Users className="w-3.5 h-3.5" />
               </div>
               {!isCollapsed && (
-                <span className="text-sm font-medium flex-1 text-left">All Categories</span>
+                <>
+                  <span className="text-sm font-medium flex-1 text-left">All Categories</span>
+                  <span className={cn(
+                    "text-xs px-2 py-0.5 rounded-full",
+                    selectedCategory === null ? "bg-white/20" : "bg-white/10"
+                  )}>
+                    {totalClients}
+                  </span>
+                </>
               )}
             </button>
 
