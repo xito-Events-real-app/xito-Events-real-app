@@ -834,20 +834,20 @@ export function DesktopClientRow({
                 <div
                   key={i}
                   className={cn(
-                    "flex items-center gap-2 text-xs px-2.5 py-2 rounded-lg border-l-4",
+                    "flex items-center text-xs rounded-lg border-l-4 px-2.5 py-1.5",
                     event.theme.bg,
                     event.theme.border
                   )}
                 >
-                  <span className="font-semibold text-foreground">{event.eventName}</span>
+                  <span className="font-semibold text-foreground w-24 shrink-0">{event.eventName}</span>
                   <span className={cn(
-                    "px-2 py-0.5 rounded-md font-medium",
+                    "px-2 py-0.5 rounded font-medium shrink-0",
                     monthColors || "bg-muted text-muted-foreground"
                   )}>
                     {event.monthName} {event.day}
                   </span>
                   {event.year && (
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-primary text-primary-foreground">
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-primary text-primary-foreground ml-1.5 shrink-0">
                       {event.year}
                     </span>
                   )}
