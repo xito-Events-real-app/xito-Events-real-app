@@ -801,6 +801,11 @@ export function DesktopClientRow({
                 <span className="text-muted-foreground whitespace-nowrap">
                   {event.monthName} {event.day}
                 </span>
+                {event.year && (
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                    {event.year}
+                  </span>
+                )}
               </div>
             ))}
           </div>
