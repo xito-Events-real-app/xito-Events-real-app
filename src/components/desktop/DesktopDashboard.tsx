@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Table,
@@ -12,8 +11,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { getCurrentStatus } from "@/lib/sheets-api";
+import { parseEventDetails, getMonthName } from "@/lib/nepali-months";
 import {
   Users,
   CalendarPlus,
@@ -33,7 +39,7 @@ import {
   CalendarX,
   ArrowRight,
   RefreshCw,
-  X,
+  MessageCircle,
 } from "lucide-react";
 
 interface DesktopDashboardProps {
@@ -171,191 +177,120 @@ export function DesktopDashboard({
   const bargaining = Object.keys(statusCounts).filter(s => s.includes('BARGAINING')).reduce((sum, s) => sum + (statusCounts[s] || 0), 0);
   const booked = Object.keys(statusCounts).filter(s => s.includes('BOOKED')).reduce((sum, s) => sum + (statusCounts[s] || 0), 0);
 
+  // Format phone number for WhatsApp
+  const formatWhatsAppNumber = (phone: string) => {
+    if (!phone) return '';
+    return phone.replace(/\D/g, '');
+  };
+
   return (
     <div className="p-6 space-y-6">
-      {/* Top Row: Stats + Quick Actions */}
-      <div className="grid grid-cols-12 gap-6">
-        {/* Stats Cards */}
-        <div className="col-span-9 grid grid-cols-4 gap-4">
-          <Card className="shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center">
-                  <Users className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{isLoading ? "—" : totalClients}</p>
-                  <p className="text-sm text-muted-foreground">Total Clients</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl gradient-secondary flex items-center justify-center">
-                  <CalendarPlus className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{isLoading ? "—" : thisMonthClients}</p>
-                  <p className="text-sm text-muted-foreground">This Month</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl gradient-accent flex items-center justify-center">
-                  <TrendingUp className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{isLoading ? "—" : todaysClients.length}</p>
-                  <p className="text-sm text-muted-foreground">Today's Enquiries</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-green-500 flex items-center justify-center">
-                  <CheckCircle className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{isLoading ? "—" : booked}</p>
-                  <p className="text-sm text-muted-foreground">Booked</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="col-span-3 space-y-3">
-          <Link to="/client-tracker/quick-add">
-            <Button className="w-full h-12 text-base font-semibold gradient-primary text-white shadow-lg">
-              <UserPlus className="w-5 h-5 mr-2" />
-              Add New Client
-            </Button>
-          </Link>
-          <Button 
-            variant="outline" 
-            className="w-full h-10"
-            onClick={onSync}
-            disabled={isSyncing}
-          >
-            <RefreshCw className={cn("w-4 h-4 mr-2", isSyncing && "animate-spin")} />
-            {isSyncing ? "Syncing..." : "Sync Data"}
-          </Button>
-        </div>
-      </div>
-
-      {/* Active Filters Bar */}
-      {hasActiveFilter && (
-        <Card className="shadow-sm border-primary/30 bg-primary/5">
-          <CardContent className="p-3">
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-muted-foreground">Active Filters:</span>
-              <div className="flex items-center gap-2 flex-wrap">
-                {selectedHandler && (
-                  <Badge variant="secondary" className="gap-1.5 py-1 px-2">
-                    Handler: {selectedHandler}
-                    <button 
-                      onClick={onClearHandler}
-                      className="ml-1 hover:bg-white/20 rounded-full p-0.5"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </Badge>
-                )}
-                {selectedCategory && (
-                  <Badge variant="secondary" className="gap-1.5 py-1 px-2">
-                    {getStatusConfig(selectedCategory).label}
-                    <button 
-                      onClick={onClearCategory}
-                      className="ml-1 hover:bg-white/20 rounded-full p-0.5"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </Badge>
-                )}
-              </div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={onClearAllFilters}
-                className="ml-auto text-muted-foreground hover:text-foreground"
-              >
-                Clear All
-              </Button>
-              <span className="text-sm text-muted-foreground">
-                Showing {clients.length} client{clients.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Filtered Results Table (when filters active) */}
-      {hasActiveFilter && (
+      {/* Filtered Results Table - Full screen when filters active */}
+      {hasActiveFilter ? (
         <Card className="shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold">
-              Filtered Results ({clients.length})
-            </CardTitle>
-          </CardHeader>
           <CardContent className="p-0">
-            <ScrollArea className="h-[500px]">
+            <ScrollArea className="h-[calc(100vh-180px)]">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Client Name</TableHead>
-                    <TableHead>Contact</TableHead>
-                    <TableHead>Event</TableHead>
-                    <TableHead>Location</TableHead>
-                    <TableHead>Handler</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Date</TableHead>
+                    <TableHead className="w-[200px]">Client Name</TableHead>
+                    <TableHead className="w-[300px]">Events & Dates</TableHead>
+                    <TableHead className="w-[150px]">City</TableHead>
+                    <TableHead className="w-[100px] text-center">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {clients.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">
                         No clients match the selected filters
                       </TableCell>
                     </TableRow>
                   ) : (
                     clients.map((client) => {
-                      const status = getCurrentStatus(client.statusLog || '').toUpperCase();
-                      const statusConfig = getStatusConfig(status);
-                      const StatusIcon = statusConfig.icon;
+                      // Parse events with their dates
+                      const events = parseEventDetails(
+                        client.events || '',
+                        client.eventYear || '',
+                        client.eventMonth || '',
+                        client.eventDay || ''
+                      );
+
+                      const contactNumber = client.whatsappNo || client.contactNo || '';
+                      const whatsappNumber = formatWhatsAppNumber(contactNumber);
                       
                       return (
-                        <TableRow key={client.rowNumber} className="cursor-pointer hover:bg-muted/50">
-                          <TableCell className="font-medium">{client.clientName}</TableCell>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span className="text-sm">{client.whatsappNo || client.contactNo || '-'}</span>
+                        <TableRow key={client.rowNumber} className="hover:bg-muted/50">
+                          <TableCell className="font-medium align-top py-4">
+                            {client.clientName}
+                          </TableCell>
+                          <TableCell className="align-top py-4">
+                            <div className="space-y-3">
+                              {events.length > 0 ? (
+                                events.map((event, idx) => (
+                                  <div key={idx} className="border-l-2 border-primary/30 pl-3">
+                                    <div className="font-medium text-sm">{event.eventName || 'Event'}</div>
+                                    <div className="text-xs text-muted-foreground">
+                                      {event.monthName} {event.day}{event.year ? `, ${event.year}` : ''}
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <span className="text-muted-foreground text-sm">No events</span>
+                              )}
                             </div>
                           </TableCell>
-                          <TableCell>{client.events || '-'}</TableCell>
-                          <TableCell>{client.eventLocation || '-'}</TableCell>
-                          <TableCell>
-                            <span className="text-sm">{client.clientHandler || client.whoAdded || '-'}</span>
+                          <TableCell className="align-top py-4">
+                            <span className="text-sm">{client.eventCityName || client.eventLocation || '-'}</span>
                           </TableCell>
-                          <TableCell>
-                            <Badge className={cn("gap-1", statusConfig.color, "text-white border-0")}>
-                              <StatusIcon className="w-3 h-3" />
-                              {statusConfig.label}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {client.inquiryDateAD || '-'}
+                          <TableCell className="align-top py-4">
+                            <TooltipProvider>
+                              <div className="flex items-center justify-center gap-2">
+                                {/* Call Button */}
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <a
+                                      href={contactNumber ? `tel:${contactNumber}` : undefined}
+                                      className={cn(
+                                        "w-9 h-9 rounded-full flex items-center justify-center transition-colors",
+                                        contactNumber 
+                                          ? "bg-green-500/10 text-green-600 hover:bg-green-500/20" 
+                                          : "bg-muted text-muted-foreground cursor-not-allowed"
+                                      )}
+                                      onClick={(e) => !contactNumber && e.preventDefault()}
+                                    >
+                                      <Phone className="w-4 h-4" />
+                                    </a>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>{contactNumber || 'No contact number'}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+
+                                {/* WhatsApp Button */}
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <a
+                                      href={whatsappNumber ? `https://wa.me/${whatsappNumber}` : undefined}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className={cn(
+                                        "w-9 h-9 rounded-full flex items-center justify-center transition-colors",
+                                        whatsappNumber 
+                                          ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20" 
+                                          : "bg-muted text-muted-foreground cursor-not-allowed"
+                                      )}
+                                      onClick={(e) => !whatsappNumber && e.preventDefault()}
+                                    >
+                                      <MessageCircle className="w-4 h-4" />
+                                    </a>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>{contactNumber || 'No contact number'}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </div>
+                            </TooltipProvider>
                           </TableCell>
                         </TableRow>
                       );
@@ -366,192 +301,279 @@ export function DesktopDashboard({
             </ScrollArea>
           </CardContent>
         </Card>
-      )}
-
-      {/* Main Content Grid (when no filters active) */}
-      {!hasActiveFilter && (
-        <div className="grid grid-cols-12 gap-6">
-          {/* Left Column: Pipeline + Categories */}
-          <div className="col-span-8 space-y-6">
-            {/* Sales Pipeline */}
-            <Card className="shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base font-semibold">Sales Pipeline</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 bg-blue-500/10 rounded-lg p-3 cursor-pointer hover:bg-blue-500/20 transition-colors">
-                    <p className="text-2xl font-bold text-blue-600">{quotationPending}</p>
-                    <p className="text-xs text-muted-foreground">Quotation Pending</p>
+      ) : (
+        /* Normal Dashboard View - No Filters */
+        <>
+          {/* Top Row: Stats + Quick Actions */}
+          <div className="grid grid-cols-12 gap-6">
+            {/* Stats Cards */}
+            <div className="col-span-9 grid grid-cols-4 gap-4">
+              <Card className="shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center">
+                      <Users className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{isLoading ? "—" : totalClients}</p>
+                      <p className="text-sm text-muted-foreground">Total Clients</p>
+                    </div>
                   </div>
-                  <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <div className="flex-1 bg-indigo-500/10 rounded-lg p-3 cursor-pointer hover:bg-indigo-500/20 transition-colors">
-                    <p className="text-2xl font-bold text-indigo-600">{quotationSent}</p>
-                    <p className="text-xs text-muted-foreground">Quotation Sent</p>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <div className="flex-1 bg-purple-500/10 rounded-lg p-3 cursor-pointer hover:bg-purple-500/20 transition-colors">
-                    <p className="text-2xl font-bold text-purple-600">{bargaining}</p>
-                    <p className="text-xs text-muted-foreground">Bargaining</p>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <div className="flex-1 bg-green-500/10 rounded-lg p-3 cursor-pointer hover:bg-green-500/20 transition-colors">
-                    <p className="text-2xl font-bold text-green-600">{booked}</p>
-                    <p className="text-xs text-muted-foreground">Booked</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Client Categories Grid */}
-            <Card className="shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base font-semibold">Client Categories</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-4 gap-3">
-                  {categoryStats.map(({ status, count, config }) => {
-                    const Icon = config.icon;
-                    return (
-                      <div
-                        key={status}
-                        className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/30 hover:bg-muted/50 cursor-pointer transition-all"
-                      >
-                        <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", config.color)}>
-                          <Icon className="w-5 h-5 text-white" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-lg font-bold">{count}</p>
-                          <p className="text-xs text-muted-foreground truncate">{config.label}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Urgent Events Table */}
-            {urgentBookedClients.length > 0 && (
-              <Card className="shadow-sm border-red-500/30">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="w-5 h-5 text-red-500" />
-                    <CardTitle className="text-base font-semibold text-red-500">
-                      Urgent Events ({urgentBookedClients.length})
-                    </CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Client</TableHead>
-                        <TableHead>Event</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Days Left</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {urgentBookedClients.slice(0, 5).map((client) => (
-                        <TableRow key={client.rowNumber}>
-                          <TableCell className="font-medium">{client.clientName}</TableCell>
-                          <TableCell>{client.events || "Event"}</TableCell>
-                          <TableCell>{client.eventDateAD}</TableCell>
-                          <TableCell>
-                            <Badge variant={client.daysRemaining <= 1 ? "destructive" : "secondary"}>
-                              {client.daysRemaining === 0 ? "TODAY" : `${client.daysRemaining} days`}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button variant="ghost" size="sm">
-                              View
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
                 </CardContent>
               </Card>
-            )}
+
+              <Card className="shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl gradient-secondary flex items-center justify-center">
+                      <CalendarPlus className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{isLoading ? "—" : thisMonthClients}</p>
+                      <p className="text-sm text-muted-foreground">This Month</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl gradient-accent flex items-center justify-center">
+                      <TrendingUp className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{isLoading ? "—" : todaysClients.length}</p>
+                      <p className="text-sm text-muted-foreground">Today's Enquiries</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-green-500 flex items-center justify-center">
+                      <CheckCircle className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{isLoading ? "—" : booked}</p>
+                      <p className="text-sm text-muted-foreground">Booked</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="col-span-3 space-y-3">
+              <Link to="/client-tracker/quick-add">
+                <Button className="w-full h-12 text-base font-semibold gradient-primary text-white shadow-lg">
+                  <UserPlus className="w-5 h-5 mr-2" />
+                  Add New Client
+                </Button>
+              </Link>
+              <Button 
+                variant="outline" 
+                className="w-full h-10"
+                onClick={onSync}
+                disabled={isSyncing}
+              >
+                <RefreshCw className={cn("w-4 h-4 mr-2", isSyncing && "animate-spin")} />
+                {isSyncing ? "Syncing..." : "Sync Data"}
+              </Button>
+            </div>
           </div>
 
-          {/* Right Column: Handlers + Today */}
-          <div className="col-span-4 space-y-6">
-            {/* Handlers Card */}
-            <Card className="shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base font-semibold">Team Handlers</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[300px]">
-                  <div className="space-y-2">
-                    {handlers.map((handler, idx) => {
-                      const count = handlerCounts[handler] || 0;
-                      const colorClass = handlerColors[idx % handlerColors.length];
-                      const initials = handler.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
-                      
+          {/* Main Content Grid */}
+          <div className="grid grid-cols-12 gap-6">
+            {/* Left Column: Pipeline + Categories */}
+            <div className="col-span-8 space-y-6">
+              {/* Sales Pipeline */}
+              <Card className="shadow-sm">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-semibold">Sales Pipeline</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-blue-500/10 rounded-lg p-3 cursor-pointer hover:bg-blue-500/20 transition-colors">
+                      <p className="text-2xl font-bold text-blue-600">{quotationPending}</p>
+                      <p className="text-xs text-muted-foreground">Quotation Pending</p>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <div className="flex-1 bg-indigo-500/10 rounded-lg p-3 cursor-pointer hover:bg-indigo-500/20 transition-colors">
+                      <p className="text-2xl font-bold text-indigo-600">{quotationSent}</p>
+                      <p className="text-xs text-muted-foreground">Quotation Sent</p>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <div className="flex-1 bg-purple-500/10 rounded-lg p-3 cursor-pointer hover:bg-purple-500/20 transition-colors">
+                      <p className="text-2xl font-bold text-purple-600">{bargaining}</p>
+                      <p className="text-xs text-muted-foreground">Bargaining</p>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <div className="flex-1 bg-green-500/10 rounded-lg p-3 cursor-pointer hover:bg-green-500/20 transition-colors">
+                      <p className="text-2xl font-bold text-green-600">{booked}</p>
+                      <p className="text-xs text-muted-foreground">Booked</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Client Categories Grid */}
+              <Card className="shadow-sm">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-semibold">Client Categories</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-4 gap-3">
+                    {categoryStats.map(({ status, count, config }) => {
+                      const Icon = config.icon;
                       return (
-                        <Link
-                          key={handler}
-                          to={`/client-tracker/handler/${encodeURIComponent(handler)}?stay=true`}
-                          className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/30 hover:bg-muted/50 transition-all"
+                        <div
+                          key={status}
+                          className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/30 hover:bg-muted/50 cursor-pointer transition-all"
                         >
-                          <div className={cn(
-                            "w-10 h-10 rounded-full flex items-center justify-center bg-gradient-to-br text-white font-bold",
-                            colorClass
-                          )}>
-                            {initials}
+                          <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", config.color)}>
+                            <Icon className="w-5 h-5 text-white" />
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">{handler}</p>
-                            <p className="text-xs text-muted-foreground">{count} clients</p>
+                          <div className="min-w-0">
+                            <p className="text-lg font-bold">{count}</p>
+                            <p className="text-xs text-muted-foreground truncate">{config.label}</p>
                           </div>
-                          <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                        </Link>
+                        </div>
                       );
                     })}
                   </div>
-                </ScrollArea>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
 
-            {/* Today's Activity Summary */}
-            <Card className="shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base font-semibold">Today's Enquiries</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {todaysClients.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    No enquiries today yet
-                  </p>
-                ) : (
-                  <ScrollArea className="h-[200px]">
+              {/* Urgent Events Table */}
+              {urgentBookedClients.length > 0 && (
+                <Card className="shadow-sm border-red-500/30">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-5 h-5 text-red-500" />
+                      <CardTitle className="text-base font-semibold text-red-500">
+                        Urgent Events ({urgentBookedClients.length})
+                      </CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Client</TableHead>
+                          <TableHead>Event</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Days Left</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {urgentBookedClients.slice(0, 5).map((client) => (
+                          <TableRow key={client.rowNumber}>
+                            <TableCell className="font-medium">{client.clientName}</TableCell>
+                            <TableCell>{client.events || "Event"}</TableCell>
+                            <TableCell>{client.eventDateAD}</TableCell>
+                            <TableCell>
+                              <span className={cn(
+                                "px-2 py-1 rounded text-xs font-medium",
+                                client.daysRemaining <= 1 
+                                  ? "bg-red-500/20 text-red-600" 
+                                  : "bg-muted text-muted-foreground"
+                              )}>
+                                {client.daysRemaining === 0 ? "TODAY" : `${client.daysRemaining} days`}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button variant="ghost" size="sm">
+                                View
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            {/* Right Column: Handlers + Today */}
+            <div className="col-span-4 space-y-6">
+              {/* Handlers Card */}
+              <Card className="shadow-sm">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-semibold">Team Handlers</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[300px]">
                     <div className="space-y-2">
-                      {todaysClients.slice(0, 10).map((client, idx) => (
-                        <div
-                          key={client.rowNumber || idx}
-                          className="flex items-center gap-3 p-2 rounded-lg bg-muted/50"
-                        >
-                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                            <Users className="w-4 h-4 text-primary" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{client.clientName}</p>
-                            <p className="text-xs text-muted-foreground truncate">{client.events || "No event"}</p>
-                          </div>
-                        </div>
-                      ))}
+                      {handlers.map((handler, idx) => {
+                        const count = handlerCounts[handler] || 0;
+                        const colorClass = handlerColors[idx % handlerColors.length];
+                        const initials = handler.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+                        
+                        return (
+                          <Link
+                            key={handler}
+                            to={`/client-tracker/handler/${encodeURIComponent(handler)}?stay=true`}
+                            className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/30 hover:bg-muted/50 transition-all"
+                          >
+                            <div className={cn(
+                              "w-10 h-10 rounded-full flex items-center justify-center bg-gradient-to-br text-white font-bold",
+                              colorClass
+                            )}>
+                              {initials}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate">{handler}</p>
+                              <p className="text-xs text-muted-foreground">{count} clients</p>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          </Link>
+                        );
+                      })}
                     </div>
                   </ScrollArea>
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+
+              {/* Today's Activity Summary */}
+              <Card className="shadow-sm">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-semibold">Today's Enquiries</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {todaysClients.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No enquiries today yet
+                    </p>
+                  ) : (
+                    <ScrollArea className="h-[200px]">
+                      <div className="space-y-2">
+                        {todaysClients.slice(0, 10).map((client, idx) => (
+                          <div
+                            key={client.rowNumber || idx}
+                            className="flex items-center gap-3 p-2 rounded-lg bg-muted/50"
+                          >
+                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                              <Users className="w-4 h-4 text-primary" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{client.clientName}</p>
+                              <p className="text-xs text-muted-foreground truncate">{client.events || "No event"}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
