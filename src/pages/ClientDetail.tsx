@@ -159,7 +159,18 @@ const ClientDetail = () => {
 
   const client = useMemo(() => {
     if (!rowNumber || !clients.length) return null;
-    return clients.find(c => String(c.rowNumber) === rowNumber);
+    
+    // First try: exact rowNumber match
+    const byRowNumber = clients.find(c => String(c.rowNumber) === rowNumber);
+    if (byRowNumber) return byRowNumber;
+    
+    // Second try: match by registeredDateTimeAD (decoded from URL)
+    // This handles cases where navigation uses registeredDateTimeAD as fallback
+    const decodedId = decodeURIComponent(rowNumber);
+    const byRegDateTime = clients.find(c => c.registeredDateTimeAD === decodedId);
+    if (byRegDateTime) return byRegDateTime;
+    
+    return null;
   }, [clients, rowNumber]);
 
   // All event options for the event selector
