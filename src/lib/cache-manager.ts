@@ -233,9 +233,17 @@ export async function clearCache(): Promise<void> {
   }
 }
 
-// Dispatch cache update event
+// Debounced cache update notification
+let cacheUpdateTimeout: ReturnType<typeof setTimeout> | null = null;
+
 export function notifyCacheUpdate(type: 'clients' | 'dropdowns' | 'all', data?: unknown): void {
-  window.dispatchEvent(new CustomEvent('cache-updated', { 
-    detail: { type, data, timestamp: Date.now() } 
-  }));
+  if (cacheUpdateTimeout) {
+    clearTimeout(cacheUpdateTimeout);
+  }
+  
+  cacheUpdateTimeout = setTimeout(() => {
+    window.dispatchEvent(new CustomEvent('cache-updated', { 
+      detail: { type, data, timestamp: Date.now() } 
+    }));
+  }, 100); // 100ms debounce
 }
