@@ -59,6 +59,7 @@ export function DesktopAppLayout({
     lastSyncedAt,
     pendingSyncs,
     refreshData,
+    updateClient,
   } = useCachedData();
 
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -175,10 +176,12 @@ export function DesktopAppLayout({
         isLoading: false,
         onSync: handleSync,
         isSyncing,
+        dropdowns,
+        onClientUpdate: updateClient,
       });
     }
     return children;
-  }, [children, filteredClients, clients, hasActiveFilter, selectedHandler, selectedCategory, handlers, handlerCounts, isSyncing]);
+  }, [children, filteredClients, clients, hasActiveFilter, selectedHandler, selectedCategory, handlers, handlerCounts, isSyncing, dropdowns, updateClient]);
 
   const totalClients = clients.length;
 

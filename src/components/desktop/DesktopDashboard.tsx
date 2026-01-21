@@ -63,6 +63,7 @@ interface DesktopDashboardProps {
   onClearCategory?: () => void;
   onClearAllFilters?: () => void;
   dropdowns?: DropdownData;
+  onClientUpdate?: (updatedClient: any) => void;
 }
 
 // Get icon and color for each status category
@@ -116,6 +117,7 @@ export function DesktopDashboard({
   onClearCategory,
   onClearAllFilters,
   dropdowns,
+  onClientUpdate,
 }: DesktopDashboardProps) {
   const navigate = useNavigate();
   const [selectedClient, setSelectedClient] = useState<any | null>(null);
@@ -257,6 +259,7 @@ export function DesktopDashboard({
                         mindsetOptions={dropdowns?.mindsetOptions || []}
                         paymentTypes={dropdowns?.paymentTypes || []}
                         banks={dropdowns?.banks || []}
+                        onClientUpdate={onClientUpdate}
                         onOpenDetail={(c) => setSelectedClient(c)}
                       />
                     ))
