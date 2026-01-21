@@ -473,10 +473,11 @@ export function getDetailedEnquiryInfo(
   const bsParts = inquiryDateBS.trim().split(/\s+/);
   let bsDisplay = inquiryDateBS;
   if (bsParts.length >= 3) {
+    const year = bsParts[0];
     const month = parseInt(bsParts[1], 10);
     const day = bsParts[2];
     const monthName = nepaliMonthNames[month - 1] || `Month ${month}`;
-    bsDisplay = `${monthName} ${day}`;
+    bsDisplay = `${year} ${monthName} ${day}`;
   }
   
   // Calculate time difference
