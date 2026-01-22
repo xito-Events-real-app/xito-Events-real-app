@@ -11,7 +11,7 @@ import { NepaliDateObject, bsToAD, adToBS, formatBSDate, isUnknownDay, getDayFor
 import { useCachedData } from "@/hooks/useCachedData";
 import { addClient, addOldClient, isSheetsConfigured } from "@/lib/sheets-api";
 import { toast } from "@/hooks/use-toast";
-import { Save, Loader2, AlertTriangle, Building2 } from "lucide-react";
+import { Save, Loader2, AlertTriangle, User, FileText, MapPin, Calendar, Phone, Sparkles } from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
@@ -278,7 +278,7 @@ export default function QuickAdd() {
     <AppLayout>
       <PageHeader title="Quick Add Client" subtitle="Add new client entry" showBack />
       
-      <form onSubmit={handleSubmit} className="px-4 py-6 max-w-lg mx-auto space-y-4 animate-fade-in">
+      <form onSubmit={handleSubmit} className="px-4 py-6 max-w-lg mx-auto space-y-5 animate-fade-in">
         {/* Setup Warning */}
         {!isConfigured && (
           <Card className="border-warning/50 bg-warning/5">
@@ -295,7 +295,7 @@ export default function QuickAdd() {
         )}
 
         {/* Client Basic Details */}
-        <FormSection title="Client Basic Details">
+        <FormSection title="Client Details" icon={User} gradient="blue">
           <FormInput label="Client Name" value={clientName} onChange={setClientName} placeholder="Enter client name" required />
           
           {/* Company Name - New field */}
@@ -361,8 +361,8 @@ export default function QuickAdd() {
           )}
         </FormSection>
 
-        {/* Inquiry Details - Moved up */}
-        <FormSection title="Inquiry Details">
+        {/* Inquiry Details */}
+        <FormSection title="Inquiry Details" icon={FileText} gradient="purple">
           <FormSelect 
             label="Status" 
             value={initialStatus} 
@@ -397,7 +397,7 @@ export default function QuickAdd() {
         </FormSection>
 
         {/* Location & Contact */}
-        <FormSection title="Location & Contact">
+        <FormSection title="Location & Contact" icon={Phone} gradient="green">
           <FormSelect 
             label="Client Current Location" 
             value={clientLocation} 
@@ -431,7 +431,7 @@ export default function QuickAdd() {
         </FormSection>
 
         {/* Event Location */}
-        <FormSection title="Event Location">
+        <FormSection title="Event Location" icon={MapPin} gradient="amber">
           <FormSelect 
             label="Event Location" 
             value={eventLocation} 
@@ -470,13 +470,13 @@ export default function QuickAdd() {
         </FormSection>
 
         {/* Event Dates */}
-        <FormSection title="Event Dates (BS Calendar)">
+        <FormSection title="Event Dates (BS Calendar)" icon={Calendar} gradient="pink">
           <NepaliCalendar selectedDates={selectedDates} onDateSelect={setSelectedDates} multiSelect />
         </FormSection>
 
         {/* Event Selection for Each Date */}
         {sortedDates.length > 0 && (
-          <FormSection title={`Events (${sortedDates.length} date${sortedDates.length > 1 ? "s" : ""} selected)`}>
+          <FormSection title={`Events (${sortedDates.length} date${sortedDates.length > 1 ? "s" : ""} selected)`} icon={Sparkles} gradient="purple">
             <div className="space-y-3">
               {sortedDates.map((date) => (
                 <EventSelector
@@ -493,7 +493,7 @@ export default function QuickAdd() {
         )}
 
         {/* Client Handler */}
-        <FormSection title="Client Handler">
+        <FormSection title="Client Handler" icon={User} gradient="green">
           <FormSelect 
             label="Who is handling this client?" 
             value={clientHandler} 
@@ -507,7 +507,7 @@ export default function QuickAdd() {
         <Button 
           type="submit" 
           disabled={isSubmitting} 
-          className="w-full h-14 text-lg font-semibold gradient-primary text-white mt-6"
+          className="w-full h-14 text-lg font-bold rounded-2xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-300 mt-6"
         >
           {isSubmitting ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Save className="w-5 h-5 mr-2" />}
           {isSubmitting ? "Saving..." : "Save Client"}
