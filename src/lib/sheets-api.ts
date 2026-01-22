@@ -15,6 +15,8 @@ export interface DropdownData {
   mindsetOptions: string[]; // Column K - Mindset options for QUOTATION SENT
   paymentTypes: string[]; // Column P - Payment types
   banks: string[]; // Column Q - Bank names
+  companyNames: string[]; // Column W - Company names
+  serviceTypes: string[]; // Column X - Service types
 }
 
 export interface ClientData {
@@ -53,6 +55,8 @@ export interface ClientData {
   paymentsMade?: string;           // Column AE - payments made log
   paymentDatesAD?: string;         // Column AF - payment dates in AD format
   remainingPayment?: string;       // Column AG - remaining payment
+  companyName?: string;            // Column AH - company name
+  serviceTypes?: string;           // Column AI - service types (multi, "/" separated)
 }
 
 export interface BookedClientData extends ClientData {

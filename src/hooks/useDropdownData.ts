@@ -25,6 +25,8 @@ export function useDropdownData() {
           mindsetOptions: ['NOT SEEN', 'IGNORED', 'BARGAINING', 'EXPENSIVE', 'READY TO PAY ADVANCE', 'NEED TIME', 'NEED MORE TIME', 'FAMILY DISCUSSION', 'OFFICE VISIT', 'DATE POSTPONED', 'BOOKED SOMEWHERE ELSE'],
           paymentTypes: ['ADVANCE PAYMENT', 'PARTIAL PAYMENT', 'FULL PAYMENT'],
           banks: ['MASTER BARUN', 'KRIPA SAVINGS', 'KRIPA CURRENT', 'ESEWA', 'KHALTI'],
+          companyNames: ['WEDDING TALES NEPAL', 'WEDDING PAPARAZZI', 'OTHER'],
+          serviceTypes: ['PHOTOGRAPHY', 'VIDEOGRAPHY', 'DRONE', 'LED', 'ALBUM', 'FRAME'],
         });
         setIsUsingMock(true);
         setIsLoading(false);
@@ -52,6 +54,8 @@ export function useDropdownData() {
           mindsetOptions: ['NOT SEEN', 'IGNORED', 'BARGAINING', 'EXPENSIVE', 'READY TO PAY ADVANCE', 'NEED TIME', 'NEED MORE TIME', 'FAMILY DISCUSSION', 'OFFICE VISIT', 'DATE POSTPONED', 'BOOKED SOMEWHERE ELSE'],
           paymentTypes: ['ADVANCE PAYMENT', 'PARTIAL PAYMENT', 'FULL PAYMENT'],
           banks: ['MASTER BARUN', 'KRIPA SAVINGS', 'KRIPA CURRENT', 'ESEWA', 'KHALTI'],
+          companyNames: ['WEDDING TALES NEPAL', 'WEDDING PAPARAZZI', 'OTHER'],
+          serviceTypes: ['PHOTOGRAPHY', 'VIDEOGRAPHY', 'DRONE', 'LED', 'ALBUM', 'FRAME'],
         });
         setIsUsingMock(true);
       } finally {
