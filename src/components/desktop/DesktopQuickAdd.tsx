@@ -1,9 +1,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
-import { Save, RotateCcw, User, MapPin, Calendar, FileText, Phone, Loader2, Building2, RefreshCw } from "lucide-react";
+import { Save, RotateCcw, User, MapPin, Calendar, FileText, Phone, Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormSection, FormInput, FormSelect, CountrySelector, NepaliCalendar } from "@/components/form";
 import { FormCombobox } from "@/components/form/FormCombobox";
 import { EventSelector } from "@/components/form/EventSelector";
@@ -307,19 +306,25 @@ export function DesktopQuickAdd() {
   };
 
   return (
-    <div className="p-6">
+    <div className="p-6 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold">Add New Client</h1>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+            Add New Client
+          </h1>
           <p className="text-muted-foreground">Fill in the details to register a new client</p>
         </div>
         <div className="flex gap-3">
-          <Button type="button" variant="outline" onClick={handleResetForm}>
+          <Button type="button" variant="outline" onClick={handleResetForm} className="shadow-sm">
             <RotateCcw className="w-4 h-4 mr-2" />
             Reset Form
           </Button>
-          <Button onClick={handleSubmit} disabled={isSubmitting || !clientName.trim()}>
+          <Button 
+            onClick={handleSubmit} 
+            disabled={isSubmitting || !clientName.trim()}
+            className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25"
+          >
             {isSubmitting ? (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
             ) : (
@@ -333,305 +338,263 @@ export function DesktopQuickAdd() {
       {/* Two-column form layout */}
       <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-6">
         {/* Left Column */}
-        <div className="space-y-6">
+        <div className="space-y-5">
           {/* Client Basic Details */}
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <User className="w-5 h-5 text-primary" />
-                Client Basic Details
-              </CardTitle>
-              <CardDescription>Enter the client's name and source</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-muted-foreground">
-                  {isFromCache ? "From cache" : "Fresh data"} • {dropdowns?.companyNames?.length || 0} companies, {dropdowns?.serviceTypes?.length || 0} services
-                </span>
-                <Button 
-                  type="button" 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => refreshData()}
-                  disabled={isSyncing}
-                  className="h-6 text-xs"
-                >
-                  <RefreshCw className={cn("w-3 h-3 mr-1", isSyncing && "animate-spin")} />
-                  Refresh
-                </Button>
-              </div>
-              
-              <FormInput 
-                label="Client Name" 
-                value={clientName} 
-                onChange={setClientName} 
-                placeholder="Enter client name" 
-                required 
-              />
-              
-              {/* Company Name - Searchable combobox */}
-              <FormCombobox 
-                label="Company Name"
-                value={companyName} 
-                onChange={setCompanyName} 
-                options={dropdowns?.companyNames || []} 
-                placeholder="Select company..."
-                searchPlaceholder="Search companies..."
-              />
-              
-              {/* Service Type - Multi-select */}
-              <ServiceTypeSelector
-                label="Service Type"
-                value={serviceTypes}
-                onChange={setServiceTypes}
-                options={dropdowns?.serviceTypes || []}
-                defaultValue="PHOTOGRAPHY"
-              />
-              
+          <FormSection title="Client Details" icon={User} gradient="blue">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs text-muted-foreground">
+                {isFromCache ? "From cache" : "Fresh data"} • {dropdowns?.companyNames?.length || 0} companies, {dropdowns?.serviceTypes?.length || 0} services
+              </span>
+              <Button 
+                type="button" 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => refreshData()}
+                disabled={isSyncing}
+                className="h-6 text-xs"
+              >
+                <RefreshCw className={cn("w-3 h-3 mr-1", isSyncing && "animate-spin")} />
+                Refresh
+              </Button>
+            </div>
+            
+            <FormInput 
+              label="Client Name" 
+              value={clientName} 
+              onChange={setClientName} 
+              placeholder="Enter client name" 
+              required 
+            />
+            
+            {/* Company Name - Searchable combobox */}
+            <FormCombobox 
+              label="Company Name"
+              value={companyName} 
+              onChange={setCompanyName} 
+              options={dropdowns?.companyNames || []} 
+              placeholder="Select company..."
+              searchPlaceholder="Search companies..."
+            />
+            
+            {/* Service Type - Multi-select */}
+            <ServiceTypeSelector
+              label="Service Type"
+              value={serviceTypes}
+              onChange={setServiceTypes}
+              options={dropdowns?.serviceTypes || []}
+              defaultValue="PHOTOGRAPHY"
+            />
+            
+            <FormSelect 
+              label="Source" 
+              value={source} 
+              onChange={setSource} 
+              options={dropdowns?.sources || []} 
+              placeholder="How did they find us?" 
+            />
+            {source === "WHATSAPP" && (
               <FormSelect 
-                label="Source" 
-                value={source} 
-                onChange={setSource} 
-                options={dropdowns?.sources || []} 
-                placeholder="How did they find us?" 
+                label="Whose WhatsApp?" 
+                value={whoseWhatsapp} 
+                onChange={setWhoseWhatsapp} 
+                options={dropdowns?.whatsappOwners || []} 
               />
-              {source === "WHATSAPP" && (
-                <FormSelect 
-                  label="Whose WhatsApp?" 
-                  value={whoseWhatsapp} 
-                  onChange={setWhoseWhatsapp} 
-                  options={dropdowns?.whatsappOwners || []} 
-                />
-              )}
-              {source === "OLD CLIENT" && (
-                <FormCombobox 
-                  label="Which Old Client?" 
-                  value={oldClientName} 
-                  onChange={setOldClientName} 
-                  options={dropdowns?.oldClients || []} 
-                  placeholder="Search or type old client name..."
-                  searchPlaceholder="Search old clients..."
-                  onAddNew={async (name) => {
-                    try {
-                      const result = await addOldClient(name);
-                      if (result.alreadyExists) {
-                        toast({ title: "Info", description: "This client already exists in the list" });
-                      } else {
-                        toast({ title: "Success!", description: `"${name}" added to old clients list` });
-                      }
-                      return true;
-                    } catch (error) {
-                      toast({ 
-                        title: "Error", 
-                        description: "Failed to add old client to the list", 
-                        variant: "destructive" 
-                      });
-                      return false;
+            )}
+            {source === "OLD CLIENT" && (
+              <FormCombobox 
+                label="Which Old Client?" 
+                value={oldClientName} 
+                onChange={setOldClientName} 
+                options={dropdowns?.oldClients || []} 
+                placeholder="Search or type old client name..."
+                searchPlaceholder="Search old clients..."
+                onAddNew={async (name) => {
+                  try {
+                    const result = await addOldClient(name);
+                    if (result.alreadyExists) {
+                      toast({ title: "Info", description: "This client already exists in the list" });
+                    } else {
+                      toast({ title: "Success!", description: `"${name}" added to old clients list` });
                     }
-                  }}
-                />
-              )}
-            </CardContent>
-          </Card>
+                    return true;
+                  } catch (error) {
+                    toast({ 
+                      title: "Error", 
+                      description: "Failed to add old client to the list", 
+                      variant: "destructive" 
+                    });
+                    return false;
+                  }
+                }}
+              />
+            )}
+          </FormSection>
 
           {/* Inquiry Details */}
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <FileText className="w-5 h-5 text-primary" />
-                Inquiry Details
-              </CardTitle>
-              <CardDescription>Track the inquiry information</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <FormSelect 
-                  label="Status" 
-                  value={initialStatus} 
-                  onChange={setInitialStatus} 
-                  options={dropdowns?.clientStatuses || []} 
-                  placeholder="Select status"
-                />
-                <FormSelect 
-                  label="Who Added" 
-                  value={whoAdded} 
-                  onChange={setWhoAdded} 
-                  options={dropdowns?.whatsappOwners || []} 
-                />
-              </div>
+          <FormSection title="Inquiry Details" icon={FileText} gradient="purple">
+            <div className="grid grid-cols-2 gap-4">
               <FormSelect 
-                label="Client Handler" 
-                value={clientHandler} 
-                onChange={setClientHandler} 
-                options={dropdowns?.whatsappOwners || []} 
-                placeholder="Who will handle this client?"
+                label="Status" 
+                value={initialStatus} 
+                onChange={setInitialStatus} 
+                options={dropdowns?.clientStatuses || []} 
+                placeholder="Select status"
               />
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Inquiry Date</label>
-                  <input
-                    type="date"
-                    value={inquiryDate ? format(inquiryDate, "yyyy-MM-dd") : ""}
-                    onChange={(e) => setInquiryDate(e.target.value ? new Date(e.target.value) : undefined)}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                </div>
-                <FormInput 
-                  label="Inquiry Time" 
-                  value={inquiryTime} 
-                  onChange={setInquiryTime} 
-                  type="time" 
+              <FormSelect 
+                label="Who Added" 
+                value={whoAdded} 
+                onChange={setWhoAdded} 
+                options={dropdowns?.whatsappOwners || []} 
+              />
+            </div>
+            <FormSelect 
+              label="Client Handler" 
+              value={clientHandler} 
+              onChange={setClientHandler} 
+              options={dropdowns?.whatsappOwners || []} 
+              placeholder="Who will handle this client?"
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Inquiry Date</label>
+                <input
+                  type="date"
+                  value={inquiryDate ? format(inquiryDate, "yyyy-MM-dd") : ""}
+                  onChange={(e) => setInquiryDate(e.target.value ? new Date(e.target.value) : undefined)}
+                  className="flex h-12 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
               </div>
               <FormInput 
-                label="Description" 
-                value={description} 
-                onChange={setDescription} 
-                multiline 
-                maxLength={500} 
-                placeholder="Brief notes about the inquiry..." 
+                label="Inquiry Time" 
+                value={inquiryTime} 
+                onChange={setInquiryTime} 
+                type="time" 
               />
-            </CardContent>
-          </Card>
+            </div>
+            <FormInput 
+              label="Description" 
+              value={description} 
+              onChange={setDescription} 
+              multiline 
+              maxLength={500} 
+              placeholder="Brief notes about the inquiry..." 
+            />
+          </FormSection>
 
           {/* Location & Contact */}
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Phone className="w-5 h-5 text-primary" />
-                Location & Contact
-              </CardTitle>
-              <CardDescription>Client's location and contact details</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <FormSelect 
-                label="Client Current Location" 
-                value={clientLocation} 
-                onChange={handleClientLocationChange} 
-                options={clientLocationOptions}
-                placeholder="Where is the client currently?"
-              />
-              {clientLocation === "OUTSIDE NEPAL" && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Client Current Country</label>
-                  <CountrySelector 
-                    value={currentCountry} 
-                    onChange={handleCountryChange}
-                    showAllCountries={true}
-                    placeholder="Select country..."
-                  />
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-4">
-                <FormInput 
-                  label="Contact Number" 
-                  value={contactNo} 
-                  onChange={setContactNo} 
-                  placeholder={dialCode ? `${dialCode} ...` : "Phone number"} 
-                />
-                <FormInput 
-                  label="WhatsApp Number" 
-                  value={whatsappNo} 
-                  onChange={setWhatsappNo} 
-                  placeholder={dialCode ? `${dialCode} ...` : "WhatsApp number"} 
+          <FormSection title="Location & Contact" icon={Phone} gradient="green">
+            <FormSelect 
+              label="Client Current Location" 
+              value={clientLocation} 
+              onChange={handleClientLocationChange} 
+              options={clientLocationOptions}
+              placeholder="Where is the client currently?"
+            />
+            {clientLocation === "OUTSIDE NEPAL" && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Client Current Country</label>
+                <CountrySelector 
+                  value={currentCountry} 
+                  onChange={handleCountryChange}
+                  showAllCountries={true}
+                  placeholder="Select country..."
                 />
               </div>
-            </CardContent>
-          </Card>
+            )}
+            <div className="grid grid-cols-2 gap-4">
+              <FormInput 
+                label="Contact Number" 
+                value={contactNo} 
+                onChange={setContactNo} 
+                placeholder={dialCode ? `${dialCode} ...` : "Phone number"} 
+              />
+              <FormInput 
+                label="WhatsApp Number" 
+                value={whatsappNo} 
+                onChange={setWhatsappNo} 
+                placeholder={dialCode ? `${dialCode} ...` : "WhatsApp number"} 
+              />
+            </div>
+          </FormSection>
         </div>
 
         {/* Right Column */}
-        <div className="space-y-6">
+        <div className="space-y-5">
           {/* Event Location */}
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <MapPin className="w-5 h-5 text-primary" />
-                Event Location
-              </CardTitle>
-              <CardDescription>Where will the event take place?</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <FormSection title="Event Location" icon={MapPin} gradient="amber">
+            <FormSelect 
+              label="Event Location" 
+              value={eventLocation} 
+              onChange={handleEventLocationChange} 
+              options={["INSIDE KATHMANDU VALLEY", "OUTSIDE KATHMANDU VALLEY", "DESTINATION EVENT", "TBD"]}
+              placeholder="Select event location type"
+            />
+            {eventLocation === "INSIDE KATHMANDU VALLEY" && (
               <FormSelect 
-                label="Event Location" 
-                value={eventLocation} 
-                onChange={handleEventLocationChange} 
-                options={["INSIDE KATHMANDU VALLEY", "OUTSIDE KATHMANDU VALLEY", "DESTINATION EVENT", "TBD"]}
-                placeholder="Select event location type"
+                label="City (Valley)" 
+                value={eventCityValley} 
+                onChange={setEventCityValley} 
+                options={valleyCitiesOptions}
+                placeholder="Select city in valley"
               />
-              {eventLocation === "INSIDE KATHMANDU VALLEY" && (
-                <FormSelect 
-                  label="City (Valley)" 
-                  value={eventCityValley} 
-                  onChange={setEventCityValley} 
-                  options={valleyCitiesOptions}
-                  placeholder="Select city in valley"
+            )}
+            {eventLocation === "OUTSIDE KATHMANDU VALLEY" && (
+              <FormSelect 
+                label="City (Outside Valley)" 
+                value={eventCity} 
+                onChange={setEventCity} 
+                options={outsideValleyCitiesOptions}
+                placeholder="Select city"
+              />
+            )}
+            {eventLocation === "DESTINATION EVENT" && (
+              <div className="grid grid-cols-2 gap-4">
+                <FormInput 
+                  label="From" 
+                  value={eventFromCity} 
+                  onChange={setEventFromCity} 
+                  placeholder="Origin city/country" 
                 />
-              )}
-              {eventLocation === "OUTSIDE KATHMANDU VALLEY" && (
-                <FormSelect 
-                  label="City (Outside Valley)" 
-                  value={eventCity} 
-                  onChange={setEventCity} 
-                  options={outsideValleyCitiesOptions}
-                  placeholder="Select city"
+                <FormInput 
+                  label="To" 
+                  value={eventToCity} 
+                  onChange={setEventToCity} 
+                  placeholder="Destination city/country" 
                 />
-              )}
-              {eventLocation === "DESTINATION EVENT" && (
-                <div className="grid grid-cols-2 gap-4">
-                  <FormInput 
-                    label="From" 
-                    value={eventFromCity} 
-                    onChange={setEventFromCity} 
-                    placeholder="Origin city/country" 
-                  />
-                  <FormInput 
-                    label="To" 
-                    value={eventToCity} 
-                    onChange={setEventToCity} 
-                    placeholder="Destination city/country" 
-                  />
-                </div>
-              )}
-            </CardContent>
-          </Card>
+              </div>
+            )}
+          </FormSection>
 
           {/* Event Dates */}
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Calendar className="w-5 h-5 text-primary" />
-                Event Dates
-              </CardTitle>
-              <CardDescription>Select event dates (Nepali calendar)</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <NepaliCalendar
-                selectedDates={selectedDates}
-                onDateSelect={handleDateSelect}
-              />
-              
-              {/* Event Type Selection for Each Date */}
-              {selectedDates.length > 0 && (
-                <div className="mt-4 space-y-3">
-                  <h4 className="text-sm font-medium text-muted-foreground">Assign Events to Dates</h4>
-                  {selectedDates.map((dateObj) => {
-                    const dateKey = getDateKey(dateObj);
-                    return (
-                      <EventSelector
-                        key={dateKey}
-                        date={dateObj}
-                        selectedEvent={eventsByDate[dateKey] || ''}
-                        onEventChange={(event) => handleEventChange(dateObj, event)}
-                        eventOptions={availableEvents}
-                        onRemoveDate={() => handleRemoveDate(dateObj)}
-                      />
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <FormSection title="Event Dates (BS Calendar)" icon={Calendar} gradient="pink">
+            <NepaliCalendar
+              selectedDates={selectedDates}
+              onDateSelect={handleDateSelect}
+            />
+            
+            {/* Event Type Selection for Each Date */}
+            {selectedDates.length > 0 && (
+              <div className="mt-4 space-y-3">
+                <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <Sparkles className="w-4 h-4" />
+                  Assign Events to Dates
+                </h4>
+                {selectedDates.map((dateObj) => {
+                  const dateKey = getDateKey(dateObj);
+                  return (
+                    <EventSelector
+                      key={dateKey}
+                      date={dateObj}
+                      selectedEvent={eventsByDate[dateKey] || ''}
+                      onEventChange={(event) => handleEventChange(dateObj, event)}
+                      eventOptions={availableEvents}
+                      onRemoveDate={() => handleRemoveDate(dateObj)}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </FormSection>
         </div>
       </form>
     </div>
