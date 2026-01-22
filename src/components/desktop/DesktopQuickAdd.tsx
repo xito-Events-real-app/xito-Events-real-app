@@ -1,7 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
-import { Save, RotateCcw, User, MapPin, Calendar, FileText, Phone, Loader2, Building2 } from "lucide-react";
+import { Save, RotateCcw, User, MapPin, Calendar, FileText, Phone, Loader2, Building2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormSection, FormInput, FormSelect, CountrySelector, NepaliCalendar } from "@/components/form";
@@ -30,13 +30,13 @@ const getDateKey = (d: NepaliDateObject): string => {
 
 export function DesktopQuickAdd() {
   const navigate = useNavigate();
-  const { dropdowns } = useCachedData();
+  const { dropdowns, isFromCache, isSyncing, refreshData } = useCachedData();
   
   // Form state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [clientName, setClientName] = useState("");
   const [companyName, setCompanyName] = useState("");
-  const [serviceTypes, setServiceTypes] = useState<string[]>(["PHOTOGRAPHY"]);
+  const [serviceTypes, setServiceTypes] = useState<string[]>([]);
   const [source, setSource] = useState("");
   const [whoseWhatsapp, setWhoseWhatsapp] = useState("");
   const [oldClientName, setOldClientName] = useState("");
@@ -58,6 +58,36 @@ export function DesktopQuickAdd() {
   const [eventToCity, setEventToCity] = useState("");
   const [selectedDates, setSelectedDates] = useState<NepaliDateObject[]>([]);
   const [eventsByDate, setEventsByDate] = useState<Record<string, string>>({});
+
+  // Set default Company Name when dropdowns load
+  useEffect(() => {
+    if (companyName === "" && dropdowns?.companyNames && dropdowns.companyNames.length > 0) {
+      const defaultCompany = dropdowns.companyNames.find(
+        (name) => name.trim().toUpperCase() === "WEDDING TALES NEPAL"
+      );
+      if (defaultCompany) {
+        setCompanyName(defaultCompany);
+      }
+    }
+  }, [companyName, dropdowns?.companyNames]);
+
+  // Set default Service Type when dropdowns load
+  useEffect(() => {
+    if (serviceTypes.length === 0) {
+      const effectiveOptions = dropdowns?.serviceTypes && dropdowns.serviceTypes.length > 0 
+        ? dropdowns.serviceTypes 
+        : ["PHOTOGRAPHY", "VIDEOGRAPHY", "DRONE"];
+      
+      const defaultService = effectiveOptions.find(
+        (s) => s.trim().toUpperCase() === "PHOTOGRAPHY"
+      );
+      if (defaultService) {
+        setServiceTypes([defaultService]);
+      } else if (effectiveOptions.length > 0) {
+        setServiceTypes([effectiveOptions[0]]);
+      }
+    }
+  }, [serviceTypes.length, dropdowns?.serviceTypes]);
 
   // Derived values - combine all event types into a single list
   const availableEvents = useMemo(() => {
@@ -314,6 +344,23 @@ export function DesktopQuickAdd() {
               <CardDescription>Enter the client's name and source</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-muted-foreground">
+                  {isFromCache ? "From cache" : "Fresh data"} • {dropdowns?.companyNames?.length || 0} companies, {dropdowns?.serviceTypes?.length || 0} services
+                </span>
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => refreshData()}
+                  disabled={isSyncing}
+                  className="h-6 text-xs"
+                >
+                  <RefreshCw className={cn("w-3 h-3 mr-1", isSyncing && "animate-spin")} />
+                  Refresh
+                </Button>
+              </div>
+              
               <FormInput 
                 label="Client Name" 
                 value={clientName} 
@@ -322,17 +369,15 @@ export function DesktopQuickAdd() {
                 required 
               />
               
-              {/* Company Name & Service Type - New fields in a grid */}
-              <div className="grid grid-cols-2 gap-4">
-                <FormSelect 
-                  label="Company Name"
-                  value={companyName} 
-                  onChange={setCompanyName} 
-                  options={dropdowns?.companyNames || []} 
-                  placeholder="Select company..."
-                />
-                <div />
-              </div>
+              {/* Company Name - Searchable combobox */}
+              <FormCombobox 
+                label="Company Name"
+                value={companyName} 
+                onChange={setCompanyName} 
+                options={dropdowns?.companyNames || []} 
+                placeholder="Select company..."
+                searchPlaceholder="Search companies..."
+              />
               
               {/* Service Type - Multi-select */}
               <ServiceTypeSelector

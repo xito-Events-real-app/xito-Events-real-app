@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { AppLayout, PageHeader } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { FormSection, FormInput, FormSelect, CountrySelector, NepaliCalendar } from "@/components/form";
@@ -11,19 +11,20 @@ import { NepaliDateObject, bsToAD, adToBS, formatBSDate, isUnknownDay, getDayFor
 import { useCachedData } from "@/hooks/useCachedData";
 import { addClient, addOldClient, isSheetsConfigured } from "@/lib/sheets-api";
 import { toast } from "@/hooks/use-toast";
-import { Save, Loader2, AlertTriangle, User, FileText, MapPin, Calendar, Phone, Sparkles } from "lucide-react";
+import { Save, Loader2, AlertTriangle, User, FileText, MapPin, Calendar, Phone, Sparkles, RefreshCw } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function QuickAdd() {
-  const { dropdowns, isLoading: dropdownsLoading, isFromCache } = useCachedData();
+  const { dropdowns, isLoading: dropdownsLoading, isFromCache, isSyncing, refreshData } = useCachedData();
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Form state
   const [clientName, setClientName] = useState("");
   const [companyName, setCompanyName] = useState("");
-  const [serviceTypes, setServiceTypes] = useState<string[]>(["PHOTOGRAPHY"]);
+  const [serviceTypes, setServiceTypes] = useState<string[]>([]);
   const [source, setSource] = useState("");
   const [whoseWhatsapp, setWhoseWhatsapp] = useState("");
   const [oldClientName, setOldClientName] = useState("");
@@ -46,6 +47,36 @@ export default function QuickAdd() {
   const [clientHandler, setClientHandler] = useState("");
 
   const isConfigured = isSheetsConfigured();
+
+  // Set default Company Name when dropdowns load
+  useEffect(() => {
+    if (companyName === "" && dropdowns?.companyNames && dropdowns.companyNames.length > 0) {
+      const defaultCompany = dropdowns.companyNames.find(
+        (name) => name.trim().toUpperCase() === "WEDDING TALES NEPAL"
+      );
+      if (defaultCompany) {
+        setCompanyName(defaultCompany);
+      }
+    }
+  }, [companyName, dropdowns?.companyNames]);
+
+  // Set default Service Type when dropdowns load
+  useEffect(() => {
+    if (serviceTypes.length === 0) {
+      const effectiveOptions = dropdowns?.serviceTypes && dropdowns.serviceTypes.length > 0 
+        ? dropdowns.serviceTypes 
+        : ["PHOTOGRAPHY", "VIDEOGRAPHY", "DRONE"];
+      
+      const defaultService = effectiveOptions.find(
+        (s) => s.trim().toUpperCase() === "PHOTOGRAPHY"
+      );
+      if (defaultService) {
+        setServiceTypes([defaultService]);
+      } else if (effectiveOptions.length > 0) {
+        setServiceTypes([effectiveOptions[0]]);
+      }
+    }
+  }, [serviceTypes.length, dropdowns?.serviceTypes]);
 
   // Combine all event options from D, E, F columns
   const allEventOptions = useMemo(() => {
@@ -296,18 +327,36 @@ export default function QuickAdd() {
 
         {/* Client Basic Details */}
         <FormSection title="Client Details" icon={User} gradient="blue">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-muted-foreground">
+              {isFromCache ? "From cache" : "Fresh data"} • {dropdowns?.companyNames?.length || 0} companies, {dropdowns?.serviceTypes?.length || 0} services
+            </span>
+            <Button 
+              type="button" 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => refreshData()}
+              disabled={isSyncing}
+              className="h-6 text-xs"
+            >
+              <RefreshCw className={cn("w-3 h-3 mr-1", isSyncing && "animate-spin")} />
+              Refresh
+            </Button>
+          </div>
+          
           <FormInput label="Client Name" value={clientName} onChange={setClientName} placeholder="Enter client name" required />
           
-          {/* Company Name - New field */}
-          <FormSelect 
+          {/* Company Name - Searchable combobox */}
+          <FormCombobox 
             label="Company Name"
             value={companyName} 
             onChange={setCompanyName} 
             options={dropdowns?.companyNames || []} 
             placeholder="Select company..."
+            searchPlaceholder="Search companies..."
           />
           
-          {/* Service Type - New multi-select field */}
+          {/* Service Type - Multi-select */}
           <ServiceTypeSelector
             label="Service Type"
             value={serviceTypes}

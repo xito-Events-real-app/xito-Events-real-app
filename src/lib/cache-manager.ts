@@ -7,6 +7,10 @@ import {
   forceResetDatabase 
 } from "./indexeddb-config";
 
+// Cache schema version - increment when dropdown structure changes
+// This forces a refresh even if cache isn't expired
+export const CACHE_SCHEMA_VERSION = "v2";
+
 export interface CacheData {
   clients: ClientData[];
   dropdowns: DropdownData | null;
@@ -73,7 +77,7 @@ export async function setCachedClients(clients: ClientData[]): Promise<void> {
     clients,
     dropdowns: cached?.dropdowns || null,
     lastSyncedAt: Date.now(),
-    version: "v1"
+    version: CACHE_SCHEMA_VERSION
   });
 }
 
@@ -84,7 +88,7 @@ export async function setCachedDropdowns(dropdowns: DropdownData): Promise<void>
     clients: cached?.clients || [],
     dropdowns,
     lastSyncedAt: Date.now(),
-    version: "v1"
+    version: CACHE_SCHEMA_VERSION
   });
 }
 
@@ -119,14 +123,21 @@ export async function addClientToCache(client: ClientData): Promise<void> {
     clients: [client, ...clients],
     dropdowns: cached?.dropdowns || null,
     lastSyncedAt: cached?.lastSyncedAt || Date.now(),
-    version: "v1"
+    version: CACHE_SCHEMA_VERSION
   });
 }
 
-// Check if cache is expired (older than 24 hours)
+// Check if cache is expired (older than 24 hours OR schema version mismatch OR missing new dropdowns)
 export async function isCacheExpired(): Promise<boolean> {
   const cached = await getCachedData();
   if (!cached?.lastSyncedAt) return true;
+  
+  // Force refresh if schema version changed (new dropdown fields added)
+  if (cached.version !== CACHE_SCHEMA_VERSION) return true;
+  
+  // Force refresh if critical dropdown fields are missing
+  if (!cached.dropdowns?.companyNames || !cached.dropdowns?.serviceTypes) return true;
+  
   return Date.now() - cached.lastSyncedAt > CACHE_EXPIRY_MS;
 }
 
