@@ -92,7 +92,7 @@ async function getAccessToken(credentials: ServiceAccountCredentials): Promise<s
 
 // Get dropdown values from setup sheet
 async function getDropdowns(accessToken: string, spreadsheetId: string) {
-  const range = encodeURIComponent("'CLIENT TRACKER SETUP DATA'!A2:Q100");
+  const range = encodeURIComponent("'CLIENT TRACKER SETUP DATA'!A2:X100");
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   const response = await fetch(url, {
@@ -106,7 +106,7 @@ async function getDropdowns(accessToken: string, spreadsheetId: string) {
   }
 
   const data = await response.json();
-  if (!data.values) return { sources: [], whatsappOwners: [], clientLocations: [], eventLocations: [], teamMembers: [], oldClients: [], clientStatuses: [], mindsetOptions: [], paymentTypes: [], banks: [] };
+  if (!data.values) return { sources: [], whatsappOwners: [], clientLocations: [], eventLocations: [], teamMembers: [], oldClients: [], clientStatuses: [], mindsetOptions: [], paymentTypes: [], banks: [], companyNames: [], serviceTypes: [] };
 
   const rows = data.values;
   const getColumn = (idx: number) => rows.map((row: string[]) => row[idx]).filter(Boolean);
@@ -124,6 +124,8 @@ async function getDropdowns(accessToken: string, spreadsheetId: string) {
     mindsetOptions: getColumn(10),    // Column K - Mindset options for QUOTATION SENT
     banks: getColumn(15),             // Column P - Bank names
     paymentTypes: getColumn(16),      // Column Q - Payment types (ADVANCE, PARTIAL, FULL)
+    companyNames: getColumn(22),      // Column W - Company names
+    serviceTypes: getColumn(23),      // Column X - Service types
   };
 }
 
@@ -228,9 +230,9 @@ async function updateClientStatus(accessToken: string, spreadsheetId: string, ro
   return { success: true, statusLog: updatedLog, copiedToBooked };
 }
 
-// Get recent clients (now including Column W for status, Column X for handler, Column Y for call log, Column Z for mindset, AA/AB for bargaining, AC for comments, AD for final quotation, AE/AF/AG for payments)
+// Get recent clients (now including Column W for status, Column X for handler, Column Y for call log, Column Z for mindset, AA/AB for bargaining, AC for comments, AD for final quotation, AE/AF/AG for payments, AH for company name, AI for service types)
 async function getClients(accessToken: string, spreadsheetId: string, limit = 50) {
-  const range = encodeURIComponent("'CLIENT TRACKER'!A2:AG" + (limit + 1));
+  const range = encodeURIComponent("'CLIENT TRACKER'!A2:AI" + (limit + 1));
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   const response = await fetch(url, {
@@ -281,6 +283,8 @@ async function getClients(accessToken: string, spreadsheetId: string, limit = 50
     paymentsMade: row[30] || '',          // Column AE - Payments made log
     paymentDatesAD: row[31] || '',        // Column AF - Payment dates in AD
     remainingPayment: row[32] || '',      // Column AG - Remaining payment
+    companyName: row[33] || '',           // Column AH - Company name
+    serviceTypes: row[34] || '',          // Column AI - Service types (multi, "/" separated)
   }));
 }
 
@@ -408,9 +412,20 @@ async function addClient(accessToken: string, spreadsheetId: string, clientData:
     '',                                      // V: (empty)
     initialStatusLog,                        // W: status_log - Initial "JUST ENQUIRED" status
     clientData.clientHandler || '',          // X: client_handler
+    '',                                      // Y: call_log (empty for new)
+    '',                                      // Z: mindset (empty for new)
+    '',                                      // AA: our_bargained_rates (empty for new)
+    '',                                      // AB: client_bargained_rates (empty for new)
+    '',                                      // AC: comments (empty for new)
+    '',                                      // AD: final_quotation (empty for new)
+    '',                                      // AE: payments_made (empty for new)
+    '',                                      // AF: payment_dates (empty for new)
+    '',                                      // AG: remaining_payment (empty for new)
+    clientData.companyName || '',            // AH: company_name
+    clientData.serviceTypes || '',           // AI: service_types (multi, "/" separated)
   ]];
 
-  const range = encodeURIComponent("'CLIENT TRACKER'!A2:X2");
+  const range = encodeURIComponent("'CLIENT TRACKER'!A2:AI2");
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
   
   const response = await fetch(updateUrl, {

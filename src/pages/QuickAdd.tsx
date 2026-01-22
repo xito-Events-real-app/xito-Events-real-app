@@ -4,13 +4,14 @@ import { Button } from "@/components/ui/button";
 import { FormSection, FormInput, FormSelect, CountrySelector, NepaliCalendar } from "@/components/form";
 import { FormCombobox } from "@/components/form/FormCombobox";
 import { EventSelector } from "@/components/form/EventSelector";
+import { ServiceTypeSelector } from "@/components/form/ServiceTypeSelector";
 import { getCountryCodeFromName } from "@/components/form/CountrySelector";
 import { valleyCities, nepalCitiesOutsideValley, clientLocationOptions } from "@/lib/form-data";
 import { NepaliDateObject, bsToAD, adToBS, formatBSDate, isUnknownDay, getDayForStorage } from "@/lib/nepali-date";
 import { useCachedData } from "@/hooks/useCachedData";
 import { addClient, addOldClient, isSheetsConfigured } from "@/lib/sheets-api";
 import { toast } from "@/hooks/use-toast";
-import { Save, Loader2, AlertTriangle } from "lucide-react";
+import { Save, Loader2, AlertTriangle, Building2 } from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,6 +22,8 @@ export default function QuickAdd() {
   
   // Form state
   const [clientName, setClientName] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [serviceTypes, setServiceTypes] = useState<string[]>(["PHOTOGRAPHY"]);
   const [source, setSource] = useState("");
   const [whoseWhatsapp, setWhoseWhatsapp] = useState("");
   const [oldClientName, setOldClientName] = useState("");
@@ -189,6 +192,8 @@ export default function QuickAdd() {
 
       const clientData = {
         clientName,
+        companyName,
+        serviceTypes: serviceTypes.join("/"),
         source: getSourceValue(),
         clientLocation,
         currentCountry: countryForSheet,
@@ -223,6 +228,8 @@ export default function QuickAdd() {
 
       // Reset form
       setClientName("");
+      setCompanyName("");
+      setServiceTypes(["PHOTOGRAPHY"]);
       setSource("");
       setWhoseWhatsapp("");
       setOldClientName("");
@@ -290,6 +297,25 @@ export default function QuickAdd() {
         {/* Client Basic Details */}
         <FormSection title="Client Basic Details">
           <FormInput label="Client Name" value={clientName} onChange={setClientName} placeholder="Enter client name" required />
+          
+          {/* Company Name - New field */}
+          <FormSelect 
+            label="Company Name"
+            value={companyName} 
+            onChange={setCompanyName} 
+            options={dropdowns?.companyNames || []} 
+            placeholder="Select company..."
+          />
+          
+          {/* Service Type - New multi-select field */}
+          <ServiceTypeSelector
+            label="Service Type"
+            value={serviceTypes}
+            onChange={setServiceTypes}
+            options={dropdowns?.serviceTypes || []}
+            defaultValue="PHOTOGRAPHY"
+          />
+          
           <FormSelect 
             label="Source" 
             value={source} 

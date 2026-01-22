@@ -1,12 +1,13 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
-import { Save, RotateCcw, User, MapPin, Calendar, FileText, Phone, Loader2 } from "lucide-react";
+import { Save, RotateCcw, User, MapPin, Calendar, FileText, Phone, Loader2, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormSection, FormInput, FormSelect, CountrySelector, NepaliCalendar } from "@/components/form";
 import { FormCombobox } from "@/components/form/FormCombobox";
 import { EventSelector } from "@/components/form/EventSelector";
+import { ServiceTypeSelector } from "@/components/form/ServiceTypeSelector";
 import { getCountryCodeFromName } from "@/components/form/CountrySelector";
 import { valleyCities, nepalCitiesOutsideValley, clientLocationOptions } from "@/lib/form-data";
 import { 
@@ -34,6 +35,8 @@ export function DesktopQuickAdd() {
   // Form state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [clientName, setClientName] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [serviceTypes, setServiceTypes] = useState<string[]>(["PHOTOGRAPHY"]);
   const [source, setSource] = useState("");
   const [whoseWhatsapp, setWhoseWhatsapp] = useState("");
   const [oldClientName, setOldClientName] = useState("");
@@ -104,6 +107,8 @@ export function DesktopQuickAdd() {
 
   const handleResetForm = () => {
     setClientName("");
+    setCompanyName("");
+    setServiceTypes(["PHOTOGRAPHY"]);
     setSource("");
     setWhoseWhatsapp("");
     setOldClientName("");
@@ -187,6 +192,8 @@ export function DesktopQuickAdd() {
 
       const clientData: ClientData = {
         clientName: clientName.trim(),
+        companyName,
+        serviceTypes: serviceTypes.join("/"),
         source: getSourceValue(),
         clientLocation,
         currentCountry: countryForSheet,
@@ -314,6 +321,28 @@ export function DesktopQuickAdd() {
                 placeholder="Enter client name" 
                 required 
               />
+              
+              {/* Company Name & Service Type - New fields in a grid */}
+              <div className="grid grid-cols-2 gap-4">
+                <FormSelect 
+                  label="Company Name"
+                  value={companyName} 
+                  onChange={setCompanyName} 
+                  options={dropdowns?.companyNames || []} 
+                  placeholder="Select company..."
+                />
+                <div />
+              </div>
+              
+              {/* Service Type - Multi-select */}
+              <ServiceTypeSelector
+                label="Service Type"
+                value={serviceTypes}
+                onChange={setServiceTypes}
+                options={dropdowns?.serviceTypes || []}
+                defaultValue="PHOTOGRAPHY"
+              />
+              
               <FormSelect 
                 label="Source" 
                 value={source} 
