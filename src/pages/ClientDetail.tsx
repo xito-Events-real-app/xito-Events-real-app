@@ -1,6 +1,6 @@
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { useState, useMemo } from "react";
-import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, Calendar, User, Clock, DollarSign, FileText, Activity, MessageSquare, Briefcase, Pencil, X, Check, Loader2, Plus, CreditCard, RefreshCw, RotateCcw } from "lucide-react";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, Calendar, User, Clock, DollarSign, FileText, Activity, MessageSquare, Briefcase, Pencil, X, Check, Loader2, Plus, CreditCard, RefreshCw, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -156,7 +156,84 @@ const ClientDetail = () => {
   const [currentRemainingPayment, setCurrentRemainingPayment] = useState("");
 
   // Get the from state to preserve filter position when going back
-  const fromState = location.state as { from?: string; filters?: any; scrollPosition?: number } | null;
+  const fromState = location.state as { 
+    from?: string; 
+    filters?: any; 
+    scrollPosition?: number;
+    searchQuery?: string;
+    resultIds?: (number | string)[];
+    currentIndex?: number;
+  } | null;
+
+  // Compute previous/next client IDs for navigation
+  const { prevClientId, nextClientId, currentPosition, totalCount, isFromSearch } = useMemo(() => {
+    // If coming from search with result context
+    if (fromState?.from === 'search' && fromState.resultIds && fromState.currentIndex !== undefined) {
+      const ids = fromState.resultIds;
+      const idx = fromState.currentIndex;
+      return {
+        prevClientId: idx > 0 ? ids[idx - 1] : null,
+        nextClientId: idx < ids.length - 1 ? ids[idx + 1] : null,
+        currentPosition: idx + 1,
+        totalCount: ids.length,
+        isFromSearch: true
+      };
+    }
+    
+    // Default: navigate through all clients
+    const allIds = clients.map(c => c.rowNumber || c.registeredDateTimeAD);
+    const currentIdx = allIds.findIndex(id => String(id) === rowNumber);
+    
+    return {
+      prevClientId: currentIdx > 0 ? allIds[currentIdx - 1] : null,
+      nextClientId: currentIdx < allIds.length - 1 ? allIds[currentIdx + 1] : null,
+      currentPosition: currentIdx >= 0 ? currentIdx + 1 : 0,
+      totalCount: allIds.length,
+      isFromSearch: false
+    };
+  }, [fromState, clients, rowNumber]);
+
+  // Navigation handlers
+  const handleNavigatePrev = useCallback(() => {
+    if (!prevClientId) return;
+    const newIndex = (fromState?.currentIndex ?? 0) - 1;
+    navigate(`/client-tracker/client/${prevClientId}`, {
+      state: {
+        ...fromState,
+        currentIndex: newIndex
+      }
+    });
+  }, [prevClientId, fromState, navigate]);
+
+  const handleNavigateNext = useCallback(() => {
+    if (!nextClientId) return;
+    const newIndex = (fromState?.currentIndex ?? 0) + 1;
+    navigate(`/client-tracker/client/${nextClientId}`, {
+      state: {
+        ...fromState,
+        currentIndex: newIndex
+      }
+    });
+  }, [nextClientId, fromState, navigate]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't navigate if editing or if focus is on an input
+      if (isEditing || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      
+      if (e.key === 'ArrowLeft' && prevClientId) {
+        handleNavigatePrev();
+      } else if (e.key === 'ArrowRight' && nextClientId) {
+        handleNavigateNext();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isEditing, prevClientId, nextClientId, handleNavigatePrev, handleNavigateNext]);
 
   const client = useMemo(() => {
     if (!rowNumber || !clients.length) return null;
@@ -599,9 +676,9 @@ const ClientDetail = () => {
       {/* Header with Quick Actions */}
       <div className="sticky top-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-800/50 shadow-sm">
         <div className="container mx-auto px-4 py-3">
-          {/* Top row: Back + Name + Edit */}
+          {/* Top row: Back + Navigation + Name + Edit */}
           <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <Button 
                 variant="ghost" 
                 size="icon" 
@@ -610,10 +687,43 @@ const ClientDetail = () => {
               >
                 <ArrowLeft className="h-5 w-5" />
               </Button>
-              <div>
+              
+              {/* Client Navigation */}
+              {!isEditing && totalCount > 1 && (
+                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-full px-1 py-0.5">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleNavigatePrev}
+                    disabled={!prevClientId}
+                    className="h-7 w-7 rounded-full hover:bg-white dark:hover:bg-slate-700 disabled:opacity-30"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-xs font-medium text-muted-foreground min-w-[40px] text-center">
+                    {currentPosition}/{totalCount}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleNavigateNext}
+                    disabled={!nextClientId}
+                    className="h-7 w-7 rounded-full hover:bg-white dark:hover:bg-slate-700 disabled:opacity-30"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+              
+              <div className="ml-1">
                 <h1 className={`text-lg font-bold px-4 py-1.5 rounded-xl shadow-sm ${inquiryMonth ? getMonthColorClasses(inquiryMonth) : 'bg-gradient-to-r from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700'}`}>
                   {isEditing ? "Edit Client" : client.clientName}
                 </h1>
+                {isFromSearch && fromState?.searchQuery && (
+                  <p className="text-[10px] text-muted-foreground mt-0.5 ml-1">
+                    Search: "{fromState.searchQuery}"
+                  </p>
+                )}
               </div>
             </div>
             {isEditing ? (
