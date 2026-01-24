@@ -1591,16 +1591,64 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
             {client.clientName}
           </button>
 
-          {/* Event Details */}
+          {/* Event Details - Styled like Desktop with colored badges */}
           {events.length > 0 && (
-            <div className="mt-1 space-y-0.5">
-              {events.slice(0, 3).map((event, i) => (
-                <p key={i} className="text-xs text-muted-foreground">
-                  {event.year} {event.monthName} {event.day} {event.eventName}
-                </p>
-              ))}
+            <div className="mt-1.5 space-y-1">
+              {events.slice(0, 3).map((event, i) => {
+                // Event type theming
+                const eventLower = event.eventName?.toLowerCase() || '';
+                const getEventTheme = () => {
+                  if (eventLower.includes('reception')) return 'border-accent bg-accent/10';
+                  if (eventLower.includes('engagement') || eventLower.includes('pre')) return 'border-secondary bg-secondary/10';
+                  if (eventLower.includes('wedding')) return 'border-primary bg-primary/10';
+                  return 'border-muted bg-muted/40';
+                };
+                
+                // Month color mapping (1-12 → distinct colors)
+                const monthNum = parseInt(event.month || '0');
+                const getMonthColors = () => {
+                  const colors: Record<number, string> = {
+                    1: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',    // Baisakh
+                    2: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',  // Jestha
+                    3: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',   // Ashadh
+                    4: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',  // Shrawan
+                    5: 'bg-lime-100 text-lime-700 dark:bg-lime-900/40 dark:text-lime-300',    // Bhadra
+                    6: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',   // Ashwin
+                    7: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300', // Kartik
+                    8: 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',    // Mangsir
+                    9: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300',    // Poush
+                    10: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',     // Magh
+                    11: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',    // Falgun
+                    12: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',  // Chaitra
+                  };
+                  return colors[monthNum] || 'bg-muted text-muted-foreground';
+                };
+                
+                return (
+                  <div
+                    key={i}
+                    className={cn(
+                      "flex items-center gap-1.5 text-[11px] rounded-md border-l-2 px-2 py-1",
+                      getEventTheme()
+                    )}
+                  >
+                    <span className="font-semibold text-foreground shrink-0 w-[70px] truncate">{event.eventName}</span>
+                    <span className={cn(
+                      "px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0",
+                      getMonthColors()
+                    )}>
+                      {event.monthName} {event.day}
+                    </span>
+                    {event.year && (
+                      <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-primary text-primary-foreground shrink-0">
+                        {event.year}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
               {events.length > 3 && (
-                <p className="text-xs text-muted-foreground/70">
+                <p className="text-[10px] text-muted-foreground/70 pl-2">
                   +{events.length - 3} more events
                 </p>
               )}
