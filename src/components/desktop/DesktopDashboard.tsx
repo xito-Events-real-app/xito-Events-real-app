@@ -102,6 +102,23 @@ export function DesktopDashboard({
   const [selectedClient, setSelectedClient] = useState<any | null>(null);
   const [showAllOpenDates, setShowAllOpenDates] = useState(false);
 
+  // Sort clients so BOOKED clients appear first
+  const sortedClients = useMemo(() => {
+    return [...clients].sort((a, b) => {
+      const statusA = getCurrentStatus(a.statusLog || '').toUpperCase();
+      const statusB = getCurrentStatus(b.statusLog || '').toUpperCase();
+      
+      // Check if status is BOOKED (but not BOOKED SOMEWHERE ELSE)
+      const isBookedA = statusA.includes('BOOKED') && !statusA.includes('BOOKED SOMEWHERE ELSE');
+      const isBookedB = statusB.includes('BOOKED') && !statusB.includes('BOOKED SOMEWHERE ELSE');
+      
+      // BOOKED clients come first
+      if (isBookedA && !isBookedB) return -1;
+      if (!isBookedA && isBookedB) return 1;
+      return 0;
+    });
+  }, [clients]);
+
   // Use allClients for stats if available, otherwise use filtered clients
   const statsClients = allClients || clients;
 
@@ -335,12 +352,15 @@ export function DesktopDashboard({
                     <TableHead className="font-bold text-foreground uppercase tracking-wide text-xs py-4">
                       Category Details
                     </TableHead>
+                    <TableHead className="font-bold text-foreground uppercase tracking-wide text-xs py-4 text-right w-[140px]">
+                      Status
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {clients.length === 0 ? (
+                  {sortedClients.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={3} className="text-center py-16">
+                      <TableCell colSpan={4} className="text-center py-16">
                         <div className="flex flex-col items-center gap-3">
                           <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
                             <Users className="w-8 h-8 text-muted-foreground" />
@@ -353,7 +373,7 @@ export function DesktopDashboard({
                       </TableCell>
                     </TableRow>
                   ) : (
-                    clients.map((client) => (
+                    sortedClients.map((client) => (
                       <DesktopClientRow
                         key={client.rowNumber}
                         client={client}
