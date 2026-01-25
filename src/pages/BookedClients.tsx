@@ -1,14 +1,13 @@
 import { useDesktopMode } from "@/hooks/useDesktopMode";
 import MobileBookedClients from "@/components/booked/MobileBookedClients";
-import DesktopBookedClients from "@/components/booked/DesktopBookedClients";
+import { DesktopBookedAppLayout } from "@/components/booked/DesktopBookedAppLayout";
 
 const BookedClients = () => {
   const { isDesktopMode } = useDesktopMode();
 
-  // Use desktop view only if desktop mode is explicitly enabled
-  // Default to mobile view for all users
+  // Use new desktop dashboard layout if desktop mode is enabled
   if (isDesktopMode) {
-    return <DesktopBookedClients />;
+    return <DesktopBookedAppLayout />;
   }
 
   return <MobileBookedClients />;
