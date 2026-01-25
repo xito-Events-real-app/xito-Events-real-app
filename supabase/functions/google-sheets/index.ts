@@ -1732,9 +1732,30 @@ async function fullResyncAllBookedClients(accessToken: string, spreadsheetId: st
   let skippedCount = 0;
   let notFoundCount = 0;
   
+  // Track detailed sync info for report
+  const syncDetails: { 
+    clientName: string; 
+    bookedRow: number; 
+    trackerRow: number; 
+    changedColumns: string[];
+  }[] = [];
+  
+  // Column names for human-readable report
+  const columnNames: Record<number, string> = {
+    0: 'Registered DateTime', 1: 'Registered Date BS', 2: 'Client Name', 3: 'Source',
+    4: 'Location', 5: 'Country', 6: 'Contact', 7: 'WhatsApp', 8: 'Email',
+    9: 'Event Location', 10: 'Event City', 11: 'Events', 12: 'Event Year',
+    13: 'Event Month', 14: 'Event Day', 15: 'Event Date AD', 16: 'Who Added',
+    17: 'Inquiry Date AD', 18: 'Inquiry Date BS', 19: 'Inquiry Time', 20: 'Description',
+    21: 'Quotation', 22: 'Status Log', 23: 'Handler', 24: 'Call Log', 25: 'Mindset',
+    26: 'Our Bargained', 27: 'Client Bargained', 28: 'Comments', 29: 'Final Quotation',
+    30: 'Payments Made', 31: 'Payment Dates', 32: 'Remaining Payment', 33: 'Company', 34: 'Service Types'
+  };
+  
   for (let i = 0; i < currentBookedRows.length; i++) {
     const row = currentBookedRows[i];
     const registeredDateTime = (row[0] || '').trim();
+    const clientName = (row[2] || '').trim(); // Column C = client name
     const bookedRowNumber = i + 2;
     
     if (!registeredDateTime) {
@@ -1757,17 +1778,19 @@ async function fullResyncAllBookedClients(accessToken: string, spreadsheetId: st
     
     const needsUpdate = forceSync || bookedAllData !== trackerAllData;
     
-    if (needsUpdate && !forceSync) {
-      // Log which columns differ for debugging
-      const diffCols: string[] = [];
+    // Track which columns differ for the report
+    const changedColumns: string[] = [];
+    if (needsUpdate) {
       for (let col = 0; col < 35; col++) {
         const bookedVal = (row[col] || '').trim();
         const trackerVal = (trackerEntry.rowData[col] || '').trim();
         if (bookedVal !== trackerVal) {
-          diffCols.push(`Col${col}`);
+          changedColumns.push(columnNames[col] || `Column ${col}`);
         }
       }
-      console.log(`[FULL RESYNC] Row ${bookedRowNumber} differs in columns: ${diffCols.join(', ')}`);
+      if (!forceSync) {
+        console.log(`[FULL RESYNC] Row ${bookedRowNumber} differs in columns: ${changedColumns.join(', ')}`);
+      }
     }
     
     if (needsUpdate) {
@@ -1793,6 +1816,14 @@ async function fullResyncAllBookedClients(accessToken: string, spreadsheetId: st
       if (updateResponse.ok) {
         console.log(`[FULL RESYNC] Synced row ${bookedRowNumber} from tracker row ${trackerEntry.trackerRowNumber}`);
         syncedCount++;
+        
+        // Add to sync details for report
+        syncDetails.push({
+          clientName: clientName || trackerEntry.rowData[2] || 'Unknown',
+          bookedRow: bookedRowNumber,
+          trackerRow: trackerEntry.trackerRowNumber,
+          changedColumns: changedColumns.length > 0 ? changedColumns : ['All (forced sync)']
+        });
       } else {
         console.error(`[FULL RESYNC] Failed to update row ${bookedRowNumber}:`, await updateResponse.text());
       }
@@ -1802,7 +1833,15 @@ async function fullResyncAllBookedClients(accessToken: string, spreadsheetId: st
   }
   
   console.log(`[FULL RESYNC] Complete: ${copiedCount} copied, ${syncedCount} synced, ${skippedCount} unchanged, ${notFoundCount} not found in tracker`);
-  return { success: true, copiedCount, syncedCount, skippedCount, notFoundCount, totalBooked: currentBookedRows.length };
+  return { 
+    success: true, 
+    copiedCount, 
+    syncedCount, 
+    skippedCount, 
+    notFoundCount, 
+    totalBooked: currentBookedRows.length,
+    syncDetails // Return detailed sync info
+  };
 }
 
 // Update a booked client in both BOOKED CLIENTS and CLIENT TRACKER sheets
