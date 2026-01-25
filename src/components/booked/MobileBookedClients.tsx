@@ -7,40 +7,36 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { getBookedClients, migrateExistingBookedClients, fullResyncAllBookedClients, BookedClientData } from "@/lib/sheets-api";
+import { migrateExistingBookedClients, fullResyncAllBookedClients, BookedClientData } from "@/lib/sheets-api";
 import EventClientCard from "./EventClientCard";
 import NepaliDateFilter from "./NepaliDateFilter";
 import { GlobalModeToggle } from "@/components/layout/GlobalModeToggle";
 import NepaliDate from "nepali-date-converter";
+import { useBookedCachedData } from "@/hooks/useBookedCachedData";
 
 const MobileBookedClients = () => {
   const navigate = useNavigate();
-  const [clients, setClients] = useState<BookedClientData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  
+  // Use cached data hook for faster loading
+  const { 
+    clients, 
+    isLoading, 
+    isFromCache, 
+    isSyncing, 
+    refreshData 
+  } = useBookedCachedData();
+  
   const [isMigrating, setIsMigrating] = useState(false);
   const [isFullResyncing, setIsFullResyncing] = useState(false);
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
-
-  const fetchClients = async () => {
-    try {
-      setIsLoading(true);
-      const data = await getBookedClients();
-      setClients(data);
-    } catch (error) {
-      console.error("Error fetching booked clients:", error);
-      toast.error("Failed to load booked clients");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleMigrate = async () => {
     try {
       setIsMigrating(true);
       const result = await migrateExistingBookedClients();
       toast.success(`Migrated ${result.migratedCount} clients`);
-      await fetchClients();
+      await refreshData();
     } catch (error) {
       console.error("Error migrating clients:", error);
       toast.error("Failed to migrate clients");
@@ -58,7 +54,7 @@ const MobileBookedClients = () => {
       } else {
         toast.info("All data is already synchronized");
       }
-      await fetchClients();
+      await refreshData();
     } catch (error) {
       console.error("Error performing full resync:", error);
       toast.error("Failed to perform full resync");
@@ -66,10 +62,6 @@ const MobileBookedClients = () => {
       setIsFullResyncing(false);
     }
   };
-
-  useEffect(() => {
-    fetchClients();
-  }, []);
 
   // Calculate days until event
   const getDaysUntilEvent = (client: BookedClientData): number | null => {
@@ -152,8 +144,8 @@ const MobileBookedClients = () => {
               <p className="text-xs text-slate-400">{clients.length} confirmed bookings</p>
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={fetchClients} disabled={isLoading} className="h-8 w-8">
-            <RefreshCw className={`h-4 w-4 text-slate-400 ${isLoading ? 'animate-spin' : ''}`} />
+          <Button variant="ghost" size="icon" onClick={refreshData} disabled={isLoading || isSyncing} className="h-8 w-8">
+            <RefreshCw className={`h-4 w-4 text-slate-400 ${isLoading || isSyncing ? 'animate-spin' : ''}`} />
           </Button>
         </div>
       </div>

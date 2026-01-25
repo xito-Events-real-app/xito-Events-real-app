@@ -3,19 +3,29 @@ import { useNavigate } from "react-router-dom";
 import { DesktopBookedSidebar } from "./DesktopBookedSidebar";
 import { DesktopBookedDashboard } from "./DesktopBookedDashboard";
 import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
-import { getBookedClients, fullResyncAllBookedClients, BookedClientData } from "@/lib/sheets-api";
+import { fullResyncAllBookedClients, BookedClientData } from "@/lib/sheets-api";
 import { parseEventDetails } from "@/lib/nepali-months";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { RefreshCw, Database, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useBookedCachedData } from "@/hooks/useBookedCachedData";
 
 export function DesktopBookedAppLayout() {
   const navigate = useNavigate();
-  const [clients, setClients] = useState<BookedClientData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSyncing, setIsSyncing] = useState(false);
+  
+  // Use cached data hook for faster loading
+  const { 
+    clients, 
+    isLoading, 
+    isFromCache, 
+    isSyncing, 
+    lastSyncedAt, 
+    refreshData,
+    error 
+  } = useBookedCachedData();
+  
   const [isFullResyncing, setIsFullResyncing] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   
@@ -23,23 +33,8 @@ export function DesktopBookedAppLayout() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedHotDate, setSelectedHotDate] = useState<string | null>(null);
 
-  const fetchClients = async () => {
-    try {
-      setIsLoading(true);
-      const data = await getBookedClients();
-      setClients(data);
-    } catch (error) {
-      console.error("Error fetching booked clients:", error);
-      toast.error("Failed to load booked clients");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleSync = async () => {
-    setIsSyncing(true);
-    await fetchClients();
-    setIsSyncing(false);
+    await refreshData();
   };
 
   const handleFullResync = async () => {
@@ -51,7 +46,7 @@ export function DesktopBookedAppLayout() {
       } else {
         toast.info("All data is already synchronized");
       }
-      await fetchClients();
+      await refreshData();
     } catch (error) {
       console.error("Error performing full resync:", error);
       toast.error("Failed to perform full resync");
@@ -61,8 +56,6 @@ export function DesktopBookedAppLayout() {
   };
 
   useEffect(() => { 
-    fetchClients(); 
-    
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     
@@ -114,8 +107,8 @@ export function DesktopBookedAppLayout() {
       <SyncStatusIndicator 
         pendingSyncs={0}
         isSyncing={isSyncing || isFullResyncing}
-        isFromCache={false}
-        lastSyncedAt={null}
+        isFromCache={isFromCache}
+        lastSyncedAt={lastSyncedAt}
         isOnline={isOnline}
       />
 
