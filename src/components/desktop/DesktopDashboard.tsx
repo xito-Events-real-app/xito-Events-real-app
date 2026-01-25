@@ -397,9 +397,17 @@ export function DesktopDashboard({
                       <Flame className="w-5 h-5 text-orange-500" />
                       Hot Dates
                     </CardTitle>
-                    <Badge variant="outline" className="text-xs">
-                      Top {hotDates.length} dates
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs">
+                        Top {hotDates.length} dates
+                      </Badge>
+                      <Link to="/client-tracker/hot-dates">
+                        <Button variant="ghost" size="sm" className="text-xs h-7">
+                          View All
+                          <ChevronRight className="w-3 h-3 ml-1" />
+                        </Button>
+                      </Link>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
