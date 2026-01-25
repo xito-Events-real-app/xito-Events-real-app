@@ -493,15 +493,21 @@ export function DesktopDashboard({
                     <div className="flex-1 flex flex-wrap gap-x-1 gap-y-1.5 min-w-0 items-center">
                       {monthData.days.map(({ day, isBooked, eventCount }) => (
                         isBooked ? (
-                          // BOOKED: Concentric circles with day number inside
-                          <span 
-                            key={day} 
-                            className="relative inline-flex items-center justify-center"
+                          // BOOKED: Clickable concentric circles with day number inside
+                          <button 
+                            key={day}
+                            onClick={() => onHotDateFilter?.(`${monthData.year}-${monthData.month}-${day}`)}
+                            className={cn(
+                              "relative inline-flex items-center justify-center cursor-pointer transition-all hover:scale-110",
+                              selectedHotDate === `${monthData.year}-${monthData.month}-${day}` 
+                                ? "ring-2 ring-offset-2 ring-green-500 rounded-full"
+                                : ""
+                            )}
                             style={{ 
                               width: eventCount >= 3 ? '40px' : eventCount >= 2 ? '32px' : '20px',
                               height: eventCount >= 3 ? '40px' : eventCount >= 2 ? '32px' : '20px'
                             }}
-                            title={`${eventCount} event(s) on day ${day}`}
+                            title={`${eventCount} event(s) on day ${day} - Click to filter`}
                           >
                             {/* 3rd ring (outermost) - shows when 3+ events */}
                             {eventCount >= 3 && (
@@ -515,15 +521,23 @@ export function DesktopDashboard({
                             <span className="w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center text-[10px] font-bold z-10">
                               {day}
                             </span>
-                          </span>
+                          </button>
                         ) : (
-                          // OPEN: Plain number
-                          <span 
+                          // OPEN: Clickable plain number
+                          <button 
                             key={day}
-                            className="w-5 h-5 flex items-center justify-center font-mono text-[10px] text-muted-foreground"
+                            onClick={() => onHotDateFilter?.(`${monthData.year}-${monthData.month}-${day}`)}
+                            className={cn(
+                              "w-5 h-5 flex items-center justify-center font-mono text-[10px] text-muted-foreground",
+                              "cursor-pointer hover:text-foreground hover:bg-muted rounded transition-all",
+                              selectedHotDate === `${monthData.year}-${monthData.month}-${day}` 
+                                ? "ring-2 ring-primary bg-primary/10 text-foreground"
+                                : ""
+                            )}
+                            title={`Day ${day} - Click to filter`}
                           >
                             {day}
-                          </span>
+                          </button>
                         )
                       ))}
                     </div>
