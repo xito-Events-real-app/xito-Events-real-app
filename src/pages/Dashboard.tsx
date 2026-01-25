@@ -2,9 +2,18 @@ import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { AppLayout, PageHeader } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { 
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerFooter,
+} from "@/components/ui/drawer";
 import { 
   Users, CalendarPlus, TrendingUp, Menu, 
-  ChevronRight, RefreshCw, AlertTriangle, Bell
+  ChevronRight, RefreshCw, AlertTriangle, Bell, Flame
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { getCurrentStatus } from "@/lib/sheets-api";
@@ -19,6 +28,7 @@ import { toast } from "sonner";
 import { getDesktopMode } from "@/hooks/useDesktopMode";
 import { DesktopAppLayout, DesktopDashboard } from "@/components/desktop";
 import { getStatusConfig, sortCategoriesByOrder } from "@/lib/status-config";
+import { parseEventDetails } from "@/lib/nepali-months";
 
 // Handler avatar colors
 const handlerColors = [
@@ -53,6 +63,7 @@ export default function Dashboard() {
   const [soloHandler, setSoloHandler] = useState<{ name: string; colorClass: string } | null>(null);
   const [showDateConverter, setShowDateConverter] = useState(false);
   const [isDesktopMode, setIsDesktopMode] = useState(false);
+  const [showHotDatesDrawer, setShowHotDatesDrawer] = useState(false);
 
   // Check desktop mode on mount
   useEffect(() => {
@@ -172,6 +183,81 @@ export default function Dashboard() {
     { label: "This Month", value: thisMonthClients, icon: CalendarPlus, color: "gradient-secondary" },
     { label: "Today", value: todaysClients.length, icon: TrendingUp, color: "gradient-accent" },
   ];
+
+  // Hot Dates calculation - group clients by event date
+  const hotDates = useMemo(() => {
+    const ENQUIRY_ON_STATUSES = [
+      'JUST ENQUIRED', 'NUMBER PROVIDED', 'TEXTED', 'CALL NOT',
+      'QUOTATION PENDING', 'QUOTATION SENT', 'BARGAINING', 'ADVANCE PENDING'
+    ];
+    
+    const GONE_ELSEWHERE_STATUSES = [
+      'CANCELLED BY CLIENT', 'CANCELLED BY US', 'BOOKED SOMEWHERE ELSE'
+    ];
+
+    interface DateGroup {
+      dateKey: string;
+      year: string;
+      month: string;
+      monthName: string;
+      day: string;
+      booked: { clientName: string; eventName: string }[];
+      enquiryOn: { clientName: string; eventName: string }[];
+      goneElsewhere: { clientName: string; eventName: string }[];
+      totalCount: number;
+    }
+
+    const dateGroups: Record<string, DateGroup> = {};
+
+    clients.forEach(client => {
+      const status = getCurrentStatus(client.statusLog || '').toUpperCase();
+      const parsedEvents = parseEventDetails(
+        client.events || '',
+        client.eventYear || '',
+        client.eventMonth || '',
+        client.eventDay || ''
+      );
+
+      parsedEvents.forEach(event => {
+        if (!event.year || !event.month || !event.day) return;
+        
+        const dateKey = `${event.year}-${event.month.padStart(2, '0')}-${event.day.padStart(2, '0')}`;
+        
+        if (!dateGroups[dateKey]) {
+          dateGroups[dateKey] = {
+            dateKey,
+            year: event.year,
+            month: event.month,
+            monthName: event.monthName,
+            day: event.day,
+            booked: [],
+            enquiryOn: [],
+            goneElsewhere: [],
+            totalCount: 0
+          };
+        }
+
+        const entry = { clientName: client.clientName || 'Unnamed', eventName: event.eventName };
+
+        if (status.includes('BOOKED') && !status.includes('SOMEWHERE ELSE')) {
+          dateGroups[dateKey].booked.push(entry);
+        } else if (GONE_ELSEWHERE_STATUSES.some(s => status.includes(s))) {
+          dateGroups[dateKey].goneElsewhere.push(entry);
+        } else if (ENQUIRY_ON_STATUSES.some(s => status.includes(s))) {
+          dateGroups[dateKey].enquiryOn.push(entry);
+        }
+      });
+    });
+
+    return Object.values(dateGroups)
+      .map(d => ({
+        ...d,
+        totalCount: d.booked.length + d.enquiryOn.length + d.goneElsewhere.length
+      }))
+      .filter(d => d.totalCount > 0)
+      .sort((a, b) => b.totalCount - a.totalCount)
+      .slice(0, 6);
+  }, [clients]);
 
   // Get BOOKED clients with events in less than 7 days
   const urgentBookedClients = useMemo(() => {
@@ -532,16 +618,151 @@ export default function Dashboard() {
           "px-4 py-4 space-y-4 animate-fade-in",
           isDesktopMode ? "max-w-7xl mx-auto" : "max-w-lg mx-auto"
         )}>
-          {/* Quick Action - Smaller in desktop mode */}
-          <Link to="/quick-add" className={isDesktopMode ? "block max-w-md" : ""}>
-            <Button 
-              className="w-full h-14 text-lg font-semibold gradient-primary text-white shadow-lg press-effect"
-              size="lg"
-            >
-              <CalendarPlus className="w-5 h-5 mr-2" />
-              Quick Add Client
-            </Button>
-          </Link>
+          {/* Hot Dates Section - Replaces Quick Add on mobile */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <Flame className="w-4 h-4 text-orange-500" />
+                <h3 className="text-sm font-semibold text-orange-500 uppercase tracking-wide">
+                  Hot Dates
+                </h3>
+              </div>
+              <Link 
+                to="/client-tracker/hot-dates" 
+                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+              >
+                View All <ChevronRight className="w-3 h-3" />
+              </Link>
+            </div>
+            
+            {/* Horizontal Scrollable Pills */}
+            <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide">
+              {hotDates.length > 0 ? (
+                hotDates.slice(0, 4).map((date) => (
+                  <button
+                    key={date.dateKey}
+                    onClick={() => setShowHotDatesDrawer(true)}
+                    className="shrink-0 px-3 py-2 rounded-lg bg-gradient-to-r from-orange-500/10 to-red-500/10 border border-orange-500/30 hover:border-orange-500/50 transition-all active:scale-95"
+                  >
+                    <div className="font-semibold text-sm text-foreground">
+                      {date.monthName} {date.day}
+                    </div>
+                    <div className="flex gap-1.5 text-xs mt-1 justify-center">
+                      <span className="text-green-600 font-bold">{date.booked.length}</span>
+                      <span className="text-amber-600 font-bold">{date.enquiryOn.length}</span>
+                      <span className="text-gray-500 font-bold">{date.goneElsewhere.length}</span>
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <div className="text-xs text-muted-foreground py-2">
+                  No hot dates yet
+                </div>
+              )}
+              
+              {hotDates.length > 4 && (
+                <button
+                  onClick={() => navigate('/client-tracker/hot-dates')}
+                  className="shrink-0 px-3 py-2 rounded-lg border border-dashed border-muted-foreground/30 flex items-center gap-1 hover:border-muted-foreground/50 transition-all"
+                >
+                  <span className="text-xs text-muted-foreground">+{hotDates.length - 4} more</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Hot Dates Drawer */}
+          <Drawer open={showHotDatesDrawer} onOpenChange={setShowHotDatesDrawer}>
+            <DrawerContent className="max-h-[85vh]">
+              <DrawerHeader>
+                <DrawerTitle className="flex items-center gap-2">
+                  <Flame className="w-5 h-5 text-orange-500" />
+                  Hot Dates
+                </DrawerTitle>
+              </DrawerHeader>
+              
+              <ScrollArea className="h-[60vh] px-4">
+                <div className="space-y-4 pb-4">
+                  {hotDates.map((date) => (
+                    <Card key={date.dateKey} className="border-l-4 border-l-orange-500">
+                      <CardContent className="p-4">
+                        {/* Date Header */}
+                        <div className="flex items-center justify-between mb-3">
+                          <Badge className="bg-gradient-to-r from-orange-500 to-red-500 text-white">
+                            {date.monthName} {date.day}, {date.year}
+                          </Badge>
+                          <span className="text-lg font-bold">{date.totalCount}</span>
+                        </div>
+                        
+                        {/* Three Categories */}
+                        <div className="space-y-3">
+                          {/* BOOKED */}
+                          {date.booked.length > 0 && (
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <Badge className="bg-green-500 text-white text-xs">BOOKED</Badge>
+                                <span className="font-semibold text-green-600">{date.booked.length}</span>
+                              </div>
+                              {date.booked.slice(0, 3).map((c, i) => (
+                                <p key={i} className="text-xs text-muted-foreground pl-2">
+                                  {c.eventName} • {c.clientName}
+                                </p>
+                              ))}
+                              {date.booked.length > 3 && (
+                                <p className="text-xs text-green-500 pl-2">+{date.booked.length - 3} more</p>
+                              )}
+                            </div>
+                          )}
+                          
+                          {/* ENQUIRY ON */}
+                          {date.enquiryOn.length > 0 && (
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <Badge className="bg-amber-500 text-white text-xs">ENQUIRY</Badge>
+                                <span className="font-semibold text-amber-600">{date.enquiryOn.length}</span>
+                              </div>
+                              {date.enquiryOn.slice(0, 3).map((c, i) => (
+                                <p key={i} className="text-xs text-muted-foreground pl-2">
+                                  {c.eventName} • {c.clientName}
+                                </p>
+                              ))}
+                              {date.enquiryOn.length > 3 && (
+                                <p className="text-xs text-amber-500 pl-2">+{date.enquiryOn.length - 3} more</p>
+                              )}
+                            </div>
+                          )}
+                          
+                          {/* GONE ELSEWHERE */}
+                          {date.goneElsewhere.length > 0 && (
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <Badge className="bg-gray-500 text-white text-xs">GONE</Badge>
+                                <span className="font-semibold text-gray-600">{date.goneElsewhere.length}</span>
+                              </div>
+                              {date.goneElsewhere.slice(0, 3).map((c, i) => (
+                                <p key={i} className="text-xs text-muted-foreground pl-2">
+                                  {c.eventName} • {c.clientName}
+                                </p>
+                              ))}
+                              {date.goneElsewhere.length > 3 && (
+                                <p className="text-xs text-gray-500 pl-2">+{date.goneElsewhere.length - 3} more</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </ScrollArea>
+              
+              <DrawerFooter>
+                <Button onClick={() => navigate('/client-tracker/hot-dates')} variant="outline">
+                  View Full Page
+                </Button>
+              </DrawerFooter>
+            </DrawerContent>
+          </Drawer>
 
           {/* Urgent Events Alert - BOOKED clients with events in ≤7 days */}
           {urgentBookedClients.length > 0 && (
