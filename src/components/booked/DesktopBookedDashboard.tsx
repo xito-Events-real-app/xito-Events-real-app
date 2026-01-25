@@ -43,6 +43,9 @@ interface DesktopBookedDashboardProps {
   onClearCategory?: () => void;
   onClearHotDate?: () => void;
   onClearAllFilters?: () => void;
+  // Hot Dates filter props
+  hotDatesSortOrder?: 'ascending' | 'descending' | 'popularity';
+  selectedMonth?: string | null;
 }
 
 export function DesktopBookedDashboard({
@@ -57,6 +60,8 @@ export function DesktopBookedDashboard({
   onClearCategory,
   onClearHotDate,
   onClearAllFilters,
+  hotDatesSortOrder = 'popularity',
+  selectedMonth,
 }: DesktopBookedDashboardProps) {
   const navigate = useNavigate();
   const [showAllOpenDates, setShowAllOpenDates] = useState(false);
@@ -222,11 +227,33 @@ export function DesktopBookedDashboard({
       });
     });
 
-    return Object.values(dateGroups)
-      .filter(d => d.events.length > 0)
-      .sort((a, b) => b.events.length - a.events.length)
-      .slice(0, 6);
-  }, [clients]);
+    let result = Object.values(dateGroups).filter(d => d.events.length > 0);
+    
+    // Apply month filter
+    if (selectedMonth) {
+      const [filterYear, filterMonth] = selectedMonth.split('-');
+      result = result.filter(d => d.year === filterYear && d.month === filterMonth);
+    }
+    
+    // Apply sort order
+    if (hotDatesSortOrder === 'ascending') {
+      result.sort((a, b) => {
+        const dateA = `${a.year}-${a.month.padStart(2, '0')}-${a.day.padStart(2, '0')}`;
+        const dateB = `${b.year}-${b.month.padStart(2, '0')}-${b.day.padStart(2, '0')}`;
+        return dateA.localeCompare(dateB);
+      });
+    } else if (hotDatesSortOrder === 'descending') {
+      result.sort((a, b) => {
+        const dateA = `${a.year}-${a.month.padStart(2, '0')}-${a.day.padStart(2, '0')}`;
+        const dateB = `${b.year}-${b.month.padStart(2, '0')}-${b.day.padStart(2, '0')}`;
+        return dateB.localeCompare(dateA);
+      });
+    } else {
+      result.sort((a, b) => b.events.length - a.events.length);
+    }
+    
+    return result;
+  }, [clients, hotDatesSortOrder, selectedMonth]);
 
   // Calendar Data - same as Client Tracker but only booked
   const calendarData = useMemo(() => {
@@ -664,20 +691,17 @@ export function DesktopBookedDashboard({
                         <span className="text-lg font-bold text-green-600">{dateInfo.events.length}</span>
                       </div>
 
-                      {/* Events List */}
-                      <div className="space-y-1">
-                        {dateInfo.events.slice(0, 3).map((c, i) => (
-                          <div key={i} className="text-[10px] text-muted-foreground truncate border-l-2 border-green-500 pl-2">
-                            <span className="font-medium text-foreground">{c.eventName}</span>
-                            <span> • {c.clientName}</span>
-                          </div>
-                        ))}
-                        {dateInfo.events.length > 3 && (
-                          <span className="text-[10px] text-green-500">
-                            +{dateInfo.events.length - 3} more
-                          </span>
-                        )}
-                      </div>
+                      {/* Events List - Show ALL events with scroll if needed */}
+                      <ScrollArea className={dateInfo.events.length > 5 ? "h-28" : ""}>
+                        <div className="space-y-1">
+                          {dateInfo.events.map((c, i) => (
+                            <div key={i} className="text-[10px] text-muted-foreground truncate border-l-2 border-green-500 pl-2">
+                              <span className="font-medium text-foreground">{c.eventName}</span>
+                              <span> • {c.clientName}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
                     </button>
                   ))}
                 </div>

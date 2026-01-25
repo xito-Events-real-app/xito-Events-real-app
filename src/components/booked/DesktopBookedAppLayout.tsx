@@ -1,10 +1,10 @@
 import { ReactNode, useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { DesktopBookedSidebar } from "./DesktopBookedSidebar";
+import { DesktopBookedSidebar, HotDatesSortOrder } from "./DesktopBookedSidebar";
 import { DesktopBookedDashboard } from "./DesktopBookedDashboard";
 import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
 import { fullResyncAllBookedClients, BookedClientData } from "@/lib/sheets-api";
-import { parseEventDetails } from "@/lib/nepali-months";
+import { parseEventDetails, NEPALI_MONTHS } from "@/lib/nepali-months";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +32,10 @@ export function DesktopBookedAppLayout() {
   // Filter state
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedHotDate, setSelectedHotDate] = useState<string | null>(null);
+  
+  // Hot Dates filter state
+  const [hotDatesSortOrder, setHotDatesSortOrder] = useState<HotDatesSortOrder>('popularity');
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
 
   const handleSync = async () => {
     await refreshData();
@@ -91,12 +95,41 @@ export function DesktopBookedAppLayout() {
     });
   }, [clients, selectedHotDate]);
 
+  // Calculate available months from clients data for filter dropdown
+  const availableMonths = useMemo(() => {
+    const monthSet = new Set<string>();
+    clients.forEach(client => {
+      const events = parseEventDetails(
+        client.events || '',
+        client.eventYear || '',
+        client.eventMonth || '',
+        client.eventDay || ''
+      );
+      events.forEach(event => {
+        if (event.year && event.month) {
+          monthSet.add(`${event.year}-${event.month}`);
+        }
+      });
+    });
+    return Array.from(monthSet)
+      .map(v => {
+        const [year, month] = v.split('-');
+        const monthNum = parseInt(month);
+        return { 
+          value: v, 
+          label: `${NEPALI_MONTHS[monthNum] || `Month ${monthNum}`} ${year}` 
+        };
+      })
+      .sort((a, b) => a.value.localeCompare(b.value));
+  }, [clients]);
+
   // Check if any filter is active
   const hasActiveFilter = selectedCategory !== null || selectedHotDate !== null;
 
   const handleClearAllFilters = () => {
     setSelectedCategory(null);
     setSelectedHotDate(null);
+    setSelectedMonth(null);
   };
 
   const totalClients = clients.length;
@@ -117,6 +150,11 @@ export function DesktopBookedAppLayout() {
         totalClients={totalClients}
         selectedCategory={selectedCategory}
         onCategoryFilter={setSelectedCategory}
+        hotDatesSortOrder={hotDatesSortOrder}
+        onSortChange={setHotDatesSortOrder}
+        selectedMonth={selectedMonth}
+        onMonthFilter={setSelectedMonth}
+        availableMonths={availableMonths}
       />
 
       {/* Main Content Area */}
@@ -197,6 +235,8 @@ export function DesktopBookedAppLayout() {
             onClearCategory={() => setSelectedCategory(null)}
             onClearHotDate={() => setSelectedHotDate(null)}
             onClearAllFilters={handleClearAllFilters}
+            hotDatesSortOrder={hotDatesSortOrder}
+            selectedMonth={selectedMonth}
           />
         </main>
       </div>
