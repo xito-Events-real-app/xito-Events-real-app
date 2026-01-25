@@ -1,6 +1,36 @@
 // Utility functions for client card display and logic
 // Extracted from FreshClientCard for reuse in desktop components
 
+// Get booking date from statusLog (when status was changed to BOOKED)
+export function getBookingDate(statusLog?: string): Date | null {
+  if (!statusLog) return null;
+  
+  const lines = statusLog.split('\n').filter(Boolean);
+  // Search from most recent to oldest
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i].toUpperCase();
+    // Match BOOKED but not BOOKED SOMEWHERE ELSE
+    if (line.includes('BOOKED') && !line.includes('BOOKED SOMEWHERE ELSE')) {
+      // Parse timestamp: "BOOKED [MM/DD/YYYY, HH:MM:SS]" or "BOOKED - MM/DD/YYYY, HH:MM:SS"
+      const bracketMatch = lines[i].match(/\[(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s*(\d{1,2}):(\d{2}):?(\d{2})?\]/);
+      const dashMatch = lines[i].match(/-\s*(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s*(\d{1,2}):(\d{2}):?(\d{2})?/);
+      
+      const match = bracketMatch || dashMatch;
+      if (match) {
+        const month = parseInt(match[1]) - 1; // JS months are 0-indexed
+        const day = parseInt(match[2]);
+        const year = parseInt(match[3]);
+        const hours = parseInt(match[4]) || 0;
+        const mins = parseInt(match[5]) || 0;
+        const secs = parseInt(match[6]) || 0;
+        
+        return new Date(year, month, day, hours, mins, secs);
+      }
+    }
+  }
+  return null;
+}
+
 export interface CallEntry {
   label: string;
   type: 'DIRECT' | 'WHATSAPP';
