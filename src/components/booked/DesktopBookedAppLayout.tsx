@@ -36,6 +36,9 @@ export function DesktopBookedAppLayout() {
   // Hot Dates filter state
   const [hotDatesSortOrder, setHotDatesSortOrder] = useState<HotDatesSortOrder>('popularity');
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  
+  // Client filter state
+  const [selectedClient, setSelectedClient] = useState<string | null>(null);
 
   const handleSync = async () => {
     await refreshData();
@@ -82,28 +85,55 @@ export function DesktopBookedAppLayout() {
     };
   }, []);
 
-  // Filter clients based on hot date
-  const filteredClients = useMemo(() => {
-    if (!selectedHotDate) return clients;
-    
-    const [hYear, hMonth, hDay] = selectedHotDate.split('-').map(Number);
-    
-    return clients.filter(client => {
-      const events = parseEventDetails(
-        client.events || '',
-        client.eventYear || '',
-        client.eventMonth || '',
-        client.eventDay || ''
-      );
-      
-      return events.some(event => {
-        const y = parseInt(event.year) || 0;
-        const m = parseInt(event.month) || 0;
-        const d = parseInt(event.day) || 0;
-        return y === hYear && m === hMonth && d === hDay;
-      });
+  // Compute unique clients list for dropdown
+  const uniqueClients = useMemo(() => {
+    const seen = new Map<string, { name: string; registeredDateTimeAD: string }>();
+    clients.forEach(c => {
+      const key = c.clientName?.toLowerCase() || '';
+      if (c.clientName && !seen.has(key)) {
+        seen.set(key, {
+          name: c.clientName,
+          registeredDateTimeAD: c.registeredDateTimeAD || ''
+        });
+      }
     });
-  }, [clients, selectedHotDate]);
+    return Array.from(seen.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [clients]);
+
+  // Filter clients based on hot date and client filter
+  const filteredClients = useMemo(() => {
+    let result = clients;
+    
+    // Hot date filter
+    if (selectedHotDate) {
+      const [hYear, hMonth, hDay] = selectedHotDate.split('-').map(Number);
+      
+      result = result.filter(client => {
+        const events = parseEventDetails(
+          client.events || '',
+          client.eventYear || '',
+          client.eventMonth || '',
+          client.eventDay || ''
+        );
+        
+        return events.some(event => {
+          const y = parseInt(event.year) || 0;
+          const m = parseInt(event.month) || 0;
+          const d = parseInt(event.day) || 0;
+          return y === hYear && m === hMonth && d === hDay;
+        });
+      });
+    }
+    
+    // Client filter
+    if (selectedClient) {
+      result = result.filter(c => 
+        c.clientName?.toLowerCase() === selectedClient.toLowerCase()
+      );
+    }
+    
+    return result;
+  }, [clients, selectedHotDate, selectedClient]);
 
   // Calculate available months from clients data for filter dropdown
   const availableMonths = useMemo(() => {
@@ -134,12 +164,13 @@ export function DesktopBookedAppLayout() {
   }, [clients]);
 
   // Check if any filter is active
-  const hasActiveFilter = selectedCategory !== null || selectedHotDate !== null;
+  const hasActiveFilter = selectedCategory !== null || selectedHotDate !== null || selectedClient !== null;
 
   const handleClearAllFilters = () => {
     setSelectedCategory(null);
     setSelectedHotDate(null);
     setSelectedMonth(null);
+    setSelectedClient(null);
   };
 
   const totalClients = clients.length;
@@ -165,6 +196,9 @@ export function DesktopBookedAppLayout() {
         selectedMonth={selectedMonth}
         onMonthFilter={setSelectedMonth}
         availableMonths={availableMonths}
+        allClients={uniqueClients}
+        selectedClient={selectedClient}
+        onClientFilter={setSelectedClient}
       />
 
       {/* Main Content Area */}
@@ -189,6 +223,14 @@ export function DesktopBookedAppLayout() {
                   <Badge variant="outline" className="gap-1 border-purple-500 text-purple-600">
                     {selectedCategory}
                     <button onClick={() => setSelectedCategory(null)}>
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                )}
+                {selectedClient && (
+                  <Badge variant="outline" className="gap-1 border-blue-500 text-blue-600">
+                    Client: {selectedClient}
+                    <button onClick={() => setSelectedClient(null)}>
                       <X className="w-3 h-3" />
                     </button>
                   </Badge>

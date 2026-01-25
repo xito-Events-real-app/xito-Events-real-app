@@ -725,12 +725,27 @@ export function DesktopBookedDashboard({
                       {/* Events List - Show ALL events with scroll if needed */}
                       <ScrollArea className={dateInfo.events.length > 5 ? "h-28" : ""}>
                         <div className="space-y-1">
-                          {dateInfo.events.map((c, i) => (
-                            <div key={i} className="text-[10px] text-muted-foreground truncate border-l-2 border-green-500 pl-2">
-                              <span className="font-medium text-foreground">{c.eventName}</span>
-                              <span> • {c.clientName}</span>
-                            </div>
-                          ))}
+                          {dateInfo.events.map((c, i) => {
+                            // Find client data for navigation
+                            const clientData = clients.find(cl => cl.clientName === c.clientName);
+                            const clientId = clientData?.originalRowNumber || encodeURIComponent(clientData?.registeredDateTimeAD || '');
+                            
+                            return (
+                              <button
+                                key={i}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (clientId) {
+                                    navigate(`/client-tracker/client/${clientId}`);
+                                  }
+                                }}
+                                className="w-full text-left text-[10px] text-muted-foreground truncate border-l-2 border-green-500 pl-2 hover:bg-green-500/10 rounded-r py-0.5 transition-colors cursor-pointer"
+                              >
+                                <span className="font-medium text-foreground">{c.eventName}</span>
+                                <span className="hover:text-primary hover:underline"> • {c.clientName}</span>
+                              </button>
+                            );
+                          })}
                         </div>
                       </ScrollArea>
                     </button>
