@@ -48,8 +48,11 @@ interface DesktopDashboardProps {
   hasActiveFilter?: boolean;
   selectedHandler?: string | null;
   selectedCategory?: string | null;
+  selectedHotDate?: string | null;
   onClearHandler?: () => void;
   onClearCategory?: () => void;
+  onHotDateFilter?: (dateKey: string | null) => void;
+  onClearHotDate?: () => void;
   onClearAllFilters?: () => void;
   dropdowns?: DropdownData;
   onClientUpdate?: (updatedClient: any) => void;
@@ -85,8 +88,11 @@ export function DesktopDashboard({
   hasActiveFilter = false,
   selectedHandler,
   selectedCategory,
+  selectedHotDate,
   onClearHandler,
   onClearCategory,
+  onHotDateFilter,
+  onClearHotDate,
   onClearAllFilters,
   dropdowns,
   onClientUpdate,
@@ -418,9 +424,15 @@ export function DesktopDashboard({
                   ) : (
                     <div className="grid grid-cols-4 gap-4">
                       {hotDates.map((dateInfo) => (
-                        <div
+                        <button
                           key={dateInfo.dateKey}
-                          className="border rounded-lg p-3 hover:border-primary/30 transition-colors"
+                          onClick={() => onHotDateFilter?.(dateInfo.dateKey)}
+                          className={cn(
+                            "border rounded-lg p-3 transition-all text-left w-full",
+                            selectedHotDate === dateInfo.dateKey
+                              ? "border-orange-500 bg-orange-500/10 ring-2 ring-orange-500/30"
+                              : "hover:border-orange-500/50 hover:bg-orange-500/5"
+                          )}
                         >
                           {/* Date Header */}
                           <div className="flex items-center justify-between mb-2">
@@ -495,7 +507,7 @@ export function DesktopDashboard({
                               </div>
                             </div>
                           </div>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   )}
