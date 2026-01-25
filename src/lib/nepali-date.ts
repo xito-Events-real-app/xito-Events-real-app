@@ -140,3 +140,28 @@ export function convertDateForDisplay(adDate: Date): DateConversion {
     bsFormatted: formatBSDate(bs),
   };
 }
+
+// Check if a BS date has passed (is before today)
+export function isBSDatePast(year: number | string, month: number | string, day: number | string): boolean {
+  try {
+    const bsYear = typeof year === 'string' ? parseInt(year) : year;
+    const bsMonth = typeof month === 'string' ? parseInt(month) : month;
+    const bsDay = typeof day === 'string' ? parseInt(day) : day;
+    
+    // Unknown day dates (containing *) are not considered past
+    if (isNaN(bsDay) || String(day).includes('*')) {
+      return false;
+    }
+    
+    const nepaliDate = new NepaliDate(bsYear, bsMonth - 1, bsDay);
+    const eventDate = nepaliDate.toJsDate();
+    eventDate.setHours(23, 59, 59, 999); // End of event day
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    return eventDate < today;
+  } catch (e) {
+    return false; // If conversion fails, assume not past
+  }
+}
