@@ -1091,17 +1091,48 @@ export function DesktopClientRow({
           </div>
         </TableCell>
         
-        {/* Column 5: Status (Far Right) */}
+        {/* Column 5: Status (Far Right) - Quick Change Dropdown */}
         <TableCell className="py-3 align-middle text-right" onClick={(e) => e.stopPropagation()}>
-          <Badge 
-            className={cn(
-              "font-bold text-xs uppercase tracking-wide px-3 py-1",
-              statusConfig.color,
-              "text-white"
-            )}
-          >
-            {statusConfig.label}
-          </Badge>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-md transition-transform hover:scale-105">
+                <Badge 
+                  className={cn(
+                    "font-bold text-xs uppercase tracking-wide px-3 py-1 cursor-pointer",
+                    statusConfig.color,
+                    "text-white"
+                  )}
+                >
+                  {isUpdatingStatus ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <>
+                      {statusConfig.label}
+                      <ChevronDown className="w-3 h-3 ml-1 inline" />
+                    </>
+                  )}
+                </Badge>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="max-h-72 overflow-y-auto z-50 bg-background w-56">
+              {statuses.map((status) => {
+                const config = getStatusConfig(status);
+                return (
+                  <DropdownMenuItem
+                    key={status}
+                    onClick={() => handleStatusChange(status)}
+                    className={cn(
+                      "text-xs cursor-pointer flex items-center gap-2",
+                      status.toUpperCase() === currentStatus?.toUpperCase() && "bg-primary/10 font-bold"
+                    )}
+                  >
+                    <span className={cn("w-2 h-2 rounded-full", config.color)} />
+                    {status}
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </TableCell>
       </TableRow>
       
