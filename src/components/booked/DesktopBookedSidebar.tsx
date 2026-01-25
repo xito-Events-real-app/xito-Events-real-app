@@ -4,6 +4,13 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   LayoutGrid,
   ChevronLeft,
   ChevronRight,
@@ -11,18 +18,34 @@ import {
   Users,
   Camera,
   CalendarCheck,
+  ArrowUp,
+  ArrowDown,
+  TrendingUp,
 } from "lucide-react";
+
+export type HotDatesSortOrder = 'ascending' | 'descending' | 'popularity';
 
 interface DesktopBookedSidebarProps {
   totalClients: number;
   selectedCategory: string | null;
   onCategoryFilter: (category: string | null) => void;
+  // Hot Dates filter props
+  hotDatesSortOrder: HotDatesSortOrder;
+  onSortChange: (sort: HotDatesSortOrder) => void;
+  selectedMonth: string | null;
+  onMonthFilter: (month: string | null) => void;
+  availableMonths: { value: string; label: string }[];
 }
 
 export function DesktopBookedSidebar({ 
   totalClients,
   selectedCategory,
   onCategoryFilter,
+  hotDatesSortOrder,
+  onSortChange,
+  selectedMonth,
+  onMonthFilter,
+  availableMonths,
 }: DesktopBookedSidebarProps) {
   const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -76,7 +99,7 @@ export function DesktopBookedSidebar({
         )}
       </div>
 
-      {/* Scrollable Content - Categories */}
+      {/* Scrollable Content - Categories & Filters */}
       <ScrollArea className="flex-1 py-3">
         <div className="px-3">
           {!isCollapsed && (
@@ -139,6 +162,98 @@ export function DesktopBookedSidebar({
               )}
             </button>
           </div>
+          
+          {/* Hot Dates Filters Section */}
+          {!isCollapsed && (
+            <div className="mt-6">
+              <h3 className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-2 px-1">
+                Hot Dates Filters
+              </h3>
+              
+              {/* Sort Order Buttons */}
+              <div className="space-y-1 mb-3">
+                <button
+                  onClick={() => onSortChange('ascending')}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all",
+                    hotDatesSortOrder === 'ascending'
+                      ? "bg-green-600 text-white"
+                      : "text-white/70 hover:bg-white/10 hover:text-white"
+                  )}
+                >
+                  <div className={cn(
+                    "w-6 h-6 rounded-md flex items-center justify-center shrink-0",
+                    hotDatesSortOrder === 'ascending' ? "bg-white/20" : "bg-white/10"
+                  )}>
+                    <ArrowUp className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-sm font-medium">Ascending</span>
+                </button>
+                
+                <button
+                  onClick={() => onSortChange('descending')}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all",
+                    hotDatesSortOrder === 'descending'
+                      ? "bg-green-600 text-white"
+                      : "text-white/70 hover:bg-white/10 hover:text-white"
+                  )}
+                >
+                  <div className={cn(
+                    "w-6 h-6 rounded-md flex items-center justify-center shrink-0",
+                    hotDatesSortOrder === 'descending' ? "bg-white/20" : "bg-white/10"
+                  )}>
+                    <ArrowDown className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-sm font-medium">Descending</span>
+                </button>
+                
+                <button
+                  onClick={() => onSortChange('popularity')}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all",
+                    hotDatesSortOrder === 'popularity'
+                      ? "bg-green-600 text-white"
+                      : "text-white/70 hover:bg-white/10 hover:text-white"
+                  )}
+                >
+                  <div className={cn(
+                    "w-6 h-6 rounded-md flex items-center justify-center shrink-0",
+                    hotDatesSortOrder === 'popularity' ? "bg-white/20" : "bg-white/10"
+                  )}>
+                    <TrendingUp className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-sm font-medium">Most Events</span>
+                </button>
+              </div>
+              
+              {/* Month Filter Dropdown */}
+              <div className="px-1">
+                <Select 
+                  value={selectedMonth || "all"} 
+                  onValueChange={(val) => onMonthFilter(val === "all" ? null : val)}
+                >
+                  <SelectTrigger className="w-full bg-white/10 border-white/20 text-white h-9">
+                    <SelectValue placeholder="Filter by Month" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[hsl(220,25%,15%)] border-white/20 z-50">
+                    <SelectItem value="all" className="text-white hover:bg-white/10 focus:bg-white/10 focus:text-white">
+                      All Months
+                    </SelectItem>
+                    {availableMonths.map((month) => (
+                      <SelectItem 
+                        key={month.value} 
+                        value={month.value}
+                        className="text-white hover:bg-white/10 focus:bg-white/10 focus:text-white"
+                      >
+                        {month.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
         </div>
       </ScrollArea>
 
