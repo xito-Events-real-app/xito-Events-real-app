@@ -386,9 +386,9 @@ export function DesktopDashboard({
           </div>
 
           {/* Main Content Grid */}
-          <div className="grid grid-cols-12 gap-6">
-            {/* Left Column: Pipeline + Categories */}
-            <div className="col-span-8 space-y-6">
+          <div className="space-y-6">
+            {/* Full Width Content */}
+            <div className="space-y-6">
               {/* Hot Dates Section */}
               <Card className="shadow-sm">
                 <CardHeader className="pb-3">
@@ -416,7 +416,7 @@ export function DesktopDashboard({
                       No event dates found
                     </p>
                   ) : (
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-4 gap-4">
                       {hotDates.map((dateInfo) => (
                         <div
                           key={dateInfo.dateKey}
@@ -582,79 +582,36 @@ export function DesktopDashboard({
               )}
             </div>
 
-            {/* Right Column: Handlers + Today */}
-            <div className="col-span-4 space-y-6">
-              {/* Handlers Card */}
-              <Card className="shadow-sm">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base font-semibold">Team Handlers</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ScrollArea className="h-[300px]">
-                    <div className="space-y-2">
-                      {handlers.map((handler, idx) => {
-                        const count = handlerCounts[handler] || 0;
-                        const colorClass = handlerColors[idx % handlerColors.length];
-                        const initials = handler.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
-                        
-                        return (
-                          <Link
-                            key={handler}
-                            to={`/client-tracker/handler/${encodeURIComponent(handler)}?stay=true`}
-                            className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/30 hover:bg-muted/50 transition-all"
-                          >
-                            <div className={cn(
-                              "w-10 h-10 rounded-full flex items-center justify-center bg-gradient-to-br text-white font-bold",
-                              colorClass
-                            )}>
-                              {initials}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium truncate">{handler}</p>
-                              <p className="text-xs text-muted-foreground">{count} clients</p>
-                            </div>
-                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  </ScrollArea>
-                </CardContent>
-              </Card>
-
-              {/* Today's Activity Summary */}
-              <Card className="shadow-sm">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base font-semibold">Today's Enquiries</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {todaysClients.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">
-                      No enquiries today yet
-                    </p>
-                  ) : (
-                    <ScrollArea className="h-[200px]">
-                      <div className="space-y-2">
-                        {todaysClients.slice(0, 10).map((client, idx) => (
-                          <div
-                            key={client.rowNumber || idx}
-                            className="flex items-center gap-3 p-2 rounded-lg bg-muted/50"
-                          >
-                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                              <Users className="w-4 h-4 text-primary" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">{client.clientName}</p>
-                              <p className="text-xs text-muted-foreground truncate">{client.events || "No event"}</p>
-                            </div>
-                          </div>
-                        ))}
+            {/* Today's Activity Summary - Full Width */}
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold">Today's Enquiries</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {todaysClients.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No enquiries today yet
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-5 gap-3">
+                    {todaysClients.slice(0, 10).map((client, idx) => (
+                      <div
+                        key={client.rowNumber || idx}
+                        className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border"
+                      >
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                          <Users className="w-4 h-4 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{client.clientName}</p>
+                          <p className="text-xs text-muted-foreground truncate">{client.events || "No event"}</p>
+                        </div>
                       </div>
-                    </ScrollArea>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         </>
       )}
