@@ -101,7 +101,6 @@ export function DesktopDashboard({
   const navigate = useNavigate();
   const [selectedClient, setSelectedClient] = useState<any | null>(null);
   const [showAllOpenDates, setShowAllOpenDates] = useState(false);
-  const [dateViewTab, setDateViewTab] = useState<'open' | 'booked'>('open');
 
   // Use allClients for stats if available, otherwise use filtered clients
   const statsClients = allClients || clients;
@@ -250,70 +249,10 @@ export function DesktopDashboard({
       .slice(0, 6);
   }, [statsClients]);
 
-  // Booking Open Dates - Calculate which dates are NOT booked for next 12 months
-  const bookingOpenDates = useMemo(() => {
-    // Collect all BOOKED dates from clients
-    const bookedDates = new Set<string>();
-    
-    statsClients.forEach(client => {
-      const status = getCurrentStatus(client.statusLog || '').toUpperCase();
-      // Only consider BOOKED clients (not "BOOKED SOMEWHERE ELSE")
-      if (!status.includes('BOOKED') || status.includes('BOOKED SOMEWHERE ELSE')) return;
-      
-      const events = parseEventDetails(
-        client.events || '',
-        client.eventYear || '',
-        client.eventMonth || '',
-        client.eventDay || ''
-      );
-      
-      events.forEach(event => {
-        if (event.year && event.month && event.day && event.day !== '**') {
-          // Store as "YEAR-MONTH-DAY" for lookup
-          bookedDates.add(`${event.year}-${event.month}-${event.day}`);
-        }
-      });
-    });
-    
-    // Determine starting month (current Nepali month - approximate to AD month 10 = MAGH)
-    // Using fixed starting point: MAGH (month 10) of 2082
-    const startMonth = 10; // MAGH
-    const startYear = 2082;
-    
-    // Days per Nepali month (approximate - varies by year)
-    const daysPerMonth: Record<number, number> = {
-      1: 31, 2: 31, 3: 32, 4: 32, 5: 31, 6: 31,
-      7: 30, 8: 29, 9: 30, 10: 29, 11: 30, 12: 30
-    };
-    
-    // Generate 12 months of data
-    const result: { month: number; year: number; monthName: string; openDays: number[] }[] = [];
-    
-    for (let i = 0; i < 12; i++) {
-      const monthNum = ((startMonth - 1 + i) % 12) + 1;
-      const yearNum = startYear + Math.floor((startMonth - 1 + i) / 12);
-      const monthName = NEPALI_MONTHS[monthNum];
-      
-      const daysInMonth = daysPerMonth[monthNum] || 30;
-      const openDays: number[] = [];
-      
-      for (let day = 1; day <= daysInMonth; day++) {
-        const dateKey = `${yearNum}-${monthNum}-${day}`;
-        if (!bookedDates.has(dateKey)) {
-          openDays.push(day);
-        }
-      }
-      
-      result.push({ month: monthNum, year: yearNum, monthName, openDays });
-    }
-    
-    return result;
-  }, [statsClients]);
-
-  // Booked Dates with Event Counts - for "Booked Dates" tab
-  const bookedDatesData = useMemo(() => {
-    // Map: dateKey -> { year, month, day, count }
-    const bookedMap = new Map<string, { year: number; month: number; day: number; count: number }>();
+  // Unified Calendar Data - All days with open/booked status and event counts
+  const calendarData = useMemo(() => {
+    // First, build a map of booked dates with counts
+    const bookedMap = new Map<string, number>();
     
     statsClients.forEach(client => {
       const status = getCurrentStatus(client.statusLog || '').toUpperCase();
@@ -329,22 +268,17 @@ export function DesktopDashboard({
       events.forEach(event => {
         if (event.year && event.month && event.day && event.day !== '**') {
           const dateKey = `${event.year}-${event.month}-${event.day}`;
-          const existing = bookedMap.get(dateKey);
-          if (existing) {
-            existing.count += 1;
-          } else {
-            bookedMap.set(dateKey, {
-              year: parseInt(event.year),
-              month: parseInt(event.month),
-              day: parseInt(event.day),
-              count: 1
-            });
-          }
+          bookedMap.set(dateKey, (bookedMap.get(dateKey) || 0) + 1);
         }
       });
     });
     
-    // Group by month over 12-month range (MAGH 2082 to POUSH 2083)
+    // Days per Nepali month (approximate - varies by year)
+    const daysPerMonth: Record<number, number> = {
+      1: 31, 2: 31, 3: 32, 4: 32, 5: 31, 6: 31,
+      7: 30, 8: 29, 9: 30, 10: 29, 11: 30, 12: 30
+    };
+    
     const startMonth = 10; // MAGH
     const startYear = 2082;
     
@@ -352,23 +286,28 @@ export function DesktopDashboard({
       month: number; 
       year: number; 
       monthName: string; 
-      bookedDays: { day: number; count: number }[] 
+      days: { day: number; isBooked: boolean; eventCount: number }[];
+      bookedCount: number;
     }[] = [];
     
     for (let i = 0; i < 12; i++) {
       const monthNum = ((startMonth - 1 + i) % 12) + 1;
       const yearNum = startYear + Math.floor((startMonth - 1 + i) / 12);
       const monthName = NEPALI_MONTHS[monthNum];
+      const daysInMonth = daysPerMonth[monthNum] || 30;
       
-      const bookedDays: { day: number; count: number }[] = [];
-      bookedMap.forEach((value) => {
-        if (value.year === yearNum && value.month === monthNum) {
-          bookedDays.push({ day: value.day, count: value.count });
-        }
-      });
+      const days: { day: number; isBooked: boolean; eventCount: number }[] = [];
+      let bookedCount = 0;
       
-      bookedDays.sort((a, b) => a.day - b.day);
-      result.push({ month: monthNum, year: yearNum, monthName, bookedDays });
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateKey = `${yearNum}-${monthNum}-${day}`;
+        const eventCount = bookedMap.get(dateKey) || 0;
+        const isBooked = eventCount > 0;
+        if (isBooked) bookedCount++;
+        days.push({ day, isBooked, eventCount });
+      }
+      
+      result.push({ month: monthNum, year: yearNum, monthName, days, bookedCount });
     }
     
     return result;
@@ -513,43 +452,16 @@ export function DesktopDashboard({
 
           {/* Main Content Grid */}
           <div className="space-y-4">
-            {/* Booking Open/Booked Dates Section with Tabs */}
-            <Card className={cn(
-              "shadow-sm",
-              dateViewTab === 'open' ? "border-blue-500/20" : "border-green-500/20"
-            )}>
+            {/* Booking Calendar Section */}
+            <Card className="shadow-sm border-primary/20">
               <CardHeader className="pb-2 pt-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <Calendar className={cn(
-                      "w-4 h-4",
-                      dateViewTab === 'open' ? "text-blue-500" : "text-green-500"
-                    )} />
-                    {/* Tab Toggle Buttons */}
-                    <div className="flex gap-1 bg-muted rounded-md p-0.5">
-                      <button
-                        onClick={() => setDateViewTab('open')}
-                        className={cn(
-                          "px-3 py-1 text-xs font-medium rounded transition-all",
-                          dateViewTab === 'open' 
-                            ? "bg-background shadow text-foreground" 
-                            : "text-muted-foreground hover:text-foreground"
-                        )}
-                      >
-                        Open Dates
-                      </button>
-                      <button
-                        onClick={() => setDateViewTab('booked')}
-                        className={cn(
-                          "px-3 py-1 text-xs font-medium rounded transition-all",
-                          dateViewTab === 'booked' 
-                            ? "bg-background shadow text-foreground" 
-                            : "text-muted-foreground hover:text-foreground"
-                        )}
-                      >
-                        Booked Dates
-                      </button>
-                    </div>
+                    <Calendar className="w-4 h-4 text-primary" />
+                    <span className="font-semibold text-sm">Booking Calendar</span>
+                    <span className="text-xs text-muted-foreground">
+                      (Plain = Open, <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-500 text-white text-[8px]">●</span> = Booked)
+                    </span>
                   </div>
                   <Button 
                     variant="ghost" 
@@ -563,100 +475,73 @@ export function DesktopDashboard({
                 </div>
               </CardHeader>
               <CardContent className="py-2 space-y-1.5">
-                {/* Open Dates Tab */}
-                {dateViewTab === 'open' && (
-                  (showAllOpenDates ? bookingOpenDates : bookingOpenDates.slice(0, 4)).map((monthData) => (
-                    <div 
-                      key={`open-${monthData.year}-${monthData.month}`}
-                      className="flex items-center gap-3 px-3 py-2 rounded-md bg-muted/30 border border-border/50"
-                    >
-                      {/* Month Badge */}
-                      <Badge className="bg-blue-500 text-white text-xs min-w-[110px] justify-center shrink-0">
-                        {monthData.monthName} {monthData.year}
-                      </Badge>
-                      
-                      {/* Separator */}
-                      <span className="text-muted-foreground font-medium">:</span>
-                      
-                      {/* Open Days */}
-                      <div className="flex-1 text-sm min-w-0">
-                        {monthData.openDays.length === 0 ? (
-                          <span className="text-red-500 text-xs italic font-medium">Fully Booked 🎉</span>
-                        ) : (
-                          <span className="text-foreground font-mono text-xs">
-                            {monthData.openDays.join(' ')}
-                          </span>
-                        )}
-                      </div>
-                      
-                      {/* Count Badge */}
-                      <Badge 
-                        variant="outline" 
-                        className={cn(
-                          "text-xs shrink-0",
-                          monthData.openDays.length === 0 && "border-green-500 text-green-600"
-                        )}
-                      >
-                        {monthData.openDays.length} open
-                      </Badge>
-                    </div>
-                  ))
-                )}
-
-                {/* Booked Dates Tab */}
-                {dateViewTab === 'booked' && (
-                  (showAllOpenDates ? bookedDatesData : bookedDatesData.slice(0, 4)).map((monthData) => (
-                    <div 
-                      key={`booked-${monthData.year}-${monthData.month}`}
-                      className="flex items-center gap-3 px-3 py-2 rounded-md bg-muted/30 border border-border/50"
-                    >
-                      {/* Month Badge - Green for booked */}
-                      <Badge className="bg-green-500 text-white text-xs min-w-[110px] justify-center shrink-0">
-                        {monthData.monthName} {monthData.year}
-                      </Badge>
-                      
-                      {/* Separator */}
-                      <span className="text-muted-foreground font-medium">:</span>
-                      
-                      {/* Booked Days with Concentric Circles */}
-                      <div className="flex-1 flex flex-wrap gap-x-3 gap-y-2 min-w-0 items-center">
-                        {monthData.bookedDays.length === 0 ? (
-                          <span className="text-muted-foreground text-xs italic">No bookings</span>
-                        ) : (
-                          monthData.bookedDays.map(({ day, count }) => (
-                            <span 
-                              key={day} 
-                              className="relative inline-flex items-center justify-center"
-                              style={{ 
-                                width: count >= 3 ? '40px' : count >= 2 ? '32px' : '24px',
-                                height: count >= 3 ? '40px' : count >= 2 ? '32px' : '24px'
-                              }}
-                              title={`${count} event(s) on day ${day}`}
-                            >
-                              {/* 3rd ring (outermost) - shows when 3+ events */}
-                              {count >= 3 && (
-                                <span className="absolute w-10 h-10 rounded-full border-2 border-green-500" />
-                              )}
-                              {/* 2nd ring - shows when 2+ events */}
-                              {count >= 2 && (
-                                <span className="absolute w-7 h-7 rounded-full border-2 border-green-500" />
-                              )}
-                              {/* 1st ring (innermost) - always present, contains the number */}
-                              <span className="w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center text-[10px] font-bold z-10">
-                                {day}
-                              </span>
+                {/* Unified Calendar View - All days shown */}
+                {(showAllOpenDates ? calendarData : calendarData.slice(0, 4)).map((monthData) => (
+                  <div 
+                    key={`cal-${monthData.year}-${monthData.month}`}
+                    className="flex items-center gap-3 px-3 py-2 rounded-md bg-muted/30 border border-border/50"
+                  >
+                    {/* Month Badge */}
+                    <Badge className="bg-gradient-to-r from-blue-500 to-green-500 text-white text-xs min-w-[110px] justify-center shrink-0">
+                      {monthData.monthName} {monthData.year}
+                    </Badge>
+                    
+                    {/* Separator */}
+                    <span className="text-muted-foreground font-medium">:</span>
+                    
+                    {/* All Days - Open as plain numbers, Booked as concentric circles */}
+                    <div className="flex-1 flex flex-wrap gap-x-1 gap-y-1.5 min-w-0 items-center">
+                      {monthData.days.map(({ day, isBooked, eventCount }) => (
+                        isBooked ? (
+                          // BOOKED: Concentric circles with day number inside
+                          <span 
+                            key={day} 
+                            className="relative inline-flex items-center justify-center"
+                            style={{ 
+                              width: eventCount >= 3 ? '28px' : eventCount >= 2 ? '24px' : '20px',
+                              height: eventCount >= 3 ? '28px' : eventCount >= 2 ? '24px' : '20px'
+                            }}
+                            title={`${eventCount} event(s) on day ${day}`}
+                          >
+                            {/* 3rd ring (outermost) - shows when 3+ events */}
+                            {eventCount >= 3 && (
+                              <span className="absolute w-7 h-7 rounded-full border-2 border-green-500" />
+                            )}
+                            {/* 2nd ring - shows when 2+ events */}
+                            {eventCount >= 2 && (
+                              <span className="absolute w-6 h-6 rounded-full border-2 border-green-500" />
+                            )}
+                            {/* 1st ring (innermost) - always present, contains the number */}
+                            <span className="w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center text-[10px] font-bold z-10">
+                              {day}
                             </span>
-                          ))
-                        )}
-                      </div>
-                      
-                      {/* Count Badge */}
-                      <Badge variant="outline" className="text-xs shrink-0 border-green-500 text-green-600">
-                        {monthData.bookedDays.length} days
-                      </Badge>
+                          </span>
+                        ) : (
+                          // OPEN: Plain number
+                          <span 
+                            key={day}
+                            className="w-5 h-5 flex items-center justify-center font-mono text-[10px] text-muted-foreground"
+                          >
+                            {day}
+                          </span>
+                        )
+                      ))}
                     </div>
-                  ))
-                )}
+                    
+                    {/* Booked Count Badge */}
+                    <Badge 
+                      variant="outline" 
+                      className={cn(
+                        "text-xs shrink-0",
+                        monthData.bookedCount > 0 
+                          ? "border-green-500 text-green-600" 
+                          : "text-muted-foreground"
+                      )}
+                    >
+                      {monthData.bookedCount} booked
+                    </Badge>
+                  </div>
+                ))}
               </CardContent>
             </Card>
 
