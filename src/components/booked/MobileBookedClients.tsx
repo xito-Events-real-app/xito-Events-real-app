@@ -48,7 +48,8 @@ const MobileBookedClients = () => {
   const handleFullResync = async () => {
     try {
       setIsFullResyncing(true);
-      const result = await fullResyncAllBookedClients();
+      // Force sync to always copy ALL data from Client Tracker to Booked Clients
+      const result = await fullResyncAllBookedClients(true);
       
       const messages: string[] = [];
       if (result.copiedCount > 0) {

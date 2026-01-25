@@ -56,7 +56,8 @@ const MobileFinanceManager = () => {
   const handleFullResync = async () => {
     try {
       setIsFullResyncing(true);
-      const result = await fullResyncAllBookedClients();
+      // Force sync to always copy ALL data from Client Tracker to Booked Clients
+      const result = await fullResyncAllBookedClients(true);
       if (result.syncedCount > 0) {
         toast.success(`Full sync: Updated ${result.syncedCount} clients with all data`);
       } else {
