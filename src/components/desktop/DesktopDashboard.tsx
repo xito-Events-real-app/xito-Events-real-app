@@ -498,18 +498,18 @@ export function DesktopDashboard({
                             key={day} 
                             className="relative inline-flex items-center justify-center"
                             style={{ 
-                              width: eventCount >= 3 ? '28px' : eventCount >= 2 ? '24px' : '20px',
-                              height: eventCount >= 3 ? '28px' : eventCount >= 2 ? '24px' : '20px'
+                              width: eventCount >= 3 ? '40px' : eventCount >= 2 ? '32px' : '20px',
+                              height: eventCount >= 3 ? '40px' : eventCount >= 2 ? '32px' : '20px'
                             }}
                             title={`${eventCount} event(s) on day ${day}`}
                           >
                             {/* 3rd ring (outermost) - shows when 3+ events */}
                             {eventCount >= 3 && (
-                              <span className="absolute w-7 h-7 rounded-full border-2 border-green-500" />
+                              <span className="absolute w-10 h-10 rounded-full border-2 border-green-500" />
                             )}
                             {/* 2nd ring - shows when 2+ events */}
                             {eventCount >= 2 && (
-                              <span className="absolute w-6 h-6 rounded-full border-2 border-green-500" />
+                              <span className="absolute w-8 h-8 rounded-full border-2 border-green-500" />
                             )}
                             {/* 1st ring (innermost) - always present, contains the number */}
                             <span className="w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center text-[10px] font-bold z-10">
