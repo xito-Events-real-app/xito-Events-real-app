@@ -417,7 +417,7 @@ async function addClient(accessToken: string, spreadsheetId: string, clientData:
     '',                                      // AA: our_bargained_rates (empty for new)
     '',                                      // AB: client_bargained_rates (empty for new)
     '',                                      // AC: comments (empty for new)
-    '',                                      // AD: final_quotation (empty for new)
+    clientData.finalQuotation || '',       // AD: final_quotation
     '',                                      // AE: payments_made (empty for new)
     '',                                      // AF: payment_dates (empty for new)
     '',                                      // AG: remaining_payment (empty for new)

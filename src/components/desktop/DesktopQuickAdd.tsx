@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
-import { Save, RotateCcw, User, MapPin, Calendar, FileText, Phone, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { Save, RotateCcw, User, MapPin, Calendar, FileText, Phone, Loader2, RefreshCw, Sparkles, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FormSection, FormInput, FormSelect, CountrySelector, NepaliCalendar } from "@/components/form";
 import { FormCombobox } from "@/components/form/FormCombobox";
@@ -21,6 +21,9 @@ import { useCachedData } from "@/hooks/useCachedData";
 import { addClient, addOldClient, ClientData } from "@/lib/sheets-api";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 // Helper function to get date key for eventsByDate mapping
 const getDateKey = (d: NepaliDateObject): string => {
@@ -57,6 +60,18 @@ export function DesktopQuickAdd() {
   const [eventToCity, setEventToCity] = useState("");
   const [selectedDates, setSelectedDates] = useState<NepaliDateObject[]>([]);
   const [eventsByDate, setEventsByDate] = useState<Record<string, string>>({});
+  
+  // Final Quotation state (for BOOKED status)
+  const [selectedPackage, setSelectedPackage] = useState<string>("");
+  const [packagePrices, setPackagePrices] = useState({
+    BASIC: "",
+    STANDARD: "",
+    PREMIUM: "",
+    "WTN SPECIAL": ""
+  });
+
+  // Check if BOOKED status is selected
+  const isBookedStatus = initialStatus?.toUpperCase().includes("BOOKED") && !initialStatus?.toUpperCase().includes("SOMEWHERE ELSE");
 
   // Set default Company Name when dropdowns load
   useEffect(() => {
@@ -173,6 +188,27 @@ export function DesktopQuickAdd() {
       return;
     }
 
+    // Validate final quotation for BOOKED status
+    if (isBookedStatus) {
+      if (!selectedPackage) {
+        toast({
+          title: "Error",
+          description: "Please select a package for booked client",
+          variant: "destructive",
+        });
+        return;
+      }
+      const price = packagePrices[selectedPackage as keyof typeof packagePrices];
+      if (!price || parseInt(price) <= 0) {
+        toast({
+          title: "Error",
+          description: "Please enter the price for the selected package",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     if (isSubmitting) return;
     setIsSubmitting(true);
 
@@ -219,6 +255,15 @@ export function DesktopQuickAdd() {
       const inquiryBS = adToBS(inquiryDateValue);
       const inquiryBSFormatted = `${inquiryBS.year}-${String(inquiryBS.month).padStart(2, '0')}-${String(inquiryBS.day).padStart(2, '0')}`;
 
+      // Build final quotation string if BOOKED
+      let finalQuotationValue = "";
+      if (isBookedStatus && selectedPackage) {
+        const price = packagePrices[selectedPackage as keyof typeof packagePrices];
+        if (price) {
+          finalQuotationValue = `${selectedPackage}: NPR ${parseInt(price).toLocaleString()}/-`;
+        }
+      }
+
       const clientData: ClientData = {
         clientName: clientName.trim(),
         companyName,
@@ -243,6 +288,7 @@ export function DesktopQuickAdd() {
         initialStatus: initialStatus || "JUST ENQUIRED",
         clientHandler: clientHandler || whoAdded,
         registeredDateBS: registeredBSFormatted,
+        finalQuotation: finalQuotationValue,
       };
 
       await addClient(clientData);
@@ -454,6 +500,55 @@ export function DesktopQuickAdd() {
               options={dropdowns?.whatsappOwners || []} 
               placeholder="Who will handle this client?"
             />
+
+            {/* Final Quotation - Only shows when BOOKED status is selected */}
+            {isBookedStatus && (
+              <div className="mt-4 p-4 rounded-lg border-2 border-amber-500/30 bg-amber-500/5">
+                <div className="flex items-center gap-2 mb-3">
+                  <Lock className="w-4 h-4 text-amber-600" />
+                  <h4 className="font-semibold text-amber-700 dark:text-amber-400">Final Quotation (Required)</h4>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Enter the agreed price for {clientName || "this client"}. Select a package and enter the amount.
+                </p>
+                
+                <RadioGroup 
+                  value={selectedPackage} 
+                  onValueChange={setSelectedPackage}
+                  className="grid grid-cols-2 gap-2 mb-3"
+                >
+                  {(["BASIC", "STANDARD", "PREMIUM", "WTN SPECIAL"] as const).map((pkg) => (
+                    <div key={pkg} className="flex items-center space-x-2 p-2 rounded-lg border bg-background/50 hover:bg-background transition-colors">
+                      <RadioGroupItem value={pkg} id={`desktop-pkg-${pkg}`} />
+                      <Label htmlFor={`desktop-pkg-${pkg}`} className="flex-1 cursor-pointer text-sm font-medium">
+                        {pkg}
+                      </Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+
+                {selectedPackage && (
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium">
+                      Price for {selectedPackage} <span className="text-destructive">*</span>
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">NPR</span>
+                      <Input
+                        type="number"
+                        placeholder="e.g., 75000"
+                        value={packagePrices[selectedPackage as keyof typeof packagePrices]}
+                        onChange={(e) => setPackagePrices(prev => ({
+                          ...prev,
+                          [selectedPackage]: e.target.value
+                        }))}
+                        className="flex-1 h-10"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Inquiry Date</label>
