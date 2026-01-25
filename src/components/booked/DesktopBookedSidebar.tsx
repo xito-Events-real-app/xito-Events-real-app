@@ -35,10 +35,6 @@ interface DesktopBookedSidebarProps {
   selectedMonth: string | null;
   onMonthFilter: (month: string | null) => void;
   availableMonths: { value: string; label: string }[];
-  // Client filter props
-  allClients: { name: string; registeredDateTimeAD: string }[];
-  selectedClient: string | null;
-  onClientFilter: (clientName: string | null) => void;
 }
 
 export function DesktopBookedSidebar({ 
@@ -50,9 +46,6 @@ export function DesktopBookedSidebar({
   selectedMonth,
   onMonthFilter,
   availableMonths,
-  allClients,
-  selectedClient,
-  onClientFilter,
 }: DesktopBookedSidebarProps) {
   const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -170,68 +163,41 @@ export function DesktopBookedSidebar({
             </button>
           </div>
           
-          {/* Month Filter - Outside the box for prominence */}
+          {/* Month Filter - Tabs Style */}
           {!isCollapsed && (
             <div className="mt-6">
               <h3 className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-2 px-1">
                 Filter by Month
               </h3>
-              <div className="px-1">
-                <Select 
-                  value={selectedMonth || "all"} 
-                  onValueChange={(val) => onMonthFilter(val === "all" ? null : val)}
+              <div className="flex flex-col gap-1 px-1">
+                {/* All Months Tab */}
+                <button
+                  onClick={() => onMonthFilter(null)}
+                  className={cn(
+                    "w-full px-3 py-2 rounded-lg text-sm font-medium transition-all text-left",
+                    selectedMonth === null
+                      ? "bg-gradient-to-r from-green-600 to-emerald-600 text-white"
+                      : "text-white/70 hover:bg-white/10 hover:text-white border border-white/20"
+                  )}
                 >
-                  <SelectTrigger className="w-full bg-gradient-to-r from-green-600/20 to-emerald-600/20 border-green-500/50 text-white h-10">
-                    <SelectValue placeholder="All Months" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[hsl(220,25%,15%)] border-white/20 z-50">
-                    <SelectItem value="all" className="text-white hover:bg-white/10 focus:bg-white/10 focus:text-white">
-                      All Months
-                    </SelectItem>
-                    {availableMonths.map((month) => (
-                      <SelectItem 
-                        key={month.value} 
-                        value={month.value}
-                        className="text-white hover:bg-white/10 focus:bg-white/10 focus:text-white"
-                      >
-                        {month.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
-          
-          {/* Client Filter - Outside the box for prominence */}
-          {!isCollapsed && (
-            <div className="mt-4">
-              <h3 className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-2 px-1">
-                Filter by Client
-              </h3>
-              <div className="px-1">
-                <Select 
-                  value={selectedClient || "all"} 
-                  onValueChange={(val) => onClientFilter(val === "all" ? null : val)}
-                >
-                  <SelectTrigger className="w-full bg-gradient-to-r from-blue-600/20 to-indigo-600/20 border-blue-500/50 text-white h-10">
-                    <SelectValue placeholder="All Clients" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[hsl(220,25%,15%)] border-white/20 z-50 max-h-60">
-                    <SelectItem value="all" className="text-white hover:bg-white/10 focus:bg-white/10 focus:text-white">
-                      All Clients ({allClients.length})
-                    </SelectItem>
-                    {allClients.map((client) => (
-                      <SelectItem 
-                        key={client.registeredDateTimeAD} 
-                        value={client.name}
-                        className="text-white hover:bg-white/10 focus:bg-white/10 focus:text-white"
-                      >
-                        {client.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  ALL MONTHS
+                </button>
+                
+                {/* Dynamic Month Tabs */}
+                {availableMonths.map((month) => (
+                  <button
+                    key={month.value}
+                    onClick={() => onMonthFilter(month.value)}
+                    className={cn(
+                      "w-full px-3 py-2 rounded-lg text-sm font-medium transition-all text-left",
+                      selectedMonth === month.value
+                        ? "bg-gradient-to-r from-green-600 to-emerald-600 text-white"
+                        : "text-white/70 hover:bg-white/10 hover:text-white border border-white/20"
+                    )}
+                  >
+                    {month.label.toUpperCase()}
+                  </button>
+                ))}
               </div>
             </div>
           )}
