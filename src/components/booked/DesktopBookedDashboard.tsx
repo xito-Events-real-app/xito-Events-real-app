@@ -697,54 +697,84 @@ export function DesktopBookedDashboard({
             <CardContent>
               {showClientWise ? (
                 // CLIENT WISE View - Show individual client cards
-                allClients.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    No clients found
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-4 gap-4">
-                    {allClients.map((client) => {
-                      // Find client data
-                      const clientData = clients.find(c => c.clientName === client.name);
-                      const clientId = clientData?.originalRowNumber || encodeURIComponent(clientData?.registeredDateTimeAD || '');
-                      
-                      // Get events for this client
-                      const clientEvents = clients
-                        .filter(c => c.clientName === client.name)
-                        .flatMap(c => parseEventDetails(
-                          c.events || '',
-                          c.eventYear || '',
-                          c.eventMonth || '',
-                          c.eventDay || ''
-                        ));
-                      
-                      return (
-                        <button
-                          key={client.registeredDateTimeAD}
-                          onClick={() => navigate(`/client-tracker/client/${clientId}`)}
-                          className="border rounded-lg p-3 transition-all text-left hover:border-blue-500/50 hover:bg-blue-500/5"
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-semibold text-sm truncate flex-1 mr-2">{client.name}</span>
-                            <Badge className="bg-blue-500 text-white text-xs shrink-0">
-                              {clientEvents.length} events
-                            </Badge>
-                          </div>
-                          <ScrollArea className={clientEvents.length > 3 ? "h-20" : ""}>
-                            <div className="space-y-1">
-                              {clientEvents.map((event, i) => (
-                                <div key={i} className="text-[10px] text-muted-foreground border-l-2 border-blue-500 pl-2">
-                                  <span className="font-medium text-foreground">{event.eventName}</span>
-                                  <span> • {event.monthName} {event.day}, {event.year}</span>
-                                </div>
-                              ))}
+                (() => {
+                  // Filter clients by selected month
+                  const filteredClientList = selectedMonth 
+                    ? allClients.filter(client => {
+                        const clientData = clients.find(c => c.clientName === client.name);
+                        if (!clientData) return false;
+                        
+                        const events = parseEventDetails(
+                          clientData.events || '',
+                          clientData.eventYear || '',
+                          clientData.eventMonth || '',
+                          clientData.eventDay || ''
+                        );
+                        
+                        const [filterYear, filterMonth] = selectedMonth.split('-');
+                        return events.some(event => 
+                          event.year === filterYear && event.month === filterMonth
+                        );
+                      })
+                    : allClients;
+                  
+                  return filteredClientList.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No clients found {selectedMonth ? "for selected month" : ""}
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-4 gap-4">
+                      {filteredClientList.map((client) => {
+                        // Find client data
+                        const clientData = clients.find(c => c.clientName === client.name);
+                        const clientId = clientData?.originalRowNumber || encodeURIComponent(clientData?.registeredDateTimeAD || '');
+                        
+                        // Get events for this client, filtered by selected month if applicable
+                        const clientEvents = clients
+                          .filter(c => c.clientName === client.name)
+                          .flatMap(c => parseEventDetails(
+                            c.events || '',
+                            c.eventYear || '',
+                            c.eventMonth || '',
+                            c.eventDay || ''
+                          ))
+                          .filter(event => {
+                            if (!selectedMonth) return true;
+                            const [filterYear, filterMonth] = selectedMonth.split('-');
+                            return event.year === filterYear && event.month === filterMonth;
+                          });
+                        
+                        return (
+                          <button
+                            key={client.registeredDateTimeAD}
+                            onClick={() => navigate(`/client-tracker/client/${clientId}`)}
+                            className={cn(
+                              "border rounded-lg p-3 transition-all text-left w-full relative overflow-hidden",
+                              "hover:border-green-500/50 hover:bg-green-500/5"
+                            )}
+                          >
+                            <div className="flex items-start justify-between mb-2 gap-2">
+                              <span className="font-semibold text-sm">{client.name}</span>
+                              <Badge className="bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs shrink-0">
+                                {clientEvents.length} events
+                              </Badge>
                             </div>
-                          </ScrollArea>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )
+                            <ScrollArea className={clientEvents.length > 3 ? "h-24" : ""}>
+                              <div className="space-y-1">
+                                {clientEvents.map((event, i) => (
+                                  <div key={i} className="text-[10px] text-muted-foreground border-l-2 border-green-500 pl-2 py-0.5">
+                                    <span className="font-medium text-foreground">{event.eventName}</span>
+                                    <span> • {event.monthName} {event.day}, {event.year}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </ScrollArea>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })()
               ) : (
                 // Original Hot Dates View
                 hotDates.length === 0 ? (
