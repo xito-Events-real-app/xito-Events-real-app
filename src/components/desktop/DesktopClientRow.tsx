@@ -136,6 +136,7 @@ export function DesktopClientRow({
 
   // Loading states
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [showSuccessFlash, setShowSuccessFlash] = useState(false);
   const [isUpdatingHandler, setIsUpdatingHandler] = useState(false);
   const [isLoggingCall, setIsLoggingCall] = useState(false);
   const [isSavingQuotation, setIsSavingQuotation] = useState(false);
@@ -301,6 +302,10 @@ export function DesktopClientRow({
       const result = await updateClientStatus(client.rowNumber, newStatus, currentStatusLog);
       setCurrentStatusLog(result.statusLog);
       toast.success(`Status changed to ${newStatus}`);
+      
+      // Trigger green flash animation
+      setShowSuccessFlash(true);
+      setTimeout(() => setShowSuccessFlash(false), 1000);
       
       if (onClientUpdate) {
         onClientUpdate({ ...client, statusLog: result.statusLog });
@@ -706,7 +711,10 @@ export function DesktopClientRow({
   return (
     <>
       <TableRow 
-        className="hover:bg-muted/50 cursor-pointer group"
+        className={cn(
+          "hover:bg-muted/50 cursor-pointer group transition-colors duration-300",
+          showSuccessFlash && "animate-success-flash"
+        )}
         onClick={() => onOpenDetail?.(client)}
       >
         {/* Column 1: Client Info Block */}

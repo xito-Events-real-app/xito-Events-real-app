@@ -103,6 +103,10 @@ export default {
           "0%, 100%": { opacity: "1" },
           "50%": { opacity: "0.7" },
         },
+        "success-flash": {
+          "0%": { backgroundColor: "hsl(142 76% 36% / 0.4)" },
+          "100%": { backgroundColor: "transparent" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -110,6 +114,7 @@ export default {
         "fade-in": "fade-in 0.3s ease-out",
         "slide-up": "slide-up 0.3s ease-out",
         "pulse-soft": "pulse-soft 2s ease-in-out infinite",
+        "success-flash": "success-flash 1s ease-out forwards",
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],
