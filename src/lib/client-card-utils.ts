@@ -397,8 +397,9 @@ export function getRelativeTime(date: Date): string {
 export function parseFinalQuotation(finalQuotation?: string): { package: string; amount: string } | null {
   if (!finalQuotation) return null;
   
-  // Format: "PREMIUM NPR 2,50,000/-" or similar
-  const match = finalQuotation.match(/^(BASIC|STANDARD|PREMIUM|WTN SPECIAL)\s+NPR\s+([\d,]+)\/?-?/i);
+  // Format: "PREMIUM NPR 2,50,000/-" OR "PREMIUM: NPR 75,000/-"
+  // Handle both formats - with or without colon after package name
+  const match = finalQuotation.match(/^(BASIC|STANDARD|PREMIUM|WTN SPECIAL):?\s+NPR\s+([\d,]+)\s*\/?-?/i);
   if (match) {
     return {
       package: match[1].toUpperCase(),
