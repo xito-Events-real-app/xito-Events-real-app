@@ -83,6 +83,7 @@ import {
   addPayment,
 } from "@/lib/sheets-api";
 import { bsToAD } from "@/lib/nepali-date";
+import { getStatusConfig } from "@/lib/status-config";
 
 interface DesktopClientRowProps {
   client: ClientData;
@@ -171,6 +172,7 @@ export function DesktopClientRow({
 
   // Derived values
   const currentStatus = getCurrentStatus(currentStatusLog);
+  const statusConfig = getStatusConfig(currentStatus);
   const callEntries = useMemo(() => parseCallLog(currentCallLog), [currentCallLog]);
   const callCount = callEntries.length;
   const lastCallInfo = useMemo(() => getLastCallInfo(currentCallLog), [currentCallLog]);
@@ -1087,6 +1089,19 @@ export function DesktopClientRow({
               )}
             </div>
           </div>
+        </TableCell>
+        
+        {/* Column 5: Status (Far Right) */}
+        <TableCell className="py-3 align-middle text-right" onClick={(e) => e.stopPropagation()}>
+          <Badge 
+            className={cn(
+              "font-bold text-xs uppercase tracking-wide px-3 py-1",
+              statusConfig.color,
+              "text-white"
+            )}
+          >
+            {statusConfig.label}
+          </Badge>
         </TableCell>
       </TableRow>
       
