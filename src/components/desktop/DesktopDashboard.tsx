@@ -31,13 +31,10 @@ import {
   UserPlus,
   AlertTriangle,
   ChevronRight,
-  ArrowRight,
   RefreshCw,
-  MessageCircle,
-  MapPin,
-  Calendar,
   Sparkles,
   CheckCircle,
+  Flame,
 } from "lucide-react";
 
 interface DesktopDashboardProps {
@@ -168,17 +165,81 @@ export function DesktopDashboard({
       .sort((a, b) => a.daysRemaining - b.daysRemaining);
   }, [statsClients]);
 
-  // Pipeline stats (from ALL clients)
-  const quotationPending = statusCounts['CALLED: QUOTATION PENDING'] || 0;
-  const quotationSent = statusCounts['QUOTATION SENT: REVIEW PENDING'] || 0;
-  const bargaining = Object.keys(statusCounts).filter(s => s.includes('BARGAINING')).reduce((sum, s) => sum + (statusCounts[s] || 0), 0);
-  const booked = Object.keys(statusCounts).filter(s => s.includes('BOOKED')).reduce((sum, s) => sum + (statusCounts[s] || 0), 0);
+  // Booked count for stats card
+  const booked = Object.keys(statusCounts).filter(s => s.includes('BOOKED') && !s.includes('BOOKED SOMEWHERE ELSE')).reduce((sum, s) => sum + (statusCounts[s] || 0), 0);
 
-  // Format phone number for WhatsApp
-  const formatWhatsAppNumber = (phone: string) => {
-    if (!phone) return '';
-    return phone.replace(/\D/g, '');
-  };
+  // Hot Dates calculation - group by event date, categorize by status
+  const hotDates = useMemo(() => {
+    const ENQUIRY_ON_STATUSES = [
+      'JUST ENQUIRED', 'NUMBER PROVIDED', 'TEXTED', 'CALL NOT',
+      'QUOTATION PENDING', 'QUOTATION SENT', 'BARGAINING', 'ADVANCE PENDING'
+    ];
+    
+    const GONE_ELSEWHERE_STATUSES = [
+      'CANCELLED BY CLIENT', 'CANCELLED BY US', 'BOOKED SOMEWHERE ELSE'
+    ];
+
+    const dateGroups: Record<string, {
+      dateKey: string;
+      year: string;
+      month: string;
+      monthName: string;
+      day: string;
+      booked: { clientName: string; eventName: string }[];
+      enquiryOn: { clientName: string; eventName: string }[];
+      goneElsewhere: { clientName: string; eventName: string }[];
+    }> = {};
+
+    statsClients.forEach(client => {
+      const status = getCurrentStatus(client.statusLog || '').toUpperCase();
+      const events = parseEventDetails(
+        client.events || '',
+        client.eventYear || '',
+        client.eventMonth || '',
+        client.eventDay || ''
+      );
+
+      events.forEach(event => {
+        if (!event.year || !event.month || !event.day) return;
+        
+        const dateKey = `${event.year}-${event.month.padStart(2, '0')}-${String(event.day).padStart(2, '0')}`;
+        
+        if (!dateGroups[dateKey]) {
+          dateGroups[dateKey] = {
+            dateKey,
+            year: event.year,
+            month: event.month,
+            monthName: event.monthName,
+            day: event.day,
+            booked: [],
+            enquiryOn: [],
+            goneElsewhere: []
+          };
+        }
+
+        const entry = { clientName: client.clientName || 'Unknown', eventName: event.eventName || 'Event' };
+
+        // Categorize by status
+        if (status.includes('BOOKED') && !status.includes('BOOKED SOMEWHERE ELSE')) {
+          dateGroups[dateKey].booked.push(entry);
+        } else if (GONE_ELSEWHERE_STATUSES.some(s => status.includes(s))) {
+          dateGroups[dateKey].goneElsewhere.push(entry);
+        } else if (ENQUIRY_ON_STATUSES.some(s => status.includes(s))) {
+          dateGroups[dateKey].enquiryOn.push(entry);
+        }
+      });
+    });
+
+    // Sort by total count (hottest dates first), take top 6
+    return Object.values(dateGroups)
+      .map(d => ({
+        ...d,
+        totalCount: d.booked.length + d.enquiryOn.length + d.goneElsewhere.length
+      }))
+      .filter(d => d.totalCount > 0)
+      .sort((a, b) => b.totalCount - a.totalCount)
+      .slice(0, 6);
+  }, [statsClients]);
 
   return (
     <div className="p-6 space-y-6">
@@ -328,33 +389,108 @@ export function DesktopDashboard({
           <div className="grid grid-cols-12 gap-6">
             {/* Left Column: Pipeline + Categories */}
             <div className="col-span-8 space-y-6">
-              {/* Sales Pipeline */}
+              {/* Hot Dates Section */}
               <Card className="shadow-sm">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base font-semibold">Sales Pipeline</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base font-semibold flex items-center gap-2">
+                      <Flame className="w-5 h-5 text-orange-500" />
+                      Hot Dates
+                    </CardTitle>
+                    <Badge variant="outline" className="text-xs">
+                      Top {hotDates.length} dates
+                    </Badge>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 bg-blue-500/10 rounded-lg p-3 cursor-pointer hover:bg-blue-500/20 transition-colors">
-                      <p className="text-2xl font-bold text-blue-600">{quotationPending}</p>
-                      <p className="text-xs text-muted-foreground">Quotation Pending</p>
+                  {hotDates.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No event dates found
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-3">
+                      {hotDates.map((dateInfo) => (
+                        <div
+                          key={dateInfo.dateKey}
+                          className="border rounded-lg p-3 hover:border-primary/30 transition-colors"
+                        >
+                          {/* Date Header */}
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <Badge className="bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs">
+                                {dateInfo.monthName} {dateInfo.day}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">{dateInfo.year}</span>
+                            </div>
+                            <span className="text-lg font-bold">{dateInfo.totalCount}</span>
+                          </div>
+
+                          {/* Three Category Rows */}
+                          <div className="space-y-2">
+                            {/* BOOKED */}
+                            <div className="flex items-start gap-2">
+                              <Badge className="bg-green-500 text-white text-[10px] shrink-0 w-14 justify-center">
+                                BOOKED
+                              </Badge>
+                              <div className="flex-1 min-w-0">
+                                <span className="font-semibold text-green-600 text-sm">{dateInfo.booked.length}</span>
+                                {dateInfo.booked.slice(0, 2).map((c, i) => (
+                                  <div key={i} className="text-[10px] text-muted-foreground truncate">
+                                    {c.eventName} • {c.clientName}
+                                  </div>
+                                ))}
+                                {dateInfo.booked.length > 2 && (
+                                  <span className="text-[10px] text-green-500">
+                                    +{dateInfo.booked.length - 2} more
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* ENQUIRY ON */}
+                            <div className="flex items-start gap-2">
+                              <Badge className="bg-amber-500 text-white text-[10px] shrink-0 w-14 justify-center">
+                                ENQUIRY
+                              </Badge>
+                              <div className="flex-1 min-w-0">
+                                <span className="font-semibold text-amber-600 text-sm">{dateInfo.enquiryOn.length}</span>
+                                {dateInfo.enquiryOn.slice(0, 2).map((c, i) => (
+                                  <div key={i} className="text-[10px] text-muted-foreground truncate">
+                                    {c.eventName} • {c.clientName}
+                                  </div>
+                                ))}
+                                {dateInfo.enquiryOn.length > 2 && (
+                                  <span className="text-[10px] text-amber-500">
+                                    +{dateInfo.enquiryOn.length - 2} more
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* GONE ELSEWHERE */}
+                            <div className="flex items-start gap-2">
+                              <Badge className="bg-gray-500 text-white text-[10px] shrink-0 w-14 justify-center">
+                                GONE
+                              </Badge>
+                              <div className="flex-1 min-w-0">
+                                <span className="font-semibold text-gray-600 text-sm">{dateInfo.goneElsewhere.length}</span>
+                                {dateInfo.goneElsewhere.slice(0, 2).map((c, i) => (
+                                  <div key={i} className="text-[10px] text-muted-foreground truncate">
+                                    {c.eventName} • {c.clientName}
+                                  </div>
+                                ))}
+                                {dateInfo.goneElsewhere.length > 2 && (
+                                  <span className="text-[10px] text-gray-400">
+                                    +{dateInfo.goneElsewhere.length - 2} more
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                    <div className="flex-1 bg-indigo-500/10 rounded-lg p-3 cursor-pointer hover:bg-indigo-500/20 transition-colors">
-                      <p className="text-2xl font-bold text-indigo-600">{quotationSent}</p>
-                      <p className="text-xs text-muted-foreground">Quotation Sent</p>
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                    <div className="flex-1 bg-purple-500/10 rounded-lg p-3 cursor-pointer hover:bg-purple-500/20 transition-colors">
-                      <p className="text-2xl font-bold text-purple-600">{bargaining}</p>
-                      <p className="text-xs text-muted-foreground">Bargaining</p>
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                    <div className="flex-1 bg-green-500/10 rounded-lg p-3 cursor-pointer hover:bg-green-500/20 transition-colors">
-                      <p className="text-2xl font-bold text-green-600">{booked}</p>
-                      <p className="text-xs text-muted-foreground">Booked</p>
-                    </div>
-                  </div>
+                  )}
                 </CardContent>
               </Card>
 
