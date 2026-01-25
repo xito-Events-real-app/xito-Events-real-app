@@ -11,11 +11,14 @@ import { NepaliDateObject, bsToAD, adToBS, formatBSDate, isUnknownDay, getDayFor
 import { useCachedData } from "@/hooks/useCachedData";
 import { addClient, addOldClient, isSheetsConfigured } from "@/lib/sheets-api";
 import { toast } from "@/hooks/use-toast";
-import { Save, Loader2, AlertTriangle, User, FileText, MapPin, Calendar, Phone, Sparkles, RefreshCw } from "lucide-react";
+import { Save, Loader2, AlertTriangle, User, FileText, MapPin, Calendar, Phone, Sparkles, RefreshCw, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 export default function QuickAdd() {
   const { dropdowns, isLoading: dropdownsLoading, isFromCache, isSyncing, refreshData } = useCachedData();
@@ -45,6 +48,18 @@ export default function QuickAdd() {
   const [description, setDescription] = useState("");
   const [initialStatus, setInitialStatus] = useState("JUST ENQUIRED");
   const [clientHandler, setClientHandler] = useState("");
+  
+  // Final Quotation state (for BOOKED status)
+  const [selectedPackage, setSelectedPackage] = useState<string>("");
+  const [packagePrices, setPackagePrices] = useState({
+    BASIC: "",
+    STANDARD: "",
+    PREMIUM: "",
+    "WTN SPECIAL": ""
+  });
+
+  // Check if BOOKED status is selected
+  const isBookedStatus = initialStatus?.toUpperCase().includes("BOOKED") && !initialStatus?.toUpperCase().includes("SOMEWHERE ELSE");
 
   const isConfigured = isSheetsConfigured();
 
@@ -172,6 +187,27 @@ export default function QuickAdd() {
       return;
     }
 
+    // Validate final quotation for BOOKED status
+    if (isBookedStatus) {
+      if (!selectedPackage) {
+        toast({
+          title: "Error",
+          description: "Please select a package for booked client",
+          variant: "destructive",
+        });
+        return;
+      }
+      const price = packagePrices[selectedPackage as keyof typeof packagePrices];
+      if (!price || parseInt(price) <= 0) {
+        toast({
+          title: "Error",
+          description: "Please enter the price for the selected package",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -221,6 +257,15 @@ export default function QuickAdd() {
       const inquiryBS = adToBS(inquiryDateValue);
       const inquiryBSFormatted = `${inquiryBS.year}-${String(inquiryBS.month).padStart(2, '0')}-${String(inquiryBS.day).padStart(2, '0')}`;
 
+      // Build final quotation string if BOOKED
+      let finalQuotationValue = "";
+      if (isBookedStatus && selectedPackage) {
+        const price = packagePrices[selectedPackage as keyof typeof packagePrices];
+        if (price) {
+          finalQuotationValue = `${selectedPackage}: NPR ${parseInt(price).toLocaleString()}/-`;
+        }
+      }
+
       const clientData = {
         clientName,
         companyName,
@@ -246,6 +291,7 @@ export default function QuickAdd() {
         // Send accurate BS dates from frontend
         registeredDateBS: registeredBSFormatted,
         inquiryDateBS: inquiryBSFormatted,
+        finalQuotation: finalQuotationValue,
       };
 
       if (isConfigured) {
@@ -551,6 +597,53 @@ export default function QuickAdd() {
             placeholder="Select handler (optional)"
           />
         </FormSection>
+
+        {/* Final Quotation - Only shows when BOOKED status is selected */}
+        {isBookedStatus && (
+          <FormSection title="Final Quotation" icon={Lock} gradient="amber">
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Enter the agreed price for {clientName || "this client"}. Select a package and enter the amount.
+              </p>
+              
+              <RadioGroup 
+                value={selectedPackage} 
+                onValueChange={setSelectedPackage}
+                className="space-y-2"
+              >
+                {(["BASIC", "STANDARD", "PREMIUM", "WTN SPECIAL"] as const).map((pkg) => (
+                  <div key={pkg} className="flex items-center space-x-3 p-3 rounded-lg border bg-background/50 hover:bg-background transition-colors">
+                    <RadioGroupItem value={pkg} id={`pkg-${pkg}`} />
+                    <Label htmlFor={`pkg-${pkg}`} className="flex-1 cursor-pointer font-medium">
+                      {pkg}
+                    </Label>
+                  </div>
+                ))}
+              </RadioGroup>
+
+              {selectedPackage && (
+                <div className="space-y-2 pt-2">
+                  <Label className="text-sm font-medium">
+                    Price for {selectedPackage} <span className="text-destructive">*</span>
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-muted-foreground">NPR</span>
+                    <Input
+                      type="number"
+                      placeholder="e.g., 75000"
+                      value={packagePrices[selectedPackage as keyof typeof packagePrices]}
+                      onChange={(e) => setPackagePrices(prev => ({
+                        ...prev,
+                        [selectedPackage]: e.target.value
+                      }))}
+                      className="flex-1"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </FormSection>
+        )}
 
         {/* Submit Button */}
         <Button 
