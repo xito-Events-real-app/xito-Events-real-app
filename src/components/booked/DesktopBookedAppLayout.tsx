@@ -45,11 +45,21 @@ export function DesktopBookedAppLayout() {
     try {
       setIsFullResyncing(true);
       const result = await fullResyncAllBookedClients();
-      if (result.syncedCount > 0) {
-        toast.success(`Full sync: Updated ${result.syncedCount} clients`);
-      } else {
-        toast.info("All data is already synchronized");
+      
+      const messages: string[] = [];
+      if (result.copiedCount > 0) {
+        messages.push(`Found & copied ${result.copiedCount} missing booked clients`);
       }
+      if (result.syncedCount > 0) {
+        messages.push(`Updated ${result.syncedCount} existing clients`);
+      }
+      
+      if (messages.length > 0) {
+        toast.success(messages.join('. '));
+      } else {
+        toast.info("All booked clients are already synchronized");
+      }
+      
       await refreshData();
     } catch (error) {
       console.error("Error performing full resync:", error);

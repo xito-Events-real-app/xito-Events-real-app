@@ -1623,6 +1623,7 @@ async function resyncAllBookedClients(accessToken: string, spreadsheetId: string
 }
 
 // Full resync all booked clients: sync ALL data (columns A-AI) from CLIENT TRACKER to BOOKED CLIENTS
+// Also scans for BOOKED clients in tracker that are missing from BOOKED CLIENTS and copies them
 async function fullResyncAllBookedClients(accessToken: string, spreadsheetId: string) {
   console.log('[FULL RESYNC] Starting comprehensive full resync of booked clients...');
   
@@ -1643,19 +1644,32 @@ async function fullResyncAllBookedClients(accessToken: string, spreadsheetId: st
   
   // Build a map of registeredDateTimeAD -> full row data from CLIENT TRACKER
   const trackerFullDataMap: Map<string, { rowData: string[]; trackerRowNumber: number }> = new Map();
+  // Also track all BOOKED clients in tracker for Phase 1
+  const bookedInTracker: { registeredDateTime: string; trackerRowNumber: number }[] = [];
   
   for (let i = 0; i < trackerRows.length; i++) {
     const row = trackerRows[i];
     const registeredDateTime = (row[0] || '').trim();
+    const statusLog = (row[22] || '').toUpperCase(); // Column W (index 22) - status log
+    
     if (registeredDateTime) {
       trackerFullDataMap.set(registeredDateTime, {
         rowData: row,
         trackerRowNumber: i + 2
       });
+      
+      // Check if this client has BOOKED status (but not "BOOKED SOMEWHERE ELSE")
+      if (statusLog.includes('BOOKED') && !statusLog.includes('SOMEWHERE ELSE')) {
+        bookedInTracker.push({
+          registeredDateTime,
+          trackerRowNumber: i + 2
+        });
+      }
     }
   }
   
   console.log(`[FULL RESYNC] Built tracker map with ${trackerFullDataMap.size} entries`);
+  console.log(`[FULL RESYNC] Found ${bookedInTracker.length} BOOKED clients in tracker`);
   
   // Get all data from BOOKED CLIENTS
   const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:AI500");
@@ -1672,12 +1686,53 @@ async function fullResyncAllBookedClients(accessToken: string, spreadsheetId: st
   const bookedData = await bookedResponse.json();
   const bookedRows = bookedData.values || [];
   
+  // Build set of existing BOOKED CLIENTS IDs
+  const existingBookedIds = new Set<string>();
+  for (const row of bookedRows) {
+    const id = (row[0] || '').trim();
+    if (id) {
+      existingBookedIds.add(id);
+    }
+  }
+  
+  // === PHASE 1: Copy missing BOOKED clients from tracker to BOOKED CLIENTS ===
+  let copiedCount = 0;
+  
+  for (const client of bookedInTracker) {
+    if (!existingBookedIds.has(client.registeredDateTime)) {
+      console.log(`[FULL RESYNC] Phase 1: Copying missing BOOKED client from tracker row ${client.trackerRowNumber}`);
+      try {
+        await copyToBookedClients(accessToken, spreadsheetId, client.trackerRowNumber);
+        copiedCount++;
+        // Add to existing set to prevent duplicates if function is called again
+        existingBookedIds.add(client.registeredDateTime);
+      } catch (error) {
+        console.error(`[FULL RESYNC] Failed to copy client from row ${client.trackerRowNumber}:`, error);
+      }
+    }
+  }
+  
+  console.log(`[FULL RESYNC] Phase 1 complete: Copied ${copiedCount} missing BOOKED clients`);
+  
+  // === PHASE 2: Sync existing data between sheets ===
+  // Re-fetch booked clients if we copied new ones
+  let currentBookedRows = bookedRows;
+  if (copiedCount > 0) {
+    const refreshResponse = await fetch(bookedUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (refreshResponse.ok) {
+      const refreshData = await refreshResponse.json();
+      currentBookedRows = refreshData.values || [];
+    }
+  }
+  
   let syncedCount = 0;
   let skippedCount = 0;
   let notFoundCount = 0;
   
-  for (let i = 0; i < bookedRows.length; i++) {
-    const row = bookedRows[i];
+  for (let i = 0; i < currentBookedRows.length; i++) {
+    const row = currentBookedRows[i];
     const registeredDateTime = (row[0] || '').trim();
     const bookedRowNumber = i + 2;
     
@@ -1695,7 +1750,6 @@ async function fullResyncAllBookedClients(accessToken: string, spreadsheetId: st
     }
     
     // Check if any data differs (compare key columns: J-P for events, AE-AG for payments)
-    // Simple check: compare stringified values of important columns
     const bookedEventData = [row[9], row[10], row[11], row[12], row[13], row[14], row[15]].join('|');
     const trackerEventData = [trackerEntry.rowData[9], trackerEntry.rowData[10], trackerEntry.rowData[11], trackerEntry.rowData[12], trackerEntry.rowData[13], trackerEntry.rowData[14], trackerEntry.rowData[15]].join('|');
     
@@ -1735,8 +1789,8 @@ async function fullResyncAllBookedClients(accessToken: string, spreadsheetId: st
     }
   }
   
-  console.log(`[FULL RESYNC] Complete: ${syncedCount} synced, ${skippedCount} unchanged, ${notFoundCount} not found in tracker`);
-  return { success: true, syncedCount, skippedCount, notFoundCount, totalBooked: bookedRows.length };
+  console.log(`[FULL RESYNC] Complete: ${copiedCount} copied, ${syncedCount} synced, ${skippedCount} unchanged, ${notFoundCount} not found in tracker`);
+  return { success: true, copiedCount, syncedCount, skippedCount, notFoundCount, totalBooked: currentBookedRows.length };
 }
 
 // Update a booked client in both BOOKED CLIENTS and CLIENT TRACKER sheets
