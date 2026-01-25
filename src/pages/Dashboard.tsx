@@ -64,6 +64,7 @@ export default function Dashboard() {
   const [showDateConverter, setShowDateConverter] = useState(false);
   const [isDesktopMode, setIsDesktopMode] = useState(false);
   const [showHotDatesDrawer, setShowHotDatesDrawer] = useState(false);
+  const [selectedMobileHotDate, setSelectedMobileHotDate] = useState<string | null>(null);
 
   // Check desktop mode on mount
   useEffect(() => {
@@ -259,7 +260,35 @@ export default function Dashboard() {
       .slice(0, 6);
   }, [clients]);
 
-  // Get BOOKED clients with events in less than 7 days
+  // Filter clients by selected mobile hot date
+  const mobileHotDateFilteredClients = useMemo(() => {
+    if (!selectedMobileHotDate) return [];
+    
+    const [hYear, hMonth, hDay] = selectedMobileHotDate.split('-').map(s => parseInt(s));
+    
+    return clients.filter(client => {
+      const years = (client.eventYear || '').split('\n').filter(Boolean);
+      const months = (client.eventMonth || '').split('\n').filter(Boolean);
+      const days = (client.eventDay || '').split('\n').filter(Boolean);
+      
+      for (let i = 0; i < Math.max(years.length, months.length, days.length); i++) {
+        const y = parseInt(years[i]) || 0;
+        const m = parseInt(months[i]) || 0;
+        const d = parseInt(days[i]) || 0;
+        if (y === hYear && m === hMonth && d === hDay) {
+          return true;
+        }
+      }
+      return false;
+    });
+  }, [clients, selectedMobileHotDate]);
+
+  // Get selected hot date info for display
+  const selectedHotDateInfo = useMemo(() => {
+    if (!selectedMobileHotDate) return null;
+    return hotDates.find(d => d.dateKey === selectedMobileHotDate) || null;
+  }, [hotDates, selectedMobileHotDate]);
+
   const urgentBookedClients = useMemo(() => {
     const now = new Date();
     return clients
@@ -638,22 +667,33 @@ export default function Dashboard() {
             {/* Horizontal Scrollable Pills */}
             <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide">
               {hotDates.length > 0 ? (
-                hotDates.slice(0, 4).map((date) => (
-                  <button
-                    key={date.dateKey}
-                    onClick={() => setShowHotDatesDrawer(true)}
-                    className="shrink-0 px-3 py-2 rounded-lg bg-gradient-to-r from-orange-500/10 to-red-500/10 border border-orange-500/30 hover:border-orange-500/50 transition-all active:scale-95"
-                  >
-                    <div className="font-semibold text-sm text-foreground">
-                      {date.monthName} {date.day}
-                    </div>
-                    <div className="flex gap-1.5 text-xs mt-1 justify-center">
-                      <span className="text-green-600 font-bold">{date.booked.length}</span>
-                      <span className="text-amber-600 font-bold">{date.enquiryOn.length}</span>
-                      <span className="text-gray-500 font-bold">{date.goneElsewhere.length}</span>
-                    </div>
-                  </button>
-                ))
+                hotDates.slice(0, 4).map((date) => {
+                  const isSelected = selectedMobileHotDate === date.dateKey;
+                  return (
+                    <button
+                      key={date.dateKey}
+                      onClick={() => setSelectedMobileHotDate(isSelected ? null : date.dateKey)}
+                      className={cn(
+                        "shrink-0 px-3 py-2 rounded-lg transition-all active:scale-95",
+                        isSelected
+                          ? "bg-gradient-to-r from-orange-500 to-red-500 border-2 border-orange-400 ring-2 ring-orange-500/30 shadow-lg"
+                          : "bg-gradient-to-r from-orange-500/10 to-red-500/10 border border-orange-500/30 hover:border-orange-500/50"
+                      )}
+                    >
+                      <div className={cn(
+                        "font-semibold text-sm",
+                        isSelected ? "text-white" : "text-foreground"
+                      )}>
+                        {date.monthName} {date.day}
+                      </div>
+                      <div className="flex gap-1.5 text-xs mt-1 justify-center">
+                        <span className={cn("font-bold", isSelected ? "text-green-200" : "text-green-600")}>{date.booked.length}</span>
+                        <span className={cn("font-bold", isSelected ? "text-amber-200" : "text-amber-600")}>{date.enquiryOn.length}</span>
+                        <span className={cn("font-bold", isSelected ? "text-gray-300" : "text-gray-500")}>{date.goneElsewhere.length}</span>
+                      </div>
+                    </button>
+                  );
+                })
               ) : (
                 <div className="text-xs text-muted-foreground py-2">
                   No hot dates yet
@@ -669,6 +709,75 @@ export default function Dashboard() {
                 </button>
               )}
             </div>
+
+            {/* Filtered Clients List - Show when a hot date is selected */}
+            {selectedMobileHotDate && selectedHotDateInfo && (
+              <Card className="border-2 border-orange-500/30 bg-gradient-to-br from-orange-500/5 to-red-500/5">
+                <CardContent className="p-3">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Badge className="bg-gradient-to-r from-orange-500 to-red-500 text-white">
+                        {selectedHotDateInfo.monthName} {selectedHotDateInfo.day}
+                      </Badge>
+                      <span className="text-sm text-muted-foreground">
+                        {mobileHotDateFilteredClients.length} clients
+                      </span>
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => setSelectedMobileHotDate(null)}
+                      className="h-7 px-2 text-xs"
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                  
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {mobileHotDateFilteredClients.map((client) => {
+                      const status = getCurrentStatus(client.statusLog || '').toUpperCase();
+                      const isBooked = status.includes('BOOKED') && !status.includes('SOMEWHERE ELSE');
+                      const isGone = status.includes('CANCELLED') || status.includes('SOMEWHERE ELSE');
+                      
+                      return (
+                        <div 
+                          key={client.rowNumber}
+                          onClick={() => navigate(`/client-tracker/client/${client.registeredDateTimeAD}`)}
+                          className={cn(
+                            "flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] border",
+                            isBooked 
+                              ? "bg-green-500/10 border-green-500/30" 
+                              : isGone 
+                                ? "bg-gray-500/10 border-gray-500/30"
+                                : "bg-amber-500/10 border-amber-500/30"
+                          )}
+                        >
+                          <div className={cn(
+                            "w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-bold",
+                            isBooked 
+                              ? "bg-gradient-to-br from-green-500 to-green-700" 
+                              : isGone 
+                                ? "bg-gradient-to-br from-gray-500 to-gray-700"
+                                : "bg-gradient-to-br from-amber-500 to-amber-700"
+                          )}>
+                            {isBooked ? "B" : isGone ? "G" : "E"}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-sm truncate">
+                              {client.clientName || 'Unnamed'}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {client.events || 'Event'}
+                            </p>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Hot Dates Drawer */}
