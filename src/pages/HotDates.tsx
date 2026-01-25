@@ -10,6 +10,7 @@ import { useCachedData } from "@/hooks/useCachedData";
 import { useDesktopMode } from "@/hooks/useDesktopMode";
 import { getCurrentStatus } from "@/lib/sheets-api";
 import { parseEventDetails } from "@/lib/nepali-months";
+import { isBSDatePast } from "@/lib/nepali-date";
 import { cn } from "@/lib/utils";
 import {
   Flame,
@@ -39,6 +40,7 @@ interface HotDateInfo {
   enquiryOn: { clientName: string; eventName: string }[];
   goneElsewhere: { clientName: string; eventName: string }[];
   totalCount: number;
+  isCompleted: boolean;
 }
 
 export default function HotDates() {
@@ -72,7 +74,8 @@ export default function HotDates() {
             day: event.day,
             booked: [],
             enquiryOn: [],
-            goneElsewhere: []
+            goneElsewhere: [],
+            isCompleted: isBSDatePast(event.year, event.month, event.day)
           };
         }
 
@@ -91,7 +94,8 @@ export default function HotDates() {
     return Object.values(dateGroups)
       .map(d => ({
         ...d,
-        totalCount: d.booked.length + d.enquiryOn.length + d.goneElsewhere.length
+        totalCount: d.booked.length + d.enquiryOn.length + d.goneElsewhere.length,
+        isCompleted: d.isCompleted
       }))
       .filter(d => d.totalCount > 0)
       .sort((a, b) => b.totalCount - a.totalCount);
@@ -177,15 +181,33 @@ export default function HotDates() {
             <Card 
               key={dateInfo.dateKey}
               className={cn(
-                "hover:border-primary/30 transition-colors",
-                index < 3 && "border-orange-500/30 bg-gradient-to-br from-orange-500/5 to-transparent"
+                "hover:border-primary/30 transition-colors relative overflow-hidden",
+                dateInfo.isCompleted && "opacity-50",
+                index < 3 && !dateInfo.isCompleted && "border-orange-500/30 bg-gradient-to-br from-orange-500/5 to-transparent"
               )}
             >
+              {/* COMPLETED Stamp */}
+              {dateInfo.isCompleted && (
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
+                  <Badge 
+                    variant="outline" 
+                    className="bg-background/90 text-muted-foreground border-2 border-muted-foreground/50 rotate-[-15deg] text-xs font-bold uppercase tracking-wider px-3 py-1 shadow-md"
+                  >
+                    Completed
+                  </Badge>
+                </div>
+              )}
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    {index < 3 && <Flame className="w-4 h-4 text-orange-500" />}
-                    <Badge className="bg-gradient-to-r from-orange-500 to-red-500 text-white">
+                    {index < 3 && !dateInfo.isCompleted && <Flame className="w-4 h-4 text-orange-500" />}
+                    {dateInfo.isCompleted && <CheckCircle className="w-4 h-4 text-muted-foreground" />}
+                    <Badge className={cn(
+                      "text-white",
+                      dateInfo.isCompleted 
+                        ? "bg-muted-foreground" 
+                        : "bg-gradient-to-r from-orange-500 to-red-500"
+                    )}>
                       {dateInfo.monthName} {dateInfo.day}
                     </Badge>
                     <span className="text-xs text-muted-foreground">{dateInfo.year}</span>

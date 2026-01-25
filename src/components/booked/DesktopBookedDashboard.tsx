@@ -15,6 +15,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { parseEventDetails, NEPALI_MONTHS } from "@/lib/nepali-months";
+import { isBSDatePast } from "@/lib/nepali-date";
 import { getBookingDate, getRelativeTime } from "@/lib/client-card-utils";
 import {
   Users,
@@ -194,6 +195,7 @@ export function DesktopBookedDashboard({
       monthName: string;
       day: string;
       events: { clientName: string; eventName: string }[];
+      isCompleted: boolean;
     }> = {};
 
     clients.forEach(client => {
@@ -216,7 +218,8 @@ export function DesktopBookedDashboard({
             month: event.month,
             monthName: event.monthName,
             day: event.day,
-            events: []
+            events: [],
+            isCompleted: isBSDatePast(event.year, event.month, event.day)
           };
         }
 
@@ -583,14 +586,16 @@ export function DesktopBookedDashboard({
                   <span className="text-muted-foreground font-medium">:</span>
                   
                   <div className="flex-1 flex flex-wrap gap-x-1 gap-y-1.5 min-w-0 items-center">
-                    {monthData.days.map(({ day, isBooked, eventCount }) => (
-                      isBooked ? (
+                    {monthData.days.map(({ day, isBooked, eventCount }) => {
+                      const isPast = isBSDatePast(monthData.year, monthData.month, day);
+                      return isBooked ? (
                         // Dynamic concentric circles based on event count
                         <button 
                           key={day}
                           onClick={() => onHotDateFilter?.(`${monthData.year}-${monthData.month}-${day}`)}
                           className={cn(
                             "relative inline-flex items-center justify-center cursor-pointer transition-all hover:scale-110",
+                            isPast && "opacity-40",
                             selectedHotDate === `${monthData.year}-${monthData.month}-${day}` 
                               ? "ring-2 ring-offset-2 ring-green-500 rounded-full"
                               : ""
@@ -600,7 +605,7 @@ export function DesktopBookedDashboard({
                             width: `${20 + (eventCount - 1) * 8}px`,
                             height: `${20 + (eventCount - 1) * 8}px`
                           }}
-                          title={`${eventCount} event(s) on day ${day} - Click to filter`}
+                          title={`${eventCount} event(s) on day ${day}${isPast ? ' (Completed)' : ''} - Click to filter`}
                         >
                           {/* Dynamic outer rings - render from largest to smallest */}
                           {Array.from({ length: eventCount - 1 }, (_, i) => {
@@ -609,14 +614,20 @@ export function DesktopBookedDashboard({
                             return (
                               <span 
                                 key={ringIndex}
-                                className="absolute rounded-full border-2 border-green-500"
+                                className={cn(
+                                  "absolute rounded-full border-2",
+                                  isPast ? "border-muted-foreground" : "border-green-500"
+                                )}
                                 style={{ width: `${size}px`, height: `${size}px` }}
                               />
                             );
                           })}
-                          {/* Inner filled circle with day number */}
-                          <span className="w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center text-[10px] font-bold z-10">
-                            {day}
+                          {/* Inner filled circle with day number or checkmark */}
+                          <span className={cn(
+                            "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold z-10 text-white",
+                            isPast ? "bg-muted-foreground" : "bg-green-500"
+                          )}>
+                            {isPast ? <CheckCircle className="w-3 h-3" /> : day}
                           </span>
                         </button>
                       ) : (
@@ -626,8 +637,8 @@ export function DesktopBookedDashboard({
                         >
                           {day}
                         </span>
-                      )
-                    ))}
+                      );
+                    })}
                   </div>
                   
                   <Badge 
@@ -674,16 +685,36 @@ export function DesktopBookedDashboard({
                       key={dateInfo.dateKey}
                       onClick={() => onHotDateFilter?.(dateInfo.dateKey)}
                       className={cn(
-                        "border rounded-lg p-3 transition-all text-left w-full",
+                        "border rounded-lg p-3 transition-all text-left w-full relative overflow-hidden",
+                        dateInfo.isCompleted && "opacity-50",
                         selectedHotDate === dateInfo.dateKey
                           ? "border-green-500 bg-green-500/10 ring-2 ring-green-500/30"
                           : "hover:border-green-500/50 hover:bg-green-500/5"
                       )}
                     >
+                      {/* COMPLETED Stamp */}
+                      {dateInfo.isCompleted && (
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
+                          <Badge 
+                            variant="outline" 
+                            className="bg-background/90 text-muted-foreground border-2 border-muted-foreground/50 rotate-[-15deg] text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 shadow-md"
+                          >
+                            Completed
+                          </Badge>
+                        </div>
+                      )}
                       {/* Date Header */}
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
-                          <Badge className="bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs">
+                          {dateInfo.isCompleted ? (
+                            <CheckCircle className="w-3 h-3 text-muted-foreground" />
+                          ) : null}
+                          <Badge className={cn(
+                            "text-white text-xs",
+                            dateInfo.isCompleted 
+                              ? "bg-muted-foreground" 
+                              : "bg-gradient-to-r from-green-500 to-emerald-500"
+                          )}>
                             {dateInfo.monthName} {dateInfo.day}
                           </Badge>
                           <span className="text-xs text-muted-foreground">{dateInfo.year}</span>

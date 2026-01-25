@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/drawer";
 import { 
   Users, CalendarPlus, TrendingUp, Menu, 
-  ChevronRight, RefreshCw, AlertTriangle, Bell, Flame
+  ChevronRight, RefreshCw, AlertTriangle, Bell, Flame, CheckCircle
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { getCurrentStatus } from "@/lib/sheets-api";
@@ -29,6 +29,7 @@ import { getDesktopMode } from "@/hooks/useDesktopMode";
 import { DesktopAppLayout, DesktopDashboard } from "@/components/desktop";
 import { getStatusConfig, sortCategoriesByOrder } from "@/lib/status-config";
 import { parseEventDetails } from "@/lib/nepali-months";
+import { isBSDatePast } from "@/lib/nepali-date";
 
 // Handler avatar colors
 const handlerColors = [
@@ -206,6 +207,7 @@ export default function Dashboard() {
       enquiryOn: { clientName: string; eventName: string }[];
       goneElsewhere: { clientName: string; eventName: string }[];
       totalCount: number;
+      isCompleted: boolean;
     }
 
     const dateGroups: Record<string, DateGroup> = {};
@@ -234,7 +236,8 @@ export default function Dashboard() {
             booked: [],
             enquiryOn: [],
             goneElsewhere: [],
-            totalCount: 0
+            totalCount: 0,
+            isCompleted: isBSDatePast(event.year, event.month, event.day)
           };
         }
 
@@ -674,12 +677,19 @@ export default function Dashboard() {
                       key={date.dateKey}
                       onClick={() => setSelectedMobileHotDate(isSelected ? null : date.dateKey)}
                       className={cn(
-                        "shrink-0 px-3 py-2 rounded-lg transition-all active:scale-95",
+                        "shrink-0 px-3 py-2 rounded-lg transition-all active:scale-95 relative",
+                        date.isCompleted && "opacity-50",
                         isSelected
                           ? "bg-gradient-to-r from-orange-500 to-red-500 border-2 border-orange-400 ring-2 ring-orange-500/30 shadow-lg"
                           : "bg-gradient-to-r from-orange-500/10 to-red-500/10 border border-orange-500/30 hover:border-orange-500/50"
                       )}
                     >
+                      {/* Completed indicator */}
+                      {date.isCompleted && (
+                        <span className="absolute -top-1 -right-1 bg-muted-foreground text-white rounded-full w-4 h-4 flex items-center justify-center">
+                          <CheckCircle className="w-3 h-3" />
+                        </span>
+                      )}
                       <div className={cn(
                         "font-semibold text-sm",
                         isSelected ? "text-white" : "text-foreground"
