@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, DollarSign, Users, TrendingUp, Phone, MessageCircle, Clock, Percent, LayoutGrid, Table as TableIcon, Receipt } from "lucide-react";
+import { ArrowLeft, RefreshCw, DollarSign, Users, TrendingUp, Phone, MessageCircle, Clock, Percent, LayoutGrid, Table as TableIcon, Receipt, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { toast } from "sonner";
-import { getBookedClients, resyncAllBookedClients, BookedClientData } from "@/lib/sheets-api";
+import { getBookedClients, resyncAllBookedClients, fullResyncAllBookedClients, BookedClientData } from "@/lib/sheets-api";
 import FinanceClientCard from "./FinanceClientCard";
 import PaymentHistorySheet from "./PaymentHistorySheet";
 import NepaliDateFilter from "../booked/NepaliDateFilter";
@@ -21,6 +21,7 @@ const DesktopFinanceManager = () => {
   const [clients, setClients] = useState<BookedClientData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isResyncing, setIsResyncing] = useState(false);
+  const [isFullResyncing, setIsFullResyncing] = useState(false);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
@@ -56,6 +57,24 @@ const DesktopFinanceManager = () => {
       toast.error("Failed to resync");
     } finally {
       setIsResyncing(false);
+    }
+  };
+
+  const handleFullResync = async () => {
+    try {
+      setIsFullResyncing(true);
+      const result = await fullResyncAllBookedClients();
+      if (result.syncedCount > 0) {
+        toast.success(`Full sync: Updated ${result.syncedCount} clients with all data`);
+      } else {
+        toast.info("All data is already synchronized");
+      }
+      await fetchClients();
+    } catch (error) {
+      console.error("Error performing full resync:", error);
+      toast.error("Failed to perform full resync");
+    } finally {
+      setIsFullResyncing(false);
     }
   };
 
@@ -195,6 +214,24 @@ const DesktopFinanceManager = () => {
                 Table
               </Button>
             </div>
+            <Button
+              variant="outline"
+              onClick={handleFullResync}
+              disabled={isFullResyncing}
+              className="border-emerald-600 text-emerald-400 hover:bg-emerald-600/20"
+            >
+              {isFullResyncing ? (
+                <>
+                  <Database className="h-4 w-4 mr-2 animate-pulse" />
+                  Full Syncing...
+                </>
+              ) : (
+                <>
+                  <Database className="h-4 w-4 mr-2" />
+                  Full Resync
+                </>
+              )}
+            </Button>
             <Button
               variant="default"
               onClick={handleResyncAll}

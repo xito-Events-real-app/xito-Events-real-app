@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -440,6 +440,34 @@ async function addClient(accessToken: string, spreadsheetId: string, clientData:
   return response.json();
 }
 
+// Helper function to find a client row in BOOKED CLIENTS by registeredDateTimeAD
+async function findBookedClientRow(
+  accessToken: string, 
+  spreadsheetId: string, 
+  registeredDateTimeAD: string
+): Promise<number | null> {
+  const range = encodeURIComponent("'BOOKED CLIENTS'!A2:A2000");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  
+  if (!response.ok) return null;
+  
+  const data = await response.json();
+  const rows = data.values || [];
+  const normalizedSearch = registeredDateTimeAD.trim();
+  
+  for (let i = 0; i < rows.length; i++) {
+    const cellValue = (rows[i][0] || '').trim();
+    if (cellValue === normalizedSearch) {
+      return i + 2; // +2 for 1-indexed + header row
+    }
+  }
+  return null;
+}
+
 // Update existing client
 async function updateClient(accessToken: string, spreadsheetId: string, clientData: Record<string, unknown>) {
   const rowNumber = clientData.rowNumber as number;
@@ -487,6 +515,34 @@ async function updateClient(accessToken: string, spreadsheetId: string, clientDa
     const errorText = await response.text();
     console.error('Google Sheets API error (updateClient):', response.status, errorText);
     throw new Error(`Failed to update client: ${response.status}`);
+  }
+
+  // After successful update to CLIENT TRACKER, sync to BOOKED CLIENTS if client exists there
+  const registeredDateTimeAD = clientData.registeredDateTimeAD as string;
+  
+  if (registeredDateTimeAD) {
+    const bookedRowNumber = await findBookedClientRow(accessToken, spreadsheetId, registeredDateTimeAD);
+    
+    if (bookedRowNumber) {
+      // Sync columns A:U (same data as CLIENT TRACKER update)
+      const bookedRange = encodeURIComponent(`'BOOKED CLIENTS'!A${bookedRowNumber}:U${bookedRowNumber}`);
+      const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}?valueInputOption=USER_ENTERED`;
+      
+      const bookedResponse = await fetch(bookedUrl, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ values }),
+      });
+      
+      if (bookedResponse.ok) {
+        console.log(`[updateClient] Synced to BOOKED CLIENTS row ${bookedRowNumber}`);
+      } else {
+        console.error(`[updateClient] Failed to sync to BOOKED CLIENTS:`, await bookedResponse.text());
+      }
+    }
   }
 
   return response.json();
@@ -1554,6 +1610,123 @@ async function resyncAllBookedClients(accessToken: string, spreadsheetId: string
   return { success: true, syncedCount, skippedCount, notFoundCount, totalBooked: bookedRows.length };
 }
 
+// Full resync all booked clients: sync ALL data (columns A-AI) from CLIENT TRACKER to BOOKED CLIENTS
+async function fullResyncAllBookedClients(accessToken: string, spreadsheetId: string) {
+  console.log('[FULL RESYNC] Starting comprehensive full resync of booked clients...');
+  
+  // Get ALL data from CLIENT TRACKER (columns A through AI)
+  const trackerRange = encodeURIComponent("'CLIENT TRACKER'!A2:AI2000");
+  const trackerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}`;
+  
+  const trackerResponse = await fetch(trackerUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  
+  if (!trackerResponse.ok) {
+    throw new Error('Failed to fetch CLIENT TRACKER data for full resync');
+  }
+  
+  const trackerData = await trackerResponse.json();
+  const trackerRows = trackerData.values || [];
+  
+  // Build a map of registeredDateTimeAD -> full row data from CLIENT TRACKER
+  const trackerFullDataMap: Map<string, { rowData: string[]; trackerRowNumber: number }> = new Map();
+  
+  for (let i = 0; i < trackerRows.length; i++) {
+    const row = trackerRows[i];
+    const registeredDateTime = (row[0] || '').trim();
+    if (registeredDateTime) {
+      trackerFullDataMap.set(registeredDateTime, {
+        rowData: row,
+        trackerRowNumber: i + 2
+      });
+    }
+  }
+  
+  console.log(`[FULL RESYNC] Built tracker map with ${trackerFullDataMap.size} entries`);
+  
+  // Get all data from BOOKED CLIENTS
+  const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:AI500");
+  const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}`;
+  
+  const bookedResponse = await fetch(bookedUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  
+  if (!bookedResponse.ok) {
+    throw new Error('Failed to fetch BOOKED CLIENTS data for full resync');
+  }
+  
+  const bookedData = await bookedResponse.json();
+  const bookedRows = bookedData.values || [];
+  
+  let syncedCount = 0;
+  let skippedCount = 0;
+  let notFoundCount = 0;
+  
+  for (let i = 0; i < bookedRows.length; i++) {
+    const row = bookedRows[i];
+    const registeredDateTime = (row[0] || '').trim();
+    const bookedRowNumber = i + 2;
+    
+    if (!registeredDateTime) {
+      skippedCount++;
+      continue;
+    }
+    
+    const trackerEntry = trackerFullDataMap.get(registeredDateTime);
+    
+    if (!trackerEntry) {
+      console.log(`[FULL RESYNC] No match in tracker for booked row ${bookedRowNumber}: ${registeredDateTime.substring(0, 20)}...`);
+      notFoundCount++;
+      continue;
+    }
+    
+    // Check if any data differs (compare key columns: J-P for events, AE-AG for payments)
+    // Simple check: compare stringified values of important columns
+    const bookedEventData = [row[9], row[10], row[11], row[12], row[13], row[14], row[15]].join('|');
+    const trackerEventData = [trackerEntry.rowData[9], trackerEntry.rowData[10], trackerEntry.rowData[11], trackerEntry.rowData[12], trackerEntry.rowData[13], trackerEntry.rowData[14], trackerEntry.rowData[15]].join('|');
+    
+    const bookedPaymentData = [row[30], row[31], row[32]].join('|');
+    const trackerPaymentData = [trackerEntry.rowData[30], trackerEntry.rowData[31], trackerEntry.rowData[32]].join('|');
+    
+    const needsUpdate = bookedEventData !== trackerEventData || bookedPaymentData !== trackerPaymentData;
+    
+    if (needsUpdate) {
+      // Update ENTIRE row in BOOKED CLIENTS (columns A:AI)
+      const updateRange = encodeURIComponent(`'BOOKED CLIENTS'!A${bookedRowNumber}:AI${bookedRowNumber}`);
+      const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`;
+      
+      // Ensure the row data has 35 columns (A-AI)
+      const paddedRowData = [...trackerEntry.rowData];
+      while (paddedRowData.length < 35) {
+        paddedRowData.push('');
+      }
+      
+      const updateResponse = await fetch(updateUrl, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ values: [paddedRowData.slice(0, 35)] }),
+      });
+      
+      if (updateResponse.ok) {
+        console.log(`[FULL RESYNC] Synced row ${bookedRowNumber} from tracker row ${trackerEntry.trackerRowNumber}`);
+        syncedCount++;
+      } else {
+        console.error(`[FULL RESYNC] Failed to update row ${bookedRowNumber}:`, await updateResponse.text());
+      }
+    } else {
+      skippedCount++;
+    }
+  }
+  
+  console.log(`[FULL RESYNC] Complete: ${syncedCount} synced, ${skippedCount} unchanged, ${notFoundCount} not found in tracker`);
+  return { success: true, syncedCount, skippedCount, notFoundCount, totalBooked: bookedRows.length };
+}
+
 // Update a booked client in both BOOKED CLIENTS and CLIENT TRACKER sheets
 // CORRECT COLUMN MAPPING (A-AG identical in both sheets):
 // AD = finalQuotation, AE = paymentsMade, AF = paymentDatesAD, AG = remainingPayment
@@ -2075,6 +2248,9 @@ Deno.serve(async (req) => {
         break;
       case 'resyncAllBookedClients':
         result = await resyncAllBookedClients(accessToken, spreadsheetId);
+        break;
+      case 'fullResyncAllBookedClients':
+        result = await fullResyncAllBookedClients(accessToken, spreadsheetId);
         break;
       // Vendor Management Actions
       case 'getVendors':

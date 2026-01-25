@@ -356,6 +356,23 @@ export async function resyncAllBookedClients(): Promise<{
   }>("resyncAllBookedClients");
 }
 
+// Full resync all booked clients: sync ALL data (not just payments) from CLIENT TRACKER to BOOKED CLIENTS
+export async function fullResyncAllBookedClients(): Promise<{ 
+  success: boolean; 
+  syncedCount: number; 
+  skippedCount: number; 
+  notFoundCount: number; 
+  totalBooked: number; 
+}> {
+  return callSheetsFunction<{ 
+    success: boolean; 
+    syncedCount: number; 
+    skippedCount: number; 
+    notFoundCount: number; 
+    totalBooked: number; 
+  }>("fullResyncAllBookedClients");
+}
+
 // Update a booked client (syncs to both sheets)
 export async function updateBookedClient(
   bookedRowNumber: number,
