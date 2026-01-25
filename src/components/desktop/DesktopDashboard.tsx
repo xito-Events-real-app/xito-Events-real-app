@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { getCurrentStatus, DropdownData } from "@/lib/sheets-api";
-import { parseEventDetails, getMonthName } from "@/lib/nepali-months";
+import { parseEventDetails, getMonthName, NEPALI_MONTHS } from "@/lib/nepali-months";
 import { DesktopClientRow } from "./DesktopClientRow";
 import { ClientDetailSheet } from "@/components/dashboard/ClientDetailSheet";
 import { getStatusConfig, sortCategoriesByOrder } from "@/lib/status-config";
@@ -35,6 +35,7 @@ import {
   Sparkles,
   CheckCircle,
   Flame,
+  Calendar,
 } from "lucide-react";
 
 interface DesktopDashboardProps {
@@ -99,6 +100,7 @@ export function DesktopDashboard({
 }: DesktopDashboardProps) {
   const navigate = useNavigate();
   const [selectedClient, setSelectedClient] = useState<any | null>(null);
+  const [showAllOpenDates, setShowAllOpenDates] = useState(false);
 
   // Use allClients for stats if available, otherwise use filtered clients
   const statsClients = allClients || clients;
@@ -247,6 +249,66 @@ export function DesktopDashboard({
       .slice(0, 6);
   }, [statsClients]);
 
+  // Booking Open Dates - Calculate which dates are NOT booked for next 12 months
+  const bookingOpenDates = useMemo(() => {
+    // Collect all BOOKED dates from clients
+    const bookedDates = new Set<string>();
+    
+    statsClients.forEach(client => {
+      const status = getCurrentStatus(client.statusLog || '').toUpperCase();
+      // Only consider BOOKED clients (not "BOOKED SOMEWHERE ELSE")
+      if (!status.includes('BOOKED') || status.includes('BOOKED SOMEWHERE ELSE')) return;
+      
+      const events = parseEventDetails(
+        client.events || '',
+        client.eventYear || '',
+        client.eventMonth || '',
+        client.eventDay || ''
+      );
+      
+      events.forEach(event => {
+        if (event.year && event.month && event.day && event.day !== '**') {
+          // Store as "YEAR-MONTH-DAY" for lookup
+          bookedDates.add(`${event.year}-${event.month}-${event.day}`);
+        }
+      });
+    });
+    
+    // Determine starting month (current Nepali month - approximate to AD month 10 = MAGH)
+    // Using fixed starting point: MAGH (month 10) of 2082
+    const startMonth = 10; // MAGH
+    const startYear = 2082;
+    
+    // Days per Nepali month (approximate - varies by year)
+    const daysPerMonth: Record<number, number> = {
+      1: 31, 2: 31, 3: 32, 4: 32, 5: 31, 6: 31,
+      7: 30, 8: 29, 9: 30, 10: 29, 11: 30, 12: 30
+    };
+    
+    // Generate 12 months of data
+    const result: { month: number; year: number; monthName: string; openDays: number[] }[] = [];
+    
+    for (let i = 0; i < 12; i++) {
+      const monthNum = ((startMonth - 1 + i) % 12) + 1;
+      const yearNum = startYear + Math.floor((startMonth - 1 + i) / 12);
+      const monthName = NEPALI_MONTHS[monthNum];
+      
+      const daysInMonth = daysPerMonth[monthNum] || 30;
+      const openDays: number[] = [];
+      
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateKey = `${yearNum}-${monthNum}-${day}`;
+        if (!bookedDates.has(dateKey)) {
+          openDays.push(day);
+        }
+      }
+      
+      result.push({ month: monthNum, year: yearNum, monthName, openDays });
+    }
+    
+    return result;
+  }, [statsClients]);
+
   return (
     <div className="p-6 space-y-6">
       {/* Filtered Results Table - Full screen when filters active */}
@@ -310,91 +372,143 @@ export function DesktopDashboard({
       ) : (
         /* Normal Dashboard View - No Filters */
         <>
-          {/* Top Row: Stats + Quick Actions */}
-          <div className="grid grid-cols-12 gap-6">
-            {/* Stats Cards */}
-            <div className="col-span-9 grid grid-cols-4 gap-4">
-              <Card className="shadow-sm hover:shadow-md transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center">
-                      <Users className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold">{isLoading ? "—" : totalClients}</p>
-                      <p className="text-sm text-muted-foreground">Total Clients</p>
-                    </div>
+          {/* Compact Stats Row + Quick Actions */}
+          <div className="flex items-center gap-4">
+            {/* Compact Stats - inline flex */}
+            <div className="flex gap-3 flex-1">
+              <Card className="shadow-sm flex-1">
+                <CardContent className="p-3 flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
+                    <Users className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold">{isLoading ? "—" : totalClients}</p>
+                    <p className="text-xs text-muted-foreground">Total</p>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="shadow-sm hover:shadow-md transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl gradient-secondary flex items-center justify-center">
-                      <CalendarPlus className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold">{isLoading ? "—" : thisMonthClients}</p>
-                      <p className="text-sm text-muted-foreground">This Month</p>
-                    </div>
+              <Card className="shadow-sm flex-1">
+                <CardContent className="p-3 flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg gradient-secondary flex items-center justify-center">
+                    <CalendarPlus className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold">{isLoading ? "—" : thisMonthClients}</p>
+                    <p className="text-xs text-muted-foreground">This Month</p>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="shadow-sm hover:shadow-md transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl gradient-accent flex items-center justify-center">
-                      <TrendingUp className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold">{isLoading ? "—" : todaysClients.length}</p>
-                      <p className="text-sm text-muted-foreground">Today's Enquiries</p>
-                    </div>
+              <Card className="shadow-sm flex-1">
+                <CardContent className="p-3 flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg gradient-accent flex items-center justify-center">
+                    <TrendingUp className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold">{isLoading ? "—" : todaysClients.length}</p>
+                    <p className="text-xs text-muted-foreground">Today's Enquiries</p>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="shadow-sm hover:shadow-md transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-green-500 flex items-center justify-center">
-                      <CheckCircle className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold">{isLoading ? "—" : booked}</p>
-                      <p className="text-sm text-muted-foreground">Booked</p>
-                    </div>
+              <Card className="shadow-sm flex-1">
+                <CardContent className="p-3 flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-green-500 flex items-center justify-center">
+                    <CheckCircle className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold">{isLoading ? "—" : booked}</p>
+                    <p className="text-xs text-muted-foreground">Booked</p>
                   </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Quick Actions */}
-            <div className="col-span-3 space-y-3">
+            {/* Compact Quick Actions */}
+            <div className="flex gap-2">
               <Link to="/client-tracker/quick-add">
-                <Button className="w-full h-12 text-base font-semibold gradient-primary text-white shadow-lg">
-                  <UserPlus className="w-5 h-5 mr-2" />
-                  Add New Client
+                <Button size="sm" className="h-9 gradient-primary text-white">
+                  <UserPlus className="w-4 h-4 mr-1" />
+                  Add Client
                 </Button>
               </Link>
               <Button 
                 variant="outline" 
-                className="w-full h-10"
+                size="sm"
+                className="h-9"
                 onClick={onSync}
                 disabled={isSyncing}
               >
-                <RefreshCw className={cn("w-4 h-4 mr-2", isSyncing && "animate-spin")} />
-                {isSyncing ? "Syncing..." : "Sync Data"}
+                <RefreshCw className={cn("w-4 h-4 mr-1", isSyncing && "animate-spin")} />
+                {isSyncing ? "Syncing..." : "Sync"}
               </Button>
             </div>
           </div>
 
           {/* Main Content Grid */}
-          <div className="space-y-6">
+          <div className="space-y-4">
+            {/* Booking Open Dates Section */}
+            <Card className="shadow-sm border-blue-500/20">
+              <CardHeader className="pb-2 pt-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-blue-500" />
+                    Booking Open Dates
+                  </CardTitle>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="text-xs h-6"
+                    onClick={() => setShowAllOpenDates(!showAllOpenDates)}
+                  >
+                    {showAllOpenDates ? "Show Less" : "View All Year"}
+                    <ChevronRight className={cn("w-3 h-3 ml-1 transition-transform", showAllOpenDates && "rotate-90")} />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="py-2 space-y-1.5">
+                {(showAllOpenDates ? bookingOpenDates : bookingOpenDates.slice(0, 4)).map((monthData) => (
+                  <div 
+                    key={`${monthData.year}-${monthData.month}`}
+                    className="flex items-center gap-3 px-3 py-2 rounded-md bg-muted/30 border border-border/50"
+                  >
+                    {/* Month Badge */}
+                    <Badge className="bg-blue-500 text-white text-xs min-w-[110px] justify-center shrink-0">
+                      {monthData.monthName} {monthData.year}
+                    </Badge>
+                    
+                    {/* Separator */}
+                    <span className="text-muted-foreground font-medium">:</span>
+                    
+                    {/* Open Days */}
+                    <div className="flex-1 text-sm min-w-0">
+                      {monthData.openDays.length === 0 ? (
+                        <span className="text-red-500 text-xs italic font-medium">Fully Booked 🎉</span>
+                      ) : (
+                        <span className="text-foreground font-mono text-xs">
+                          {monthData.openDays.join(' ')}
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Count Badge */}
+                    <Badge 
+                      variant="outline" 
+                      className={cn(
+                        "text-xs shrink-0",
+                        monthData.openDays.length === 0 && "border-green-500 text-green-600"
+                      )}
+                    >
+                      {monthData.openDays.length} open
+                    </Badge>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
             {/* Full Width Content */}
-            <div className="space-y-6">
+            <div className="space-y-4">
               {/* Hot Dates Section */}
               <Card className="shadow-sm">
                 <CardHeader className="pb-3">
