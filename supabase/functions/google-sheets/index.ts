@@ -437,6 +437,18 @@ async function addClient(accessToken: string, spreadsheetId: string, clientData:
     body: JSON.stringify({ values }),
   });
 
+  // If initial status is BOOKED, copy to BOOKED CLIENTS sheet
+  if (selectedStatus.toUpperCase() === 'BOOKED') {
+    console.log('[addClient] Status is BOOKED, copying to BOOKED CLIENTS sheet...');
+    const isAlreadyBooked = await checkIfAlreadyBooked(accessToken, spreadsheetId, registeredDateTimeAD);
+    if (!isAlreadyBooked) {
+      await copyToBookedClients(accessToken, spreadsheetId, 2); // Row 2 is where we just inserted
+      console.log('[addClient] Client copied to BOOKED CLIENTS sheet successfully');
+    } else {
+      console.log('[addClient] Client already exists in BOOKED CLIENTS, skipping copy');
+    }
+  }
+
   return response.json();
 }
 
