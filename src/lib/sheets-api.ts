@@ -358,7 +358,8 @@ export async function resyncAllBookedClients(): Promise<{
 
 // Full resync all booked clients: sync ALL data (not just payments) from CLIENT TRACKER to BOOKED CLIENTS
 // Also finds and copies missing BOOKED clients from CLIENT TRACKER
-export async function fullResyncAllBookedClients(): Promise<{ 
+// forceSync = true will skip comparison and always copy ALL data from tracker
+export async function fullResyncAllBookedClients(forceSync: boolean = false): Promise<{ 
   success: boolean;
   copiedCount: number;
   syncedCount: number; 
@@ -373,7 +374,7 @@ export async function fullResyncAllBookedClients(): Promise<{
     skippedCount: number; 
     notFoundCount: number; 
     totalBooked: number; 
-  }>("fullResyncAllBookedClients");
+  }>("fullResyncAllBookedClients", { data: { forceSync } });
 }
 
 // Update a booked client (syncs to both sheets)

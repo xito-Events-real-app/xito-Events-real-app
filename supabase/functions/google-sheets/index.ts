@@ -1624,8 +1624,9 @@ async function resyncAllBookedClients(accessToken: string, spreadsheetId: string
 
 // Full resync all booked clients: sync ALL data (columns A-AI) from CLIENT TRACKER to BOOKED CLIENTS
 // Also scans for BOOKED clients in tracker that are missing from BOOKED CLIENTS and copies them
-async function fullResyncAllBookedClients(accessToken: string, spreadsheetId: string) {
-  console.log('[FULL RESYNC] Starting comprehensive full resync of booked clients...');
+// forceSync = true will skip comparison and always copy data from tracker
+async function fullResyncAllBookedClients(accessToken: string, spreadsheetId: string, forceSync: boolean = false) {
+  console.log(`[FULL RESYNC] Starting ${forceSync ? 'FORCED' : 'normal'} comprehensive resync of booked clients...`);
   
   // Get ALL data from CLIENT TRACKER (columns A through AI)
   const trackerRange = encodeURIComponent("'CLIENT TRACKER'!A2:AI2000");
@@ -1749,14 +1750,25 @@ async function fullResyncAllBookedClients(accessToken: string, spreadsheetId: st
       continue;
     }
     
-    // Check if any data differs (compare key columns: J-P for events, AE-AG for payments)
-    const bookedEventData = [row[9], row[10], row[11], row[12], row[13], row[14], row[15]].join('|');
-    const trackerEventData = [trackerEntry.rowData[9], trackerEntry.rowData[10], trackerEntry.rowData[11], trackerEntry.rowData[12], trackerEntry.rowData[13], trackerEntry.rowData[14], trackerEntry.rowData[15]].join('|');
+    // Compare ALL columns (A-AI = 35 columns) for comprehensive check
+    // Or force update if forceSync is true
+    const bookedAllData = row.slice(0, 35).map((v: string) => (v || '').trim()).join('|');
+    const trackerAllData = trackerEntry.rowData.slice(0, 35).map((v: string) => (v || '').trim()).join('|');
     
-    const bookedPaymentData = [row[30], row[31], row[32]].join('|');
-    const trackerPaymentData = [trackerEntry.rowData[30], trackerEntry.rowData[31], trackerEntry.rowData[32]].join('|');
+    const needsUpdate = forceSync || bookedAllData !== trackerAllData;
     
-    const needsUpdate = bookedEventData !== trackerEventData || bookedPaymentData !== trackerPaymentData;
+    if (needsUpdate && !forceSync) {
+      // Log which columns differ for debugging
+      const diffCols: string[] = [];
+      for (let col = 0; col < 35; col++) {
+        const bookedVal = (row[col] || '').trim();
+        const trackerVal = (trackerEntry.rowData[col] || '').trim();
+        if (bookedVal !== trackerVal) {
+          diffCols.push(`Col${col}`);
+        }
+      }
+      console.log(`[FULL RESYNC] Row ${bookedRowNumber} differs in columns: ${diffCols.join(', ')}`);
+    }
     
     if (needsUpdate) {
       // Update ENTIRE row in BOOKED CLIENTS (columns A:AI)
@@ -2315,9 +2327,11 @@ Deno.serve(async (req) => {
       case 'resyncAllBookedClients':
         result = await resyncAllBookedClients(accessToken, spreadsheetId);
         break;
-      case 'fullResyncAllBookedClients':
-        result = await fullResyncAllBookedClients(accessToken, spreadsheetId);
+      case 'fullResyncAllBookedClients': {
+        const forceSync = Boolean(data?.forceSync);
+        result = await fullResyncAllBookedClients(accessToken, spreadsheetId, forceSync);
         break;
+      }
       // Vendor Management Actions
       case 'getVendors':
         result = await getVendors(accessToken, spreadsheetId, body.limit);
