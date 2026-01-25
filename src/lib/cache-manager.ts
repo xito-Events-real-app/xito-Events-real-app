@@ -1,4 +1,4 @@
-import { ClientData, DropdownData } from "./sheets-api";
+import { ClientData, DropdownData, BookedClientData } from "./sheets-api";
 import { 
   getDatabase, 
   CACHE_STORE, 
@@ -9,11 +9,20 @@ import {
 
 // Cache schema version - increment when dropdown structure changes
 // This forces a refresh even if cache isn't expired
-export const CACHE_SCHEMA_VERSION = "v2";
+export const CACHE_SCHEMA_VERSION = "v3";
+
+// Separate cache key for booked clients
+export const BOOKED_CACHE_KEY = "booked_clients_cache_v1";
 
 export interface CacheData {
   clients: ClientData[];
   dropdowns: DropdownData | null;
+  lastSyncedAt: number;
+  version: string;
+}
+
+export interface BookedCacheData {
+  clients: BookedClientData[];
   lastSyncedAt: number;
   version: string;
 }
@@ -141,6 +150,74 @@ export async function isCacheExpired(): Promise<boolean> {
   return Date.now() - cached.lastSyncedAt > CACHE_EXPIRY_MS;
 }
 
+// ==================== BOOKED CLIENTS CACHE ====================
+
+// Get cached booked clients data
+export async function getCachedBookedClients(): Promise<BookedCacheData | null> {
+  try {
+    const database = await getDatabase();
+    
+    return new Promise((resolve) => {
+      const transaction = database.transaction(CACHE_STORE, "readonly");
+      const store = transaction.objectStore(CACHE_STORE);
+      const request = store.get(BOOKED_CACHE_KEY);
+
+      request.onsuccess = () => {
+        resolve(request.result || null);
+      };
+
+      request.onerror = () => {
+        console.error("Failed to read booked cache:", request.error);
+        resolve(null);
+      };
+    });
+  } catch (error) {
+    console.error("Booked cache read error:", error);
+    return null;
+  }
+}
+
+// Set cached booked clients data
+export async function setCachedBookedClients(clients: BookedClientData[]): Promise<void> {
+  try {
+    const database = await getDatabase();
+    
+    const data: BookedCacheData = {
+      clients,
+      lastSyncedAt: Date.now(),
+      version: CACHE_SCHEMA_VERSION
+    };
+    
+    return new Promise((resolve, reject) => {
+      const transaction = database.transaction(CACHE_STORE, "readwrite");
+      const store = transaction.objectStore(CACHE_STORE);
+      const request = store.put(data, BOOKED_CACHE_KEY);
+
+      request.onsuccess = () => {
+        resolve();
+      };
+
+      request.onerror = () => {
+        console.error("Failed to write booked cache:", request.error);
+        reject(request.error);
+      };
+    });
+  } catch (error) {
+    console.error("Booked cache write error:", error);
+  }
+}
+
+// Check if booked clients cache is expired
+export async function isBookedCacheExpired(): Promise<boolean> {
+  const cached = await getCachedBookedClients();
+  if (!cached?.lastSyncedAt) return true;
+  
+  // Force refresh if schema version changed
+  if (cached.version !== CACHE_SCHEMA_VERSION) return true;
+  
+  return Date.now() - cached.lastSyncedAt > CACHE_EXPIRY_MS;
+}
+
 // Get cache age in human-readable format
 export function getCacheAge(lastSyncedAt: number): string {
   const diffMs = Date.now() - lastSyncedAt;
@@ -182,7 +259,7 @@ export async function clearCache(): Promise<void> {
 // Debounced cache update notification
 let cacheUpdateTimeout: ReturnType<typeof setTimeout> | null = null;
 
-export function notifyCacheUpdate(type: 'clients' | 'dropdowns' | 'all', data?: unknown): void {
+export function notifyCacheUpdate(type: 'clients' | 'dropdowns' | 'all' | 'booked-clients', data?: unknown): void {
   if (cacheUpdateTimeout) {
     clearTimeout(cacheUpdateTimeout);
   }
