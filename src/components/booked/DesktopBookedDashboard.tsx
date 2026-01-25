@@ -47,6 +47,8 @@ interface DesktopBookedDashboardProps {
   // Hot Dates filter props
   hotDatesSortOrder?: 'ascending' | 'descending' | 'popularity';
   selectedMonth?: string | null;
+  // Client-wise view
+  allClients?: { name: string; registeredDateTimeAD: string }[];
 }
 
 export function DesktopBookedDashboard({
@@ -63,9 +65,11 @@ export function DesktopBookedDashboard({
   onClearAllFilters,
   hotDatesSortOrder = 'popularity',
   selectedMonth,
+  allClients = [],
 }: DesktopBookedDashboardProps) {
   const navigate = useNavigate();
   const [showAllOpenDates, setShowAllOpenDates] = useState(false);
+  const [showClientWise, setShowClientWise] = useState(false);
 
   // Total unique clients
   const uniqueClientCount = useMemo(() => {
@@ -668,89 +672,159 @@ export function DesktopBookedDashboard({
                     Booked Events Only
                   </Badge>
                 </CardTitle>
-                <Badge variant="outline" className="text-xs">
-                  Top {hotDates.length} dates
-                </Badge>
+                <div className="flex items-center gap-2">
+                  {/* CLIENT WISE Toggle Button */}
+                  <Button
+                    variant={showClientWise ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setShowClientWise(!showClientWise)}
+                    className={cn(
+                      "text-xs h-7",
+                      showClientWise 
+                        ? "bg-blue-600 hover:bg-blue-700 text-white" 
+                        : "border-blue-500 text-blue-600 hover:bg-blue-500/10"
+                    )}
+                  >
+                    <Users className="w-3 h-3 mr-1" />
+                    CLIENT WISE
+                  </Button>
+                  <Badge variant="outline" className="text-xs">
+                    {showClientWise ? `${allClients.length} clients` : `Top ${hotDates.length} dates`}
+                  </Badge>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
-              {hotDates.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  No event dates found
-                </p>
+              {showClientWise ? (
+                // CLIENT WISE View - Show individual client cards
+                allClients.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No clients found
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-4 gap-4">
+                    {allClients.map((client) => {
+                      // Find client data
+                      const clientData = clients.find(c => c.clientName === client.name);
+                      const clientId = clientData?.originalRowNumber || encodeURIComponent(clientData?.registeredDateTimeAD || '');
+                      
+                      // Get events for this client
+                      const clientEvents = clients
+                        .filter(c => c.clientName === client.name)
+                        .flatMap(c => parseEventDetails(
+                          c.events || '',
+                          c.eventYear || '',
+                          c.eventMonth || '',
+                          c.eventDay || ''
+                        ));
+                      
+                      return (
+                        <button
+                          key={client.registeredDateTimeAD}
+                          onClick={() => navigate(`/client-tracker/client/${clientId}`)}
+                          className="border rounded-lg p-3 transition-all text-left hover:border-blue-500/50 hover:bg-blue-500/5"
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-semibold text-sm truncate flex-1 mr-2">{client.name}</span>
+                            <Badge className="bg-blue-500 text-white text-xs shrink-0">
+                              {clientEvents.length} events
+                            </Badge>
+                          </div>
+                          <ScrollArea className={clientEvents.length > 3 ? "h-20" : ""}>
+                            <div className="space-y-1">
+                              {clientEvents.map((event, i) => (
+                                <div key={i} className="text-[10px] text-muted-foreground border-l-2 border-blue-500 pl-2">
+                                  <span className="font-medium text-foreground">{event.eventName}</span>
+                                  <span> • {event.monthName} {event.day}, {event.year}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </ScrollArea>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )
               ) : (
-                <div className="grid grid-cols-4 gap-4">
-                  {hotDates.map((dateInfo) => (
-                    <button
-                      key={dateInfo.dateKey}
-                      onClick={() => onHotDateFilter?.(dateInfo.dateKey)}
-                      className={cn(
-                        "border rounded-lg p-3 transition-all text-left w-full relative overflow-hidden",
-                        dateInfo.isCompleted && "opacity-50",
-                        selectedHotDate === dateInfo.dateKey
-                          ? "border-green-500 bg-green-500/10 ring-2 ring-green-500/30"
-                          : "hover:border-green-500/50 hover:bg-green-500/5"
-                      )}
-                    >
-                      {/* COMPLETED Stamp */}
-                      {dateInfo.isCompleted && (
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
-                          <Badge 
-                            variant="outline" 
-                            className="bg-background/90 text-muted-foreground border-2 border-muted-foreground/50 rotate-[-15deg] text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 shadow-md"
-                          >
-                            Completed
-                          </Badge>
+                // Original Hot Dates View
+                hotDates.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No event dates found
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-4 gap-4">
+                    {hotDates.map((dateInfo) => (
+                      <button
+                        key={dateInfo.dateKey}
+                        onClick={() => onHotDateFilter?.(dateInfo.dateKey)}
+                        className={cn(
+                          "border rounded-lg p-3 transition-all text-left w-full relative overflow-hidden",
+                          dateInfo.isCompleted && "opacity-50",
+                          selectedHotDate === dateInfo.dateKey
+                            ? "border-green-500 bg-green-500/10 ring-2 ring-green-500/30"
+                            : "hover:border-green-500/50 hover:bg-green-500/5"
+                        )}
+                      >
+                        {/* COMPLETED Stamp */}
+                        {dateInfo.isCompleted && (
+                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
+                            <Badge 
+                              variant="outline" 
+                              className="bg-background/90 text-muted-foreground border-2 border-muted-foreground/50 rotate-[-15deg] text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 shadow-md"
+                            >
+                              Completed
+                            </Badge>
+                          </div>
+                        )}
+                        {/* Date Header */}
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            {dateInfo.isCompleted ? (
+                              <CheckCircle className="w-3 h-3 text-muted-foreground" />
+                            ) : null}
+                            <Badge className={cn(
+                              "text-white text-xs",
+                              dateInfo.isCompleted 
+                                ? "bg-muted-foreground" 
+                                : "bg-gradient-to-r from-green-500 to-emerald-500"
+                            )}>
+                              {dateInfo.monthName} {dateInfo.day}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">{dateInfo.year}</span>
+                          </div>
+                          <span className="text-lg font-bold text-green-600">{dateInfo.events.length}</span>
                         </div>
-                      )}
-                      {/* Date Header */}
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          {dateInfo.isCompleted ? (
-                            <CheckCircle className="w-3 h-3 text-muted-foreground" />
-                          ) : null}
-                          <Badge className={cn(
-                            "text-white text-xs",
-                            dateInfo.isCompleted 
-                              ? "bg-muted-foreground" 
-                              : "bg-gradient-to-r from-green-500 to-emerald-500"
-                          )}>
-                            {dateInfo.monthName} {dateInfo.day}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">{dateInfo.year}</span>
-                        </div>
-                        <span className="text-lg font-bold text-green-600">{dateInfo.events.length}</span>
-                      </div>
 
-                      {/* Events List - Show ALL events with scroll if needed */}
-                      <ScrollArea className={dateInfo.events.length > 5 ? "h-28" : ""}>
-                        <div className="space-y-1">
-                          {dateInfo.events.map((c, i) => {
-                            // Find client data for navigation
-                            const clientData = clients.find(cl => cl.clientName === c.clientName);
-                            const clientId = clientData?.originalRowNumber || encodeURIComponent(clientData?.registeredDateTimeAD || '');
-                            
-                            return (
-                              <button
-                                key={i}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (clientId) {
-                                    navigate(`/client-tracker/client/${clientId}`);
-                                  }
-                                }}
-                                className="w-full text-left text-[10px] text-muted-foreground truncate border-l-2 border-green-500 pl-2 hover:bg-green-500/10 rounded-r py-0.5 transition-colors cursor-pointer"
-                              >
-                                <span className="font-medium text-foreground">{c.eventName}</span>
-                                <span className="hover:text-primary hover:underline"> • {c.clientName}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </ScrollArea>
-                    </button>
-                  ))}
-                </div>
+                        {/* Events List - Show ALL events with scroll if needed */}
+                        <ScrollArea className={dateInfo.events.length > 5 ? "h-28" : ""}>
+                          <div className="space-y-1">
+                            {dateInfo.events.map((c, i) => {
+                              // Find client data for navigation
+                              const clientData = clients.find(cl => cl.clientName === c.clientName);
+                              const clientId = clientData?.originalRowNumber || encodeURIComponent(clientData?.registeredDateTimeAD || '');
+                              
+                              return (
+                                <button
+                                  key={i}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (clientId) {
+                                      navigate(`/client-tracker/client/${clientId}`);
+                                    }
+                                  }}
+                                  className="w-full text-left text-[10px] text-muted-foreground truncate border-l-2 border-green-500 pl-2 hover:bg-green-500/10 rounded-r py-0.5 transition-colors cursor-pointer"
+                                >
+                                  <span className="font-medium text-foreground">{c.eventName}</span>
+                                  <span className="hover:text-primary hover:underline"> • {c.clientName}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </ScrollArea>
+                      </button>
+                    ))}
+                  </div>
+                )
               )}
             </CardContent>
           </Card>

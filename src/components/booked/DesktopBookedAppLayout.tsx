@@ -36,9 +36,6 @@ export function DesktopBookedAppLayout() {
   // Hot Dates filter state
   const [hotDatesSortOrder, setHotDatesSortOrder] = useState<HotDatesSortOrder>('popularity');
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
-  
-  // Client filter state
-  const [selectedClient, setSelectedClient] = useState<string | null>(null);
 
   const handleSync = async () => {
     await refreshData();
@@ -100,7 +97,7 @@ export function DesktopBookedAppLayout() {
     return Array.from(seen.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [clients]);
 
-  // Filter clients based on hot date and client filter
+  // Filter clients based on hot date
   const filteredClients = useMemo(() => {
     let result = clients;
     
@@ -125,15 +122,8 @@ export function DesktopBookedAppLayout() {
       });
     }
     
-    // Client filter
-    if (selectedClient) {
-      result = result.filter(c => 
-        c.clientName?.toLowerCase() === selectedClient.toLowerCase()
-      );
-    }
-    
     return result;
-  }, [clients, selectedHotDate, selectedClient]);
+  }, [clients, selectedHotDate]);
 
   // Calculate available months from clients data for filter dropdown
   const availableMonths = useMemo(() => {
@@ -164,13 +154,12 @@ export function DesktopBookedAppLayout() {
   }, [clients]);
 
   // Check if any filter is active
-  const hasActiveFilter = selectedCategory !== null || selectedHotDate !== null || selectedClient !== null;
+  const hasActiveFilter = selectedCategory !== null || selectedHotDate !== null;
 
   const handleClearAllFilters = () => {
     setSelectedCategory(null);
     setSelectedHotDate(null);
     setSelectedMonth(null);
-    setSelectedClient(null);
   };
 
   const totalClients = clients.length;
@@ -196,9 +185,6 @@ export function DesktopBookedAppLayout() {
         selectedMonth={selectedMonth}
         onMonthFilter={setSelectedMonth}
         availableMonths={availableMonths}
-        allClients={uniqueClients}
-        selectedClient={selectedClient}
-        onClientFilter={setSelectedClient}
       />
 
       {/* Main Content Area */}
@@ -223,14 +209,6 @@ export function DesktopBookedAppLayout() {
                   <Badge variant="outline" className="gap-1 border-purple-500 text-purple-600">
                     {selectedCategory}
                     <button onClick={() => setSelectedCategory(null)}>
-                      <X className="w-3 h-3" />
-                    </button>
-                  </Badge>
-                )}
-                {selectedClient && (
-                  <Badge variant="outline" className="gap-1 border-blue-500 text-blue-600">
-                    Client: {selectedClient}
-                    <button onClick={() => setSelectedClient(null)}>
                       <X className="w-3 h-3" />
                     </button>
                   </Badge>
@@ -289,6 +267,7 @@ export function DesktopBookedAppLayout() {
             onClearAllFilters={handleClearAllFilters}
             hotDatesSortOrder={hotDatesSortOrder}
             selectedMonth={selectedMonth}
+            allClients={uniqueClients}
           />
         </main>
       </div>
