@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Calendar, Users, Bell, AlertTriangle, Phone, MessageCircle, LayoutGrid, Table as TableIcon } from "lucide-react";
+import { ArrowLeft, RefreshCw, Calendar, Users, Bell, AlertTriangle, Phone, MessageCircle, LayoutGrid, Table as TableIcon, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { toast } from "sonner";
-import { getBookedClients, migrateExistingBookedClients, BookedClientData } from "@/lib/sheets-api";
+import { getBookedClients, migrateExistingBookedClients, fullResyncAllBookedClients, BookedClientData } from "@/lib/sheets-api";
 import EventClientCard from "./EventClientCard";
 import NepaliDateFilter from "./NepaliDateFilter";
 import { getMonthName, parseEventDetails } from "@/lib/nepali-months";
@@ -19,6 +19,7 @@ const DesktopBookedClients = () => {
   const [clients, setClients] = useState<BookedClientData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isMigrating, setIsMigrating] = useState(false);
+  const [isFullResyncing, setIsFullResyncing] = useState(false);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
@@ -47,6 +48,24 @@ const DesktopBookedClients = () => {
       toast.error("Failed to migrate clients");
     } finally {
       setIsMigrating(false);
+    }
+  };
+
+  const handleFullResync = async () => {
+    try {
+      setIsFullResyncing(true);
+      const result = await fullResyncAllBookedClients();
+      if (result.syncedCount > 0) {
+        toast.success(`Full sync: Updated ${result.syncedCount} clients with all data`);
+      } else {
+        toast.info("All data is already synchronized");
+      }
+      await fetchClients();
+    } catch (error) {
+      console.error("Error performing full resync:", error);
+      toast.error("Failed to perform full resync");
+    } finally {
+      setIsFullResyncing(false);
     }
   };
 
@@ -128,6 +147,24 @@ const DesktopBookedClients = () => {
               <Button variant={viewMode === 'cards' ? 'secondary' : 'ghost'} size="sm" onClick={() => setViewMode('cards')}><LayoutGrid className="h-4 w-4 mr-1" />Cards</Button>
               <Button variant={viewMode === 'table' ? 'secondary' : 'ghost'} size="sm" onClick={() => setViewMode('table')}><TableIcon className="h-4 w-4 mr-1" />Table</Button>
             </div>
+            <Button 
+              variant="outline" 
+              onClick={handleFullResync} 
+              disabled={isFullResyncing}
+              className="border-emerald-600 text-emerald-400 hover:bg-emerald-600/20"
+            >
+              {isFullResyncing ? (
+                <>
+                  <Database className="h-4 w-4 mr-2 animate-pulse" />
+                  Syncing All...
+                </>
+              ) : (
+                <>
+                  <Database className="h-4 w-4 mr-2" />
+                  Full Resync
+                </>
+              )}
+            </Button>
             <Button variant="outline" onClick={handleMigrate} disabled={isMigrating}>{isMigrating ? "Migrating..." : "Migrate New"}</Button>
             <Button variant="ghost" size="icon" onClick={fetchClients} disabled={isLoading}><RefreshCw className={`h-4 w-4 text-slate-400 ${isLoading ? 'animate-spin' : ''}`} /></Button>
           </div>
