@@ -24,8 +24,9 @@ import {
   X,
   Users,
   MapPin,
+  Flame,
 } from "lucide-react";
-import { NEPALI_MONTHS } from "@/lib/nepali-months";
+import { NEPALI_MONTHS, getMonthName } from "@/lib/nepali-months";
 
 interface DesktopHeaderProps {
   onSync: () => void;
@@ -46,6 +47,9 @@ interface DesktopHeaderProps {
   onYearChange?: (year: number | null) => void;
   onMonthChange?: (month: number | null) => void;
   onDayChange?: (day: number | null) => void;
+  // Hot date filter props
+  selectedHotDate?: string | null;
+  onClearHotDate?: () => void;
   // Clear all
   onClearAllFilters?: () => void;
   hasActiveFilter?: boolean;
@@ -97,6 +101,8 @@ export function DesktopHeader({
   onYearChange,
   onMonthChange,
   onDayChange,
+  selectedHotDate,
+  onClearHotDate,
   onClearAllFilters,
   hasActiveFilter = false,
   filteredCount = 0,
@@ -249,6 +255,31 @@ export function DesktopHeader({
                     <button 
                       onClick={onClearCategory}
                       className="ml-1 hover:bg-primary/20 rounded-full p-0.5 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                </>
+              )}
+
+              {/* Hot Date Badge */}
+              {selectedHotDate && (
+                <>
+                  <div className="h-6 w-px bg-border" />
+                  <Badge 
+                    variant="secondary" 
+                    className="gap-1.5 py-1.5 px-4 bg-gradient-to-r from-orange-500/20 to-red-500/20 border-orange-500/30"
+                  >
+                    <Flame className="w-3.5 h-3.5 text-orange-500" />
+                    <span className="font-medium">
+                      {(() => {
+                        const [y, m, d] = selectedHotDate.split('-').map(Number);
+                        return `${getMonthName(m)} ${d}, ${y}`;
+                      })()}
+                    </span>
+                    <button 
+                      onClick={onClearHotDate}
+                      className="ml-1 hover:bg-orange-500/20 rounded-full p-0.5 transition-colors"
                     >
                       <X className="w-3 h-3" />
                     </button>

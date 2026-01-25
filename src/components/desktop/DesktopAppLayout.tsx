@@ -43,6 +43,9 @@ export function DesktopAppLayout({
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  
+  // Hot date filter state (format: "YEAR-MONTH-DAY" e.g. "2082-11-27")
+  const [selectedHotDate, setSelectedHotDate] = useState<string | null>(null);
 
   // Get handlers and their counts
   const handlers = dropdowns?.whatsappOwners || [];
@@ -105,16 +108,37 @@ export function DesktopAppLayout({
         const days = (client.eventDay || '').split('\n').filter(Boolean);
         if (!days.some(d => parseInt(d) === selectedDay)) return false;
       }
+      // Hot date filter - matches clients with events on specific Year-Month-Day
+      if (selectedHotDate) {
+        const [hYear, hMonth, hDay] = selectedHotDate.split('-').map(Number);
+        const years = (client.eventYear || '').split('\n').filter(Boolean);
+        const months = (client.eventMonth || '').split('\n').filter(Boolean);
+        const days = (client.eventDay || '').split('\n').filter(Boolean);
+        
+        // Check if any event matches the hot date
+        let hasMatch = false;
+        for (let i = 0; i < Math.max(years.length, months.length, days.length); i++) {
+          const y = parseInt(years[i]) || 0;
+          const m = parseInt(months[i]) || 0;
+          const d = parseInt(days[i]) || 0;
+          if (y === hYear && m === hMonth && d === hDay) {
+            hasMatch = true;
+            break;
+          }
+        }
+        if (!hasMatch) return false;
+      }
       return true;
     });
-  }, [clients, selectedHandler, selectedCategory, selectedYear, selectedMonth, selectedDay]);
+  }, [clients, selectedHandler, selectedCategory, selectedYear, selectedMonth, selectedDay, selectedHotDate]);
 
   // Check if any filter is active
   const hasActiveFilter = selectedHandler !== null || 
                           selectedCategory !== null || 
                           selectedYear !== null || 
                           selectedMonth !== null || 
-                          selectedDay !== null;
+                          selectedDay !== null ||
+                          selectedHotDate !== null;
 
   // Get category label for display
   const categoryLabel = selectedCategory 
@@ -131,6 +155,7 @@ export function DesktopAppLayout({
     setSelectedYear(null);
     setSelectedMonth(null);
     setSelectedDay(null);
+    setSelectedHotDate(null);
   };
 
   // Clone children and pass filter-related props
@@ -142,8 +167,11 @@ export function DesktopAppLayout({
         hasActiveFilter,
         selectedHandler,
         selectedCategory,
+        selectedHotDate,
         onClearHandler: () => setSelectedHandler(null),
         onClearCategory: () => setSelectedCategory(null),
+        onHotDateFilter: setSelectedHotDate,
+        onClearHotDate: () => setSelectedHotDate(null),
         onClearAllFilters: handleClearAllFilters,
         handlers,
         handlerCounts,
@@ -155,7 +183,7 @@ export function DesktopAppLayout({
       });
     }
     return children;
-  }, [children, filteredClients, clients, hasActiveFilter, selectedHandler, selectedCategory, handlers, handlerCounts, isSyncing, dropdowns, updateClient]);
+  }, [children, filteredClients, clients, hasActiveFilter, selectedHandler, selectedCategory, selectedHotDate, handlers, handlerCounts, isSyncing, dropdowns, updateClient]);
 
   const totalClients = clients.length;
 
@@ -197,6 +225,8 @@ export function DesktopAppLayout({
           onYearChange={setSelectedYear}
           onMonthChange={setSelectedMonth}
           onDayChange={setSelectedDay}
+          selectedHotDate={selectedHotDate}
+          onClearHotDate={() => setSelectedHotDate(null)}
           onClearAllFilters={handleClearAllFilters}
           hasActiveFilter={hasActiveFilter}
           filteredCount={filteredClients.length}
