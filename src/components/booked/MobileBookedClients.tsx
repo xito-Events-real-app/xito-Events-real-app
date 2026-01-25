@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Calendar, Users, Bell, AlertTriangle } from "lucide-react";
+import { ArrowLeft, RefreshCw, Calendar, Users, Bell, AlertTriangle, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { getBookedClients, migrateExistingBookedClients, BookedClientData } from "@/lib/sheets-api";
+import { getBookedClients, migrateExistingBookedClients, fullResyncAllBookedClients, BookedClientData } from "@/lib/sheets-api";
 import EventClientCard from "./EventClientCard";
 import NepaliDateFilter from "./NepaliDateFilter";
 import { GlobalModeToggle } from "@/components/layout/GlobalModeToggle";
@@ -18,6 +18,7 @@ const MobileBookedClients = () => {
   const [clients, setClients] = useState<BookedClientData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isMigrating, setIsMigrating] = useState(false);
+  const [isFullResyncing, setIsFullResyncing] = useState(false);
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
 
@@ -45,6 +46,24 @@ const MobileBookedClients = () => {
       toast.error("Failed to migrate clients");
     } finally {
       setIsMigrating(false);
+    }
+  };
+
+  const handleFullResync = async () => {
+    try {
+      setIsFullResyncing(true);
+      const result = await fullResyncAllBookedClients();
+      if (result.syncedCount > 0) {
+        toast.success(`Full sync: Updated ${result.syncedCount} clients`);
+      } else {
+        toast.info("All data is already synchronized");
+      }
+      await fetchClients();
+    } catch (error) {
+      console.error("Error performing full resync:", error);
+      toast.error("Failed to perform full resync");
+    } finally {
+      setIsFullResyncing(false);
     }
   };
 
@@ -183,10 +202,31 @@ const MobileBookedClients = () => {
               </CardContent>
             </Card>
 
-            {/* Migrate button */}
-            <Button variant="outline" size="sm" onClick={handleMigrate} disabled={isMigrating} className="w-full">
-              {isMigrating ? "Migrating..." : "Migrate New Bookings"}
-            </Button>
+            {/* Sync buttons */}
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleFullResync} 
+                disabled={isFullResyncing} 
+                className="flex-1 border-emerald-600 text-emerald-400"
+              >
+                {isFullResyncing ? (
+                  <>
+                    <Database className="h-4 w-4 mr-1 animate-pulse" />
+                    Syncing...
+                  </>
+                ) : (
+                  <>
+                    <Database className="h-4 w-4 mr-1" />
+                    Full Resync
+                  </>
+                )}
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleMigrate} disabled={isMigrating} className="flex-1">
+                {isMigrating ? "Migrating..." : "Migrate New"}
+              </Button>
+            </div>
 
             {/* Client List */}
             <div className="space-y-3">
