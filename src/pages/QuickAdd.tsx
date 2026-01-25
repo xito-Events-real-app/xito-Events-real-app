@@ -297,6 +297,9 @@ export default function QuickAdd() {
       if (isConfigured) {
         await addClient(clientData);
         toast({ title: "Success!", description: "Client added to Google Sheets" });
+        
+        // Refresh cache so new client appears everywhere immediately
+        await refreshData();
       } else {
         // Demo mode
         await new Promise((r) => setTimeout(r, 1000));
