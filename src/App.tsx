@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -19,8 +20,31 @@ import Vendors from "./pages/Vendors";
 import NotFound from "./pages/NotFound";
 import ClientDetail from "./pages/ClientDetail";
 import HotDates from "./pages/HotDates";
+import { fullResyncAllBookedClients } from "./lib/sheets-api";
 
 const queryClient = new QueryClient();
+
+// Hourly auto-sync component for booked clients
+function BookedClientsAutoSync() {
+  useEffect(() => {
+    // Auto-sync booked clients every hour
+    const syncInterval = setInterval(async () => {
+      if (navigator.onLine) {
+        console.log('[AUTO-SYNC] Hourly booked clients sync triggered');
+        try {
+          const result = await fullResyncAllBookedClients();
+          console.log('[AUTO-SYNC] Complete:', result);
+        } catch (error) {
+          console.error('[AUTO-SYNC] Failed:', error);
+        }
+      }
+    }, 60 * 60 * 1000); // 1 hour in milliseconds
+    
+    return () => clearInterval(syncInterval);
+  }, []);
+  
+  return null;
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -28,6 +52,7 @@ const App = () => (
       <AudioProvider>
         <Toaster />
         <Sonner />
+        <BookedClientsAutoSync />
         <BrowserRouter>
           <Routes>
             {/* Suite Landing */}

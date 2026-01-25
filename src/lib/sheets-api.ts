@@ -357,15 +357,18 @@ export async function resyncAllBookedClients(): Promise<{
 }
 
 // Full resync all booked clients: sync ALL data (not just payments) from CLIENT TRACKER to BOOKED CLIENTS
+// Also finds and copies missing BOOKED clients from CLIENT TRACKER
 export async function fullResyncAllBookedClients(): Promise<{ 
-  success: boolean; 
+  success: boolean;
+  copiedCount: number;
   syncedCount: number; 
   skippedCount: number; 
   notFoundCount: number; 
   totalBooked: number; 
 }> {
   return callSheetsFunction<{ 
-    success: boolean; 
+    success: boolean;
+    copiedCount: number;
     syncedCount: number; 
     skippedCount: number; 
     notFoundCount: number; 
