@@ -514,6 +514,7 @@ export function DesktopDashboard({
                       {monthData.days.map(({ day, isBooked, eventCount }) => (
                         isBooked ? (
                           // BOOKED: Clickable concentric circles with day number inside
+                          // Dynamic rings: 1 event = 1 circle, 2 events = 2 circles, etc.
                           <button 
                             key={day}
                             onClick={() => onHotDateFilter?.(`${monthData.year}-${monthData.month}-${day}`)}
@@ -524,20 +525,25 @@ export function DesktopDashboard({
                                 : ""
                             )}
                             style={{ 
-                              width: eventCount >= 3 ? '40px' : eventCount >= 2 ? '32px' : '20px',
-                              height: eventCount >= 3 ? '40px' : eventCount >= 2 ? '32px' : '20px'
+                              // Base size 20px + 8px per additional ring
+                              width: `${20 + (eventCount - 1) * 8}px`,
+                              height: `${20 + (eventCount - 1) * 8}px`
                             }}
                             title={`${eventCount} event(s) on day ${day} - Click to filter`}
                           >
-                            {/* 3rd ring (outermost) - shows when 3+ events */}
-                            {eventCount >= 3 && (
-                              <span className="absolute w-10 h-10 rounded-full border-2 border-green-500" />
-                            )}
-                            {/* 2nd ring - shows when 2+ events */}
-                            {eventCount >= 2 && (
-                              <span className="absolute w-8 h-8 rounded-full border-2 border-green-500" />
-                            )}
-                            {/* 1st ring (innermost) - always present, contains the number */}
+                            {/* Dynamic outer rings - render from largest to smallest */}
+                            {Array.from({ length: eventCount - 1 }, (_, i) => {
+                              const ringIndex = eventCount - 1 - i; // Render largest first
+                              const size = 20 + ringIndex * 8; // 28px, 36px, 44px, 52px...
+                              return (
+                                <span 
+                                  key={ringIndex}
+                                  className="absolute rounded-full border-2 border-green-500"
+                                  style={{ width: `${size}px`, height: `${size}px` }}
+                                />
+                              );
+                            })}
+                            {/* Inner filled circle with day number - always present */}
                             <span className="w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center text-[10px] font-bold z-10">
                               {day}
                             </span>
