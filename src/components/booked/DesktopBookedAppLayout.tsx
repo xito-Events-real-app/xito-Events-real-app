@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { DesktopBookedSidebar, HotDatesSortOrder } from "./DesktopBookedSidebar";
 import { DesktopBookedDashboard } from "./DesktopBookedDashboard";
 import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
-import { fullResyncAllBookedClients, BookedClientData } from "@/lib/sheets-api";
+import { fullResyncAllBookedClients, BookedClientData, SyncDetail } from "@/lib/sheets-api";
 import { parseEventDetails, NEPALI_MONTHS } from "@/lib/nepali-months";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { RefreshCw, Database, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBookedCachedData } from "@/hooks/useBookedCachedData";
+import { SyncReportSheet } from "./SyncReportSheet";
 
 export function DesktopBookedAppLayout() {
   const navigate = useNavigate();
@@ -28,6 +29,17 @@ export function DesktopBookedAppLayout() {
   
   const [isFullResyncing, setIsFullResyncing] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  
+  // Sync report state
+  const [syncReportOpen, setSyncReportOpen] = useState(false);
+  const [syncReport, setSyncReport] = useState<{
+    copiedCount: number;
+    syncedCount: number;
+    skippedCount: number;
+    notFoundCount: number;
+    totalBooked: number;
+    syncDetails?: SyncDetail[];
+  } | null>(null);
   
   // Filter state
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -47,19 +59,18 @@ export function DesktopBookedAppLayout() {
       // Force sync to always copy ALL data from Client Tracker to Booked Clients
       const result = await fullResyncAllBookedClients(true);
       
-      const messages: string[] = [];
-      if (result.copiedCount > 0) {
-        messages.push(`Found & copied ${result.copiedCount} missing booked clients`);
-      }
-      if (result.syncedCount > 0) {
-        messages.push(`Updated ${result.syncedCount} existing clients`);
-      }
+      // Store report for display
+      setSyncReport({
+        copiedCount: result.copiedCount,
+        syncedCount: result.syncedCount,
+        skippedCount: result.skippedCount,
+        notFoundCount: result.notFoundCount,
+        totalBooked: result.totalBooked,
+        syncDetails: result.syncDetails
+      });
       
-      if (messages.length > 0) {
-        toast.success(messages.join('. '));
-      } else {
-        toast.info("All booked clients are already synchronized");
-      }
+      // Show report sheet
+      setSyncReportOpen(true);
       
       await refreshData();
     } catch (error) {
@@ -272,6 +283,13 @@ export function DesktopBookedAppLayout() {
           />
         </main>
       </div>
+      
+      {/* Sync Report Sheet */}
+      <SyncReportSheet
+        open={syncReportOpen}
+        onOpenChange={setSyncReportOpen}
+        report={syncReport}
+      />
     </div>
   );
 }

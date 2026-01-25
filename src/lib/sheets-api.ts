@@ -356,6 +356,14 @@ export async function resyncAllBookedClients(): Promise<{
   }>("resyncAllBookedClients");
 }
 
+// Sync detail for the report
+export interface SyncDetail {
+  clientName: string;
+  bookedRow: number;
+  trackerRow: number;
+  changedColumns: string[];
+}
+
 // Full resync all booked clients: sync ALL data (not just payments) from CLIENT TRACKER to BOOKED CLIENTS
 // Also finds and copies missing BOOKED clients from CLIENT TRACKER
 // forceSync = true will skip comparison and always copy ALL data from tracker
@@ -365,7 +373,8 @@ export async function fullResyncAllBookedClients(forceSync: boolean = false): Pr
   syncedCount: number; 
   skippedCount: number; 
   notFoundCount: number; 
-  totalBooked: number; 
+  totalBooked: number;
+  syncDetails?: SyncDetail[];
 }> {
   return callSheetsFunction<{ 
     success: boolean;
@@ -373,7 +382,8 @@ export async function fullResyncAllBookedClients(forceSync: boolean = false): Pr
     syncedCount: number; 
     skippedCount: number; 
     notFoundCount: number; 
-    totalBooked: number; 
+    totalBooked: number;
+    syncDetails?: SyncDetail[];
   }>("fullResyncAllBookedClients", { data: { forceSync } });
 }
 
