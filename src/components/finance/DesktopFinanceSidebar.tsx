@@ -120,6 +120,45 @@ export function DesktopFinanceSidebar({
       {/* Scrollable Content */}
       <ScrollArea className="flex-1 py-3">
         <div className="px-3">
+          {/* Month Filter Section - NOW AT TOP */}
+          {!isCollapsed && (
+            <div className="mb-6">
+              <h3 className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-2 px-1">
+                Filter by Month
+              </h3>
+              <div className="flex flex-col gap-1 px-1">
+                {/* All Months Tab */}
+                <button
+                  onClick={() => onMonthFilter(null)}
+                  className={cn(
+                    "w-full px-3 py-2 rounded-lg text-sm font-medium transition-all text-left",
+                    selectedMonth === null
+                      ? "bg-gradient-to-r from-emerald-600 to-green-600 text-white"
+                      : "text-white/70 hover:bg-white/10 hover:text-white border border-white/20"
+                  )}
+                >
+                  ALL MONTHS
+                </button>
+
+                {/* Dynamic Month Tabs */}
+                {availableMonths.map((month) => (
+                  <button
+                    key={month.value}
+                    onClick={() => onMonthFilter(month.value)}
+                    className={cn(
+                      "w-full px-3 py-2 rounded-lg text-sm font-medium transition-all text-left",
+                      selectedMonth === month.value
+                        ? "bg-gradient-to-r from-emerald-600 to-green-600 text-white"
+                        : "text-white/70 hover:bg-white/10 hover:text-white border border-white/20"
+                    )}
+                  >
+                    {month.label.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Handler Filters Section */}
           {!isCollapsed && (
             <h3 className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-2 px-1">
@@ -227,44 +266,6 @@ export function DesktopFinanceSidebar({
             </div>
           )}
 
-          {/* Month Filter Section */}
-          {!isCollapsed && (
-            <div className="mt-6">
-              <h3 className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-2 px-1">
-                Filter by Month
-              </h3>
-              <div className="flex flex-col gap-1 px-1">
-                {/* All Months Tab */}
-                <button
-                  onClick={() => onMonthFilter(null)}
-                  className={cn(
-                    "w-full px-3 py-2 rounded-lg text-sm font-medium transition-all text-left",
-                    selectedMonth === null
-                      ? "bg-gradient-to-r from-emerald-600 to-green-600 text-white"
-                      : "text-white/70 hover:bg-white/10 hover:text-white border border-white/20"
-                  )}
-                >
-                  ALL MONTHS
-                </button>
-
-                {/* Dynamic Month Tabs */}
-                {availableMonths.map((month) => (
-                  <button
-                    key={month.value}
-                    onClick={() => onMonthFilter(month.value)}
-                    className={cn(
-                      "w-full px-3 py-2 rounded-lg text-sm font-medium transition-all text-left",
-                      selectedMonth === month.value
-                        ? "bg-gradient-to-r from-emerald-600 to-green-600 text-white"
-                        : "text-white/70 hover:bg-white/10 hover:text-white border border-white/20"
-                    )}
-                  >
-                    {month.label.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </ScrollArea>
 

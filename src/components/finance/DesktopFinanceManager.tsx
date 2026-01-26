@@ -602,20 +602,20 @@ const DesktopFinanceManager = () => {
                           <div className="space-y-2">
                             {parseClientEvents(client).length > 0 ? (
                               parseClientEvents(client).map((event, idx) => (
-                                <div key={idx} className="flex items-center gap-2 flex-wrap">
-                                  {/* Event name in parenthesis - orange/amber */}
-                                  <span className="text-sm font-semibold text-orange-400">
+                                <div key={idx} className="flex items-center gap-1.5 flex-wrap">
+                                  {/* Event name in parenthesis - amber/orange */}
+                                  <span className="text-sm font-semibold text-amber-400">
                                     ( {event.eventName.toUpperCase()} )
                                   </span>
-                                  {/* Month and Day - orange */}
-                                  <span className="text-sm font-medium text-orange-400">
+                                  {/* Month and Day - emerald (finance theme) */}
+                                  <span className="text-sm font-medium text-emerald-400">
                                     {event.monthName.toUpperCase()} {event.day}
                                   </span>
-                                  {/* Year badge - green pill */}
+                                  {/* Year - small badge */}
                                   {event.year && (
-                                    <Badge className="bg-green-600 text-white text-xs px-2 py-0.5 rounded">
+                                    <span className="text-[10px] font-bold text-white bg-emerald-600/80 px-1.5 py-0.5 rounded">
                                       {event.year}
-                                    </Badge>
+                                    </span>
                                   )}
                                 </div>
                               ))
