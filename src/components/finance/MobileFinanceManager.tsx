@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, RefreshCw, DollarSign, Users, TrendingUp, Clock, Percent, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ const MobileFinanceManager = () => {
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
   const [paymentFilter, setPaymentFilter] = useState<'all' | 'fully-paid' | 'partial' | 'no-payment'>('all');
+  const [selectedHandler, setSelectedHandler] = useState<string | null>(null);
   
   // Sync report state
   const [syncReportOpen, setSyncReportOpen] = useState(false);
@@ -68,10 +69,8 @@ const MobileFinanceManager = () => {
   const handleFullResync = async () => {
     try {
       setIsFullResyncing(true);
-      // Force sync to always copy ALL data from Client Tracker to Booked Clients
       const result = await fullResyncAllBookedClients(true);
       
-      // Store report for display
       setSyncReport({
         copiedCount: result.copiedCount,
         syncedCount: result.syncedCount,
@@ -81,9 +80,7 @@ const MobileFinanceManager = () => {
         syncDetails: result.syncDetails
       });
       
-      // Show report sheet
       setSyncReportOpen(true);
-      
       await fetchClients();
     } catch (error) {
       console.error("Error performing full resync:", error);
@@ -115,6 +112,20 @@ const MobileFinanceManager = () => {
   const remainingValue = totalBookedValue - totalPaidValue;
   const collectionRate = totalBookedValue > 0 ? (totalPaidValue / totalBookedValue) * 100 : 0;
 
+  // Extract unique handlers
+  const handlers = useMemo(() => {
+    const handlerMap = new Map<string, number>();
+    clients.forEach(client => {
+      const handler = client.clientHandler?.trim().toUpperCase();
+      if (handler) {
+        handlerMap.set(handler, (handlerMap.get(handler) || 0) + 1);
+      }
+    });
+    return Array.from(handlerMap.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [clients]);
+
   // Get payment status for a client
   const getPaymentStatus = (client: BookedClientData): 'fully-paid' | 'partial' | 'no-payment' => {
     const quotationMatch = client.finalQuotation?.match(/NPR\s*([\d,]+)/);
@@ -136,6 +147,11 @@ const MobileFinanceManager = () => {
 
   // Filter clients
   const filteredClients = clients.filter(client => {
+    // Handler filter
+    if (selectedHandler && client.clientHandler?.trim().toUpperCase() !== selectedHandler) {
+      return false;
+    }
+    
     // Date filter
     if (filterYear && client.eventYear !== filterYear.toString()) return false;
     if (filterMonth && client.eventMonth !== filterMonth.toString()) return false;
@@ -170,6 +186,7 @@ const MobileFinanceManager = () => {
     setFilterYear(null);
     setFilterMonth(null);
     setPaymentFilter('all');
+    setSelectedHandler(null);
   };
 
   return (
@@ -293,6 +310,37 @@ const MobileFinanceManager = () => {
                   </div>
                 </CardContent>
               </Card>
+            </div>
+
+            {/* Handler Pills */}
+            <div className="overflow-x-auto -mx-4 px-4">
+              <div className="flex gap-2 pb-2">
+                <Badge
+                  variant={selectedHandler === null ? 'default' : 'outline'}
+                  className={`cursor-pointer whitespace-nowrap ${
+                    selectedHandler === null 
+                      ? 'bg-emerald-600 hover:bg-emerald-700' 
+                      : 'border-slate-600 text-slate-400 hover:text-white'
+                  }`}
+                  onClick={() => setSelectedHandler(null)}
+                >
+                  All ({clients.length})
+                </Badge>
+                {handlers.map(handler => (
+                  <Badge
+                    key={handler.name}
+                    variant={selectedHandler === handler.name ? 'default' : 'outline'}
+                    className={`cursor-pointer whitespace-nowrap ${
+                      selectedHandler === handler.name 
+                        ? 'bg-purple-600 hover:bg-purple-700' 
+                        : 'border-slate-600 text-slate-400 hover:text-white'
+                    }`}
+                    onClick={() => setSelectedHandler(handler.name)}
+                  >
+                    {handler.name} ({handler.count})
+                  </Badge>
+                ))}
+              </div>
             </div>
 
             {/* Filters */}
