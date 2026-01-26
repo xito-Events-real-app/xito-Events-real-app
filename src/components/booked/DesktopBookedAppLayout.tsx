@@ -94,15 +94,20 @@ export function DesktopBookedAppLayout() {
     };
   }, []);
 
-  // Compute unique clients list for dropdown
+  // Compute unique clients list for dropdown - include originalRowNumber for reliable navigation
   const uniqueClients = useMemo(() => {
-    const seen = new Map<string, { name: string; registeredDateTimeAD: string }>();
+    const seen = new Map<string, { 
+      name: string; 
+      registeredDateTimeAD: string;
+      originalRowNumber?: number;
+    }>();
     clients.forEach(c => {
       const key = c.clientName?.toLowerCase() || '';
       if (c.clientName && !seen.has(key)) {
         seen.set(key, {
           name: c.clientName,
-          registeredDateTimeAD: c.registeredDateTimeAD || ''
+          registeredDateTimeAD: c.registeredDateTimeAD || '',
+          originalRowNumber: c.originalRowNumber
         });
       }
     });
