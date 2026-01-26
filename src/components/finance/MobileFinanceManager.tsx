@@ -7,9 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { getBookedClients, resyncAllBookedClients, fullResyncAllBookedClients, BookedClientData } from "@/lib/sheets-api";
+import { getBookedClients, resyncAllBookedClients, fullResyncAllBookedClients, BookedClientData, SyncDetail } from "@/lib/sheets-api";
 import FinanceClientCard from "./FinanceClientCard";
 import NepaliDateFilter from "../booked/NepaliDateFilter";
+import { SyncReportSheet } from "../booked/SyncReportSheet";
 import { GlobalModeToggle } from "@/components/layout/GlobalModeToggle";
 
 const MobileFinanceManager = () => {
@@ -21,6 +22,17 @@ const MobileFinanceManager = () => {
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
   const [paymentFilter, setPaymentFilter] = useState<'all' | 'fully-paid' | 'partial' | 'no-payment'>('all');
+  
+  // Sync report state
+  const [syncReportOpen, setSyncReportOpen] = useState(false);
+  const [syncReport, setSyncReport] = useState<{
+    copiedCount: number;
+    syncedCount: number;
+    skippedCount: number;
+    notFoundCount: number;
+    totalBooked: number;
+    syncDetails?: SyncDetail[];
+  } | null>(null);
 
   const fetchClients = async () => {
     try {
@@ -58,11 +70,20 @@ const MobileFinanceManager = () => {
       setIsFullResyncing(true);
       // Force sync to always copy ALL data from Client Tracker to Booked Clients
       const result = await fullResyncAllBookedClients(true);
-      if (result.syncedCount > 0) {
-        toast.success(`Full sync: Updated ${result.syncedCount} clients with all data`);
-      } else {
-        toast.info("All data is already synchronized");
-      }
+      
+      // Store report for display
+      setSyncReport({
+        copiedCount: result.copiedCount,
+        syncedCount: result.syncedCount,
+        skippedCount: result.skippedCount,
+        notFoundCount: result.notFoundCount,
+        totalBooked: result.totalBooked,
+        syncDetails: result.syncDetails
+      });
+      
+      // Show report sheet
+      setSyncReportOpen(true);
+      
       await fetchClients();
     } catch (error) {
       console.error("Error performing full resync:", error);
@@ -342,6 +363,13 @@ const MobileFinanceManager = () => {
           </div>
         )}
       </ScrollArea>
+      
+      {/* Sync Report Sheet */}
+      <SyncReportSheet
+        open={syncReportOpen}
+        onOpenChange={setSyncReportOpen}
+        report={syncReport}
+      />
     </div>
   );
 };
