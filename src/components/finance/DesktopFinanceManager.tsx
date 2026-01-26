@@ -138,23 +138,62 @@ const DesktopFinanceManager = () => {
     fetchClients();
   }, []);
 
-  // Calculate summary stats
-  const totalBookedValue = clients.reduce((sum, client) => {
-    const match = client.finalQuotation?.match(/NPR\s*([\d,]+)/);
-    return sum + (match ? parseInt(match[1].replace(/,/g, '')) : 0);
-  }, 0);
+  // Filter clients (moved up so stats can use filteredClients)
+  const filteredClients = useMemo(() => {
+    return clients.filter(client => {
+      // Handler filter
+      if (selectedHandler && client.clientHandler?.trim().toUpperCase() !== selectedHandler) {
+        return false;
+      }
+      
+      // Month filter - handles multi-event clients
+      if (selectedMonth) {
+        const years = client.eventYear?.split('\n').filter(Boolean) || [];
+        const months = client.eventMonth?.split('\n').filter(Boolean) || [];
+        
+        let hasMatchingMonth = false;
+        for (let i = 0; i < Math.max(years.length, months.length); i++) {
+          const year = years[i]?.trim() || years[0]?.trim();
+          const month = months[i]?.trim() || months[0]?.trim();
+          if (`${year}-${month}` === selectedMonth) {
+            hasMatchingMonth = true;
+            break;
+          }
+        }
+        if (!hasMatchingMonth) return false;
+      }
+      
+      // Payment status filter
+      if (paymentFilter !== 'all') {
+        const status = getPaymentStatus(client);
+        if (status !== paymentFilter) return false;
+      }
+      
+      return true;
+    });
+  }, [clients, selectedHandler, selectedMonth, paymentFilter]);
 
-  const totalPaidValue = clients.reduce((sum, client) => {
-    if (!client.paymentsMade) return sum;
-    const payments = client.paymentsMade.split('\n');
-    return sum + payments.reduce((pSum, entry) => {
-      const match = entry.match(/NPR\s*([\d,]+)/);
-      return pSum + (match ? parseInt(match[1].replace(/,/g, '')) : 0);
+  // Calculate summary stats FROM FILTERED CLIENTS
+  const totalBookedValue = useMemo(() => {
+    return filteredClients.reduce((sum, client) => {
+      const match = client.finalQuotation?.match(/NPR\s*([\d,]+)/);
+      return sum + (match ? parseInt(match[1].replace(/,/g, '')) : 0);
     }, 0);
-  }, 0);
+  }, [filteredClients]);
 
-  const remainingValue = totalBookedValue - totalPaidValue;
-  const collectionRate = totalBookedValue > 0 ? (totalPaidValue / totalBookedValue) * 100 : 0;
+  const totalPaidValue = useMemo(() => {
+    return filteredClients.reduce((sum, client) => {
+      if (!client.paymentsMade) return sum;
+      const payments = client.paymentsMade.split('\n');
+      return sum + payments.reduce((pSum, entry) => {
+        const match = entry.match(/NPR\s*([\d,]+)/);
+        return pSum + (match ? parseInt(match[1].replace(/,/g, '')) : 0);
+      }, 0);
+    }, 0);
+  }, [filteredClients]);
+
+  const remainingValue = useMemo(() => totalBookedValue - totalPaidValue, [totalBookedValue, totalPaidValue]);
+  const collectionRate = useMemo(() => totalBookedValue > 0 ? (totalPaidValue / totalBookedValue) * 100 : 0, [totalBookedValue, totalPaidValue]);
 
   // Get payment status for a client
   const getPaymentStatus = (client: BookedClientData): 'fully-paid' | 'partial' | 'no-payment' => {
@@ -243,39 +282,7 @@ const DesktopFinanceManager = () => {
     return counts;
   }, [clients]);
 
-  // Filter clients
-  const filteredClients = clients.filter(client => {
-    // Handler filter
-    if (selectedHandler && client.clientHandler?.trim().toUpperCase() !== selectedHandler) {
-      return false;
-    }
-    
-    // Month filter - handles multi-event clients
-    if (selectedMonth) {
-      const years = client.eventYear?.split('\n').filter(Boolean) || [];
-      const months = client.eventMonth?.split('\n').filter(Boolean) || [];
-      
-      // Check if any event matches the selected month
-      let hasMatchingMonth = false;
-      for (let i = 0; i < Math.max(years.length, months.length); i++) {
-        const year = years[i]?.trim() || years[0]?.trim();
-        const month = months[i]?.trim() || months[0]?.trim();
-        if (`${year}-${month}` === selectedMonth) {
-          hasMatchingMonth = true;
-          break;
-        }
-      }
-      if (!hasMatchingMonth) return false;
-    }
-    
-    // Payment status filter
-    if (paymentFilter !== 'all') {
-      const status = getPaymentStatus(client);
-      if (status !== paymentFilter) return false;
-    }
-    
-    return true;
-  });
+  // filteredClients is now defined above (moved for stats calculation)
 
   // Sort by remaining payment (highest first)
   const sortedClients = [...filteredClients].sort((a, b) => {
@@ -421,7 +428,7 @@ const DesktopFinanceManager = () => {
                   </div>
                   <div>
                     <p className="text-xs text-blue-400">Total Clients</p>
-                    <p className="text-xl font-bold text-blue-300">{clients.length}</p>
+                    <p className="text-xl font-bold text-blue-300">{filteredClients.length}</p>
                   </div>
                 </div>
               </CardContent>
