@@ -17,6 +17,42 @@ import { getMonthName } from "@/lib/nepali-months";
 import { DesktopFinanceSidebar, PaymentStatus } from "./DesktopFinanceSidebar";
 import { cn } from "@/lib/utils";
 
+// Handler color palette (same as Dashboard)
+const handlerColors = [
+  'text-violet-400',
+  'text-cyan-400',
+  'text-emerald-400',
+  'text-orange-400',
+  'text-pink-400',
+  'text-amber-400',
+];
+
+// Background versions for badges
+const handlerBgColors = [
+  'bg-violet-500/20 border-violet-500/50',
+  'bg-cyan-500/20 border-cyan-500/50',
+  'bg-emerald-500/20 border-emerald-500/50',
+  'bg-orange-500/20 border-orange-500/50',
+  'bg-pink-500/20 border-pink-500/50',
+  'bg-amber-500/20 border-amber-500/50',
+];
+
+// Parse events for a client (handles newline-delimited multi-event format)
+const parseClientEvents = (client: BookedClientData) => {
+  const events = client.events?.split('\n').filter(Boolean) || [];
+  const years = client.eventYear?.split('\n').filter(Boolean) || [];
+  const months = client.eventMonth?.split('\n').filter(Boolean) || [];
+  const days = client.eventDay?.split('\n').filter(Boolean) || [];
+  
+  return events.map((eventName, i) => ({
+    eventName: eventName.trim(),
+    year: years[i] || '',
+    month: months[i] || '',
+    monthName: getMonthName(parseInt(months[i] || '0', 10)),
+    day: days[i] || '',
+  }));
+};
+
 const DesktopFinanceManager = () => {
   const navigate = useNavigate();
   const [clients, setClients] = useState<BookedClientData[]>([]);
@@ -167,6 +203,18 @@ const DesktopFinanceManager = () => {
       .map(([value, label]) => ({ value, label }))
       .sort((a, b) => b.value.localeCompare(a.value));
   }, [clients]);
+
+  // Create handler-to-color mapping
+  const handlerColorMap = useMemo(() => {
+    const map = new Map<string, { text: string; bg: string }>();
+    handlers.forEach((handler, idx) => {
+      map.set(handler.name, {
+        text: handlerColors[idx % handlerColors.length],
+        bg: handlerBgColors[idx % handlerBgColors.length],
+      });
+    });
+    return map;
+  }, [handlers]);
 
   // Calculate payment counts for sidebar
   const paymentCounts = useMemo(() => {
@@ -512,13 +560,39 @@ const DesktopFinanceManager = () => {
                         onClick={() => handleRowClick(client)}
                       >
                         <TableCell>
-                          <div>
-                            <p className="font-medium text-white">{client.clientName}</p>
-                            <p className="text-xs text-slate-400">{client.clientHandler || '-'}</p>
+                          <div className="space-y-1">
+                            <p className="font-semibold text-white cursor-pointer hover:text-emerald-300">
+                              {client.clientName}
+                            </p>
+                            {client.clientHandler && (
+                              <Badge className={cn(
+                                "text-xs px-2 py-0.5 font-medium border",
+                                handlerColorMap.get(client.clientHandler.trim().toUpperCase())?.bg || 'bg-slate-500/20 border-slate-500/50'
+                              )}>
+                                <span className={handlerColorMap.get(client.clientHandler.trim().toUpperCase())?.text || 'text-slate-400'}>
+                                  {client.clientHandler}
+                                </span>
+                              </Badge>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell className="text-slate-300">
-                          {formatNepaliEventDate(client.eventYear, client.eventMonth, client.eventDay)}
+                          <div className="space-y-1.5">
+                            {parseClientEvents(client).length > 0 ? (
+                              parseClientEvents(client).map((event, idx) => (
+                                <div key={idx} className="flex flex-col">
+                                  <span className="text-xs font-semibold text-white uppercase">{event.eventName}</span>
+                                  <span className="text-xs text-emerald-400">
+                                    {event.monthName} {event.day} {event.year}
+                                  </span>
+                                </div>
+                              ))
+                            ) : (
+                              <span className="text-xs text-slate-500">
+                                {formatNepaliEventDate(client.eventYear, client.eventMonth, client.eventDay)}
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           {getPaymentStatusBadge(status)}

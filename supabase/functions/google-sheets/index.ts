@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -1268,6 +1268,162 @@ async function addPayment(
   };
 }
 
+// Update an existing payment entry at a specific index
+async function updatePaymentEntry(
+  accessToken: string,
+  spreadsheetId: string,
+  rowNumber: number,
+  paymentIndex: number,
+  newAmount: string,
+  newType: string,
+  newYear: string,
+  newMonth: string,
+  newDay: string,
+  newBank: string,
+  existingPaymentsMade: string,
+  finalQuotationAmount: number,
+  registeredDateTimeAD?: string
+) {
+  if (!rowNumber || rowNumber < 2) {
+    throw new Error('Valid rowNumber is required for updating payment');
+  }
+
+  // Parse existing payments into array
+  const paymentLines = existingPaymentsMade.split('\n').filter(line => line.trim());
+  
+  if (paymentIndex < 0 || paymentIndex >= paymentLines.length) {
+    throw new Error(`Invalid payment index: ${paymentIndex}. Only ${paymentLines.length} payments exist.`);
+  }
+
+  // Get weekday for the date
+  const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+  let weekday = 'SAT'; // Default
+  try {
+    // Create a Nepali date and convert to get the weekday
+    // We'll approximate using the current day since we don't have full conversion in Deno
+    const currentDate = new Date();
+    weekday = dayNames[currentDate.getDay()];
+  } catch (e) {
+    console.log('Using default weekday');
+  }
+
+  // Format month with leading zero
+  const monthPadded = newMonth.padStart(2, '0');
+  const dayPadded = newDay.padStart(2, '0');
+  const nepaliDateFormatted = `${newYear}-${monthPadded}-${dayPadded}`;
+  
+  // Format amount with commas
+  const amountNum = parseInt(newAmount.replace(/,/g, ''), 10);
+  const amountFormatted = amountNum.toLocaleString('en-IN');
+
+  // Create new payment line: "NPR X,XXX/- AS TYPE ON WEEKDAY YYYY-MM-DD IN BANK"
+  const newPaymentLine = `NPR ${amountFormatted}/- AS ${newType.toUpperCase()} ON ${weekday} ${nepaliDateFormatted} IN ${newBank.toUpperCase()}`;
+  
+  // Replace the payment at the specified index
+  paymentLines[paymentIndex] = newPaymentLine;
+  const updatedPaymentsMade = paymentLines.join('\n');
+  
+  // Recalculate total paid
+  let totalPaid = 0;
+  paymentLines.forEach(entry => {
+    const match = entry.match(/NPR\s*([\d,]+)/);
+    if (match) {
+      totalPaid += parseInt(match[1].replace(/,/g, ''), 10);
+    }
+  });
+  
+  // Calculate remaining
+  const remaining = Math.max(0, finalQuotationAmount - totalPaid);
+  const remainingFormatted = `NPR ${remaining.toLocaleString('en-IN')}/-`;
+
+  // Create payment values array [paymentsMade, '', remainingPayment] 
+  // Note: We're not updating paymentDatesAD (column AF) for simplicity
+  const paymentValues = [[updatedPaymentsMade, '', remainingFormatted]];
+
+  // Determine which sheet to update - for booked clients, update BOOKED CLIENTS first
+  // We'll update both sheets using registeredDateTimeAD as the key
+  
+  // Update BOOKED CLIENTS sheet first
+  const actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'BOOKED CLIENTS', rowNumber, registeredDateTimeAD);
+  
+  const bookedRange = encodeURIComponent(`'BOOKED CLIENTS'!AE${actualRowNumber}:AG${actualRowNumber}`);
+  const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}?valueInputOption=USER_ENTERED`;
+  
+  const bookedResponse = await fetch(bookedUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: paymentValues }),
+  });
+
+  if (!bookedResponse.ok) {
+    const errorText = await bookedResponse.text();
+    console.error('Google Sheets API error (updatePayment to BOOKED CLIENTS):', bookedResponse.status, errorText);
+    throw new Error(`Failed to update payment: ${bookedResponse.status}`);
+  }
+  
+  console.log(`[UPDATE PAYMENT] Updated BOOKED CLIENTS row ${actualRowNumber}`);
+
+  // Two-way sync: Update CLIENT TRACKER
+  if (registeredDateTimeAD) {
+    try {
+      const searchRange = encodeURIComponent(`'CLIENT TRACKER'!A2:A2000`);
+      const searchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${searchRange}`;
+      
+      const searchResponse = await fetch(searchUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (searchResponse.ok) {
+        const searchData = await searchResponse.json();
+        if (searchData.values) {
+          const normalizedDateTime = registeredDateTimeAD.trim();
+          let matchingRowIndex = -1;
+          
+          for (let i = 0; i < searchData.values.length; i++) {
+            const rowDateTime = (searchData.values[i][0] || '').trim();
+            if (rowDateTime === normalizedDateTime) {
+              matchingRowIndex = i;
+              break;
+            }
+          }
+          
+          if (matchingRowIndex !== -1) {
+            const trackerRowNumber = matchingRowIndex + 2;
+            const trackerRange = encodeURIComponent(`'CLIENT TRACKER'!AE${trackerRowNumber}:AG${trackerRowNumber}`);
+            const trackerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}?valueInputOption=USER_ENTERED`;
+            
+            const trackerResponse = await fetch(trackerUrl, {
+              method: 'PUT',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ values: paymentValues }),
+            });
+            
+            if (trackerResponse.ok) {
+              console.log(`[UPDATE PAYMENT] Synced to CLIENT TRACKER row ${trackerRowNumber}`);
+            } else {
+              console.error(`[UPDATE PAYMENT] Failed to sync to CLIENT TRACKER:`, await trackerResponse.text());
+            }
+          }
+        }
+      }
+    } catch (syncError) {
+      console.error('[UPDATE PAYMENT] Error syncing to CLIENT TRACKER:', syncError);
+    }
+  }
+
+  return { 
+    success: true, 
+    paymentsMade: updatedPaymentsMade, 
+    remainingPayment: remainingFormatted,
+  };
+}
+
 // Check if a client is already in the BOOKED CLIENTS sheet using registeredDateTimeAD (Column A) as unique identifier
 async function checkIfAlreadyBooked(accessToken: string, spreadsheetId: string, registeredDateTimeAD: string): Promise<boolean> {
   const range = encodeURIComponent("'BOOKED CLIENTS'!A2:A1000"); // Column A - registeredDateTimeAD
@@ -2511,6 +2667,26 @@ Deno.serve(async (req) => {
           data.finalQuotationAmount as number || 0,
           data.registeredDateTimeAD as string | undefined,
           data.sourceSheet as 'tracker' | 'booked' | undefined
+        );
+        break;
+      case 'updatePayment':
+        if (!data || data.rowNumber === undefined || data.paymentIndex === undefined || !data.newAmount || !data.newType || !data.newYear || !data.newMonth || !data.newDay || !data.newBank) {
+          throw new Error('rowNumber, paymentIndex, newAmount, newType, newYear, newMonth, newDay, and newBank are required for updatePayment');
+        }
+        result = await updatePaymentEntry(
+          accessToken, 
+          spreadsheetId, 
+          data.rowNumber as number, 
+          data.paymentIndex as number,
+          data.newAmount as string,
+          data.newType as string,
+          data.newYear as string,
+          data.newMonth as string,
+          data.newDay as string,
+          data.newBank as string,
+          data.existingPaymentsMade as string || '',
+          data.finalQuotationAmount as number || 0,
+          data.registeredDateTimeAD as string | undefined
         );
         break;
       case 'getBookedClients':
