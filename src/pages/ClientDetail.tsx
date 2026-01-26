@@ -139,7 +139,8 @@ const ClientDetail = () => {
   const [source, setSource] = useState("");
   const [whoseWhatsapp, setWhoseWhatsapp] = useState("");
   const [oldClientName, setOldClientName] = useState("");
-  const [whoAdded, setWhoAdded] = useState("");
+const [whoAdded, setWhoAdded] = useState("");
+  const [clientHandler, setClientHandler] = useState("");
   const [inquiryDate, setInquiryDate] = useState<Date | undefined>(undefined);
   const [inquiryTimeInput, setInquiryTimeInput] = useState("");
   const [descriptionInput, setDescriptionInput] = useState("");
@@ -373,6 +374,7 @@ const ClientDetail = () => {
     else if (base === 'OLD CLIENT') setOldClientName(sub);
     
     setWhoAdded(client.whoAdded || '');
+    setClientHandler(client.clientHandler || '');
     
     if (client.inquiryDateAD) {
       setInquiryDate(new Date(client.inquiryDateAD));
@@ -404,6 +406,7 @@ const ClientDetail = () => {
     setWhoseWhatsapp("");
     setOldClientName("");
     setWhoAdded("");
+    setClientHandler("");
     setInquiryDate(undefined);
     setInquiryTimeInput("");
     setDescriptionInput("");
@@ -497,6 +500,7 @@ const ClientDetail = () => {
         eventDay: eventDays,
         eventDateAD: eventADDates,
         whoAdded,
+        clientHandler,
         description: descriptionInput,
         inquiryDateAD: inquiryDate ? format(inquiryDate, "yyyy-MM-dd") : editedClient.inquiryDateAD,
         inquiryTime: inquiryTimeInput,
@@ -868,6 +872,13 @@ const ClientDetail = () => {
               onChange={setWhoAdded} 
               options={dropdowns?.whatsappOwners || []} 
               placeholder="Who added this client?" 
+            />
+            <FormSelect 
+              label="Handler" 
+              value={clientHandler} 
+              onChange={setClientHandler} 
+              options={dropdowns?.whatsappOwners || []} 
+              placeholder="Who is handling this client?" 
             />
           </FormSection>
 
