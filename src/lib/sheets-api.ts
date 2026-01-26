@@ -65,6 +65,44 @@ export interface BookedClientData extends ClientData {
   bookedDateTime: string;
 }
 
+export interface BookedEventDetails {
+  rowNumber: number;
+  registeredDateTimeAD: string;   // A - Unique ID
+  registeredDateBS: string;       // B
+  clientName: string;             // C
+  events: string;                 // D (from L)
+  eventYear: string;              // E (from M)
+  eventMonth: string;             // F (from N)
+  eventDay: string;               // G (from O)
+  eventDateAD: string;            // H (from P)
+  // Column I is empty/reserved
+  venueType: string;              // J
+  venueName: string;              // K
+  venueCity: string;              // L
+  venueArea: string;              // M
+  venueMap: string;               // N
+  eventStartTime: string;         // O
+  eventEndTime: string;           // P
+  parlourType: string;            // Q
+  parlourName: string;            // R
+  parlourCity: string;            // S
+  parlourArea: string;            // T
+  parlourMap: string;             // U
+  parlourStartTime: string;       // V
+  parlourEndTime: string;         // W
+  preShootVenueType: string;      // X
+  preShootVenueName: string;      // Y
+  preShootVenueCity: string;      // Z
+  preShootVenueArea: string;      // AA
+  preShootVenueMap: string;       // AB
+  preShootStartTime: string;      // AC
+  preShootEndTime: string;        // AD
+  doGroomComeInMehndi: string;    // AE
+  noOfGuest: string;              // AF
+  eventDemand: string;            // AG
+  eventReferences: string;        // AH
+}
+
 // Spreadsheet ID is now configured as a backend secret
 // These functions are kept for backward compatibility
 export function getSpreadsheetId(): string {
@@ -454,4 +492,44 @@ export function getCurrentStatus(statusLog: string): string {
     statusPart = lastLine.split(' - ')[0]; // Fallback to dash format
   }
   return statusPart.trim().toUpperCase();
+}
+
+// ============= BOOKED CLIENTS EVENT DETAILS API =============
+
+// Get all event details from BOOKED CLIENTS EVENT DETAILS sheet
+export async function getBookedEventDetails(limit = 200): Promise<BookedEventDetails[]> {
+  return callSheetsFunction<BookedEventDetails[]>("getBookedEventDetails", { limit });
+}
+
+// Sync a single client to EVENT DETAILS (by registeredDateTimeAD)
+export async function syncToEventDetails(registeredDateTimeAD: string): Promise<{ success: boolean }> {
+  return callSheetsFunction<{ success: boolean }>("syncToEventDetails", {
+    data: { registeredDateTimeAD },
+  });
+}
+
+// Full sync: Copy all missing clients from BOOKED CLIENTS to EVENT DETAILS
+// Also updates columns A-C and D-H for existing entries (preserving J-AH user data)
+export async function fullSyncEventDetails(): Promise<{ 
+  success: boolean; 
+  copiedCount: number; 
+  updatedCount: number; 
+  totalEvents: number;
+}> {
+  return callSheetsFunction<{ 
+    success: boolean; 
+    copiedCount: number; 
+    updatedCount: number; 
+    totalEvents: number;
+  }>("fullSyncEventDetails");
+}
+
+// Update event detail columns (J-AH) for a specific row
+export async function updateEventDetails(
+  rowNumber: number,
+  updates: Partial<BookedEventDetails>
+): Promise<{ success: boolean }> {
+  return callSheetsFunction<{ success: boolean }>("updateEventDetails", {
+    data: { rowNumber, updates },
+  });
 }

@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -1603,6 +1603,377 @@ async function copyToBookedClients(accessToken: string, spreadsheetId: string, o
   }
 
   console.log(`Successfully copied client from row ${originalRowNumber} to BOOKED CLIENTS`);
+  
+  // Also copy to EVENT DETAILS sheet
+  const registeredDateTimeAD = clientRow[0] || '';
+  if (registeredDateTimeAD) {
+    try {
+      await copyToEventDetails(accessToken, spreadsheetId, clientRow);
+      console.log(`Successfully copied client to BOOKED CLIENTS EVENT DETAILS`);
+    } catch (eventError) {
+      console.error('Failed to copy to EVENT DETAILS (non-critical):', eventError);
+    }
+  }
+  
+  return { success: true };
+}
+
+// ============= BOOKED CLIENTS EVENT DETAILS FUNCTIONS =============
+
+// Check if client already exists in EVENT DETAILS sheet
+async function checkIfExistsInEventDetails(accessToken: string, spreadsheetId: string, registeredDateTimeAD: string): Promise<number | null> {
+  const range = encodeURIComponent("'BOOKED CLIENTS EVENT DETAILS'!A2:A1000");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  try {
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!response.ok) {
+      console.log('BOOKED CLIENTS EVENT DETAILS sheet may not exist');
+      return null;
+    }
+
+    const data = await response.json();
+    if (!data.values) return null;
+    
+    const normalizedDateTime = registeredDateTimeAD.trim();
+    for (let i = 0; i < data.values.length; i++) {
+      const rowDateTime = (data.values[i][0] || '').trim();
+      if (rowDateTime === normalizedDateTime) {
+        return i + 2; // Return row number (1-indexed, skip header)
+      }
+    }
+    return null;
+  } catch (error) {
+    console.error('Error checking EVENT DETAILS:', error);
+    return null;
+  }
+}
+
+// Copy a client to BOOKED CLIENTS EVENT DETAILS sheet
+// Column mapping: A-C (same), L-P -> D-H, J-AH are empty for user input
+async function copyToEventDetails(accessToken: string, spreadsheetId: string, clientRow: string[]) {
+  const registeredDateTimeAD = (clientRow[0] || '').trim();
+  if (!registeredDateTimeAD) {
+    throw new Error('registeredDateTimeAD is required for copying to EVENT DETAILS');
+  }
+  
+  // Check if already exists
+  const existingRow = await checkIfExistsInEventDetails(accessToken, spreadsheetId, registeredDateTimeAD);
+  if (existingRow) {
+    console.log(`Client already exists in EVENT DETAILS at row ${existingRow}, skipping`);
+    return { success: true, alreadyExists: true, rowNumber: existingRow };
+  }
+  
+  // Get sheet ID for inserting new row
+  const sheetId = await getSheetId(accessToken, spreadsheetId, 'BOOKED CLIENTS EVENT DETAILS');
+  
+  // Insert a new row at position 2
+  const insertUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+  await fetch(insertUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      requests: [{
+        insertDimension: {
+          range: {
+            sheetId,
+            dimension: 'ROWS',
+            startIndex: 1,
+            endIndex: 2,
+          },
+          inheritFromBefore: false,
+        },
+      }],
+    }),
+  });
+  
+  // Map columns from BOOKED CLIENTS to EVENT DETAILS:
+  // A-C (same): registeredDateTimeAD, registeredDateBS, clientName
+  // L-P -> D-H: events, eventYear, eventMonth, eventDay, eventDateAD
+  const eventDetailsValues = [[
+    clientRow[0] || '',   // A: registeredDateTimeAD (same)
+    clientRow[1] || '',   // B: registeredDateBS (same)
+    clientRow[2] || '',   // C: clientName (same)
+    clientRow[11] || '',  // D: events (from L)
+    clientRow[12] || '',  // E: eventYear (from M)
+    clientRow[13] || '',  // F: eventMonth (from N)
+    clientRow[14] || '',  // G: eventDay (from O)
+    clientRow[15] || '',  // H: eventDateAD (from P)
+    '',                   // I: empty/reserved separator
+    // J-AH are empty - user input columns
+  ]];
+  
+  const writeRange = encodeURIComponent("'BOOKED CLIENTS EVENT DETAILS'!A2:I2");
+  const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${writeRange}?valueInputOption=USER_ENTERED`;
+  
+  const writeResponse = await fetch(writeUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: eventDetailsValues }),
+  });
+
+  if (!writeResponse.ok) {
+    const errorText = await writeResponse.text();
+    console.error('Error writing to EVENT DETAILS:', errorText);
+    throw new Error(`Failed to copy to EVENT DETAILS: ${writeResponse.status}`);
+  }
+
+  return { success: true, alreadyExists: false };
+}
+
+// Get all event details from BOOKED CLIENTS EVENT DETAILS sheet
+async function getBookedEventDetails(accessToken: string, spreadsheetId: string, limit = 200) {
+  const range = encodeURIComponent("'BOOKED CLIENTS EVENT DETAILS'!A2:AH" + (limit + 1));
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (getBookedEventDetails):', response.status, errorText);
+    throw new Error(`Google Sheets API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  if (!data.values) return [];
+
+  return data.values.map((row: string[], index: number) => ({
+    rowNumber: index + 2,
+    registeredDateTimeAD: row[0] || '',   // A
+    registeredDateBS: row[1] || '',       // B
+    clientName: row[2] || '',             // C
+    events: row[3] || '',                 // D (from L)
+    eventYear: row[4] || '',              // E (from M)
+    eventMonth: row[5] || '',             // F (from N)
+    eventDay: row[6] || '',               // G (from O)
+    eventDateAD: row[7] || '',            // H (from P)
+    // Column I is empty/reserved
+    venueType: row[9] || '',              // J
+    venueName: row[10] || '',             // K
+    venueCity: row[11] || '',             // L
+    venueArea: row[12] || '',             // M
+    venueMap: row[13] || '',              // N
+    eventStartTime: row[14] || '',        // O
+    eventEndTime: row[15] || '',          // P
+    parlourType: row[16] || '',           // Q
+    parlourName: row[17] || '',           // R
+    parlourCity: row[18] || '',           // S
+    parlourArea: row[19] || '',           // T
+    parlourMap: row[20] || '',            // U
+    parlourStartTime: row[21] || '',      // V
+    parlourEndTime: row[22] || '',        // W
+    preShootVenueType: row[23] || '',     // X
+    preShootVenueName: row[24] || '',     // Y
+    preShootVenueCity: row[25] || '',     // Z
+    preShootVenueArea: row[26] || '',     // AA
+    preShootVenueMap: row[27] || '',      // AB
+    preShootStartTime: row[28] || '',     // AC
+    preShootEndTime: row[29] || '',       // AD
+    doGroomComeInMehndi: row[30] || '',   // AE
+    noOfGuest: row[31] || '',             // AF
+    eventDemand: row[32] || '',           // AG
+    eventReferences: row[33] || '',       // AH
+  }));
+}
+
+// Sync a single client to EVENT DETAILS (used when status changes to BOOKED)
+async function syncToEventDetails(accessToken: string, spreadsheetId: string, registeredDateTimeAD: string) {
+  // Fetch the client data from BOOKED CLIENTS by registeredDateTimeAD
+  const range = encodeURIComponent("'BOOKED CLIENTS'!A2:P1000");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch BOOKED CLIENTS data');
+  }
+
+  const data = await response.json();
+  if (!data.values) {
+    throw new Error('No BOOKED CLIENTS data found');
+  }
+
+  // Find the matching client
+  const normalizedDateTime = registeredDateTimeAD.trim();
+  for (const row of data.values) {
+    const rowDateTime = (row[0] || '').trim();
+    if (rowDateTime === normalizedDateTime) {
+      // Found - copy to EVENT DETAILS
+      await copyToEventDetails(accessToken, spreadsheetId, row);
+      return { success: true };
+    }
+  }
+
+  throw new Error('Client not found in BOOKED CLIENTS');
+}
+
+// Full sync: Copy all missing clients from BOOKED CLIENTS to EVENT DETAILS
+// Also update columns A-C and D-H for existing entries (preserving J-AH user data)
+async function fullSyncEventDetails(accessToken: string, spreadsheetId: string) {
+  // 1. Fetch all BOOKED CLIENTS data
+  const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:P2000");
+  const bookedResponse = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+
+  if (!bookedResponse.ok) {
+    throw new Error('Failed to fetch BOOKED CLIENTS data');
+  }
+
+  const bookedData = await bookedResponse.json();
+  if (!bookedData.values || bookedData.values.length === 0) {
+    return { success: true, copiedCount: 0, updatedCount: 0, totalEvents: 0 };
+  }
+
+  // 2. Fetch all existing EVENT DETAILS entries
+  const eventRange = encodeURIComponent("'BOOKED CLIENTS EVENT DETAILS'!A2:H2000");
+  const eventResponse = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${eventRange}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+
+  let existingEventMap: Record<string, number> = {};
+  if (eventResponse.ok) {
+    const eventData = await eventResponse.json();
+    if (eventData.values) {
+      eventData.values.forEach((row: string[], index: number) => {
+        const regDateTime = (row[0] || '').trim();
+        if (regDateTime) {
+          existingEventMap[regDateTime] = index + 2; // Row number
+        }
+      });
+    }
+  }
+
+  let copiedCount = 0;
+  let updatedCount = 0;
+
+  // 3. Process each booked client
+  for (const row of bookedData.values) {
+    const registeredDateTimeAD = (row[0] || '').trim();
+    if (!registeredDateTimeAD) continue;
+
+    const existingRowNumber = existingEventMap[registeredDateTimeAD];
+    
+    if (existingRowNumber) {
+      // Update existing: Only update columns A-C and D-H (preserve J-AH)
+      const updateValues = [[
+        row[0] || '',   // A: registeredDateTimeAD
+        row[1] || '',   // B: registeredDateBS
+        row[2] || '',   // C: clientName
+        row[11] || '',  // D: events (from L)
+        row[12] || '',  // E: eventYear (from M)
+        row[13] || '',  // F: eventMonth (from N)
+        row[14] || '',  // G: eventDay (from O)
+        row[15] || '',  // H: eventDateAD (from P)
+      ]];
+      
+      const updateRange = encodeURIComponent(`'BOOKED CLIENTS EVENT DETAILS'!A${existingRowNumber}:H${existingRowNumber}`);
+      const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`;
+      
+      const updateResponse = await fetch(updateUrl, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ values: updateValues }),
+      });
+
+      if (updateResponse.ok) {
+        updatedCount++;
+      }
+    } else {
+      // Copy new entry
+      try {
+        await copyToEventDetails(accessToken, spreadsheetId, row);
+        copiedCount++;
+      } catch (copyError) {
+        console.error(`Failed to copy client ${registeredDateTimeAD}:`, copyError);
+      }
+    }
+  }
+
+  return { 
+    success: true, 
+    copiedCount, 
+    updatedCount, 
+    totalEvents: bookedData.values.length 
+  };
+}
+
+// Update specific event detail columns (J-AH) for a client
+async function updateEventDetails(
+  accessToken: string, 
+  spreadsheetId: string, 
+  rowNumber: number,
+  updates: Record<string, string>
+) {
+  if (!rowNumber || rowNumber < 2) {
+    throw new Error('Valid rowNumber is required for updating event details');
+  }
+
+  // Build update array for columns J-AH (indices 9-33)
+  const updateValues = [[
+    updates.venueType || '',              // J (index 9)
+    updates.venueName || '',              // K
+    updates.venueCity || '',              // L
+    updates.venueArea || '',              // M
+    updates.venueMap || '',               // N
+    updates.eventStartTime || '',         // O
+    updates.eventEndTime || '',           // P
+    updates.parlourType || '',            // Q
+    updates.parlourName || '',            // R
+    updates.parlourCity || '',            // S
+    updates.parlourArea || '',            // T
+    updates.parlourMap || '',             // U
+    updates.parlourStartTime || '',       // V
+    updates.parlourEndTime || '',         // W
+    updates.preShootVenueType || '',      // X
+    updates.preShootVenueName || '',      // Y
+    updates.preShootVenueCity || '',      // Z
+    updates.preShootVenueArea || '',      // AA
+    updates.preShootVenueMap || '',       // AB
+    updates.preShootStartTime || '',      // AC
+    updates.preShootEndTime || '',        // AD
+    updates.doGroomComeInMehndi || '',    // AE
+    updates.noOfGuest || '',              // AF
+    updates.eventDemand || '',            // AG
+    updates.eventReferences || '',        // AH
+  ]];
+
+  const range = encodeURIComponent(`'BOOKED CLIENTS EVENT DETAILS'!J${rowNumber}:AH${rowNumber}`);
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  
+  const response = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: updateValues }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (updateEventDetails):', response.status, errorText);
+    throw new Error(`Failed to update event details: ${response.status}`);
+  }
+
   return { success: true };
 }
 
@@ -2733,6 +3104,21 @@ Deno.serve(async (req) => {
       case 'deleteVendor':
         if (!data || !data.rowNumber) throw new Error('rowNumber is required for deleteVendor');
         result = await deleteVendor(accessToken, spreadsheetId, data.rowNumber as number);
+        break;
+      // Event Details Actions
+      case 'getBookedEventDetails':
+        result = await getBookedEventDetails(accessToken, spreadsheetId, body.limit);
+        break;
+      case 'syncToEventDetails':
+        if (!data || !data.registeredDateTimeAD) throw new Error('registeredDateTimeAD is required for syncToEventDetails');
+        result = await syncToEventDetails(accessToken, spreadsheetId, data.registeredDateTimeAD as string);
+        break;
+      case 'fullSyncEventDetails':
+        result = await fullSyncEventDetails(accessToken, spreadsheetId);
+        break;
+      case 'updateEventDetails':
+        if (!data || !data.rowNumber) throw new Error('rowNumber is required for updateEventDetails');
+        result = await updateEventDetails(accessToken, spreadsheetId, data.rowNumber as number, data.updates as Record<string, string> || {});
         break;
       default:
         throw new Error(`Unknown action: ${action}`);
