@@ -3,12 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { DesktopBookedSidebar, HotDatesSortOrder } from "./DesktopBookedSidebar";
 import { DesktopBookedDashboard } from "./DesktopBookedDashboard";
 import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
-import { fullResyncAllBookedClients, BookedClientData, SyncDetail } from "@/lib/sheets-api";
+import { fullResyncAllBookedClients, fullSyncEventDetails, BookedClientData, SyncDetail } from "@/lib/sheets-api";
 import { parseEventDetails, NEPALI_MONTHS } from "@/lib/nepali-months";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, Database, X } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { RefreshCw, Database, X, Calendar, CheckCircle, Copy, ArrowUpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBookedCachedData } from "@/hooks/useBookedCachedData";
 import { SyncReportSheet } from "./SyncReportSheet";
@@ -28,6 +29,7 @@ export function DesktopBookedAppLayout() {
   } = useBookedCachedData();
   
   const [isFullResyncing, setIsFullResyncing] = useState(false);
+  const [isEventDetailsSyncing, setIsEventDetailsSyncing] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   
   // Sync report state
@@ -39,6 +41,14 @@ export function DesktopBookedAppLayout() {
     notFoundCount: number;
     totalBooked: number;
     syncDetails?: SyncDetail[];
+  } | null>(null);
+  
+  // Event Details sync report state
+  const [eventDetailsReportOpen, setEventDetailsReportOpen] = useState(false);
+  const [eventDetailsReport, setEventDetailsReport] = useState<{
+    copiedCount: number;
+    updatedCount: number;
+    totalEvents: number;
   } | null>(null);
   
   // Filter state
@@ -78,6 +88,30 @@ export function DesktopBookedAppLayout() {
       toast.error("Failed to perform full resync");
     } finally {
       setIsFullResyncing(false);
+    }
+  };
+
+  const handleSyncEventDetails = async () => {
+    try {
+      setIsEventDetailsSyncing(true);
+      const result = await fullSyncEventDetails();
+      
+      // Store report for display
+      setEventDetailsReport({
+        copiedCount: result.copiedCount,
+        updatedCount: result.updatedCount,
+        totalEvents: result.totalEvents
+      });
+      
+      // Show report sheet
+      setEventDetailsReportOpen(true);
+      
+      toast.success(`Event Details synced: ${result.copiedCount} new, ${result.updatedCount} updated`);
+    } catch (error) {
+      console.error("Error syncing event details:", error);
+      toast.error("Failed to sync event details. Make sure the 'BOOKED CLIENTS EVENT DETAILS' sheet exists.");
+    } finally {
+      setIsEventDetailsSyncing(false);
     }
   };
 
@@ -241,6 +275,25 @@ export function DesktopBookedAppLayout() {
             <Button 
               variant="outline" 
               size="sm"
+              onClick={handleSyncEventDetails} 
+              disabled={isEventDetailsSyncing}
+              className="border-amber-600 text-amber-600 hover:bg-amber-600/10"
+            >
+              {isEventDetailsSyncing ? (
+                <>
+                  <Calendar className="h-4 w-4 mr-2 animate-pulse" />
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Sync Event Details
+                </>
+              )}
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
               onClick={handleFullResync} 
               disabled={isFullResyncing}
               className="border-emerald-600 text-emerald-600 hover:bg-emerald-600/10"
@@ -295,6 +348,76 @@ export function DesktopBookedAppLayout() {
         onOpenChange={setSyncReportOpen}
         report={syncReport}
       />
+      
+      {/* Event Details Sync Report Sheet */}
+      <Sheet open={eventDetailsReportOpen} onOpenChange={setEventDetailsReportOpen}>
+        <SheetContent className="w-[400px] sm:w-[480px]">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-amber-600" />
+              Event Details Sync Report
+            </SheetTitle>
+            <SheetDescription>
+              Synced client data to BOOKED CLIENTS EVENT DETAILS sheet
+            </SheetDescription>
+          </SheetHeader>
+          
+          {eventDetailsReport && (
+            <div className="mt-6 space-y-6">
+              {/* Summary Stats */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <Copy className="h-4 w-4 text-green-600" />
+                    <span className="text-2xl font-bold text-green-700">{eventDetailsReport.copiedCount}</span>
+                  </div>
+                  <p className="text-xs text-green-600">New Copied</p>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <ArrowUpCircle className="h-4 w-4 text-blue-600" />
+                    <span className="text-2xl font-bold text-blue-700">{eventDetailsReport.updatedCount}</span>
+                  </div>
+                  <p className="text-xs text-blue-600">Updated</p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center">
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <CheckCircle className="h-4 w-4 text-slate-600" />
+                    <span className="text-2xl font-bold text-slate-700">{eventDetailsReport.totalEvents}</span>
+                  </div>
+                  <p className="text-xs text-slate-600">Total Booked</p>
+                </div>
+              </div>
+              
+              {/* Explanation */}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <h4 className="font-medium text-amber-800 mb-2">What was synced:</h4>
+                <ul className="text-sm text-amber-700 space-y-1">
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <span><strong>Columns A-C:</strong> Client ID, Registration Date BS, Client Name</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <span><strong>Columns D-H:</strong> Events, Year, Month, Day, Date AD</span>
+                  </li>
+                  <li className="flex items-start gap-2 text-green-700">
+                    <CheckCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <span><strong>Columns J-AH:</strong> Preserved (user-entered venue, parlour, pre-shoot details)</span>
+                  </li>
+                </ul>
+              </div>
+              
+              <Button 
+                onClick={() => setEventDetailsReportOpen(false)} 
+                className="w-full bg-amber-600 hover:bg-amber-700"
+              >
+                Done
+              </Button>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
