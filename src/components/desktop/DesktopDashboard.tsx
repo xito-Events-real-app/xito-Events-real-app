@@ -345,9 +345,21 @@ export function DesktopDashboard({
     return Object.values(dateMap)
       .filter(d => d.bookedCount === 0 && d.enquiringClients.length > 0)
       .sort((a, b) => {
+        // Push ** dates to the end
+        const aIsUnknown = a.day.includes('*');
+        const bIsUnknown = b.day.includes('*');
+        if (aIsUnknown && !bIsUnknown) return 1;
+        if (!aIsUnknown && bIsUnknown) return -1;
+        
+        // Sort by year first (2082 before 2083)
+        const yearDiff = parseInt(a.year) - parseInt(b.year);
+        if (yearDiff !== 0) return yearDiff;
+        
+        // Then by month, then by day
         const monthDiff = parseInt(a.month) - parseInt(b.month);
         if (monthDiff !== 0) return monthDiff;
-        return b.enquiringClients.length - a.enquiringClients.length;
+        
+        return parseInt(a.day) - parseInt(b.day);
       });
   }, [statsClients]);
 
@@ -723,7 +735,7 @@ export function DesktopDashboard({
                       </p>
                     ) : (
                       <ScrollArea className="h-[400px]">
-                        <div className="grid grid-cols-4 gap-4 pr-4">
+                        <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4 pr-4">
                           {coldDates.map((dateInfo) => (
                             <div
                               key={dateInfo.dateKey}
@@ -732,10 +744,10 @@ export function DesktopDashboard({
                               {/* Cold Date Header */}
                               <div className="flex items-center gap-2 mb-3 pb-2 border-b border-cyan-500/20">
                                 <Snowflake className="w-4 h-4 text-cyan-500" />
+                                <span className="text-sm font-bold text-cyan-700">{dateInfo.year}</span>
                                 <Badge className="bg-gradient-to-r from-cyan-500 to-blue-500 text-white">
                                   {dateInfo.monthName} {dateInfo.day}
                                 </Badge>
-                                <span className="text-xs text-muted-foreground">{dateInfo.year}</span>
                                 <Badge variant="outline" className="ml-auto text-cyan-600 border-cyan-500/30">
                                   {dateInfo.enquiringClients.length}
                                 </Badge>
@@ -747,18 +759,18 @@ export function DesktopDashboard({
                                   <Link 
                                     key={i}
                                     to={`/client-tracker/client/${client.id}`}
-                                    className="flex items-center gap-2 p-1.5 rounded hover:bg-cyan-500/10 transition-colors group"
+                                    className="flex flex-wrap items-center gap-x-2 gap-y-1 p-2 rounded hover:bg-cyan-500/10 transition-colors group"
                                   >
-                                    <span className="font-medium text-xs truncate flex-1 group-hover:text-cyan-600">
+                                    <span className="font-semibold text-sm text-foreground group-hover:text-cyan-600">
                                       {client.clientName}
                                     </span>
-                                    <span className="text-[10px] text-muted-foreground truncate max-w-[50px]">
-                                      {client.eventName}
+                                    <span className="text-xs text-amber-600">
+                                      • {client.eventName}
                                     </span>
-                                    <Badge variant="outline" className="text-[9px] px-1.5 py-0">
-                                      {client.statusShort}
+                                    <Badge variant="outline" className="text-[10px] px-2 py-0.5 shrink-0 bg-slate-100">
+                                      {client.status}
                                     </Badge>
-                                    <span className="text-[10px] font-bold text-cyan-600">
+                                    <span className="text-xs font-bold text-cyan-600">
                                       {client.handlerInitials}
                                     </span>
                                   </Link>
