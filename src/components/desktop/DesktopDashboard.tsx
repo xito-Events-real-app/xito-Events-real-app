@@ -36,6 +36,7 @@ import {
   CheckCircle,
   Flame,
   Calendar,
+  Snowflake,
 } from "lucide-react";
 
 interface DesktopDashboardProps {
@@ -101,6 +102,7 @@ export function DesktopDashboard({
   const navigate = useNavigate();
   const [selectedClient, setSelectedClient] = useState<any | null>(null);
   const [showAllOpenDates, setShowAllOpenDates] = useState(false);
+  const [showColdDates, setShowColdDates] = useState(false);
 
   // Sort clients so BOOKED clients appear first
   const sortedClients = useMemo(() => {
@@ -264,6 +266,89 @@ export function DesktopDashboard({
       .filter(d => d.totalCount > 0)
       .sort((a, b) => b.totalCount - a.totalCount)
       .slice(0, 6);
+  }, [statsClients]);
+
+  // Cold Dates calculation - dates with enquiries but ZERO bookings
+  const coldDates = useMemo(() => {
+    const ENQUIRY_ON_STATUSES = [
+      'JUST ENQUIRED', 'NUMBER PROVIDED', 'TEXTED', 'CALL NOT',
+      'QUOTATION PENDING', 'QUOTATION SENT', 'BARGAINING', 'ADVANCE PENDING'
+    ];
+
+    const dateMap: Record<string, {
+      dateKey: string;
+      year: string;
+      month: string;
+      monthName: string;
+      day: string;
+      bookedCount: number;
+      enquiringClients: Array<{
+        clientName: string;
+        eventName: string;
+        status: string;
+        statusShort: string;
+        handler: string;
+        handlerInitials: string;
+        id: string;
+      }>;
+    }> = {};
+
+    statsClients.forEach(client => {
+      const status = getCurrentStatus(client.statusLog || '').toUpperCase();
+      const events = parseEventDetails(
+        client.events || '',
+        client.eventYear || '',
+        client.eventMonth || '',
+        client.eventDay || ''
+      );
+
+      events.forEach(event => {
+        if (!event.year || !event.month || !event.day) return;
+        
+        const dateKey = `${event.year}-${event.month.padStart(2, '0')}-${String(event.day).padStart(2, '0')}`;
+        
+        if (!dateMap[dateKey]) {
+          dateMap[dateKey] = {
+            dateKey,
+            year: event.year,
+            month: event.month,
+            monthName: event.monthName,
+            day: event.day,
+            bookedCount: 0,
+            enquiringClients: []
+          };
+        }
+
+        // Count booked clients
+        if (status.includes('BOOKED') && !status.includes('BOOKED SOMEWHERE ELSE')) {
+          dateMap[dateKey].bookedCount++;
+        }
+        
+        // Track enquiring clients
+        if (ENQUIRY_ON_STATUSES.some(s => status.includes(s))) {
+          const handler = client.clientHandler || client.whoAdded || '';
+          dateMap[dateKey].enquiringClients.push({
+            clientName: client.clientName || 'Unknown',
+            eventName: event.eventName || 'Event',
+            status: status,
+            statusShort: status.split(' ')[0],
+            handler: handler,
+            handlerInitials: handler.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase(),
+            id: client.registeredDateTimeAD || client.rowNumber?.toString() || ''
+          });
+        }
+      });
+    });
+
+    // Filter to only dates with ZERO booked and at least 1 enquiring
+    // Sort by nearest month first, then by enquiry count
+    return Object.values(dateMap)
+      .filter(d => d.bookedCount === 0 && d.enquiringClients.length > 0)
+      .sort((a, b) => {
+        const monthDiff = parseInt(a.month) - parseInt(b.month);
+        if (monthDiff !== 0) return monthDiff;
+        return b.enquiringClients.length - a.enquiringClients.length;
+      });
   }, [statsClients]);
 
   // Unified Calendar Data - All days with open/booked status and event counts
@@ -587,121 +672,199 @@ export function DesktopDashboard({
 
             {/* Full Width Content */}
             <div className="space-y-4">
-              {/* Hot Dates Section */}
+              {/* Hot Dates / Cold Dates Section */}
               <Card className="shadow-sm">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-base font-semibold flex items-center gap-2">
-                      <Flame className="w-5 h-5 text-orange-500" />
-                      Hot Dates
-                    </CardTitle>
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-xs">
-                        Top {hotDates.length} dates
-                      </Badge>
+                      <Button 
+                        variant={showColdDates ? "ghost" : "default"}
+                        size="sm" 
+                        className={cn(
+                          "transition-all",
+                          !showColdDates && "bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-600 hover:to-red-600"
+                        )}
+                        onClick={() => setShowColdDates(false)}
+                      >
+                        <Flame className="w-4 h-4 mr-1" />
+                        Hot Dates
+                        <Badge variant="secondary" className="ml-2 bg-white/20">{hotDates.length}</Badge>
+                      </Button>
+                      <Button 
+                        variant={showColdDates ? "default" : "ghost"}
+                        size="sm"
+                        className={cn(
+                          "transition-all",
+                          showColdDates && "bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:from-cyan-600 hover:to-blue-600"
+                        )}
+                        onClick={() => setShowColdDates(true)}
+                      >
+                        <Snowflake className="w-4 h-4 mr-1" />
+                        Cold Dates
+                        <Badge variant="secondary" className="ml-2 bg-white/20">{coldDates.length}</Badge>
+                      </Button>
+                    </div>
+                    {!showColdDates && (
                       <Link to="/client-tracker/hot-dates">
                         <Button variant="ghost" size="sm" className="text-xs h-7">
                           View All
                           <ChevronRight className="w-3 h-3 ml-1" />
                         </Button>
                       </Link>
-                    </div>
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {hotDates.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">
-                      No event dates found
-                    </p>
+                  {showColdDates ? (
+                    /* Cold Dates Grid - Show ALL dates */
+                    coldDates.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        No cold dates found - all enquiry dates have bookings! 🎉
+                      </p>
+                    ) : (
+                      <ScrollArea className="h-[400px]">
+                        <div className="grid grid-cols-4 gap-4 pr-4">
+                          {coldDates.map((dateInfo) => (
+                            <div
+                              key={dateInfo.dateKey}
+                              className="border rounded-lg p-3 border-cyan-500/30 bg-gradient-to-br from-cyan-500/5 to-blue-500/5 hover:border-cyan-500/50 transition-colors"
+                            >
+                              {/* Cold Date Header */}
+                              <div className="flex items-center gap-2 mb-3 pb-2 border-b border-cyan-500/20">
+                                <Snowflake className="w-4 h-4 text-cyan-500" />
+                                <Badge className="bg-gradient-to-r from-cyan-500 to-blue-500 text-white">
+                                  {dateInfo.monthName} {dateInfo.day}
+                                </Badge>
+                                <span className="text-xs text-muted-foreground">{dateInfo.year}</span>
+                                <Badge variant="outline" className="ml-auto text-cyan-600 border-cyan-500/30">
+                                  {dateInfo.enquiringClients.length}
+                                </Badge>
+                              </div>
+                              
+                              {/* Client List - ALL clients */}
+                              <div className="space-y-1.5">
+                                {dateInfo.enquiringClients.map((client, i) => (
+                                  <Link 
+                                    key={i}
+                                    to={`/client-tracker/client/${client.id}`}
+                                    className="flex items-center gap-2 p-1.5 rounded hover:bg-cyan-500/10 transition-colors group"
+                                  >
+                                    <span className="font-medium text-xs truncate flex-1 group-hover:text-cyan-600">
+                                      {client.clientName}
+                                    </span>
+                                    <span className="text-[10px] text-muted-foreground truncate max-w-[50px]">
+                                      {client.eventName}
+                                    </span>
+                                    <Badge variant="outline" className="text-[9px] px-1.5 py-0">
+                                      {client.statusShort}
+                                    </Badge>
+                                    <span className="text-[10px] font-bold text-cyan-600">
+                                      {client.handlerInitials}
+                                    </span>
+                                  </Link>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    )
                   ) : (
-                    <div className="grid grid-cols-4 gap-4">
-                      {hotDates.map((dateInfo) => (
-                        <button
-                          key={dateInfo.dateKey}
-                          onClick={() => onHotDateFilter?.(dateInfo.dateKey)}
-                          className={cn(
-                            "border rounded-lg p-3 transition-all text-left w-full",
-                            selectedHotDate === dateInfo.dateKey
-                              ? "border-orange-500 bg-orange-500/10 ring-2 ring-orange-500/30"
-                              : "hover:border-orange-500/50 hover:bg-orange-500/5"
-                          )}
-                        >
-                          {/* Date Header */}
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <Badge className="bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs">
-                                {dateInfo.monthName} {dateInfo.day}
-                              </Badge>
-                              <span className="text-xs text-muted-foreground">{dateInfo.year}</span>
-                            </div>
-                            <span className="text-lg font-bold">{dateInfo.totalCount}</span>
-                          </div>
-
-                          {/* Three Category Rows */}
-                          <div className="space-y-2">
-                            {/* BOOKED */}
-                            <div className="flex items-start gap-2">
-                              <Badge className="bg-green-500 text-white text-[10px] shrink-0 w-14 justify-center">
-                                BOOKED
-                              </Badge>
-                              <div className="flex-1 min-w-0">
-                                <span className="font-semibold text-green-600 text-sm">{dateInfo.booked.length}</span>
-                                {dateInfo.booked.slice(0, 2).map((c, i) => (
-                                  <div key={i} className="text-[10px] text-muted-foreground truncate">
-                                    {c.eventName} • {c.clientName}
-                                  </div>
-                                ))}
-                                {dateInfo.booked.length > 2 && (
-                                  <span className="text-[10px] text-green-500">
-                                    +{dateInfo.booked.length - 2} more
-                                  </span>
-                                )}
+                    /* Hot Dates Grid */
+                    hotDates.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        No event dates found
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-4 gap-4">
+                        {hotDates.map((dateInfo) => (
+                          <button
+                            key={dateInfo.dateKey}
+                            onClick={() => onHotDateFilter?.(dateInfo.dateKey)}
+                            className={cn(
+                              "border rounded-lg p-3 transition-all text-left w-full",
+                              selectedHotDate === dateInfo.dateKey
+                                ? "border-orange-500 bg-orange-500/10 ring-2 ring-orange-500/30"
+                                : "hover:border-orange-500/50 hover:bg-orange-500/5"
+                            )}
+                          >
+                            {/* Date Header */}
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <Badge className="bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs">
+                                  {dateInfo.monthName} {dateInfo.day}
+                                </Badge>
+                                <span className="text-xs text-muted-foreground">{dateInfo.year}</span>
                               </div>
+                              <span className="text-lg font-bold">{dateInfo.totalCount}</span>
                             </div>
 
-                            {/* ENQUIRY ON */}
-                            <div className="flex items-start gap-2">
-                              <Badge className="bg-amber-500 text-white text-[10px] shrink-0 w-14 justify-center">
-                                ENQUIRY
-                              </Badge>
-                              <div className="flex-1 min-w-0">
-                                <span className="font-semibold text-amber-600 text-sm">{dateInfo.enquiryOn.length}</span>
-                                {dateInfo.enquiryOn.slice(0, 2).map((c, i) => (
-                                  <div key={i} className="text-[10px] text-muted-foreground truncate">
-                                    {c.eventName} • {c.clientName}
-                                  </div>
-                                ))}
-                                {dateInfo.enquiryOn.length > 2 && (
-                                  <span className="text-[10px] text-amber-500">
-                                    +{dateInfo.enquiryOn.length - 2} more
-                                  </span>
-                                )}
+                            {/* Three Category Rows */}
+                            <div className="space-y-2">
+                              {/* BOOKED */}
+                              <div className="flex items-start gap-2">
+                                <Badge className="bg-green-500 text-white text-[10px] shrink-0 w-14 justify-center">
+                                  BOOKED
+                                </Badge>
+                                <div className="flex-1 min-w-0">
+                                  <span className="font-semibold text-green-600 text-sm">{dateInfo.booked.length}</span>
+                                  {dateInfo.booked.slice(0, 2).map((c, i) => (
+                                    <div key={i} className="text-[10px] text-muted-foreground truncate">
+                                      {c.eventName} • {c.clientName}
+                                    </div>
+                                  ))}
+                                  {dateInfo.booked.length > 2 && (
+                                    <span className="text-[10px] text-green-500">
+                                      +{dateInfo.booked.length - 2} more
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                            </div>
 
-                            {/* GONE ELSEWHERE */}
-                            <div className="flex items-start gap-2">
-                              <Badge className="bg-gray-500 text-white text-[10px] shrink-0 w-14 justify-center">
-                                GONE
-                              </Badge>
-                              <div className="flex-1 min-w-0">
-                                <span className="font-semibold text-gray-600 text-sm">{dateInfo.goneElsewhere.length}</span>
-                                {dateInfo.goneElsewhere.slice(0, 2).map((c, i) => (
-                                  <div key={i} className="text-[10px] text-muted-foreground truncate">
-                                    {c.eventName} • {c.clientName}
-                                  </div>
-                                ))}
-                                {dateInfo.goneElsewhere.length > 2 && (
-                                  <span className="text-[10px] text-gray-400">
-                                    +{dateInfo.goneElsewhere.length - 2} more
-                                  </span>
-                                )}
+                              {/* ENQUIRY ON */}
+                              <div className="flex items-start gap-2">
+                                <Badge className="bg-amber-500 text-white text-[10px] shrink-0 w-14 justify-center">
+                                  ENQUIRY
+                                </Badge>
+                                <div className="flex-1 min-w-0">
+                                  <span className="font-semibold text-amber-600 text-sm">{dateInfo.enquiryOn.length}</span>
+                                  {dateInfo.enquiryOn.slice(0, 2).map((c, i) => (
+                                    <div key={i} className="text-[10px] text-muted-foreground truncate">
+                                      {c.eventName} • {c.clientName}
+                                    </div>
+                                  ))}
+                                  {dateInfo.enquiryOn.length > 2 && (
+                                    <span className="text-[10px] text-amber-500">
+                                      +{dateInfo.enquiryOn.length - 2} more
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* GONE ELSEWHERE */}
+                              <div className="flex items-start gap-2">
+                                <Badge className="bg-gray-500 text-white text-[10px] shrink-0 w-14 justify-center">
+                                  GONE
+                                </Badge>
+                                <div className="flex-1 min-w-0">
+                                  <span className="font-semibold text-gray-600 text-sm">{dateInfo.goneElsewhere.length}</span>
+                                  {dateInfo.goneElsewhere.slice(0, 2).map((c, i) => (
+                                    <div key={i} className="text-[10px] text-muted-foreground truncate">
+                                      {c.eventName} • {c.clientName}
+                                    </div>
+                                  ))}
+                                  {dateInfo.goneElsewhere.length > 2 && (
+                                    <span className="text-[10px] text-gray-400">
+                                      +{dateInfo.goneElsewhere.length - 2} more
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
+                          </button>
+                        ))}
+                      </div>
+                    )
                   )}
                 </CardContent>
               </Card>
