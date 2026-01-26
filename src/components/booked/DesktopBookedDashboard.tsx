@@ -47,8 +47,8 @@ interface DesktopBookedDashboardProps {
   // Hot Dates filter props
   hotDatesSortOrder?: 'ascending' | 'descending' | 'popularity';
   selectedMonth?: string | null;
-  // Client-wise view
-  allClients?: { name: string; registeredDateTimeAD: string }[];
+  // Client-wise view - includes originalRowNumber for reliable navigation
+  allClients?: { name: string; registeredDateTimeAD: string; originalRowNumber?: number }[];
 }
 
 export function DesktopBookedDashboard({
@@ -190,7 +190,7 @@ export function DesktopBookedDashboard({
     return soonestEvent;
   }, [clients]);
 
-  // Hot Dates - Booked only (no enquiry/gone)
+  // Hot Dates - Booked only (no enquiry/gone) - includes client IDs for navigation
   const hotDates = useMemo(() => {
     const dateGroups: Record<string, {
       dateKey: string;
@@ -198,7 +198,7 @@ export function DesktopBookedDashboard({
       month: string;
       monthName: string;
       day: string;
-      events: { clientName: string; eventName: string }[];
+      events: { clientName: string; eventName: string; originalRowNumber?: number; registeredDateTimeAD?: string }[];
       isCompleted: boolean;
     }> = {};
 
@@ -227,9 +227,12 @@ export function DesktopBookedDashboard({
           };
         }
 
+        // Store client IDs directly to avoid re-lookup
         dateGroups[dateKey].events.push({ 
           clientName: client.clientName || 'Unknown', 
-          eventName: event.eventName || 'Event' 
+          eventName: event.eventName || 'Event',
+          originalRowNumber: client.originalRowNumber,
+          registeredDateTimeAD: client.registeredDateTimeAD
         });
       });
     });
@@ -725,9 +728,8 @@ export function DesktopBookedDashboard({
                   ) : (
                     <div className="grid grid-cols-4 gap-4">
                       {filteredClientList.map((client) => {
-                        // Find client data
-                        const clientData = clients.find(c => c.clientName === client.name);
-                        const clientId = clientData?.originalRowNumber || encodeURIComponent(clientData?.registeredDateTimeAD || '');
+                        // Use ID directly from allClients - no re-lookup needed
+                        const clientId = client.originalRowNumber || encodeURIComponent(client.registeredDateTimeAD || '');
                         
                         // Get events for this client, filtered by selected month if applicable
                         const clientEvents = clients
@@ -746,7 +748,7 @@ export function DesktopBookedDashboard({
                         
                         return (
                           <button
-                            key={client.registeredDateTimeAD}
+                            key={`${client.name}-${client.registeredDateTimeAD}`}
                             onClick={() => navigate(`/client-tracker/client/${clientId}`)}
                             className={cn(
                               "border rounded-lg p-3 transition-all text-left w-full relative overflow-hidden",
@@ -829,13 +831,12 @@ export function DesktopBookedDashboard({
                         <ScrollArea className={dateInfo.events.length > 5 ? "h-28" : ""}>
                           <div className="space-y-1">
                             {dateInfo.events.map((c, i) => {
-                              // Find client data for navigation
-                              const clientData = clients.find(cl => cl.clientName === c.clientName);
-                              const clientId = clientData?.originalRowNumber || encodeURIComponent(clientData?.registeredDateTimeAD || '');
+                              // Use ID directly from event data - no re-lookup needed
+                              const clientId = c.originalRowNumber || encodeURIComponent(c.registeredDateTimeAD || '');
                               
                               return (
                                 <button
-                                  key={i}
+                                  key={`${c.clientName}-${c.registeredDateTimeAD}-${i}`}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (clientId) {
