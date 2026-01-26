@@ -189,19 +189,29 @@ const DesktopFinanceManager = () => {
       .sort((a, b) => b.count - a.count);
   }, [clients]);
 
-  // Extract available months from client event dates
+  // Extract available months from client event dates (handles multi-event clients)
   const availableMonths = useMemo(() => {
     const monthSet = new Map<string, string>();
     clients.forEach(client => {
-      if (client.eventYear && client.eventMonth) {
-        const key = `${client.eventYear}-${client.eventMonth}`;
-        const monthName = getMonthName(client.eventMonth);
-        monthSet.set(key, `${monthName} ${client.eventYear}`);
+      // Parse multi-event dates (newline-delimited)
+      const years = client.eventYear?.split('\n').filter(Boolean) || [];
+      const months = client.eventMonth?.split('\n').filter(Boolean) || [];
+      
+      // Add each unique year-month combination
+      for (let i = 0; i < Math.max(years.length, months.length); i++) {
+        const year = years[i]?.trim() || years[0]?.trim();
+        const month = months[i]?.trim() || months[0]?.trim();
+        
+        if (year && month) {
+          const key = `${year}-${month}`;
+          const monthName = getMonthName(parseInt(month, 10));
+          monthSet.set(key, `${monthName} ${year}`);
+        }
       }
     });
     return Array.from(monthSet.entries())
       .map(([value, label]) => ({ value, label }))
-      .sort((a, b) => b.value.localeCompare(a.value));
+      .sort((a, b) => b.value.localeCompare(a.value)); // Most recent first
   }, [clients]);
 
   // Create handler-to-color mapping
@@ -240,10 +250,22 @@ const DesktopFinanceManager = () => {
       return false;
     }
     
-    // Month filter
+    // Month filter - handles multi-event clients
     if (selectedMonth) {
-      const clientMonthKey = `${client.eventYear}-${client.eventMonth}`;
-      if (clientMonthKey !== selectedMonth) return false;
+      const years = client.eventYear?.split('\n').filter(Boolean) || [];
+      const months = client.eventMonth?.split('\n').filter(Boolean) || [];
+      
+      // Check if any event matches the selected month
+      let hasMatchingMonth = false;
+      for (let i = 0; i < Math.max(years.length, months.length); i++) {
+        const year = years[i]?.trim() || years[0]?.trim();
+        const month = months[i]?.trim() || months[0]?.trim();
+        if (`${year}-${month}` === selectedMonth) {
+          hasMatchingMonth = true;
+          break;
+        }
+      }
+      if (!hasMatchingMonth) return false;
     }
     
     // Payment status filter
@@ -577,14 +599,24 @@ const DesktopFinanceManager = () => {
                           </div>
                         </TableCell>
                         <TableCell className="text-slate-300">
-                          <div className="space-y-1.5">
+                          <div className="space-y-2">
                             {parseClientEvents(client).length > 0 ? (
                               parseClientEvents(client).map((event, idx) => (
-                                <div key={idx} className="flex flex-col">
-                                  <span className="text-xs font-semibold text-white uppercase">{event.eventName}</span>
-                                  <span className="text-xs text-emerald-400">
-                                    {event.monthName} {event.day} {event.year}
+                                <div key={idx} className="flex items-center gap-2 flex-wrap">
+                                  {/* Event name in parenthesis - orange/amber */}
+                                  <span className="text-sm font-semibold text-orange-400">
+                                    ( {event.eventName.toUpperCase()} )
                                   </span>
+                                  {/* Month and Day - orange */}
+                                  <span className="text-sm font-medium text-orange-400">
+                                    {event.monthName.toUpperCase()} {event.day}
+                                  </span>
+                                  {/* Year badge - green pill */}
+                                  {event.year && (
+                                    <Badge className="bg-green-600 text-white text-xs px-2 py-0.5 rounded">
+                                      {event.year}
+                                    </Badge>
+                                  )}
                                 </div>
                               ))
                             ) : (
