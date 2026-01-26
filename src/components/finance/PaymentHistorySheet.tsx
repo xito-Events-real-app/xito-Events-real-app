@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { Receipt, Banknote, Calendar, Plus, Edit, Loader2 } from "lucide-react";
+import { getDropdowns } from "@/lib/sheets-api";
 import {
   Sheet,
   SheetContent,
@@ -154,8 +155,25 @@ const PaymentHistorySheet = ({
   });
   const [editSelectedDate, setEditSelectedDate] = useState<Date | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [banks, setBanks] = useState<string[]>([]);
   
   const payments = useMemo(() => parsePayments(paymentsMade), [paymentsMade]);
+
+  // Fetch banks when sheet opens
+  useEffect(() => {
+    const fetchBanks = async () => {
+      try {
+        const data = await getDropdowns();
+        setBanks(data.banks || ['ESEWA', 'KHALTI', 'BANK', 'CASH', 'FONEPAY']);
+      } catch (error) {
+        console.error("Error fetching banks:", error);
+        setBanks(['ESEWA', 'KHALTI', 'BANK', 'CASH', 'FONEPAY']);
+      }
+    };
+    if (isOpen) {
+      fetchBanks();
+    }
+  }, [isOpen]);
   
   // Initialize edit form when a payment is selected for editing
   useEffect(() => {
@@ -498,12 +516,11 @@ const PaymentHistorySheet = ({
                   <SelectValue placeholder="Select bank" />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-700">
-                  <SelectItem value="ESEWA">ESEWA</SelectItem>
-                  <SelectItem value="KHALTI">KHALTI</SelectItem>
-                  <SelectItem value="BANK">BANK</SelectItem>
-                  <SelectItem value="CASH">CASH</SelectItem>
-                  <SelectItem value="FONEPAY">FONEPAY</SelectItem>
-                  <SelectItem value="OTHER">OTHER</SelectItem>
+                  {banks.map((b) => (
+                    <SelectItem key={b} value={b} className="text-white">
+                      {b}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
