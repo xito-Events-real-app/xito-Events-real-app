@@ -369,6 +369,8 @@ export interface SyncDetail {
 // forceSync = true will skip comparison and always copy ALL data from tracker
 export async function fullResyncAllBookedClients(forceSync: boolean = false): Promise<{ 
   success: boolean;
+  restoredToTrackerCount?: number;
+  restoredToTracker?: string[];
   copiedCount: number;
   syncedCount: number; 
   skippedCount: number; 
@@ -378,6 +380,8 @@ export async function fullResyncAllBookedClients(forceSync: boolean = false): Pr
 }> {
   return callSheetsFunction<{ 
     success: boolean;
+    restoredToTrackerCount?: number;
+    restoredToTracker?: string[];
     copiedCount: number;
     syncedCount: number; 
     skippedCount: number; 
