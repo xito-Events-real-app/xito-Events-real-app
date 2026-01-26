@@ -1090,14 +1090,28 @@ const [whoAdded, setWhoAdded] = useState("");
               <Badge className={`${getStatusColor(currentStatus)} shadow-md text-sm px-3 py-1`}>
                 {currentStatus || 'UNTOUCHED'}
               </Badge>
-              {client.clientHandler && (
-                <div className="flex items-center gap-2 text-sm p-2 rounded-lg bg-white/50 dark:bg-slate-800/50">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white text-xs font-bold shadow-md">
-                    {client.clientHandler.split(' ').map(n => n[0]).join('').slice(0, 2)}
+              {/* Added By & Handler - Always visible */}
+              <div className="flex items-center gap-3 p-2 rounded-lg bg-white/50 dark:bg-slate-800/50">
+                <div className="flex items-center gap-2 flex-1">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-[10px] font-bold shadow-sm">
+                    {client.whoAdded ? client.whoAdded.split(' ').map(n => n[0]).join('').slice(0, 2) : '?'}
                   </div>
-                  <span className="font-medium">{client.clientHandler}</span>
+                  <div>
+                    <div className="text-[9px] text-slate-500 dark:text-slate-400 uppercase">Added By</div>
+                    <div className="text-xs font-semibold">{client.whoAdded || 'Unknown'}</div>
+                  </div>
                 </div>
-              )}
+                <div className="w-px h-8 bg-slate-300 dark:bg-slate-600" />
+                <div className="flex items-center gap-2 flex-1">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white text-[10px] font-bold shadow-sm">
+                    {client.clientHandler ? client.clientHandler.split(' ').map(n => n[0]).join('').slice(0, 2) : '?'}
+                  </div>
+                  <div>
+                    <div className="text-[9px] text-slate-500 dark:text-slate-400 uppercase">Handler</div>
+                    <div className="text-xs font-semibold">{client.clientHandler || 'Not Assigned'}</div>
+                  </div>
+                </div>
+              </div>
               {inquiryInfo && (
                 <div className="text-sm">
                   <span className="text-slate-500 dark:text-slate-400">Inquired:</span>{' '}
@@ -1150,29 +1164,6 @@ const [whoAdded, setWhoAdded] = useState("");
               </TabsTrigger>
             </TabsList>
           </ScrollArea>
-
-          {/* Persistent Added By & Handler Bar - Visible across all tabs */}
-          <div className="flex items-center gap-4 mt-3 p-3 rounded-xl bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800/80 dark:to-slate-900/80 border border-slate-200/50 dark:border-slate-700/50">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold shadow-sm">
-                {client.whoAdded ? client.whoAdded.split(' ').map(n => n[0]).join('').slice(0, 2) : '?'}
-              </div>
-              <div>
-                <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wide">Added By</div>
-                <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">{client.whoAdded || 'Unknown'}</div>
-              </div>
-            </div>
-            <div className="w-px h-8 bg-slate-300 dark:bg-slate-600" />
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white text-xs font-bold shadow-sm">
-                {client.clientHandler ? client.clientHandler.split(' ').map(n => n[0]).join('').slice(0, 2) : '?'}
-              </div>
-              <div>
-                <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wide">Handler</div>
-                <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">{client.clientHandler || 'Not Assigned'}</div>
-              </div>
-            </div>
-          </div>
 
           {/* Registration Tab */}
           <TabsContent value="registration" className="mt-4">
