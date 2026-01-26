@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/drawer";
 import { 
   Users, CalendarPlus, TrendingUp, Menu, 
-  ChevronRight, RefreshCw, AlertTriangle, Bell, Flame, CheckCircle
+  ChevronRight, RefreshCw, AlertTriangle, Bell, Flame, CheckCircle, Snowflake
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { getCurrentStatus } from "@/lib/sheets-api";
@@ -66,6 +66,8 @@ export default function Dashboard() {
   const [isDesktopMode, setIsDesktopMode] = useState(false);
   const [showHotDatesDrawer, setShowHotDatesDrawer] = useState(false);
   const [selectedMobileHotDate, setSelectedMobileHotDate] = useState<string | null>(null);
+  const [showColdDatesDrawer, setShowColdDatesDrawer] = useState(false);
+  const [selectedMobileColdDate, setSelectedMobileColdDate] = useState<string | null>(null);
 
   // Check desktop mode on mount
   useEffect(() => {
@@ -262,6 +264,104 @@ export default function Dashboard() {
       .sort((a, b) => b.totalCount - a.totalCount)
       .slice(0, 6);
   }, [clients]);
+
+  // Cold Dates calculation - dates with enquiries but NO bookings
+  const coldDates = useMemo(() => {
+    const ENQUIRY_ON_STATUSES = [
+      'JUST ENQUIRED', 'NUMBER PROVIDED', 'TEXTED', 'CALL NOT',
+      'QUOTATION PENDING', 'QUOTATION SENT', 'BARGAINING', 'ADVANCE PENDING'
+    ];
+
+    interface ColdDateGroup {
+      dateKey: string;
+      year: string;
+      month: string;
+      monthName: string;
+      day: string;
+      bookedCount: number;
+      enquiringClients: Array<{
+        clientName: string;
+        eventName: string;
+        status: string;
+        handler: string;
+        id: string;
+      }>;
+    }
+
+    const dateMap: Record<string, ColdDateGroup> = {};
+
+    clients.forEach(client => {
+      const status = getCurrentStatus(client.statusLog || '').toUpperCase();
+      const parsedEvents = parseEventDetails(
+        client.events || '',
+        client.eventYear || '',
+        client.eventMonth || '',
+        client.eventDay || ''
+      );
+
+      parsedEvents.forEach(event => {
+        if (!event.year || !event.month || !event.day) return;
+        
+        const dateKey = `${event.year}-${event.month.padStart(2, '0')}-${String(event.day).padStart(2, '0')}`;
+        
+        if (!dateMap[dateKey]) {
+          dateMap[dateKey] = {
+            dateKey,
+            year: event.year,
+            month: event.month,
+            monthName: event.monthName,
+            day: event.day,
+            bookedCount: 0,
+            enquiringClients: []
+          };
+        }
+
+        // Count booked clients
+        if (status.includes('BOOKED') && !status.includes('BOOKED SOMEWHERE ELSE')) {
+          dateMap[dateKey].bookedCount++;
+        }
+        
+        // Track enquiring clients
+        if (ENQUIRY_ON_STATUSES.some(s => status.includes(s))) {
+          const handler = client.clientHandler || client.whoAdded || '';
+          dateMap[dateKey].enquiringClients.push({
+            clientName: client.clientName || 'Unknown',
+            eventName: event.eventName || 'Event',
+            status: status,
+            handler: handler,
+            id: client.registeredDateTimeAD || client.rowNumber?.toString() || ''
+          });
+        }
+      });
+    });
+
+    // Filter to only dates with ZERO booked and at least 1 enquiring
+    return Object.values(dateMap)
+      .filter(d => d.bookedCount === 0 && d.enquiringClients.length > 0)
+      .sort((a, b) => {
+        // Push ** dates to the end
+        const aIsUnknown = a.day.includes('*');
+        const bIsUnknown = b.day.includes('*');
+        if (aIsUnknown && !bIsUnknown) return 1;
+        if (!aIsUnknown && bIsUnknown) return -1;
+        
+        // Sort by year first (2082 before 2083)
+        const yearDiff = parseInt(a.year) - parseInt(b.year);
+        if (yearDiff !== 0) return yearDiff;
+        
+        // Then by month, then by day
+        const monthDiff = parseInt(a.month) - parseInt(b.month);
+        if (monthDiff !== 0) return monthDiff;
+        
+        return parseInt(a.day) - parseInt(b.day);
+      });
+  }, [clients]);
+
+  // Get selected cold date info for display
+  const selectedColdDateInfo = useMemo(() => {
+    if (!selectedMobileColdDate) return null;
+    return coldDates.find(d => d.dateKey === selectedMobileColdDate) || null;
+  }, [coldDates, selectedMobileColdDate]);
 
   // Filter clients by selected mobile hot date
   const mobileHotDateFilteredClients = useMemo(() => {
@@ -790,7 +890,118 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Hot Dates Drawer */}
+          {/* Cold Dates Section - Dates with enquiries but NO bookings */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <Snowflake className="w-4 h-4 text-cyan-500" />
+                <h3 className="text-sm font-semibold text-cyan-500 uppercase tracking-wide">
+                  Cold Dates
+                </h3>
+                <Badge variant="outline" className="text-cyan-600 border-cyan-500/30 text-xs">
+                  {coldDates.length}
+                </Badge>
+              </div>
+            </div>
+            
+            {/* Horizontal Scrollable Pills */}
+            <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide">
+              {coldDates.length > 0 ? (
+                coldDates.slice(0, 6).map((date) => {
+                  const isSelected = selectedMobileColdDate === date.dateKey;
+                  return (
+                    <button
+                      key={date.dateKey}
+                      onClick={() => setSelectedMobileColdDate(isSelected ? null : date.dateKey)}
+                      className={cn(
+                        "shrink-0 px-3 py-2 rounded-lg transition-all active:scale-95",
+                        isSelected
+                          ? "bg-gradient-to-r from-cyan-500 to-blue-500 border-2 border-cyan-400 ring-2 ring-cyan-500/30 shadow-lg"
+                          : "bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-500/30 hover:border-cyan-500/50"
+                      )}
+                    >
+                      <div className={cn(
+                        "font-semibold text-sm",
+                        isSelected ? "text-white" : "text-foreground"
+                      )}>
+                        {date.year} {date.monthName} {date.day}
+                      </div>
+                      <div className={cn(
+                        "text-xs mt-1",
+                        isSelected ? "text-cyan-100" : "text-cyan-600"
+                      )}>
+                        {date.enquiringClients.length} enquir{date.enquiringClients.length === 1 ? 'y' : 'ies'}
+                      </div>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="text-xs text-muted-foreground py-2">
+                  No cold dates - all dates have bookings! 🎉
+                </div>
+              )}
+              
+              {coldDates.length > 6 && (
+                <button
+                  onClick={() => setShowColdDatesDrawer(true)}
+                  className="shrink-0 px-3 py-2 rounded-lg border border-dashed border-cyan-500/30 flex items-center gap-1 hover:border-cyan-500/50 transition-all"
+                >
+                  <span className="text-xs text-cyan-600">+{coldDates.length - 6} more</span>
+                </button>
+              )}
+            </div>
+
+            {/* Selected Cold Date Details */}
+            {selectedMobileColdDate && selectedColdDateInfo && (
+              <Card className="border-2 border-cyan-500/30 bg-gradient-to-br from-cyan-500/5 to-blue-500/5">
+                <CardContent className="p-3">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-cyan-700">{selectedColdDateInfo.year}</span>
+                      <Badge className="bg-gradient-to-r from-cyan-500 to-blue-500 text-white">
+                        {selectedColdDateInfo.monthName} {selectedColdDateInfo.day}
+                      </Badge>
+                      <span className="text-sm text-muted-foreground">
+                        {selectedColdDateInfo.enquiringClients.length} enquiries
+                      </span>
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => setSelectedMobileColdDate(null)}
+                      className="h-7 px-2 text-xs"
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                  
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {selectedColdDateInfo.enquiringClients.map((client, i) => (
+                      <div 
+                        key={i}
+                        onClick={() => navigate(`/client-tracker/client/${client.id}`)}
+                        className="flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] border bg-cyan-500/10 border-cyan-500/30"
+                      >
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-bold bg-gradient-to-br from-cyan-500 to-cyan-700">
+                          E
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm">
+                            {client.clientName}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {client.eventName} • {client.status}
+                          </p>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
           <Drawer open={showHotDatesDrawer} onOpenChange={setShowHotDatesDrawer}>
             <DrawerContent className="max-h-[85vh]">
               <DrawerHeader>
@@ -878,6 +1089,67 @@ export default function Dashboard() {
               <DrawerFooter>
                 <Button onClick={() => navigate('/client-tracker/hot-dates')} variant="outline">
                   View Full Page
+                </Button>
+              </DrawerFooter>
+            </DrawerContent>
+          </Drawer>
+
+          {/* Cold Dates Drawer */}
+          <Drawer open={showColdDatesDrawer} onOpenChange={setShowColdDatesDrawer}>
+            <DrawerContent className="max-h-[85vh]">
+              <DrawerHeader>
+                <DrawerTitle className="flex items-center gap-2">
+                  <Snowflake className="w-5 h-5 text-cyan-500" />
+                  Cold Dates
+                  <Badge variant="outline" className="text-cyan-600 border-cyan-500/30 ml-2">
+                    {coldDates.length} dates
+                  </Badge>
+                </DrawerTitle>
+              </DrawerHeader>
+              
+              <ScrollArea className="h-[60vh] px-4">
+                <div className="space-y-4 pb-4">
+                  {coldDates.map((date) => (
+                    <Card 
+                      key={date.dateKey} 
+                      className="border-l-4 border-l-cyan-500 cursor-pointer hover:shadow-md transition-shadow"
+                      onClick={() => {
+                        setSelectedMobileColdDate(date.dateKey);
+                        setShowColdDatesDrawer(false);
+                      }}
+                    >
+                      <CardContent className="p-4">
+                        {/* Date Header */}
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-cyan-700">{date.year}</span>
+                            <Badge className="bg-gradient-to-r from-cyan-500 to-blue-500 text-white">
+                              {date.monthName} {date.day}
+                            </Badge>
+                          </div>
+                          <span className="text-lg font-bold text-cyan-600">{date.enquiringClients.length}</span>
+                        </div>
+                        
+                        {/* Enquiring Clients */}
+                        <div className="space-y-1">
+                          {date.enquiringClients.slice(0, 3).map((c, i) => (
+                            <p key={i} className="text-xs text-muted-foreground pl-2">
+                              {c.eventName} • {c.clientName}
+                            </p>
+                          ))}
+                          {date.enquiringClients.length > 3 && (
+                            <p className="text-xs text-cyan-500 pl-2">+{date.enquiringClients.length - 3} more</p>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </ScrollArea>
+              
+              <DrawerFooter>
+                <Button onClick={() => setShowColdDatesDrawer(false)} variant="outline">
+                  Close
                 </Button>
               </DrawerFooter>
             </DrawerContent>
