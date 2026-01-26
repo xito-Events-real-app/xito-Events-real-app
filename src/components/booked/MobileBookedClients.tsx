@@ -7,9 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { migrateExistingBookedClients, fullResyncAllBookedClients, BookedClientData } from "@/lib/sheets-api";
+import { migrateExistingBookedClients, fullResyncAllBookedClients, BookedClientData, SyncDetail } from "@/lib/sheets-api";
 import EventClientCard from "./EventClientCard";
 import NepaliDateFilter from "./NepaliDateFilter";
+import { SyncReportSheet } from "./SyncReportSheet";
 import { GlobalModeToggle } from "@/components/layout/GlobalModeToggle";
 import NepaliDate from "nepali-date-converter";
 import { useBookedCachedData } from "@/hooks/useBookedCachedData";
@@ -30,6 +31,17 @@ const MobileBookedClients = () => {
   const [isFullResyncing, setIsFullResyncing] = useState(false);
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
+  
+  // Sync report state
+  const [syncReportOpen, setSyncReportOpen] = useState(false);
+  const [syncReport, setSyncReport] = useState<{
+    copiedCount: number;
+    syncedCount: number;
+    skippedCount: number;
+    notFoundCount: number;
+    totalBooked: number;
+    syncDetails?: SyncDetail[];
+  } | null>(null);
 
   const handleMigrate = async () => {
     try {
@@ -51,19 +63,18 @@ const MobileBookedClients = () => {
       // Force sync to always copy ALL data from Client Tracker to Booked Clients
       const result = await fullResyncAllBookedClients(true);
       
-      const messages: string[] = [];
-      if (result.copiedCount > 0) {
-        messages.push(`Found & copied ${result.copiedCount} missing booked clients`);
-      }
-      if (result.syncedCount > 0) {
-        messages.push(`Updated ${result.syncedCount} existing clients`);
-      }
+      // Store report for display
+      setSyncReport({
+        copiedCount: result.copiedCount,
+        syncedCount: result.syncedCount,
+        skippedCount: result.skippedCount,
+        notFoundCount: result.notFoundCount,
+        totalBooked: result.totalBooked,
+        syncDetails: result.syncDetails
+      });
       
-      if (messages.length > 0) {
-        toast.success(messages.join('. '));
-      } else {
-        toast.info("All booked clients are already synchronized");
-      }
+      // Show report sheet
+      setSyncReportOpen(true);
       
       await refreshData();
     } catch (error) {
@@ -247,6 +258,13 @@ const MobileBookedClients = () => {
           </div>
         )}
       </ScrollArea>
+      
+      {/* Sync Report Sheet */}
+      <SyncReportSheet
+        open={syncReportOpen}
+        onOpenChange={setSyncReportOpen}
+        report={syncReport}
+      />
     </div>
   );
 };
