@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { getMonthName } from "@/lib/nepali-months";
 import NepaliDate from "nepali-date-converter";
 import PaymentDrawer from "./PaymentDrawer";
+import { PaymentDatePicker } from "./PaymentDatePicker";
 import { updatePayment } from "@/lib/sheets-api";
 import { toast } from "sonner";
 
@@ -151,6 +152,7 @@ const PaymentHistorySheet = ({
     day: '',
     bank: '',
   });
+  const [editSelectedDate, setEditSelectedDate] = useState<Date | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   
   const payments = useMemo(() => parsePayments(paymentsMade), [paymentsMade]);
@@ -180,6 +182,18 @@ const PaymentHistorySheet = ({
         day,
         bank: payment.bank,
       });
+      
+      // Convert BS date to AD for calendar picker
+      if (year && month && day) {
+        try {
+          const nepaliDate = new NepaliDate(parseInt(year), parseInt(month) - 1, parseInt(day));
+          setEditSelectedDate(nepaliDate.toJsDate());
+        } catch {
+          setEditSelectedDate(new Date());
+        }
+      } else {
+        setEditSelectedDate(new Date());
+      }
     }
   }, [editingPaymentIndex, payments]);
   
@@ -458,43 +472,20 @@ const PaymentHistorySheet = ({
               </Select>
             </div>
 
-            {/* Date - Year/Month/Day */}
-            <div className="space-y-2">
-              <Label className="text-slate-300">Nepali Date (BS)</Label>
-              <div className="grid grid-cols-3 gap-2">
-                <Input
-                  type="number"
-                  value={editFormData.year}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, year: e.target.value }))}
-                  className="bg-slate-800 border-slate-700 text-white"
-                  placeholder="Year"
-                  min="2070"
-                  max="2100"
-                />
-                <Select 
-                  value={editFormData.month} 
-                  onValueChange={(value) => setEditFormData(prev => ({ ...prev, month: value }))}
-                >
-                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
-                    <SelectValue placeholder="Month" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700">
-                    {['Baisakh', 'Jestha', 'Ashadh', 'Shrawan', 'Bhadra', 'Ashwin', 'Kartik', 'Mangsir', 'Poush', 'Magh', 'Falgun', 'Chaitra'].map((month, i) => (
-                      <SelectItem key={i + 1} value={String(i + 1)}>{month}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Input
-                  type="number"
-                  value={editFormData.day}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, day: e.target.value }))}
-                  className="bg-slate-800 border-slate-700 text-white"
-                  placeholder="Day"
-                  min="1"
-                  max="32"
-                />
-              </div>
-            </div>
+            {/* Date - Calendar Picker with AD/BS Toggle */}
+            <PaymentDatePicker
+              selectedDate={editSelectedDate}
+              onDateChange={(adDate, bsDate) => {
+                setEditSelectedDate(adDate);
+                setEditFormData(prev => ({
+                  ...prev,
+                  year: String(bsDate.year),
+                  month: String(bsDate.month),
+                  day: String(bsDate.day),
+                }));
+              }}
+              defaultMode="ad"
+            />
 
             {/* Bank */}
             <div className="space-y-2">

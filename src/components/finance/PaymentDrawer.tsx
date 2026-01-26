@@ -21,8 +21,7 @@ import {
 } from "@/components/ui/select";
 import { addPayment, getDropdowns } from "@/lib/sheets-api";
 import { toast } from "sonner";
-import NepaliDate from "nepali-date-converter";
-import { nepaliMonthsEnglish, getBSYearsRange, getDaysInBSMonth } from "@/lib/nepali-date";
+import { PaymentDatePicker } from "./PaymentDatePicker";
 
 interface PaymentDrawerProps {
   isOpen: boolean;
@@ -52,24 +51,18 @@ const PaymentDrawer = ({
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentType, setPaymentType] = useState("");
   const [bank, setBank] = useState("");
-  const [selectedYear, setSelectedYear] = useState<number | null>(null);
-  const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
-  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedBSDate, setSelectedBSDate] = useState<{ year: number; month: number; day: number } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentTypes, setPaymentTypes] = useState<string[]>([]);
   const [banks, setBanks] = useState<string[]>([]);
 
-  const years = getBSYearsRange();
-
-  // Set default date to today's Nepali date
+  // Set default date to today when drawer opens
   useEffect(() => {
-    if (isOpen && selectedYear === null) {
-      const today = new NepaliDate();
-      setSelectedYear(today.getYear());
-      setSelectedMonth(today.getMonth() + 1); // 1-indexed
-      setSelectedDay(today.getDate());
+    if (isOpen && !selectedDate) {
+      setSelectedDate(new Date());
     }
-  }, [isOpen, selectedYear]);
+  }, [isOpen, selectedDate]);
 
   // Fetch dropdown data
   useEffect(() => {
@@ -88,13 +81,13 @@ const PaymentDrawer = ({
     }
   }, [isOpen]);
 
-  // Get days in selected month
-  const daysInMonth = selectedYear && selectedMonth 
-    ? getDaysInBSMonth(selectedYear, selectedMonth) 
-    : 30;
+  const handleDateChange = (date: Date, bsDate: { year: number; month: number; day: number }) => {
+    setSelectedDate(date);
+    setSelectedBSDate(bsDate);
+  };
 
   const handleSubmit = async () => {
-    if (!paymentAmount || !paymentType || !bank || !selectedYear || !selectedMonth || !selectedDay) {
+    if (!paymentAmount || !paymentType || !bank || !selectedDate || !selectedBSDate) {
       toast.error("Please fill all fields");
       return;
     }
@@ -102,12 +95,10 @@ const PaymentDrawer = ({
     setIsSubmitting(true);
     try {
       // Format Nepali date as YYYY-MM-DD
-      const nepaliDateStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`;
+      const nepaliDateStr = `${selectedBSDate.year}-${String(selectedBSDate.month).padStart(2, '0')}-${String(selectedBSDate.day).padStart(2, '0')}`;
       
-      // Convert to AD date
-      const nepaliDateObj = new NepaliDate(selectedYear, selectedMonth - 1, selectedDay);
-      const adDateObj = nepaliDateObj.toJsDate();
-      const adDateStr = `${adDateObj.getFullYear()}-${String(adDateObj.getMonth() + 1).padStart(2, '0')}-${String(adDateObj.getDate()).padStart(2, '0')}`;
+      // Format AD date
+      const adDateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
       
       const result = await addPayment(
         rowNumber,
@@ -130,9 +121,8 @@ const PaymentDrawer = ({
       setPaymentAmount("");
       setPaymentType("");
       setBank("");
-      setSelectedYear(null);
-      setSelectedMonth(null);
-      setSelectedDay(null);
+      setSelectedDate(null);
+      setSelectedBSDate(null);
       onClose();
     } catch (error) {
       console.error("Error adding payment:", error);
@@ -202,77 +192,18 @@ const PaymentDrawer = ({
             </Select>
           </div>
 
-          {/* Nepali Date Selectors */}
-          <div className="space-y-2">
-            <Label className="text-slate-300">Payment Date (BS)</Label>
-            <div className="grid grid-cols-3 gap-2">
-              {/* Year */}
-              <Select 
-                value={selectedYear?.toString() || ""} 
-                onValueChange={(v) => setSelectedYear(parseInt(v))}
-              >
-                <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
-                  <SelectValue placeholder="Year" />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-600 max-h-48">
-                  {years.map((y) => (
-                    <SelectItem key={y} value={y.toString()} className="text-white">
-                      {y}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {/* Month */}
-              <Select 
-                value={selectedMonth?.toString() || ""} 
-                onValueChange={(v) => {
-                  setSelectedMonth(parseInt(v));
-                  // Reset day if it exceeds days in new month
-                  if (selectedYear && selectedDay) {
-                    const newDaysInMonth = getDaysInBSMonth(selectedYear, parseInt(v));
-                    if (selectedDay > newDaysInMonth) {
-                      setSelectedDay(newDaysInMonth);
-                    }
-                  }
-                }}
-              >
-                <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
-                  <SelectValue placeholder="Month" />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-600 max-h-48">
-                  {nepaliMonthsEnglish.map((m, i) => (
-                    <SelectItem key={i} value={(i + 1).toString()} className="text-white">
-                      {m}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {/* Day */}
-              <Select 
-                value={selectedDay?.toString() || ""} 
-                onValueChange={(v) => setSelectedDay(parseInt(v))}
-              >
-                <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
-                  <SelectValue placeholder="Day" />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-600 max-h-48">
-                  {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => (
-                    <SelectItem key={d} value={d.toString()} className="text-white">
-                      {d}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          {/* Calendar Date Picker with AD/BS Toggle */}
+          <PaymentDatePicker
+            selectedDate={selectedDate}
+            onDateChange={handleDateChange}
+            defaultMode="ad"
+          />
         </div>
 
         <DrawerFooter className="pt-4">
           <Button
             onClick={handleSubmit}
-            disabled={isSubmitting || !paymentAmount || !paymentType || !bank || !selectedYear || !selectedMonth || !selectedDay}
+            disabled={isSubmitting || !paymentAmount || !paymentType || !bank || !selectedDate}
             className="bg-emerald-600 hover:bg-emerald-700 text-white"
           >
             {isSubmitting ? "Adding..." : "Add Payment"}
