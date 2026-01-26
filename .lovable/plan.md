@@ -1,153 +1,224 @@
 
+# Plan: Sync BOOKED CLIENTS to BOOKED CLIENTS EVENT DETAILS Sheet
 
-# Plan: Fix Cold Dates Display - Full Status Visibility
+## Overview
 
-## Issues to Fix
-
-1. **Status truncated**: Currently showing only first word (e.g., "NUMBER" instead of "NUMBER PROVIDED")
-2. **Text truncation**: Client names and event names cut off by `truncate` class
-3. **Fixed card widths**: All cards same size regardless of content
-4. **Date sorting**: 2082/2083 mixed, `**` dates not at end
-5. **Year position**: Should show year first (2082 MAGH 23)
+Create a new synchronization system that copies specific columns from the "BOOKED CLIENTS" sheet to a new "BOOKED CLIENTS EVENT DETAILS" sheet with a different column structure. This enables tracking detailed event logistics (venue, parlour, pre-shoot details) separately from client information.
 
 ---
 
-## Technical Changes
+## Column Mapping
 
-### File: `src/components/desktop/DesktopDashboard.tsx`
+### Source: BOOKED CLIENTS → Target: BOOKED CLIENTS EVENT DETAILS
 
-### 1. Fix Sorting Logic (lines 347-351)
+| BOOKED CLIENTS | → | EVENT DETAILS | Purpose |
+|----------------|---|---------------|---------|
+| A (registeredDateTimeAD) | → | A | Unique ID (for sync matching) |
+| B (registeredDateBS) | → | B | Registration Date BS |
+| C (clientName) | → | C | Client Name |
+| L (events) | → | D | Event Names |
+| M (eventYear) | → | E | Event Year |
+| N (eventMonth) | → | F | Event Month |
+| O (eventDay) | → | G | Event Day |
+| P (eventDateAD) | → | H | Event Date AD |
 
-**Current:**
+### New Columns in EVENT DETAILS (J-AH) - User Input Only
+| Column | Field |
+|--------|-------|
+| J | Venue Type |
+| K | Venue Name |
+| L | Venue City |
+| M | Venue Area |
+| N | Venue Map |
+| O | Event Start Time |
+| P | Event End Time |
+| Q | Parlour Type |
+| R | Parlour Name |
+| S | Parlour City |
+| T | Parlour Area |
+| U | Parlour Map |
+| V | Parlour Start Time |
+| W | Parlour End Time |
+| X | Pre-Shoot Venue Type |
+| Y | Pre-Shoot Venue Name |
+| Z | Pre-Shoot Venue City |
+| AA | Pre-Shoot Venue Area |
+| AB | Pre-Shoot Venue Map |
+| AC | Pre-Shoot Start Time |
+| AD | Pre-Shoot End Time |
+| AE | Do Groom Come In Mehndi? |
+| AF | No. of Guest |
+| AG | Event Demand |
+| AH | Event References |
+
+---
+
+## Technical Implementation
+
+### 1. Edge Function Changes (supabase/functions/google-sheets/index.ts)
+
+**Add new action types to SheetRequest interface (line 21):**
 ```typescript
-.sort((a, b) => {
-  const monthDiff = parseInt(a.month) - parseInt(b.month);
-  if (monthDiff !== 0) return monthDiff;
-  return b.enquiringClients.length - a.enquiringClients.length;
-});
+| 'getBookedEventDetails' 
+| 'syncToEventDetails' 
+| 'fullSyncEventDetails'
+| 'updateEventDetails'
 ```
 
-**New - Year first, `**` dates last:**
+**Add helper function: `copyToEventDetails`**
+- Copies a single client from BOOKED CLIENTS to EVENT DETAILS
+- Maps columns A-C directly, L-P to D-H
+- Leaves J-AH empty for user input
+
+**Add action handler: `syncToEventDetails`**
+- Triggered when a new client is added to BOOKED CLIENTS (after status changes to BOOKED)
+- Checks if client already exists in EVENT DETAILS using registeredDateTimeAD
+- Only copies if not already present
+
+**Add action handler: `fullSyncEventDetails`**
+- Scans all BOOKED CLIENTS entries
+- Copies missing entries to EVENT DETAILS
+- Optionally updates columns A-C and D-H for existing entries (preserving J-AH user input)
+
+**Add action handler: `getBookedEventDetails`**
+- Fetches all data from BOOKED CLIENTS EVENT DETAILS sheet
+- Returns full column structure (A-AH)
+
+**Add action handler: `updateEventDetails`**
+- Updates specific columns (J-AH) for a client in EVENT DETAILS
+- Identified by registeredDateTimeAD
+
+### 2. Frontend API (src/lib/sheets-api.ts)
+
+**Add new interface:**
 ```typescript
-.sort((a, b) => {
-  // Push ** dates to the end
-  const aIsUnknown = a.day.includes('*');
-  const bIsUnknown = b.day.includes('*');
-  if (aIsUnknown && !bIsUnknown) return 1;
-  if (!aIsUnknown && bIsUnknown) return -1;
-  
-  // Sort by year first (2082 before 2083)
-  const yearDiff = parseInt(a.year) - parseInt(b.year);
-  if (yearDiff !== 0) return yearDiff;
-  
-  // Then by month, then by day
-  const monthDiff = parseInt(a.month) - parseInt(b.month);
-  if (monthDiff !== 0) return monthDiff;
-  
-  return parseInt(a.day) - parseInt(b.day);
-});
+export interface BookedEventDetails {
+  rowNumber: number;
+  registeredDateTimeAD: string;  // A - Unique ID
+  registeredDateBS: string;       // B
+  clientName: string;             // C
+  events: string;                 // D (from L)
+  eventYear: string;              // E (from M)
+  eventMonth: string;             // F (from N)
+  eventDay: string;               // G (from O)
+  eventDateAD: string;            // H (from P)
+  // Column I is empty/reserved
+  venueType: string;              // J
+  venueName: string;              // K
+  venueCity: string;              // L
+  venueArea: string;              // M
+  venueMap: string;               // N
+  eventStartTime: string;         // O
+  eventEndTime: string;           // P
+  parlourType: string;            // Q
+  parlourName: string;            // R
+  parlourCity: string;            // S
+  parlourArea: string;            // T
+  parlourMap: string;             // U
+  parlourStartTime: string;       // V
+  parlourEndTime: string;         // W
+  preShootVenueType: string;      // X
+  preShootVenueName: string;      // Y
+  preShootVenueCity: string;      // Z
+  preShootVenueArea: string;      // AA
+  preShootVenueMap: string;       // AB
+  preShootStartTime: string;      // AC
+  preShootEndTime: string;        // AD
+  doGroomComeInMehndi: string;    // AE
+  noOfGuest: string;              // AF
+  eventDemand: string;            // AG
+  eventReferences: string;        // AH
+}
 ```
 
-### 2. Change Grid to Flexible Layout (line 726)
+**Add new functions:**
+```typescript
+export async function getBookedEventDetails(limit?: number): Promise<BookedEventDetails[]>
 
-**Current:**
-```tsx
-<div className="grid grid-cols-4 gap-4 pr-4">
+export async function syncToEventDetails(registeredDateTimeAD: string): Promise<{ success: boolean }>
+
+export async function fullSyncEventDetails(): Promise<{ 
+  success: boolean; 
+  copiedCount: number; 
+  updatedCount: number; 
+  totalEvents: number 
+}>
+
+export async function updateEventDetails(
+  rowNumber: number,
+  updates: Partial<BookedEventDetails>
+): Promise<{ success: boolean }>
 ```
 
-**New - Auto-sizing cards:**
-```tsx
-<div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4 pr-4">
-```
+### 3. Automatic Sync Integration
 
-### 3. Fix Date Header - Year First (lines 733-741)
+**Modify `updateClientStatus` in edge function:**
+- When status changes to "BOOKED", after copying to BOOKED CLIENTS, also trigger copy to EVENT DETAILS
 
-**Current:**
-```tsx
-<Snowflake className="w-4 h-4 text-cyan-500" />
-<Badge className="...">
-  {dateInfo.monthName} {dateInfo.day}
-</Badge>
-<span className="text-xs">{dateInfo.year}</span>
-```
-
-**New:**
-```tsx
-<Snowflake className="w-4 h-4 text-cyan-500" />
-<span className="text-sm font-bold text-cyan-700">{dateInfo.year}</span>
-<Badge className="...">
-  {dateInfo.monthName} {dateInfo.day}
-</Badge>
-```
-
-### 4. Fix Client Row - Remove Truncation, Show Full Status (lines 746-765)
-
-**Current:**
-```tsx
-<Link className="flex items-center gap-2 p-1.5 ...">
-  <span className="font-medium text-xs truncate flex-1">
-    {client.clientName}
-  </span>
-  <span className="text-[10px] truncate max-w-[50px]">
-    {client.eventName}
-  </span>
-  <Badge className="text-[9px] px-1.5 py-0">
-    {client.statusShort}
-  </Badge>
-  <span className="text-[10px] font-bold">
-    {client.handlerInitials}
-  </span>
-</Link>
-```
-
-**New - Full visibility with flex-wrap:**
-```tsx
-<Link className="flex flex-wrap items-center gap-x-2 gap-y-1 p-2 ...">
-  <span className="font-semibold text-sm text-foreground">
-    {client.clientName}
-  </span>
-  <span className="text-xs text-amber-600">
-    • {client.eventName}
-  </span>
-  <Badge variant="outline" className="text-[10px] px-2 py-0.5 shrink-0 bg-slate-100">
-    {client.status}  {/* Full status instead of statusShort */}
-  </Badge>
-  <span className="text-xs font-bold text-cyan-600">
-    {client.handlerInitials}
-  </span>
-</Link>
-```
+**Modify `copyToBookedClients` function:**
+- After successfully copying to BOOKED CLIENTS, call `copyToEventDetails`
 
 ---
 
-## Visual Result
+## Sync Behavior
 
-**Before:**
-```
-┌────────────────────────┐
-│ ❄️ MAGH 23  2082    2  │
-│ BKARKI... • ... NUMBER │
-│ BKARKI... • ... NUMBER │
-└────────────────────────┘
+```text
+CLIENT TRACKER                BOOKED CLIENTS              BOOKED CLIENTS EVENT DETAILS
+     |                              |                              |
+     | (status → BOOKED)            |                              |
+     +----------------------------->|                              |
+     |       (auto-copy A-AG)       |                              |
+     |                              +----------------------------->|
+     |                              |       (auto-copy A-C, L-P)   |
+     |                              |                              |
+     | (hourly resync / manual)     |                              |
+     +----------------------------->|----------------------------->|
+                                    |   (sync only A-C, D-H)       |
+                                    |   (preserve J-AH user data)  |
 ```
 
-**After:**
-```
-┌─────────────────────────────────────────────────────┐
-│ ❄️ 2082  MAGH 23                                  2 │
-│ BKARKI • COURT MARRIAGE  [NUMBER PROVIDED]       NI │
-│ BKARKI • POST SHOOT      [QUOTATION SENT]        NI │
-└─────────────────────────────────────────────────────┘
-```
+### Key Sync Rules:
+1. **New BOOKED client**: Automatically copied to both sheets
+2. **Full resync**: Updates A-C and D-H in EVENT DETAILS, preserves J-AH
+3. **Event detail changes**: Only affects EVENT DETAILS sheet (J-AH columns)
+4. **Unique ID**: registeredDateTimeAD (Column A) used for matching
 
 ---
 
-## Summary of Changes
+## Files to Modify
 
-| Line | Change |
-|------|--------|
-| 347-351 | Fix sorting: year first, `**` dates last |
-| 726 | Change grid to `auto-fill` with `minmax(320px, 1fr)` |
-| 733-741 | Rearrange header: year first before month+day |
-| 746-765 | Remove truncation, use `flex-wrap`, show full `client.status` instead of `statusShort` |
+| File | Changes |
+|------|---------|
+| `supabase/functions/google-sheets/index.ts` | Add `copyToEventDetails`, `getBookedEventDetails`, `syncToEventDetails`, `fullSyncEventDetails`, `updateEventDetails` functions and action handlers |
+| `src/lib/sheets-api.ts` | Add `BookedEventDetails` interface and API functions |
 
+---
+
+## Implementation Order
+
+1. **Phase 1: Edge Function - Read Operations**
+   - Add `getBookedEventDetails` function
+   - Add action handler in main switch
+
+2. **Phase 2: Edge Function - Write Operations**
+   - Add `copyToEventDetails` helper
+   - Add `syncToEventDetails` action
+   - Add `fullSyncEventDetails` action
+   - Add `updateEventDetails` action
+
+3. **Phase 3: Auto-Sync Integration**
+   - Modify `copyToBookedClients` to also copy to EVENT DETAILS
+   - Add sync to hourly auto-sync (optional)
+
+4. **Phase 4: Frontend API**
+   - Add `BookedEventDetails` interface
+   - Add API wrapper functions
+
+---
+
+## Technical Notes
+
+- The EVENT DETAILS sheet must be manually created in Google Sheets with the header row
+- Column I is intentionally left empty as a separator between basic info (A-H) and event details (J-AH)
+- J-AH columns are ONLY written by `updateEventDetails` and preserved during sync operations
+- The sync uses registeredDateTimeAD as the unique identifier (same as BOOKED CLIENTS)
