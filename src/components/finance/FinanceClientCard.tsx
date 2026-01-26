@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Phone, MessageCircle, Lock, Plus, Calendar } from "lucide-react";
+import { Phone, MessageCircle, Lock, Plus, Calendar, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { BookedClientData } from "@/lib/sheets-api";
 import { getMonthName } from "@/lib/nepali-months";
 import PaymentDrawer from "./PaymentDrawer";
+import PaymentHistorySheet from "./PaymentHistorySheet";
 
 interface FinanceClientCardProps {
   client: BookedClientData;
@@ -15,6 +16,7 @@ interface FinanceClientCardProps {
 
 const FinanceClientCard = ({ client, onRefresh }: FinanceClientCardProps) => {
   const [showPaymentDrawer, setShowPaymentDrawer] = useState(false);
+  const [showPaymentHistory, setShowPaymentHistory] = useState(false);
   const [localPaymentsMade, setLocalPaymentsMade] = useState(client.paymentsMade || "");
   const [localRemainingPayment, setLocalRemainingPayment] = useState(client.remainingPayment || "");
 
@@ -78,6 +80,10 @@ const FinanceClientCard = ({ client, onRefresh }: FinanceClientCardProps) => {
     onRefresh();
   };
 
+  const handlePaymentHistoryUpdate = () => {
+    onRefresh();
+  };
+
   // Payment status badge
   const getPaymentStatusBadge = () => {
     if (remainingAmount <= 0) {
@@ -101,6 +107,9 @@ const FinanceClientCard = ({ client, onRefresh }: FinanceClientCardProps) => {
                 <Calendar className="h-3 w-3" />
                 <span>{formatNepaliEventDate()}</span>
               </div>
+              {client.clientHandler && (
+                <span className="text-[10px] text-purple-400 mt-0.5">{client.clientHandler}</span>
+              )}
             </div>
             {getPaymentStatusBadge()}
           </div>
@@ -164,8 +173,18 @@ const FinanceClientCard = ({ client, onRefresh }: FinanceClientCardProps) => {
             <Button
               variant="outline"
               size="sm"
+              className="border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+              onClick={() => setShowPaymentHistory(true)}
+              title="View/Edit Payment History"
+            >
+              <History className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
               onClick={() => setShowPaymentDrawer(true)}
+              title="Add New Payment"
             >
               <Plus className="h-4 w-4" />
             </Button>
@@ -185,6 +204,20 @@ const FinanceClientCard = ({ client, onRefresh }: FinanceClientCardProps) => {
         finalQuotationAmount={quotationAmount}
         onPaymentAdded={handlePaymentAdded}
         sourceSheet="booked"
+      />
+
+      {/* Payment History Sheet */}
+      <PaymentHistorySheet
+        isOpen={showPaymentHistory}
+        onClose={() => setShowPaymentHistory(false)}
+        clientName={client.clientName}
+        paymentsMade={localPaymentsMade}
+        finalQuotation={client.finalQuotation || ""}
+        remainingPayment={localRemainingPayment}
+        rowNumber={client.bookedRowNumber}
+        registeredDateTimeAD={client.registeredDateTimeAD || ""}
+        paymentDatesAD={client.paymentDatesAD || ""}
+        onPaymentAdded={handlePaymentHistoryUpdate}
       />
     </>
   );
