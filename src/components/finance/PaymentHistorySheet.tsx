@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { Receipt, Banknote, Calendar, Plus } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Receipt, Banknote, Calendar, Plus, Edit, Loader2 } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -13,9 +13,15 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getMonthName } from "@/lib/nepali-months";
 import NepaliDate from "nepali-date-converter";
 import PaymentDrawer from "./PaymentDrawer";
+import { updatePayment } from "@/lib/sheets-api";
+import { toast } from "sonner";
 
 interface ParsedPayment {
   amount: string;
@@ -39,6 +45,7 @@ interface PaymentHistorySheetProps {
   registeredDateTimeAD: string;
   paymentDatesAD: string;
   onPaymentAdded?: () => void;
+  finalQuotationAmount?: number;
 }
 
 /**
@@ -129,11 +136,92 @@ const PaymentHistorySheet = ({
   registeredDateTimeAD,
   paymentDatesAD,
   onPaymentAdded,
+  finalQuotationAmount: propQuotationAmount,
 }: PaymentHistorySheetProps) => {
   const [showADDates, setShowADDates] = useState<Record<number, boolean>>({});
   const [isPaymentDrawerOpen, setIsPaymentDrawerOpen] = useState(false);
   
+  // Edit payment state
+  const [editingPaymentIndex, setEditingPaymentIndex] = useState<number | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    amount: '',
+    type: '',
+    year: '',
+    month: '',
+    day: '',
+    bank: '',
+  });
+  const [isUpdating, setIsUpdating] = useState(false);
+  
   const payments = useMemo(() => parsePayments(paymentsMade), [paymentsMade]);
+  
+  // Initialize edit form when a payment is selected for editing
+  useEffect(() => {
+    if (editingPaymentIndex !== null && payments[editingPaymentIndex]) {
+      const payment = payments[editingPaymentIndex];
+      // Parse the amount number
+      const amountStr = payment.amountNumber.toString();
+      // Parse the date (format: "YYYY Month DD")
+      const dateMatch = payment.dateBS.match(/(\d{4})\s+(\w+)\s+(\d+)/);
+      let year = '', month = '', day = '';
+      if (dateMatch) {
+        year = dateMatch[1];
+        // Convert month name back to number
+        const monthNames = ['Baisakh', 'Jestha', 'Ashadh', 'Shrawan', 'Bhadra', 'Ashwin', 'Kartik', 'Mangsir', 'Poush', 'Magh', 'Falgun', 'Chaitra'];
+        const monthIndex = monthNames.findIndex(m => m.toLowerCase() === dateMatch[2].toLowerCase());
+        month = monthIndex >= 0 ? String(monthIndex + 1) : '';
+        day = dateMatch[3];
+      }
+      setEditFormData({
+        amount: amountStr,
+        type: payment.type,
+        year,
+        month,
+        day,
+        bank: payment.bank,
+      });
+    }
+  }, [editingPaymentIndex, payments]);
+  
+  // Handle edit payment submit
+  const handleEditPaymentSubmit = async () => {
+    if (editingPaymentIndex === null) return;
+    
+    try {
+      setIsUpdating(true);
+      
+      // Validate inputs
+      if (!editFormData.amount || !editFormData.type || !editFormData.year || !editFormData.month || !editFormData.day || !editFormData.bank) {
+        toast.error("Please fill in all fields");
+        return;
+      }
+      
+      const result = await updatePayment(
+        rowNumber,
+        editingPaymentIndex,
+        editFormData.amount,
+        editFormData.type,
+        editFormData.year,
+        editFormData.month,
+        editFormData.day,
+        editFormData.bank,
+        paymentsMade,
+        quotationAmount,
+        registeredDateTimeAD
+      );
+      
+      if (result.success) {
+        toast.success("Payment updated successfully");
+        setEditingPaymentIndex(null);
+        onPaymentAdded?.(); // Refresh data
+      }
+    } catch (error) {
+      console.error("Error updating payment:", error);
+      toast.error("Failed to update payment");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
   
   const totalPaid = useMemo(() => 
     payments.reduce((sum, p) => sum + p.amountNumber, 0), 
@@ -250,6 +338,7 @@ const PaymentHistorySheet = ({
                       <TableHead className="text-slate-400 text-xs">Type</TableHead>
                       <TableHead className="text-slate-400 text-xs">Date</TableHead>
                       <TableHead className="text-slate-400 text-xs">Bank</TableHead>
+                      <TableHead className="text-slate-400 text-xs w-16">Edit</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -278,6 +367,17 @@ const PaymentHistorySheet = ({
                         </TableCell>
                         <TableCell className="text-slate-300 text-sm">
                           {payment.bank}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => setEditingPaymentIndex(index)}
+                            title="Edit this payment"
+                          >
+                            <Edit className="h-3.5 w-3.5 text-slate-400 hover:text-emerald-400" />
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -313,6 +413,137 @@ const PaymentHistorySheet = ({
         onPaymentAdded={handlePaymentAdded}
         sourceSheet="booked"
       />
+
+      {/* Edit Payment Dialog */}
+      <Dialog open={editingPaymentIndex !== null} onOpenChange={(open) => !open && setEditingPaymentIndex(null)}>
+        <DialogContent className="bg-slate-900 border-slate-700 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <Edit className="h-5 w-5 text-emerald-400" />
+              Edit Payment
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Update the payment details below
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {/* Amount */}
+            <div className="space-y-2">
+              <Label className="text-slate-300">Amount (NPR)</Label>
+              <Input
+                type="number"
+                value={editFormData.amount}
+                onChange={(e) => setEditFormData(prev => ({ ...prev, amount: e.target.value }))}
+                className="bg-slate-800 border-slate-700 text-white"
+                placeholder="Enter amount"
+              />
+            </div>
+
+            {/* Payment Type */}
+            <div className="space-y-2">
+              <Label className="text-slate-300">Payment Type</Label>
+              <Select 
+                value={editFormData.type} 
+                onValueChange={(value) => setEditFormData(prev => ({ ...prev, type: value }))}
+              >
+                <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="ADVANCE">ADVANCE</SelectItem>
+                  <SelectItem value="PARTIAL">PARTIAL</SelectItem>
+                  <SelectItem value="FINAL">FINAL</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Date - Year/Month/Day */}
+            <div className="space-y-2">
+              <Label className="text-slate-300">Nepali Date (BS)</Label>
+              <div className="grid grid-cols-3 gap-2">
+                <Input
+                  type="number"
+                  value={editFormData.year}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, year: e.target.value }))}
+                  className="bg-slate-800 border-slate-700 text-white"
+                  placeholder="Year"
+                  min="2070"
+                  max="2100"
+                />
+                <Select 
+                  value={editFormData.month} 
+                  onValueChange={(value) => setEditFormData(prev => ({ ...prev, month: value }))}
+                >
+                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                    <SelectValue placeholder="Month" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700">
+                    {['Baisakh', 'Jestha', 'Ashadh', 'Shrawan', 'Bhadra', 'Ashwin', 'Kartik', 'Mangsir', 'Poush', 'Magh', 'Falgun', 'Chaitra'].map((month, i) => (
+                      <SelectItem key={i + 1} value={String(i + 1)}>{month}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="number"
+                  value={editFormData.day}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, day: e.target.value }))}
+                  className="bg-slate-800 border-slate-700 text-white"
+                  placeholder="Day"
+                  min="1"
+                  max="32"
+                />
+              </div>
+            </div>
+
+            {/* Bank */}
+            <div className="space-y-2">
+              <Label className="text-slate-300">Bank/Method</Label>
+              <Select 
+                value={editFormData.bank} 
+                onValueChange={(value) => setEditFormData(prev => ({ ...prev, bank: value }))}
+              >
+                <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                  <SelectValue placeholder="Select bank" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="ESEWA">ESEWA</SelectItem>
+                  <SelectItem value="KHALTI">KHALTI</SelectItem>
+                  <SelectItem value="BANK">BANK</SelectItem>
+                  <SelectItem value="CASH">CASH</SelectItem>
+                  <SelectItem value="FONEPAY">FONEPAY</SelectItem>
+                  <SelectItem value="OTHER">OTHER</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setEditingPaymentIndex(null)}
+              className="border-slate-600 text-slate-300"
+              disabled={isUpdating}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleEditPaymentSubmit}
+              className="bg-emerald-600 hover:bg-emerald-700"
+              disabled={isUpdating}
+            >
+              {isUpdating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                'Save Changes'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

@@ -402,6 +402,45 @@ export async function updateBookedClient(
   });
 }
 
+// Update an existing payment entry
+export async function updatePayment(
+  rowNumber: number,
+  paymentIndex: number,
+  newAmount: string,
+  newType: string,
+  newYear: string,
+  newMonth: string,
+  newDay: string,
+  newBank: string,
+  existingPaymentsMade: string,
+  finalQuotationAmount: number,
+  registeredDateTimeAD?: string
+): Promise<{ 
+  success: boolean; 
+  paymentsMade: string; 
+  remainingPayment: string;
+}> {
+  return callSheetsFunction<{ 
+    success: boolean; 
+    paymentsMade: string; 
+    remainingPayment: string;
+  }>("updatePayment", {
+    data: { 
+      rowNumber, 
+      paymentIndex,
+      newAmount, 
+      newType, 
+      newYear,
+      newMonth,
+      newDay,
+      newBank, 
+      existingPaymentsMade, 
+      finalQuotationAmount,
+      registeredDateTimeAD
+    },
+  });
+}
+
 // Helper to get current status from status log
 export function getCurrentStatus(statusLog: string): string {
   if (!statusLog) return 'UNTOUCHED';
