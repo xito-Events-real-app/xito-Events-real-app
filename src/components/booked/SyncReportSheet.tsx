@@ -8,6 +8,8 @@ interface SyncReportSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   report: {
+    restoredToTrackerCount?: number;
+    restoredToTracker?: string[];
     copiedCount: number;
     syncedCount: number;
     skippedCount: number;
@@ -58,10 +60,10 @@ export function SyncReportSheet({ open, onOpenChange, report }: SyncReportSheetP
               </div>
             </div>
             <div className="flex items-center gap-2 p-3 rounded-lg bg-orange-500/10 border border-orange-500/20">
-              <AlertCircle className="h-4 w-4 text-orange-500" />
+              <XCircle className="h-4 w-4 text-orange-500" />
               <div>
-                <p className="text-2xl font-bold text-orange-500">{report.notFoundCount}</p>
-                <p className="text-xs text-muted-foreground">Not in Tracker</p>
+                <p className="text-2xl font-bold text-orange-500">{report.restoredToTrackerCount || 0}</p>
+                <p className="text-xs text-muted-foreground">Restored to Tracker</p>
               </div>
             </div>
           </div>
