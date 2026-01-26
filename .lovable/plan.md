@@ -1,106 +1,106 @@
 
-# Plan: Fix Bank Dropdown & Dynamic Dashboard Stats
+# Plan: Add Handler Field to Client Edit Form
 
-## Overview
+## Problem
 
-Two changes needed:
-1. **Bank dropdown in Edit Payment** - Use dynamic banks from Google Sheets (same as Add Payment)
-2. **Dashboard summary stats** - Update Total Value, Collected, and Pending when sidebar filters change
+When editing a client, the "Handler" field (`clientHandler`) is missing. The user correctly identified that:
+- **"Added By"** (`whoAdded`) = Who registered the client (already editable)
+- **"Handler"** (`clientHandler`) = Who is currently managing this client (missing from edit form)
+
+The Handler is displayed in view mode but cannot be edited.
 
 ---
 
-## Changes
+## Technical Changes
 
-### 1. PaymentHistorySheet.tsx - Dynamic Bank Dropdown
+### File: `src/pages/ClientDetail.tsx`
 
-**Current Problem**: Lines 500-506 have hardcoded bank options (ESEWA, KHALTI, BANK, CASH, FONEPAY, OTHER)
+**1. Add state variable for clientHandler**
 
-**Solution**: Fetch banks from `getDropdowns()` when the sheet opens (same pattern as PaymentDrawer)
-
-**Add state and fetch effect:**
+Around line 142 (after `whoAdded` state):
 ```typescript
-// Add state
-const [banks, setBanks] = useState<string[]>([]);
-
-// Fetch when sheet opens
-useEffect(() => {
-  const fetchBanks = async () => {
-    try {
-      const data = await getDropdowns();
-      setBanks(data.banks || []);
-    } catch (error) {
-      setBanks(['ESEWA', 'KHALTI', 'BANK', 'CASH', 'FONEPAY']); // Fallback
-    }
-  };
-  if (isOpen) {
-    fetchBanks();
-  }
-}, [isOpen]);
+const [whoAdded, setWhoAdded] = useState("");
+const [clientHandler, setClientHandler] = useState("");  // ADD THIS
 ```
 
-**Update Bank dropdown** (replace lines 500-507):
+**2. Initialize handler in handleEdit function**
+
+Around line 375 (in `handleEdit` function):
+```typescript
+setWhoAdded(client.whoAdded || '');
+setClientHandler(client.clientHandler || '');  // ADD THIS
+```
+
+**3. Add Handler field to edit form**
+
+After the "Added By" `FormSelect` (around line 871), add:
 ```tsx
-<SelectContent className="bg-slate-800 border-slate-700">
-  {banks.map((b) => (
-    <SelectItem key={b} value={b} className="text-white">
-      {b}
-    </SelectItem>
-  ))}
-</SelectContent>
+<FormSelect 
+  label="Added By" 
+  value={whoAdded} 
+  onChange={setWhoAdded} 
+  options={dropdowns?.whatsappOwners || []} 
+  placeholder="Who added this client?" 
+/>
+{/* ADD THIS - Handler field */}
+<FormSelect 
+  label="Handler" 
+  value={clientHandler} 
+  onChange={setClientHandler} 
+  options={dropdowns?.whatsappOwners || []} 
+  placeholder="Who is handling this client?" 
+/>
 ```
 
----
+**4. Include handler in updatedClient object**
 
-### 2. DesktopFinanceManager.tsx - Dynamic Stats
-
-**Current Problem**: Lines 142-157 calculate totals from the full `clients` array, so values never change when filters are applied
-
-**Solution**: Use `filteredClients` instead of `clients` and wrap in `useMemo`
-
-**Update calculations:**
+In `handleSave` (around line 499):
 ```typescript
-// Calculate summary stats FROM FILTERED CLIENTS
-const totalBookedValue = useMemo(() => {
-  return filteredClients.reduce((sum, client) => {
-    const match = client.finalQuotation?.match(/NPR\s*([\d,]+)/);
-    return sum + (match ? parseInt(match[1].replace(/,/g, '')) : 0);
-  }, 0);
-}, [filteredClients]);
+const updatedClient: ClientData = {
+  ...editedClient,
+  // ... existing fields
+  whoAdded,
+  clientHandler,  // ADD THIS
+  description: descriptionInput,
+  // ... rest
+};
+```
 
-const totalPaidValue = useMemo(() => {
-  return filteredClients.reduce((sum, client) => {
-    if (!client.paymentsMade) return sum;
-    const payments = client.paymentsMade.split('\n');
-    return sum + payments.reduce((pSum, entry) => {
-      const match = entry.match(/NPR\s*([\d,]+)/);
-      return pSum + (match ? parseInt(match[1].replace(/,/g, '')) : 0);
-    }, 0);
-  }, 0);
-}, [filteredClients]);
+**5. Reset handler in resetFormState**
 
-const remainingValue = useMemo(() => totalBookedValue - totalPaidValue, [totalBookedValue, totalPaidValue]);
-const collectionRate = useMemo(() => 
-  totalBookedValue > 0 ? (totalPaidValue / totalBookedValue) * 100 : 0, 
-  [totalBookedValue, totalPaidValue]
-);
+Around line 406:
+```typescript
+setWhoAdded("");
+setClientHandler("");  // ADD THIS
 ```
 
 ---
 
-## Expected Behavior
+## Summary of Changes
 
-| Feature | Before | After |
-|---------|--------|-------|
-| Edit Payment Banks | Hardcoded 6 options | Dynamic from Google Sheets (same as Add Payment) |
-| Dashboard Stats | Always show all clients | Update when Handler, Month, or Payment Status filters change |
-
-**Example**: Select "BENZO" handler in sidebar -> Stats update to show only BENZO's totals
+| Location | Change |
+|----------|--------|
+| Line ~142 | Add `const [clientHandler, setClientHandler] = useState("");` |
+| Line ~375 | Add `setClientHandler(client.clientHandler \|\| '');` in handleEdit |
+| Line ~406 | Add `setClientHandler("");` in resetFormState |
+| Line ~499 | Add `clientHandler,` to updatedClient object |
+| Line ~871 | Add Handler `FormSelect` in edit form UI |
 
 ---
 
-## Files Changed
+## Visual Result
 
-| File | Changes |
-|------|---------|
-| `src/components/finance/PaymentHistorySheet.tsx` | Add `getDropdowns` import, add `banks` state, fetch on open, use dynamic dropdown |
-| `src/components/finance/DesktopFinanceManager.tsx` | Change summary calculations to use `filteredClients` with `useMemo` |
+The edit form will now show both fields:
+
+```text
+┌─────────────────────────────────────┐
+│ Client Basic Details                │
+├─────────────────────────────────────┤
+│ Client Name: [FUNNY BHUSAN      ]   │
+│ Source:      [INSTAGRAM         ▼]  │
+│ Added By:    [BENZO             ▼]  │
+│ Handler:     [BENZO             ▼]  │  ← NEW FIELD
+└─────────────────────────────────────┘
+```
+
+Both fields use the same `whatsappOwners` dropdown options (BENZO, BARUN, NIKIT) since these are the team members who can add clients and handle them.
