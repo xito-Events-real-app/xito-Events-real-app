@@ -1,12 +1,21 @@
-import { Phone, MessageCircle, Mail, MapPin, FileText, CreditCard, RefreshCw, Pencil } from "lucide-react";
+import { Phone, MessageCircle, Mail, MapPin, FileText, CreditCard, RefreshCw, Pencil, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ClientData } from "@/lib/sheets-api";
-import { getMonthColorClasses, parseInquiryMonth, getCurrentStatus } from "@/lib/client-card-utils";
+import { getMonthColorClasses, parseInquiryMonth } from "@/lib/client-card-utils";
+import { getMonthName } from "@/lib/nepali-months";
 import LastActivitiesSummary from "./LastActivitiesSummary";
+
+interface EventData {
+  name: string;
+  monthName: string;
+  day: string;
+  year: string;
+}
 
 interface ClientHeroSectionProps {
   client: ClientData;
+  events: EventData[];
   currentStatus: string;
   onCall: (type: 'DIRECT' | 'WHATSAPP') => void;
   onPayment: () => void;
@@ -28,8 +37,37 @@ function getStatusColor(status: string): string {
   return 'bg-slate-500 text-white';
 }
 
+// Get event theme colors for badges
+function getEventThemeClasses(eventName: string): string {
+  const upper = eventName.toUpperCase();
+  if (upper.includes('WEDDING')) return 'bg-blue-500/30 text-blue-200 border border-blue-400/30';
+  if (upper.includes('RECEPTION')) return 'bg-purple-500/30 text-purple-200 border border-purple-400/30';
+  if (upper.includes('ENGAGEMENT')) return 'bg-pink-500/30 text-pink-200 border border-pink-400/30';
+  if (upper.includes('PRE') || upper.includes('MEHNDI')) return 'bg-orange-500/30 text-orange-200 border border-orange-400/30';
+  return 'bg-emerald-500/30 text-emerald-200 border border-emerald-400/30';
+}
+
+// Format description with better readability
+function formatDescription(text: string): string {
+  if (!text) return '';
+  
+  // Split by common delimiters and clean up
+  const segments = text
+    .split(/\s*[:\n]\s*/)
+    .map(segment => segment.trim())
+    .filter(Boolean)
+    .map(segment => {
+      // Capitalize first letter of each segment
+      return segment.charAt(0).toUpperCase() + segment.slice(1);
+    });
+  
+  // Join with bullet separator
+  return segments.join(' • ');
+}
+
 const ClientHeroSection = ({
   client,
+  events,
   currentStatus,
   onCall,
   onPayment,
@@ -43,8 +81,8 @@ const ClientHeroSection = ({
 
   return (
     <div className="relative overflow-hidden">
-      {/* Background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-br from-[hsl(220,25%,12%)] via-[hsl(220,25%,8%)] to-[hsl(220,30%,5%)]" />
+      {/* Background gradient - matching Finance Manager theme */}
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-emerald-950/20 to-slate-900" />
       
       {/* Subtle pattern overlay */}
       <div className="absolute inset-0 opacity-5" style={{
@@ -54,46 +92,60 @@ const ClientHeroSection = ({
 
       <div className="relative p-6 md:p-8">
         {/* Top Row: Name + Status + Edit */}
-        <div className="flex items-start justify-between gap-4 mb-6">
+        <div className="flex items-start justify-between gap-4 mb-4">
           <div className="flex-1 min-w-0">
             {/* Client Name - Large & Prominent */}
-            <h1 className={`text-3xl md:text-4xl font-bold text-white mb-3 inline-block px-4 py-2 rounded-xl ${monthColorClasses || 'bg-white/10'}`}>
+            <h1 className={`text-3xl md:text-4xl font-bold text-white mb-2 inline-block px-4 py-2 rounded-xl ${monthColorClasses || 'bg-emerald-900/30'}`}>
               {client.clientName}
             </h1>
             
-            {/* Contact Info Row */}
-            <div className="flex flex-wrap gap-4 text-white/80 mt-4">
+            {/* Cute Event Badges - Right below name */}
+            {events.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-3">
+                {events.slice(0, 3).map((event, i) => (
+                  <div 
+                    key={i}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${getEventThemeClasses(event.name)}`}
+                  >
+                    <Calendar className="h-3 w-3" />
+                    <span className="font-semibold">{event.name}</span>
+                    <span className="opacity-60">•</span>
+                    <span>{event.monthName} {event.day}</span>
+                    {event.year && (
+                      <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] font-bold ml-0.5">
+                        {event.year}
+                      </span>
+                    )}
+                  </div>
+                ))}
+                {events.length > 3 && (
+                  <span className="text-xs text-white/50 self-center">+{events.length - 3} more</span>
+                )}
+              </div>
+            )}
+            
+            {/* Contact Info Row - NOT clickable */}
+            <div className="flex flex-wrap gap-4 text-white/70 mt-4">
               {client.contactNo && (
-                <a 
-                  href={`tel:${client.contactNo}`} 
-                  className="flex items-center gap-2 hover:text-blue-400 transition-colors"
-                >
+                <div className="flex items-center gap-2">
                   <Phone className="h-4 w-4 text-blue-400" />
                   <span>{client.contactNo}</span>
-                </a>
+                </div>
               )}
               {client.whatsappNo && (
-                <a 
-                  href={`https://wa.me/${client.whatsappNo.replace(/[^0-9]/g, '')}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 hover:text-green-400 transition-colors"
-                >
+                <div className="flex items-center gap-2">
                   <MessageCircle className="h-4 w-4 text-green-400" />
                   <span>{client.whatsappNo}</span>
-                </a>
+                </div>
               )}
               {client.email && (
-                <a 
-                  href={`mailto:${client.email}`}
-                  className="flex items-center gap-2 hover:text-amber-400 transition-colors"
-                >
+                <div className="flex items-center gap-2">
                   <Mail className="h-4 w-4 text-amber-400" />
                   <span className="truncate max-w-[200px]">{client.email}</span>
-                </a>
+                </div>
               )}
               {client.eventCity && (
-                <div className="flex items-center gap-2 text-white/60">
+                <div className="flex items-center gap-2">
                   <MapPin className="h-4 w-4 text-purple-400" />
                   <span>{client.eventCity}</span>
                 </div>
@@ -140,7 +192,7 @@ const ClientHeroSection = ({
           </div>
         </div>
 
-        {/* Quick Actions */}
+        {/* Quick Actions - These buttons trigger call logging */}
         <div className="flex flex-wrap gap-2 mb-6">
           {client.contactNo && (
             <Button
@@ -183,16 +235,23 @@ const ClientHeroSection = ({
           </Button>
         </div>
 
-        {/* Description Box - Netflix Style */}
+        {/* Description Box - Cute Netflix Style with Quote Marks */}
         {client.description && (
-          <div className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-4 mb-6 animate-fade-in">
+          <div className="bg-gradient-to-r from-amber-950/40 via-amber-900/20 to-transparent rounded-xl border-l-4 border-amber-500 p-4 mb-6 animate-fade-in">
             <div className="flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-amber-500/20 shrink-0">
-                <FileText className="h-5 w-5 text-amber-400" />
+              <div className="shrink-0 text-amber-400/60">
+                <span className="text-3xl font-serif leading-none">"</span>
               </div>
-              <div>
-                <div className="text-xs font-semibold text-amber-400 mb-1 uppercase tracking-wide">Description</div>
-                <div className="text-white/90 whitespace-pre-wrap leading-relaxed">{client.description}</div>
+              <div className="flex-1">
+                <div className="text-xs font-semibold text-amber-400 mb-2 uppercase tracking-widest">
+                  Client Notes
+                </div>
+                <div className="text-white/95 leading-relaxed text-sm">
+                  {formatDescription(client.description)}
+                </div>
+              </div>
+              <div className="shrink-0 text-amber-400/60 self-end">
+                <span className="text-3xl font-serif leading-none">"</span>
               </div>
             </div>
           </div>

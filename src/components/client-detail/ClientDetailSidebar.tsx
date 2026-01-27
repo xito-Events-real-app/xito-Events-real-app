@@ -47,7 +47,7 @@ const ClientDetailSidebar = ({
   canGoNext = false,
 }: ClientDetailSidebarProps) => {
   return (
-    <div className="w-64 min-h-screen bg-[hsl(220,25%,8%)] text-white border-r border-[hsl(220,20%,15%)] flex flex-col">
+    <div className="w-64 min-h-screen bg-[hsl(220,25%,8%)] text-white border-r border-emerald-900/30 flex flex-col">
       {/* Header */}
       <div className="p-4 border-b border-[hsl(220,20%,15%)]">
         <Button

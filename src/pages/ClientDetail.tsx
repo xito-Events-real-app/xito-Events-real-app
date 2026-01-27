@@ -44,6 +44,7 @@ import {
   getDetailedEnquiryInfo
 } from "@/lib/client-card-utils";
 import { nepaliMonthsEnglish, NepaliDateObject, bsToAD, isUnknownDay, getDayForStorage, getCurrentBSDate } from "@/lib/nepali-date";
+import { getMonthName } from "@/lib/nepali-months";
 import NepaliDate from "nepali-date-converter";
 import { FormSection, FormInput, FormSelect, CountrySelector, PhoneInputField, NepaliCalendar } from "@/components/form";
 import { EventSelector } from "@/components/form/EventSelector";
@@ -1026,7 +1027,7 @@ const ClientDetail = () => {
 
   // View Mode - Netflix Style Layout
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-950/20 to-slate-900 flex">
       {/* Left Sidebar - Hidden on mobile */}
       {!isMobile && (
         <ClientDetailSidebar
@@ -1075,6 +1076,12 @@ const ClientDetail = () => {
         {/* Hero Section */}
         <ClientHeroSection
           client={client}
+          events={events.map(e => ({
+            name: e.name,
+            monthName: e.month ? getMonthName(parseInt(e.month)) : '',
+            day: e.day,
+            year: e.year
+          }))}
           currentStatus={currentStatus}
           onCall={handleCall}
           onPayment={() => setShowPaymentDrawer(true)}
