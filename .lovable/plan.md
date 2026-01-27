@@ -1,395 +1,312 @@
 
-## Improve Client Detail Page: Description, Comments, Status Sync, and Quotation Dialog
+## Netflix-Style Client Detail Page Redesign
 
-This plan addresses all your requests to enhance the Client Detail page with better visibility for description and comments, the ability to add new comments, global status synchronization, and the quotation dialog when changing status to "QUOTATION SENT : REVIEW PENDING".
+This plan transforms the Client Detail page into a cinematic, Netflix-inspired experience with a dark theme, left sidebar navigation, prominent hero description section, and quick activity summaries.
 
 ---
 
-### Overview of Changes
+### Current vs New Architecture
 
 ```text
-+----------------------------------------+
-|         CLIENT DETAIL PAGE             |
-+----------------------------------------+
-|  1. DESCRIPTION CARD (New prominent    |
-|     section at top of view mode)       |
-+----------------------------------------+
-|  2. COMMENTS SECTION                   |
-|     - View all comments                |
-|     - Add new comment input            |
-|     - Real-time updates                |
-+----------------------------------------+
-|  3. STATUS CHANGE                      |
-|     - Quotation dialog for             |
-|       "QUOTATION SENT" transition      |
-|     - Global cache sync after change   |
-+----------------------------------------+
-|  4. QUOTATION DISPLAY                  |
-|     - Show quotation tiers in Sales    |
-|       tab after entry                  |
-+----------------------------------------+
+CURRENT LAYOUT:
++------------------------------------------+
+| [Back] [Nav] [Name]           [Edit]     |
++------------------------------------------+
+| [Call] [WhatsApp] [Payment] [Status]     |
++------------------------------------------+
+| [Description Card - if exists]           |
++------------------------------------------+
+| [Client Info] [Events] [Category]        |  <- 3 Cards
++------------------------------------------+
+| Events | Inquiry | Sales | Activity | ... | <- Horizontal Tabs
++------------------------------------------+
+| [Tab Content Area]                       |
++------------------------------------------+
+
+
+NEW NETFLIX-STYLE LAYOUT:
++--------+---------------------------------------------+
+| SIDE   |  HERO SECTION                               |
+| BAR    +---------------------------------------------+
+|        |  CLIENT NAME (Large)     [Status Badge]    |
+| Events |  Contact: +977...        [Quick Actions]   |
+| Regis- |  Handler: Name | Added: Name               |
+| tration|---------------------------------------------+
+| Contact|  📝 DESCRIPTION (Netflix-style box)        |
+| Inquiry|  "Interested in premium package for        |
+| Sales  |   wedding in Pokhara. Budget flexible."    |
+| Activ- +---------------------------------------------+
+| ity    |  LAST ACTIVITIES                           |
+| Comment|  • Status → QUOTATION SENT (2h ago)        |
+| Financ |  • Called via WhatsApp (1d ago)            |
+|        |  • Comment: "Discussed pricing" (2d ago)   |
++--------+---------------------------------------------+
+         |  [SELECTED SECTION CONTENT]                |
+         |  (Events / Sales / Financials, etc.)       |
+         +---------------------------------------------+
 ```
 
 ---
 
 ### Implementation Steps
 
-#### 1. Add Prominent Description Section
+#### 1. Create Netflix-Style Sidebar Component
+**New File:** `src/components/client-detail/ClientDetailSidebar.tsx`
+
+A collapsible dark sidebar with vertical navigation for all sections:
+
+- **Sections:** Events, Registration, Contact, Inquiry, Sales, Activity, Comments, Financials
+- **Styling:** Uses existing dark theme pattern from `DesktopSidebar.tsx`:
+  ```
+  bg-[hsl(220,25%,10%)] text-[hsl(220,15%,95%)] border-[hsl(220,20%,18%)]
+  ```
+- **Active State:** Highlighted item with gradient background
+- **Quick Actions:** Call, WhatsApp, Payment buttons at bottom
+- **Collapse Toggle:** Same pattern as other sidebars
+
+#### 2. Create Hero Section Component
+**New File:** `src/components/client-detail/ClientHeroSection.tsx`
+
+Netflix-style hero with prominent client info:
+
+- **Client Name:** Large, bold typography (text-3xl/4xl) with month-based color gradient
+- **Contact Row:** Phone and WhatsApp icons inline with numbers (clickable)
+- **Handler/Added By:** Avatar circles with names
+- **Status Badge:** Large, prominent status indicator
+- **Quick Actions:** Floating action buttons (Call, WhatsApp, Payment, Edit)
+- **Background:** Subtle gradient with blur effects (`bg-black/90 backdrop-blur-lg`)
+
+#### 3. Create Description Card (Netflix-Style)
+**Part of Hero Section**
+
+- **Position:** Below client name, spanning full width
+- **Styling:** Semi-transparent dark card with subtle border
+- **Icon:** FileText icon with amber accent
+- **Typography:** Clear, readable text on dark background
+- **Empty State:** "No description added" with muted styling
+
+#### 4. Create Last Activities Summary Component
+**New File:** `src/components/client-detail/LastActivitiesSummary.tsx`
+
+Compact activity timeline showing:
+
+- **Latest Status Change:** With relative time (e.g., "2h ago")
+- **Latest Call Attempt:** Type (Direct/WhatsApp) + time
+- **Latest Comment:** First 50 chars truncated + time
+- **Latest Payment:** Amount + time (if any)
+
+Each activity item uses:
+- Colored dot indicator (green for positive, amber for neutral, red for critical)
+- Icon representing activity type
+- Relative timestamp
+
+#### 5. Refactor Main Content Area
 **File:** `src/pages/ClientDetail.tsx`
 
-Add a visible description card right below the header in view mode (before the tabs):
+Transform from horizontal tabs to sidebar-controlled sections:
 
-- Display the description in a highlighted card with a gradient background
-- Use `FileText` icon to indicate it's the description
-- Show "No description" message if empty
-- Make it collapsible if the description is very long
+- **State Management:** Replace `Tabs` with `activeSection` state
+- **Content Rendering:** Conditional rendering based on `activeSection`
+- **Layout:** Use `flex` with fixed sidebar + fluid main content
+- **Mobile Adaptation:** Stack layout on mobile, sidebar becomes bottom sheet or hidden
 
-**Position:** After the action buttons row, before the tabs
+#### 6. Section Content Components
+Reuse existing tab content but enhance styling:
+
+- **Events Section:** Keep nested sub-tabs for event types
+- **Registration Section:** Client basic info + source details
+- **Contact Section:** Phone, WhatsApp, Email, Location
+- **Inquiry Section:** Dates, times, description
+- **Sales Section:** Quotations, mindset, bargaining
+- **Activity Section:** Status history, call log
+- **Comments Section:** Add comment + history
+- **Financials Section:** Payments, progress bar, history
 
 ---
 
-#### 2. Enhance Comments Section with Add Comment Feature
-**File:** `src/pages/ClientDetail.tsx`
+### File Structure
 
-Current state: Comments tab only shows existing comments without option to add
-
-**Changes needed:**
-
-A. **Add state variables:**
-```typescript
-const [newComment, setNewComment] = useState("");
-const [isAddingComment, setIsAddingComment] = useState(false);
-const [currentComments, setCurrentComments] = useState(client.comments || "");
+```text
+src/components/client-detail/
+├── ClientDetailSidebar.tsx    (NEW - Left navigation)
+├── ClientHeroSection.tsx      (NEW - Netflix-style hero)
+├── LastActivitiesSummary.tsx  (NEW - Activity preview)
+├── sections/
+│   ├── EventsSection.tsx      (Extracted from ClientDetail)
+│   ├── RegistrationSection.tsx
+│   ├── ContactSection.tsx
+│   ├── InquirySection.tsx
+│   ├── SalesSection.tsx
+│   ├── ActivitySection.tsx
+│   ├── CommentsSection.tsx
+│   └── FinancialsSection.tsx
+└── index.ts
 ```
-
-B. **Add comment handler function:**
-```typescript
-const handleAddComment = async () => {
-  if (!client?.rowNumber || !newComment.trim()) return;
-  
-  setIsAddingComment(true);
-  try {
-    const result = await addClientComment(
-      client.rowNumber, 
-      newComment.trim(), 
-      currentComments
-    );
-    setCurrentComments(result.comments);
-    setNewComment('');
-    toast({ title: "Comment added" });
-    
-    // Update global cache
-    if (updateClientCache) {
-      updateClientCache({ ...client, comments: result.comments });
-    }
-  } catch (err) {
-    toast({ title: "Failed to add comment", variant: "destructive" });
-  } finally {
-    setIsAddingComment(false);
-  }
-};
-```
-
-C. **Update Comments tab UI to include:**
-- Text area for new comment input
-- "Add Comment" button with loading state
-- Parse comments from `currentComments` instead of `client.comments`
-
----
-
-#### 3. Global Status Synchronization
-**File:** `src/pages/ClientDetail.tsx`
-
-The current `handleStatusChange` function updates status but doesn't fully sync the cache.
-
-**Update the function to:**
-```typescript
-const handleStatusChange = async (newStatus: string) => {
-  if (!client?.rowNumber) return;
-  
-  setIsChangingStatus(true);
-  try {
-    const result = await updateClientStatus(client.rowNumber, newStatus, currentStatusLog);
-    setCurrentStatusLog(result.statusLog);
-    
-    // CRITICAL: Update global cache to sync across the app
-    if (updateClientCache) {
-      updateClientCache({ 
-        ...client, 
-        statusLog: result.statusLog 
-      });
-    }
-    
-    toast({ title: "Success", description: `Status changed to ${newStatus}` });
-  } catch (err) {
-    toast({ title: "Error", variant: "destructive" });
-  } finally {
-    setIsChangingStatus(false);
-  }
-};
-```
-
-This ensures that when you change status on the Client Detail page, it:
-1. Updates the backend (Google Sheet)
-2. Updates local state (currentStatusLog)
-3. Updates the global IndexedDB cache
-4. Notifies all other components via the cache update event
-
----
-
-#### 4. Add Quotation Dialog for "QUOTATION SENT" Status Transition
-**File:** `src/pages/ClientDetail.tsx`
-
-**New state variables:**
-```typescript
-const [showQuotationDialog, setShowQuotationDialog] = useState(false);
-const [quotationAmounts, setQuotationAmounts] = useState<Record<string, string>>({});
-const [isSavingQuotation, setIsSavingQuotation] = useState(false);
-const [currentQuotationData, setCurrentQuotationData] = useState(client.quotationData || "");
-```
-
-**New imports:**
-```typescript
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { updateClientQuotation } from "@/lib/sheets-api";
-```
-
-**Modify `handleStatusChange` to intercept:**
-```typescript
-const handleStatusChange = async (newStatus: string) => {
-  if (!client?.rowNumber) return;
-  
-  const currentStatus = getCurrentStatus(currentStatusLog);
-  
-  // INTERCEPT: If moving to QUOTATION SENT, show quotation dialog first
-  const isFromQuotationPending = currentStatus?.toUpperCase().includes('QUOTATION PENDING');
-  const isToQuotationSent = newStatus.toUpperCase().includes('QUOTATION SENT');
-  
-  if (isFromQuotationPending && isToQuotationSent) {
-    setPendingStatus(newStatus);
-    setShowQuotationDialog(true);
-    return;
-  }
-  
-  // Continue with normal status change...
-  await performStatusChange(newStatus);
-};
-```
-
-**Add quotation save handler:**
-```typescript
-const handleSaveQuotation = async () => {
-  if (!client?.rowNumber) return;
-  
-  const tiers = ['BASIC', 'STANDARD', 'PREMIUM', 'WTN SPECIAL'];
-  const filledQuotations = tiers
-    .filter(tier => quotationAmounts[tier]?.trim())
-    .map(tier => `${tier}: NPR ${formatNPR(quotationAmounts[tier])}/-`);
-  
-  if (filledQuotations.length === 0) {
-    toast({ title: "Please enter at least one quotation amount", variant: "destructive" });
-    return;
-  }
-  
-  const quotationData = filledQuotations.join('\n');
-  
-  setIsSavingQuotation(true);
-  try {
-    await updateClientQuotation(client.rowNumber, quotationData);
-    setCurrentQuotationData(quotationData);
-    
-    // Update status to QUOTATION SENT
-    const statusResult = await updateClientStatus(client.rowNumber, 'QUOTATION SENT : REVIEW PENDING', currentStatusLog);
-    setCurrentStatusLog(statusResult.statusLog);
-    
-    // Update global cache with both quotation and status
-    if (updateClientCache) {
-      updateClientCache({
-        ...client,
-        quotationData: quotationData,
-        statusLog: statusResult.statusLog
-      });
-    }
-    
-    toast({ title: "Quotation saved & status updated" });
-    setShowQuotationDialog(false);
-    setQuotationAmounts({});
-  } catch (err) {
-    toast({ title: "Failed to save quotation", variant: "destructive" });
-  } finally {
-    setIsSavingQuotation(false);
-  }
-};
-```
-
-**Add the Dialog component at the end of the JSX:**
-```xml
-<Dialog open={showQuotationDialog} onOpenChange={(open) => {
-  if (!open) {
-    setShowQuotationDialog(false);
-    setQuotationAmounts({});
-  }
-}}>
-  <DialogContent className="max-w-sm">
-    <DialogHeader>
-      <DialogTitle>Enter Quotation Amounts</DialogTitle>
-      <DialogDescription>
-        Enter the prices quoted to {client.clientName}. At least one is required.
-      </DialogDescription>
-    </DialogHeader>
-    
-    <div className="space-y-4 py-2">
-      {['BASIC', 'STANDARD', 'PREMIUM', 'WTN SPECIAL'].map((tier) => (
-        <div key={tier} className="space-y-1.5">
-          <Label>{tier}</Label>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">NPR</span>
-            <Input
-              type="number"
-              placeholder="e.g., 50000"
-              value={quotationAmounts[tier] || ''}
-              onChange={(e) => setQuotationAmounts({ ...quotationAmounts, [tier]: e.target.value })}
-            />
-          </div>
-        </div>
-      ))}
-    </div>
-    
-    <DialogFooter>
-      <Button variant="outline" onClick={() => setShowQuotationDialog(false)}>Cancel</Button>
-      <Button onClick={handleSaveQuotation} disabled={isSavingQuotation}>
-        {isSavingQuotation ? "Saving..." : "Save & Update Status"}
-      </Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
-```
-
----
-
-#### 5. Display Quotation Data on Client Page
-**File:** `src/pages/ClientDetail.tsx`
-
-The Sales tab already displays quotation tiers via `quotationTiers`. 
-
-**Update to use `currentQuotationData` instead of `client.quotationData`:**
-```typescript
-const quotationTiers = useMemo(() => 
-  parseQuotationData(currentQuotationData || client.quotationData || ''), 
-  [currentQuotationData, client.quotationData]
-);
-```
-
-This ensures that when you save a new quotation, the Sales tab immediately reflects the updated values.
-
----
-
-### Files Summary
-
-| File | Action | Purpose |
-|------|--------|---------|
-| `src/pages/ClientDetail.tsx` | Modify | Add description section, comment input, quotation dialog, and global sync |
 
 ---
 
 ### Technical Details
 
-#### Data Flow for Status Change with Quotation
+#### Color Palette (Netflix-Inspired Dark Theme)
 
+| Element | Color |
+|---------|-------|
+| Sidebar Background | `hsl(220, 25%, 10%)` - Deep navy |
+| Main Background | `bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950` |
+| Hero Overlay | `bg-black/80 backdrop-blur-xl` |
+| Active Nav Item | `bg-gradient-to-r from-primary to-primary/80` |
+| Text Primary | `text-white` |
+| Text Secondary | `text-white/70` |
+| Accent | `text-primary` (existing brand color) |
+
+#### Sidebar Navigation Items
+
+| Icon | Label | Maps To |
+|------|-------|---------|
+| Calendar | Events | Existing Events tab content |
+| FileText | Registration | Client basic info + source |
+| Phone | Contact | Phone, WhatsApp, Email |
+| Clock | Inquiry | Inquiry dates and description |
+| DollarSign | Sales | Quotations and bargaining |
+| Activity | Activity | Status history and calls |
+| MessageSquare | Comments | Comments with add feature |
+| CreditCard | Financials | Payments and progress |
+
+#### Mobile Responsiveness
+
+- **Desktop (>1024px):** Fixed left sidebar (w-64) + main content
+- **Tablet (768-1024px):** Collapsed sidebar (w-16 icons only) + main content
+- **Mobile (<768px):** 
+  - No sidebar, use bottom sheet navigation
+  - Hero section simplified
+  - Horizontal scroll for quick actions
+
+---
+
+### UI Preview
+
+#### Hero Section Design
 ```text
-User clicks Status → QUOTATION SENT
-          ↓
-handleStatusChange intercepts
-          ↓
-Check: Is current status "QUOTATION PENDING"?
-          ↓ YES
-Show Quotation Dialog
-          ↓
-User enters prices for tiers (BASIC, STANDARD, etc.)
-          ↓
-User clicks "Save & Update Status"
-          ↓
-1. updateClientQuotation() → Save to Column V
-2. updateClientStatus() → Update status to QUOTATION SENT
-3. updateClientCache() → Sync to global IndexedDB
-4. notifyCacheUpdate() → Event dispatched to all components
-          ↓
-All pages (Dashboard, Fresh Clients, etc.) show updated status
++-----------------------------------------------------------+
+|                                                           |
+|   ██████████████████████████████████████████████████████  |
+|   █                                                    █  |
+|   █  RAMESH SHARMA                    [QUOTATION SENT] █  |
+|   █  ─────────────────────────────────────────────────█  |
+|   █  📞 +977-9841234567    💬 +977-9841234567         █  |
+|   █                                                    █  |
+|   █  ┌─────────────────────────────────────────────┐  █  |
+|   █  │ 📝 DESCRIPTION                               │  █  |
+|   █  │ Interested in premium wedding package for    │  █  |
+|   █  │ destination wedding in Pokhara. Budget is    │  █  |
+|   █  │ flexible. Looking for full coverage.         │  █  |
+|   █  └─────────────────────────────────────────────┘  █  |
+|   █                                                    █  |
+|   █  LAST ACTIVITIES                                   █  |
+|   █  ● Status changed to QUOTATION SENT (2h ago)      █  |
+|   █  ○ WhatsApp call logged (1d ago)                  █  |
+|   █  ○ Comment: "Discussed pricing..." (2d ago)       █  |
+|   █                                                    █  |
+|   ██████████████████████████████████████████████████████  |
+|                                                           |
++-----------------------------------------------------------+
 ```
 
-#### Comment System Data Flow
-
+#### Sidebar Design
 ```text
-User enters comment in textarea
-          ↓
-Clicks "Add Comment"
-          ↓
-addClientComment() API call
-          ↓
-Comment appended to Column AC with timestamp
-          ↓
-Result returned with updated comments string
-          ↓
-1. setCurrentComments() → Local state update
-2. updateClientCache() → Sync to global IndexedDB
-          ↓
-Comments visible across all pages
++------------------+
+|  ← Back to Suite |
++------------------+
+|  [Client Icon]   |
+|  Client Detail   |
++------------------+
+|                  |
+|  📅 Events     ← |  (Active)
+|  📋 Registration |
+|  📞 Contact      |
+|  🕐 Inquiry      |
+|  💰 Sales        |
+|  📊 Activity     |
+|  💬 Comments (3) |
+|  💳 Financials   |
+|                  |
++------------------+
+|  [Call] [WA]     |
+|  [Payment]       |
++------------------+
 ```
 
 ---
 
-### UI Layout Preview
+### Files to Create/Modify
 
-**View Mode - Top of Page:**
-```text
-+------------------------------------------+
-| [Back] [Name Badge]           [Edit Btn] |
-+------------------------------------------+
-| [Call] [WhatsApp] [Payment] [Status ▼]   |
-+------------------------------------------+
-|                                          |
-| ┌──────────────────────────────────────┐ |
-| │ 📝 DESCRIPTION                       │ |
-| │ "Interested in premium package for   │ |
-| │ wedding in Pokhara. Budget flexible."│ |
-| └──────────────────────────────────────┘ |
-|                                          |
-| [Events] [Inquiry] [Sales] [Activity]... |
-+------------------------------------------+
-```
+| File | Action | Purpose |
+|------|--------|---------|
+| `src/components/client-detail/ClientDetailSidebar.tsx` | Create | Netflix-style left sidebar navigation |
+| `src/components/client-detail/ClientHeroSection.tsx` | Create | Hero with name, contact, description |
+| `src/components/client-detail/LastActivitiesSummary.tsx` | Create | Compact recent activities preview |
+| `src/components/client-detail/index.ts` | Create | Export barrel file |
+| `src/pages/ClientDetail.tsx` | Major Refactor | New layout with sidebar + hero + sections |
 
-**Comments Tab:**
-```text
-+------------------------------------------+
-| 💬 COMMENTS                              |
-+------------------------------------------+
-| ┌──────────────────────────────────────┐ |
-| │ [Text area: Add your comment...]     │ |
-| │                          [Add ✓]     │ |
-| └──────────────────────────────────────┘ |
-|                                          |
-| ┌──────────────────────────────────────┐ |
-| │ "Called and discussed pricing"       │ |
-| │ Magh 15, 2082 at 3:45 PM            │ |
-| └──────────────────────────────────────┘ |
-|                                          |
-| ┌──────────────────────────────────────┐ |
-| │ "Initial inquiry received via WA"    │ |
-| │ Magh 12, 2082 at 10:20 AM           │ |
-| └──────────────────────────────────────┘ |
-+------------------------------------------+
+---
+
+### State Management
+
+```typescript
+// New state for section navigation
+const [activeSection, setActiveSection] = useState<
+  'events' | 'registration' | 'contact' | 'inquiry' | 
+  'sales' | 'activity' | 'comments' | 'financials'
+>('events');
+
+// Sidebar collapsed state
+const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 ```
 
 ---
 
-### Edge Cases Handled
+### Data Flow
 
-1. **Empty description**: Shows "No description added" placeholder
-2. **Empty comments**: Shows "No comments yet" with input still available
-3. **Quotation dialog cancel**: No changes made, dialog closes cleanly
-4. **Partial quotation**: At least one tier required (validation)
-5. **Network failure**: Toast error shown, state not corrupted
-6. **Cache sync**: Uses `notifyCacheUpdate` to inform all components of changes
+```text
+ClientDetail Page
+      │
+      ├── ClientDetailSidebar (Navigation)
+      │       └── onClick → setActiveSection()
+      │
+      ├── ClientHeroSection (Hero Display)
+      │       ├── Client Name + Status
+      │       ├── Contact Info
+      │       ├── Description Card
+      │       └── LastActivitiesSummary
+      │
+      └── Main Content Area
+              └── Conditional render based on activeSection
+                  ├── 'events' → EventsSection
+                  ├── 'registration' → RegistrationSection
+                  ├── 'contact' → ContactSection
+                  ├── 'inquiry' → InquirySection
+                  ├── 'sales' → SalesSection
+                  ├── 'activity' → ActivitySection
+                  ├── 'comments' → CommentsSection
+                  └── 'financials' → FinancialsSection
+```
 
+---
+
+### Key Features Preserved
+
+- All existing functionality (edit mode, call logging, payment drawer, quotation dialog)
+- Global status synchronization
+- Comment adding with cache updates
+- Navigation (prev/next client)
+- Keyboard shortcuts
+- Mobile responsiveness
+
+---
+
+### Animation Enhancements
+
+- **Section Transitions:** `animate-fade-in` when switching sections
+- **Sidebar Hover:** `hover:bg-white/10` with smooth transition
+- **Hero Entrance:** Subtle scale + fade animation on page load
+- **Activity Items:** Staggered fade-in for timeline items
