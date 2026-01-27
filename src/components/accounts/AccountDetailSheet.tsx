@@ -20,10 +20,14 @@ import {
   KeyRound,
   Mail,
   User,
-  Building2
+  Building2,
+  Calendar,
+  Clock,
+  CreditCard
 } from "lucide-react";
 import { toast } from "sonner";
-import { AccountData } from "@/lib/accounts-api";
+import { AccountData, getExpiryStatus, formatPrice, getEffectiveExpiryDate } from "@/lib/accounts-api";
+import { format, parseISO } from "date-fns";
 
 interface AccountDetailSheetProps {
   account: AccountData | null;
@@ -224,6 +228,89 @@ export function AccountDetailSheet({ account, open, onOpenChange }: AccountDetai
                         WhatsApp
                       </Button>
                     )}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Subscription Details Section */}
+          {(account.dateOfPurchase || account.validity || account.price) && (
+            <>
+              <Separator className="bg-slate-700" />
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">
+                  Subscription Details
+                </h3>
+                
+                {/* Date of Purchase */}
+                {account.dateOfPurchase && (
+                  <div className="flex items-center gap-2 bg-slate-800/50 rounded-lg p-3">
+                    <Calendar className="h-4 w-4 text-slate-400" />
+                    <div>
+                      <p className="text-xs text-slate-400">Date of Purchase</p>
+                      <span className="text-white">
+                        {(() => {
+                          try {
+                            return format(parseISO(account.dateOfPurchase), 'MMMM dd, yyyy');
+                          } catch {
+                            return account.dateOfPurchase;
+                          }
+                        })()}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Validity Period */}
+                {account.validity && (
+                  <div className="flex items-center gap-2 bg-slate-800/50 rounded-lg p-3">
+                    <Clock className="h-4 w-4 text-slate-400" />
+                    <div>
+                      <p className="text-xs text-slate-400">Validity Period</p>
+                      <span className="text-white">{account.validity} months</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Expiry Date with Status */}
+                {(() => {
+                  const expiryStatus = getExpiryStatus(account);
+                  const expiryDateStr = getEffectiveExpiryDate(account);
+                  if (!expiryDateStr) return null;
+                  
+                  let formattedDate = expiryDateStr;
+                  try {
+                    formattedDate = format(parseISO(expiryDateStr), 'MMMM dd, yyyy');
+                  } catch {}
+                  
+                  return (
+                    <div className="flex items-center justify-between bg-slate-800/50 rounded-lg p-3">
+                      <div className="flex items-center gap-2">
+                        <Clock className={`h-4 w-4 ${expiryStatus.colorClass}`} />
+                        <div>
+                          <p className="text-xs text-slate-400">Expiry Date</p>
+                          <span className="text-white">{formattedDate}</span>
+                        </div>
+                      </div>
+                      <Badge 
+                        variant="outline" 
+                        className={`${expiryStatus.colorClass} border-current`}
+                      >
+                        {expiryStatus.label}
+                      </Badge>
+                    </div>
+                  );
+                })()}
+
+                {/* Price */}
+                {account.price && (
+                  <div className="flex items-center gap-2 bg-slate-800/50 rounded-lg p-3">
+                    <CreditCard className="h-4 w-4 text-emerald-400" />
+                    <div>
+                      <p className="text-xs text-slate-400">Price</p>
+                      <span className="text-emerald-400 font-semibold">{formatPrice(account.price)}</span>
+                    </div>
                   </div>
                 )}
               </div>

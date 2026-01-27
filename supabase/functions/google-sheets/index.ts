@@ -2820,7 +2820,7 @@ async function deleteVendor(accessToken: string, spreadsheetId: string, rowNumbe
 // ============= MY ACCOUNTS MODULE =============
 // Get account credentials from WTN ID PASSWORD sheet
 async function getAccounts(accessToken: string, spreadsheetId: string, limit = 500) {
-  const range = encodeURIComponent("'WTN ID PASSWORD'!A2:L" + (limit + 1));
+  const range = encodeURIComponent("'WTN ID PASSWORD'!A2:P" + (limit + 1));
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   const response = await fetch(url, {
@@ -2850,6 +2850,10 @@ async function getAccounts(accessToken: string, spreadsheetId: string, limit = 5
     website: row[9] || '',          // Column J
     instagram: row[10] || '',       // Column K
     facebook: row[11] || '',        // Column L
+    dateOfPurchase: row[12] || '',  // Column M
+    validity: row[13] || '',        // Column N (months)
+    expiryDate: row[14] || '',      // Column O
+    price: row[15] || '',           // Column P
   }));
 }
 
