@@ -3,6 +3,7 @@ import { DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { adToBS } from "@/lib/nepali-date";
 import {
   Drawer,
   DrawerContent,
@@ -102,7 +103,10 @@ const PaymentDrawer = ({
   // Set default date to today when drawer opens
   useEffect(() => {
     if (isOpen && !selectedDate) {
-      setSelectedDate(new Date());
+      const today = new Date();
+      const bsDate = adToBS(today);
+      setSelectedDate(today);
+      setSelectedBSDate({ year: bsDate.year, month: bsDate.month, day: bsDate.day as number });
     }
   }, [isOpen, selectedDate]);
 
