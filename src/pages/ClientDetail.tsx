@@ -759,7 +759,7 @@ const ClientDetail = () => {
   const payments = client ? parsePayments(client.paymentsMade) : [];
   const totalPaid = client ? getTotalPaid(client.paymentsMade) : 0;
 
-  // Initialize state when client changes
+  // Initialize state when client changes - use all relevant fields to catch updates
   useEffect(() => {
     if (client) {
       setCurrentStatusLog(client.statusLog || '');
@@ -768,7 +768,7 @@ const ClientDetail = () => {
       setCurrentPaymentsMade(client.paymentsMade || '');
       setCurrentRemainingPayment(client.remainingPayment || '');
     }
-  }, [client?.rowNumber, client?.registeredDateTimeAD]);
+  }, [client?.rowNumber, client?.registeredDateTimeAD, client?.statusLog, client?.comments, client?.quotationData, client?.paymentsMade, client?.remainingPayment]);
 
   // Only show loading if we have no clients AND still loading
   if (isLoading && clients.length === 0) {
@@ -1289,20 +1289,49 @@ const ClientDetail = () => {
             <div className="space-y-6">
               <h2 className="text-xl font-bold text-white mb-4">Sales & Quotation</h2>
               
-              {/* Initial Quotation */}
+              {/* Quotation Sent Status - Show quotation or prompt to add */}
+              {currentStatus.toUpperCase().includes('QUOTATION SENT') && quotationTiers.length === 0 && (
+                <div className="p-4 bg-amber-500/20 rounded-xl border border-amber-500/30 animate-fade-in">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 rounded-lg bg-amber-500/30">
+                      <FileText className="h-5 w-5 text-amber-400" />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-amber-200">Quotation Not Recorded</div>
+                      <div className="text-sm text-amber-300/70">Status shows QUOTATION SENT but no amounts are recorded</div>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setPendingStatus('QUOTATION SENT : REVIEW PENDING');
+                      setShowQuotationDialog(true);
+                    }}
+                    className="bg-amber-500 hover:bg-amber-600 text-black font-medium"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Quotation Amounts
+                  </Button>
+                </div>
+              )}
+
+              {/* Quotation Amounts - Show if available */}
               <div>
-                <div className="text-sm text-white/40 mb-3">Initial Quotation</div>
+                <div className="text-sm text-white/40 mb-3">Quotation Sent</div>
                 {quotationTiers.length > 0 ? (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {quotationTiers.map((tier, i) => (
-                      <div key={i} className={`p-3 rounded-lg ${getQuotationTierColor(tier.tier)}`}>
-                        <div className="text-xs font-medium opacity-80">{tier.tier}</div>
-                        <div className="font-semibold">{tier.amount}</div>
+                      <div key={i} className={`p-4 rounded-xl ${getQuotationTierColor(tier.tier)} shadow-lg`}>
+                        <div className="text-xs font-semibold opacity-80 mb-1">{tier.tier}</div>
+                        <div className="text-lg font-bold">{tier.amount}</div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-white/40 p-4 bg-white/5 rounded-xl border border-white/10 text-center">No quotation sent yet</div>
+                  <div className="text-white/40 p-4 bg-white/5 rounded-xl border border-dashed border-white/20 text-center">
+                    <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <div>No quotation amounts recorded</div>
+                  </div>
                 )}
               </div>
 
