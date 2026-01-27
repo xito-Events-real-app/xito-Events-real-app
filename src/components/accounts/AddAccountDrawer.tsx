@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Drawer,
@@ -12,6 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { FormCombobox } from "@/components/form/FormCombobox";
 import { 
   KeyRound, 
   Mail, 
@@ -29,7 +31,13 @@ import {
   Shield
 } from "lucide-react";
 import { toast } from "sonner";
-import { addAccount, AccountData } from "@/lib/accounts-api";
+import { 
+  addAccount, 
+  getAccountSetupData, 
+  getSecretsVendors, 
+  addSecretsVendor,
+  VendorInfo 
+} from "@/lib/accounts-api";
 
 interface AddAccountDrawerProps {
   open: boolean;
@@ -75,10 +83,71 @@ const initialFormData: FormData = {
 export function AddAccountDrawer({ open, onOpenChange }: AddAccountDrawerProps) {
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingDropdowns, setIsLoadingDropdowns] = useState(true);
+  const [accountTypes, setAccountTypes] = useState<string[]>([]);
+  const [whoBoughtItOptions, setWhoBoughtItOptions] = useState<string[]>([]);
+  const [vendors, setVendors] = useState<VendorInfo[]>([]);
   const queryClient = useQueryClient();
+
+  // Fetch dropdown data on mount
+  useEffect(() => {
+    if (open) {
+      fetchDropdownData();
+    }
+  }, [open]);
+
+  const fetchDropdownData = async () => {
+    setIsLoadingDropdowns(true);
+    try {
+      const [setupData, vendorData] = await Promise.all([
+        getAccountSetupData(),
+        getSecretsVendors(),
+      ]);
+      setAccountTypes(setupData.accountTypes);
+      setWhoBoughtItOptions(setupData.whoBoughtIt);
+      setVendors(vendorData);
+    } catch (error) {
+      console.error('Failed to fetch dropdown data:', error);
+      toast.error('Failed to load form options');
+    } finally {
+      setIsLoadingDropdowns(false);
+    }
+  };
 
   const handleChange = (field: keyof FormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Handle vendor selection with auto-fill
+  const handleVendorChange = (vendorName: string) => {
+    // Find existing vendor (case-insensitive)
+    const existingVendor = vendors.find(
+      v => v.vendorName.toLowerCase() === vendorName.toLowerCase()
+    );
+
+    if (existingVendor) {
+      // Auto-fill vendor details
+      setFormData(prev => ({
+        ...prev,
+        vendor: vendorName,
+        vendorNumber: existingVendor.vendorNumber,
+        vendorWhatsapp: existingVendor.vendorWhatsapp,
+        website: existingVendor.website,
+        instagram: existingVendor.instagram,
+        facebook: existingVendor.facebook,
+      }));
+    } else {
+      // Just update vendor name, clear other fields for new vendor
+      setFormData(prev => ({
+        ...prev,
+        vendor: vendorName,
+        vendorNumber: '',
+        vendorWhatsapp: '',
+        website: '',
+        instagram: '',
+        facebook: '',
+      }));
+    }
   };
 
   const handleSubmit = async () => {
@@ -98,6 +167,26 @@ export function AddAccountDrawer({ open, onOpenChange }: AddAccountDrawerProps) 
 
     setIsSubmitting(true);
     try {
+      // Check if vendor is new (not in existing list)
+      if (formData.vendor.trim()) {
+        const isNewVendor = !vendors.some(
+          v => v.vendorName.toLowerCase() === formData.vendor.toLowerCase()
+        );
+        
+        if (isNewVendor) {
+          // Save new vendor to WTN SECRETS VENDOR INFO
+          await addSecretsVendor({
+            vendorName: formData.vendor,
+            vendorNumber: formData.vendorNumber,
+            vendorWhatsapp: formData.vendorWhatsapp,
+            website: formData.website,
+            instagram: formData.instagram,
+            facebook: formData.facebook,
+          });
+        }
+      }
+
+      // Add account to WTN ID PASSWORD
       await addAccount(formData);
       toast.success('Account added successfully!');
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
@@ -141,18 +230,20 @@ export function AddAccountDrawer({ open, onOpenChange }: AddAccountDrawerProps) 
               </h3>
               
               <div className="space-y-3">
-                <div className="space-y-2">
-                  <Label htmlFor="accountType" className="text-slate-300">
-                    Account Type *
-                  </Label>
-                  <Input
-                    id="accountType"
-                    placeholder="e.g., Netflix, Spotify, Adobe..."
+                {isLoadingDropdowns ? (
+                  <Skeleton className="h-16 bg-slate-800" />
+                ) : (
+                  <FormCombobox
+                    label="Account Type *"
                     value={formData.accountType}
-                    onChange={(e) => handleChange('accountType', e.target.value)}
-                    className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                    onChange={(value) => handleChange('accountType', value)}
+                    options={accountTypes}
+                    placeholder="Select account type..."
+                    searchPlaceholder="Search account types..."
+                    required
+                    className="[&_label]:text-slate-300 [&_button]:bg-slate-800 [&_button]:border-slate-700 [&_button]:text-white"
                   />
-                </div>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="id" className="text-slate-300 flex items-center gap-2">
@@ -210,19 +301,19 @@ export function AddAccountDrawer({ open, onOpenChange }: AddAccountDrawerProps) 
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="whoBoughtIt" className="text-slate-300 flex items-center gap-2">
-                    <User className="h-4 w-4 text-slate-400" />
-                    Who Bought It
-                  </Label>
-                  <Input
-                    id="whoBoughtIt"
-                    placeholder="Name of buyer"
+                {isLoadingDropdowns ? (
+                  <Skeleton className="h-16 bg-slate-800" />
+                ) : (
+                  <FormCombobox
+                    label="Who Bought It"
                     value={formData.whoBoughtIt}
-                    onChange={(e) => handleChange('whoBoughtIt', e.target.value)}
-                    className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                    onChange={(value) => handleChange('whoBoughtIt', value)}
+                    options={whoBoughtItOptions}
+                    placeholder="Select buyer..."
+                    searchPlaceholder="Search buyers..."
+                    className="[&_label]:text-slate-300 [&_button]:bg-slate-800 [&_button]:border-slate-700 [&_button]:text-white"
                   />
-                </div>
+                )}
               </div>
             </div>
 
@@ -236,18 +327,26 @@ export function AddAccountDrawer({ open, onOpenChange }: AddAccountDrawerProps) 
               </h3>
               
               <div className="space-y-3">
-                <div className="space-y-2">
-                  <Label htmlFor="vendor" className="text-slate-300">
-                    Vendor Name
-                  </Label>
-                  <Input
-                    id="vendor"
-                    placeholder="Vendor company name"
+                {isLoadingDropdowns ? (
+                  <Skeleton className="h-16 bg-slate-800" />
+                ) : (
+                  <FormCombobox
+                    label="Vendor Name"
                     value={formData.vendor}
-                    onChange={(e) => handleChange('vendor', e.target.value)}
-                    className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                    onChange={handleVendorChange}
+                    options={vendors.map(v => v.vendorName)}
+                    placeholder="Select or add vendor..."
+                    searchPlaceholder="Search vendors..."
+                    className="[&_label]:text-slate-300 [&_button]:bg-slate-800 [&_button]:border-slate-700 [&_button]:text-white"
                   />
-                </div>
+                )}
+                {formData.vendor && (
+                  <p className="text-xs text-slate-500">
+                    {vendors.some(v => v.vendorName.toLowerCase() === formData.vendor.toLowerCase())
+                      ? "✓ Existing vendor - details auto-filled"
+                      : "• New vendor - enter details below to save"}
+                  </p>
+                )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
