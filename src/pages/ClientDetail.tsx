@@ -679,19 +679,25 @@ const ClientDetail = () => {
     }
   };
 
-  // Handle adding a comment
+  // Handle adding a comment (from Comments tab)
   const handleAddComment = async () => {
     if (!client?.rowNumber || !newComment.trim()) return;
+    await handleAddCommentDirect(newComment.trim());
+    setNewComment('');
+  };
+
+  // Handle adding a comment directly (from Hero section chat)
+  const handleAddCommentDirect = async (commentText: string) => {
+    if (!client?.rowNumber || !commentText.trim()) return;
     
     setIsAddingComment(true);
     try {
       const result = await addClientComment(
         client.rowNumber, 
-        newComment.trim(), 
+        commentText.trim(), 
         currentComments || client.comments || ''
       );
       setCurrentComments(result.comments);
-      setNewComment('');
       toast({ title: "Comment added" });
       
       // Update global cache
@@ -1076,19 +1082,17 @@ const ClientDetail = () => {
         {/* Hero Section */}
         <ClientHeroSection
           client={client}
-          events={events.map(e => ({
-            name: e.name,
-            monthName: e.month ? getMonthName(parseInt(e.month)) : '',
-            day: e.day,
-            year: e.year
-          }))}
           currentStatus={currentStatus}
           onCall={handleCall}
           onPayment={() => setShowPaymentDrawer(true)}
           onStatusClick={() => setShowStatusDropdown(true)}
           onEdit={handleEdit}
+          onAddComment={async (comment) => {
+            await handleAddCommentDirect(comment);
+          }}
           isLoggingCall={isLoggingCall}
           isChangingStatus={isChangingStatus}
+          isAddingComment={isAddingComment}
         />
 
         {/* Mobile Section Tabs */}
@@ -1125,6 +1129,40 @@ const ClientDetail = () => {
           {activeSection === 'events' && (
             <div className="space-y-4">
               <h2 className="text-xl font-bold text-white mb-4">Events & Dates</h2>
+              
+              {/* Cute Event Badges Summary */}
+              {events.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {events.map((event, i) => {
+                    const upper = event.name.toUpperCase();
+                    const badgeClass = upper.includes('WEDDING') ? 'bg-blue-500/30 text-blue-200 border-blue-400/30' :
+                      upper.includes('RECEPTION') ? 'bg-purple-500/30 text-purple-200 border-purple-400/30' :
+                      upper.includes('ENGAGEMENT') ? 'bg-pink-500/30 text-pink-200 border-pink-400/30' :
+                      upper.includes('PRE') || upper.includes('MEHNDI') ? 'bg-orange-500/30 text-orange-200 border-orange-400/30' :
+                      'bg-emerald-500/30 text-emerald-200 border-emerald-400/30';
+                    
+                    const monthName = event.month ? getMonthName(parseInt(event.month)) : '';
+                    
+                    return (
+                      <div 
+                        key={i}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${badgeClass}`}
+                      >
+                        <Calendar className="h-3 w-3" />
+                        <span className="font-semibold">{event.name}</span>
+                        <span className="opacity-60">•</span>
+                        <span>{monthName} {event.day}</span>
+                        {event.year && (
+                          <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] font-bold ml-0.5">
+                            {event.year}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              
               {events.length > 0 ? (
                 <Tabs defaultValue={events[0]?.name.toLowerCase().replace(/\s+/g, '-') || 'event-0'} className="w-full">
                   <TabsList className="flex flex-wrap gap-1 h-auto p-1.5 bg-white/5 rounded-xl border border-white/10">

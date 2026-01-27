@@ -1,28 +1,21 @@
-import { Phone, MessageCircle, Mail, MapPin, FileText, CreditCard, RefreshCw, Pencil, Calendar } from "lucide-react";
+import { Phone, MessageCircle, Mail, MapPin, FileText, CreditCard, RefreshCw, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ClientData } from "@/lib/sheets-api";
 import { getMonthColorClasses, parseInquiryMonth } from "@/lib/client-card-utils";
-import { getMonthName } from "@/lib/nepali-months";
-import LastActivitiesSummary from "./LastActivitiesSummary";
-
-interface EventData {
-  name: string;
-  monthName: string;
-  day: string;
-  year: string;
-}
+import ChatComments from "./ChatComments";
 
 interface ClientHeroSectionProps {
   client: ClientData;
-  events: EventData[];
   currentStatus: string;
   onCall: (type: 'DIRECT' | 'WHATSAPP') => void;
   onPayment: () => void;
   onStatusClick: () => void;
   onEdit: () => void;
+  onAddComment: (comment: string) => Promise<void>;
   isLoggingCall?: boolean;
   isChangingStatus?: boolean;
+  isAddingComment?: boolean;
 }
 
 // Get status color
@@ -37,15 +30,6 @@ function getStatusColor(status: string): string {
   return 'bg-slate-500 text-white';
 }
 
-// Get event theme colors for badges
-function getEventThemeClasses(eventName: string): string {
-  const upper = eventName.toUpperCase();
-  if (upper.includes('WEDDING')) return 'bg-blue-500/30 text-blue-200 border border-blue-400/30';
-  if (upper.includes('RECEPTION')) return 'bg-purple-500/30 text-purple-200 border border-purple-400/30';
-  if (upper.includes('ENGAGEMENT')) return 'bg-pink-500/30 text-pink-200 border border-pink-400/30';
-  if (upper.includes('PRE') || upper.includes('MEHNDI')) return 'bg-orange-500/30 text-orange-200 border border-orange-400/30';
-  return 'bg-emerald-500/30 text-emerald-200 border border-emerald-400/30';
-}
 
 // Format description with better readability
 function formatDescription(text: string): string {
@@ -67,14 +51,15 @@ function formatDescription(text: string): string {
 
 const ClientHeroSection = ({
   client,
-  events,
   currentStatus,
   onCall,
   onPayment,
   onStatusClick,
   onEdit,
+  onAddComment,
   isLoggingCall = false,
   isChangingStatus = false,
+  isAddingComment = false,
 }: ClientHeroSectionProps) => {
   const inquiryMonth = parseInquiryMonth(client.inquiryDateBS);
   const monthColorClasses = inquiryMonth ? getMonthColorClasses(inquiryMonth) : '';
@@ -99,30 +84,6 @@ const ClientHeroSection = ({
               {client.clientName}
             </h1>
             
-            {/* Cute Event Badges - Right below name */}
-            {events.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-3">
-                {events.slice(0, 3).map((event, i) => (
-                  <div 
-                    key={i}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${getEventThemeClasses(event.name)}`}
-                  >
-                    <Calendar className="h-3 w-3" />
-                    <span className="font-semibold">{event.name}</span>
-                    <span className="opacity-60">•</span>
-                    <span>{event.monthName} {event.day}</span>
-                    {event.year && (
-                      <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] font-bold ml-0.5">
-                        {event.year}
-                      </span>
-                    )}
-                  </div>
-                ))}
-                {events.length > 3 && (
-                  <span className="text-xs text-white/50 self-center">+{events.length - 3} more</span>
-                )}
-              </div>
-            )}
             
             {/* Contact Info Row - NOT clickable */}
             <div className="flex flex-wrap gap-4 text-white/70 mt-4">
@@ -257,12 +218,11 @@ const ClientHeroSection = ({
           </div>
         )}
 
-        {/* Last Activities Summary */}
-        <LastActivitiesSummary
-          statusLog={client.statusLog}
-          callLog={client.callLog}
-          comments={client.comments}
-          paymentsMade={client.paymentsMade}
+        {/* Chat-style Comments Section */}
+        <ChatComments
+          comments={client.comments || ''}
+          onAddComment={onAddComment}
+          isAddingComment={isAddingComment}
         />
       </div>
     </div>
