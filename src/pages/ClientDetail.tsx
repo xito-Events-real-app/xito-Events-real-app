@@ -1090,6 +1090,10 @@ const ClientDetail = () => {
           onAddComment={async (comment) => {
             await handleAddCommentDirect(comment);
           }}
+          onAddQuotation={() => {
+            setPendingStatus('QUOTATION SENT : REVIEW PENDING');
+            setShowQuotationDialog(true);
+          }}
           isLoggingCall={isLoggingCall}
           isChangingStatus={isChangingStatus}
           isAddingComment={isAddingComment}

@@ -1,9 +1,10 @@
-import { Phone, MessageCircle, Mail, MapPin, FileText, CreditCard, RefreshCw, Pencil } from "lucide-react";
+import { Phone, MessageCircle, Mail, MapPin, CreditCard, RefreshCw, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ClientData } from "@/lib/sheets-api";
 import { getMonthColorClasses, parseInquiryMonth } from "@/lib/client-card-utils";
 import ChatComments from "./ChatComments";
+import QuotationDisplaySection from "./QuotationDisplaySection";
 
 interface ClientHeroSectionProps {
   client: ClientData;
@@ -13,6 +14,7 @@ interface ClientHeroSectionProps {
   onStatusClick: () => void;
   onEdit: () => void;
   onAddComment: (comment: string) => Promise<void>;
+  onAddQuotation: () => void;
   isLoggingCall?: boolean;
   isChangingStatus?: boolean;
   isAddingComment?: boolean;
@@ -57,6 +59,7 @@ const ClientHeroSection = ({
   onStatusClick,
   onEdit,
   onAddComment,
+  onAddQuotation,
   isLoggingCall = false,
   isChangingStatus = false,
   isAddingComment = false,
@@ -152,6 +155,16 @@ const ClientHeroSection = ({
             </Button>
           </div>
         </div>
+
+        {/* Quotation Display Section - Below Status */}
+        <QuotationDisplaySection
+          status={currentStatus}
+          quotationData={client.quotationData}
+          ourBargainedRates={client.ourBargainedRates}
+          clientBargainedRates={client.clientBargainedRates}
+          finalQuotation={client.finalQuotation}
+          onAddQuotation={onAddQuotation}
+        />
 
         {/* Quick Actions - These buttons trigger call logging */}
         <div className="flex flex-wrap gap-2 mb-6">
