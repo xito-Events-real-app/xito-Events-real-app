@@ -12,10 +12,12 @@ import {
   Globe,
   Instagram,
   Facebook,
-  KeyRound
+  KeyRound,
+  Calendar,
+  Clock
 } from "lucide-react";
 import { toast } from "sonner";
-import { AccountData } from "@/lib/accounts-api";
+import { AccountData, getExpiryStatus, formatPrice, getEffectiveExpiryDate } from "@/lib/accounts-api";
 
 interface AccountCardProps {
   account: AccountData;
@@ -55,6 +57,8 @@ export function AccountCard({ account, onSelect }: AccountCardProps) {
 
   const hasSocialLinks = account.website || account.instagram || account.facebook;
   const hasVendorContact = account.vendorNumber || account.vendorWhatsapp;
+  const expiryStatus = getExpiryStatus(account);
+  const hasSubscriptionInfo = account.dateOfPurchase || account.validity || account.price;
 
   return (
     <Card 
@@ -147,6 +151,26 @@ export function AccountCard({ account, onSelect }: AccountCardProps) {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Subscription Info */}
+      {hasSubscriptionInfo && (
+        <div className="flex items-center justify-between border-t border-slate-700 pt-3 mt-2">
+          <div className="flex items-center gap-2">
+            {account.price && (
+              <span className="text-emerald-400 text-sm font-medium">
+                {formatPrice(account.price)}
+              </span>
+            )}
+          </div>
+          <Badge 
+            variant="outline" 
+            className={`${expiryStatus.colorClass} border-current text-xs`}
+          >
+            <Clock className="h-3 w-3 mr-1" />
+            {expiryStatus.label}
+          </Badge>
         </div>
       )}
 
