@@ -14,6 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FormCombobox } from "@/components/form/FormCombobox";
+import { AccountDatePicker } from "./AccountDatePicker";
 import { 
   KeyRound, 
   Mail, 
@@ -23,13 +24,13 @@ import {
   Globe, 
   Instagram, 
   Facebook,
-  Calendar,
   Clock,
   CreditCard,
   Loader2,
   User,
   Shield
 } from "lucide-react";
+import { format } from "date-fns";
 import { toast } from "sonner";
 import { 
   addAccount, 
@@ -443,16 +444,11 @@ export function AddAccountDrawer({ open, onOpenChange }: AddAccountDrawerProps) 
               
               <div className="space-y-3">
                 <div className="space-y-2">
-                  <Label htmlFor="dateOfPurchase" className="text-slate-300 flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-slate-400" />
-                    Date of Purchase
-                  </Label>
-                  <Input
-                    id="dateOfPurchase"
-                    type="date"
-                    value={formData.dateOfPurchase}
-                    onChange={(e) => handleChange('dateOfPurchase', e.target.value)}
-                    className="bg-slate-800 border-slate-700 text-white"
+                  <Label className="text-slate-300">Date of Purchase</Label>
+                  <AccountDatePicker
+                    selectedDate={formData.dateOfPurchase ? new Date(formData.dateOfPurchase) : null}
+                    onDateChange={(date) => handleChange('dateOfPurchase', format(date, 'yyyy-MM-dd'))}
+                    placeholder="Select purchase date..."
                   />
                 </div>
 
