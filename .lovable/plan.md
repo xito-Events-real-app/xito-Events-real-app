@@ -1,97 +1,191 @@
 
 
-## Add Purchase/Validity/Expiry/Price Columns to My Accounts
+## My Accounts Module Enhancements
 
-This plan adds 4 new columns from the "WTN ID PASSWORD" sheet to the My Accounts module with automatic expiry date calculation.
+This plan addresses three key improvements to the My Accounts module:
+1. Change expiry display to show "X days remaining" format
+2. Make ID fully visible (not truncated)
+3. Add clickable dates that show BS (Bikram Sambat) equivalent
+4. Create a form to add new accounts to the sheet
 
-### Column Mapping (New)
-| Column | Field | Description |
-|--------|-------|-------------|
-| M | Date of Purchase | When the account was purchased |
-| N | Validity | Number of months the account is valid |
-| O | Expiry Date | Calculated: Purchase Date + Validity months |
-| P | Price | Cost of the account |
+---
 
-### Changes Overview
+### Overview of Changes
 
 ```text
-+------------------+     +-------------------+     +------------------+
-| Edge Function    | --> | accounts-api.ts   | --> | UI Components    |
-| (fetch M-P cols) |     | (add interface)   |     | (display data)   |
-+------------------+     +-------------------+     +------------------+
++-------------------+     +-------------------+     +-------------------+
+| UI Components     |     | API Layer         |     | Edge Function     |
+| - AccountCard     |     | - accounts-api.ts |     | - google-sheets   |
+| - AccountTable    |     | - addAccount()    |     | - addAccount case |
+| - AccountDetail   |     |                   |     |                   |
+| - AddAccountDrawer|     |                   |     |                   |
++-------------------+     +-------------------+     +-------------------+
 ```
+
+---
+
+### 1. Expiry Date Display Enhancement
+
+**Current**: Shows "Active", "30d left", "Expired" as badges
+**New**: Shows "45 days remaining" or "Expired 3 days ago"
+
+**Files to modify:**
+- `src/lib/accounts-api.ts` - Update `getExpiryStatus()` to return human-readable labels
+- `src/components/accounts/AccountTable.tsx` - Update expiry column display
+- `src/components/accounts/AccountCard.tsx` - Update mobile card expiry badge
+- `src/components/accounts/AccountDetailSheet.tsx` - Update detail sheet expiry display
+
+**New label format:**
+| Status | Current Label | New Label |
+|--------|--------------|-----------|
+| Active (>30d) | "Active" | "120 days remaining" |
+| Expiring (1-30d) | "15d left" | "15 days remaining" |
+| Expired | "Expired" | "Expired 5 days ago" |
+
+---
+
+### 2. Full ID Visibility Fix
+
+**Current**: ID is truncated with `max-w-[200px]` causing cropping
+**Fix**: Remove truncation, allow ID to wrap or expand
+
+**Files to modify:**
+- `src/components/accounts/AccountTable.tsx` - Line 100: Remove `truncate max-w-[200px]` class
+
+The ID will now display fully without cropping in the desktop table view.
+
+---
+
+### 3. Clickable AD to BS Date Conversion
+
+When users click on any AD date (Date of Purchase, Expiry Date), it will show the corresponding BS date in a tooltip or toggle display.
+
+**Implementation approach:**
+- Create a reusable `ClickableDateWithBS` component
+- Uses existing `adToBS()` and `formatBSDate()` from `src/lib/nepali-date.ts`
+- Clicking toggles between AD and BS display, or shows BS in a tooltip
+
+**Files to modify:**
+- Create new: `src/components/accounts/ClickableDateWithBS.tsx`
+- Update: `src/components/accounts/AccountTable.tsx` - Use component for expiry dates
+- Update: `src/components/accounts/AccountCard.tsx` - Use component for dates
+- Update: `src/components/accounts/AccountDetailSheet.tsx` - Use component for all dates
+
+**Component behavior:**
+- Default: Shows AD date (e.g., "Jan 27, 2026")
+- On click: Toggles to show BS date (e.g., "14 Magh 2082")
+- Visual indicator (small calendar icon) to show it's clickable
+
+---
+
+### 4. Add Account Form
+
+Create a drawer form to add new accounts to the WTN ID PASSWORD sheet.
+
+**New files:**
+- `src/components/accounts/AddAccountDrawer.tsx` - Form UI component
+- Update `src/lib/accounts-api.ts` - Add `addAccount()` function
+
+**Form fields (matching sheet columns A-P):**
+| Field | Column | Required |
+|-------|--------|----------|
+| Account Type | A | Yes |
+| ID (email/username) | B | Yes |
+| Password | C | Yes |
+| Recovery Account | D | No |
+| Registered Number | E | No |
+| Who Bought It | F | No |
+| Vendor | G | No |
+| Vendor Number | H | No |
+| Vendor WhatsApp | I | No |
+| Website | J | No |
+| Instagram | K | No |
+| Facebook | L | No |
+| Date of Purchase | M | No |
+| Validity (months) | N | No |
+| Expiry Date | O | Auto-calculated |
+| Price | P | No |
+
+**Edge function update:**
+- Add `addAccount` case to `supabase/functions/google-sheets/index.ts`
+- Appends new row to the "WTN ID PASSWORD" sheet
+
+**UI integration:**
+- Add "+" button in header of both Desktop and Mobile views
+- Opens AddAccountDrawer
+- On successful add, refreshes the account list
 
 ---
 
 ### Technical Details
 
-#### 1. Edge Function Update
-**File:** `supabase/functions/google-sheets/index.ts`
+#### A. Update `getExpiryStatus()` in accounts-api.ts
 
-- Extend range from `A2:L` to `A2:P` to fetch new columns
-- Add mapping for 4 new fields in the response object:
-  - `dateOfPurchase` (Column M)
-  - `validity` (Column N) - stored as months
-  - `expiryDate` (Column O) - calculated if empty
-  - `price` (Column P)
-
-#### 2. Frontend Interface Update
-**File:** `src/lib/accounts-api.ts`
-
-Add 4 new properties to `AccountData` interface:
 ```typescript
-dateOfPurchase: string;   // Column M
-validity: string;         // Column N (months)
-expiryDate: string;       // Column O
-price: string;            // Column P
+// Updated label format
+if (days < 0) {
+  const daysAgo = Math.abs(days);
+  return { 
+    status: 'expired', 
+    daysRemaining: days, 
+    label: `Expired ${daysAgo} day${daysAgo !== 1 ? 's' : ''} ago`, 
+    colorClass: 'text-red-400' 
+  };
+} else if (days === 0) {
+  return { status: 'expiring', daysRemaining: 0, label: 'Expires today', colorClass: 'text-amber-400' };
+} else {
+  return { 
+    status: days <= 30 ? 'expiring' : 'active', 
+    daysRemaining: days, 
+    label: `${days} day${days !== 1 ? 's' : ''} remaining`, 
+    colorClass: days <= 30 ? 'text-amber-400' : 'text-green-400' 
+  };
+}
 ```
 
-#### 3. Expiry Calculation Utility
-**File:** `src/lib/accounts-api.ts`
+#### B. ClickableDateWithBS Component
 
-Add helper function to calculate expiry date:
 ```typescript
-// If expiryDate is empty, calculate from dateOfPurchase + validity months
-function calculateExpiryDate(purchaseDate: string, validityMonths: number): string
+interface Props {
+  dateString: string;  // AD date in various formats
+  className?: string;
+}
+
+// Parses date, converts to BS, shows both on click
+// Uses Tooltip from shadcn/ui for clean UX
 ```
 
-#### 4. Mobile Card Update
-**File:** `src/components/accounts/AccountCard.tsx`
+#### C. Edge Function addAccount Handler
 
-Add a "Subscription" section showing:
-- Price with NPR formatting
-- Expiry status badge (Active/Expiring Soon/Expired)
-- Visual indicator based on days until expiry
+```typescript
+case 'addAccount':
+  if (!data) throw new Error('data is required for addAccount');
+  // Use WTN_SECRETS_SPREADSHEET_ID
+  const secretsSpreadsheetId = Deno.env.get('WTN_SECRETS_SPREADSHEET_ID') || spreadsheetId;
+  result = await addAccount(accessToken, secretsSpreadsheetId, data);
+  break;
 
-#### 5. Desktop Table Update
-**File:** `src/components/accounts/AccountTable.tsx`
-
-Add 2 new columns to the table:
-- **Expiry** column showing expiry date with color-coded status
-- **Price** column with NPR formatting
-
-#### 6. Detail Sheet Update
-**File:** `src/components/accounts/AccountDetailSheet.tsx`
-
-Add new "Subscription Details" section with:
-- Date of Purchase
-- Validity period (e.g., "12 months")
-- Expiry Date with status indicator
-- Price
+// addAccount function appends to "WTN ID PASSWORD" sheet
+async function addAccount(accessToken, spreadsheetId, data) {
+  // Build row array [A through P]
+  // POST to sheets API append endpoint
+}
+```
 
 ---
 
-### Expiry Status Logic
+### Files Summary
 
-The expiry date will be color-coded based on remaining days:
-- **Green (Active):** More than 30 days remaining
-- **Amber (Expiring Soon):** 1-30 days remaining  
-- **Red (Expired):** Past expiry date
-
-### Edge Cases Handled
-
-1. **Missing data:** If columns M-P are empty, gracefully show "Not set"
-2. **Missing expiry:** If Column O is empty but M and N exist, calculate automatically
-3. **Invalid dates:** Handle various date formats from the sheet
-4. **No validity:** If validity is empty/invalid, don't calculate expiry
+| File | Action | Purpose |
+|------|--------|---------|
+| `src/lib/accounts-api.ts` | Modify | Update expiry labels, add `addAccount()` |
+| `src/components/accounts/AccountTable.tsx` | Modify | Fix ID visibility, use new expiry labels, add clickable dates |
+| `src/components/accounts/AccountCard.tsx` | Modify | Use new expiry labels, add clickable dates |
+| `src/components/accounts/AccountDetailSheet.tsx` | Modify | Use new expiry labels, add clickable dates |
+| `src/components/accounts/ClickableDateWithBS.tsx` | Create | Reusable date component with BS conversion |
+| `src/components/accounts/AddAccountDrawer.tsx` | Create | Form to add new accounts |
+| `src/components/accounts/DesktopAccounts.tsx` | Modify | Add "+" button to header |
+| `src/components/accounts/MobileAccounts.tsx` | Modify | Add "+" button to header |
+| `src/components/accounts/index.ts` | Modify | Export new components |
+| `supabase/functions/google-sheets/index.ts` | Modify | Add `addAccount` handler |
 
