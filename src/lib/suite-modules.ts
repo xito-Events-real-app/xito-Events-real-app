@@ -9,6 +9,7 @@ import {
   Album,
   Building2,
   UserCog,
+  KeyRound,
   LucideIcon,
 } from "lucide-react";
 
@@ -103,6 +104,15 @@ export const suiteModules: SuiteModule[] = [
     path: '/vendors',
     status: 'active',
     gradient: 'from-slate-500 to-gray-600',
+  },
+  {
+    id: 'my-accounts',
+    name: 'My Accounts',
+    description: 'View account credentials',
+    icon: KeyRound,
+    path: '/my-accounts',
+    status: 'active',
+    gradient: 'from-pink-500 to-rose-600',
   },
   {
     id: 'freelancers',
