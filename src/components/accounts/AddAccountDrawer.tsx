@@ -209,8 +209,8 @@ export function AddAccountDrawer({ open, onOpenChange }: AddAccountDrawerProps) 
 
   return (
     <Drawer open={open} onOpenChange={handleClose}>
-      <DrawerContent className="bg-slate-900 border-slate-800 max-h-[90vh]">
-        <DrawerHeader className="border-b border-slate-800 pb-4">
+      <DrawerContent className="bg-slate-900 border-slate-800 max-h-[85vh] overflow-hidden">
+        <DrawerHeader className="border-b border-slate-800 pb-4 flex-shrink-0">
           <DrawerTitle className="text-white flex items-center gap-2">
             <KeyRound className="h-5 w-5 text-pink-400" />
             Add New Account
@@ -220,7 +220,7 @@ export function AddAccountDrawer({ open, onOpenChange }: AddAccountDrawerProps) 
           </DrawerDescription>
         </DrawerHeader>
 
-        <ScrollArea className="flex-1 px-4 py-4">
+        <ScrollArea className="flex-1 overflow-y-auto px-4 py-4" style={{ maxHeight: 'calc(85vh - 180px)' }}>
           <div className="space-y-6 pb-4">
             {/* Account Information Section */}
             <div className="space-y-4">
