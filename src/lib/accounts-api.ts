@@ -96,11 +96,22 @@ export function getExpiryStatus(account: AccountData): {
   const days = differenceInDays(expiryDate, today);
   
   if (days < 0) {
-    return { status: 'expired', daysRemaining: days, label: 'Expired', colorClass: 'text-red-400' };
-  } else if (days <= 30) {
-    return { status: 'expiring', daysRemaining: days, label: `${days}d left`, colorClass: 'text-amber-400' };
+    const daysAgo = Math.abs(days);
+    return { 
+      status: 'expired', 
+      daysRemaining: days, 
+      label: `Expired ${daysAgo} day${daysAgo !== 1 ? 's' : ''} ago`, 
+      colorClass: 'text-red-400' 
+    };
+  } else if (days === 0) {
+    return { status: 'expiring', daysRemaining: 0, label: 'Expires today', colorClass: 'text-amber-400' };
   } else {
-    return { status: 'active', daysRemaining: days, label: 'Active', colorClass: 'text-green-400' };
+    return { 
+      status: days <= 30 ? 'expiring' : 'active', 
+      daysRemaining: days, 
+      label: `${days} day${days !== 1 ? 's' : ''} remaining`, 
+      colorClass: days <= 30 ? 'text-amber-400' : 'text-green-400' 
+    };
   }
 }
 
@@ -130,4 +141,41 @@ export async function getAccounts(limit = 500): Promise<AccountData[]> {
   }
 
   return data.data || [];
+}
+
+// Add a new account to the sheet
+export async function addAccount(accountData: {
+  accountType: string;
+  id: string;
+  password: string;
+  recoveryAccount?: string;
+  registeredNumber?: string;
+  whoBoughtIt?: string;
+  vendor?: string;
+  vendorNumber?: string;
+  vendorWhatsapp?: string;
+  website?: string;
+  instagram?: string;
+  facebook?: string;
+  dateOfPurchase?: string;
+  validity?: string;
+  price?: string;
+}): Promise<{ success: boolean }> {
+  const { data, error } = await supabase.functions.invoke('google-sheets', {
+    body: {
+      action: 'addAccount',
+      data: accountData,
+    },
+  });
+
+  if (error) {
+    console.error('Error adding account:', error);
+    throw error;
+  }
+
+  if (!data.success) {
+    throw new Error(data.error || 'Failed to add account');
+  }
+
+  return data;
 }

@@ -17,8 +17,8 @@ import {
   MessageCircle 
 } from "lucide-react";
 import { toast } from "sonner";
-import { AccountData, getExpiryStatus, formatPrice, getEffectiveExpiryDate } from "@/lib/accounts-api";
-import { format, parseISO } from "date-fns";
+import { AccountData, getExpiryStatus, formatPrice } from "@/lib/accounts-api";
+import { ClickableDateWithBS } from "./ClickableDateWithBS";
 
 interface AccountTableProps {
   accounts: AccountData[];
@@ -74,15 +74,6 @@ export function AccountTable({ accounts, onSelectAccount }: AccountTableProps) {
         <TableBody>
           {accounts.map((account) => {
             const expiryStatus = getExpiryStatus(account);
-            const expiryDateStr = getEffectiveExpiryDate(account);
-            let formattedExpiry = '-';
-            if (expiryDateStr) {
-              try {
-                formattedExpiry = format(parseISO(expiryDateStr), 'MMM dd, yyyy');
-              } catch {
-                formattedExpiry = expiryDateStr;
-              }
-            }
             
             return (
               <TableRow 
@@ -97,7 +88,7 @@ export function AccountTable({ accounts, onSelectAccount }: AccountTableProps) {
                 </TableCell>
                 <TableCell className="text-white font-medium">
                   <div className="flex items-center gap-2">
-                    <span className="truncate max-w-[200px]">{account.id || 'No ID'}</span>
+                    <span className="break-all">{account.id || 'No ID'}</span>
                     <Button 
                       variant="ghost" 
                       size="icon" 
@@ -139,11 +130,10 @@ export function AccountTable({ accounts, onSelectAccount }: AccountTableProps) {
                   {account.vendor || '-'}
                 </TableCell>
                 <TableCell>
-                  <div className="flex flex-col">
-                    <span className={expiryStatus.colorClass}>{formattedExpiry}</span>
+                  <div className="flex flex-col gap-1">
                     <Badge 
                       variant="outline" 
-                      className={`${expiryStatus.colorClass} border-current text-xs w-fit mt-1`}
+                      className={`${expiryStatus.colorClass} border-current text-xs w-fit`}
                     >
                       {expiryStatus.label}
                     </Badge>
