@@ -34,12 +34,15 @@ const fetchState = {
 
 // Fetch fresh data from Google Sheets
 async function fetchFromSheets(): Promise<{ clients: ClientData[]; dropdowns: DropdownData }> {
-  const [clientsResult, dropdownsResult] = await Promise.all([
+  const [clientsResult, dropdownsResult, eventSetupResult] = await Promise.all([
     supabase.functions.invoke("google-sheets", {
       body: { action: "getClients", limit: 500 },
     }),
     supabase.functions.invoke("google-sheets", {
       body: { action: "getDropdowns" },
+    }),
+    supabase.functions.invoke("google-sheets", {
+      body: { action: "getEventSetupData" },
     }),
   ]);
 
@@ -49,9 +52,17 @@ async function fetchFromSheets(): Promise<{ clients: ClientData[]; dropdowns: Dr
   if (!clientsResult.data?.success) throw new Error(clientsResult.data?.error || "Failed to fetch clients");
   if (!dropdownsResult.data?.success) throw new Error(dropdownsResult.data?.error || "Failed to fetch dropdowns");
 
+  // Merge allEvents from EVENT SETUP DATA into dropdowns
+  const dropdowns = dropdownsResult.data.data as DropdownData;
+  if (eventSetupResult.data?.success) {
+    dropdowns.allEvents = eventSetupResult.data.data || [];
+  } else {
+    dropdowns.allEvents = [];
+  }
+
   return {
     clients: clientsResult.data.data as ClientData[],
-    dropdowns: dropdownsResult.data.data as DropdownData,
+    dropdowns,
   };
 }
 

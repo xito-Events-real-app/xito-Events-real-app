@@ -93,8 +93,12 @@ export default function QuickAdd() {
     }
   }, [serviceTypes.length, dropdowns?.serviceTypes]);
 
-  // Combine all event options from D, E, F columns
+  // Use allEvents from EVENT SETUP DATA sheet, fallback to combined events for backwards compatibility
   const allEventOptions = useMemo(() => {
+    if (dropdowns?.allEvents && dropdowns.allEvents.length > 0) {
+      return dropdowns.allEvents;
+    }
+    // Fallback to old method (combining from D, E, F columns)
     const events: string[] = [];
     if (dropdowns?.preweddingEvents) events.push(...dropdowns.preweddingEvents);
     if (dropdowns?.weddingEvents) events.push(...dropdowns.weddingEvents);

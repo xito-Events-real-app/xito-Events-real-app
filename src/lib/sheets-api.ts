@@ -17,6 +17,7 @@ export interface DropdownData {
   banks: string[]; // Column Q - Bank names
   companyNames: string[]; // Column W - Company names
   serviceTypes: string[]; // Column X - Service types
+  allEvents: string[]; // From EVENT SETUP DATA sheet - single source of truth
 }
 
 export interface ClientData {
@@ -137,6 +138,11 @@ async function callSheetsFunction<T>(action: string, data?: Record<string, unkno
 
 export async function getDropdowns(): Promise<DropdownData> {
   return callSheetsFunction<DropdownData>("getDropdowns");
+}
+
+// Get all events from EVENT SETUP DATA sheet
+export async function getEventSetupData(): Promise<string[]> {
+  return callSheetsFunction<string[]>("getEventSetupData");
 }
 
 export async function getClients(limit = 50): Promise<ClientData[]> {

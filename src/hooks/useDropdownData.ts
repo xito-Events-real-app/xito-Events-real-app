@@ -27,6 +27,7 @@ export function useDropdownData() {
           banks: ['MASTER BARUN', 'KRIPA SAVINGS', 'KRIPA CURRENT', 'ESEWA', 'KHALTI'],
           companyNames: ['WEDDING TALES NEPAL', 'WEDDING PAPARAZZI', 'OTHER'],
           serviceTypes: ['PHOTOGRAPHY', 'VIDEOGRAPHY', 'DRONE', 'LED', 'ALBUM', 'FRAME'],
+          allEvents: [], // From EVENT SETUP DATA sheet
         });
         setIsUsingMock(true);
         setIsLoading(false);
@@ -56,6 +57,7 @@ export function useDropdownData() {
           banks: ['MASTER BARUN', 'KRIPA SAVINGS', 'KRIPA CURRENT', 'ESEWA', 'KHALTI'],
           companyNames: ['WEDDING TALES NEPAL', 'WEDDING PAPARAZZI', 'OTHER'],
           serviceTypes: ['PHOTOGRAPHY', 'VIDEOGRAPHY', 'DRONE', 'LED', 'ALBUM', 'FRAME'],
+          allEvents: [], // From EVENT SETUP DATA sheet
         });
         setIsUsingMock(true);
       } finally {
