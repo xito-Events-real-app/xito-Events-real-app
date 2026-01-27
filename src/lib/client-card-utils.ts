@@ -256,8 +256,9 @@ export function parseQuotationData(data: string): QuotationTier[] {
   if (!data) return [];
   
   const tiers: QuotationTier[] = [];
-  // Format: "BASIC: NPR X,XX,XXX/- | STANDARD: NPR X,XX,XXX/-"
-  const parts = data.split('|').map(p => p.trim()).filter(Boolean);
+  // Format: "BASIC: NPR X,XX,XXX/- | STANDARD: NPR X,XX,XXX/-" or newline-separated
+  // Handle both pipe (|) and newline (\n) delimiters for backward compatibility
+  const parts = data.split(/[|\n]/).map(p => p.trim()).filter(Boolean);
   
   parts.forEach(part => {
     const match = part.match(/^(BASIC|STANDARD|PREMIUM|WTN SPECIAL):\s*(.+)/i);
