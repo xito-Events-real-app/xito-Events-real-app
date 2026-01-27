@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getAccounts';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -2817,6 +2817,42 @@ async function deleteVendor(accessToken: string, spreadsheetId: string, rowNumbe
   return { success: true };
 }
 
+// ============= MY ACCOUNTS MODULE =============
+// Get account credentials from WTN ID PASSWORD sheet
+async function getAccounts(accessToken: string, spreadsheetId: string, limit = 500) {
+  const range = encodeURIComponent("'WTN ID PASSWORD'!A2:L" + (limit + 1));
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (getAccounts):', response.status, errorText);
+    throw new Error(`Google Sheets API error: ${response.status} - ${errorText.substring(0, 200)}`);
+  }
+
+  const data = await response.json();
+  if (!data.values) return [];
+
+  return data.values.map((row: string[], index: number) => ({
+    rowNumber: index + 2,
+    accountType: row[0] || '',      // Column A
+    id: row[1] || '',               // Column B
+    password: row[2] || '',         // Column C
+    recoveryAccount: row[3] || '',  // Column D
+    registeredNumber: row[4] || '', // Column E
+    whoBoughtIt: row[5] || '',      // Column F
+    vendor: row[6] || '',           // Column G
+    vendorNumber: row[7] || '',     // Column H
+    vendorWhatsapp: row[8] || '',   // Column I
+    website: row[9] || '',          // Column J
+    instagram: row[10] || '',       // Column K
+    facebook: row[11] || '',        // Column L
+  }));
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -3119,6 +3155,9 @@ Deno.serve(async (req) => {
       case 'updateEventDetails':
         if (!data || !data.rowNumber) throw new Error('rowNumber is required for updateEventDetails');
         result = await updateEventDetails(accessToken, spreadsheetId, data.rowNumber as number, data.updates as Record<string, string> || {});
+        break;
+      case 'getAccounts':
+        result = await getAccounts(accessToken, spreadsheetId, body.limit);
         break;
       default:
         throw new Error(`Unknown action: ${action}`);

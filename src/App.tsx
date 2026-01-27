@@ -17,6 +17,7 @@ import BookedClients from "./pages/BookedClients";
 import FinanceManager from "./pages/FinanceManager";
 import ComingSoon from "./pages/ComingSoon";
 import Vendors from "./pages/Vendors";
+import MyAccounts from "./pages/MyAccounts";
 import NotFound from "./pages/NotFound";
 import ClientDetail from "./pages/ClientDetail";
 import HotDates from "./pages/HotDates";
@@ -80,6 +81,7 @@ const App = () => (
             <Route path="/files" element={<ComingSoon moduleId="file-management" />} />
             <Route path="/media" element={<ComingSoon moduleId="album-media" />} />
             <Route path="/vendors" element={<Vendors />} />
+            <Route path="/my-accounts" element={<MyAccounts />} />
             <Route path="/freelancers" element={<ComingSoon moduleId="freelancers" />} />
             
             <Route path="*" element={<NotFound />} />
