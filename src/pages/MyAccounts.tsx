@@ -1,12 +1,13 @@
 import { useDesktopMode } from "@/hooks/useDesktopMode";
 import { MobileAccounts, DesktopAccounts } from "@/components/accounts";
+import { AccountPasswordGate } from "@/components/accounts/AccountPasswordGate";
 
 export default function MyAccounts() {
   const { isDesktopMode } = useDesktopMode();
 
-  if (isDesktopMode) {
-    return <DesktopAccounts />;
-  }
-
-  return <MobileAccounts />;
+  return (
+    <AccountPasswordGate>
+      {isDesktopMode ? <DesktopAccounts /> : <MobileAccounts />}
+    </AccountPasswordGate>
+  );
 }

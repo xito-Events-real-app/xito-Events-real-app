@@ -4,3 +4,4 @@ export { AccountCard } from "./AccountCard";
 export { AccountTable } from "./AccountTable";
 export { AccountDetailSheet } from "./AccountDetailSheet";
 export { AccountTypeSidebar } from "./AccountTypeSidebar";
+export { AccountPasswordGate } from "./AccountPasswordGate";
