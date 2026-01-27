@@ -5,3 +5,5 @@ export { AccountTable } from "./AccountTable";
 export { AccountDetailSheet } from "./AccountDetailSheet";
 export { AccountTypeSidebar } from "./AccountTypeSidebar";
 export { AccountPasswordGate } from "./AccountPasswordGate";
+export { ClickableDateWithBS } from "./ClickableDateWithBS";
+export { AddAccountDrawer } from "./AddAccountDrawer";

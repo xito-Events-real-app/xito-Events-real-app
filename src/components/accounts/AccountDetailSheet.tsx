@@ -21,13 +21,12 @@ import {
   Mail,
   User,
   Building2,
-  Calendar,
   Clock,
   CreditCard
 } from "lucide-react";
 import { toast } from "sonner";
 import { AccountData, getExpiryStatus, formatPrice, getEffectiveExpiryDate } from "@/lib/accounts-api";
-import { format, parseISO } from "date-fns";
+import { ClickableDateWithBS } from "./ClickableDateWithBS";
 
 interface AccountDetailSheetProps {
   account: AccountData | null;
@@ -246,18 +245,12 @@ export function AccountDetailSheet({ account, open, onOpenChange }: AccountDetai
                 {/* Date of Purchase */}
                 {account.dateOfPurchase && (
                   <div className="flex items-center gap-2 bg-slate-800/50 rounded-lg p-3">
-                    <Calendar className="h-4 w-4 text-slate-400" />
-                    <div>
-                      <p className="text-xs text-slate-400">Date of Purchase</p>
-                      <span className="text-white">
-                        {(() => {
-                          try {
-                            return format(parseISO(account.dateOfPurchase), 'MMMM dd, yyyy');
-                          } catch {
-                            return account.dateOfPurchase;
-                          }
-                        })()}
-                      </span>
+                    <div className="flex-1">
+                      <p className="text-xs text-slate-400 mb-1">Date of Purchase</p>
+                      <ClickableDateWithBS 
+                        dateString={account.dateOfPurchase} 
+                        className="text-white"
+                      />
                     </div>
                   </div>
                 )}
@@ -279,19 +272,14 @@ export function AccountDetailSheet({ account, open, onOpenChange }: AccountDetai
                   const expiryDateStr = getEffectiveExpiryDate(account);
                   if (!expiryDateStr) return null;
                   
-                  let formattedDate = expiryDateStr;
-                  try {
-                    formattedDate = format(parseISO(expiryDateStr), 'MMMM dd, yyyy');
-                  } catch {}
-                  
                   return (
                     <div className="flex items-center justify-between bg-slate-800/50 rounded-lg p-3">
-                      <div className="flex items-center gap-2">
-                        <Clock className={`h-4 w-4 ${expiryStatus.colorClass}`} />
-                        <div>
-                          <p className="text-xs text-slate-400">Expiry Date</p>
-                          <span className="text-white">{formattedDate}</span>
-                        </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-slate-400 mb-1">Expiry Date</p>
+                        <ClickableDateWithBS 
+                          dateString={expiryDateStr} 
+                          className={expiryStatus.colorClass}
+                        />
                       </div>
                       <Badge 
                         variant="outline" 

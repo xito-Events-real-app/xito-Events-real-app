@@ -9,13 +9,15 @@ import {
   RefreshCw, 
   Search,
   KeyRound,
-  Loader2
+  Loader2,
+  Plus
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { getAccounts, AccountData } from "@/lib/accounts-api";
 import { AccountCard } from "./AccountCard";
 import { AccountDetailSheet } from "./AccountDetailSheet";
+import { AddAccountDrawer } from "./AddAccountDrawer";
 import { GlobalModeToggle } from "@/components/layout/GlobalModeToggle";
 
 export function MobileAccounts() {
@@ -24,6 +26,7 @@ export function MobileAccounts() {
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<AccountData | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [addDrawerOpen, setAddDrawerOpen] = useState(false);
 
   const { data: accounts = [], isLoading, refetch, isFetching } = useQuery({
     queryKey: ['accounts'],
@@ -88,6 +91,14 @@ export function MobileAccounts() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="text-white bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700"
+              onClick={() => setAddDrawerOpen(true)}
+            >
+              <Plus className="h-5 w-5" />
+            </Button>
             <Button 
               variant="ghost" 
               size="icon" 
@@ -181,6 +192,12 @@ export function MobileAccounts() {
         account={selectedAccount}
         open={detailOpen}
         onOpenChange={setDetailOpen}
+      />
+
+      {/* Add Account Drawer */}
+      <AddAccountDrawer
+        open={addDrawerOpen}
+        onOpenChange={setAddDrawerOpen}
       />
     </div>
   );

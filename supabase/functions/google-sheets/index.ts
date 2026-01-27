@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getAccounts';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getAccounts' | 'addAccount';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -2857,6 +2857,87 @@ async function getAccounts(accessToken: string, spreadsheetId: string, limit = 5
   }));
 }
 
+// Add new account to WTN ID PASSWORD sheet
+async function addNewAccount(accessToken: string, spreadsheetId: string, accountData: Record<string, unknown>) {
+  const sheetId = await getSheetId(accessToken, spreadsheetId, 'WTN ID PASSWORD');
+  
+  // First, insert a new row at position 2
+  const insertUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+  await fetch(insertUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      requests: [{
+        insertDimension: {
+          range: {
+            sheetId,
+            dimension: 'ROWS',
+            startIndex: 1, // Row 2 (0-indexed)
+            endIndex: 2,
+          },
+          inheritFromBefore: false,
+        },
+      }],
+    }),
+  });
+
+  // Calculate expiry date if dateOfPurchase and validity are provided
+  let expiryDate = '';
+  if (accountData.dateOfPurchase && accountData.validity) {
+    const purchaseDate = new Date(accountData.dateOfPurchase as string);
+    const months = parseInt(accountData.validity as string, 10);
+    if (!isNaN(purchaseDate.getTime()) && !isNaN(months)) {
+      const expiry = new Date(purchaseDate);
+      expiry.setMonth(expiry.getMonth() + months);
+      expiryDate = expiry.toISOString().split('T')[0]; // YYYY-MM-DD format
+    }
+  }
+
+  // Build the row data (Columns A-P)
+  const rowData = [
+    accountData.accountType || '',       // Column A
+    accountData.id || '',                // Column B
+    accountData.password || '',          // Column C
+    accountData.recoveryAccount || '',   // Column D
+    accountData.registeredNumber || '',  // Column E
+    accountData.whoBoughtIt || '',       // Column F
+    accountData.vendor || '',            // Column G
+    accountData.vendorNumber || '',      // Column H
+    accountData.vendorWhatsapp || '',    // Column I
+    accountData.website || '',           // Column J
+    accountData.instagram || '',         // Column K
+    accountData.facebook || '',          // Column L
+    accountData.dateOfPurchase || '',    // Column M
+    accountData.validity || '',          // Column N
+    expiryDate,                          // Column O (calculated)
+    accountData.price || '',             // Column P
+  ];
+
+  // Now write data to row 2
+  const range = encodeURIComponent("'WTN ID PASSWORD'!A2:P2");
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  
+  const response = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [rowData] }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (addNewAccount):', response.status, errorText);
+    throw new Error(`Failed to add account: ${response.status}`);
+  }
+
+  return { success: true, rowNumber: 2 };
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -3160,11 +3241,19 @@ Deno.serve(async (req) => {
         if (!data || !data.rowNumber) throw new Error('rowNumber is required for updateEventDetails');
         result = await updateEventDetails(accessToken, spreadsheetId, data.rowNumber as number, data.updates as Record<string, string> || {});
         break;
-      case 'getAccounts':
+      case 'getAccounts': {
         // Use WTN SECRETS spreadsheet for accounts (different from main spreadsheet)
         const secretsSpreadsheetId = Deno.env.get('WTN_SECRETS_SPREADSHEET_ID') || spreadsheetId;
         result = await getAccounts(accessToken, secretsSpreadsheetId, body.limit);
         break;
+      }
+      case 'addAccount': {
+        if (!data) throw new Error('data is required for addAccount');
+        // Use WTN SECRETS spreadsheet for accounts (different from main spreadsheet)
+        const secretsSpreadsheetId = Deno.env.get('WTN_SECRETS_SPREADSHEET_ID') || spreadsheetId;
+        result = await addNewAccount(accessToken, secretsSpreadsheetId, data);
+        break;
+      }
       default:
         throw new Error(`Unknown action: ${action}`);
     }
