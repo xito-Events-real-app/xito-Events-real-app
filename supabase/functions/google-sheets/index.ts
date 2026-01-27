@@ -1095,6 +1095,7 @@ async function updateFinalQuotation(
 
 // Add payment entry to Columns AE, AF, AG for BOOKED clients
 // Now supports two-way sync: CLIENT TRACKER + BOOKED CLIENTS sheet
+// Also syncs to INCOME WTN sheet in WTN INCOME & EXPENSES spreadsheet
 async function addPayment(
   accessToken: string, 
   spreadsheetId: string, 
@@ -1108,7 +1109,8 @@ async function addPayment(
   existingPaymentDatesAD: string,
   finalQuotationAmount: number,
   registeredDateTimeAD?: string, // Used to find matching row in BOOKED CLIENTS
-  sourceSheet?: 'tracker' | 'booked' // Which sheet the payment is coming from
+  sourceSheet?: 'tracker' | 'booked', // Which sheet the payment is coming from
+  clientName?: string // For income statement in WTN INCOME & EXPENSES
 ) {
   if (!rowNumber || rowNumber < 2) {
     throw new Error('Valid rowNumber is required for adding payment');
@@ -1278,6 +1280,57 @@ async function addPayment(
     } catch (syncError) {
       // Log but don't fail the primary update
       console.error('Error syncing payment to secondary sheet:', syncError);
+    }
+  }
+
+  // Sync to INCOME WTN sheet in WTN INCOME & EXPENSES spreadsheet
+  const incomeSpreadsheetId = Deno.env.get('WTN_INCOME_EXPENSES_SPREADSHEET_ID');
+  if (incomeSpreadsheetId && clientName) {
+    try {
+      // Map payment type to income category
+      const paymentTypeMap: Record<string, string> = {
+        'ADVANCE': 'CLIENT ADVANCE',
+        'PARTIAL': 'CLIENT PARTIAL PAYMENT',
+        'FINAL': 'CLIENT FINAL PAYMENT',
+      };
+      const incomeCategory = paymentTypeMap[paymentType.toUpperCase()] || `CLIENT ${paymentType.toUpperCase()}`;
+      
+      // Build statement: "CLIENT NAME - PARTIAL AMOUNT PAID - NPR 75,000/-, REMAINING NPR 45,000/-"
+      const paymentTypeLabel = paymentType.toUpperCase();
+      const statement = `${clientName} - ${paymentTypeLabel} AMOUNT PAID - NPR ${parseInt(paymentAmount).toLocaleString('en-IN')}/-, REMAINING ${remainingFormatted}`;
+      
+      // Prepare row values: A=AD Date, B=BS Date, C=INCOME, D=Category, E=Amount, F=Bank, G=Statement
+      const incomeRowValues = [[
+        nepaliDateAD,              // Column A - AD Date
+        nepaliDate,                // Column B - BS Date  
+        'INCOME',                  // Column C - Type (static)
+        incomeCategory,            // Column D - Payment category
+        parseInt(paymentAmount),   // Column E - Amount (raw number)
+        bank,                      // Column F - Bank/Payment Method
+        statement                  // Column G - Statement
+      ]];
+      
+      // Append to INCOME WTN sheet
+      const incomeRange = encodeURIComponent("'INCOME WTN'!A:G");
+      const incomeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${incomeSpreadsheetId}/values/${incomeRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+      
+      const incomeResponse = await fetch(incomeUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ values: incomeRowValues }),
+      });
+      
+      if (incomeResponse.ok) {
+        console.log(`Payment copied to INCOME WTN sheet for ${clientName}`);
+      } else {
+        console.error('Failed to copy payment to INCOME WTN:', await incomeResponse.text());
+      }
+    } catch (incomeError) {
+      // Log but don't fail the primary update
+      console.error('Error syncing payment to INCOME WTN:', incomeError);
     }
   }
 
@@ -3267,7 +3320,8 @@ Deno.serve(async (req) => {
           data.existingPaymentDatesAD as string || '',
           data.finalQuotationAmount as number || 0,
           data.registeredDateTimeAD as string | undefined,
-          data.sourceSheet as 'tracker' | 'booked' | undefined
+          data.sourceSheet as 'tracker' | 'booked' | undefined,
+          data.clientName as string | undefined
         );
         break;
       case 'updatePayment':

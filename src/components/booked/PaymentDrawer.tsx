@@ -157,7 +157,8 @@ const PaymentDrawer = ({
         existingPaymentDatesAD,
         finalQuotationAmount,
         registeredDateTimeAD,
-        sourceSheet
+        sourceSheet,
+        clientName
       );
 
       toast.success(`Payment of NPR ${parseInt(paymentAmount).toLocaleString('en-IN')} recorded`);
