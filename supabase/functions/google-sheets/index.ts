@@ -3157,7 +3157,9 @@ Deno.serve(async (req) => {
         result = await updateEventDetails(accessToken, spreadsheetId, data.rowNumber as number, data.updates as Record<string, string> || {});
         break;
       case 'getAccounts':
-        result = await getAccounts(accessToken, spreadsheetId, body.limit);
+        // Use WTN SECRETS spreadsheet for accounts (different from main spreadsheet)
+        const secretsSpreadsheetId = Deno.env.get('WTN_SECRETS_SPREADSHEET_ID') || spreadsheetId;
+        result = await getAccounts(accessToken, secretsSpreadsheetId, body.limit);
         break;
       default:
         throw new Error(`Unknown action: ${action}`);
