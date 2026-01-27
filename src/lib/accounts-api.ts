@@ -143,6 +143,80 @@ export async function getAccounts(limit = 500): Promise<AccountData[]> {
   return data.data || [];
 }
 
+// Vendor info interface for secrets vendors
+export interface VendorInfo {
+  vendorName: string;
+  vendorNumber: string;
+  vendorWhatsapp: string;
+  website: string;
+  instagram: string;
+  facebook: string;
+}
+
+// Fetch dropdown options for form
+export async function getAccountSetupData(): Promise<{
+  accountTypes: string[];
+  whoBoughtIt: string[];
+}> {
+  const { data, error } = await supabase.functions.invoke('google-sheets', {
+    body: {
+      action: 'getAccountSetupData',
+    },
+  });
+
+  if (error) {
+    console.error('Error fetching account setup data:', error);
+    throw error;
+  }
+
+  if (!data.success) {
+    throw new Error(data.error || 'Failed to fetch account setup data');
+  }
+
+  return data.data || { accountTypes: [], whoBoughtIt: [] };
+}
+
+// Fetch all vendors from vendor info sheet
+export async function getSecretsVendors(): Promise<VendorInfo[]> {
+  const { data, error } = await supabase.functions.invoke('google-sheets', {
+    body: {
+      action: 'getSecretsVendors',
+    },
+  });
+
+  if (error) {
+    console.error('Error fetching secrets vendors:', error);
+    throw error;
+  }
+
+  if (!data.success) {
+    throw new Error(data.error || 'Failed to fetch secrets vendors');
+  }
+
+  return data.data || [];
+}
+
+// Add a new secrets vendor
+export async function addSecretsVendor(vendorData: VendorInfo): Promise<{ success: boolean }> {
+  const { data, error } = await supabase.functions.invoke('google-sheets', {
+    body: {
+      action: 'addSecretsVendor',
+      data: vendorData,
+    },
+  });
+
+  if (error) {
+    console.error('Error adding secrets vendor:', error);
+    throw error;
+  }
+
+  if (!data.success) {
+    throw new Error(data.error || 'Failed to add secrets vendor');
+  }
+
+  return data;
+}
+
 // Add a new account to the sheet
 export async function addAccount(accountData: {
   accountType: string;

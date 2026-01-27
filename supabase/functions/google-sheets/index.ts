@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getAccounts' | 'addAccount';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -2818,6 +2818,93 @@ async function deleteVendor(accessToken: string, spreadsheetId: string, rowNumbe
 }
 
 // ============= MY ACCOUNTS MODULE =============
+
+// Get setup data for account form dropdowns (from WTN SECRETS SETUP DATA)
+async function getAccountSetupData(accessToken: string, spreadsheetId: string) {
+  const range = encodeURIComponent("'WTN SECRETS SETUP DATA'!A2:B100");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (getAccountSetupData):', response.status, errorText);
+    throw new Error(`Google Sheets API error: ${response.status} - ${errorText.substring(0, 200)}`);
+  }
+
+  const data = await response.json();
+  if (!data.values) return { accountTypes: [], whoBoughtIt: [] };
+
+  const rows = data.values;
+  return {
+    accountTypes: rows.map((r: string[]) => r[0]).filter(Boolean),  // Column A
+    whoBoughtIt: rows.map((r: string[]) => r[1]).filter(Boolean),   // Column B
+  };
+}
+
+// Get all vendors from WTN SECRETS VENDOR INFO sheet
+async function getSecretsVendors(accessToken: string, spreadsheetId: string) {
+  const range = encodeURIComponent("'WTN SECRETS VENDOR INFO'!A2:F500");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (getSecretsVendors):', response.status, errorText);
+    throw new Error(`Google Sheets API error: ${response.status} - ${errorText.substring(0, 200)}`);
+  }
+
+  const data = await response.json();
+  if (!data.values) return [];
+
+  return data.values.map((row: string[]) => ({
+    vendorName: row[0] || '',
+    vendorNumber: row[1] || '',
+    vendorWhatsapp: row[2] || '',
+    website: row[3] || '',
+    instagram: row[4] || '',
+    facebook: row[5] || '',
+  }));
+}
+
+// Add new vendor to WTN SECRETS VENDOR INFO sheet
+async function addSecretsVendor(accessToken: string, spreadsheetId: string, vendorData: Record<string, unknown>) {
+  const rowData = [
+    vendorData.vendorName || '',
+    vendorData.vendorNumber || '',
+    vendorData.vendorWhatsapp || '',
+    vendorData.website || '',
+    vendorData.instagram || '',
+    vendorData.facebook || '',
+  ];
+
+  // Append to end of sheet
+  const range = encodeURIComponent("'WTN SECRETS VENDOR INFO'!A:F");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:append?valueInputOption=USER_ENTERED`;
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [rowData] }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (addSecretsVendor):', response.status, errorText);
+    throw new Error(`Failed to add vendor: ${response.status}`);
+  }
+
+  return { success: true };
+}
+
 // Get account credentials from WTN ID PASSWORD sheet
 async function getAccounts(accessToken: string, spreadsheetId: string, limit = 500) {
   const range = encodeURIComponent("'WTN ID PASSWORD'!A2:P" + (limit + 1));
@@ -3252,6 +3339,22 @@ Deno.serve(async (req) => {
         // Use WTN SECRETS spreadsheet for accounts (different from main spreadsheet)
         const secretsSpreadsheetId = Deno.env.get('WTN_SECRETS_SPREADSHEET_ID') || spreadsheetId;
         result = await addNewAccount(accessToken, secretsSpreadsheetId, data);
+        break;
+      }
+      case 'getAccountSetupData': {
+        const secretsSpreadsheetId = Deno.env.get('WTN_SECRETS_SPREADSHEET_ID') || spreadsheetId;
+        result = await getAccountSetupData(accessToken, secretsSpreadsheetId);
+        break;
+      }
+      case 'getSecretsVendors': {
+        const secretsSpreadsheetId = Deno.env.get('WTN_SECRETS_SPREADSHEET_ID') || spreadsheetId;
+        result = await getSecretsVendors(accessToken, secretsSpreadsheetId);
+        break;
+      }
+      case 'addSecretsVendor': {
+        if (!data) throw new Error('data is required for addSecretsVendor');
+        const secretsSpreadsheetId = Deno.env.get('WTN_SECRETS_SPREADSHEET_ID') || spreadsheetId;
+        result = await addSecretsVendor(accessToken, secretsSpreadsheetId, data);
         break;
       }
       default:
