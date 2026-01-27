@@ -1,11 +1,15 @@
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, Calendar, User, Clock, DollarSign, FileText, Activity, MessageSquare, Briefcase, Pencil, X, Check, Loader2, Plus, CreditCard, RefreshCw, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, Calendar, User, Clock, DollarSign, FileText, Activity, MessageSquare, Briefcase, Pencil, X, Check, Loader2, Plus, CreditCard, RefreshCw, RotateCcw, ChevronLeft, ChevronRight, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,7 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useCachedData } from "@/hooks/useCachedData";
 import { useDropdownData } from "@/hooks/useDropdownData";
-import { updateClient, ClientData, updateClientStatus, logCallAttempt, addPayment } from "@/lib/sheets-api";
+import { updateClient, ClientData, updateClientStatus, logCallAttempt, addPayment, updateClientQuotation, addClientComment } from "@/lib/sheets-api";
 import { forceResetDatabase } from "@/lib/cache-manager";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -155,6 +159,18 @@ const [whoAdded, setWhoAdded] = useState("");
   const [currentStatusLog, setCurrentStatusLog] = useState("");
   const [currentPaymentsMade, setCurrentPaymentsMade] = useState("");
   const [currentRemainingPayment, setCurrentRemainingPayment] = useState("");
+
+  // Comments state
+  const [newComment, setNewComment] = useState("");
+  const [isAddingComment, setIsAddingComment] = useState(false);
+  const [currentComments, setCurrentComments] = useState("");
+
+  // Quotation dialog state
+  const [showQuotationDialog, setShowQuotationDialog] = useState(false);
+  const [quotationAmounts, setQuotationAmounts] = useState<Record<string, string>>({});
+  const [isSavingQuotation, setIsSavingQuotation] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState("");
+  const [currentQuotationData, setCurrentQuotationData] = useState("");
 
   // Get the from state to preserve filter position when going back
   const fromState = location.state as { 
@@ -566,20 +582,120 @@ const [whoAdded, setWhoAdded] = useState("");
   const handleStatusChange = async (newStatus: string) => {
     if (!client?.rowNumber) return;
     
+    // Get current status to check for quotation transition
+    const currentStatusValue = getCurrentStatus(currentStatusLog || client.statusLog || '');
+    
+    // INTERCEPT: If moving to QUOTATION SENT, show quotation dialog first
+    const isFromQuotationPending = currentStatusValue?.toUpperCase().includes('QUOTATION PENDING');
+    const isToQuotationSent = newStatus.toUpperCase().includes('QUOTATION SENT');
+    
+    if (isFromQuotationPending && isToQuotationSent) {
+      setPendingStatus(newStatus);
+      setShowQuotationDialog(true);
+      return;
+    }
+    
+    // Continue with normal status change
+    await performStatusChange(newStatus);
+  };
+
+  const performStatusChange = async (newStatus: string) => {
+    if (!client?.rowNumber) return;
+    
     setIsChangingStatus(true);
     try {
-      const result = await updateClientStatus(client.rowNumber, newStatus, client.statusLog || '');
+      const result = await updateClientStatus(client.rowNumber, newStatus, currentStatusLog || client.statusLog || '');
       setCurrentStatusLog(result.statusLog);
-      toast({ title: "Success", description: `Status changed to ${newStatus}` });
+      
+      // CRITICAL: Update global cache to sync across the app
       if (updateClientCache) {
-        updateClientCache({ ...client, statusLog: result.statusLog });
+        updateClientCache({ 
+          ...client, 
+          statusLog: result.statusLog 
+        });
       }
+      
+      toast({ title: "Success", description: `Status changed to ${newStatus}` });
     } catch (err) {
       console.error('Failed to update status:', err);
       toast({ title: "Error", description: "Failed to update status", variant: "destructive" });
     } finally {
       setIsChangingStatus(false);
       setShowFab(false);
+    }
+  };
+
+  // Handle quotation save and status update
+  const handleSaveQuotation = async () => {
+    if (!client?.rowNumber) return;
+    
+    const tiers = ['BASIC', 'STANDARD', 'PREMIUM', 'WTN SPECIAL'];
+    const filledQuotations = tiers
+      .filter(tier => quotationAmounts[tier]?.trim())
+      .map(tier => `${tier}: NPR ${formatNPR(quotationAmounts[tier])}/-`);
+    
+    if (filledQuotations.length === 0) {
+      toast({ title: "Please enter at least one quotation amount", variant: "destructive" });
+      return;
+    }
+    
+    const quotationData = filledQuotations.join('\n');
+    
+    setIsSavingQuotation(true);
+    try {
+      // Save quotation data
+      await updateClientQuotation(client.rowNumber, quotationData);
+      setCurrentQuotationData(quotationData);
+      
+      // Update status to QUOTATION SENT
+      const statusResult = await updateClientStatus(client.rowNumber, 'QUOTATION SENT : REVIEW PENDING', currentStatusLog || client.statusLog || '');
+      setCurrentStatusLog(statusResult.statusLog);
+      
+      // Update global cache with both quotation and status
+      if (updateClientCache) {
+        updateClientCache({
+          ...client,
+          quotationData: quotationData,
+          statusLog: statusResult.statusLog
+        });
+      }
+      
+      toast({ title: "Quotation saved & status updated" });
+      setShowQuotationDialog(false);
+      setQuotationAmounts({});
+      setPendingStatus("");
+    } catch (err) {
+      console.error('Failed to save quotation:', err);
+      toast({ title: "Failed to save quotation", variant: "destructive" });
+    } finally {
+      setIsSavingQuotation(false);
+    }
+  };
+
+  // Handle adding a comment
+  const handleAddComment = async () => {
+    if (!client?.rowNumber || !newComment.trim()) return;
+    
+    setIsAddingComment(true);
+    try {
+      const result = await addClientComment(
+        client.rowNumber, 
+        newComment.trim(), 
+        currentComments || client.comments || ''
+      );
+      setCurrentComments(result.comments);
+      setNewComment('');
+      toast({ title: "Comment added" });
+      
+      // Update global cache
+      if (updateClientCache) {
+        updateClientCache({ ...client, comments: result.comments });
+      }
+    } catch (err) {
+      console.error('Failed to add comment:', err);
+      toast({ title: "Failed to add comment", variant: "destructive" });
+    } finally {
+      setIsAddingComment(false);
     }
   };
 
@@ -621,14 +737,31 @@ const [whoAdded, setWhoAdded] = useState("");
     return parseInquiryMonth(client.inquiryDateBS);
   }, [client]);
 
-  const currentStatus = client ? getCurrentStatus(client.statusLog) : '';
-  const quotationTiers = client ? parseQuotationData(client.quotationData) : [];
+  const currentStatus = client ? getCurrentStatus(currentStatusLog || client.statusLog || '') : '';
+  const quotationTiers = useMemo(() => 
+    parseQuotationData(currentQuotationData || client?.quotationData || ''), 
+    [currentQuotationData, client?.quotationData]
+  );
   const mindsetData = client ? parseMindset(client.mindset) : null;
   const callEntries = client ? parseCallLog(client.callLog) : [];
-  const comments = client ? parseComments(client.comments) : [];
+  const parsedComments = useMemo(() => 
+    parseComments(currentComments || client?.comments || ''),
+    [currentComments, client?.comments]
+  );
   const finalQuotation = client ? parseFinalQuotation(client.finalQuotation) : null;
   const payments = client ? parsePayments(client.paymentsMade) : [];
   const totalPaid = client ? getTotalPaid(client.paymentsMade) : 0;
+
+  // Initialize state when client changes
+  useEffect(() => {
+    if (client) {
+      setCurrentStatusLog(client.statusLog || '');
+      setCurrentComments(client.comments || '');
+      setCurrentQuotationData(client.quotationData || '');
+      setCurrentPaymentsMade(client.paymentsMade || '');
+      setCurrentRemainingPayment(client.remainingPayment || '');
+    }
+  }, [client?.rowNumber, client?.registeredDateTimeAD]);
 
   // Only show loading if we have no clients AND still loading
   // This allows rendering from cache immediately while background sync happens
@@ -1011,6 +1144,24 @@ const [whoAdded, setWhoAdded] = useState("");
       ) : (
         /* View Mode */
         <div className="container mx-auto px-4 py-6 space-y-6">
+        
+        {/* Description Section - Prominent placement */}
+        {client.description && (
+          <Card className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 border-amber-200/50 dark:border-amber-800/50 shadow-lg">
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-amber-500/10 shrink-0">
+                  <FileText className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <div className="text-xs font-medium text-amber-600 dark:text-amber-400 mb-1 uppercase tracking-wide">Description</div>
+                  <div className="text-slate-700 dark:text-slate-200 whitespace-pre-wrap">{client.description}</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        
         {/* Hero Section - 3 Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Client Info Card */}
@@ -1479,34 +1630,69 @@ const [whoAdded, setWhoAdded] = useState("");
           {/* Comments Tab */}
           <TabsContent value="comments" className="mt-4">
             <Card>
-              <CardContent className="pt-6">
-                {comments.length > 0 ? (
-                  <div className="space-y-3">
-                    {comments.map((comment, i) => {
-                      let bsDate = '';
-                      if (comment.timestamp) {
-                        try {
-                          const np = new NepaliDate(comment.timestamp);
-                          const hours = comment.timestamp.getHours();
-                          const mins = comment.timestamp.getMinutes();
-                          const isPM = hours >= 12;
-                          const displayHours = hours % 12 || 12;
-                          bsDate = `${nepaliMonthsEnglish[np.getMonth()]} ${np.getDate()}, ${np.getYear()} at ${displayHours}:${String(mins).padStart(2, '0')} ${isPM ? 'PM' : 'AM'}`;
-                        } catch {}
-                      }
-                      return (
-                        <div key={i} className="p-3 bg-muted/50 rounded-lg">
-                          <div className="whitespace-pre-wrap">{comment.text}</div>
-                          {bsDate && (
-                            <div className="text-xs text-muted-foreground mt-2">{bsDate}</div>
-                          )}
-                        </div>
-                      );
-                    })}
+              <CardContent className="pt-6 space-y-4">
+                {/* Add Comment Section */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400">
+                    <Plus className="h-4 w-4" />
+                    Add New Comment
                   </div>
-                ) : (
-                  <div className="text-center text-muted-foreground py-8">No comments yet</div>
-                )}
+                  <div className="flex gap-2">
+                    <Textarea
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      placeholder="Type your comment here..."
+                      className="min-h-[80px] flex-1"
+                    />
+                  </div>
+                  <Button
+                    onClick={handleAddComment}
+                    disabled={isAddingComment || !newComment.trim()}
+                    className="gap-2"
+                    size="sm"
+                  >
+                    {isAddingComment ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                    Add Comment
+                  </Button>
+                </div>
+
+                {/* Existing Comments */}
+                <div className="border-t pt-4">
+                  <div className="text-sm font-medium text-muted-foreground mb-3">
+                    Comment History ({parsedComments.length})
+                  </div>
+                  {parsedComments.length > 0 ? (
+                    <div className="space-y-3">
+                      {parsedComments.map((comment, i) => {
+                        let bsDate = '';
+                        if (comment.timestamp) {
+                          try {
+                            const np = new NepaliDate(comment.timestamp);
+                            const hours = comment.timestamp.getHours();
+                            const mins = comment.timestamp.getMinutes();
+                            const isPM = hours >= 12;
+                            const displayHours = hours % 12 || 12;
+                            bsDate = `${nepaliMonthsEnglish[np.getMonth()]} ${np.getDate()}, ${np.getYear()} at ${displayHours}:${String(mins).padStart(2, '0')} ${isPM ? 'PM' : 'AM'}`;
+                          } catch {}
+                        }
+                        return (
+                          <div key={i} className="p-3 bg-muted/50 rounded-lg">
+                            <div className="whitespace-pre-wrap">{comment.text}</div>
+                            {bsDate && (
+                              <div className="text-xs text-muted-foreground mt-2">{bsDate}</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center text-muted-foreground py-8">No comments yet. Add one above!</div>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -1607,6 +1793,57 @@ const [whoAdded, setWhoAdded] = useState("");
           sourceSheet="tracker"
         />
       )}
+
+      {/* Quotation Dialog - For QUOTATION SENT status transition */}
+      <Dialog open={showQuotationDialog} onOpenChange={(open) => {
+        if (!open) {
+          setShowQuotationDialog(false);
+          setQuotationAmounts({});
+          setPendingStatus("");
+        }
+      }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Enter Quotation Amounts</DialogTitle>
+            <DialogDescription>
+              Enter the prices quoted to {client?.clientName}. At least one is required.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-2">
+            {['BASIC', 'STANDARD', 'PREMIUM', 'WTN SPECIAL'].map((tier) => (
+              <div key={tier} className="space-y-1.5">
+                <Label>{tier}</Label>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">NPR</span>
+                  <Input
+                    type="number"
+                    placeholder="e.g., 50000"
+                    value={quotationAmounts[tier] || ''}
+                    onChange={(e) => setQuotationAmounts({ ...quotationAmounts, [tier]: e.target.value })}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setShowQuotationDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveQuotation} disabled={isSavingQuotation}>
+              {isSavingQuotation ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Saving...
+                </>
+              ) : (
+                "Save & Update Status"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
