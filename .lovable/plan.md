@@ -1,312 +1,282 @@
 
-## Netflix-Style Client Detail Page Redesign
+## Client Detail Page Refinements: Theme, Events, Actions & Description
 
-This plan transforms the Client Detail page into a cinematic, Netflix-inspired experience with a dark theme, left sidebar navigation, prominent hero description section, and quick activity summaries.
+This plan addresses all four issues to align the Client Detail page with the main app theme (like Finance Manager), add cute event badges next to the client name, fix call/WhatsApp button behavior, and improve the description styling.
 
 ---
 
-### Current vs New Architecture
+### Overview of Changes
 
 ```text
-CURRENT LAYOUT:
-+------------------------------------------+
-| [Back] [Nav] [Name]           [Edit]     |
-+------------------------------------------+
-| [Call] [WhatsApp] [Payment] [Status]     |
-+------------------------------------------+
-| [Description Card - if exists]           |
-+------------------------------------------+
-| [Client Info] [Events] [Category]        |  <- 3 Cards
-+------------------------------------------+
-| Events | Inquiry | Sales | Activity | ... | <- Horizontal Tabs
-+------------------------------------------+
-| [Tab Content Area]                       |
-+------------------------------------------+
+CURRENT ISSUES:
+1. Dark theme looks "off" compared to Finance Manager (uses wrong gradient)
+2. Event details are hidden in tabs, not visible at top
+3. Phone/WhatsApp icons on top are clickable (shouldn't be)
+4. Description text is plain and ugly
 
-
-NEW NETFLIX-STYLE LAYOUT:
-+--------+---------------------------------------------+
-| SIDE   |  HERO SECTION                               |
-| BAR    +---------------------------------------------+
-|        |  CLIENT NAME (Large)     [Status Badge]    |
-| Events |  Contact: +977...        [Quick Actions]   |
-| Regis- |  Handler: Name | Added: Name               |
-| tration|---------------------------------------------+
-| Contact|  📝 DESCRIPTION (Netflix-style box)        |
-| Inquiry|  "Interested in premium package for        |
-| Sales  |   wedding in Pokhara. Budget flexible."    |
-| Activ- +---------------------------------------------+
-| ity    |  LAST ACTIVITIES                           |
-| Comment|  • Status → QUOTATION SENT (2h ago)        |
-| Financ |  • Called via WhatsApp (1d ago)            |
-|        |  • Comment: "Discussed pricing" (2d ago)   |
-+--------+---------------------------------------------+
-         |  [SELECTED SECTION CONTENT]                |
-         |  (Events / Sales / Financials, etc.)       |
-         +---------------------------------------------+
+FIXES:
+1. Use Finance Manager gradient: bg-gradient-to-br from-slate-900 via-emerald-950/20 to-slate-900
+2. Add cute event badges inline with client name
+3. Remove click handlers from top contact display; keep them only on action buttons
+4. Style description with better formatting and title-case where appropriate
 ```
 
 ---
 
-### Implementation Steps
+### 1. Update Background Gradient to Match Finance Manager
 
-#### 1. Create Netflix-Style Sidebar Component
-**New File:** `src/components/client-detail/ClientDetailSidebar.tsx`
+**Files:** `src/pages/ClientDetail.tsx`, `src/components/client-detail/ClientHeroSection.tsx`, `src/components/client-detail/ClientDetailSidebar.tsx`
 
-A collapsible dark sidebar with vertical navigation for all sections:
+**Current (Hero Section):**
+```css
+bg-gradient-to-br from-[hsl(220,25%,12%)] via-[hsl(220,25%,8%)] to-[hsl(220,30%,5%)]
+```
 
-- **Sections:** Events, Registration, Contact, Inquiry, Sales, Activity, Comments, Financials
-- **Styling:** Uses existing dark theme pattern from `DesktopSidebar.tsx`:
-  ```
-  bg-[hsl(220,25%,10%)] text-[hsl(220,15%,95%)] border-[hsl(220,20%,18%)]
-  ```
-- **Active State:** Highlighted item with gradient background
-- **Quick Actions:** Call, WhatsApp, Payment buttons at bottom
-- **Collapse Toggle:** Same pattern as other sidebars
+**Finance Manager Theme:**
+```css
+bg-gradient-to-br from-slate-900 via-emerald-950/20 to-slate-900
+```
 
-#### 2. Create Hero Section Component
-**New File:** `src/components/client-detail/ClientHeroSection.tsx`
-
-Netflix-style hero with prominent client info:
-
-- **Client Name:** Large, bold typography (text-3xl/4xl) with month-based color gradient
-- **Contact Row:** Phone and WhatsApp icons inline with numbers (clickable)
-- **Handler/Added By:** Avatar circles with names
-- **Status Badge:** Large, prominent status indicator
-- **Quick Actions:** Floating action buttons (Call, WhatsApp, Payment, Edit)
-- **Background:** Subtle gradient with blur effects (`bg-black/90 backdrop-blur-lg`)
-
-#### 3. Create Description Card (Netflix-Style)
-**Part of Hero Section**
-
-- **Position:** Below client name, spanning full width
-- **Styling:** Semi-transparent dark card with subtle border
-- **Icon:** FileText icon with amber accent
-- **Typography:** Clear, readable text on dark background
-- **Empty State:** "No description added" with muted styling
-
-#### 4. Create Last Activities Summary Component
-**New File:** `src/components/client-detail/LastActivitiesSummary.tsx`
-
-Compact activity timeline showing:
-
-- **Latest Status Change:** With relative time (e.g., "2h ago")
-- **Latest Call Attempt:** Type (Direct/WhatsApp) + time
-- **Latest Comment:** First 50 chars truncated + time
-- **Latest Payment:** Amount + time (if any)
-
-Each activity item uses:
-- Colored dot indicator (green for positive, amber for neutral, red for critical)
-- Icon representing activity type
-- Relative timestamp
-
-#### 5. Refactor Main Content Area
-**File:** `src/pages/ClientDetail.tsx`
-
-Transform from horizontal tabs to sidebar-controlled sections:
-
-- **State Management:** Replace `Tabs` with `activeSection` state
-- **Content Rendering:** Conditional rendering based on `activeSection`
-- **Layout:** Use `flex` with fixed sidebar + fluid main content
-- **Mobile Adaptation:** Stack layout on mobile, sidebar becomes bottom sheet or hidden
-
-#### 6. Section Content Components
-Reuse existing tab content but enhance styling:
-
-- **Events Section:** Keep nested sub-tabs for event types
-- **Registration Section:** Client basic info + source details
-- **Contact Section:** Phone, WhatsApp, Email, Location
-- **Inquiry Section:** Dates, times, description
-- **Sales Section:** Quotations, mindset, bargaining
-- **Activity Section:** Status history, call log
-- **Comments Section:** Add comment + history
-- **Financials Section:** Payments, progress bar, history
+**Changes:**
+- Hero section background: `bg-gradient-to-br from-slate-900 via-emerald-950/20 to-slate-900`
+- Sidebar background: Keep dark but align with emerald accent `bg-[hsl(220,25%,8%)] border-emerald-900/30`
+- Main content area: `bg-gradient-to-br from-slate-900 via-emerald-950/20 to-slate-900`
+- Section cards: `bg-emerald-950/30 border-emerald-900/50` instead of plain `bg-white/5`
 
 ---
 
-### File Structure
+### 2. Add Cute Event Badges Next to Client Name
 
+**File:** `src/components/client-detail/ClientHeroSection.tsx`
+
+Add event details in a compact, colorful badge format directly below/beside the client name.
+
+**New Component Section (after client name):**
+```tsx
+{/* Cute Event Badges - Right below name */}
+{events.length > 0 && (
+  <div className="flex flex-wrap gap-2 mt-3">
+    {events.slice(0, 3).map((event, i) => (
+      <div 
+        key={i}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium
+          ${getEventThemeClasses(event.name)}`}
+      >
+        <span className="font-semibold">{event.name}</span>
+        <span className="opacity-75">•</span>
+        <span>{event.monthName} {event.day}</span>
+        {event.year && (
+          <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] font-bold">{event.year}</span>
+        )}
+      </div>
+    ))}
+    {events.length > 3 && (
+      <span className="text-xs text-white/50 self-center">+{events.length - 3} more</span>
+    )}
+  </div>
+)}
+```
+
+**Event Theme Function:**
+```typescript
+function getEventThemeClasses(eventName: string): string {
+  const upper = eventName.toUpperCase();
+  if (upper.includes('WEDDING')) return 'bg-blue-500/30 text-blue-200 border border-blue-400/30';
+  if (upper.includes('RECEPTION')) return 'bg-purple-500/30 text-purple-200 border border-purple-400/30';
+  if (upper.includes('ENGAGEMENT')) return 'bg-pink-500/30 text-pink-200 border border-pink-400/30';
+  if (upper.includes('PRE') || upper.includes('MEHNDI')) return 'bg-orange-500/30 text-orange-200 border border-orange-400/30';
+  return 'bg-emerald-500/30 text-emerald-200 border border-emerald-400/30';
+}
+```
+
+**Props Update:**
+Add `events` prop to `ClientHeroSectionProps`:
+```typescript
+interface ClientHeroSectionProps {
+  client: ClientData;
+  events: Array<{ name: string; monthName: string; day: string; year: string }>;
+  // ... rest of props
+}
+```
+
+---
+
+### 3. Fix Call/WhatsApp Click Behavior
+
+**File:** `src/components/client-detail/ClientHeroSection.tsx`
+
+**Current Problem:** Top contact info (phone/WhatsApp numbers) are wrapped in `<a>` tags with `tel:` and `https://wa.me/` hrefs.
+
+**Fix:** Remove clickable behavior from top contact display; show as text-only info.
+
+**Before (Lines 66-84):**
+```tsx
+{client.contactNo && (
+  <a 
+    href={`tel:${client.contactNo}`} 
+    className="flex items-center gap-2 hover:text-blue-400 transition-colors"
+  >
+    <Phone className="h-4 w-4 text-blue-400" />
+    <span>{client.contactNo}</span>
+  </a>
+)}
+```
+
+**After:**
+```tsx
+{client.contactNo && (
+  <div className="flex items-center gap-2 text-white/70">
+    <Phone className="h-4 w-4 text-blue-400" />
+    <span>{client.contactNo}</span>
+  </div>
+)}
+{client.whatsappNo && (
+  <div className="flex items-center gap-2 text-white/70">
+    <MessageCircle className="h-4 w-4 text-green-400" />
+    <span>{client.whatsappNo}</span>
+  </div>
+)}
+```
+
+The actual call/WhatsApp functionality is correctly handled by the action buttons below the handler section (lines 145-165), which already call `onCall('DIRECT')` and `onCall('WHATSAPP')` to log the call AND initiate it.
+
+---
+
+### 4. Improve Description Styling
+
+**File:** `src/components/client-detail/ClientHeroSection.tsx`
+
+**Current Problem:** Description is displayed as plain `whitespace-pre-wrap` text with raw formatting.
+
+**New "Cute" Description Style:**
+- Format text to Title Case for readability
+- Use styled card with subtle gradient
+- Add decorative quote marks or border
+- Better typography
+
+**Before (Lines 186-199):**
+```tsx
+{client.description && (
+  <div className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-4 mb-6 animate-fade-in">
+    <div className="flex items-start gap-3">
+      <div className="p-2 rounded-lg bg-amber-500/20 shrink-0">
+        <FileText className="h-5 w-5 text-amber-400" />
+      </div>
+      <div>
+        <div className="text-xs font-semibold text-amber-400 mb-1 uppercase tracking-wide">Description</div>
+        <div className="text-white/90 whitespace-pre-wrap leading-relaxed">{client.description}</div>
+      </div>
+    </div>
+  </div>
+)}
+```
+
+**After:**
+```tsx
+{client.description && (
+  <div className="bg-gradient-to-r from-amber-950/40 via-amber-900/20 to-transparent rounded-xl border-l-4 border-amber-500 p-4 mb-6 animate-fade-in">
+    <div className="flex items-start gap-3">
+      <div className="shrink-0 text-amber-400/60">
+        <span className="text-3xl font-serif">"</span>
+      </div>
+      <div className="flex-1">
+        <div className="text-xs font-semibold text-amber-400 mb-2 uppercase tracking-widest">Client Notes</div>
+        <div className="text-white/95 leading-relaxed text-sm">
+          {formatDescription(client.description)}
+        </div>
+      </div>
+      <div className="shrink-0 text-amber-400/60 self-end">
+        <span className="text-3xl font-serif">"</span>
+      </div>
+    </div>
+  </div>
+)}
+```
+
+**Format Description Function:**
+```typescript
+function formatDescription(text: string): string {
+  // Split by common delimiters (: , - etc.)
+  // Capitalize first letter of each logical segment
+  // Clean up extra whitespace
+  return text
+    .split(/\s*:\s*/)
+    .map(segment => segment.trim())
+    .filter(Boolean)
+    .map(segment => {
+      // Capitalize first letter, keep rest as-is for names/places
+      return segment.charAt(0).toUpperCase() + segment.slice(1);
+    })
+    .join(' • ');
+}
+```
+
+---
+
+### Files Summary
+
+| File | Action | Purpose |
+|------|--------|---------|
+| `src/components/client-detail/ClientHeroSection.tsx` | Major Update | Theme gradient, event badges, contact display, description styling |
+| `src/pages/ClientDetail.tsx` | Minor Update | Pass events prop to hero, update main content gradient |
+| `src/components/client-detail/ClientDetailSidebar.tsx` | Minor Update | Align with emerald theme accent |
+
+---
+
+### Visual Preview
+
+**Updated Hero Section Layout:**
 ```text
-src/components/client-detail/
-├── ClientDetailSidebar.tsx    (NEW - Left navigation)
-├── ClientHeroSection.tsx      (NEW - Netflix-style hero)
-├── LastActivitiesSummary.tsx  (NEW - Activity preview)
-├── sections/
-│   ├── EventsSection.tsx      (Extracted from ClientDetail)
-│   ├── RegistrationSection.tsx
-│   ├── ContactSection.tsx
-│   ├── InquirySection.tsx
-│   ├── SalesSection.tsx
-│   ├── ActivitySection.tsx
-│   ├── CommentsSection.tsx
-│   └── FinancialsSection.tsx
-└── index.ts
++-----------------------------------------------------------+
+|  bg-gradient-to-br from-slate-900 via-emerald-950/20      |
++-----------------------------------------------------------+
+|                                                           |
+|  ┌─ RAMESH SHARMA ─────────────────┐  [QUOTATION SENT]   |
+|  └─────────────────────────────────┘                      |
+|                                                           |
+|  ┌────────────────────────────────────────────────────┐  |
+|  │ 🔵 WEDDING • Magh 15 [2082]  🟣 RECEPTION • Magh 18 │  | <- Cute Event Badges
+|  └────────────────────────────────────────────────────┘  |
+|                                                           |
+|  📞 9841234567   💬 9841234567   📍 Kathmandu             | <- NOT clickable
+|                                                           |
+|  [Avatar] Added By: Ram  |  [Avatar] Handler: Shyam      |
+|                                                           |
+|  [Call ✓] [WhatsApp ✓] [Payment] [Status]                | <- THESE are clickable
+|                                                           |
+|  ╭───────────────────────────────────────────────────╮   |
+|  │ "                                                   │   |
+|  │ CLIENT NOTES                                        │   |
+|  │ Pasni Ghar Ma Puja • Lokanthali • Party Tinkune •  │   |
+|  │ Siddharth Cottage • 3-4 Baje Start • Guest 200+    │   |
+|  │                                                 "   │   |
+|  ╰───────────────────────────────────────────────────╯   |
+|                                                           |
+|  LAST ACTIVITIES                                          |
+|  ● Status → QUOTATION SENT (2h ago)                      |
++-----------------------------------------------------------+
 ```
 
 ---
 
 ### Technical Details
 
-#### Color Palette (Netflix-Inspired Dark Theme)
+#### Event Badge Styling Logic
+Uses the same semantic color scheme as Desktop Dashboard:
+- Wedding events → Blue theme
+- Reception → Purple theme
+- Engagement/Pre-wedding → Pink/Orange theme
+- Post-wedding (Pasni, etc.) → Emerald theme
 
-| Element | Color |
-|---------|-------|
-| Sidebar Background | `hsl(220, 25%, 10%)` - Deep navy |
-| Main Background | `bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950` |
-| Hero Overlay | `bg-black/80 backdrop-blur-xl` |
-| Active Nav Item | `bg-gradient-to-r from-primary to-primary/80` |
-| Text Primary | `text-white` |
-| Text Secondary | `text-white/70` |
-| Accent | `text-primary` (existing brand color) |
+#### Description Formatting Rules
+1. Split text by colons (`:`) which are commonly used as delimiters
+2. Capitalize first letter of each segment
+3. Join with bullet separator (`•`) for cleaner reading
+4. Preserve original text for segments that might be names/places
 
-#### Sidebar Navigation Items
+#### Theme Consistency
+- Main gradient: `from-slate-900 via-emerald-950/20 to-slate-900` (matches Finance Manager)
+- Card backgrounds: `bg-emerald-950/30 border-emerald-900/50`
+- Accent colors: Emerald tints throughout
+- Keep existing button gradients for actions (blue, green, violet, amber)
 
-| Icon | Label | Maps To |
-|------|-------|---------|
-| Calendar | Events | Existing Events tab content |
-| FileText | Registration | Client basic info + source |
-| Phone | Contact | Phone, WhatsApp, Email |
-| Clock | Inquiry | Inquiry dates and description |
-| DollarSign | Sales | Quotations and bargaining |
-| Activity | Activity | Status history and calls |
-| MessageSquare | Comments | Comments with add feature |
-| CreditCard | Financials | Payments and progress |
-
-#### Mobile Responsiveness
-
-- **Desktop (>1024px):** Fixed left sidebar (w-64) + main content
-- **Tablet (768-1024px):** Collapsed sidebar (w-16 icons only) + main content
-- **Mobile (<768px):** 
-  - No sidebar, use bottom sheet navigation
-  - Hero section simplified
-  - Horizontal scroll for quick actions
-
----
-
-### UI Preview
-
-#### Hero Section Design
-```text
-+-----------------------------------------------------------+
-|                                                           |
-|   ██████████████████████████████████████████████████████  |
-|   █                                                    █  |
-|   █  RAMESH SHARMA                    [QUOTATION SENT] █  |
-|   █  ─────────────────────────────────────────────────█  |
-|   █  📞 +977-9841234567    💬 +977-9841234567         █  |
-|   █                                                    █  |
-|   █  ┌─────────────────────────────────────────────┐  █  |
-|   █  │ 📝 DESCRIPTION                               │  █  |
-|   █  │ Interested in premium wedding package for    │  █  |
-|   █  │ destination wedding in Pokhara. Budget is    │  █  |
-|   █  │ flexible. Looking for full coverage.         │  █  |
-|   █  └─────────────────────────────────────────────┘  █  |
-|   █                                                    █  |
-|   █  LAST ACTIVITIES                                   █  |
-|   █  ● Status changed to QUOTATION SENT (2h ago)      █  |
-|   █  ○ WhatsApp call logged (1d ago)                  █  |
-|   █  ○ Comment: "Discussed pricing..." (2d ago)       █  |
-|   █                                                    █  |
-|   ██████████████████████████████████████████████████████  |
-|                                                           |
-+-----------------------------------------------------------+
-```
-
-#### Sidebar Design
-```text
-+------------------+
-|  ← Back to Suite |
-+------------------+
-|  [Client Icon]   |
-|  Client Detail   |
-+------------------+
-|                  |
-|  📅 Events     ← |  (Active)
-|  📋 Registration |
-|  📞 Contact      |
-|  🕐 Inquiry      |
-|  💰 Sales        |
-|  📊 Activity     |
-|  💬 Comments (3) |
-|  💳 Financials   |
-|                  |
-+------------------+
-|  [Call] [WA]     |
-|  [Payment]       |
-+------------------+
-```
-
----
-
-### Files to Create/Modify
-
-| File | Action | Purpose |
-|------|--------|---------|
-| `src/components/client-detail/ClientDetailSidebar.tsx` | Create | Netflix-style left sidebar navigation |
-| `src/components/client-detail/ClientHeroSection.tsx` | Create | Hero with name, contact, description |
-| `src/components/client-detail/LastActivitiesSummary.tsx` | Create | Compact recent activities preview |
-| `src/components/client-detail/index.ts` | Create | Export barrel file |
-| `src/pages/ClientDetail.tsx` | Major Refactor | New layout with sidebar + hero + sections |
-
----
-
-### State Management
-
-```typescript
-// New state for section navigation
-const [activeSection, setActiveSection] = useState<
-  'events' | 'registration' | 'contact' | 'inquiry' | 
-  'sales' | 'activity' | 'comments' | 'financials'
->('events');
-
-// Sidebar collapsed state
-const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-```
-
----
-
-### Data Flow
-
-```text
-ClientDetail Page
-      │
-      ├── ClientDetailSidebar (Navigation)
-      │       └── onClick → setActiveSection()
-      │
-      ├── ClientHeroSection (Hero Display)
-      │       ├── Client Name + Status
-      │       ├── Contact Info
-      │       ├── Description Card
-      │       └── LastActivitiesSummary
-      │
-      └── Main Content Area
-              └── Conditional render based on activeSection
-                  ├── 'events' → EventsSection
-                  ├── 'registration' → RegistrationSection
-                  ├── 'contact' → ContactSection
-                  ├── 'inquiry' → InquirySection
-                  ├── 'sales' → SalesSection
-                  ├── 'activity' → ActivitySection
-                  ├── 'comments' → CommentsSection
-                  └── 'financials' → FinancialsSection
-```
-
----
-
-### Key Features Preserved
-
-- All existing functionality (edit mode, call logging, payment drawer, quotation dialog)
-- Global status synchronization
-- Comment adding with cache updates
-- Navigation (prev/next client)
-- Keyboard shortcuts
-- Mobile responsiveness
-
----
-
-### Animation Enhancements
-
-- **Section Transitions:** `animate-fade-in` when switching sections
-- **Sidebar Hover:** `hover:bg-white/10` with smooth transition
-- **Hero Entrance:** Subtle scale + fade animation on page load
-- **Activity Items:** Staggered fade-in for timeline items
