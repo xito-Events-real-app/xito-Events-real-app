@@ -1,0 +1,4 @@
+export { default as ClientDetailSidebar } from './ClientDetailSidebar';
+export type { SectionType } from './ClientDetailSidebar';
+export { default as ClientHeroSection } from './ClientHeroSection';
+export { default as LastActivitiesSummary } from './LastActivitiesSummary';
