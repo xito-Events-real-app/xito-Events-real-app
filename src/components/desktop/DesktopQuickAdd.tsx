@@ -103,8 +103,12 @@ export function DesktopQuickAdd() {
     }
   }, [serviceTypes.length, dropdowns?.serviceTypes]);
 
-  // Derived values - combine all event types into a single list
+  // Use allEvents from EVENT SETUP DATA sheet, fallback to combined events for backwards compatibility
   const availableEvents = useMemo(() => {
+    if (dropdowns?.allEvents && dropdowns.allEvents.length > 0) {
+      return dropdowns.allEvents;
+    }
+    // Fallback to old method (combining from D, E, F columns)
     const all: string[] = [];
     if (dropdowns?.preweddingEvents) all.push(...dropdowns.preweddingEvents);
     if (dropdowns?.weddingEvents) all.push(...dropdowns.weddingEvents);
