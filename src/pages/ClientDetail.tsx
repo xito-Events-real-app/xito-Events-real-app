@@ -1,15 +1,15 @@
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, Calendar, User, Clock, DollarSign, FileText, Activity, MessageSquare, Briefcase, Pencil, X, Check, Loader2, Plus, CreditCard, RefreshCw, RotateCcw, ChevronLeft, ChevronRight, Send } from "lucide-react";
+import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, Calendar, User, Clock, DollarSign, FileText, Activity, MessageSquare, Briefcase, Pencil, X, Check, Loader2, Plus, CreditCard, RefreshCw, RotateCcw, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,6 +50,8 @@ import { EventSelector } from "@/components/form/EventSelector";
 import { getCountryCodeFromName } from "@/components/form/CountrySelector";
 import { valleyCities, nepalCitiesOutsideValley, clientLocationOptions } from "@/lib/form-data";
 import PaymentDrawer from "@/components/finance/PaymentDrawer";
+import { ClientDetailSidebar, ClientHeroSection, SectionType } from "@/components/client-detail";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 // Helper to convert AD date to BS formatted string
 function formatADtoBS(adDateStr: string): string {
@@ -120,8 +122,13 @@ const ClientDetail = () => {
   const { rowNumber } = useParams<{ rowNumber: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const isMobile = useIsMobile();
   const { clients, isLoading, updateClient: updateClientCache, refreshData } = useCachedData();
   const { data: dropdowns } = useDropdownData();
+
+  // Netflix-style sidebar section state
+  const [activeSection, setActiveSection] = useState<SectionType>('events');
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
 
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false);
@@ -143,7 +150,7 @@ const ClientDetail = () => {
   const [source, setSource] = useState("");
   const [whoseWhatsapp, setWhoseWhatsapp] = useState("");
   const [oldClientName, setOldClientName] = useState("");
-const [whoAdded, setWhoAdded] = useState("");
+  const [whoAdded, setWhoAdded] = useState("");
   const [clientHandler, setClientHandler] = useState("");
   const [inquiryDate, setInquiryDate] = useState<Date | undefined>(undefined);
   const [inquiryTimeInput, setInquiryTimeInput] = useState("");
@@ -260,7 +267,6 @@ const [whoAdded, setWhoAdded] = useState("");
     if (byRowNumber) return byRowNumber;
     
     // Second try: match by registeredDateTimeAD (decoded from URL)
-    // This handles cases where navigation uses registeredDateTimeAD as fallback
     const decodedId = decodeURIComponent(rowNumber);
     const byRegDateTime = clients.find(c => c.registeredDateTimeAD === decodedId);
     if (byRegDateTime) return byRegDateTime;
@@ -764,11 +770,10 @@ const [whoAdded, setWhoAdded] = useState("");
   }, [client?.rowNumber, client?.registeredDateTimeAD]);
 
   // Only show loading if we have no clients AND still loading
-  // This allows rendering from cache immediately while background sync happens
   if (isLoading && clients.length === 0) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-muted-foreground">Loading...</div>
+      <div className="min-h-screen bg-[hsl(220,25%,8%)] flex items-center justify-center">
+        <div className="text-white/60">Loading...</div>
       </div>
     );
   }
@@ -785,17 +790,17 @@ const [whoAdded, setWhoAdded] = useState("");
     };
 
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 p-4">
-        <div className="text-muted-foreground text-center">
+      <div className="min-h-screen bg-[hsl(220,25%,8%)] flex flex-col items-center justify-center gap-4 p-4">
+        <div className="text-white/60 text-center">
           <p className="text-lg mb-2">Client not found</p>
-          <p className="text-sm text-muted-foreground/70">This may be due to stale local data</p>
+          <p className="text-sm text-white/40">This may be due to stale local data</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
-          <Button onClick={() => navigate('/client-tracker')}>
+          <Button onClick={() => navigate('/client-tracker')} className="bg-white/10 hover:bg-white/20 text-white">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Clients
           </Button>
-          <Button variant="outline" onClick={refreshData}>
+          <Button variant="outline" onClick={refreshData} className="border-white/20 text-white hover:bg-white/10">
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh Data
           </Button>
@@ -808,165 +813,39 @@ const [whoAdded, setWhoAdded] = useState("");
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-      {/* Header with Quick Actions */}
-      <div className="sticky top-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-800/50 shadow-sm">
-        <div className="container mx-auto px-4 py-3">
-          {/* Top row: Back + Navigation + Name + Edit */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={handleBack}
-                className="rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-              
-              {/* Client Navigation */}
-              {!isEditing && totalCount > 1 && (
-                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-full px-1 py-0.5">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleNavigatePrev}
-                    disabled={!prevClientId}
-                    className="h-7 w-7 rounded-full hover:bg-white dark:hover:bg-slate-700 disabled:opacity-30"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <span className="text-xs font-medium text-muted-foreground min-w-[40px] text-center">
-                    {currentPosition}/{totalCount}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleNavigateNext}
-                    disabled={!nextClientId}
-                    className="h-7 w-7 rounded-full hover:bg-white dark:hover:bg-slate-700 disabled:opacity-30"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
-              
-              <div className="ml-1">
-                <h1 className={`text-lg font-bold px-4 py-1.5 rounded-xl shadow-sm ${inquiryMonth ? getMonthColorClasses(inquiryMonth) : 'bg-gradient-to-r from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700'}`}>
-                  {isEditing ? "Edit Client" : client.clientName}
-                </h1>
-                {isFromSearch && fromState?.searchQuery && (
-                  <p className="text-[10px] text-muted-foreground mt-0.5 ml-1">
-                    Search: "{fromState.searchQuery}"
-                  </p>
-                )}
-              </div>
-            </div>
-            {isEditing ? (
-              <div className="flex items-center gap-2">
+  // Edit Mode - Keep similar to before but with dark theme
+  if (isEditing) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+        {/* Edit Header */}
+        <div className="sticky top-0 z-50 bg-[hsl(220,25%,8%)]/90 backdrop-blur-xl border-b border-white/10 shadow-lg">
+          <div className="container mx-auto px-4 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
                 <Button 
                   variant="ghost" 
                   size="icon" 
                   onClick={handleCancel} 
                   disabled={isSaving}
-                  className="rounded-full"
+                  className="rounded-full text-white/70 hover:text-white hover:bg-white/10"
                 >
                   <X className="h-5 w-5" />
                 </Button>
-                <Button 
-                  size="icon" 
-                  onClick={handleSave} 
-                  disabled={isSaving}
-                  className="rounded-full bg-emerald-500 hover:bg-emerald-600 shadow-lg"
-                >
-                  {isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
-                </Button>
+                <h1 className="text-lg font-bold text-white">Edit Client</h1>
               </div>
-            ) : (
               <Button 
-                variant="ghost" 
                 size="icon" 
-                onClick={handleEdit}
-                className="rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
+                onClick={handleSave} 
+                disabled={isSaving}
+                className="rounded-full bg-emerald-500 hover:bg-emerald-600 shadow-lg"
               >
-                <Pencil className="h-4 w-4" />
+                {isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
               </Button>
-            )}
-          </div>
-          
-          {/* Quick Actions Row - Only in view mode */}
-          {!isEditing && (
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-              {/* Call Direct */}
-              {client.contactNo && (
-                <Button
-                  size="sm"
-                  className="rounded-full shadow-md gap-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shrink-0"
-                  onClick={() => handleCall('DIRECT')}
-                  disabled={isLoggingCall}
-                >
-                  <Phone className="h-4 w-4" />
-                  <span>Call</span>
-                </Button>
-              )}
-              
-              {/* WhatsApp */}
-              {client.whatsappNo && (
-                <Button
-                  size="sm"
-                  className="rounded-full shadow-md gap-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shrink-0"
-                  onClick={() => handleCall('WHATSAPP')}
-                  disabled={isLoggingCall}
-                >
-                  <MessageCircle className="h-4 w-4" />
-                  <span>WhatsApp</span>
-                </Button>
-              )}
-              
-              {/* Add Payment - Always show if client is booked or has any payment history */}
-              <Button
-                size="sm"
-                className="rounded-full shadow-md gap-2 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white shrink-0"
-                onClick={() => setShowPaymentDrawer(true)}
-              >
-                <CreditCard className="h-4 w-4" />
-                <span>Payment</span>
-              </Button>
-              
-              {/* Change Status */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    size="sm"
-                    className="rounded-full shadow-md gap-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white shrink-0"
-                    disabled={isChangingStatus}
-                  >
-                    <RefreshCw className={`h-4 w-4 ${isChangingStatus ? 'animate-spin' : ''}`} />
-                    <span>Status</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto bg-background z-[60] rounded-xl shadow-xl border-slate-200 dark:border-slate-700">
-                  <DropdownMenuLabel className="text-xs text-muted-foreground">Change Status To</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {dropdowns?.clientStatuses?.map((status) => (
-                    <DropdownMenuItem 
-                      key={status} 
-                      onClick={() => handleStatusChange(status)}
-                      className="cursor-pointer rounded-lg"
-                    >
-                      {status}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
             </div>
-          )}
+          </div>
         </div>
-      </div>
 
-      {isEditing ? (
-        /* Edit Mode */
+        {/* Edit Form */}
         <div className="container mx-auto px-4 py-6 space-y-4 pb-20">
           {/* Client Basic Details */}
           <FormSection title="Client Basic Details">
@@ -1141,645 +1020,586 @@ const [whoAdded, setWhoAdded] = useState("");
             />
           </FormSection>
         </div>
-      ) : (
-        /* View Mode */
-        <div className="container mx-auto px-4 py-6 space-y-6">
-        
-        {/* Description Section - Prominent placement */}
-        {client.description && (
-          <Card className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 border-amber-200/50 dark:border-amber-800/50 shadow-lg">
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-start gap-3">
-                <div className="p-2 rounded-lg bg-amber-500/10 shrink-0">
-                  <FileText className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                </div>
-                <div>
-                  <div className="text-xs font-medium text-amber-600 dark:text-amber-400 mb-1 uppercase tracking-wide">Description</div>
-                  <div className="text-slate-700 dark:text-slate-200 whitespace-pre-wrap">{client.description}</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-        
-        {/* Hero Section - 3 Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Client Info Card */}
-          <Card className="bg-gradient-to-br from-white to-blue-50/50 dark:from-slate-900 dark:to-blue-950/30 border-blue-100/50 dark:border-blue-900/50 shadow-lg shadow-blue-500/5">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2 text-blue-700 dark:text-blue-400">
-                <div className="p-1.5 rounded-lg bg-blue-500/10">
-                  <User className="h-4 w-4" />
-                </div>
-                Client Info
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2.5 text-sm">
-              <div className="flex items-center gap-2">
-                <Badge className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white border-0">{client.source || 'Unknown Source'}</Badge>
-              </div>
-              {client.contactNo && (
-                <a href={`tel:${client.contactNo}`} className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                  <Phone className="h-3.5 w-3.5" />
-                  {client.contactNo}
-                </a>
-              )}
-              {client.whatsappNo && (
-                <a href={`https://wa.me/${client.whatsappNo.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-green-600 dark:hover:text-green-400 transition-colors">
-                  <MessageCircle className="h-3.5 w-3.5" />
-                  {client.whatsappNo}
-                </a>
-              )}
-              {client.email && (
-                <a href={`mailto:${client.email}`} className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                  <Mail className="h-3.5 w-3.5" />
-                  {client.email}
-                </a>
-              )}
-            </CardContent>
-          </Card>
+      </div>
+    );
+  }
 
-          {/* Events Card */}
-          <Card className="bg-gradient-to-br from-white to-purple-50/50 dark:from-slate-900 dark:to-purple-950/30 border-purple-100/50 dark:border-purple-900/50 shadow-lg shadow-purple-500/5">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2 text-purple-700 dark:text-purple-400">
-                <div className="p-1.5 rounded-lg bg-purple-500/10">
-                  <Calendar className="h-4 w-4" />
-                </div>
-                Events & Dates
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2.5">
-              {events.map((event, i) => (
-                <div key={i} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-white/50 dark:bg-slate-800/50">
-                  <Badge className={`${getEventTypeColor(event.name)} shadow-sm`}>
-                    {event.name}
-                  </Badge>
-                  <span className="text-sm font-semibold text-purple-700 dark:text-purple-300">{event.formatted}</span>
-                </div>
-              ))}
-              {client.eventCity && (
-                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 pt-1">
-                  <MapPin className="h-3.5 w-3.5 text-purple-500" />
-                  {client.eventCity}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Category Details Card */}
-          <Card className="bg-gradient-to-br from-white to-emerald-50/50 dark:from-slate-900 dark:to-emerald-950/30 border-emerald-100/50 dark:border-emerald-900/50 shadow-lg shadow-emerald-500/5">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
-                <div className="p-1.5 rounded-lg bg-emerald-500/10">
-                  <Activity className="h-4 w-4" />
-                </div>
-                Category Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Badge className={`${getStatusColor(currentStatus)} shadow-md text-sm px-3 py-1`}>
-                {currentStatus || 'UNTOUCHED'}
-              </Badge>
-              {/* Added By & Handler - Always visible */}
-              <div className="flex items-center gap-3 p-2 rounded-lg bg-white/50 dark:bg-slate-800/50">
-                <div className="flex items-center gap-2 flex-1">
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-[10px] font-bold shadow-sm">
-                    {client.whoAdded ? client.whoAdded.split(' ').map(n => n[0]).join('').slice(0, 2) : '?'}
-                  </div>
-                  <div>
-                    <div className="text-[9px] text-slate-500 dark:text-slate-400 uppercase">Added By</div>
-                    <div className="text-xs font-semibold">{client.whoAdded || 'Unknown'}</div>
-                  </div>
-                </div>
-                <div className="w-px h-8 bg-slate-300 dark:bg-slate-600" />
-                <div className="flex items-center gap-2 flex-1">
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white text-[10px] font-bold shadow-sm">
-                    {client.clientHandler ? client.clientHandler.split(' ').map(n => n[0]).join('').slice(0, 2) : '?'}
-                  </div>
-                  <div>
-                    <div className="text-[9px] text-slate-500 dark:text-slate-400 uppercase">Handler</div>
-                    <div className="text-xs font-semibold">{client.clientHandler || 'Not Assigned'}</div>
-                  </div>
-                </div>
-              </div>
-              {inquiryInfo && (
-                <div className="text-sm">
-                  <span className="text-slate-500 dark:text-slate-400">Inquired:</span>{' '}
-                  <span className={`font-semibold ${
-                    inquiryInfo.urgency === 'critical' ? 'text-red-500' :
-                    inquiryInfo.urgency === 'urgent' ? 'text-orange-500' :
-                    inquiryInfo.urgency === 'warning' ? 'text-amber-500' : 'text-slate-700 dark:text-slate-300'
-                  }`}>{inquiryInfo.timeAgo} ago</span>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Tabs Section */}
-        <Tabs defaultValue="events" className="w-full">
-          <ScrollArea className="w-full whitespace-nowrap">
-            <TabsList className="inline-flex w-max gap-1 p-1.5 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/50 dark:border-slate-700/50">
-              <TabsTrigger value="events" className="gap-1.5 rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-md">
-                <Calendar className="h-3.5 w-3.5" />
-                Events
-              </TabsTrigger>
-              <TabsTrigger value="registration" className="gap-1.5 rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-500 data-[state=active]:text-white data-[state=active]:shadow-md">
-                <FileText className="h-3.5 w-3.5" />
-                Registration
-              </TabsTrigger>
-              <TabsTrigger value="contact" className="gap-1.5 rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-500 data-[state=active]:text-white data-[state=active]:shadow-md">
-                <Phone className="h-3.5 w-3.5" />
-                Contact
-              </TabsTrigger>
-              <TabsTrigger value="inquiry" className="gap-1.5 rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-md">
-                <Clock className="h-3.5 w-3.5" />
-                Inquiry
-              </TabsTrigger>
-              <TabsTrigger value="sales" className="gap-1.5 rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-rose-500 data-[state=active]:to-red-500 data-[state=active]:text-white data-[state=active]:shadow-md">
-                <Briefcase className="h-3.5 w-3.5" />
-                Sales
-              </TabsTrigger>
-              <TabsTrigger value="activity" className="gap-1.5 rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-md">
-                <Activity className="h-3.5 w-3.5" />
-                Activity
-              </TabsTrigger>
-              <TabsTrigger value="comments" className="gap-1.5 rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-500 data-[state=active]:to-slate-600 data-[state=active]:text-white data-[state=active]:shadow-md">
-                <MessageSquare className="h-3.5 w-3.5" />
-                Comments
-              </TabsTrigger>
-              <TabsTrigger value="financials" className="gap-1.5 rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-500 data-[state=active]:to-purple-500 data-[state=active]:text-white data-[state=active]:shadow-md">
-                <DollarSign className="h-3.5 w-3.5" />
-                Financials
-              </TabsTrigger>
-            </TabsList>
-          </ScrollArea>
-
-          {/* Registration Tab */}
-          <TabsContent value="registration" className="mt-4">
-            <Card className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm shadow-lg border-slate-200/50 dark:border-slate-700/50">
-              <CardContent className="pt-6 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-3 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900">
-                    <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Registered Date</div>
-                    <div className="font-semibold text-slate-700 dark:text-slate-200">{formatADtoBSWithTime(client.registeredDateTimeAD)}</div>
-                  </div>
-                  <div className="p-3 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900">
-                    <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Registered Date (BS)</div>
-                    <div className="font-semibold text-slate-700 dark:text-slate-200">{formatBSDateDisplay(client.registeredDateBS)}</div>
-                  </div>
-                  <div className="p-3 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900">
-                    <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Added By</div>
-                    <div className="font-semibold text-slate-700 dark:text-slate-200">{client.whoAdded || 'Unknown'}</div>
-                  </div>
-                  <div className="p-3 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900">
-                    <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Source</div>
-                    <div className="font-semibold text-slate-700 dark:text-slate-200">{client.source || 'Unknown'}</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Contact Tab */}
-          <TabsContent value="contact" className="mt-4">
-            <Card>
-              <CardContent className="pt-6 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-sm text-muted-foreground">Client Location</div>
-                    <div className="font-medium">{client.clientLocation || 'Not specified'}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Current Country</div>
-                    <div className="font-medium">{client.currentCountry || 'Not specified'}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Contact Number</div>
-                    <div className="font-medium">
-                      {client.contactNo ? (
-                        <a href={`tel:${client.contactNo}`} className="text-primary hover:underline">{client.contactNo}</a>
-                      ) : 'Not provided'}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">WhatsApp Number</div>
-                    <div className="font-medium">
-                      {client.whatsappNo ? (
-                        <a href={`https://wa.me/${client.whatsappNo.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{client.whatsappNo}</a>
-                      ) : 'Not provided'}
-                    </div>
-                  </div>
-                  <div className="md:col-span-2">
-                    <div className="text-sm text-muted-foreground">Email</div>
-                    <div className="font-medium">
-                      {client.email ? (
-                        <a href={`mailto:${client.email}`} className="text-primary hover:underline">{client.email}</a>
-                      ) : 'Not provided'}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Events Tab - Now First with Nested Sub-Tabs */}
-          <TabsContent value="events" className="mt-2">
-            {/* Nested Event Sub-Tabs */}
-            {events.length > 0 ? (
-              <Tabs defaultValue={events[0]?.name.toLowerCase().replace(/\s+/g, '-') || 'event-0'} className="w-full">
-                <TabsList className="flex flex-wrap gap-1 h-auto p-1.5 bg-slate-100/80 dark:bg-slate-800/80 rounded-xl">
-                  {events.map((event, index) => (
-                    <TabsTrigger 
-                      key={index}
-                      value={event.name.toLowerCase().replace(/\s+/g, '-')}
-                      className={`gap-1.5 rounded-lg text-sm px-3 py-2 data-[state=active]:shadow-md ${
-                        event.name.toUpperCase().includes('WEDDING') ? 'data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-500 data-[state=active]:text-white' :
-                        event.name.toUpperCase().includes('RECEPTION') ? 'data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-violet-500 data-[state=active]:text-white' :
-                        event.name.toUpperCase().includes('ENGAGEMENT') ? 'data-[state=active]:bg-gradient-to-r data-[state=active]:from-pink-500 data-[state=active]:to-rose-500 data-[state=active]:text-white' :
-                        event.name.toUpperCase().includes('PRE') ? 'data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-amber-500 data-[state=active]:text-white' :
-                        'data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-500 data-[state=active]:to-slate-600 data-[state=active]:text-white'
-                      }`}
-                    >
-                      {event.name}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-                
-                {events.map((event, index) => (
-                  <TabsContent 
-                    key={index} 
-                    value={event.name.toLowerCase().replace(/\s+/g, '-')}
-                    className="mt-3"
-                  >
-                    {/* Empty Event Detail Panel */}
-                    <div className={`min-h-[200px] p-4 rounded-xl border-2 ${
-                      event.name.toUpperCase().includes('WEDDING') ? 'bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200/50 dark:border-blue-800/50' :
-                      event.name.toUpperCase().includes('RECEPTION') ? 'bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-950/20 dark:to-violet-950/20 border-purple-200/50 dark:border-purple-800/50' :
-                      event.name.toUpperCase().includes('ENGAGEMENT') ? 'bg-gradient-to-br from-pink-50 to-rose-50 dark:from-pink-950/20 dark:to-rose-950/20 border-pink-200/50 dark:border-pink-800/50' :
-                      event.name.toUpperCase().includes('PRE') ? 'bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/20 dark:to-amber-950/20 border-orange-200/50 dark:border-orange-800/50' :
-                      'bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900/50 dark:to-slate-800/50 border-slate-200/50 dark:border-slate-700/50'
-                    }`}>
-                      {/* Empty - ready for future content */}
-                    </div>
-                  </TabsContent>
-                ))}
-              </Tabs>
-            ) : (
-              <div className="text-center text-muted-foreground py-8 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-                <Calendar className="h-12 w-12 mx-auto mb-3 text-slate-400" />
-                <p>No events configured for this client</p>
-              </div>
-            )}
-          </TabsContent>
-
-          {/* Inquiry Tab */}
-          <TabsContent value="inquiry" className="mt-4">
-            <Card>
-              <CardContent className="pt-6 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-sm text-muted-foreground">Inquiry Date (BS)</div>
-                    <div className="font-medium">{inquiryInfo?.bsDisplay || formatBSDateDisplay(client.inquiryDateBS)}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Inquiry Date (AD)</div>
-                    <div className="font-medium">{client.inquiryDateAD || 'Not recorded'}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Inquiry Time</div>
-                    <div className="font-medium">{client.inquiryTime || 'Not recorded'}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Time Since Inquiry</div>
-                    <div className={`font-medium ${
-                      inquiryInfo?.urgency === 'critical' ? 'text-red-500' :
-                      inquiryInfo?.urgency === 'urgent' ? 'text-orange-500' :
-                      inquiryInfo?.urgency === 'warning' ? 'text-amber-500' : ''
-                    }`}>
-                      {inquiryInfo?.timeAgo ? `${inquiryInfo.timeAgo} ago` : 'Unknown'}
-                    </div>
-                  </div>
-                </div>
-                {client.description && (
-                  <div className="pt-4 border-t">
-                    <div className="text-sm text-muted-foreground mb-2">Description</div>
-                    <div className="p-3 bg-muted/50 rounded-lg whitespace-pre-wrap">{client.description}</div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Sales Tab */}
-          <TabsContent value="sales" className="mt-4">
-            <Card>
-              <CardContent className="pt-6 space-y-6">
-                {/* Initial Quotation */}
-                <div>
-                  <div className="text-sm text-muted-foreground mb-3">Initial Quotation</div>
-                  {quotationTiers.length > 0 ? (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                      {quotationTiers.map((tier, i) => (
-                        <div key={i} className={`p-3 rounded-lg ${getQuotationTierColor(tier.tier)}`}>
-                          <div className="text-xs font-medium opacity-80">{tier.tier}</div>
-                          <div className="font-semibold">{tier.amount}</div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-muted-foreground">No quotation sent yet</div>
-                  )}
-                </div>
-
-                {/* Mindset */}
-                {mindsetData?.name && (
-                  <div>
-                    <div className="text-sm text-muted-foreground mb-2">Client Mindset</div>
-                    <Badge className={getMindsetColor(mindsetData.name)}>{mindsetData.name}</Badge>
-                    {mindsetData.timestamp && (
-                      <span className="text-xs text-muted-foreground ml-2">
-                        {getRelativeTime(mindsetData.timestamp)}
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                {/* Bargaining */}
-                {(client.ourBargainedRates || client.clientBargainedRates) && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-sm text-muted-foreground mb-2">Our Bargained Rates</div>
-                      <div className="p-3 bg-muted/50 rounded-lg">
-                        {client.ourBargainedRates || 'Not set'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-muted-foreground mb-2">Client Bargained Rates</div>
-                      <div className="p-3 bg-muted/50 rounded-lg">
-                        {client.clientBargainedRates || 'Not set'}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Final Quotation */}
-                {finalQuotation && (
-                  <div>
-                    <div className="text-sm text-muted-foreground mb-2">Final Fixed Quotation 🔒</div>
-                    <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                      <Badge className="bg-emerald-500 text-white mb-2">{finalQuotation.package}</Badge>
-                      <div className="text-2xl font-bold">NPR {formatNPR(finalQuotation.amount)}/-</div>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Activity Tab */}
-          <TabsContent value="activity" className="mt-4">
-            <Card>
-              <CardContent className="pt-6 space-y-6">
-                {/* Current Status */}
-                <div>
-                  <div className="text-sm text-muted-foreground mb-2">Current Status</div>
-                  <Badge className={`${getStatusColor(currentStatus)} text-base px-4 py-2`}>
-                    {currentStatus || 'UNTOUCHED'}
-                  </Badge>
-                </div>
-
-                {/* Handler */}
-                <div>
-                  <div className="text-sm text-muted-foreground mb-2">Client Handler</div>
-                  <div className="font-medium">{client.clientHandler || 'Not assigned'}</div>
-                </div>
-
-                {/* Status History */}
-                {client.statusLog && (
-                  <div>
-                    <div className="text-sm text-muted-foreground mb-2">Status History</div>
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
-                      {client.statusLog.split('\n').filter(Boolean).reverse().map((status, i) => {
-                        // Parse status timestamp for BS display
-                        const bracketMatch = status.match(/\[(\d{1,2}\/\d{1,2}\/\d{4}),\s*(\d{1,2}:\d{2}:\d{2})\]/);
-                        let bsDate = '';
-                        if (bracketMatch) {
-                          const [month, day, year] = bracketMatch[1].split('/').map(Number);
-                          const [hours, mins] = bracketMatch[2].split(':').map(Number);
-                          try {
-                            const date = new Date(year, month - 1, day, hours, mins);
-                            const np = new NepaliDate(date);
-                            const isPM = hours >= 12;
-                            const displayHours = hours % 12 || 12;
-                            bsDate = `${nepaliMonthsEnglish[np.getMonth()]} ${np.getDate()}, ${np.getYear()} at ${displayHours}:${String(mins).padStart(2, '0')} ${isPM ? 'PM' : 'AM'}`;
-                          } catch {}
-                        }
-                        const statusName = status.split(' [')[0].trim();
-                        return (
-                          <div key={i} className="p-2 bg-muted/50 rounded text-sm">
-                            <div className="font-medium">{statusName}</div>
-                            {bsDate && <div className="text-xs text-muted-foreground">{bsDate}</div>}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Call Log */}
-                {callEntries.length > 0 && (
-                  <div>
-                    <div className="text-sm text-muted-foreground mb-2">Call History ({callEntries.length} calls)</div>
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
-                      {callEntries.map((call, i) => {
-                        // Parse call date for BS display
-                        let bsDate = call.date;
-                        if (call.date) {
-                          try {
-                            const [year, month, day] = call.date.split('-').map(Number);
-                            const date = new Date(year, month - 1, day);
-                            const np = new NepaliDate(date);
-                            bsDate = `${nepaliMonthsEnglish[np.getMonth()]} ${np.getDate()}, ${np.getYear()}`;
-                          } catch {}
-                        }
-                        return (
-                          <div key={i} className="p-2 bg-muted/50 rounded text-sm flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              {call.type === 'WHATSAPP' ? (
-                                <MessageCircle className="h-4 w-4 text-green-500" />
-                              ) : (
-                                <Phone className="h-4 w-4 text-blue-500" />
-                              )}
-                              <span>{call.type}</span>
-                            </div>
-                            <div className="text-muted-foreground">
-                              {bsDate} {call.time && `at ${call.time}`}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Comments Tab */}
-          <TabsContent value="comments" className="mt-4">
-            <Card>
-              <CardContent className="pt-6 space-y-4">
-                {/* Add Comment Section */}
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400">
-                    <Plus className="h-4 w-4" />
-                    Add New Comment
-                  </div>
-                  <div className="flex gap-2">
-                    <Textarea
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                      placeholder="Type your comment here..."
-                      className="min-h-[80px] flex-1"
-                    />
-                  </div>
-                  <Button
-                    onClick={handleAddComment}
-                    disabled={isAddingComment || !newComment.trim()}
-                    className="gap-2"
-                    size="sm"
-                  >
-                    {isAddingComment ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
-                    Add Comment
-                  </Button>
-                </div>
-
-                {/* Existing Comments */}
-                <div className="border-t pt-4">
-                  <div className="text-sm font-medium text-muted-foreground mb-3">
-                    Comment History ({parsedComments.length})
-                  </div>
-                  {parsedComments.length > 0 ? (
-                    <div className="space-y-3">
-                      {parsedComments.map((comment, i) => {
-                        let bsDate = '';
-                        if (comment.timestamp) {
-                          try {
-                            const np = new NepaliDate(comment.timestamp);
-                            const hours = comment.timestamp.getHours();
-                            const mins = comment.timestamp.getMinutes();
-                            const isPM = hours >= 12;
-                            const displayHours = hours % 12 || 12;
-                            bsDate = `${nepaliMonthsEnglish[np.getMonth()]} ${np.getDate()}, ${np.getYear()} at ${displayHours}:${String(mins).padStart(2, '0')} ${isPM ? 'PM' : 'AM'}`;
-                          } catch {}
-                        }
-                        return (
-                          <div key={i} className="p-3 bg-muted/50 rounded-lg">
-                            <div className="whitespace-pre-wrap">{comment.text}</div>
-                            {bsDate && (
-                              <div className="text-xs text-muted-foreground mt-2">{bsDate}</div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="text-center text-muted-foreground py-8">No comments yet. Add one above!</div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Financials Tab */}
-          <TabsContent value="financials" className="mt-4">
-            <Card>
-              <CardContent className="pt-6 space-y-6">
-                {/* Summary Cards */}
-                {finalQuotation && (
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="p-4 bg-muted/50 rounded-lg text-center">
-                      <div className="text-xs text-muted-foreground">Total Quote</div>
-                      <div className="text-lg font-bold">NPR {formatNPR(finalQuotation.amount)}/-</div>
-                    </div>
-                    <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg text-center">
-                      <div className="text-xs text-muted-foreground">Total Paid</div>
-                      <div className="text-lg font-bold text-emerald-600">NPR {formatNPR(totalPaid)}/-</div>
-                    </div>
-                    <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-center">
-                      <div className="text-xs text-muted-foreground">Remaining</div>
-                      <div className="text-lg font-bold text-amber-600">
-                        {client.remainingPayment || `NPR ${formatNPR(parseInt(finalQuotation.amount.replace(/,/g, '')) - totalPaid)}/-`}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Payment Progress */}
-                {finalQuotation && (
-                  <div>
-                    <div className="flex justify-between text-sm mb-2">
-                      <span className="text-muted-foreground">Payment Progress</span>
-                      <span className="font-medium">
-                        {Math.round((totalPaid / parseInt(finalQuotation.amount.replace(/,/g, ''))) * 100)}%
-                      </span>
-                    </div>
-                    <div className="h-3 bg-muted rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-emerald-500 rounded-full transition-all"
-                        style={{ width: `${Math.min(100, (totalPaid / parseInt(finalQuotation.amount.replace(/,/g, ''))) * 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Payments Table */}
-                {payments.length > 0 ? (
-                  <div>
-                    <div className="text-sm text-muted-foreground mb-3">Payment History</div>
-                    <div className="border rounded-lg overflow-hidden">
-                      <table className="w-full text-sm">
-                        <thead className="bg-muted/50">
-                          <tr>
-                            <th className="text-left p-3 font-medium">Amount</th>
-                            <th className="text-left p-3 font-medium">Type</th>
-                            <th className="text-left p-3 font-medium">Date (BS)</th>
-                            <th className="text-left p-3 font-medium">Bank</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {payments.map((payment, i) => (
-                            <tr key={i} className="border-t">
-                              <td className="p-3 font-semibold">{payment.amount}</td>
-                              <td className="p-3">
-                                <Badge className={getPaymentTypeBadgeColor(payment.type)}>{payment.type}</Badge>
-                              </td>
-                              <td className="p-3">{payment.dateBSFormatted}</td>
-                              <td className="p-3">{payment.bank}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center text-muted-foreground py-8">No payments recorded</div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-        </div>
+  // View Mode - Netflix Style Layout
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex">
+      {/* Left Sidebar - Hidden on mobile */}
+      {!isMobile && (
+        <ClientDetailSidebar
+          activeSection={activeSection}
+          onSectionChange={setActiveSection}
+          onBack={handleBack}
+          clientName={client.clientName}
+          commentsCount={parsedComments.length}
+          showNavigation={totalCount > 1}
+          currentPosition={currentPosition}
+          totalCount={totalCount}
+          onPrev={handleNavigatePrev}
+          onNext={handleNavigateNext}
+          canGoPrev={!!prevClientId}
+          canGoNext={!!nextClientId}
+        />
       )}
 
-      {/* Payment Drawer - Always available */}
-      {!isEditing && client && (
+      {/* Main Content */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Mobile Header - Only show on mobile */}
+        {isMobile && (
+          <div className="sticky top-0 z-50 bg-[hsl(220,25%,8%)]/90 backdrop-blur-xl border-b border-white/10 p-3">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleBack}
+                className="rounded-full text-white/70 hover:text-white hover:bg-white/10"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <span className="text-white font-semibold flex-1 truncate">{client.clientName}</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleEdit}
+                className="rounded-full text-white/70 hover:text-white hover:bg-white/10"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Hero Section */}
+        <ClientHeroSection
+          client={client}
+          currentStatus={currentStatus}
+          onCall={handleCall}
+          onPayment={() => setShowPaymentDrawer(true)}
+          onStatusClick={() => setShowStatusDropdown(true)}
+          onEdit={handleEdit}
+          isLoggingCall={isLoggingCall}
+          isChangingStatus={isChangingStatus}
+        />
+
+        {/* Mobile Section Tabs */}
+        {isMobile && (
+          <div className="px-4 py-3 border-b border-white/10 bg-[hsl(220,25%,8%)]">
+            <ScrollArea className="w-full whitespace-nowrap">
+              <div className="inline-flex gap-2">
+                {(['events', 'registration', 'contact', 'inquiry', 'sales', 'activity', 'comments', 'financials'] as SectionType[]).map((section) => (
+                  <Button
+                    key={section}
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setActiveSection(section)}
+                    className={`rounded-full text-sm capitalize ${
+                      activeSection === section
+                        ? 'bg-primary text-white'
+                        : 'text-white/60 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    {section}
+                    {section === 'comments' && parsedComments.length > 0 && (
+                      <span className="ml-1 text-xs">({parsedComments.length})</span>
+                    )}
+                  </Button>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
+
+        {/* Section Content */}
+        <div className="p-4 md:p-6 animate-fade-in">
+          {/* Events Section */}
+          {activeSection === 'events' && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-bold text-white mb-4">Events & Dates</h2>
+              {events.length > 0 ? (
+                <Tabs defaultValue={events[0]?.name.toLowerCase().replace(/\s+/g, '-') || 'event-0'} className="w-full">
+                  <TabsList className="flex flex-wrap gap-1 h-auto p-1.5 bg-white/5 rounded-xl border border-white/10">
+                    {events.map((event, index) => (
+                      <TabsTrigger 
+                        key={index}
+                        value={event.name.toLowerCase().replace(/\s+/g, '-')}
+                        className={`gap-1.5 rounded-lg text-sm px-3 py-2 text-white/70 data-[state=active]:text-white data-[state=active]:shadow-md ${
+                          event.name.toUpperCase().includes('WEDDING') ? 'data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-500' :
+                          event.name.toUpperCase().includes('RECEPTION') ? 'data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-violet-500' :
+                          event.name.toUpperCase().includes('ENGAGEMENT') ? 'data-[state=active]:bg-gradient-to-r data-[state=active]:from-pink-500 data-[state=active]:to-rose-500' :
+                          event.name.toUpperCase().includes('PRE') ? 'data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-amber-500' :
+                          'data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-500 data-[state=active]:to-slate-600'
+                        }`}
+                      >
+                        {event.name}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                  
+                  {events.map((event, index) => (
+                    <TabsContent 
+                      key={index} 
+                      value={event.name.toLowerCase().replace(/\s+/g, '-')}
+                      className="mt-3"
+                    >
+                      <div className={`min-h-[200px] p-6 rounded-xl border ${
+                        event.name.toUpperCase().includes('WEDDING') ? 'bg-blue-500/10 border-blue-500/30' :
+                        event.name.toUpperCase().includes('RECEPTION') ? 'bg-purple-500/10 border-purple-500/30' :
+                        event.name.toUpperCase().includes('ENGAGEMENT') ? 'bg-pink-500/10 border-pink-500/30' :
+                        event.name.toUpperCase().includes('PRE') ? 'bg-orange-500/10 border-orange-500/30' :
+                        'bg-white/5 border-white/10'
+                      }`}>
+                        <div className="text-center text-white/60">
+                          <Calendar className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                          <p className="text-lg font-semibold text-white mb-1">{event.name}</p>
+                          <p className="text-white/80">{event.formatted}</p>
+                          {client.eventCity && (
+                            <p className="text-sm mt-2 flex items-center justify-center gap-1">
+                              <MapPin className="h-4 w-4" /> {client.eventCity}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </TabsContent>
+                  ))}
+                </Tabs>
+              ) : (
+                <div className="text-center text-white/40 py-12 bg-white/5 rounded-xl border border-dashed border-white/20">
+                  <Calendar className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p>No events configured for this client</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Registration Section */}
+          {activeSection === 'registration' && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-bold text-white mb-4">Registration Details</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                  <div className="text-xs text-white/40 mb-1">Registered Date</div>
+                  <div className="font-semibold text-white">{formatADtoBSWithTime(client.registeredDateTimeAD)}</div>
+                </div>
+                <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                  <div className="text-xs text-white/40 mb-1">Registered Date (BS)</div>
+                  <div className="font-semibold text-white">{formatBSDateDisplay(client.registeredDateBS)}</div>
+                </div>
+                <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                  <div className="text-xs text-white/40 mb-1">Added By</div>
+                  <div className="font-semibold text-white">{client.whoAdded || 'Unknown'}</div>
+                </div>
+                <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                  <div className="text-xs text-white/40 mb-1">Source</div>
+                  <div className="font-semibold text-white">{client.source || 'Unknown'}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Contact Section */}
+          {activeSection === 'contact' && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-bold text-white mb-4">Contact Information</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                  <div className="text-xs text-white/40 mb-1">Client Location</div>
+                  <div className="font-semibold text-white">{client.clientLocation || 'Not specified'}</div>
+                </div>
+                <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                  <div className="text-xs text-white/40 mb-1">Current Country</div>
+                  <div className="font-semibold text-white">{client.currentCountry || 'Not specified'}</div>
+                </div>
+                <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                  <div className="text-xs text-white/40 mb-1">Contact Number</div>
+                  <div className="font-semibold text-white">
+                    {client.contactNo ? (
+                      <a href={`tel:${client.contactNo}`} className="text-blue-400 hover:underline">{client.contactNo}</a>
+                    ) : 'Not provided'}
+                  </div>
+                </div>
+                <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                  <div className="text-xs text-white/40 mb-1">WhatsApp Number</div>
+                  <div className="font-semibold text-white">
+                    {client.whatsappNo ? (
+                      <a href={`https://wa.me/${client.whatsappNo.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:underline">{client.whatsappNo}</a>
+                    ) : 'Not provided'}
+                  </div>
+                </div>
+                <div className="p-4 rounded-xl bg-white/5 border border-white/10 md:col-span-2">
+                  <div className="text-xs text-white/40 mb-1">Email</div>
+                  <div className="font-semibold text-white">
+                    {client.email ? (
+                      <a href={`mailto:${client.email}`} className="text-amber-400 hover:underline">{client.email}</a>
+                    ) : 'Not provided'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Inquiry Section */}
+          {activeSection === 'inquiry' && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-bold text-white mb-4">Inquiry Details</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                  <div className="text-xs text-white/40 mb-1">Inquiry Date (BS)</div>
+                  <div className="font-semibold text-white">{inquiryInfo?.bsDisplay || formatBSDateDisplay(client.inquiryDateBS)}</div>
+                </div>
+                <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                  <div className="text-xs text-white/40 mb-1">Inquiry Date (AD)</div>
+                  <div className="font-semibold text-white">{client.inquiryDateAD || 'Not recorded'}</div>
+                </div>
+                <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                  <div className="text-xs text-white/40 mb-1">Inquiry Time</div>
+                  <div className="font-semibold text-white">{client.inquiryTime || 'Not recorded'}</div>
+                </div>
+                <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                  <div className="text-xs text-white/40 mb-1">Time Since Inquiry</div>
+                  <div className={`font-semibold ${
+                    inquiryInfo?.urgency === 'critical' ? 'text-red-400' :
+                    inquiryInfo?.urgency === 'urgent' ? 'text-orange-400' :
+                    inquiryInfo?.urgency === 'warning' ? 'text-amber-400' : 'text-white'
+                  }`}>
+                    {inquiryInfo?.timeAgo ? `${inquiryInfo.timeAgo} ago` : 'Unknown'}
+                  </div>
+                </div>
+              </div>
+              {client.description && (
+                <div className="p-4 rounded-xl bg-white/5 border border-white/10 mt-4">
+                  <div className="text-xs text-white/40 mb-2">Description</div>
+                  <div className="text-white/90 whitespace-pre-wrap">{client.description}</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Sales Section */}
+          {activeSection === 'sales' && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-bold text-white mb-4">Sales & Quotation</h2>
+              
+              {/* Initial Quotation */}
+              <div>
+                <div className="text-sm text-white/40 mb-3">Initial Quotation</div>
+                {quotationTiers.length > 0 ? (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {quotationTiers.map((tier, i) => (
+                      <div key={i} className={`p-3 rounded-lg ${getQuotationTierColor(tier.tier)}`}>
+                        <div className="text-xs font-medium opacity-80">{tier.tier}</div>
+                        <div className="font-semibold">{tier.amount}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-white/40 p-4 bg-white/5 rounded-xl border border-white/10 text-center">No quotation sent yet</div>
+                )}
+              </div>
+
+              {/* Mindset */}
+              {mindsetData?.name && (
+                <div>
+                  <div className="text-sm text-white/40 mb-2">Client Mindset</div>
+                  <Badge className={getMindsetColor(mindsetData.name)}>{mindsetData.name}</Badge>
+                  {mindsetData.timestamp && (
+                    <span className="text-xs text-white/40 ml-2">
+                      {getRelativeTime(mindsetData.timestamp)}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Bargaining */}
+              {(client.ourBargainedRates || client.clientBargainedRates) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                    <div className="text-xs text-white/40 mb-2">Our Bargained Rates</div>
+                    <div className="text-white">{client.ourBargainedRates || 'Not set'}</div>
+                  </div>
+                  <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                    <div className="text-xs text-white/40 mb-2">Client Bargained Rates</div>
+                    <div className="text-white">{client.clientBargainedRates || 'Not set'}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Final Quotation */}
+              {finalQuotation && (
+                <div>
+                  <div className="text-sm text-white/40 mb-2">Final Fixed Quotation 🔒</div>
+                  <div className="p-4 bg-emerald-500/20 rounded-lg border border-emerald-500/30">
+                    <Badge className="bg-emerald-500 text-white mb-2">{finalQuotation.package}</Badge>
+                    <div className="text-2xl font-bold text-white">NPR {formatNPR(finalQuotation.amount)}/-</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Activity Section */}
+          {activeSection === 'activity' && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-bold text-white mb-4">Activity & History</h2>
+              
+              {/* Current Status */}
+              <div>
+                <div className="text-sm text-white/40 mb-2">Current Status</div>
+                <Badge className={`${getStatusColor(currentStatus)} text-base px-4 py-2`}>
+                  {currentStatus || 'UNTOUCHED'}
+                </Badge>
+              </div>
+
+              {/* Handler */}
+              <div>
+                <div className="text-sm text-white/40 mb-2">Client Handler</div>
+                <div className="text-white font-medium">{client.clientHandler || 'Not assigned'}</div>
+              </div>
+
+              {/* Status History */}
+              {client.statusLog && (
+                <div>
+                  <div className="text-sm text-white/40 mb-3">Status History</div>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {client.statusLog.split('\n').filter(Boolean).reverse().map((status, i) => {
+                      const bracketMatch = status.match(/\[(\d{1,2}\/\d{1,2}\/\d{4}),\s*(\d{1,2}:\d{2}:\d{2})\]/);
+                      let bsDate = '';
+                      if (bracketMatch) {
+                        const [month, day, year] = bracketMatch[1].split('/').map(Number);
+                        const [hours, mins] = bracketMatch[2].split(':').map(Number);
+                        try {
+                          const date = new Date(year, month - 1, day, hours, mins);
+                          const np = new NepaliDate(date);
+                          const isPM = hours >= 12;
+                          const displayHours = hours % 12 || 12;
+                          bsDate = `${nepaliMonthsEnglish[np.getMonth()]} ${np.getDate()}, ${np.getYear()} at ${displayHours}:${String(mins).padStart(2, '0')} ${isPM ? 'PM' : 'AM'}`;
+                        } catch {}
+                      }
+                      const statusName = status.split(' [')[0].trim();
+                      return (
+                        <div key={i} className="p-3 bg-white/5 rounded-lg border border-white/10">
+                          <div className="font-medium text-white">{statusName}</div>
+                          {bsDate && <div className="text-xs text-white/40">{bsDate}</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Call Log */}
+              {callEntries.length > 0 && (
+                <div>
+                  <div className="text-sm text-white/40 mb-3">Call History ({callEntries.length} calls)</div>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {callEntries.map((call, i) => {
+                      let bsDate = call.date;
+                      if (call.date) {
+                        try {
+                          const [year, month, day] = call.date.split('-').map(Number);
+                          const date = new Date(year, month - 1, day);
+                          const np = new NepaliDate(date);
+                          bsDate = `${nepaliMonthsEnglish[np.getMonth()]} ${np.getDate()}, ${np.getYear()}`;
+                        } catch {}
+                      }
+                      return (
+                        <div key={i} className="p-3 bg-white/5 rounded-lg border border-white/10 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            {call.type === 'WHATSAPP' ? (
+                              <MessageCircle className="h-4 w-4 text-green-400" />
+                            ) : (
+                              <Phone className="h-4 w-4 text-blue-400" />
+                            )}
+                            <span className="text-white">{call.type}</span>
+                          </div>
+                          <div className="text-white/40 text-sm">
+                            {bsDate} {call.time && `at ${call.time}`}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Comments Section */}
+          {activeSection === 'comments' && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-bold text-white mb-4">Comments</h2>
+              
+              {/* Add Comment */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-white/60">
+                  <Plus className="h-4 w-4" />
+                  Add New Comment
+                </div>
+                <Textarea
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  placeholder="Type your comment here..."
+                  className="min-h-[80px] bg-white/5 border-white/20 text-white placeholder:text-white/40"
+                />
+                <Button
+                  onClick={handleAddComment}
+                  disabled={isAddingComment || !newComment.trim()}
+                  className="gap-2 bg-primary hover:bg-primary/90"
+                  size="sm"
+                >
+                  {isAddingComment ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                  Add Comment
+                </Button>
+              </div>
+
+              {/* Existing Comments */}
+              <div className="border-t border-white/10 pt-4">
+                <div className="text-sm font-medium text-white/40 mb-3">
+                  Comment History ({parsedComments.length})
+                </div>
+                {parsedComments.length > 0 ? (
+                  <div className="space-y-3">
+                    {parsedComments.map((comment, i) => {
+                      let bsDate = '';
+                      if (comment.timestamp) {
+                        try {
+                          const np = new NepaliDate(comment.timestamp);
+                          const hours = comment.timestamp.getHours();
+                          const mins = comment.timestamp.getMinutes();
+                          const isPM = hours >= 12;
+                          const displayHours = hours % 12 || 12;
+                          bsDate = `${nepaliMonthsEnglish[np.getMonth()]} ${np.getDate()}, ${np.getYear()} at ${displayHours}:${String(mins).padStart(2, '0')} ${isPM ? 'PM' : 'AM'}`;
+                        } catch {}
+                      }
+                      return (
+                        <div key={i} className="p-4 bg-white/5 rounded-xl border border-white/10">
+                          <div className="text-white whitespace-pre-wrap">{comment.text}</div>
+                          {bsDate && (
+                            <div className="text-xs text-white/40 mt-2">{bsDate}</div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center text-white/40 py-8 bg-white/5 rounded-xl border border-dashed border-white/20">
+                    No comments yet. Add one above!
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Financials Section */}
+          {activeSection === 'financials' && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-bold text-white mb-4">Financials & Payments</h2>
+              
+              {/* Summary Cards */}
+              {finalQuotation && (
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="p-4 bg-white/5 rounded-lg border border-white/10 text-center">
+                    <div className="text-xs text-white/40">Total Quote</div>
+                    <div className="text-lg font-bold text-white">NPR {formatNPR(finalQuotation.amount)}/-</div>
+                  </div>
+                  <div className="p-4 bg-emerald-500/20 rounded-lg border border-emerald-500/30 text-center">
+                    <div className="text-xs text-white/40">Total Paid</div>
+                    <div className="text-lg font-bold text-emerald-400">NPR {formatNPR(totalPaid)}/-</div>
+                  </div>
+                  <div className="p-4 bg-amber-500/20 rounded-lg border border-amber-500/30 text-center">
+                    <div className="text-xs text-white/40">Remaining</div>
+                    <div className="text-lg font-bold text-amber-400">
+                      {client.remainingPayment || `NPR ${formatNPR(parseInt(finalQuotation.amount.replace(/,/g, '')) - totalPaid)}/-`}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Payment Progress */}
+              {finalQuotation && (
+                <div>
+                  <div className="flex justify-between text-sm mb-2">
+                    <span className="text-white/40">Payment Progress</span>
+                    <span className="font-medium text-white">
+                      {Math.round((totalPaid / parseInt(finalQuotation.amount.replace(/,/g, ''))) * 100)}%
+                    </span>
+                  </div>
+                  <div className="h-3 bg-white/10 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all"
+                      style={{ width: `${Math.min(100, (totalPaid / parseInt(finalQuotation.amount.replace(/,/g, ''))) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Payments Table */}
+              {payments.length > 0 ? (
+                <div>
+                  <div className="text-sm text-white/40 mb-3">Payment History</div>
+                  <div className="rounded-xl border border-white/10 overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-white/5">
+                        <tr>
+                          <th className="text-left p-3 font-medium text-white/60">Amount</th>
+                          <th className="text-left p-3 font-medium text-white/60">Type</th>
+                          <th className="text-left p-3 font-medium text-white/60">Date (BS)</th>
+                          <th className="text-left p-3 font-medium text-white/60">Bank</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {payments.map((payment, i) => (
+                          <tr key={i} className="border-t border-white/10">
+                            <td className="p-3 font-semibold text-white">{payment.amount}</td>
+                            <td className="p-3">
+                              <Badge className={getPaymentTypeBadgeColor(payment.type)}>{payment.type}</Badge>
+                            </td>
+                            <td className="p-3 text-white/80">{payment.dateBSFormatted}</td>
+                            <td className="p-3 text-white/80">{payment.bank}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center text-white/40 py-8 bg-white/5 rounded-xl border border-dashed border-white/20">
+                  No payments recorded
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Status Change Dropdown (shown as modal overlay) */}
+      <DropdownMenu open={showStatusDropdown} onOpenChange={setShowStatusDropdown}>
+        <DropdownMenuTrigger asChild>
+          <span className="hidden" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="center" className="max-h-80 overflow-y-auto bg-[hsl(220,25%,12%)] border-white/20 z-[60] rounded-xl shadow-xl">
+          <DropdownMenuLabel className="text-xs text-white/50">Change Status To</DropdownMenuLabel>
+          <DropdownMenuSeparator className="bg-white/10" />
+          {dropdowns?.clientStatuses?.map((status) => (
+            <DropdownMenuItem 
+              key={status} 
+              onClick={() => handleStatusChange(status)}
+              className="cursor-pointer rounded-lg text-white/80 hover:text-white hover:bg-white/10 focus:bg-white/10 focus:text-white"
+            >
+              {status}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Payment Drawer */}
+      {client && (
         <PaymentDrawer
           isOpen={showPaymentDrawer}
           onClose={() => setShowPaymentDrawer(false)}
@@ -1794,7 +1614,7 @@ const [whoAdded, setWhoAdded] = useState("");
         />
       )}
 
-      {/* Quotation Dialog - For QUOTATION SENT status transition */}
+      {/* Quotation Dialog */}
       <Dialog open={showQuotationDialog} onOpenChange={(open) => {
         if (!open) {
           setShowQuotationDialog(false);
@@ -1802,10 +1622,10 @@ const [whoAdded, setWhoAdded] = useState("");
           setPendingStatus("");
         }
       }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm bg-[hsl(220,25%,12%)] border-white/20 text-white">
           <DialogHeader>
             <DialogTitle>Enter Quotation Amounts</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-white/60">
               Enter the prices quoted to {client?.clientName}. At least one is required.
             </DialogDescription>
           </DialogHeader>
@@ -1813,14 +1633,15 @@ const [whoAdded, setWhoAdded] = useState("");
           <div className="space-y-4 py-2">
             {['BASIC', 'STANDARD', 'PREMIUM', 'WTN SPECIAL'].map((tier) => (
               <div key={tier} className="space-y-1.5">
-                <Label>{tier}</Label>
+                <Label className="text-white/80">{tier}</Label>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">NPR</span>
+                  <span className="text-sm text-white/40">NPR</span>
                   <Input
                     type="number"
                     placeholder="e.g., 50000"
                     value={quotationAmounts[tier] || ''}
                     onChange={(e) => setQuotationAmounts({ ...quotationAmounts, [tier]: e.target.value })}
+                    className="bg-white/5 border-white/20 text-white placeholder:text-white/30"
                   />
                 </div>
               </div>
@@ -1828,10 +1649,10 @@ const [whoAdded, setWhoAdded] = useState("");
           </div>
           
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setShowQuotationDialog(false)}>
+            <Button variant="outline" onClick={() => setShowQuotationDialog(false)} className="border-white/20 text-white hover:bg-white/10">
               Cancel
             </Button>
-            <Button onClick={handleSaveQuotation} disabled={isSavingQuotation}>
+            <Button onClick={handleSaveQuotation} disabled={isSavingQuotation} className="bg-primary hover:bg-primary/90">
               {isSavingQuotation ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
