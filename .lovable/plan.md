@@ -1,136 +1,342 @@
 
+## Netflix-Style Xito Business Suite Landing Page Redesign
 
-## Add Payment Copy to WTN INCOME & EXPENSES Spreadsheet
-
-This plan syncs payments from the Finance Manager to a separate "WTN INCOME & EXPENSES" spreadsheet for income tracking.
-
----
-
-### Setup Required
-
-A new backend secret is needed to store the spreadsheet ID:
-
-**New Secret:** `WTN_INCOME_EXPENSES_SPREADSHEET_ID`
-
-You'll need to:
-1. Open your "WTN INCOME & EXPENSES" spreadsheet in Google Sheets
-2. Copy the spreadsheet ID from the URL (the long string between `/d/` and `/edit`)
-3. Make sure the spreadsheet is shared with the service account email (same one used for the main tracker)
+This plan transforms the Suite Landing page into a visually stunning, Netflix-inspired dashboard with quick actions, today's event hero, and module cards featuring recent activity statements.
 
 ---
 
-### Target Sheet Structure
+### Overview
 
-**Sheet:** "INCOME WTN" in WTN INCOME & EXPENSES spreadsheet
+```text
+CURRENT LAYOUT:
++----------------------------------+
+| Header (Logo + Title)            |
++----------------------------------+
+| Active Modules (cards)           |
+| Coming Soon Modules (grid)       |
+| Footer                           |
++----------------------------------+
 
-| Column | Content | Example |
-|--------|---------|---------|
-| A | AD Date | 2026-01-27 |
-| B | BS Date | 2082-10-14 |
-| C | Type (static) | INCOME |
-| D | Payment Category | CLIENT ADVANCE / CLIENT PARTIAL PAYMENT / CLIENT FINAL PAYMENT |
-| E | Amount | 30000 |
-| F | Bank/Payment Method | MASTER BENZO |
-| G | Statement | Amrita Didi - PARTIAL AMOUNT PAID - NPR 30,000/-, REMAINING NPR 45,000/- |
+NEW LAYOUT:
++----------------------------------+
+| Header (Logo + Quick Add CTAs)   |
++----------------------------------+
+| Hero Section: Today's Events     |
++----------------------------------+
+| Active Module Cards (Netflix)    |
+| - Module name, stats, activity   |
++----------------------------------+
+| [Scroll to see more...]          |
+| Coming Soon Modules (hidden)     |
+| Footer                           |
++----------------------------------+
+```
 
 ---
 
-### Payment Type Mapping
+### New Components to Create
 
-| Original | Saved As |
-|----------|----------|
-| ADVANCE | CLIENT ADVANCE |
-| PARTIAL | CLIENT PARTIAL PAYMENT |
-| FINAL | CLIENT FINAL PAYMENT |
+#### 1. SuiteLandingQuickAdd Component
+**Purpose:** Quick access to "Add Client" and "Add Payment" actions from the landing page
+
+**Features:**
+- Two prominent gradient buttons side by side
+- "Add Client" opens a modal/drawer with the QuickAdd form
+- "Add Payment" opens a modal that first lists booked clients, then the PaymentDrawer for the selected client
+- Consistent dark theme styling
+
+**File:** `src/components/suite/SuiteLandingQuickAdd.tsx`
+
+---
+
+#### 2. TodayEventsHero Component
+**Purpose:** Prominent hero section showing today's booked events
+
+**Features:**
+- Full-width gradient banner (Netflix-style dark gradient)
+- Large title: "Today's Events" or "No Events Today"
+- List of today's booked clients with clickable names
+- Client names link to `/client-tracker/client/{rowNumber}`
+- Countdown timer or "LIVE NOW" badge for ongoing events
+- Fallback: Show "No events scheduled for today" with subtle animation
+
+**Data Source:** Uses `useBookedCachedData` hook to fetch booked clients, filter by today's date using `eventDateAD`
+
+**File:** `src/components/suite/TodayEventsHero.tsx`
+
+---
+
+#### 3. ModuleCard Component (Enhanced)
+**Purpose:** Netflix-style module cards with statistics and recent activity
+
+**Features:**
+- Large gradient banner background (like Netflix movie cards)
+- Module icon prominently displayed
+- Module name and description
+- **Stats Section:** 
+  - Client Tracker: "X active leads"
+  - Booked Clients: "X upcoming events"
+  - Finance Manager: "NPR X collected today/this month"
+  - Vendors: "X vendors listed"
+  - My Accounts: "X accounts saved"
+- **Recent Activity Statement:**
+  - Client Tracker: "Last client: [name] added 2h ago"
+  - Booked Clients: "Next event: [name] in 3 days"
+  - Finance Manager: "Last payment: NPR 50,000 from [name]"
+  - Vendors: "Last added: [vendor name]"
+  - My Accounts: "Recently viewed: [account type]"
+- Hover effects with subtle scale and glow
+- Click navigates to module
+
+**File:** `src/components/suite/ModuleCard.tsx`
 
 ---
 
 ### Implementation Changes
 
-#### 1. Add New Secret
-**Action:** Use secret tool to request `WTN_INCOME_EXPENSES_SPREADSHEET_ID`
-
-#### 2. Update Edge Function
-**File:** `supabase/functions/google-sheets/index.ts`
-
-Modify the `addPayment` handler to:
-- Accept `clientName` parameter from frontend
-- After primary payment sync, append row to "INCOME WTN" sheet
-- Use the new `WTN_INCOME_EXPENSES_SPREADSHEET_ID` secret
-
+#### 1. Update `src/lib/suite-modules.ts`
+Add optional `statsKey` field to each module for fetching relevant statistics:
 ```typescript
-// After primary payment update succeeds
-const incomeSpreadsheetId = Deno.env.get('WTN_INCOME_EXPENSES_SPREADSHEET_ID');
-if (incomeSpreadsheetId) {
-  // Map payment type
-  const categoryMap = {
-    'ADVANCE': 'CLIENT ADVANCE',
-    'PARTIAL': 'CLIENT PARTIAL PAYMENT', 
-    'FINAL': 'CLIENT FINAL PAYMENT'
-  };
-  
-  // Build statement
-  const statement = `${clientName} - ${paymentType.toUpperCase()} AMOUNT PAID - NPR ${amount}/-, REMAINING ${remaining}`;
-  
-  // Append to INCOME WTN sheet
-  const rowValues = [[adDate, bsDate, 'INCOME', category, amount, bank, statement]];
-  // ... append using Google Sheets API
+export interface SuiteModule {
+  id: string;
+  name: string;
+  description: string;
+  icon: LucideIcon;
+  path: string;
+  status: "active" | "coming-soon";
+  gradient: string;
+  statsKey?: 'clients' | 'booked' | 'finance' | 'vendors' | 'accounts';
 }
 ```
 
-#### 3. Update API Function Signature
-**File:** `src/lib/sheets-api.ts`
+---
 
-Add `clientName` parameter to `addPayment`:
+#### 2. Create `src/components/suite/SuiteLandingQuickAdd.tsx`
 ```typescript
-export async function addPayment(
-  rowNumber: number,
-  paymentAmount: string,
-  paymentType: string,
-  nepaliDate: string,
-  nepaliDateAD: string,
-  bank: string,
-  existingPaymentsMade: string,
-  existingPaymentDatesAD: string,
-  finalQuotationAmount: number,
-  registeredDateTimeAD?: string,
-  sourceSheet?: 'tracker' | 'booked',
-  clientName?: string  // NEW
-)
+// Quick Add buttons for Client and Payment
+// Uses existing QuickAdd form logic
+// Uses existing PaymentDrawer component
+// Opens in Drawer/Modal for seamless UX
 ```
 
-#### 4. Update Payment Drawers
-**Files:** 
-- `src/components/finance/PaymentDrawer.tsx`
-- `src/components/booked/PaymentDrawer.tsx`
-
-Pass `clientName` prop to the `addPayment` call.
-
----
-
-### Files to Modify
-
-| File | Change |
-|------|--------|
-| Backend Secret | Add `WTN_INCOME_EXPENSES_SPREADSHEET_ID` |
-| `supabase/functions/google-sheets/index.ts` | Add income sheet sync in `addPayment` |
-| `src/lib/sheets-api.ts` | Add `clientName` parameter |
-| `src/components/finance/PaymentDrawer.tsx` | Pass `clientName` to API |
-| `src/components/booked/PaymentDrawer.tsx` | Pass `clientName` to API |
+**Dependencies:**
+- Drawer component from UI
+- QuickAdd form logic (inline or modal)
+- PaymentDrawer from finance module
+- useBookedCachedData for client selection
 
 ---
 
-### Error Handling
+#### 3. Create `src/components/suite/TodayEventsHero.tsx`
+```typescript
+// Fetches booked clients
+// Filters to today's events using eventDateAD
+// Displays client names as clickable links
+// Netflix-style gradient background
+// Animation for "LIVE" indicator
+```
 
-- If `WTN_INCOME_EXPENSES_SPREADSHEET_ID` is not set, sync is skipped silently
-- If income sheet sync fails, primary payment still succeeds (logged but not blocking)
-- This ensures the main payment functionality is never disrupted
+**Logic for Today's Events:**
+```typescript
+const today = new Date();
+const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+const todayEvents = bookedClients.filter(client => {
+  // Check if any event date matches today
+  const eventDates = client.eventDateAD?.split('\n') || [];
+  return eventDates.some(date => date.startsWith(todayStr));
+});
+```
 
 ---
 
-### Prerequisites
+#### 4. Create `src/components/suite/ModuleCard.tsx`
+```typescript
+// Enhanced module card with Netflix styling
+// Receives module data + optional stats
+// Displays gradient banner, icon, name, description
+// Shows statistics and recent activity statement
+// Hover effects and click navigation
+```
 
-Before implementation, you need to:
-1. Share the "WTN INCOME & EXPENSES" spreadsheet with the service account email
-2. Provide the spreadsheet ID when prompted
+**Card Structure:**
+```text
++----------------------------------------+
+| [Gradient Banner with Icon]            |
+|                                        |
+| MODULE NAME                            |
+| Description text                       |
+|                                        |
+| Stats: 45 active leads                 |
+| Last: Client XYZ added 2h ago          |
++----------------------------------------+
+```
 
+---
+
+#### 5. Update `src/components/suite/MobileSuiteLanding.tsx`
+
+**Changes:**
+- Add GlobalModeToggle at top
+- Add SuiteLandingQuickAdd (two buttons)
+- Add TodayEventsHero section
+- Replace current module list with enhanced ModuleCard components
+- Move "Coming Soon" section below the fold (user must scroll to see)
+- Remove Coming Soon from initial viewport
+- Add dark theme gradient background matching other modules
+- Footer remains at bottom
+
+**Layout Flow:**
+1. Header with Logo + Quick Add buttons
+2. Today's Events Hero (full-width gradient)
+3. Active Modules as Netflix-style cards
+4. Spacer/separator
+5. Coming Soon section (below fold)
+6. Footer
+
+---
+
+#### 6. Update `src/components/suite/DesktopSuiteLanding.tsx`
+
+**Same changes as mobile but with:**
+- 3-column grid for module cards
+- Larger hero section
+- Side-by-side quick add buttons with more padding
+- Coming Soon in 4-column grid at bottom
+
+---
+
+#### 7. Create Custom Hook: `src/hooks/useSuiteStats.ts`
+
+**Purpose:** Fetch statistics for all modules in a single hook
+
+**Returns:**
+```typescript
+{
+  clients: { total: number; today: number; lastClient?: string; lastAddedTime?: string };
+  booked: { total: number; upcoming: number; nextEvent?: string; daysUntil?: number };
+  finance: { collected: number; pending: number; lastPayment?: string; lastAmount?: number };
+  vendors: { total: number; lastAdded?: string };
+  accounts: { total: number };
+  isLoading: boolean;
+}
+```
+
+**Data Sources:**
+- `useCachedData()` for client tracker data
+- `useBookedCachedData()` for booked clients
+- Vendor data from vendor API
+- Account data from accounts API
+
+---
+
+### Visual Design Specifications
+
+#### Theme Colors (Matching App)
+- Background: `bg-slate-900` to `bg-slate-950` gradient
+- Card backgrounds: `bg-slate-800/80` with blur
+- Primary gradient: Emerald to Teal
+- Accent gradients per module (already defined in suite-modules.ts)
+
+#### Hero Section Styling
+```css
+/* Netflix-style gradient */
+background: linear-gradient(to right, 
+  rgba(15, 23, 42, 0.95) 0%,
+  rgba(15, 23, 42, 0.8) 50%,
+  rgba(15, 23, 42, 0.4) 100%
+);
+```
+
+#### Card Hover Effects
+```css
+.module-card:hover {
+  transform: scale(1.03);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+```
+
+---
+
+### File Changes Summary
+
+| File | Action | Description |
+|------|--------|-------------|
+| `src/components/suite/SuiteLandingQuickAdd.tsx` | Create | Quick Add Client + Payment buttons |
+| `src/components/suite/TodayEventsHero.tsx` | Create | Today's events hero section |
+| `src/components/suite/ModuleCard.tsx` | Create | Enhanced Netflix-style module card |
+| `src/hooks/useSuiteStats.ts` | Create | Statistics aggregation hook |
+| `src/components/suite/MobileSuiteLanding.tsx` | Modify | Integrate new components |
+| `src/components/suite/DesktopSuiteLanding.tsx` | Modify | Integrate new components |
+| `src/lib/suite-modules.ts` | Modify | Add statsKey to modules |
+| `src/components/suite/index.ts` | Modify | Export new components |
+
+---
+
+### Technical Details
+
+#### Quick Add Client Integration
+The Quick Add button will open a Drawer containing a simplified version of the QuickAdd form:
+- Reuse existing form logic from `src/pages/QuickAdd.tsx`
+- Extract form into reusable component if needed
+- On success, show toast and close drawer
+
+#### Quick Add Payment Flow
+1. User clicks "Add Payment"
+2. Drawer opens with searchable list of booked clients
+3. User selects a client
+4. PaymentDrawer opens for that client (same one from Finance Manager)
+5. Payment is recorded (syncs to WTN INCOME & EXPENSES as implemented)
+
+#### Today's Events Click Navigation
+Client names in the hero section link to:
+```typescript
+navigate(`/client-tracker/client/${client.rowNumber}`);
+// or using registeredDateTimeAD for universal ID resolution
+```
+
+#### Recent Activity Data
+For "recent activity" statements:
+- Parse `registeredDateTimeAD` for last added client
+- Calculate time difference for "X hours ago" display
+- Use cached data for performance
+
+---
+
+### Coming Soon Section Placement
+
+To hide Coming Soon below the fold:
+```tsx
+{/* Spacer to push Coming Soon below viewport */}
+<div className="min-h-[100px]" />
+
+{/* Coming Soon - only visible after scrolling */}
+<div className="space-y-4 pt-8 border-t border-slate-700/50">
+  <h3>Coming Soon</h3>
+  {/* Coming soon module grid */}
+</div>
+```
+
+---
+
+### Accessibility & Performance
+
+- All clickable elements have proper `aria-labels`
+- Lazy load module statistics
+- Use skeleton loaders while data loads
+- Maintain touch-friendly tap targets (44px minimum)
+- Ensure sufficient color contrast for text
+
+---
+
+### Testing Checklist
+
+After implementation:
+1. Test Quick Add Client flow end-to-end
+2. Test Quick Add Payment with client selection
+3. Verify Today's Events shows correct clients
+4. Verify client name clicks navigate correctly
+5. Check Coming Soon is hidden initially on mobile
+6. Verify all module cards display correct stats
+7. Test dark theme consistency across all sections
+8. Test responsive layout on various screen sizes
