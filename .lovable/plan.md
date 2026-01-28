@@ -1,115 +1,72 @@
 
 
-## Fix Event Line Alignment Between CLIENT TRACKER and BOOKED CLIENTS EVENT DETAILS
+## Modify Event Details to Tab-Based Display with Summary Card
 
-The event details are saving to the wrong event line because there's a mismatch between the event indices used by the CLIENT TRACKER data (which uses `.filter(Boolean)` to remove empty lines) and the actual line positions in the `BOOKED CLIENTS EVENT DETAILS` sheet.
-
----
-
-### Root Cause Analysis
-
-**Data Flow:**
-1. Client events are stored in `CLIENT TRACKER` (columns L-P)
-2. When client is booked, data syncs to `BOOKED CLIENTS` (columns L-P)
-3. Event logistics data syncs to `BOOKED CLIENTS EVENT DETAILS` (columns D-H for events, J-AH for logistics)
-
-**The Problem:**
-- In `ClientDetail.tsx`, events are parsed with `.filter(Boolean)`:
-  ```typescript
-  const eventNames = (client.events || '').split('\n').filter(Boolean);
-  ```
-  This gives filtered indices (0, 1 for two events even if the original data was `"WEDDING\n\nRECEPTION"`)
-
-- In the Edge Function, events are parsed WITHOUT filtering, but `numEvents` is calculated from filtered count:
-  ```typescript
-  const eventNames = (foundRow[3] || '').split('\n');
-  const numEvents = eventNames.filter(e => e.trim()).length || 1;
-  ```
-  
-- The `eventIndex` sent to `updateClientEventDetails` is the filtered display index, not the actual sheet line position
-
-**Example:**
-| Sheet Data | Display (filtered) | Actual Sheet Position |
-|------------|-------------------|----------------------|
-| `"WEDDING"` | Event 0 (WEDDING) | Line 0 |
-| `""` (empty) | (not shown) | Line 1 |
-| `"RECEPTION"` | Event 1 (RECEPTION) | Line 2 |
-
-When user saves Event 1 (RECEPTION), the code sends `eventIndex: 1`, but it should update **line 2** in the sheet.
+Transform the current accordion-style event cards into a tab-based interface that shows saved event details in a summary card format.
 
 ---
 
-### Solution
+### Current Behavior
+- Events are displayed as expandable cards (accordion style)
+- Each card shows "Details added" or "Not filled" badge when collapsed
+- Clicking a card expands it to show/edit the full form
 
-Update the edge function's `getClientEventDetails` to track the **original line index** for each event, even after filtering out empty events. This ensures the correct line is updated.
-
----
-
-### Implementation
-
-**File: `supabase/functions/google-sheets/index.ts`**
-
-Change the event building loop (around lines 2130-2161) to:
-
-```typescript
-// Build events array - filter empty names but preserve ORIGINAL line index
-const events = [];
-
-for (let i = 0; i < eventNames.length; i++) {
-  const name = eventNames[i]?.trim();
-  if (!name) continue; // Skip empty event names in display
-  
-  events.push({
-    eventIndex: i,  // This is the ACTUAL sheet line index, not the display order
-    eventName: name,
-    eventYear: eventYears[i] || '',
-    eventMonth: eventMonths[i] || '',
-    eventDay: eventDays[i] || '',
-    eventDateAD: eventDatesAD[i] || '',
-    venueType: venueTypes[i] || '',
-    venueName: venueNames[i] || '',
-    venueCity: venueCities[i] || '',
-    venueArea: venueAreas[i] || '',
-    venueMap: venueMaps[i] || '',
-    eventStartTime: eventStartTimes[i] || '',
-    eventEndTime: eventEndTimes[i] || '',
-    parlourType: parlourTypes[i] || '',
-    parlourName: parlourNames[i] || '',
-    parlourCity: parlourCities[i] || '',
-    parlourArea: parlourAreas[i] || '',
-    parlourMap: parlourMaps[i] || '',
-    parlourStartTime: parlourStartTimes[i] || '',
-    parlourEndTime: parlourEndTimes[i] || '',
-    doGroomComeInMehndi: doGroomInMehndiArr[i] || '',
-    guestCount: guestCounts[i] || '',
-    eventDemands: parseQuotedList(eventDemandsArr[i] || ''),
-    eventReferences: parseQuotedList(eventReferencesArr[i] || ''),
-  });
-}
-```
-
-**Key Change:** Remove the `numEvents` limit and instead loop through ALL `eventNames`, skipping empty ones with `continue`. This preserves the original `i` index (sheet line position) for each event.
+### New Behavior
+- Event names appear as horizontal **tabs** (e.g., "WEDDING", "RECEPTION")
+- Below the tabs, a **summary card** displays the saved details for the selected event
+- Clicking a tab switches the card content to that event's details
+- An "Edit Details" button opens the form for editing
 
 ---
 
-### Why This Works
+### UI Design
 
-**Before:**
-```
-eventNames = ["WEDDING", "", "RECEPTION"]
-numEvents = 2 (filtered count)
-Loop i=0,1: creates events with eventIndex 0,1
-But RECEPTION should have eventIndex 2!
+```text
++------------------------------------------+
+|  [WEDDING]   [RECEPTION]   [PRE-WEDDING] |   <-- Event Tabs
++------------------------------------------+
+|                                          |
+|  VENUE DETAILS                           |
+|  Type: HOTEL  |  Name: Grand Hyatt       |
+|  City: Kathmandu  |  Area: Durbar Marg   |
+|                                          |
+|  EVENT TIMING                            |
+|  Start: 10:00 AM  |  End: 4:00 PM        |
+|                                          |
+|  PARLOUR DETAILS                         |
+|  Name: Glam Studio  |  City: Lalitpur    |
+|                                          |
+|  GUEST COUNT: 500                        |
+|                                          |
+|  [Edit Details]                          |
++------------------------------------------+
 ```
 
-**After:**
-```
-eventNames = ["WEDDING", "", "RECEPTION"]
-Loop i=0: name="WEDDING" -> push with eventIndex:0
-Loop i=1: name="" -> skip
-Loop i=2: name="RECEPTION" -> push with eventIndex:2
-Updates now go to correct line!
-```
+---
+
+### Implementation Details
+
+#### 1. Create New Component: `EventDetailsSummaryCard.tsx`
+A new read-only card component that displays saved event details in a clean summary format with sections for:
+- Venue info (type, name, city, area, map link)
+- Event timing (start/end)
+- Parlour info (if filled)
+- Guest count
+- Demands and references
+
+Empty fields will be shown as "Not set" or hidden for cleaner display.
+
+#### 2. Modify `ClientDetail.tsx` Events Section
+Replace the current map of `EventDetailCard` components with:
+- A `Tabs` component using existing shadcn/ui tabs
+- `TabsTrigger` for each event name (with color coding based on event type)
+- `TabsContent` containing the summary card for each event
+- An "Edit Details" button that opens a dialog/drawer with the existing `EventDetailCard` form
+
+#### 3. Edit Mode
+When user clicks "Edit Details":
+- Open a sheet/dialog containing the current `EventDetailCard` form
+- On save, close the dialog and refresh the summary card
 
 ---
 
@@ -117,29 +74,17 @@ Updates now go to correct line!
 
 | File | Changes |
 |------|---------|
-| `supabase/functions/google-sheets/index.ts` | Update `getClientEventDetails` to preserve original line indices when skipping empty events |
+| `src/components/client-detail/EventDetailsSummaryCard.tsx` | **NEW** - Read-only summary card showing saved event details |
+| `src/pages/ClientDetail.tsx` | Update events section to use tabs + summary card pattern |
+| `src/components/client-detail/index.ts` | Export new component |
 
 ---
 
-### Additional Fix: Fallback in ClientDetail.tsx
+### Technical Notes
 
-The fallback case (lines 1197-1229) also needs to use the correct index. However, this is only triggered when no event details are found in the EVENT DETAILS sheet, which means the client hasn't been synced yet. In this case, we should:
-
-1. Use the original unfiltered event parsing to get correct indices, OR
-2. Ensure the sync happens before allowing event detail edits
-
-For now, the Edge Function fix is the primary solution since it's the source of truth for indices.
-
----
-
-### Testing Checklist
-
-After implementation:
-1. Open a client with 2+ events where the events have gaps (e.g., `WEDDING\n\nRECEPTION`)
-2. Expand the second event (RECEPTION)
-3. Fill in venue details and save
-4. Check Google Sheet `BOOKED CLIENTS EVENT DETAILS`:
-   - Column J (venueType) should have the value on line 3 (matching RECEPTION's position)
-   - NOT on line 2 (the empty line)
-5. Verify first event (WEDDING) data stays on line 1
+1. **Selected Tab State**: Track `selectedEventIndex` in the events section
+2. **Tab Styling**: Reuse existing event color logic (wedding=blue, reception=purple, etc.)
+3. **Empty State**: If no details saved, show a prompt card with "Add event details" button
+4. **Loading State**: Show skeleton while `eventDetailsData` is loading
+5. **Form Editing**: Reuse existing `EventDetailCard` component in a Sheet for editing
 
