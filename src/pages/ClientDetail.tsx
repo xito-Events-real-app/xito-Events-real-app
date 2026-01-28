@@ -51,8 +51,9 @@ import { EventSelector } from "@/components/form/EventSelector";
 import { getCountryCodeFromName } from "@/components/form/CountrySelector";
 import { valleyCities, nepalCitiesOutsideValley, clientLocationOptions } from "@/lib/form-data";
 import PaymentDrawer from "@/components/finance/PaymentDrawer";
-import { ClientDetailSidebar, ClientHeroSection, SectionType } from "@/components/client-detail";
+import { ClientDetailSidebar, ClientHeroSection, SectionType, EventDetailsSummaryCard } from "@/components/client-detail";
 import { EventDetailCard } from "@/components/client-detail/EventDetailCard";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useEventDetails } from "@/hooks/useEventDetails";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -181,6 +182,9 @@ const ClientDetail = () => {
   const [isSavingQuotation, setIsSavingQuotation] = useState(false);
   const [pendingStatus, setPendingStatus] = useState("");
   const [currentQuotationData, setCurrentQuotationData] = useState("");
+
+  // Event details editing state
+  const [editingEventIndex, setEditingEventIndex] = useState<number | null>(null);
 
   // Get the from state to preserve filter position when going back
   const fromState = location.state as { 
@@ -1143,92 +1147,139 @@ const ClientDetail = () => {
             <div className="space-y-4">
               <h2 className="text-xl font-bold text-white mb-4">Events & Dates</h2>
               
-              {/* Cute Event Badges Summary */}
-              {events.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {events.map((event, i) => {
-                    const upper = event.name.toUpperCase();
-                    const badgeClass = upper.includes('WEDDING') ? 'bg-blue-500/30 text-blue-200 border-blue-400/30' :
-                      upper.includes('RECEPTION') ? 'bg-purple-500/30 text-purple-200 border-purple-400/30' :
-                      upper.includes('ENGAGEMENT') ? 'bg-pink-500/30 text-pink-200 border-pink-400/30' :
-                      upper.includes('PRE') || upper.includes('MEHNDI') ? 'bg-orange-500/30 text-orange-200 border-orange-400/30' :
-                      'bg-emerald-500/30 text-emerald-200 border-emerald-400/30';
-                    
-                    const monthName = event.month ? getMonthName(parseInt(event.month)) : '';
-                    
-                    return (
-                      <div 
-                        key={i}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${badgeClass}`}
-                      >
-                        <Calendar className="h-3 w-3" />
-                        <span className="font-semibold">{event.name}</span>
-                        <span className="opacity-60">•</span>
-                        <span>{monthName} {event.day}</span>
-                        {event.year && (
-                          <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] font-bold ml-0.5">
-                            {event.year}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              
-              {/* Expandable Event Detail Cards */}
               {events.length > 0 ? (
-                <div className="space-y-3">
-                  {eventDetailsLoading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <Loader2 className="h-6 w-6 animate-spin text-white/40" />
-                      <span className="ml-2 text-white/40">Loading event details...</span>
-                    </div>
-                  ) : eventDetailsData?.events && eventDetailsData.events.length > 0 ? (
-                    eventDetailsData.events.map((eventDetail) => (
-                      <EventDetailCard
-                        key={eventDetail.eventIndex}
-                        event={eventDetail}
-                        eventDateAD={eventDetail.eventDateAD}
-                        onSave={updateEventDetail}
-                      />
-                    ))
-                  ) : (
-                    // Fallback to basic event cards if no event details found
-                    events.map((event, index) => (
-                      <EventDetailCard
-                        key={index}
-                        event={{
-                          eventIndex: index,
-                          eventName: event.name,
-                          eventYear: event.year || '',
-                          eventMonth: event.month || '',
-                          eventDay: event.day || '',
-                          eventDateAD: '',
-                          venueType: '',
-                          venueName: '',
-                          venueCity: '',
-                          venueArea: '',
-                          venueMap: '',
-                          eventStartTime: '',
-                          eventEndTime: '',
-                          parlourType: '',
-                          parlourName: '',
-                          parlourCity: '',
-                          parlourArea: '',
-                          parlourMap: '',
-                          parlourStartTime: '',
-                          parlourEndTime: '',
-                          doGroomComeInMehndi: '',
-                          guestCount: '',
-                          eventDemands: [],
-                          eventReferences: [],
-                        }}
-                        onSave={updateEventDetail}
-                      />
-                    ))
-                  )}
-                </div>
+                eventDetailsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-white/40" />
+                    <span className="ml-2 text-white/40">Loading event details...</span>
+                  </div>
+                ) : (
+                  <>
+                    {/* Event Tabs */}
+                    <Tabs defaultValue={eventDetailsData?.events?.[0]?.eventIndex?.toString() || "0"} className="w-full">
+                      <TabsList className="w-full flex flex-wrap gap-1 h-auto p-1 bg-white/5 rounded-xl">
+                        {(eventDetailsData?.events || events.map((e, i) => ({ eventIndex: i, eventName: e.name, eventMonth: e.month, eventDay: e.day, eventYear: e.year }))).map((eventDetail: any) => {
+                          const upper = eventDetail.eventName?.toUpperCase() || '';
+                          const tabClass = upper.includes('WEDDING') ? 'data-[state=active]:bg-blue-500/30 data-[state=active]:text-blue-200' :
+                            upper.includes('RECEPTION') ? 'data-[state=active]:bg-purple-500/30 data-[state=active]:text-purple-200' :
+                            upper.includes('ENGAGEMENT') ? 'data-[state=active]:bg-pink-500/30 data-[state=active]:text-pink-200' :
+                            upper.includes('PRE') || upper.includes('MEHNDI') ? 'data-[state=active]:bg-orange-500/30 data-[state=active]:text-orange-200' :
+                            'data-[state=active]:bg-emerald-500/30 data-[state=active]:text-emerald-200';
+                          
+                          const monthName = eventDetail.eventMonth ? getMonthName(parseInt(eventDetail.eventMonth)) : '';
+                          
+                          return (
+                            <TabsTrigger 
+                              key={eventDetail.eventIndex} 
+                              value={eventDetail.eventIndex.toString()}
+                              className={`flex-1 min-w-[120px] flex flex-col items-center gap-0.5 px-3 py-2 rounded-lg text-white/60 ${tabClass}`}
+                            >
+                              <span className="font-semibold text-xs">{eventDetail.eventName}</span>
+                              <span className="text-[10px] opacity-70">
+                                {monthName} {eventDetail.eventDay}{eventDetail.eventYear ? `, ${eventDetail.eventYear}` : ''}
+                              </span>
+                            </TabsTrigger>
+                          );
+                        })}
+                      </TabsList>
+                      
+                      {/* Tab Content - Summary Cards */}
+                      {(eventDetailsData?.events || events.map((e, i) => ({
+                        eventIndex: i,
+                        eventName: e.name,
+                        eventYear: e.year || '',
+                        eventMonth: e.month || '',
+                        eventDay: e.day || '',
+                        eventDateAD: '',
+                        venueType: '',
+                        venueName: '',
+                        venueCity: '',
+                        venueArea: '',
+                        venueMap: '',
+                        eventStartTime: '',
+                        eventEndTime: '',
+                        parlourType: '',
+                        parlourName: '',
+                        parlourCity: '',
+                        parlourArea: '',
+                        parlourMap: '',
+                        parlourStartTime: '',
+                        parlourEndTime: '',
+                        doGroomComeInMehndi: '',
+                        guestCount: '',
+                        eventDemands: [],
+                        eventReferences: [],
+                      }))).map((eventDetail: any) => (
+                        <TabsContent key={eventDetail.eventIndex} value={eventDetail.eventIndex.toString()} className="mt-4">
+                          <EventDetailsSummaryCard
+                            event={eventDetail}
+                            onEdit={() => setEditingEventIndex(eventDetail.eventIndex)}
+                          />
+                        </TabsContent>
+                      ))}
+                    </Tabs>
+
+                    {/* Edit Event Details Sheet */}
+                    <Sheet open={editingEventIndex !== null} onOpenChange={(open) => !open && setEditingEventIndex(null)}>
+                      <SheetContent side="right" className="w-full sm:max-w-lg bg-background overflow-y-auto">
+                        <SheetHeader>
+                          <SheetTitle className="text-white">
+                            Edit Event Details
+                          </SheetTitle>
+                        </SheetHeader>
+                        {editingEventIndex !== null && (
+                          <div className="mt-4">
+                            {(() => {
+                              const eventToEdit = eventDetailsData?.events?.find(e => e.eventIndex === editingEventIndex) ||
+                                (events[editingEventIndex] ? {
+                                  eventIndex: editingEventIndex,
+                                  eventName: events[editingEventIndex].name,
+                                  eventYear: events[editingEventIndex].year || '',
+                                  eventMonth: events[editingEventIndex].month || '',
+                                  eventDay: events[editingEventIndex].day || '',
+                                  eventDateAD: '',
+                                  venueType: '',
+                                  venueName: '',
+                                  venueCity: '',
+                                  venueArea: '',
+                                  venueMap: '',
+                                  eventStartTime: '',
+                                  eventEndTime: '',
+                                  parlourType: '',
+                                  parlourName: '',
+                                  parlourCity: '',
+                                  parlourArea: '',
+                                  parlourMap: '',
+                                  parlourStartTime: '',
+                                  parlourEndTime: '',
+                                  doGroomComeInMehndi: '',
+                                  guestCount: '',
+                                  eventDemands: [],
+                                  eventReferences: [],
+                                } : null);
+                              
+                              if (!eventToEdit) return null;
+                              
+                              return (
+                                <EventDetailCard
+                                  event={eventToEdit}
+                                  eventDateAD={eventToEdit.eventDateAD}
+                                  onSave={async (eventIndex, updates) => {
+                                    const success = await updateEventDetail(eventIndex, updates);
+                                    if (success) {
+                                      setEditingEventIndex(null);
+                                    }
+                                    return success;
+                                  }}
+                                />
+                              );
+                            })()}
+                          </div>
+                        )}
+                      </SheetContent>
+                    </Sheet>
+                  </>
+                )
               ) : (
                 <div className="text-center text-white/40 py-12 bg-white/5 rounded-xl border border-dashed border-white/20">
                   <Calendar className="h-12 w-12 mx-auto mb-3 opacity-50" />
