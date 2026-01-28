@@ -1,101 +1,72 @@
 
 
-## Add Event Details to Dashboard - Left Tabs, Right Details Layout
+## Keep Two-Column Layout - Show All Events at Once (No Tab Switching)
 
-Add an event details display to the Dashboard section with a **two-column layout**: event tabs on the left, venue/parlour details on the right.
+Modify the event details to keep the left/right column structure but display ALL events simultaneously without clickable tabs.
 
 ---
 
-### Requested Layout
+### Layout
 
 ```
 ┌─────────────────────────┬──────────────────────────────────────────────────────────┐
 │ EVENT DETAILS           │                                                          │
-├─────────────────────────┤                                                          │
-│ MAGH 16 WEDDING         │ VENUE                                                    │
-│ BRIDE SIDE              │ SMART PALACE, CHABHIL, KATHMANDU  📍  8 AM - 9 PM (250)  │
-│                         │                                                          │
-│ MAGH 17 PRE+RECEPTION   │ PARLOUR                                                  │
-│                         │ GLAM STUDIO, LAZIMPAT, KATHMANDU  📍  6 AM - 8 AM        │
-│ FALGUN 28 POST SHOOT    │                                                          │
-│                         │                                                          │
+├─────────────────────────┼──────────────────────────────────────────────────────────┤
+│ MAGH 16                 │ Venue: Smart Palace, Chabhil, Kathmandu 📍 8AM-9PM (250) │
+│ WEDDING BRIDE SIDE      │ Parlour: Glam Studio, Lazimpat 📍 6AM-8AM                │
+├─────────────────────────┼──────────────────────────────────────────────────────────┤
+│ MAGH 17                 │ Venue: ...                                               │
+│ PRE + RECEPTION         │ Parlour: ...                                             │
+├─────────────────────────┼──────────────────────────────────────────────────────────┤
+│ FALGUN 28               │ Venue: ...                                               │
+│ POST SHOOT              │ Parlour: ...                                             │
 └─────────────────────────┴──────────────────────────────────────────────────────────┘
 ```
 
-**Left Column:** Vertical event tabs (clickable)
-**Right Column:** Venue & Parlour details for selected event
+**Left Column:** All event names/dates stacked (not clickable)
+**Right Column:** Corresponding venue/parlour details for each event
 
 ---
 
-### Implementation Details
+### Changes to `DashboardEventDetails.tsx`
 
-#### 1. Create `DashboardEventDetails.tsx`
+| Change | Description |
+|--------|-------------|
+| Remove `useState` | No tab selection needed |
+| Keep flex layout | Maintain left (w-1/4) and right (w-3/4) columns |
+| Map all events | Each event shows as a row with left name + right details |
+| Remove click handlers | Event names are display-only, not buttons |
+| Smaller text | Reduce from `text-base` to `text-sm` for details |
 
-Two-column flex layout:
-- **Left (w-1/4):** Vertical list of event buttons/tabs
-- **Right (w-3/4):** Venue and Parlour sections
+---
+
+### New Structure
 
 ```typescript
-<div className="flex gap-4">
-  {/* LEFT - Event Tabs */}
-  <div className="w-1/4 space-y-2">
-    {events.map(event => (
-      <button 
-        key={event.eventIndex}
-        onClick={() => setSelectedIndex(event.eventIndex)}
-        className={selectedIndex === event.eventIndex ? 'bg-emerald-600' : 'bg-slate-700'}
-      >
-        {getMonthName(event.eventMonth)} {event.eventDay}
-        {event.eventName}
-      </button>
-    ))}
+{events.map((event, idx) => (
+  <div key={event.eventIndex} className="flex gap-4 border-b border-slate-700/30 pb-3 last:border-0">
+    {/* LEFT - Event Name/Date */}
+    <div className="w-1/4 min-w-[120px]">
+      <div className="text-sm font-bold uppercase text-emerald-400">
+        {monthName} {event.eventDay}
+      </div>
+      <div className="text-xs text-white/70">{event.eventName}</div>
+    </div>
+    
+    {/* RIGHT - Venue & Parlour */}
+    <div className="w-3/4 space-y-2">
+      <div className="text-xs">Venue: {venueName}, {area}... 📍 {time} ({guests})</div>
+      <div className="text-xs">Parlour: {parlourName}... 📍 {time}</div>
+    </div>
   </div>
-  
-  {/* RIGHT - Details */}
-  <div className="w-3/4">
-    <div>VENUE: {selectedEvent.venueName}, {selectedEvent.venueArea}...</div>
-    <div>PARLOUR: {selectedEvent.parlourName}...</div>
-  </div>
-</div>
-```
-
-#### 2. Tab Label Format (Stacked)
-```
-MAGH 16 WEDDING
-BRIDE SIDE
-```
-- Line 1: `{MONTH} {DAY} {EVENT_TYPE}` (e.g., "MAGH 16 WEDDING")
-- Line 2: Event name details (e.g., "BRIDE SIDE")
-
-#### 3. Venue Line Format
-```
-SMART PALACE, CHABHIL, KATHMANDU  📍  8 AM - 9 PM  (250 GUESTS)
-```
-
-#### 4. Parlour Line Format (No Guests)
-```
-GLAM STUDIO, LAZIMPAT, KATHMANDU  📍  6 AM - 8 AM
+))}
 ```
 
 ---
 
-### Files to Create/Modify
+### File to Modify
 
 | File | Changes |
 |------|---------|
-| `src/components/client-detail/DashboardEventDetails.tsx` | **NEW** - Two-column layout with vertical tabs |
-| `src/components/client-detail/ClientHeroSection.tsx` | Add DashboardEventDetails below quotation section |
-| `src/components/client-detail/index.ts` | Export new component |
-| `src/pages/ClientDetail.tsx` | Pass events and eventDetailsData to ClientHeroSection |
-
----
-
-### Styling
-
-- **Left tabs:** Dark background, emerald highlight for selected, stacked text
-- **Right details:** Large readable text, good contrast
-- **Venue name:** Bold white
-- **Map link:** Blue clickable icon
-- **Time range:** Emerald color
-- **Guest count:** Amber color (venue only)
+| `src/components/client-detail/DashboardEventDetails.tsx` | Remove tabs, show all events in rows with left/right columns |
 
