@@ -1,9 +1,9 @@
-import { Calendar, FileText, Phone, Clock, DollarSign, Activity, MessageSquare, CreditCard, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
+import { Calendar, FileText, Phone, Clock, DollarSign, Activity, MessageSquare, CreditCard, ArrowLeft, ChevronLeft, ChevronRight, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
-export type SectionType = 'events' | 'registration' | 'contact' | 'inquiry' | 'sales' | 'activity' | 'comments' | 'financials';
+export type SectionType = 'dashboard' | 'events' | 'registration' | 'contact' | 'inquiry' | 'sales' | 'activity' | 'comments' | 'financials';
 
 interface ClientDetailSidebarProps {
   activeSection: SectionType;
@@ -22,6 +22,7 @@ interface ClientDetailSidebarProps {
 }
 
 const sidebarItems: { id: SectionType; label: string; icon: React.ElementType }[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'events', label: 'Events', icon: Calendar },
   { id: 'registration', label: 'Registration', icon: FileText },
   { id: 'contact', label: 'Contact', icon: Phone },
