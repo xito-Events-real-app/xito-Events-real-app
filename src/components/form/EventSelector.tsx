@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { NepaliDateObject, formatBSDate, nepaliMonthsEnglish, isUnknownDay, getDayDisplay } from "@/lib/nepali-date";
 import { Search, X, Calendar, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -84,29 +85,34 @@ export function EventSelector({
         </div>
       )}
 
-      {/* Search Input */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          value={searchQuery}
-          onChange={(e) => handleInputChange(e.target.value)}
-          onFocus={() => setIsOpen(true)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              if (searchQuery.trim()) {
-                handleCustomEvent();
-              }
-            }
-          }}
-          placeholder="Search or type event..."
-          className="pl-9 h-9 text-sm"
-        />
-      </div>
-
-      {/* Dropdown Options */}
-      {isOpen && (
-        <div className="mt-2 max-h-40 overflow-y-auto rounded-md border border-border bg-card shadow-lg">
+      {/* Search Input with Portal-based Dropdown */}
+      <Popover open={isOpen} onOpenChange={setIsOpen}>
+        <PopoverTrigger asChild>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => handleInputChange(e.target.value)}
+              onFocus={() => setIsOpen(true)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (searchQuery.trim()) {
+                    handleCustomEvent();
+                  }
+                }
+              }}
+              placeholder="Search or type event..."
+              className="pl-9 h-9 text-sm"
+            />
+          </div>
+        </PopoverTrigger>
+        
+        <PopoverContent 
+          className="w-[var(--radix-popover-trigger-width)] p-0 z-[9999] bg-background border border-border shadow-xl max-h-60 overflow-y-auto" 
+          align="start"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
           {filteredOptions.length > 0 ? (
             filteredOptions.map((option, idx) => (
               <button
@@ -133,8 +139,8 @@ export function EventSelector({
           ) : (
             <p className="px-3 py-2 text-sm text-muted-foreground">No options available</p>
           )}
-        </div>
-      )}
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
