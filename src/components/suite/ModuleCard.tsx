@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
-import { LucideIcon, ChevronRight, TrendingUp, Clock, Users, DollarSign } from "lucide-react";
+import { LucideIcon, ChevronRight, TrendingUp, Clock, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatNPR } from "@/lib/client-card-utils";
 
 interface ModuleCardProps {
   id: string;
@@ -33,9 +32,9 @@ export function ModuleCard({
       <Link to={path} className="block group">
         <div className={cn(
           "relative overflow-hidden rounded-xl transition-all duration-300",
-          "bg-slate-800/80 backdrop-blur-sm border border-slate-700/50",
-          "hover:border-slate-500/50 hover:shadow-xl hover:shadow-black/20",
-          "hover:scale-[1.02] active:scale-[0.98]"
+          "bg-white border border-gray-200 shadow-sm",
+          "hover:border-gray-300 hover:shadow-md",
+          "hover:scale-[1.01] active:scale-[0.99]"
         )}>
           {/* Gradient accent bar */}
           <div className={cn(
@@ -47,36 +46,36 @@ export function ModuleCard({
             <div className="flex items-center gap-3">
               <div className={cn(
                 "w-12 h-12 rounded-xl flex items-center justify-center shrink-0",
-                "bg-gradient-to-br shadow-lg",
+                "bg-gradient-to-br shadow-md",
                 gradient
               )}>
                 <Icon className="w-6 h-6 text-white" />
               </div>
               
               <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-white text-lg truncate group-hover:text-emerald-300 transition-colors">
+                <h3 className="font-bold text-gray-900 text-lg truncate group-hover:text-emerald-700 transition-colors">
                   {name}
                 </h3>
-                <p className="text-sm text-slate-400 truncate">
+                <p className="text-sm text-gray-500 truncate">
                   {description}
                 </p>
               </div>
               
-              <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-white group-hover:translate-x-1 transition-all shrink-0" />
+              <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all shrink-0" />
             </div>
 
             {/* Stats row */}
             {stats && (stats.primary || stats.activity) && (
-              <div className="mt-3 pt-3 border-t border-slate-700/50">
+              <div className="mt-3 pt-3 border-t border-gray-100">
                 <div className="flex items-center gap-4 text-xs">
                   {stats.primary && (
-                    <div className="flex items-center gap-1.5 text-emerald-400">
+                    <div className="flex items-center gap-1.5 text-emerald-600">
                       <TrendingUp className="w-3.5 h-3.5" />
-                      <span>{stats.primary}</span>
+                      <span className="font-medium">{stats.primary}</span>
                     </div>
                   )}
                   {stats.activity && (
-                    <div className="flex items-center gap-1.5 text-slate-400">
+                    <div className="flex items-center gap-1.5 text-gray-500">
                       <Clock className="w-3.5 h-3.5" />
                       <span className="truncate">{stats.activity}</span>
                     </div>
@@ -94,16 +93,10 @@ export function ModuleCard({
     <Link to={path} className="block group">
       <div className={cn(
         "relative overflow-hidden rounded-2xl transition-all duration-300",
-        "bg-slate-800/80 backdrop-blur-sm border border-slate-700/50",
-        "hover:border-slate-500/50 hover:shadow-2xl hover:shadow-black/30",
-        "hover:scale-[1.03] active:scale-[0.98]"
+        "bg-white border border-gray-200 shadow-sm",
+        "hover:border-gray-300 hover:shadow-lg",
+        "hover:scale-[1.02] active:scale-[0.98]"
       )}>
-        {/* Background gradient effect */}
-        <div className={cn(
-          "absolute inset-0 opacity-10 bg-gradient-to-br",
-          gradient
-        )} />
-        
         {/* Gradient accent bar */}
         <div className={cn(
           "absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r",
@@ -115,43 +108,43 @@ export function ModuleCard({
           <div className="flex items-start gap-4 mb-4">
             <div className={cn(
               "w-16 h-16 rounded-xl flex items-center justify-center shrink-0",
-              "bg-gradient-to-br shadow-xl",
+              "bg-gradient-to-br shadow-lg",
               gradient
             )}>
               <Icon className="w-8 h-8 text-white" />
             </div>
             
             <div className="flex-1 min-w-0">
-              <h3 className="font-bold text-white text-xl group-hover:text-emerald-300 transition-colors">
+              <h3 className="font-bold text-gray-900 text-xl group-hover:text-emerald-700 transition-colors">
                 {name}
               </h3>
-              <p className="text-sm text-slate-400 mt-1">
+              <p className="text-sm text-gray-500 mt-1">
                 {description}
               </p>
             </div>
             
-            <ChevronRight className="w-6 h-6 text-slate-500 group-hover:text-white group-hover:translate-x-1 transition-all shrink-0 mt-1" />
+            <ChevronRight className="w-6 h-6 text-gray-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all shrink-0 mt-1" />
           </div>
 
           {/* Stats Section */}
           {stats && (
-            <div className="space-y-2 pt-4 border-t border-slate-700/50">
+            <div className="space-y-2 pt-4 border-t border-gray-100">
               {stats.primary && (
                 <div className="flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-emerald-400" />
-                  <span className="text-sm font-medium text-emerald-400">{stats.primary}</span>
+                  <TrendingUp className="w-4 h-4 text-emerald-600" />
+                  <span className="text-sm font-medium text-emerald-600">{stats.primary}</span>
                 </div>
               )}
               {stats.secondary && (
                 <div className="flex items-center gap-2">
-                  <DollarSign className="w-4 h-4 text-amber-400" />
-                  <span className="text-sm text-amber-400">{stats.secondary}</span>
+                  <DollarSign className="w-4 h-4 text-amber-600" />
+                  <span className="text-sm text-amber-600">{stats.secondary}</span>
                 </div>
               )}
               {stats.activity && (
                 <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-slate-400" />
-                  <span className="text-sm text-slate-400 truncate">{stats.activity}</span>
+                  <Clock className="w-4 h-4 text-gray-400" />
+                  <span className="text-sm text-gray-500 truncate">{stats.activity}</span>
                 </div>
               )}
             </div>
