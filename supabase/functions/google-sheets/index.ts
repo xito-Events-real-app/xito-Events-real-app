@@ -2127,14 +2127,16 @@ async function getClientEventDetails(accessToken: string, spreadsheetId: string,
     return matches ? matches.map(m => m.replace(/"/g, '')) : [];
   }
 
-  // Build events array
-  const numEvents = eventNames.filter(e => e.trim()).length || 1;
+  // Build events array - filter empty names but preserve ORIGINAL line index
   const events = [];
   
-  for (let i = 0; i < numEvents; i++) {
+  for (let i = 0; i < eventNames.length; i++) {
+    const name = eventNames[i]?.trim();
+    if (!name) continue; // Skip empty event names in display
+    
     events.push({
-      eventIndex: i,
-      eventName: eventNames[i] || '',
+      eventIndex: i,  // This is the ACTUAL sheet line index, not the display order
+      eventName: name,
       eventYear: eventYears[i] || '',
       eventMonth: eventMonths[i] || '',
       eventDay: eventDays[i] || '',
