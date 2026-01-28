@@ -1,75 +1,115 @@
 
 
-## Client Page Event Details - Expandable Event Forms
+## Fix Event Line Alignment Between CLIENT TRACKER and BOOKED CLIENTS EVENT DETAILS
 
-This plan adds detailed event logistics forms to the Client Detail page's Events section. Each event box will be expandable to reveal fields for venue, timing, parlour, and logistics information that syncs with the `BOOKED CLIENTS EVENT DETAILS` Google Sheet.
-
----
-
-### Understanding the Data Structure
-
-**Key Insight**: The `BOOKED CLIENTS EVENT DETAILS` sheet stores multiple events per client using newline-separated values in each column. For example:
-- Column D (events): `"WEDDING\nRECEPTION"`
-- Column J (venueType): `"OUTDOOR\nINDOOR"`
-
-Each event corresponds to a specific line number (1st event = line 1, 2nd event = line 2, etc.). Updates must preserve line alignment across all columns.
-
-**Columns to Use (J-AH, excluding X-AD)**:
-- **Venue**: J (Type), K (Name), L (City), M (Area), N (Map)
-- **Event Time**: O (Start), P (End)
-- **Parlour**: Q (Type), R (Name), S (City), T (Area), U (Map)
-- **Parlour Time**: V (Start), W (End)
-- **Skip columns X-AD** (preShoot fields - not needed per user request)
-- **Misc**: AE (Groom in Mehndi), AF (Guest Count), AG (Demands), AH (References)
+The event details are saving to the wrong event line because there's a mismatch between the event indices used by the CLIENT TRACKER data (which uses `.filter(Boolean)` to remove empty lines) and the actual line positions in the `BOOKED CLIENTS EVENT DETAILS` sheet.
 
 ---
 
-### Architecture
+### Root Cause Analysis
 
-```text
-+------------------------------------------+
-| ClientDetail.tsx (Events Section)        |
-+------------------------------------------+
-|  Events Tabs (existing)                  |
-|  +--------------------------------------+|
-|  | EventDetailCard (NEW COMPONENT)     ||
-|  | - Collapsed: Summary / "Not filled" ||
-|  | - Expanded: Full form fields        ||
-|  +--------------------------------------+|
-+------------------------------------------+
-            |
-            v
-+------------------------------------------+
-| useEventDetails hook (NEW)               |
-| - Fetches event details for client       |
-| - Parses multi-line data by event index  |
-| - Handles save with line alignment       |
-+------------------------------------------+
-            |
-            v
-+------------------------------------------+
-| sheets-api.ts                            |
-| - getClientEventDetails (NEW)            |
-| - updateClientEventDetails (NEW)         |
-+------------------------------------------+
-            |
-            v
-+------------------------------------------+
-| Edge Function: google-sheets             |
-| - getClientEventDetails action           |
-| - updateClientEventDetails action        |
-| (Uses registeredDateTimeAD as unique ID) |
-+------------------------------------------+
+**Data Flow:**
+1. Client events are stored in `CLIENT TRACKER` (columns L-P)
+2. When client is booked, data syncs to `BOOKED CLIENTS` (columns L-P)
+3. Event logistics data syncs to `BOOKED CLIENTS EVENT DETAILS` (columns D-H for events, J-AH for logistics)
+
+**The Problem:**
+- In `ClientDetail.tsx`, events are parsed with `.filter(Boolean)`:
+  ```typescript
+  const eventNames = (client.events || '').split('\n').filter(Boolean);
+  ```
+  This gives filtered indices (0, 1 for two events even if the original data was `"WEDDING\n\nRECEPTION"`)
+
+- In the Edge Function, events are parsed WITHOUT filtering, but `numEvents` is calculated from filtered count:
+  ```typescript
+  const eventNames = (foundRow[3] || '').split('\n');
+  const numEvents = eventNames.filter(e => e.trim()).length || 1;
+  ```
+  
+- The `eventIndex` sent to `updateClientEventDetails` is the filtered display index, not the actual sheet line position
+
+**Example:**
+| Sheet Data | Display (filtered) | Actual Sheet Position |
+|------------|-------------------|----------------------|
+| `"WEDDING"` | Event 0 (WEDDING) | Line 0 |
+| `""` (empty) | (not shown) | Line 1 |
+| `"RECEPTION"` | Event 1 (RECEPTION) | Line 2 |
+
+When user saves Event 1 (RECEPTION), the code sends `eventIndex: 1`, but it should update **line 2** in the sheet.
+
+---
+
+### Solution
+
+Update the edge function's `getClientEventDetails` to track the **original line index** for each event, even after filtering out empty events. This ensures the correct line is updated.
+
+---
+
+### Implementation
+
+**File: `supabase/functions/google-sheets/index.ts`**
+
+Change the event building loop (around lines 2130-2161) to:
+
+```typescript
+// Build events array - filter empty names but preserve ORIGINAL line index
+const events = [];
+
+for (let i = 0; i < eventNames.length; i++) {
+  const name = eventNames[i]?.trim();
+  if (!name) continue; // Skip empty event names in display
+  
+  events.push({
+    eventIndex: i,  // This is the ACTUAL sheet line index, not the display order
+    eventName: name,
+    eventYear: eventYears[i] || '',
+    eventMonth: eventMonths[i] || '',
+    eventDay: eventDays[i] || '',
+    eventDateAD: eventDatesAD[i] || '',
+    venueType: venueTypes[i] || '',
+    venueName: venueNames[i] || '',
+    venueCity: venueCities[i] || '',
+    venueArea: venueAreas[i] || '',
+    venueMap: venueMaps[i] || '',
+    eventStartTime: eventStartTimes[i] || '',
+    eventEndTime: eventEndTimes[i] || '',
+    parlourType: parlourTypes[i] || '',
+    parlourName: parlourNames[i] || '',
+    parlourCity: parlourCities[i] || '',
+    parlourArea: parlourAreas[i] || '',
+    parlourMap: parlourMaps[i] || '',
+    parlourStartTime: parlourStartTimes[i] || '',
+    parlourEndTime: parlourEndTimes[i] || '',
+    doGroomComeInMehndi: doGroomInMehndiArr[i] || '',
+    guestCount: guestCounts[i] || '',
+    eventDemands: parseQuotedList(eventDemandsArr[i] || ''),
+    eventReferences: parseQuotedList(eventReferencesArr[i] || ''),
+  });
+}
 ```
 
+**Key Change:** Remove the `numEvents` limit and instead loop through ALL `eventNames`, skipping empty ones with `continue`. This preserves the original `i` index (sheet line position) for each event.
+
 ---
 
-### New Files to Create
+### Why This Works
 
-| File | Purpose |
-|------|---------|
-| `src/components/client-detail/EventDetailCard.tsx` | Expandable event form component |
-| `src/hooks/useEventDetails.ts` | Custom hook for fetching/updating event details |
+**Before:**
+```
+eventNames = ["WEDDING", "", "RECEPTION"]
+numEvents = 2 (filtered count)
+Loop i=0,1: creates events with eventIndex 0,1
+But RECEPTION should have eventIndex 2!
+```
+
+**After:**
+```
+eventNames = ["WEDDING", "", "RECEPTION"]
+Loop i=0: name="WEDDING" -> push with eventIndex:0
+Loop i=1: name="" -> skip
+Loop i=2: name="RECEPTION" -> push with eventIndex:2
+Updates now go to correct line!
+```
 
 ---
 
@@ -77,275 +117,29 @@ Each event corresponds to a specific line number (1st event = line 1, 2nd event 
 
 | File | Changes |
 |------|---------|
-| `src/pages/ClientDetail.tsx` | Replace simple event display with EventDetailCard |
-| `src/lib/sheets-api.ts` | Add getClientEventDetails and updateClientEventDetails functions |
-| `supabase/functions/google-sheets/index.ts` | Add new action handlers for event detail CRUD |
+| `supabase/functions/google-sheets/index.ts` | Update `getClientEventDetails` to preserve original line indices when skipping empty events |
 
 ---
 
-### Component Design: EventDetailCard
+### Additional Fix: Fallback in ClientDetail.tsx
 
-**Collapsed State** (default):
-- Shows event name, date, and summary badge
-- Badge shows "Not filled" (gray) OR "Details added" (green) based on data
-- Click to expand
+The fallback case (lines 1197-1229) also needs to use the correct index. However, this is only triggered when no event details are found in the EVENT DETAILS sheet, which means the client hasn't been synced yet. In this case, we should:
 
-**Expanded State**:
-Organized form sections with the exact field order specified:
+1. Use the original unfiltered event parsing to get correct indices, OR
+2. Ensure the sync happens before allowing event detail edits
 
-**Line 1 - Venue Details:**
-```
-[Dropdown: Venue Type] [Text: Venue Name]
-[Text: Venue City] [Text: Venue Area]
-[URL: Venue Map] [Button: Open Google Maps]
-```
-
-**Line 2 - Event Timing:**
-```
-[Time: Event Start] [Time: Event End]
-```
-
-**Line 3 - Parlour Details:**
-```
-[Dropdown: Parlour Type] [Text: Parlour Name]
-[Text: Parlour City] [Text: Parlour Area]
-[URL: Parlour Map] [Button: Open Google Maps]
-```
-
-**Line 4 - Parlour Timing:**
-```
-[Time: Parlour Start] [Time: Parlour End]
-```
-
-**Line 5 - Additional Info:**
-```
-[Toggle: Does Groom Come in Mehndi?] [Number: Guest Count]
-```
-
-**Line 6 - Event Demands:**
-```
-[TextList: 1. ______ 2. ______ 3. ______ 4. ______]
-[Button: + Add More]
-```
-Saved as: `"Demand 1" "Demand 2" "Demand 3"`
-
-**Line 7 - References:**
-```
-[URL Input + Label: Reference 1]
-[URL Input + Label: Reference 2]
-[Button: + Add More]
-```
-Saved as: `"https://link1" "https://link2"`
-
-**Footer:**
-```
-[Warning: Urgency alert if event <20 days and fields empty]
-[Button: Save Details]
-```
+For now, the Edge Function fix is the primary solution since it's the source of truth for indices.
 
 ---
 
-### Data Flow
+### Testing Checklist
 
-**Fetching Event Details:**
-1. `ClientDetail.tsx` calls `useEventDetails(registeredDateTimeAD)`
-2. Hook calls `getClientEventDetails(registeredDateTimeAD)`
-3. Edge function looks up client in EVENT DETAILS sheet by Column A
-4. Returns parsed data with multi-line values split into arrays
-5. Each event gets data at its corresponding index
-
-**Saving Event Details:**
-1. User edits fields in EventDetailCard
-2. On save, call `updateClientEventDetails(registeredDateTimeAD, eventIndex, updates)`
-3. Edge function fetches current multi-line data for all columns
-4. Updates the specific line (eventIndex) while preserving other lines
-5. Writes back to sheet with newline-joined values
-
----
-
-### Edge Function Changes
-
-**New Action: `getClientEventDetails`**
-
-```typescript
-// Input: { registeredDateTimeAD: string }
-// Output: { 
-//   rowNumber: number,
-//   events: Array<{
-//     eventName: string,
-//     eventIndex: number,
-//     venueType: string,
-//     venueName: string,
-//     venueCity: string,
-//     venueArea: string,
-//     venueMap: string,
-//     eventStartTime: string,
-//     eventEndTime: string,
-//     parlourType: string,
-//     parlourName: string,
-//     parlourCity: string,
-//     parlourArea: string,
-//     parlourMap: string,
-//     parlourStartTime: string,
-//     parlourEndTime: string,
-//     doGroomComeInMehndi: string,  // "YES" or "NO" or ""
-//     guestCount: string,
-//     eventDemands: string[],        // Parsed array
-//     eventReferences: string[],     // Parsed array
-//   }>
-// }
-```
-
-**New Action: `updateClientEventDetails`**
-
-```typescript
-// Input: { 
-//   registeredDateTimeAD: string,
-//   eventIndex: number,  // 0-based index
-//   updates: {
-//     venueType?: string,
-//     venueName?: string,
-//     ... other fields
-//   }
-// }
-// Output: { success: boolean }
-```
-
-The update function will:
-1. Fetch current row data (columns J-AH)
-2. Split each column by `\n` into arrays
-3. Update the specific index in each array
-4. Rejoin with `\n` and write back
-
----
-
-### Urgency Warning Logic
-
-```typescript
-function isEventUrgent(eventDateAD: string): boolean {
-  const eventDate = new Date(eventDateAD);
-  const now = new Date();
-  const diffDays = (eventDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-  return diffDays <= 20 && diffDays > 0;
-}
-
-function hasEmptyFields(eventDetails: EventDetail): boolean {
-  return !eventDetails.venueType || 
-         !eventDetails.venueName || 
-         !eventDetails.eventStartTime;
-}
-```
-
-Display a non-blocking red warning if `isEventUrgent() && hasEmptyFields()`.
-
----
-
-### UI Components Breakdown
-
-**Venue/Parlour Type Dropdown Options** (to be added to setup):
-- `INDOOR`
-- `OUTDOOR`
-- `MIXED`
-- `HOTEL`
-- `BANQUET`
-- `HOME`
-- `OTHER`
-
-**Time Picker**: Use native HTML time input for simplicity and mobile compatibility.
-
-**Google Maps Button**:
-```tsx
-<Button 
-  variant="outline" 
-  size="sm"
-  onClick={() => window.open('https://maps.google.com', '_blank')}
->
-  <MapPin className="h-4 w-4 mr-1" /> Open Maps
-</Button>
-```
-
-**Multi-value Inputs (Demands/References)**:
-- Dynamic array of inputs
-- "Add More" button appends new empty input
-- Remove button on each (except first)
-- Parse/serialize with quoted format: `"value1" "value2"`
-
----
-
-### Implementation Steps
-
-1. **Update Edge Function** (`supabase/functions/google-sheets/index.ts`)
-   - Add `getClientEventDetails` function
-   - Add `updateClientEventDetails` function with line-aware update logic
-   - Register both in the action switch
-
-2. **Update API Layer** (`src/lib/sheets-api.ts`)
-   - Add TypeScript interfaces for event details
-   - Add `getClientEventDetails()` function
-   - Add `updateClientEventDetails()` function
-
-3. **Create Hook** (`src/hooks/useEventDetails.ts`)
-   - Fetch on mount with registeredDateTimeAD
-   - Expose loading, error, data states
-   - Provide update function with optimistic UI
-
-4. **Create EventDetailCard** (`src/components/client-detail/EventDetailCard.tsx`)
-   - Collapsible card component
-   - Form fields organized by lines
-   - Save button with loading state
-   - Urgency warning display
-
-5. **Update ClientDetail** (`src/pages/ClientDetail.tsx`)
-   - Replace simple event tabs with EventDetailCard components
-   - Pass event data and handlers
-
----
-
-### Technical Details
-
-**Parsing Quoted Strings (Demands/References):**
-```typescript
-function parseQuotedList(value: string): string[] {
-  if (!value) return [];
-  const matches = value.match(/"([^"]*)"/g);
-  return matches ? matches.map(m => m.replace(/"/g, '')) : [];
-}
-
-function serializeQuotedList(items: string[]): string {
-  return items.filter(Boolean).map(i => `"${i}"`).join(' ');
-}
-```
-
-**Multi-line Value Update:**
-```typescript
-function updateLineAtIndex(existing: string, index: number, newValue: string): string {
-  const lines = existing ? existing.split('\n') : [];
-  // Pad array if needed
-  while (lines.length <= index) {
-    lines.push('');
-  }
-  lines[index] = newValue;
-  return lines.join('\n');
-}
-```
-
----
-
-### Styling
-
-The EventDetailCard will match the existing Client Detail dark theme:
-- Background: `bg-white/5` with `border border-white/10`
-- Expanded state: Subtle gradient based on event type
-- Form labels: `text-white/70`
-- Inputs: Dark themed with proper contrast
-- Save button: Primary gradient
-
----
-
-### Error Handling
-
-- Show toast on save success/failure
-- Disable save button during submission
-- Preserve form data on failed saves
-- Show retry option on network errors
+After implementation:
+1. Open a client with 2+ events where the events have gaps (e.g., `WEDDING\n\nRECEPTION`)
+2. Expand the second event (RECEPTION)
+3. Fill in venue details and save
+4. Check Google Sheet `BOOKED CLIENTS EVENT DETAILS`:
+   - Column J (venueType) should have the value on line 3 (matching RECEPTION's position)
+   - NOT on line 2 (the empty line)
+5. Verify first event (WEDDING) data stays on line 1
 
