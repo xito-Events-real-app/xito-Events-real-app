@@ -132,7 +132,7 @@ const ClientDetail = () => {
   const { data: dropdowns } = useDropdownData();
 
   // Netflix-style sidebar section state
-  const [activeSection, setActiveSection] = useState<SectionType>('events');
+  const [activeSection, setActiveSection] = useState<SectionType>('dashboard');
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
 
   // Edit mode state
@@ -1101,32 +1101,12 @@ const ClientDetail = () => {
           </div>
         )}
 
-        {/* Hero Section */}
-        <ClientHeroSection
-          client={client}
-          currentStatus={currentStatus}
-          firstEventDaysRemaining={firstEventDaysRemaining}
-          onCall={handleCall}
-          onStatusClick={() => setShowStatusDropdown(true)}
-          onEdit={handleEdit}
-          onAddComment={async (comment) => {
-            await handleAddCommentDirect(comment);
-          }}
-          onAddQuotation={() => {
-            setPendingStatus('QUOTATION SENT : REVIEW PENDING');
-            setShowQuotationDialog(true);
-          }}
-          isLoggingCall={isLoggingCall}
-          isChangingStatus={isChangingStatus}
-          isAddingComment={isAddingComment}
-        />
-
         {/* Mobile Section Tabs */}
         {isMobile && (
           <div className="px-4 py-3 border-b border-white/10 bg-[hsl(220,25%,8%)]">
             <ScrollArea className="w-full whitespace-nowrap">
               <div className="inline-flex gap-2">
-                {(['events', 'registration', 'contact', 'inquiry', 'sales', 'activity', 'comments', 'financials'] as SectionType[]).map((section) => (
+                {(['dashboard', 'events', 'registration', 'contact', 'inquiry', 'sales', 'activity', 'comments', 'financials'] as SectionType[]).map((section) => (
                   <Button
                     key={section}
                     variant="ghost"
@@ -1151,6 +1131,28 @@ const ClientDetail = () => {
 
         {/* Section Content */}
         <div className="p-4 md:p-6 animate-fade-in">
+          {/* Dashboard Section - Hero Content */}
+          {activeSection === 'dashboard' && (
+            <ClientHeroSection
+              client={client}
+              currentStatus={currentStatus}
+              firstEventDaysRemaining={firstEventDaysRemaining}
+              onCall={handleCall}
+              onStatusClick={() => setShowStatusDropdown(true)}
+              onEdit={handleEdit}
+              onAddComment={async (comment) => {
+                await handleAddCommentDirect(comment);
+              }}
+              onAddQuotation={() => {
+                setPendingStatus('QUOTATION SENT : REVIEW PENDING');
+                setShowQuotationDialog(true);
+              }}
+              isLoggingCall={isLoggingCall}
+              isChangingStatus={isChangingStatus}
+              isAddingComment={isAddingComment}
+            />
+          )}
+
           {/* Events Section */}
           {activeSection === 'events' && (
             <div className="space-y-4">
