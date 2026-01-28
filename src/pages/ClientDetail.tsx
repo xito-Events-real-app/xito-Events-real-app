@@ -1150,6 +1150,8 @@ const ClientDetail = () => {
               isLoggingCall={isLoggingCall}
               isChangingStatus={isChangingStatus}
               isAddingComment={isAddingComment}
+              eventDetailsData={eventDetailsData}
+              eventDetailsLoading={eventDetailsLoading}
             />
           )}
 

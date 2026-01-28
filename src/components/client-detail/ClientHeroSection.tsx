@@ -4,7 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { ClientData } from "@/lib/sheets-api";
 import { getMonthColorClasses, parseInquiryMonth } from "@/lib/client-card-utils";
 import QuotationDisplaySection from "./QuotationDisplaySection";
-
+import DashboardEventDetails from "./DashboardEventDetails";
+import { EventDetailsData } from "@/hooks/useEventDetails";
 interface ClientHeroSectionProps {
   client: ClientData;
   currentStatus: string;
@@ -17,6 +18,8 @@ interface ClientHeroSectionProps {
   isLoggingCall?: boolean;
   isChangingStatus?: boolean;
   isAddingComment?: boolean;
+  eventDetailsData?: EventDetailsData | null;
+  eventDetailsLoading?: boolean;
 }
 
 // Get status color
@@ -58,6 +61,8 @@ const ClientHeroSection = ({
   isLoggingCall = false,
   isChangingStatus = false,
   isAddingComment = false,
+  eventDetailsData,
+  eventDetailsLoading = false,
 }: ClientHeroSectionProps) => {
   const inquiryMonth = parseInquiryMonth(client.inquiryDateBS);
   const monthColorClasses = inquiryMonth ? getMonthColorClasses(inquiryMonth) : '';
@@ -225,6 +230,12 @@ const ClientHeroSection = ({
           comments={client.comments}
           onAddComment={onAddComment}
           isAddingComment={isAddingComment}
+        />
+
+        {/* Event Details - Two Column Layout */}
+        <DashboardEventDetails 
+          eventDetailsData={eventDetailsData}
+          isLoading={eventDetailsLoading}
         />
 
         {/* Description Box - Compact */}
