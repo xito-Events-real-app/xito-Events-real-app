@@ -66,24 +66,24 @@ export function DesktopSuiteLanding() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="border-b border-slate-700/50 bg-slate-900/80 backdrop-blur-sm sticky top-0 z-50">
+      <div className="border-b border-gray-200 bg-white sticky top-0 z-50 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg shadow-violet-500/30">
               <span className="text-white font-bold text-xl">X</span>
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white">Xito Business Suite</h1>
-              <p className="text-sm text-slate-400">Your complete business toolkit</p>
+              <h1 className="text-2xl font-bold text-gray-900">Xito Business Suite</h1>
+              <p className="text-sm text-gray-500">Your complete business toolkit</p>
             </div>
           </div>
           <Button
             variant="outline"
             size="sm"
             onClick={toggleDesktopMode}
-            className="gap-2 bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white"
+            className="gap-2 bg-white border-gray-300 text-gray-700 hover:bg-gray-50 hover:text-gray-900"
           >
             <Smartphone className="w-4 h-4" />
             Switch to Mobile
@@ -96,7 +96,7 @@ export function DesktopSuiteLanding() {
         <div className="grid grid-cols-3 gap-6">
           {/* Quick Add */}
           <div className="col-span-1">
-            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-3">
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
               Quick Actions
             </h3>
             <SuiteQuickAdd />
@@ -104,7 +104,7 @@ export function DesktopSuiteLanding() {
           
           {/* Today's Events Hero */}
           <div className="col-span-2">
-            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-3">
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
               Today's Schedule
             </h3>
             <TodayEventsHero />
@@ -113,7 +113,7 @@ export function DesktopSuiteLanding() {
 
         {/* Active Modules */}
         <div className="space-y-4">
-          <h3 className="text-base font-semibold text-slate-400 uppercase tracking-wide">
+          <h3 className="text-base font-semibold text-gray-600 uppercase tracking-wide">
             Active Modules
           </h3>
           
@@ -137,10 +137,10 @@ export function DesktopSuiteLanding() {
         <div className="min-h-[100px]" />
 
         {/* Coming Soon Modules */}
-        <div className="space-y-4 pt-8 border-t border-slate-700/50">
+        <div className="space-y-4 pt-8 border-t border-gray-200">
           <div className="flex items-center gap-2">
             <Construction className="w-5 h-5 text-amber-500" />
-            <h3 className="text-base font-semibold text-slate-400 uppercase tracking-wide">
+            <h3 className="text-base font-semibold text-gray-500 uppercase tracking-wide">
               Coming Soon
             </h3>
           </div>
@@ -151,7 +151,7 @@ export function DesktopSuiteLanding() {
               return (
                 <Card 
                   key={module.id}
-                  className="bg-slate-800/50 border-slate-700/50 cursor-pointer hover:bg-slate-700/50 transition-all active:scale-[0.98] opacity-60"
+                  className="bg-white border-gray-200 shadow-sm cursor-pointer hover:shadow-md hover:border-gray-300 transition-all active:scale-[0.98] opacity-70"
                   onClick={() => handleComingSoonClick(module.name)}
                 >
                   <CardContent className="p-4">
@@ -163,10 +163,10 @@ export function DesktopSuiteLanding() {
                         <Icon className="w-6 h-6 text-white" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-slate-300 truncate">
+                        <p className="font-semibold text-gray-700 truncate">
                           {module.name}
                         </p>
-                        <p className="text-xs text-slate-500 truncate">
+                        <p className="text-xs text-gray-400 truncate">
                           Coming Soon
                         </p>
                       </div>
@@ -180,7 +180,7 @@ export function DesktopSuiteLanding() {
 
         {/* Footer */}
         <div className="text-center pt-8 pb-4">
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-gray-400">
             Xito Business Suite v1.0 • © 2024 Xito. All rights reserved.
           </p>
         </div>

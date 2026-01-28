@@ -62,11 +62,11 @@ export function SuiteQuickAdd() {
 
   return (
     <>
-      {/* Quick Add Buttons */}
+      {/* Quick Add Buttons - Pill style */}
       <div className="grid grid-cols-2 gap-3">
         <Button
           onClick={handleAddClient}
-          className="h-14 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/25 rounded-xl font-semibold gap-2"
+          className="h-14 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/25 rounded-full font-semibold gap-2 transition-all hover:shadow-xl hover:shadow-blue-500/30"
         >
           <UserPlus className="w-5 h-5" />
           Add Client
@@ -74,41 +74,41 @@ export function SuiteQuickAdd() {
         
         <Button
           onClick={handleAddPayment}
-          className="h-14 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-lg shadow-emerald-500/25 rounded-xl font-semibold gap-2"
+          className="h-14 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-lg shadow-emerald-500/25 rounded-full font-semibold gap-2 transition-all hover:shadow-xl hover:shadow-emerald-500/30"
         >
           <DollarSign className="w-5 h-5" />
           Add Payment
         </Button>
       </div>
 
-      {/* Client Selection Drawer */}
+      {/* Client Selection Drawer - White Theme */}
       <Drawer open={isPaymentListOpen} onOpenChange={setIsPaymentListOpen}>
-        <DrawerContent className="bg-slate-900 border-slate-700 max-h-[85vh]">
-          <DrawerHeader className="text-left border-b border-slate-700 pb-4">
-            <DrawerTitle className="text-white flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-emerald-400" />
+        <DrawerContent className="bg-white border-gray-200 max-h-[85vh]">
+          <DrawerHeader className="text-left border-b border-gray-200 pb-4">
+            <DrawerTitle className="text-gray-900 flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-emerald-600" />
               Select Client for Payment
             </DrawerTitle>
-            <DrawerDescription className="text-slate-400">
+            <DrawerDescription className="text-gray-500">
               Choose a booked client to record payment
             </DrawerDescription>
           </DrawerHeader>
 
-          <div className="p-4 border-b border-slate-700">
+          <div className="p-4 border-b border-gray-200">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
                 placeholder="Search clients..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-slate-800 border-slate-600 text-white placeholder:text-slate-400"
+                className="pl-10 bg-gray-50 border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-emerald-500 focus:ring-emerald-500"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery("")}
                   className="absolute right-3 top-1/2 -translate-y-1/2"
                 >
-                  <X className="w-4 h-4 text-slate-400 hover:text-white" />
+                  <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
                 </button>
               )}
             </div>
@@ -117,7 +117,7 @@ export function SuiteQuickAdd() {
           <ScrollArea className="flex-1 max-h-[50vh]">
             <div className="p-4 space-y-2">
               {filteredClients.length === 0 ? (
-                <p className="text-slate-400 text-center py-8">
+                <p className="text-gray-500 text-center py-8">
                   {searchQuery ? "No clients found" : "No booked clients available"}
                 </p>
               ) : (
@@ -132,29 +132,29 @@ export function SuiteQuickAdd() {
                       onClick={() => handleSelectClient(client)}
                       className={cn(
                         "w-full p-4 rounded-xl text-left transition-all",
-                        "bg-slate-800/50 hover:bg-slate-700/70 border border-slate-700 hover:border-emerald-500/50",
-                        "group"
+                        "bg-gray-50 hover:bg-gray-100 border border-gray-200 hover:border-emerald-300",
+                        "group shadow-sm hover:shadow-md"
                       )}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-white truncate group-hover:text-emerald-300">
+                          <p className="font-semibold text-gray-900 truncate group-hover:text-emerald-700">
                             {client.clientName}
                           </p>
                           {quotation > 0 && (
                             <div className="flex items-center gap-2 mt-1">
-                              <span className="text-xs text-emerald-400">
+                              <span className="text-xs text-emerald-600">
                                 Paid: {formatNPR(paid)}
                               </span>
                               {remaining > 0 && (
-                                <span className="text-xs text-amber-400">
+                                <span className="text-xs text-amber-600">
                                   • Remaining: {formatNPR(remaining)}
                                 </span>
                               )}
                             </div>
                           )}
                         </div>
-                        <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" />
+                        <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all" />
                       </div>
                     </button>
                   );
