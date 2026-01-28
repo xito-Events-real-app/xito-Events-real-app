@@ -1,39 +1,114 @@
 
 
-## Client Detail Page UI Modifications - COMPLETED ✅
+## Add Dashboard Section to Client Detail Page
 
-This plan reorganized the Client Hero Section for a more compact and efficient layout with quick-access contact actions.
-
----
-
-### Changes Implemented
-
-| Change | Status |
-|--------|--------|
-| 1. Client Name | ✅ Reduced size (text-xl/2xl), added "X days remaining" badge |
-| 2. Contact Numbers | ✅ Made clickable to open apps directly with call logging |
-| 3. Remove Icons | ✅ Removed Phone/WhatsApp icons from contact row |
-| 4. Top Row Consolidation | ✅ Status, Added By, Handler moved to compact header rows |
-| 5. Remove Payment Button | ✅ Removed from action buttons row |
-| 6. Quotation + Comments | ✅ Side-by-side layout for BOOKED clients, reduced sizes |
+Transform the Client Detail page to include a new "Dashboard" section in the sidebar that displays the hero content (client info, quotation, comments).
 
 ---
 
-### Files Modified
+### Current Behavior
+- `ClientHeroSection` (name, status, contacts, quotation, comments) is **always visible** at the top
+- Sidebar sections (Events, Registration, Contact, etc.) show content below the hero
+
+### New Behavior  
+- New **"Dashboard"** section added to sidebar as **first item**
+- `ClientHeroSection` content only appears when Dashboard is selected
+- Other sections show directly without the hero section above them
+- Dashboard is the **default active section** on page load
+
+---
+
+### UI Layout
+
+```text
+SIDEBAR                    |  MAIN CONTENT
+---------------------------+------------------------------------------
+[Back]                     |
+Client: John Doe           |
+                           |
+> Dashboard  ← NEW         |  (When Dashboard selected)
+  Events                   |  +--------------------------------------+
+  Registration             |  | John Doe [3 days]        | BOOKED   |
+  Contact                  |  | 98xxx | 98xxx | email | city        |
+  Inquiry                  |  | Added: X | Handler: Y               |
+  Sales                    |  | [Call] [WhatsApp] [Status]          |
+  Activity                 |  |                                      |
+  Comments                 |  | Final Quotation | Recent Comments    |
+  Financials               |  +--------------------------------------+
+                           |
+                           |  (When Events selected)
+                           |  +--------------------------------------+
+                           |  | Events & Dates                       |
+                           |  | [WEDDING] [RECEPTION]                |
+                           |  | ...                                  |
+                           |  +--------------------------------------+
+```
+
+---
+
+### Implementation Details
+
+#### 1. Update `SectionType` in `ClientDetailSidebar.tsx`
+Add `'dashboard'` to the type definition and sidebar items array:
+
+```typescript
+export type SectionType = 'dashboard' | 'events' | 'registration' | ...;
+
+const sidebarItems = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },  // NEW - first item
+  { id: 'events', label: 'Events', icon: Calendar },
+  // ... rest unchanged
+];
+```
+
+#### 2. Update `ClientDetail.tsx` State
+Change default active section from `'events'` to `'dashboard'`:
+
+```typescript
+const [activeSection, setActiveSection] = useState<SectionType>('dashboard');
+```
+
+#### 3. Move Hero Section into Dashboard Section
+Remove the always-visible `ClientHeroSection` and place it inside a conditional:
+
+```typescript
+{/* Section Content */}
+<div className="p-4 md:p-6 animate-fade-in">
+  {/* Dashboard Section - NEW */}
+  {activeSection === 'dashboard' && (
+    <ClientHeroSection
+      client={client}
+      currentStatus={currentStatus}
+      // ... all existing props
+    />
+  )}
+
+  {/* Events Section */}
+  {activeSection === 'events' && (
+    // ... existing events content
+  )}
+  
+  // ... other sections unchanged
+```
+
+#### 4. Update Mobile Tabs
+Add 'dashboard' to the mobile tab list as the first option.
+
+---
+
+### Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/components/client-detail/ClientHeroSection.tsx` | Complete layout restructure - smaller name, days badge, clickable contacts, consolidated rows, no payment button |
-| `src/components/client-detail/QuotationDisplaySection.tsx` | Added inline comments panel, side-by-side layout for BOOKED status, compact design throughout |
-| `src/lib/client-card-utils.ts` | Added `getDaysUntilEvent()` utility function for BS→AD date conversion and countdown |
-| `src/pages/ClientDetail.tsx` | Updated imports, added firstEventDaysRemaining calculation, removed onPayment prop |
+| `src/components/client-detail/ClientDetailSidebar.tsx` | Add `dashboard` to SectionType and sidebarItems array |
+| `src/pages/ClientDetail.tsx` | Change default section to `dashboard`, move hero section into conditional |
 
 ---
 
-### New Features
+### Technical Notes
 
-1. **Days Remaining Badge**: Shows countdown to first event in amber badge next to client name
-2. **Clickable Contacts**: Tapping phone number opens dialer AND logs call; same for WhatsApp
-3. **Inline Comments**: For BOOKED clients, comments appear alongside Final Quotation in a 2-column layout
-4. **Compact Design**: All sections use smaller text, reduced padding, more efficient vertical space
+1. **Default Section**: Dashboard becomes the landing view when opening a client
+2. **Icon**: Use `LayoutDashboard` from lucide-react for the sidebar item
+3. **Mobile Tabs**: Dashboard tab appears first in the horizontal scrolling tabs
+4. **No Comments Badge on Dashboard**: The comment count badge only shows on the Comments sidebar item (unchanged)
 
