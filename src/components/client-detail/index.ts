@@ -4,3 +4,4 @@ export { default as ClientHeroSection } from './ClientHeroSection';
 export { default as LastActivitiesSummary } from './LastActivitiesSummary';
 export { default as ChatComments } from './ChatComments';
 export { default as QuotationDisplaySection } from './QuotationDisplaySection';
+export { EventDetailCard } from './EventDetailCard';
