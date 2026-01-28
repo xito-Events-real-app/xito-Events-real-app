@@ -52,6 +52,8 @@ import { getCountryCodeFromName } from "@/components/form/CountrySelector";
 import { valleyCities, nepalCitiesOutsideValley, clientLocationOptions } from "@/lib/form-data";
 import PaymentDrawer from "@/components/finance/PaymentDrawer";
 import { ClientDetailSidebar, ClientHeroSection, SectionType } from "@/components/client-detail";
+import { EventDetailCard } from "@/components/client-detail/EventDetailCard";
+import { useEventDetails } from "@/hooks/useEventDetails";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 // Helper to convert AD date to BS formatted string
@@ -274,6 +276,13 @@ const ClientDetail = () => {
     
     return null;
   }, [clients, rowNumber]);
+
+  // Fetch event details for this client (for the expandable event cards)
+  const { 
+    data: eventDetailsData, 
+    isLoading: eventDetailsLoading, 
+    updateEventDetail 
+  } = useEventDetails(client?.registeredDateTimeAD);
 
   // All event options for the event selector
   const allEventOptions = useMemo(() => {
@@ -1167,53 +1176,59 @@ const ClientDetail = () => {
                 </div>
               )}
               
+              {/* Expandable Event Detail Cards */}
               {events.length > 0 ? (
-                <Tabs defaultValue={events[0]?.name.toLowerCase().replace(/\s+/g, '-') || 'event-0'} className="w-full">
-                  <TabsList className="flex flex-wrap gap-1 h-auto p-1.5 bg-white/5 rounded-xl border border-white/10">
-                    {events.map((event, index) => (
-                      <TabsTrigger 
+                <div className="space-y-3">
+                  {eventDetailsLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-white/40" />
+                      <span className="ml-2 text-white/40">Loading event details...</span>
+                    </div>
+                  ) : eventDetailsData?.events && eventDetailsData.events.length > 0 ? (
+                    eventDetailsData.events.map((eventDetail) => (
+                      <EventDetailCard
+                        key={eventDetail.eventIndex}
+                        event={eventDetail}
+                        eventDateAD={eventDetail.eventDateAD}
+                        onSave={updateEventDetail}
+                      />
+                    ))
+                  ) : (
+                    // Fallback to basic event cards if no event details found
+                    events.map((event, index) => (
+                      <EventDetailCard
                         key={index}
-                        value={event.name.toLowerCase().replace(/\s+/g, '-')}
-                        className={`gap-1.5 rounded-lg text-sm px-3 py-2 text-white/70 data-[state=active]:text-white data-[state=active]:shadow-md ${
-                          event.name.toUpperCase().includes('WEDDING') ? 'data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-500' :
-                          event.name.toUpperCase().includes('RECEPTION') ? 'data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-violet-500' :
-                          event.name.toUpperCase().includes('ENGAGEMENT') ? 'data-[state=active]:bg-gradient-to-r data-[state=active]:from-pink-500 data-[state=active]:to-rose-500' :
-                          event.name.toUpperCase().includes('PRE') ? 'data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-amber-500' :
-                          'data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-500 data-[state=active]:to-slate-600'
-                        }`}
-                      >
-                        {event.name}
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
-                  
-                  {events.map((event, index) => (
-                    <TabsContent 
-                      key={index} 
-                      value={event.name.toLowerCase().replace(/\s+/g, '-')}
-                      className="mt-3"
-                    >
-                      <div className={`min-h-[200px] p-6 rounded-xl border ${
-                        event.name.toUpperCase().includes('WEDDING') ? 'bg-blue-500/10 border-blue-500/30' :
-                        event.name.toUpperCase().includes('RECEPTION') ? 'bg-purple-500/10 border-purple-500/30' :
-                        event.name.toUpperCase().includes('ENGAGEMENT') ? 'bg-pink-500/10 border-pink-500/30' :
-                        event.name.toUpperCase().includes('PRE') ? 'bg-orange-500/10 border-orange-500/30' :
-                        'bg-white/5 border-white/10'
-                      }`}>
-                        <div className="text-center text-white/60">
-                          <Calendar className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                          <p className="text-lg font-semibold text-white mb-1">{event.name}</p>
-                          <p className="text-white/80">{event.formatted}</p>
-                          {client.eventCity && (
-                            <p className="text-sm mt-2 flex items-center justify-center gap-1">
-                              <MapPin className="h-4 w-4" /> {client.eventCity}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </TabsContent>
-                  ))}
-                </Tabs>
+                        event={{
+                          eventIndex: index,
+                          eventName: event.name,
+                          eventYear: event.year || '',
+                          eventMonth: event.month || '',
+                          eventDay: event.day || '',
+                          eventDateAD: '',
+                          venueType: '',
+                          venueName: '',
+                          venueCity: '',
+                          venueArea: '',
+                          venueMap: '',
+                          eventStartTime: '',
+                          eventEndTime: '',
+                          parlourType: '',
+                          parlourName: '',
+                          parlourCity: '',
+                          parlourArea: '',
+                          parlourMap: '',
+                          parlourStartTime: '',
+                          parlourEndTime: '',
+                          doGroomComeInMehndi: '',
+                          guestCount: '',
+                          eventDemands: [],
+                          eventReferences: [],
+                        }}
+                        onSave={updateEventDetail}
+                      />
+                    ))
+                  )}
+                </div>
               ) : (
                 <div className="text-center text-white/40 py-12 bg-white/5 rounded-xl border border-dashed border-white/20">
                   <Calendar className="h-12 w-12 mx-auto mb-3 opacity-50" />

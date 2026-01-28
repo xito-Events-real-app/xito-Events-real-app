@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -2052,6 +2052,236 @@ async function updateEventDetails(
   return { success: true };
 }
 
+// ============= NEW: GET CLIENT EVENT DETAILS BY registeredDateTimeAD =============
+// Returns event details parsed by event index for multi-event clients
+async function getClientEventDetails(accessToken: string, spreadsheetId: string, registeredDateTimeAD: string) {
+  // Find the row in EVENT DETAILS by registeredDateTimeAD
+  const range = encodeURIComponent("'BOOKED CLIENTS EVENT DETAILS'!A2:AH500");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch event details');
+  }
+
+  const data = await response.json();
+  if (!data.values) {
+    throw new Error('No event details data found');
+  }
+
+  // Find the matching client row
+  const normalizedId = registeredDateTimeAD.trim();
+  let foundRow: string[] | null = null;
+  let rowNumber = 0;
+  
+  for (let i = 0; i < data.values.length; i++) {
+    const rowId = (data.values[i][0] || '').trim();
+    if (rowId === normalizedId) {
+      foundRow = data.values[i];
+      rowNumber = i + 2;
+      break;
+    }
+  }
+
+  if (!foundRow) {
+    throw new Error('Client not found in EVENT DETAILS sheet');
+  }
+
+  // Parse multi-line columns to build event-indexed data
+  // Columns: D=events (3), E=year (4), F=month (5), G=day (6), H=dateAD (7)
+  // J-AH for logistics (9-33)
+  const eventNames = (foundRow[3] || '').split('\n');
+  const eventYears = (foundRow[4] || '').split('\n');
+  const eventMonths = (foundRow[5] || '').split('\n');
+  const eventDays = (foundRow[6] || '').split('\n');
+  const eventDatesAD = (foundRow[7] || '').split('\n');
+  
+  // Logistics columns (J-AH, indices 9-33)
+  const venueTypes = (foundRow[9] || '').split('\n');
+  const venueNames = (foundRow[10] || '').split('\n');
+  const venueCities = (foundRow[11] || '').split('\n');
+  const venueAreas = (foundRow[12] || '').split('\n');
+  const venueMaps = (foundRow[13] || '').split('\n');
+  const eventStartTimes = (foundRow[14] || '').split('\n');
+  const eventEndTimes = (foundRow[15] || '').split('\n');
+  const parlourTypes = (foundRow[16] || '').split('\n');
+  const parlourNames = (foundRow[17] || '').split('\n');
+  const parlourCities = (foundRow[18] || '').split('\n');
+  const parlourAreas = (foundRow[19] || '').split('\n');
+  const parlourMaps = (foundRow[20] || '').split('\n');
+  const parlourStartTimes = (foundRow[21] || '').split('\n');
+  const parlourEndTimes = (foundRow[22] || '').split('\n');
+  // Skip X-AD (indices 23-29 - preShoot fields not used)
+  const doGroomInMehndiArr = (foundRow[30] || '').split('\n');
+  const guestCounts = (foundRow[31] || '').split('\n');
+  const eventDemandsArr = (foundRow[32] || '').split('\n');
+  const eventReferencesArr = (foundRow[33] || '').split('\n');
+
+  // Helper to parse quoted list
+  function parseQuotedList(value: string): string[] {
+    if (!value) return [];
+    const matches = value.match(/"([^"]*)"/g);
+    return matches ? matches.map(m => m.replace(/"/g, '')) : [];
+  }
+
+  // Build events array
+  const numEvents = eventNames.filter(e => e.trim()).length || 1;
+  const events = [];
+  
+  for (let i = 0; i < numEvents; i++) {
+    events.push({
+      eventIndex: i,
+      eventName: eventNames[i] || '',
+      eventYear: eventYears[i] || '',
+      eventMonth: eventMonths[i] || '',
+      eventDay: eventDays[i] || '',
+      eventDateAD: eventDatesAD[i] || '',
+      venueType: venueTypes[i] || '',
+      venueName: venueNames[i] || '',
+      venueCity: venueCities[i] || '',
+      venueArea: venueAreas[i] || '',
+      venueMap: venueMaps[i] || '',
+      eventStartTime: eventStartTimes[i] || '',
+      eventEndTime: eventEndTimes[i] || '',
+      parlourType: parlourTypes[i] || '',
+      parlourName: parlourNames[i] || '',
+      parlourCity: parlourCities[i] || '',
+      parlourArea: parlourAreas[i] || '',
+      parlourMap: parlourMaps[i] || '',
+      parlourStartTime: parlourStartTimes[i] || '',
+      parlourEndTime: parlourEndTimes[i] || '',
+      doGroomComeInMehndi: doGroomInMehndiArr[i] || '',
+      guestCount: guestCounts[i] || '',
+      eventDemands: parseQuotedList(eventDemandsArr[i] || ''),
+      eventReferences: parseQuotedList(eventReferencesArr[i] || ''),
+    });
+  }
+
+  return { rowNumber, events };
+}
+
+// ============= NEW: UPDATE CLIENT EVENT DETAILS FOR SPECIFIC EVENT INDEX =============
+// Updates logistics columns (J-AH) for a specific event line, preserving other lines
+async function updateClientEventDetails(
+  accessToken: string,
+  spreadsheetId: string,
+  registeredDateTimeAD: string,
+  eventIndex: number,
+  updates: Record<string, string>
+) {
+  // First find the row and get existing data
+  const range = encodeURIComponent("'BOOKED CLIENTS EVENT DETAILS'!A2:AH500");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch event details for update');
+  }
+
+  const data = await response.json();
+  if (!data.values) {
+    throw new Error('No event details data found');
+  }
+
+  // Find the matching client row
+  const normalizedId = registeredDateTimeAD.trim();
+  let foundRowIndex = -1;
+  let rowNumber = 0;
+  
+  for (let i = 0; i < data.values.length; i++) {
+    const rowId = (data.values[i][0] || '').trim();
+    if (rowId === normalizedId) {
+      foundRowIndex = i;
+      rowNumber = i + 2;
+      break;
+    }
+  }
+
+  if (foundRowIndex === -1 || rowNumber === 0) {
+    throw new Error('Client not found in EVENT DETAILS sheet for update');
+  }
+
+  const existingRow = data.values[foundRowIndex];
+
+  // Helper to update a specific line in a multi-line value
+  function updateLineAtIndex(existing: string, idx: number, newValue: string): string {
+    const lines = existing ? existing.split('\n') : [];
+    // Pad array if needed
+    while (lines.length <= idx) {
+      lines.push('');
+    }
+    lines[idx] = newValue;
+    return lines.join('\n');
+  }
+
+  // Build updated values for columns J-AH (indices 9-33)
+  // Map field names to column indices
+  const fieldToIndex: Record<string, number> = {
+    venueType: 9,
+    venueName: 10,
+    venueCity: 11,
+    venueArea: 12,
+    venueMap: 13,
+    eventStartTime: 14,
+    eventEndTime: 15,
+    parlourType: 16,
+    parlourName: 17,
+    parlourCity: 18,
+    parlourArea: 19,
+    parlourMap: 20,
+    parlourStartTime: 21,
+    parlourEndTime: 22,
+    // Skip X-AD (23-29)
+    doGroomComeInMehndi: 30,
+    guestCount: 31,
+    eventDemands: 32,
+    eventReferences: 33,
+  };
+
+  // Build the update array (J to AH = indices 9-33, 25 columns)
+  const updateValues: string[] = [];
+  
+  for (let colIdx = 9; colIdx <= 33; colIdx++) {
+    const fieldName = Object.entries(fieldToIndex).find(([_, idx]) => idx === colIdx)?.[0];
+    const existingValue = existingRow[colIdx] || '';
+    
+    if (fieldName && updates[fieldName] !== undefined) {
+      // This field is being updated
+      updateValues.push(updateLineAtIndex(existingValue, eventIndex, updates[fieldName]));
+    } else {
+      // Keep existing value
+      updateValues.push(existingValue);
+    }
+  }
+
+  // Write updated values back to columns J-AH
+  const updateRange = encodeURIComponent(`'BOOKED CLIENTS EVENT DETAILS'!J${rowNumber}:AH${rowNumber}`);
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`;
+  
+  const updateResponse = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [updateValues] }),
+  });
+
+  if (!updateResponse.ok) {
+    const errorText = await updateResponse.text();
+    console.error('Google Sheets API error (updateClientEventDetails):', updateResponse.status, errorText);
+    throw new Error(`Failed to update event details: ${updateResponse.status}`);
+  }
+
+  return { success: true };
+}
+
 // Get all clients from BOOKED CLIENTS sheet (same structure as CLIENT TRACKER: A-AG)
 // Now includes a lookup to resolve originalRowNumber from CLIENT TRACKER
 async function getBookedClients(accessToken: string, spreadsheetId: string, limit = 100) {
@@ -3403,6 +3633,22 @@ Deno.serve(async (req) => {
       case 'updateEventDetails':
         if (!data || !data.rowNumber) throw new Error('rowNumber is required for updateEventDetails');
         result = await updateEventDetails(accessToken, spreadsheetId, data.rowNumber as number, data.updates as Record<string, string> || {});
+        break;
+      case 'getClientEventDetails':
+        if (!data || !data.registeredDateTimeAD) throw new Error('registeredDateTimeAD is required for getClientEventDetails');
+        result = await getClientEventDetails(accessToken, spreadsheetId, data.registeredDateTimeAD as string);
+        break;
+      case 'updateClientEventDetails':
+        if (!data || !data.registeredDateTimeAD || data.eventIndex === undefined) {
+          throw new Error('registeredDateTimeAD and eventIndex are required for updateClientEventDetails');
+        }
+        result = await updateClientEventDetails(
+          accessToken, 
+          spreadsheetId, 
+          data.registeredDateTimeAD as string,
+          data.eventIndex as number,
+          data.updates as Record<string, string> || {}
+        );
         break;
       case 'getAccounts': {
         // Use WTN SECRETS spreadsheet for accounts (different from main spreadsheet)

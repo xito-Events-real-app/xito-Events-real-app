@@ -541,3 +541,60 @@ export async function updateEventDetails(
     data: { rowNumber, updates },
   });
 }
+
+// ============= EVENT DETAILS BY CLIENT (NEW) =============
+
+export interface ClientEventDetail {
+  eventIndex: number;
+  eventName: string;
+  eventYear: string;
+  eventMonth: string;
+  eventDay: string;
+  eventDateAD: string;
+  venueType: string;
+  venueName: string;
+  venueCity: string;
+  venueArea: string;
+  venueMap: string;
+  eventStartTime: string;
+  eventEndTime: string;
+  parlourType: string;
+  parlourName: string;
+  parlourCity: string;
+  parlourArea: string;
+  parlourMap: string;
+  parlourStartTime: string;
+  parlourEndTime: string;
+  doGroomComeInMehndi: string;
+  guestCount: string;
+  eventDemands: string[];
+  eventReferences: string[];
+}
+
+export interface ClientEventDetailsResponse {
+  rowNumber: number;
+  events: ClientEventDetail[];
+}
+
+// Get event details for a specific client, parsed by event index
+export async function getClientEventDetails(
+  registeredDateTimeAD: string
+): Promise<ClientEventDetailsResponse> {
+  return callSheetsFunction<ClientEventDetailsResponse>("getClientEventDetails", {
+    data: { registeredDateTimeAD },
+  });
+}
+
+// Update event details for a specific event (by event index) for a client
+export async function updateClientEventDetails(
+  registeredDateTimeAD: string,
+  eventIndex: number,
+  updates: Partial<Omit<ClientEventDetail, 'eventIndex' | 'eventName' | 'eventYear' | 'eventMonth' | 'eventDay' | 'eventDateAD' | 'eventDemands' | 'eventReferences'>> & {
+    eventDemands?: string;
+    eventReferences?: string;
+  }
+): Promise<{ success: boolean }> {
+  return callSheetsFunction<{ success: boolean }>("updateClientEventDetails", {
+    data: { registeredDateTimeAD, eventIndex, updates },
+  });
+}
