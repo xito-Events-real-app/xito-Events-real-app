@@ -1,6 +1,5 @@
-import { useState } from "react";
 import { MapPin, ExternalLink } from "lucide-react";
-import { EventDetail, EventDetailsData } from "@/hooks/useEventDetails";
+import { EventDetailsData } from "@/hooks/useEventDetails";
 import { getMonthName } from "@/lib/nepali-months";
 
 interface DashboardEventDetailsProps {
@@ -11,10 +10,8 @@ interface DashboardEventDetailsProps {
 // Format time for display (e.g., "8:00 AM")
 function formatTime(time: string): string {
   if (!time) return '';
-  // If already formatted, return as-is
   if (time.includes('AM') || time.includes('PM')) return time;
   
-  // Try to parse 24h format
   const match = time.match(/(\d{1,2}):?(\d{2})?/);
   if (match) {
     let hours = parseInt(match[1]);
@@ -27,20 +24,14 @@ function formatTime(time: string): string {
 }
 
 const DashboardEventDetails = ({ eventDetailsData, isLoading }: DashboardEventDetailsProps) => {
-  const [selectedIndex, setSelectedIndex] = useState(0);
-
   if (isLoading) {
     return (
       <div className="bg-slate-800/50 rounded-xl p-4 mt-4 animate-pulse">
-        <div className="h-6 bg-slate-700 rounded w-32 mb-4" />
-        <div className="flex gap-4">
-          <div className="w-1/4 space-y-2">
-            <div className="h-16 bg-slate-700 rounded" />
-            <div className="h-16 bg-slate-700 rounded" />
-          </div>
-          <div className="w-3/4 space-y-4">
-            <div className="h-8 bg-slate-700 rounded" />
-            <div className="h-8 bg-slate-700 rounded" />
+        <div className="h-5 bg-slate-700 rounded w-28 mb-3" />
+        <div className="space-y-3">
+          <div className="flex gap-4">
+            <div className="w-1/4 h-12 bg-slate-700 rounded" />
+            <div className="w-3/4 h-12 bg-slate-700 rounded" />
           </div>
         </div>
       </div>
@@ -52,33 +43,6 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading }: DashboardEventDe
   }
 
   const events = eventDetailsData.events;
-  const selectedEvent = events[selectedIndex] || events[0];
-
-  // Build venue line
-  const venueLocation = [
-    selectedEvent.venueName,
-    selectedEvent.venueArea,
-    selectedEvent.venueCity
-  ].filter(Boolean).join(', ');
-
-  const venueTimeRange = selectedEvent.eventStartTime && selectedEvent.eventEndTime
-    ? `${formatTime(selectedEvent.eventStartTime)} - ${formatTime(selectedEvent.eventEndTime)}`
-    : selectedEvent.eventStartTime 
-      ? formatTime(selectedEvent.eventStartTime)
-      : '';
-
-  // Build parlour line
-  const parlourLocation = [
-    selectedEvent.parlourName,
-    selectedEvent.parlourArea,
-    selectedEvent.parlourCity
-  ].filter(Boolean).join(', ');
-
-  const parlourTimeRange = selectedEvent.parlourStartTime && selectedEvent.parlourEndTime
-    ? `${formatTime(selectedEvent.parlourStartTime)} - ${formatTime(selectedEvent.parlourEndTime)}`
-    : selectedEvent.parlourStartTime 
-      ? formatTime(selectedEvent.parlourStartTime)
-      : '';
 
   return (
     <div className="bg-slate-800/60 rounded-xl p-4 mt-4 border border-slate-700/50">
@@ -86,115 +50,107 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading }: DashboardEventDe
         Event Details
       </h3>
 
-      <div className="flex gap-4">
-        {/* LEFT - Vertical Event Tabs */}
-        <div className="w-1/4 min-w-[140px] space-y-2">
-          {events.map((event, idx) => {
-            const monthName = getMonthName(parseInt(event.eventMonth) || 0);
-            const isSelected = idx === selectedIndex;
-            
-            return (
-              <button
-                key={event.eventIndex}
-                onClick={() => setSelectedIndex(idx)}
-                className={`w-full text-left p-3 rounded-lg transition-all ${
-                  isSelected 
-                    ? 'bg-emerald-600 text-white shadow-lg' 
-                    : 'bg-slate-700/50 text-white/80 hover:bg-slate-700'
-                }`}
-              >
-                <div className="text-sm font-bold uppercase">
+      <div className="space-y-3">
+        {events.map((event, idx) => {
+          const monthName = getMonthName(parseInt(event.eventMonth) || 0);
+          
+          // Build venue line
+          const venueLocation = [event.venueName, event.venueArea, event.venueCity].filter(Boolean).join(', ');
+          const venueTimeRange = event.eventStartTime && event.eventEndTime
+            ? `${formatTime(event.eventStartTime)} - ${formatTime(event.eventEndTime)}`
+            : event.eventStartTime ? formatTime(event.eventStartTime) : '';
+
+          // Build parlour line
+          const parlourLocation = [event.parlourName, event.parlourArea, event.parlourCity].filter(Boolean).join(', ');
+          const parlourTimeRange = event.parlourStartTime && event.parlourEndTime
+            ? `${formatTime(event.parlourStartTime)} - ${formatTime(event.parlourEndTime)}`
+            : event.parlourStartTime ? formatTime(event.parlourStartTime) : '';
+
+          return (
+            <div 
+              key={event.eventIndex} 
+              className="flex gap-4 border-b border-slate-700/30 pb-3 last:border-0 last:pb-0"
+            >
+              {/* LEFT - Event Name/Date */}
+              <div className="w-1/4 min-w-[100px]">
+                <div className="text-sm font-bold uppercase text-emerald-400">
                   {monthName} {event.eventDay}
                 </div>
-                <div className={`text-xs mt-0.5 ${isSelected ? 'text-emerald-100' : 'text-white/60'}`}>
+                <div className="text-xs text-white/70 mt-0.5">
                   {event.eventName || 'Event'}
                 </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* RIGHT - Venue & Parlour Details */}
-        <div className="w-3/4 space-y-4">
-          {/* Venue Section */}
-          <div className="bg-slate-900/50 rounded-lg p-4">
-            <div className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">
-              Venue
-            </div>
-            {venueLocation ? (
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="text-base font-bold text-white">
-                  {selectedEvent.venueName}
-                </span>
-                {(selectedEvent.venueArea || selectedEvent.venueCity) && (
-                  <span className="text-base text-white/80">
-                    {[selectedEvent.venueArea, selectedEvent.venueCity].filter(Boolean).join(', ')}
-                  </span>
-                )}
-                {selectedEvent.venueMap && (
-                  <a
-                    href={selectedEvent.venueMap}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 transition-colors"
-                  >
-                    <MapPin className="h-4 w-4" />
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                )}
-                {venueTimeRange && (
-                  <span className="text-base font-medium text-emerald-400">
-                    {venueTimeRange}
-                  </span>
-                )}
-                {selectedEvent.guestCount && (
-                  <span className="text-base font-medium text-amber-400">
-                    ({selectedEvent.guestCount} Guests)
-                  </span>
-                )}
               </div>
-            ) : (
-              <span className="text-sm text-white/40 italic">No venue details</span>
-            )}
-          </div>
 
-          {/* Parlour Section */}
-          <div className="bg-slate-900/50 rounded-lg p-4">
-            <div className="text-xs font-semibold text-purple-400 uppercase tracking-wider mb-2">
-              Parlour
-            </div>
-            {parlourLocation ? (
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="text-base font-bold text-white">
-                  {selectedEvent.parlourName}
-                </span>
-                {(selectedEvent.parlourArea || selectedEvent.parlourCity) && (
-                  <span className="text-base text-white/80">
-                    {[selectedEvent.parlourArea, selectedEvent.parlourCity].filter(Boolean).join(', ')}
-                  </span>
-                )}
-                {selectedEvent.parlourMap && (
-                  <a
-                    href={selectedEvent.parlourMap}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 transition-colors"
-                  >
-                    <MapPin className="h-4 w-4" />
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                )}
-                {parlourTimeRange && (
-                  <span className="text-base font-medium text-emerald-400">
-                    {parlourTimeRange}
-                  </span>
-                )}
+              {/* RIGHT - Venue & Parlour */}
+              <div className="w-3/4 space-y-1.5">
+                {/* Venue */}
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <span className="text-xs font-medium text-amber-400">Venue:</span>
+                  {venueLocation ? (
+                    <>
+                      <span className="text-sm font-semibold text-white">{event.venueName}</span>
+                      {(event.venueArea || event.venueCity) && (
+                        <span className="text-xs text-white/70">
+                          {[event.venueArea, event.venueCity].filter(Boolean).join(', ')}
+                        </span>
+                      )}
+                      {event.venueMap && (
+                        <a
+                          href={event.venueMap}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-0.5 text-blue-400 hover:text-blue-300"
+                        >
+                          <MapPin className="h-3 w-3" />
+                          <ExternalLink className="h-2.5 w-2.5" />
+                        </a>
+                      )}
+                      {venueTimeRange && (
+                        <span className="text-xs font-medium text-emerald-400">{venueTimeRange}</span>
+                      )}
+                      {event.guestCount && (
+                        <span className="text-xs font-medium text-amber-400">({event.guestCount})</span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-xs text-white/40 italic">Not set</span>
+                  )}
+                </div>
+
+                {/* Parlour */}
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <span className="text-xs font-medium text-purple-400">Parlour:</span>
+                  {parlourLocation ? (
+                    <>
+                      <span className="text-sm font-semibold text-white">{event.parlourName}</span>
+                      {(event.parlourArea || event.parlourCity) && (
+                        <span className="text-xs text-white/70">
+                          {[event.parlourArea, event.parlourCity].filter(Boolean).join(', ')}
+                        </span>
+                      )}
+                      {event.parlourMap && (
+                        <a
+                          href={event.parlourMap}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-0.5 text-blue-400 hover:text-blue-300"
+                        >
+                          <MapPin className="h-3 w-3" />
+                          <ExternalLink className="h-2.5 w-2.5" />
+                        </a>
+                      )}
+                      {parlourTimeRange && (
+                        <span className="text-xs font-medium text-emerald-400">{parlourTimeRange}</span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-xs text-white/40 italic">Not set</span>
+                  )}
+                </div>
               </div>
-            ) : (
-              <span className="text-sm text-white/40 italic">No parlour details</span>
-            )}
-          </div>
-        </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
