@@ -21,6 +21,7 @@ export interface SuiteModule {
   path: string;
   status: "active" | "coming-soon";
   gradient: string;
+  statsKey?: "clients" | "booked" | "finance" | "vendors" | "accounts";
 }
 
 export const suiteModules: SuiteModule[] = [
@@ -32,6 +33,7 @@ export const suiteModules: SuiteModule[] = [
     path: '/client-tracker',
     status: 'active',
     gradient: 'from-emerald-500 to-teal-600',
+    statsKey: 'clients',
   },
   {
     id: 'booked-clients',
@@ -41,6 +43,7 @@ export const suiteModules: SuiteModule[] = [
     path: '/booked-clients',
     status: 'active',
     gradient: 'from-blue-500 to-indigo-600',
+    statsKey: 'booked',
   },
   {
     id: 'finance-manager',
@@ -50,6 +53,7 @@ export const suiteModules: SuiteModule[] = [
     path: '/finance',
     status: 'active',
     gradient: 'from-green-500 to-emerald-600',
+    statsKey: 'finance',
   },
   {
     id: 'daily-task-manager',
@@ -104,6 +108,7 @@ export const suiteModules: SuiteModule[] = [
     path: '/vendors',
     status: 'active',
     gradient: 'from-slate-500 to-gray-600',
+    statsKey: 'vendors',
   },
   {
     id: 'my-accounts',
@@ -113,6 +118,7 @@ export const suiteModules: SuiteModule[] = [
     path: '/my-accounts',
     status: 'active',
     gradient: 'from-pink-500 to-rose-600',
+    statsKey: 'accounts',
   },
   {
     id: 'freelancers',
