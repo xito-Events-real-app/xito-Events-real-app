@@ -41,7 +41,8 @@ import {
   getTotalPaid,
   getMonthColorClasses,
   parseInquiryMonth,
-  getDetailedEnquiryInfo
+  getDetailedEnquiryInfo,
+  getDaysUntilEvent
 } from "@/lib/client-card-utils";
 import { nepaliMonthsEnglish, NepaliDateObject, bsToAD, isUnknownDay, getDayForStorage, getCurrentBSDate } from "@/lib/nepali-date";
 import { getMonthName } from "@/lib/nepali-months";
@@ -751,6 +752,14 @@ const ClientDetail = () => {
     }));
   }, [client]);
 
+  // Calculate days remaining for first event
+  const firstEventDaysRemaining = useMemo(() => {
+    if (events.length === 0) return null;
+    const firstEvent = events[0];
+    if (!firstEvent.year || !firstEvent.month || !firstEvent.day) return null;
+    return getDaysUntilEvent(firstEvent.year, firstEvent.month, firstEvent.day);
+  }, [events]);
+
   // Parse inquiry info
   const inquiryInfo = useMemo(() => {
     if (!client) return null;
@@ -1096,8 +1105,8 @@ const ClientDetail = () => {
         <ClientHeroSection
           client={client}
           currentStatus={currentStatus}
+          firstEventDaysRemaining={firstEventDaysRemaining}
           onCall={handleCall}
-          onPayment={() => setShowPaymentDrawer(true)}
           onStatusClick={() => setShowStatusDropdown(true)}
           onEdit={handleEdit}
           onAddComment={async (comment) => {

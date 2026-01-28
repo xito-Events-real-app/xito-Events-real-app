@@ -1,7 +1,9 @@
-import { AlertTriangle, Lock, Plus } from "lucide-react";
+import { AlertTriangle, Lock, Plus, MessageSquare, Send, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { parseQuotationData, formatNPR, parseFinalQuotation } from "@/lib/client-card-utils";
+import { Input } from "@/components/ui/input";
+import { useState, useRef, useEffect } from "react";
+import { parseQuotationData, formatNPR, parseFinalQuotation, parseComments, getRelativeTime } from "@/lib/client-card-utils";
 
 interface QuotationDisplaySectionProps {
   status: string;
@@ -10,6 +12,9 @@ interface QuotationDisplaySectionProps {
   clientBargainedRates?: string;
   finalQuotation?: string;
   onAddQuotation: () => void;
+  comments?: string;
+  onAddComment?: (comment: string) => Promise<void>;
+  isAddingComment?: boolean;
 }
 
 // Dark theme tier colors (for hero section)
@@ -56,6 +61,137 @@ function calculateDiff(originalData: string, proposedTier: { tier: string; amoun
   return formatNPR(diff);
 }
 
+// Inline Comments Component for side-by-side display
+const InlineComments = ({ 
+  comments, 
+  onAddComment, 
+  isAddingComment = false 
+}: { 
+  comments?: string; 
+  onAddComment?: (comment: string) => Promise<void>; 
+  isAddingComment?: boolean;
+}) => {
+  const [newComment, setNewComment] = useState('');
+  const [showInput, setShowInput] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  
+  const parsedComments = parseComments(comments || '');
+  
+  useEffect(() => {
+    if (showInput && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [showInput]);
+  
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = 0; // Keep scroll at top (latest first)
+    }
+  }, [comments]);
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!newComment.trim() || isAddingComment || !onAddComment) return;
+    
+    await onAddComment(newComment.trim());
+    setNewComment('');
+    setShowInput(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+    if (e.key === 'Escape') {
+      setShowInput(false);
+      setNewComment('');
+    }
+  };
+
+  return (
+    <div className="bg-black/30 backdrop-blur-sm rounded-lg border border-white/5 overflow-hidden h-full flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between p-2 border-b border-white/5 shrink-0">
+        <div className="flex items-center gap-1.5">
+          <MessageSquare className="h-3 w-3 text-emerald-400" />
+          <span className="text-[10px] font-semibold text-white/60 uppercase tracking-wide">
+            Comments {parsedComments.length > 0 && `(${parsedComments.length})`}
+          </span>
+        </div>
+        {onAddComment && (
+          <button
+            onClick={() => setShowInput(!showInput)}
+            className="p-1 rounded-full hover:bg-white/10 transition-colors text-emerald-400 hover:text-emerald-300"
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+      
+      {/* Comments List - Scrollable */}
+      <div 
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto p-2 space-y-1.5 max-h-32"
+      >
+        {parsedComments.length === 0 ? (
+          <div className="text-center text-white/30 py-3 text-xs">
+            No comments yet
+          </div>
+        ) : (
+          [...parsedComments].reverse().map((comment, i) => (
+            <div 
+              key={i} 
+              className="bg-white/5 rounded px-2 py-1.5"
+            >
+              <div className="text-white/90 text-xs leading-relaxed line-clamp-2">
+                {comment.text}
+              </div>
+              {comment.timestamp && (
+                <div className="text-[9px] text-white/40 mt-0.5 text-right">
+                  {getRelativeTime(comment.timestamp)}
+                </div>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+      
+      {/* Inline Input */}
+      {showInput && onAddComment && (
+        <form 
+          onSubmit={handleSubmit}
+          className="p-2 pt-0 border-t border-white/5 bg-white/5 shrink-0"
+        >
+          <div className="flex items-center gap-1.5">
+            <Input
+              ref={inputRef}
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Add comment..."
+              className="flex-1 h-7 bg-transparent border-white/20 text-white placeholder:text-white/30 text-xs"
+              disabled={isAddingComment}
+            />
+            <button
+              type="submit"
+              disabled={!newComment.trim() || isAddingComment}
+              className="p-1.5 rounded-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {isAddingComment ? (
+                <Loader2 className="h-3 w-3 text-white animate-spin" />
+              ) : (
+                <Send className="h-3 w-3 text-white" />
+              )}
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+};
+
 const QuotationDisplaySection = ({
   status,
   quotationData,
@@ -63,6 +199,9 @@ const QuotationDisplaySection = ({
   clientBargainedRates,
   finalQuotation,
   onAddQuotation,
+  comments,
+  onAddComment,
+  isAddingComment,
 }: QuotationDisplaySectionProps) => {
   const upper = status.toUpperCase();
   
@@ -80,99 +219,108 @@ const QuotationDisplaySection = ({
   const isBooked = upper.includes('BOOKED') && !upper.includes('SOMEWHERE');
   const isEndState = upper.includes('CANCELLED') || upper.includes('POSTPONED') || upper.includes('SOMEWHERE ELSE');
 
-  // BOOKED status - show final quotation prominently
+  // BOOKED status - show final quotation + comments side by side
   if (isBooked) {
     return (
-      <div className="mt-4 space-y-3">
-        {/* Final Quotation - Priority Display */}
-        {parsedFinal ? (
-          <div className="bg-emerald-500/20 rounded-xl border border-emerald-500/30 p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Lock className="h-4 w-4 text-emerald-400" />
-              <span className="text-xs text-emerald-300 font-semibold uppercase tracking-wide">
-                Final Fixed Quotation
-              </span>
-            </div>
-            <Badge className={`${getTierColorDark(parsedFinal.package)} text-sm border-0`}>
-              {parsedFinal.package}
-            </Badge>
-            <div className="text-2xl font-bold text-white mt-2">
-              NPR {formatNPR(parsedFinal.amount)}/-
-            </div>
-          </div>
-        ) : quotationTiers.length === 0 ? (
-          <div className="bg-amber-500/20 rounded-xl border border-amber-500/30 p-4">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="h-5 w-5 text-amber-400" />
-              <div>
-                <div className="font-medium text-amber-200">Quotation Not Recorded</div>
-                <div className="text-xs text-amber-300/70">Add quotation for records</div>
+      <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+        {/* Left: Final Quotation - Compact */}
+        <div className="space-y-2">
+          {parsedFinal ? (
+            <div className="bg-emerald-500/20 rounded-lg border border-emerald-500/30 p-3">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Lock className="h-3 w-3 text-emerald-400" />
+                <span className="text-[10px] text-emerald-300 font-semibold uppercase tracking-wide">
+                  Final Fixed Quotation
+                </span>
+              </div>
+              <Badge className={`${getTierColorDark(parsedFinal.package)} text-xs border-0`}>
+                {parsedFinal.package}
+              </Badge>
+              <div className="text-lg font-bold text-white mt-1">
+                NPR {formatNPR(parsedFinal.amount)}/-
               </div>
             </div>
-            <Button 
-              size="sm" 
-              onClick={onAddQuotation}
-              className="mt-3 bg-amber-500 hover:bg-amber-600 text-black"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Add Quotation
-            </Button>
-          </div>
-        ) : null}
-        
-        {/* Original Quotation Tiers */}
-        {quotationTiers.length > 0 && (
-          <div className="bg-white/5 rounded-xl border border-white/10 p-3">
-            <div className="text-xs text-white/40 mb-2">Original Quotation</div>
-            <div className="flex flex-wrap gap-2">
-              {quotationTiers.map((tier, idx) => (
-                <div key={idx} className={`px-3 py-1.5 rounded-lg text-sm font-medium ${getTierColorDark(tier.tier)}`}>
-                  <span className="opacity-70">{tier.tier}:</span> {tier.amount}
+          ) : quotationTiers.length === 0 ? (
+            <div className="bg-amber-500/20 rounded-lg border border-amber-500/30 p-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-400" />
+                <div>
+                  <div className="font-medium text-amber-200 text-sm">Quotation Not Recorded</div>
+                  <div className="text-[10px] text-amber-300/70">Add quotation for records</div>
                 </div>
-              ))}
+              </div>
+              <Button 
+                size="sm" 
+                onClick={onAddQuotation}
+                className="mt-2 bg-amber-500 hover:bg-amber-600 text-black h-7 text-xs"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Add Quotation
+              </Button>
             </div>
-          </div>
-        )}
+          ) : null}
+          
+          {/* Original Quotation Tiers - Compact */}
+          {quotationTiers.length > 0 && (
+            <div className="bg-white/5 rounded-lg border border-white/10 p-2">
+              <div className="text-[10px] text-white/40 mb-1.5">Original Quotation</div>
+              <div className="flex flex-wrap gap-1.5">
+                {quotationTiers.map((tier, idx) => (
+                  <div key={idx} className={`px-2 py-1 rounded text-xs font-medium ${getTierColorDark(tier.tier)}`}>
+                    <span className="opacity-70">{tier.tier}:</span> {tier.amount}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        
+        {/* Right: Comments */}
+        <InlineComments 
+          comments={comments} 
+          onAddComment={onAddComment} 
+          isAddingComment={isAddingComment} 
+        />
       </div>
     );
   }
 
-  // BARGAINING IS ON - full negotiation comparison
+  // BARGAINING IS ON - full negotiation comparison (compact)
   if (isBargaining) {
     const clientTiers = parseQuotationData(clientBargainedRates || '');
     const ourCounterTiers = parseQuotationData(ourBargainedRates || '');
     
     return (
-      <div className="mt-4 bg-amber-500/20 rounded-xl border border-amber-500/30 p-4 space-y-3">
-        <div className="text-xs text-amber-300 font-semibold uppercase tracking-wide">
+      <div className="mt-3 bg-amber-500/20 rounded-lg border border-amber-500/30 p-3 space-y-2">
+        <div className="text-[10px] text-amber-300 font-semibold uppercase tracking-wide">
           Negotiation In Progress
         </div>
         
         {/* Our Original Proposal */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <span className="text-white/60 text-sm shrink-0">Our Proposal</span>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
+          <span className="text-white/60 text-xs shrink-0">Our Proposal</span>
           {quotationTiers.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1">
               {quotationTiers.map((tier, idx) => (
-                <span key={idx} className={`px-2 py-0.5 rounded text-xs ${getTierColorDark(tier.tier)}`}>
+                <span key={idx} className={`px-1.5 py-0.5 rounded text-[10px] ${getTierColorDark(tier.tier)}`}>
                   {tier.tier}: {tier.amount}
                 </span>
               ))}
             </div>
           ) : (
-            <span className="text-white/40 text-sm">Not set</span>
+            <span className="text-white/40 text-xs">Not set</span>
           )}
         </div>
         
         {/* Client's Ask */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <span className="text-white/60 text-sm shrink-0">Client Asking</span>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
+          <span className="text-white/60 text-xs shrink-0">Client Asking</span>
           {clientTiers.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1">
               {clientTiers.map((tier, idx) => {
                 const diff = quotationData ? calculateDiff(quotationData, tier) : '';
                 return (
-                  <span key={idx} className="px-2 py-0.5 rounded text-xs bg-red-500/30 text-red-200">
+                  <span key={idx} className="px-1.5 py-0.5 rounded text-[10px] bg-red-500/30 text-red-200">
                     {tier.tier}: {tier.amount}
                     {diff && <span className="ml-1 text-red-400">↓{diff}/-</span>}
                   </span>
@@ -180,30 +328,30 @@ const QuotationDisplaySection = ({
               })}
             </div>
           ) : (
-            <span className="text-white/40 text-sm">Not set</span>
+            <span className="text-white/40 text-xs">Not set</span>
           )}
         </div>
         
         {/* Our Counter */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <span className="text-white/60 text-sm shrink-0">Our Counter</span>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
+          <span className="text-white/60 text-xs shrink-0">Our Counter</span>
           {ourCounterTiers.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1">
               {ourCounterTiers.map((tier, idx) => (
-                <span key={idx} className="px-2 py-0.5 rounded text-xs bg-green-500/30 text-green-200">
+                <span key={idx} className="px-1.5 py-0.5 rounded text-[10px] bg-green-500/30 text-green-200">
                   {tier.tier}: {tier.amount}
                 </span>
               ))}
             </div>
           ) : (
-            <span className="text-white/40 text-sm">Not set</span>
+            <span className="text-white/40 text-xs">Not set</span>
           )}
         </div>
         
         {/* Show Add Quotation if original not set */}
         {quotationTiers.length === 0 && (
-          <Button size="sm" onClick={onAddQuotation} className="mt-2 bg-amber-500 hover:bg-amber-600 text-black">
-            <Plus className="h-4 w-4 mr-1" />
+          <Button size="sm" onClick={onAddQuotation} className="mt-1 bg-amber-500 hover:bg-amber-600 text-black h-7 text-xs">
+            <Plus className="h-3 w-3 mr-1" />
             Add Original Quotation
           </Button>
         )}
@@ -211,26 +359,26 @@ const QuotationDisplaySection = ({
     );
   }
 
-  // QUOTATION SENT or ADVANCE PENDING
+  // QUOTATION SENT or ADVANCE PENDING - compact
   if (isQuotationSent || isAdvancePending) {
     return (
-      <div className="mt-4">
+      <div className="mt-3">
         {quotationTiers.length > 0 ? (
-          <div className="bg-blue-500/20 rounded-xl border border-blue-500/30 p-4">
-            <div className="text-xs text-blue-300 mb-2 font-semibold uppercase tracking-wide">
+          <div className="bg-blue-500/20 rounded-lg border border-blue-500/30 p-3">
+            <div className="text-[10px] text-blue-300 mb-1.5 font-semibold uppercase tracking-wide">
               {isAdvancePending ? 'Quotation Details' : 'Quotation Sent'}
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {quotationTiers.map((tier, idx) => (
-                <div key={idx} className={`px-3 py-1.5 rounded-lg text-sm font-medium ${getTierColorDark(tier.tier)}`}>
+                <div key={idx} className={`px-2 py-1 rounded text-xs font-medium ${getTierColorDark(tier.tier)}`}>
                   <span className="opacity-70">{tier.tier}:</span> {tier.amount}
                 </div>
               ))}
             </div>
             {/* Show final quotation for ADVANCE PENDING if available */}
             {isAdvancePending && parsedFinal && (
-              <div className="mt-3 pt-3 border-t border-blue-500/30">
-                <div className="flex items-center gap-2">
+              <div className="mt-2 pt-2 border-t border-blue-500/30">
+                <div className="flex items-center gap-1.5">
                   <Lock className="h-3 w-3 text-emerald-400" />
                   <span className="text-xs text-emerald-300 font-medium">
                     Final: {parsedFinal.package} - NPR {formatNPR(parsedFinal.amount)}/-
@@ -240,20 +388,20 @@ const QuotationDisplaySection = ({
             )}
           </div>
         ) : (
-          <div className="bg-amber-500/20 rounded-xl border border-amber-500/30 p-4">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="h-5 w-5 text-amber-400" />
+          <div className="bg-amber-500/20 rounded-lg border border-amber-500/30 p-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-400" />
               <div>
-                <div className="font-medium text-amber-200">Quotation Not Recorded</div>
-                <div className="text-xs text-amber-300/70">Add quotation to proceed</div>
+                <div className="font-medium text-amber-200 text-sm">Quotation Not Recorded</div>
+                <div className="text-[10px] text-amber-300/70">Add quotation to proceed</div>
               </div>
             </div>
             <Button 
               size="sm" 
               onClick={onAddQuotation}
-              className="mt-3 bg-amber-500 hover:bg-amber-600 text-black"
+              className="mt-2 bg-amber-500 hover:bg-amber-600 text-black h-7 text-xs"
             >
-              <Plus className="h-4 w-4 mr-1" />
+              <Plus className="h-3 w-3 mr-1" />
               Add Quotation
             </Button>
           </div>
@@ -267,11 +415,11 @@ const QuotationDisplaySection = ({
     if (quotationTiers.length === 0) return null;
     
     return (
-      <div className="mt-4 bg-white/5 rounded-xl border border-white/10 p-3">
-        <div className="text-xs text-white/40 mb-2">Quotation (For Reference)</div>
-        <div className="flex flex-wrap gap-2">
+      <div className="mt-3 bg-white/5 rounded-lg border border-white/10 p-2">
+        <div className="text-[10px] text-white/40 mb-1.5">Quotation (For Reference)</div>
+        <div className="flex flex-wrap gap-1.5">
           {quotationTiers.map((tier, idx) => (
-            <div key={idx} className={`px-3 py-1.5 rounded-lg text-sm font-medium ${getTierColorDark(tier.tier)} opacity-70`}>
+            <div key={idx} className={`px-2 py-1 rounded text-xs font-medium ${getTierColorDark(tier.tier)} opacity-70`}>
               <span className="opacity-70">{tier.tier}:</span> {tier.amount}
             </div>
           ))}

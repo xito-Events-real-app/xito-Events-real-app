@@ -439,6 +439,51 @@ export function getDaysRemainingInfo(events: string): { days: number; color: str
   return null;
 }
 
+// Import nepali-date-converter dynamically to avoid circular dependencies
+import NepaliDate from "nepali-date-converter";
+
+// Calculate days until an event from BS date components
+export function getDaysUntilEvent(
+  eventYear: string | number,
+  eventMonth: string | number,
+  eventDay: string | number
+): number | null {
+  if (!eventYear || !eventMonth || !eventDay) return null;
+  
+  // Handle unknown day (** represents unknown)
+  const dayStr = String(eventDay);
+  if (dayStr === '**') return null;
+  
+  try {
+    const year = typeof eventYear === 'string' ? parseInt(eventYear) : eventYear;
+    const month = typeof eventMonth === 'string' ? parseInt(eventMonth) : eventMonth;
+    const day = typeof eventDay === 'string' ? parseInt(eventDay) : eventDay;
+    
+    if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
+    
+    // Convert BS to AD using nepali-date-converter
+    // NepaliDate uses 0-indexed months, so subtract 1
+    const npDate = new NepaliDate(year, month - 1, day);
+    const eventDateAD = npDate.toJsDate();
+    
+    if (!eventDateAD || isNaN(eventDateAD.getTime())) return null;
+    
+    // Calculate difference from today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    eventDateAD.setHours(0, 0, 0, 0);
+    
+    const diffTime = eventDateAD.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    // Return days only if event is in the future
+    return diffDays > 0 ? diffDays : null;
+  } catch (e) {
+    console.error('Error calculating days until event:', e);
+    return null;
+  }
+}
+
 // Get current status from status log
 export function getCurrentStatus(statusLog?: string): string {
   if (!statusLog) return 'UNTOUCHED';
