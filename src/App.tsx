@@ -56,53 +56,50 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <BrowserRouter>
-        <Toaster />
-        <Sonner />
-        <Routes>
-          {/* Public routes - no auth required */}
-          <Route path="/client-form/:clientId" element={<ClientContactForm />} />
-          <Route path="/login" element={<Login />} />
-          
-          {/* Protected routes - wrapped in AuthProvider */}
-          <Route path="/*" element={
-            <AuthProvider>
+        <AuthProvider>
+          <Toaster />
+          <Sonner />
+          <Routes>
+            {/* Public routes - no auth required */}
+            <Route path="/client-form/:clientId" element={<ClientContactForm />} />
+            <Route path="/login" element={<Login />} />
+            
+            {/* Protected routes */}
+            <Route path="/" element={
               <ProtectedRoute>
                 <BookedClientsAutoSync />
-                <Routes>
-                  {/* Suite Landing */}
-                  <Route path="/" element={<SuiteLanding />} />
-                  
-                  {/* Client Tracker Module */}
-                  <Route path="/client-tracker" element={<Dashboard />} />
-                  <Route path="/client-tracker/quick-add" element={<QuickAdd />} />
-                  <Route path="/client-tracker/search" element={<Search />} />
-                  <Route path="/client-tracker/settings" element={<Settings />} />
-                  <Route path="/client-tracker/fresh-clients" element={<FreshClients />} />
-                  <Route path="/client-tracker/today" element={<Today />} />
-                  <Route path="/client-tracker/handler/:handlerName" element={<HandlerClients />} />
-                  <Route path="/client-tracker/client/:rowNumber" element={<ClientDetail />} />
-                  <Route path="/client-tracker/hot-dates" element={<HotDates />} />
-                  
-                  {/* Booked Clients Module */}
-                  <Route path="/booked-clients" element={<BookedClients />} />
-                  
-                  {/* Coming Soon Modules */}
-                  <Route path="/finance" element={<FinanceManager />} />
-                  <Route path="/tasks" element={<ComingSoon moduleId="daily-task-manager" />} />
-                  <Route path="/video-edit" element={<ComingSoon moduleId="video-edit-tracker" />} />
-                  <Route path="/photo-edit" element={<ComingSoon moduleId="photo-edit-tracker" />} />
-                  <Route path="/files" element={<ComingSoon moduleId="file-management" />} />
-                  <Route path="/media" element={<ComingSoon moduleId="album-media" />} />
-                  <Route path="/vendors" element={<Vendors />} />
-                  <Route path="/my-accounts" element={<MyAccounts />} />
-                  <Route path="/freelancers" element={<ComingSoon moduleId="freelancers" />} />
-                  
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
+                <SuiteLanding />
               </ProtectedRoute>
-            </AuthProvider>
-          } />
-        </Routes>
+            } />
+            
+            {/* Client Tracker Module */}
+            <Route path="/client-tracker" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/client-tracker/quick-add" element={<ProtectedRoute><QuickAdd /></ProtectedRoute>} />
+            <Route path="/client-tracker/search" element={<ProtectedRoute><Search /></ProtectedRoute>} />
+            <Route path="/client-tracker/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+            <Route path="/client-tracker/fresh-clients" element={<ProtectedRoute><FreshClients /></ProtectedRoute>} />
+            <Route path="/client-tracker/today" element={<ProtectedRoute><Today /></ProtectedRoute>} />
+            <Route path="/client-tracker/handler/:handlerName" element={<ProtectedRoute><HandlerClients /></ProtectedRoute>} />
+            <Route path="/client-tracker/client/:rowNumber" element={<ProtectedRoute><ClientDetail /></ProtectedRoute>} />
+            <Route path="/client-tracker/hot-dates" element={<ProtectedRoute><HotDates /></ProtectedRoute>} />
+            
+            {/* Booked Clients Module */}
+            <Route path="/booked-clients" element={<ProtectedRoute><BookedClients /></ProtectedRoute>} />
+            
+            {/* Other Modules */}
+            <Route path="/finance" element={<ProtectedRoute><FinanceManager /></ProtectedRoute>} />
+            <Route path="/tasks" element={<ProtectedRoute><ComingSoon moduleId="daily-task-manager" /></ProtectedRoute>} />
+            <Route path="/video-edit" element={<ProtectedRoute><ComingSoon moduleId="video-edit-tracker" /></ProtectedRoute>} />
+            <Route path="/photo-edit" element={<ProtectedRoute><ComingSoon moduleId="photo-edit-tracker" /></ProtectedRoute>} />
+            <Route path="/files" element={<ProtectedRoute><ComingSoon moduleId="file-management" /></ProtectedRoute>} />
+            <Route path="/media" element={<ProtectedRoute><ComingSoon moduleId="album-media" /></ProtectedRoute>} />
+            <Route path="/vendors" element={<ProtectedRoute><Vendors /></ProtectedRoute>} />
+            <Route path="/my-accounts" element={<ProtectedRoute><MyAccounts /></ProtectedRoute>} />
+            <Route path="/freelancers" element={<ProtectedRoute><ComingSoon moduleId="freelancers" /></ProtectedRoute>} />
+            
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
