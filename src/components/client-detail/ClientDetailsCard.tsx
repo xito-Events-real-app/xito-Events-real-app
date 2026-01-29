@@ -443,7 +443,7 @@ export const ClientDetailsCard = ({ data, isLoading, isResyncing, onSave, onResy
                 {data?.brideWhatsappNumber && (
                   <a href={formatWhatsAppLink(data.brideWhatsappNumber)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-green-400 hover:underline bg-green-500/10 px-2 py-1 rounded-full">
                     <MessageCircle className="h-3 w-3" />
-                    WhatsApp
+                    {data.brideWhatsappNumber}
                   </a>
                 )}
                 {data?.brideInstagram && (
@@ -485,7 +485,7 @@ export const ClientDetailsCard = ({ data, isLoading, isResyncing, onSave, onResy
                 {data?.groomWhatsappNumber && (
                   <a href={formatWhatsAppLink(data.groomWhatsappNumber)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-green-400 hover:underline bg-green-500/10 px-2 py-1 rounded-full">
                     <MessageCircle className="h-3 w-3" />
-                    WhatsApp
+                    {data.groomWhatsappNumber}
                   </a>
                 )}
                 {data?.groomInstagram && (
