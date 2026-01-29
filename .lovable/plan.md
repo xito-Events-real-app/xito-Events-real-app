@@ -1,173 +1,124 @@
 
+# Custom Domain for Client Contact Form
 
-# Google Forms Integration Plan
+## The Problem
 
-## Overview
+Currently, when you share the contact form link with clients, they see:
+```
+https://wtnclienttracker.lovable.app/client-form/2026-01-18T16%3A19%3A50.358Z
+```
 
-You want clients to fill in contact details via a **Google Form** (google.com link) instead of your app. This ensures:
-- Clients never access your app domain
-- No name in the URL (just Google's form ID)
-- No staff login needed since you're only sharing the form
-
----
-
-## How Google Forms Works
-
-Google Forms is a separate Google product that:
-1. Has its own shareable URL (e.g., `https://docs.google.com/forms/d/e/FORM_ID/viewform`)
-2. Collects responses and stores them in a linked Google Sheet
-3. Is completely independent from your Lovable app
-
-**Important:** I cannot create the Google Form for you directly because it needs to be created in YOUR Google account with access to YOUR spreadsheet. However, I can guide you through the exact steps.
+You want clients to see a **completely different domain** - something like:
+```
+https://forms.weddingtalesnepal.com/client-form/abc123
+```
 
 ---
 
-## Step-by-Step: Create a Google Form
+## Solution Options
 
-### Step 1: Create the Form
+### Option 1: Add a Subdomain to This Project (Recommended)
 
-1. Go to [Google Forms](https://forms.google.com)
-2. Click **+ Blank** to create a new form
-3. Name it: "Wedding Tales Nepal - Contact Details"
+Lovable supports **multiple custom domains** on the same project. You can:
 
-### Step 2: Add Form Fields
+1. Keep `wtnclienttracker.lovable.app` (or your main domain) for staff
+2. Add a **separate subdomain** like `forms.weddingtalesnepal.com` for clients
 
-Add these questions (matching your Contact Details sheet columns D-AA):
+**How it works:**
+- Both domains point to the same Lovable project
+- The `/client-form/:clientId` route works on both domains
+- You share only the `forms.weddingtalesnepal.com` link with clients
+- Clients never see `wtnclienttracker.lovable.app`
 
-**Section 1: Bride's Details**
-- Full Name (Short answer)
-- Contact Number (Short answer)
-- WhatsApp Number (Short answer)
-- Backup Number 1 (Short answer)
-- Backup 1 Relation (Dropdown: Mother, Father, Sister, Other)
-- Backup Number 2 (Short answer)
-- Backup 2 Relation (Dropdown: Mother, Father, Sister, Other)
-- Instagram Handle (Short answer, without @)
-- Home City (Short answer or Dropdown)
-- Home Area (Short answer)
-- Google Maps Link (Short answer)
-- Landmark (Short answer)
+**Steps to set up:**
+1. Go to **Project Settings → Domains**
+2. Click **Connect Domain**
+3. Add `forms.weddingtalesnepal.com` (or your preferred subdomain)
+4. Add DNS records at your domain registrar:
+   - **A Record**: Name: `forms`, Value: `185.158.133.1`
+5. Wait for verification (can take up to 72 hours)
 
-**Section 2: Groom's Details**
-- Same 12 fields as above
-
-**Hidden/Identifier Field (Important!):**
-- Add a hidden field or a field that identifies which client this form belongs to
-- Option A: Pre-fill a "Client ID" field when generating the link
-- Option B: Add a "Booking Reference" field where clients enter a code you give them
-
-### Step 3: Link Responses to Your Sheet
-
-1. In the form, click **Responses** tab
-2. Click the Google Sheets icon (📊)
-3. Choose **"Select existing spreadsheet"**
-4. Select your **"BOOKED CLIENTS CONTACT DETAILS"** sheet OR create a new response sheet
-
----
-
-## Option A: Separate Response Sheet (Recommended)
-
-Google Forms creates its own response sheet. You can then:
-- Manually copy responses to your Contact Details sheet
-- OR use Google Apps Script to auto-sync responses
-
-### Google Apps Script for Auto-Sync
-
-Add this script to your spreadsheet (Extensions > Apps Script):
-
-```javascript
-function onFormSubmit(e) {
-  // Get the form response
-  var response = e.values;
-  var clientId = response[1]; // Assuming Client ID is question 1
-  
-  // Find the matching row in BOOKED CLIENTS CONTACT DETAILS
-  var sheet = SpreadsheetApp.getActiveSpreadsheet()
-    .getSheetByName('BOOKED CLIENTS CONTACT DETAILS');
-  var data = sheet.getDataRange().getValues();
-  
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][0] === clientId) { // Column A = registeredDateTimeAD
-      // Update columns D-AA with form response data
-      // Bride details: D-O (columns 4-15, indices 3-14)
-      sheet.getRange(i + 1, 4, 1, 12).setValues([[
-        response[2],  // Bride Full Name
-        response[3],  // Bride Contact
-        // ... map all fields
-      ]]);
-      break;
-    }
-  }
+**Update the app code:**
+```typescript
+// In src/lib/client-contact-api.ts
+export function getClientFormUrl(registeredDateTimeAD: string): string {
+  const encodedId = encodeURIComponent(registeredDateTimeAD);
+  // Use the forms subdomain for client-facing links
+  return `https://forms.weddingtalesnepal.com/client-form/${encodedId}`;
 }
 ```
 
 ---
 
-## Option B: Pre-filled Form Links
+### Option 2: Create a Separate Lovable Project
 
-You can generate **unique pre-filled links** for each client that auto-populate a Client ID field:
+If you want **complete separation**, you could:
+1. Create a new Lovable project just for the contact form
+2. Connect a custom domain to that project
+3. Use an edge function to sync data between projects
 
-1. In your form, add a field "Client Reference" (can be hidden later)
-2. Get the form's edit link: `https://docs.google.com/forms/d/FORM_ID/edit`
-3. Generate pre-filled URL: `https://docs.google.com/forms/d/e/FORM_ID/viewform?entry.XXXXXX=CLIENT_ID`
-
-I can update your app to generate these pre-filled form URLs.
-
----
-
-## Changes to Your App
-
-### Remove the In-App Form Page
-
-Since clients will use Google Forms, we can:
-1. **Remove** the public route `/client-form/:clientId`
-2. **Remove** the `ClientContactForm.tsx` page
-3. **Update** the "Send to WhatsApp" button to use the Google Form URL instead
-
-### Update WhatsApp Message
-
-Change the link in the WhatsApp message from:
-```
-https://wtnclienttracker.lovable.app/client-form/...
-```
-to:
-```
-https://docs.google.com/forms/d/e/YOUR_FORM_ID/viewform?usp=pp_url&entry.XXXXXX=CLIENT_ID
-```
+**Pros:** Complete isolation, separate codebase
+**Cons:** More complex, need to sync data between projects, additional maintenance
 
 ---
 
-## What You Need to Do
+### Option 3: Shorten the URL (Bonus)
 
-1. **Create the Google Form** in your Google account
-2. **Share the Form ID** with me (the long string in the URL)
-3. **Share the Entry ID** for the Client Reference field (found in the pre-fill URL)
+Regardless of which option you choose, we can also make the URL **shorter and cleaner**:
 
-Then I can update your app to:
-- Generate pre-filled Google Form links for each client
-- Update the WhatsApp message with the Google Form link
-- Keep the "Form sent" tracking in your app
+**Current:** `forms.weddingtalesnepal.com/client-form/2026-01-18T16%3A19%3A50.358Z`
+
+**Improved:** `forms.weddingtalesnepal.com/f/abc123`
+
+This requires:
+1. Creating a lookup table (in your sheet or database) that maps short codes to client IDs
+2. Updating the route to use the short code
 
 ---
 
-## Files to Modify (After You Provide Form Details)
+## Recommended Approach
 
-| File | Action | Purpose |
-|------|--------|---------|
-| `src/lib/client-contact-api.ts` | Modify | Update `getClientFormUrl()` to generate Google Form URL |
-| `src/pages/ClientContactForm.tsx` | Delete | Remove the in-app form page |
-| `src/App.tsx` | Modify | Remove the `/client-form/:clientId` route |
+**Option 1 (Subdomain)** is the simplest and most practical:
+
+| Step | Action | Who Does It |
+|------|--------|-------------|
+| 1 | Add `forms.weddingtalesnepal.com` in Project Settings → Domains | You |
+| 2 | Add A record at your domain registrar | You |
+| 3 | Wait for DNS propagation | Automatic |
+| 4 | Update the code to use the new domain | Me (Lovable) |
+
+---
+
+## What You Need to Do First
+
+1. **Decide on your subdomain name** (e.g., `forms.weddingtalesnepal.com`, `contact.weddingtalesnepal.com`, or any domain you own)
+
+2. **Add the domain in Lovable:**
+   - Go to Project Settings → Domains
+   - Click "Connect Domain"
+   - Enter your chosen subdomain
+
+3. **Configure DNS at your registrar** (GoDaddy, Namecheap, Cloudflare, etc.):
+   - Add an **A Record** pointing to `185.158.133.1`
+
+4. **Tell me the domain** once it's connected, and I'll update the code
+
+---
+
+## Technical Changes Needed (After Domain Setup)
+
+| File | Change |
+|------|--------|
+| `src/lib/client-contact-api.ts` | Update `getClientFormUrl()` to use your new domain |
 
 ---
 
 ## Next Steps
 
-1. **You create the Google Form** following the steps above
-2. **Link it to a response sheet** (new or existing)
-3. **Share with me:**
-   - The Form ID (from the URL)
-   - The Entry ID for the Client Reference field
-4. **I update your app** to use the Google Form URL
+Please:
+1. Choose the domain/subdomain you want to use for client forms
+2. Add it in **Project Settings → Domains**
+3. Configure DNS records at your registrar
+4. Let me know the domain name once verified
 
-Would you like me to proceed once you have the form set up?
-
+Then I'll update the code to generate links using your new domain!
