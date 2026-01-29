@@ -1,153 +1,231 @@
 
+## Dynamic Dropdowns & Auto-Fill for Event Details Form
 
-## Improve Event Details Tab Readability
-
-You've noted that the "Event Details" sidebar section (below Dashboard) has text that's hard to read, while the Dashboard's event details display is clear and readable. The goal is to apply the same visual styling from the Dashboard's event display to the Event Details tab.
-
----
-
-### Current Issue
-
-The **FullScreenEventCard** component used in the Event Details tab has:
-- Low contrast text colors (`text-white/50`, `text-white/90`)
-- Complex gradient backgrounds that reduce readability
-- Inconsistent visual language compared to the Dashboard
+Based on your requirements, I'll implement a system where the Event Details form fetches venue types from a setup sheet, and when a venue type is selected (like "BANQUET"), it loads the corresponding venue names from that sheet. When a venue is selected, CITY, AREA, and MAP LINK auto-fill. If a venue doesn't exist, it creates a new entry.
 
 ---
 
-### Solution: Match Dashboard Styling
+### Data Flow Architecture
 
-Apply the same clear, high-contrast styling from **DashboardEventDetails** to the read-only view in **FullScreenEventCard**:
-
-| Element | Current (Hard to Read) | After (Dashboard Style) |
-|---------|------------------------|-------------------------|
-| Section labels | `text-white/50 text-xs` | `text-amber-400` / `text-purple-400` (color-coded) |
-| Values | `text-white/90` | `text-white font-semibold` |
-| Secondary info | `text-white/90` | `text-white/70 text-xs` |
-| Dates | `text-white/60` | `text-emerald-400 font-bold` |
-| Background | Complex gradients | `bg-slate-800/60` (solid, readable) |
-| Times | Same as values | `text-emerald-400` (matches Dashboard) |
-
----
-
-### Visual Comparison
-
-**Before (Current - Hard to Read):**
-```
-┌─────────────────────────────────────────────────────────────┐
-│ [W] WEDDING DAY                         [Details added ✓]  │
-│     Magh 15, 2082                                           │
-├─────────────────────────────────────────────────────────────┤
-│  📍 Venue: INDOOR Not set          ← Low contrast text     │
-│  🕐 Event Time: Not set            ← Hard to distinguish   │
-│  ✂️ Parlour: Not set               ← All looks the same    │
-│  🕐 Parlour Time: Not set                                  │
-│  👥 Guest Count: Not set                                   │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**After (Dashboard Style - Clear & Readable):**
-```
-┌─────────────────────────────────────────────────────────────┐
-│ [W] WEDDING DAY                         [Details added ✓]  │
-│     Magh 15, 2082 (click to edit)                          │
-├─────────────────────────────────────────────────────────────┤
-│  MAGH 15      │ Venue: Hotel Himalaya, Lalitpur      │
-│  Wedding Day  │        12:00 PM - 4:00 PM (500)      │
-│               │ Parlour: Elegance Beauty, Kathmandu  │
-│               │          9:00 AM - 11:00 AM          │
-└─────────────────────────────────────────────────────────────┘
+```text
++---------------------------+      +----------------------------+
+| EVENT DETAILS SETUP DATA  |      | BANQUET / DECORATION / etc |
+| Column A: Venue Types     |      | (Dynamic sheets per type)  |
+| - BANQUET                 |  =>  | A: NAME                    |
+| - DECORATION              |      | B: COMPANY WHATSAPP        |
+| - TRANSPORTATION          |      | ...                        |
+| - etc.                    |      | J: CITY, K: AREA, L: MAP   |
++---------------------------+      +----------------------------+
+            |                                    |
+            v                                    v
+   +------------------+              +------------------------+
+   | Venue Type       |   triggers   | Venue Name Dropdown    |
+   | Dropdown         |  =========>  | (filtered by type)     |
+   +------------------+              +------------------------+
+                                              |
+                                              v
+                                     +-----------------+
+                                     | Auto-fill       |
+                                     | City, Area, Map |
+                                     +-----------------+
 ```
 
 ---
 
-### Changes to Make
+### Changes Required
+
+#### 1. Backend: New Edge Function Actions
+
+**File: `supabase/functions/google-sheets/index.ts`**
+
+Add 3 new actions:
+
+| Action | Purpose |
+|--------|---------|
+| `getEventDetailsSetupData` | Fetch venue types from "EVENT DETAILS SETUP DATA" Column A (row 2+) |
+| `getVenuesByType` | Fetch all venues from dynamic sheet (e.g., "BANQUET", "DECORATION") |
+| `addVenueEntry` | Add new venue with NAME, CITY, AREA, MAP to the appropriate sheet |
+
+**New Functions:**
+
+```typescript
+// Get venue types from EVENT DETAILS SETUP DATA
+async function getEventDetailsSetupData(accessToken: string, spreadsheetId: string) {
+  const range = "'EVENT DETAILS SETUP DATA'!A2:A100";
+  // Returns: ["BANQUET", "DECORATION", "TRANSPORTATION", ...]
+}
+
+// Get venues from a specific type sheet (dynamic sheet name)
+async function getVenuesByType(accessToken: string, spreadsheetId: string, venueType: string) {
+  const sheetName = venueType.toUpperCase();
+  const range = `'${sheetName}'!A2:S500`;
+  // Returns array with: name, companyWhatsapp, companyContact, owner1, etc.
+}
+
+// Add new venue entry to type-specific sheet
+async function addVenueEntry(accessToken: string, spreadsheetId: string, venueType: string, venueData: {...}) {
+  const sheetName = venueType.toUpperCase();
+  // Inserts row with: name, city, area, mapLink
+}
+```
+
+#### 2. Frontend: New API Helper
+
+**New File: `src/lib/event-venue-api.ts`**
+
+```typescript
+export interface VenueEntry {
+  rowNumber: number;
+  name: string;
+  companyWhatsapp: string;
+  companyContact: string;
+  owner1: string;
+  owner1Contact: string;
+  owner1Whatsapp: string;
+  owner2: string;
+  owner2Contact: string;
+  owner2Whatsapp: string;
+  city: string;
+  area: string;
+  googleMap: string;
+  instagram: string;
+  facebook: string;
+  tiktok: string;
+  youtube: string;
+  website: string;
+  gmail: string;
+  rating: string;
+}
+
+export async function getVenueTypes(): Promise<string[]>;
+export async function getVenuesByType(venueType: string): Promise<VenueEntry[]>;
+export async function addVenueEntry(venueType: string, data: Partial<VenueEntry>): Promise<void>;
+```
+
+#### 3. Frontend: New Custom Hook
+
+**New File: `src/hooks/useVenueData.ts`**
+
+This hook will:
+- Fetch and cache venue types on mount
+- Fetch venues when type changes
+- Handle auto-fill when venue is selected
+- Handle adding new venues
+
+```typescript
+export function useVenueData() {
+  const [venueTypes, setVenueTypes] = useState<string[]>([]);
+  const [venues, setVenues] = useState<VenueEntry[]>([]);
+  const [isLoadingTypes, setIsLoadingTypes] = useState(false);
+  const [isLoadingVenues, setIsLoadingVenues] = useState(false);
+  
+  const fetchVenueTypes = useCallback(async () => { ... });
+  const fetchVenuesByType = useCallback(async (type: string) => { ... });
+  const addNewVenue = useCallback(async (type, name, city, area, map) => { ... });
+  
+  return { venueTypes, venues, fetchVenueTypes, fetchVenuesByType, addNewVenue, ... };
+}
+```
+
+#### 4. Frontend: Update FullScreenEventCard
 
 **File: `src/components/client-detail/FullScreenEventCard.tsx`**
 
-1. **Update read-only collapsed view styling** (lines 310-418):
-   - Change layout to two-column style matching Dashboard
-   - Use color-coded labels: `text-amber-400` for Venue, `text-purple-400` for Parlour
-   - Use `text-emerald-400` for date/time displays
-   - Use `text-white font-semibold` for venue/parlour names
-   - Keep background cleaner with `bg-slate-800/60` when collapsed
+Replace current static venue type dropdown and text input with:
 
-2. **Update the collapsed card background**:
-   - Change from: `bg-white/5 border-white/10`
-   - To: `bg-slate-800/60 border-slate-700/50`
+1. **Venue Type Dropdown** - Fetches from `EVENT DETAILS SETUP DATA` Column A
+2. **Venue Name Combobox** - Shows suggestions from the type-specific sheet, allows new entries
+3. **Auto-fill logic** - When venue selected, populate City, Area, Map Link
+4. **Create-on-save** - If venue doesn't exist, add entry when form is saved
 
-3. **Restructure the read-only content layout**:
-   - Use two-column layout like Dashboard (date on left, details on right)
-   - Apply consistent color coding for each element type
-   - Increase font weights for better readability
-
----
-
-### Technical Details
-
-The collapsed view in FullScreenEventCard (lines 310-418) will be refactored to:
+**UI Changes:**
 
 ```tsx
-{/* Read-only Details View - Dashboard Style */}
-<div className="px-4 pb-4">
-  <div className="flex gap-4 border-t border-slate-700/30 pt-3">
-    {/* LEFT - Date Column */}
-    <div className="w-1/4 min-w-[100px]">
-      <div className="text-sm font-bold uppercase text-emerald-400">
-        {monthName} {event.eventDay}
-      </div>
-      <div className="text-xs text-white/70 mt-0.5">
-        {event.eventYear}
-      </div>
-    </div>
-    
-    {/* RIGHT - Details Column */}
-    <div className="w-3/4 space-y-2">
-      {/* Venue Row */}
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-        <span className="text-xs font-medium text-amber-400">Venue:</span>
-        <span className="text-sm font-semibold text-white">{venueName}</span>
-        <span className="text-xs text-white/70">{venueArea}, {venueCity}</span>
-        <span className="text-xs font-medium text-emerald-400">{timeRange}</span>
-        <span className="text-xs font-medium text-amber-400">({guestCount})</span>
-      </div>
-      
-      {/* Parlour Row */}
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-        <span className="text-xs font-medium text-purple-400">Parlour:</span>
-        <span className="text-sm font-semibold text-white">{parlourName}</span>
-        <span className="text-xs text-white/70">{parlourArea}, {parlourCity}</span>
-        <span className="text-xs font-medium text-emerald-400">{parlourTimeRange}</span>
-      </div>
-    </div>
-  </div>
+{/* Venue Details Section */}
+<div className="space-y-3 bg-slate-800/40 rounded-lg p-4 border border-slate-700/40">
+  {/* Venue Type - Dynamic Dropdown */}
+  <Select value={venueType} onValueChange={handleVenueTypeChange}>
+    {venueTypes.map(type => (
+      <SelectItem key={type} value={type}>{type}</SelectItem>
+    ))}
+  </Select>
+
+  {/* Venue Name - Combobox with suggestions */}
+  <Combobox
+    value={venueName}
+    options={venues.map(v => v.name)}
+    onSelect={handleVenueSelect}  // Auto-fills city, area, map
+    onCreateNew={handleCreateNewVenue}
+  />
+
+  {/* City, Area, Map - Auto-filled or editable */}
+  <Input value={venueCity} ... />
+  <Input value={venueArea} ... />
+  <Input value={venueMap} ... />
 </div>
 ```
 
-**Key styling patterns from DashboardEventDetails to apply:**
-- `text-emerald-400` for dates and times
-- `text-amber-400` for "Venue:" label and guest count
-- `text-purple-400` for "Parlour:" label
-- `text-white font-semibold` for venue/parlour names
-- `text-white/70 text-xs` for secondary location info (area, city)
-- `text-blue-400` for map links
-- `text-white/40 italic` for "Not set" placeholders
+---
+
+### Sheet Schema Reference
+
+**"EVENT DETAILS SETUP DATA" Sheet:**
+| Column | Content |
+|--------|---------|
+| A | Venue Types (BANQUET, DECORATION, etc.) |
+
+**Type-Specific Sheets (BANQUET, DECORATION, etc.):**
+| Column | Field |
+|--------|-------|
+| A | NAME |
+| B | COMPANY WHATSAPP NUMBER |
+| C | COMPANY CONTACT NUMBER |
+| D | OWNER 1 |
+| E | OWNER 1 CONTACT NO |
+| F | OWNER 1 WHATSAPP NO |
+| G | OWNER 2 |
+| H | OWNER 2 CONTACT NO |
+| I | OWNER 2 WHATSAPP NO |
+| J | CITY |
+| K | AREA |
+| L | GOOGLE MAP |
+| M | INSTAGRAM |
+| N | FACEBOOK |
+| O | TIKTOK |
+| P | YOUTUBE |
+| Q | WEBSITE |
+| R | GMAIL |
+| S | RATING |
 
 ---
 
-### Files to Modify
+### User Experience Flow
 
-| File | Changes |
-|------|---------|
-| `src/components/client-detail/FullScreenEventCard.tsx` | Update read-only view (lines 252-418) to use Dashboard-style layout and color coding |
+1. **User opens Event Details edit form**
+2. **Selects Venue Type** from dropdown (fetched from setup sheet)
+3. **Types Venue Name** - sees suggestions from that type's sheet
+4. **Selects existing venue** - City, Area, Map auto-fill from sheet data
+5. **OR types new name** - enters City, Area, Map manually
+6. **Saves form** - if venue is new, creates entry in the type sheet with the 4 fields
 
 ---
 
-### Result
+### Files to Create/Modify
 
-After this change:
-- Event Details tab will have the same clear, readable styling as the Dashboard
-- Venue details in amber, Parlour in purple, Times in emerald - consistent color language
-- High contrast text that's easy to read at a glance
-- The edit form (expanded state) remains unchanged - only the read-only collapsed view is updated
+| File | Action | Description |
+|------|--------|-------------|
+| `supabase/functions/google-sheets/index.ts` | Modify | Add `getEventDetailsSetupData`, `getVenuesByType`, `addVenueEntry` actions |
+| `src/lib/event-venue-api.ts` | Create | API helper functions for venue data |
+| `src/hooks/useVenueData.ts` | Create | Custom hook for venue state management |
+| `src/components/client-detail/FullScreenEventCard.tsx` | Modify | Integrate dynamic dropdowns and auto-fill logic |
 
+---
+
+### Technical Notes
+
+- The venue type dropdown will dynamically fetch from Column A of "EVENT DETAILS SETUP DATA"
+- Each venue type maps to a sheet with the same name (e.g., type "BANQUET" uses "BANQUET" sheet)
+- The system follows the existing vendor pattern already in the codebase
+- Error handling: If a type's sheet doesn't exist, show empty options and allow manual entry
+- Caching: Venue types fetched once, venues fetched on type change
+- This same pattern can apply to Parlour details if needed in the future
