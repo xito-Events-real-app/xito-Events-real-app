@@ -1,246 +1,104 @@
 
+# Fix: Off-By-One Client Navigation Bug
 
-## Auto-Sync Vendor Changes to Client Event Details
+## Problem Analysis
 
-### Current Problem
+When clicking on a client in the Booked Events table, the wrong client page opens (e.g., clicking PRASANNA MAINALI at position 44 opens PABINA ADHIKARI at position 45).
 
-When you update vendor details in sheets like "BANQUET" or "MAKEUP STUDIO" (e.g., adding City for "Makeup by Niru"), the client page doesn't reflect these changes because:
+### Root Cause
 
-1. Client event details are stored in "BOOKED CLIENTS EVENT DETAILS" sheet with venue/parlour data copied at the time of selection
-2. There's no automatic sync from vendor sheets back to client records
-3. The data is stored separately - vendor info isn't dynamically linked
-
-### Solution Architecture
-
-```text
-+-------------------+           +--------------------------------+
-| MAKEUP STUDIO     |   Sync    | BOOKED CLIENTS EVENT DETAILS   |
-| Sheet             |  ======>  | Sheet                          |
-+-------------------+           +--------------------------------+
-| Makeup by Niru    |           | NIBISHA MA'AM : PRARTHANA      |
-| City: KATHMANDU   |  ------>  | ParlourName: Makeup by Niru    |
-| Area: CHABAHIL    |           | ParlourCity: KATHMANDU         |
-| Map: https://...  |           | ParlourArea: CHABAHIL          |
-+-------------------+           +--------------------------------+
-```
-
-### Implementation Approach
-
-There are two approaches to solve this:
-
-#### Approach 1: Auto-Refresh on Page Load (Recommended)
-When the Client Detail page loads event details, automatically check if the selected venue/parlour has updated data in the vendor sheet and refresh if different.
-
-**Pros:**
-- No manual sync needed
-- Always shows latest data
-- Low complexity
-
-**Cons:**
-- Slightly slower page load (extra API call)
-- Only updates when client page is viewed
-
-#### Approach 2: Bulk Sync Action (Master Sync Enhancement)
-Add a step to Master Sync that updates all client event details with the latest vendor data from the vendor sheets.
-
-**Pros:**
-- Updates all clients at once
-- Can be scheduled/triggered manually
-
-**Cons:**
-- Requires running Master Sync
-- More complex to implement
-
----
-
-### Recommended: Approach 1 - Auto-Refresh on Page Load
-
-#### Changes Required
-
-##### 1. Backend: New Edge Function Action
-
-**File: `supabase/functions/google-sheets/index.ts`**
-
-Add new action: `refreshClientVendorData`
-
-This action will:
-1. Get the client's event details from "BOOKED CLIENTS EVENT DETAILS"
-2. For each event with a venue/parlour:
-   - Look up the venue in its type-specific sheet (e.g., "BANQUET")
-   - Look up the parlour in its type-specific sheet (e.g., "MAKEUP STUDIO")
-   - Compare City, Area, Map with stored values
-   - Update the EVENT DETAILS sheet if different
+The navigation utility `client-navigation.ts` prioritizes `originalRowNumber` over `registeredDateTimeAD` when building the URL:
 
 ```typescript
-async function refreshClientVendorData(
-  accessToken: string, 
-  spreadsheetId: string, 
-  registeredDateTimeAD: string
-) {
-  // 1. Get client's event details
-  const clientData = await getClientEventDetails(accessToken, spreadsheetId, registeredDateTimeAD);
-  
-  // 2. For each event, check and refresh vendor data
-  for (const event of clientData.events) {
-    let hasChanges = false;
-    const updates: Record<string, string> = {};
-    
-    // Check venue data
-    if (event.venueType && event.venueName) {
-      const venues = await getVenuesByType(accessToken, spreadsheetId, event.venueType);
-      const matchingVenue = venues.find(v => v.name.toLowerCase() === event.venueName.toLowerCase());
-      
-      if (matchingVenue) {
-        if (matchingVenue.city !== event.venueCity) {
-          updates.venueCity = matchingVenue.city;
-          hasChanges = true;
-        }
-        if (matchingVenue.area !== event.venueArea) {
-          updates.venueArea = matchingVenue.area;
-          hasChanges = true;
-        }
-        if (matchingVenue.googleMap !== event.venueMap) {
-          updates.venueMap = matchingVenue.googleMap;
-          hasChanges = true;
-        }
-      }
-    }
-    
-    // Check parlour data
-    if (event.parlourType && event.parlourName) {
-      const parlours = await getParloursByType(accessToken, spreadsheetId, event.parlourType);
-      const matchingParlour = parlours.find(p => p.name.toLowerCase() === event.parlourName.toLowerCase());
-      
-      if (matchingParlour) {
-        if (matchingParlour.city !== event.parlourCity) {
-          updates.parlourCity = matchingParlour.city;
-          hasChanges = true;
-        }
-        if (matchingParlour.area !== event.parlourArea) {
-          updates.parlourArea = matchingParlour.area;
-          hasChanges = true;
-        }
-        if (matchingParlour.googleMap !== event.parlourMap) {
-          updates.parlourMap = matchingParlour.googleMap;
-          hasChanges = true;
-        }
-      }
-    }
-    
-    // Update if changes found
-    if (hasChanges) {
-      await updateClientEventDetails(accessToken, spreadsheetId, registeredDateTimeAD, event.eventIndex, updates);
-    }
+// Current priority (problematic)
+1. originalRowNumber  ← Uses row number that may be stale
+2. rowNumber
+3. registeredDateTimeAD  ← True unique identifier (safest)
+```
+
+The issue occurs because:
+1. Booked clients use `originalRowNumber` which is resolved from CLIENT TRACKER at fetch time
+2. If the CLIENT TRACKER cache is stale or rows shifted since the lookup, the row number no longer matches
+3. The ClientDetail page then finds the wrong client at that row number
+
+### Why +1 offset?
+
+The off-by-one error likely occurs because:
+- A new client was added to CLIENT TRACKER after the lookup was performed
+- Or the cached data has a slightly different row index than the live sheet
+
+## Solution
+
+**Invert the navigation priority to use `registeredDateTimeAD` first** since it's the true unique identifier that never changes:
+
+```typescript
+// New priority (correct)
+1. registeredDateTimeAD  ← Always correct (unique ID)
+2. rowNumber             ← Fallback for older clients
+3. originalRowNumber     ← Last resort
+```
+
+This ensures navigation always uses the stable unique identifier rather than position-based row numbers that can shift.
+
+## Files to Modify
+
+| File | Change |
+|------|--------|
+| `src/lib/client-navigation.ts` | Invert priority: use `registeredDateTimeAD` first |
+
+## Implementation Details
+
+### `src/lib/client-navigation.ts`
+
+Update `getClientNavigationId()` function:
+
+```typescript
+export function getClientNavigationId(
+  client: ClientData | BookedClientData | { 
+    originalRowNumber?: number; 
+    rowNumber?: number; 
+    registeredDateTimeAD?: string;
+  }
+): string {
+  // Priority 1: Use registeredDateTimeAD (most reliable - true unique ID)
+  if (client.registeredDateTimeAD) {
+    return encodeURIComponent(client.registeredDateTimeAD);
   }
   
-  return { success: true, refreshed: true };
+  // Priority 2: Use rowNumber if available (for regular clients without registeredDateTimeAD)
+  if ('rowNumber' in client && client.rowNumber) {
+    return String(client.rowNumber);
+  }
+  
+  // Priority 3: Use originalRowNumber as last resort
+  if ('originalRowNumber' in client && client.originalRowNumber) {
+    return String(client.originalRowNumber);
+  }
+  
+  console.warn('Client has no valid navigation ID:', client);
+  return '';
 }
 ```
 
-##### 2. Frontend: New API Function
+## Why This Works
 
-**File: `src/lib/event-venue-api.ts`**
+1. **`registeredDateTimeAD` is immutable**: It's set when the client is first registered and never changes
+2. **ClientDetail already supports it**: The lookup logic (lines 270-283) already handles both row number and registeredDateTimeAD lookups
+3. **URL-safe encoding**: `encodeURIComponent()` handles special characters in the datetime string
+4. **Backward compatible**: Falls back to row numbers for any edge cases
 
-Add function to call the refresh action:
+## Testing Verification
 
-```typescript
-export async function refreshClientVendorData(registeredDateTimeAD: string): Promise<boolean> {
-  const { data, error } = await supabase.functions.invoke('google-sheets', {
-    body: {
-      action: 'refreshClientVendorData',
-      data: { registeredDateTimeAD }
-    }
-  });
-  
-  if (error) throw new Error(error.message);
-  return data?.success || false;
-}
-```
-
-##### 3. Frontend: Hook Enhancement
-
-**File: `src/hooks/useEventDetails.ts`**
-
-Modify `fetchEventDetails` to refresh vendor data before returning:
-
-```typescript
-const fetchEventDetails = useCallback(async () => {
-  if (!registeredDateTimeAD) return;
-
-  setIsLoading(true);
-  setError(null);
-
-  try {
-    // Step 1: Refresh vendor data (auto-sync from vendor sheets)
-    await supabase.functions.invoke('google-sheets', {
-      body: {
-        action: 'refreshClientVendorData',
-        data: { registeredDateTimeAD }
-      }
-    });
-    
-    // Step 2: Fetch the (now-updated) event details
-    const { data: result, error: fetchError } = await supabase.functions.invoke('google-sheets', {
-      body: {
-        action: 'getClientEventDetails',
-        data: { registeredDateTimeAD }
-      }
-    });
-
-    if (fetchError) throw new Error(fetchError.message);
-    if (!result?.success) throw new Error(result?.error || 'Failed to fetch event details');
-
-    setData(result.data);
-  } catch (err) {
-    // ... error handling
-  } finally {
-    setIsLoading(false);
-  }
-}, [registeredDateTimeAD]);
-```
-
----
-
-### User Experience Flow
-
-1. You edit "Makeup by Niru" in the "MAKEUP STUDIO" sheet and add City: KATHMANDU
-2. You navigate to NIBISHA MA'AM : PRARTHANA's Client Detail page
-3. On page load, the system:
-   - Detects that Parlour Name is "Makeup by Niru" with Parlour Type "MAKEUP STUDIO"
-   - Looks up "Makeup by Niru" in the "MAKEUP STUDIO" sheet
-   - Finds City: KATHMANDU is different from the stored value (empty)
-   - Updates "BOOKED CLIENTS EVENT DETAILS" with the new City
-4. The Client page now shows City: KATHMANDU in the Parlour section
-
----
-
-### Files to Create/Modify
-
-| File | Action | Description |
-|------|--------|-------------|
-| `supabase/functions/google-sheets/index.ts` | Modify | Add `refreshClientVendorData` action |
-| `src/lib/event-venue-api.ts` | Modify | Add `refreshClientVendorData` function |
-| `src/hooks/useEventDetails.ts` | Modify | Call refresh before fetching event details |
+After implementation:
+1. Navigate to Booked Events page
+2. Click on PRASANNA MAINALI (row 44)
+3. Verify the Client Detail page shows PRASANNA MAINALI (not PABINA ADHIKARI)
+4. Test navigation from other views (Fresh Clients, Search, etc.) to ensure they still work
 
 ---
 
 ### Technical Notes
 
-- **Performance**: The refresh is called once per client page load, checking only that client's events
-- **Matching Logic**: Uses case-insensitive name matching to find the vendor in the type sheet
-- **Fields Synced**: City, Area, and Map Link from venue/parlour sheets
-- **Non-destructive**: Only updates if vendor sheet has a value and it differs from stored value
-- **Silent Operation**: Runs in background without user notification unless errors occur
-- **Cache Invalidation**: The venue/parlour hooks already fetch fresh data, so dropdowns will show updated info
-
----
-
-### Optional Enhancement: Master Sync Integration
-
-To also update all clients during Master Sync, add a Phase 4 to the sync process that:
-1. Gets all clients from "BOOKED CLIENTS EVENT DETAILS"
-2. For each client, runs `refreshClientVendorData`
-3. Reports how many client records were updated
-
-This would be added to `MasterSyncButton.tsx` as an additional sync phase.
-
+- The `registeredDateTimeAD` format is typically `YYYY-MM-DDTHH:MM:SS.sssZ` which, when URL-encoded, becomes safe for use in routes
+- The ClientDetail page's lookup logic at lines 277-279 handles decoding and matching by `registeredDateTimeAD`
+- This fix applies globally to all navigation from any client list view
