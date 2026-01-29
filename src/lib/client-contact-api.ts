@@ -75,7 +75,7 @@ export const emptyContactDetails: Omit<ClientContactDetails, 'rowNumber' | 'regi
 export function getClientFormUrl(registeredDateTimeAD: string): string {
   const encodedId = encodeURIComponent(registeredDateTimeAD);
   // Use custom subdomain for client-facing links
-  return `https://forms.bookedclientscontactdetails.com.chickenkiller.com/client-form/${encodedId}`;
+  return `https://forms.bookedclientscontactdetails.chickenkiller.com/client-form/${encodedId}`;
 }
 
 // Generate WhatsApp message with form link
