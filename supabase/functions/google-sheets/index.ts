@@ -2979,13 +2979,17 @@ async function getClientEventDetails(accessToken: string, spreadsheetId: string,
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
+  // Return empty data if sheet doesn't exist or is inaccessible
+  // This allows non-booked clients to be handled gracefully
   if (!response.ok) {
-    throw new Error('Failed to fetch event details');
+    console.warn(`[EVENT DETAILS] Sheet fetch failed for ${registeredDateTimeAD}: ${response.status}`);
+    return { rowNumber: 0, events: [] };
   }
 
   const data = await response.json();
   if (!data.values) {
-    throw new Error('No event details data found');
+    // No data in sheet - return empty
+    return { rowNumber: 0, events: [] };
   }
 
   // Find the matching client row
