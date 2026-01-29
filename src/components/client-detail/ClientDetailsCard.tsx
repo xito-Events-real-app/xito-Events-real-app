@@ -437,7 +437,7 @@ export const ClientDetailsCard = ({ data, isLoading, isResyncing, onSave, onResy
                 {data?.brideContactNumber && (
                   <a href={`tel:${data.brideContactNumber}`} className="flex items-center gap-1 text-blue-400 hover:underline bg-blue-500/10 px-2 py-1 rounded-full">
                     <Phone className="h-3 w-3" />
-                    Call
+                    {data.brideContactNumber}
                   </a>
                 )}
                 {data?.brideWhatsappNumber && (
@@ -479,7 +479,7 @@ export const ClientDetailsCard = ({ data, isLoading, isResyncing, onSave, onResy
                 {data?.groomContactNumber && (
                   <a href={`tel:${data.groomContactNumber}`} className="flex items-center gap-1 text-blue-400 hover:underline bg-blue-500/10 px-2 py-1 rounded-full">
                     <Phone className="h-3 w-3" />
-                    Call
+                    {data.groomContactNumber}
                   </a>
                 )}
                 {data?.groomWhatsappNumber && (
