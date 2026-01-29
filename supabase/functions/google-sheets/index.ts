@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -149,6 +149,138 @@ async function getEventSetupData(accessToken: string, spreadsheetId: string) {
   
   // Extract event names from Column A, filter empty values
   return data.values.map((row: string[]) => row[0]).filter(Boolean);
+}
+
+// Get venue types from EVENT DETAILS SETUP DATA sheet (Column A, starting from row 2)
+async function getEventDetailsSetupData(accessToken: string, spreadsheetId: string) {
+  const range = encodeURIComponent("'EVENT DETAILS SETUP DATA'!A2:A100");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (getEventDetailsSetupData):', response.status, errorText);
+    throw new Error(`Google Sheets API error: ${response.status} - ${errorText.substring(0, 200)}`);
+  }
+
+  const data = await response.json();
+  if (!data.values) return [];
+  
+  // Extract venue types from Column A, filter empty values
+  return data.values.map((row: string[]) => row[0]).filter(Boolean);
+}
+
+// Get venues from a specific type sheet (e.g., "BANQUET", "DECORATION")
+// Schema: A: NAME, B: COMPANY WHATSAPP, C: COMPANY CONTACT, D: OWNER 1, E: OWNER 1 CONTACT,
+//         F: OWNER 1 WHATSAPP, G: OWNER 2, H: OWNER 2 CONTACT, I: OWNER 2 WHATSAPP,
+//         J: CITY, K: AREA, L: GOOGLE MAP, M: INSTAGRAM, N: FACEBOOK, O: TIKTOK,
+//         P: YOUTUBE, Q: WEBSITE, R: GMAIL, S: RATING
+async function getVenuesByType(accessToken: string, spreadsheetId: string, venueType: string) {
+  if (!venueType) return [];
+  
+  const sheetName = venueType.toUpperCase();
+  const range = encodeURIComponent(`'${sheetName}'!A2:S500`);
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`Google Sheets API error (getVenuesByType - ${sheetName}):`, response.status, errorText);
+    // If sheet doesn't exist, return empty array instead of throwing
+    if (response.status === 400 || errorText.includes('Unable to parse range')) {
+      return [];
+    }
+    throw new Error(`Google Sheets API error: ${response.status} - ${errorText.substring(0, 200)}`);
+  }
+
+  const data = await response.json();
+  if (!data.values) return [];
+  
+  return data.values.map((row: string[], index: number) => ({
+    rowNumber: index + 2,
+    name: row[0] || '',
+    companyWhatsapp: row[1] || '',
+    companyContact: row[2] || '',
+    owner1: row[3] || '',
+    owner1Contact: row[4] || '',
+    owner1Whatsapp: row[5] || '',
+    owner2: row[6] || '',
+    owner2Contact: row[7] || '',
+    owner2Whatsapp: row[8] || '',
+    city: row[9] || '',
+    area: row[10] || '',
+    googleMap: row[11] || '',
+    instagram: row[12] || '',
+    facebook: row[13] || '',
+    tiktok: row[14] || '',
+    youtube: row[15] || '',
+    website: row[16] || '',
+    gmail: row[17] || '',
+    rating: row[18] || '',
+  })).filter((venue: { name: string }) => venue.name); // Filter out empty rows
+}
+
+// Add a new venue entry to the type-specific sheet
+async function addVenueEntry(
+  accessToken: string, 
+  spreadsheetId: string, 
+  venueType: string, 
+  venueData: { name: string; city: string; area: string; googleMap: string }
+) {
+  if (!venueType || !venueData.name) {
+    throw new Error('Venue type and name are required');
+  }
+
+  const sheetName = venueType.toUpperCase();
+  const range = encodeURIComponent(`'${sheetName}'!A:S`);
+  const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+
+  // Build the row with values in correct columns
+  // A: NAME, B-I: empty, J: CITY, K: AREA, L: GOOGLE MAP, M-S: empty
+  const newRow = [
+    venueData.name,     // A: NAME
+    '',                 // B: COMPANY WHATSAPP
+    '',                 // C: COMPANY CONTACT
+    '',                 // D: OWNER 1
+    '',                 // E: OWNER 1 CONTACT
+    '',                 // F: OWNER 1 WHATSAPP
+    '',                 // G: OWNER 2
+    '',                 // H: OWNER 2 CONTACT
+    '',                 // I: OWNER 2 WHATSAPP
+    venueData.city,     // J: CITY
+    venueData.area,     // K: AREA
+    venueData.googleMap,// L: GOOGLE MAP
+    '',                 // M: INSTAGRAM
+    '',                 // N: FACEBOOK
+    '',                 // O: TIKTOK
+    '',                 // P: YOUTUBE
+    '',                 // Q: WEBSITE
+    '',                 // R: GMAIL
+    '',                 // S: RATING
+  ];
+
+  const response = await fetch(appendUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [newRow] }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`Google Sheets API error (addVenueEntry - ${sheetName}):`, response.status, errorText);
+    throw new Error(`Failed to add venue: ${response.status}`);
+  }
+
+  return { success: true };
 }
 
 // Get client statuses from Column I of setup data
@@ -3684,6 +3816,22 @@ Deno.serve(async (req) => {
       }
       case 'getEventSetupData':
         result = await getEventSetupData(accessToken, spreadsheetId);
+        break;
+      case 'getEventDetailsSetupData':
+        result = await getEventDetailsSetupData(accessToken, spreadsheetId);
+        break;
+      case 'getVenuesByType':
+        if (!data || !data.venueType) throw new Error('venueType is required for getVenuesByType');
+        result = await getVenuesByType(accessToken, spreadsheetId, data.venueType as string);
+        break;
+      case 'addVenueEntry':
+        if (!data || !data.venueType || !data.name) throw new Error('venueType and name are required for addVenueEntry');
+        result = await addVenueEntry(accessToken, spreadsheetId, data.venueType as string, {
+          name: data.name as string,
+          city: (data.city as string) || '',
+          area: (data.area as string) || '',
+          googleMap: (data.googleMap as string) || '',
+        });
         break;
       default:
         throw new Error(`Unknown action: ${action}`);
