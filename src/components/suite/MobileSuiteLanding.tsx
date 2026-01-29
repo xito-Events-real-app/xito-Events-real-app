@@ -6,6 +6,7 @@ import { GlobalModeToggle } from "@/components/layout/GlobalModeToggle";
 import { SuiteQuickAdd } from "./SuiteQuickAdd";
 import { TodayEventsHero } from "./TodayEventsHero";
 import { ModuleCard } from "./ModuleCard";
+import { MasterSyncButton } from "./MasterSyncButton";
 import { useSuiteStats } from "@/hooks/useSuiteStats";
 import { formatNPR } from "@/lib/client-card-utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -82,6 +83,9 @@ export function MobileSuiteLanding() {
       <div className="px-4 py-4 space-y-5 animate-fade-in max-w-lg mx-auto">
         {/* Quick Add Buttons */}
         <SuiteQuickAdd />
+
+        {/* Master Sync Button */}
+        <MasterSyncButton />
 
         {/* Today's Events Hero */}
         <TodayEventsHero />

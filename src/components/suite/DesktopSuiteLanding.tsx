@@ -8,6 +8,7 @@ import { useDesktopMode } from "@/hooks/useDesktopMode";
 import { SuiteQuickAdd } from "./SuiteQuickAdd";
 import { TodayEventsHero } from "./TodayEventsHero";
 import { ModuleCard } from "./ModuleCard";
+import { MasterSyncButton } from "./MasterSyncButton";
 import { useSuiteStats } from "@/hooks/useSuiteStats";
 import { formatNPR } from "@/lib/client-card-utils";
 
@@ -95,11 +96,12 @@ export function DesktopSuiteLanding() {
         {/* Top Section: Quick Add + Hero */}
         <div className="grid grid-cols-3 gap-6">
           {/* Quick Add */}
-          <div className="col-span-1">
+          <div className="col-span-1 space-y-4">
             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
               Quick Actions
             </h3>
             <SuiteQuickAdd />
+            <MasterSyncButton />
           </div>
           
           {/* Today's Events Hero */}
