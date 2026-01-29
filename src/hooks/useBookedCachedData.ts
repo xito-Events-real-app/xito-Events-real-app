@@ -151,17 +151,24 @@ export function useBookedCachedData(): UseBookedCachedDataResult {
     loadData();
   }, [loadData]);
 
-  // Listen for cache updates from other operations
+  // Listen for cache updates and invalidation from other operations
   useEffect(() => {
     const handleCacheUpdate = (e: CustomEvent<{ type: string; data: unknown }>) => {
       if (e.detail.type === 'booked-clients' && Array.isArray(e.detail.data)) {
         setClients(e.detail.data as BookedClientData[]);
+        setLastSyncedAt(new Date());
+        setIsFromCache(false);
+      }
+      // Handle invalidation - trigger refresh
+      if (e.detail.type === 'booked-clients-invalidate') {
+        fetchState.hasRefreshed = false; // Reset refresh flag
+        refreshData(); // Force a fresh fetch
       }
     };
     
     window.addEventListener('cache-updated', handleCacheUpdate as EventListener);
     return () => window.removeEventListener('cache-updated', handleCacheUpdate as EventListener);
-  }, []);
+  }, [refreshData]);
 
   return {
     clients,
