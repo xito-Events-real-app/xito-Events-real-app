@@ -103,3 +103,27 @@ export async function addVenueEntry(
     throw new Error(data.error || 'Failed to add venue');
   }
 }
+
+/**
+ * Refreshes client venue/parlour data from vendor sheets.
+ * Syncs City, Area, and Map Link from vendor type sheets to client event details.
+ * @param registeredDateTimeAD - The unique client identifier
+ * @returns boolean indicating if refresh was successful
+ */
+export async function refreshClientVendorData(registeredDateTimeAD: string): Promise<boolean> {
+  if (!registeredDateTimeAD) return false;
+  
+  const { data, error } = await supabase.functions.invoke('google-sheets', {
+    body: {
+      action: 'refreshClientVendorData',
+      data: { registeredDateTimeAD }
+    }
+  });
+
+  if (error) {
+    console.error('Error refreshing vendor data:', error);
+    return false;
+  }
+
+  return data?.success || false;
+}

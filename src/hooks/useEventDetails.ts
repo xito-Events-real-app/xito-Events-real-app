@@ -69,6 +69,16 @@ export function useEventDetails(registeredDateTimeAD: string | undefined) {
     setError(null);
 
     try {
+      // Step 1: Refresh vendor data (auto-sync from vendor sheets)
+      // This updates City, Area, Map from vendor type sheets if they differ
+      await supabase.functions.invoke('google-sheets', {
+        body: {
+          action: 'refreshClientVendorData',
+          data: { registeredDateTimeAD }
+        }
+      });
+      
+      // Step 2: Fetch the (now-updated) event details
       const { data: result, error: fetchError } = await supabase.functions.invoke('google-sheets', {
         body: {
           action: 'getClientEventDetails',
