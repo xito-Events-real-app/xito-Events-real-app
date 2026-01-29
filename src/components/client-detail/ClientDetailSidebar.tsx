@@ -23,7 +23,7 @@ interface ClientDetailSidebarProps {
 
 const sidebarItems: { id: SectionType; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'events', label: 'Events', icon: Calendar },
+  { id: 'events', label: 'Event Details', icon: Calendar },
   { id: 'registration', label: 'Registration', icon: FileText },
   { id: 'contact', label: 'Contact', icon: Phone },
   { id: 'inquiry', label: 'Inquiry', icon: Clock },
