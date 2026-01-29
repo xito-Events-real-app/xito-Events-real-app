@@ -1253,25 +1253,35 @@ const ClientDetail = () => {
           </div>
         )}
 
-        {/* Mobile Section Tabs */}
+        {/* Mobile Section Tabs - Match desktop sidebar sections exactly */}
         {isMobile && (
           <div className="px-4 py-3 border-b border-white/10 bg-[hsl(220,25%,8%)]">
             <ScrollArea className="w-full whitespace-nowrap">
               <div className="inline-flex gap-2">
-                {(['dashboard', 'events', 'registration', 'contact', 'inquiry', 'sales', 'activity', 'comments', 'financials'] as SectionType[]).map((section) => (
+                {([
+                  { id: 'dashboard', label: 'Dashboard' },
+                  { id: 'events', label: 'Events' },
+                  { id: 'clientDetails', label: 'Client' },
+                  { id: 'registration', label: 'Registration' },
+                  { id: 'inquiry', label: 'Inquiry' },
+                  { id: 'sales', label: 'Sales' },
+                  { id: 'activity', label: 'Activity' },
+                  { id: 'comments', label: 'Comments' },
+                  { id: 'financials', label: 'Financials' },
+                ] as { id: SectionType; label: string }[]).map((section) => (
                   <Button
-                    key={section}
+                    key={section.id}
                     variant="ghost"
                     size="sm"
-                    onClick={() => setActiveSection(section)}
-                    className={`rounded-full text-sm capitalize ${
-                      activeSection === section
+                    onClick={() => setActiveSection(section.id)}
+                    className={`rounded-full text-sm ${
+                      activeSection === section.id
                         ? 'bg-primary text-white'
                         : 'text-white/60 hover:text-white hover:bg-white/10'
                     }`}
                   >
-                    {section}
-                    {section === 'comments' && parsedComments.length > 0 && (
+                    {section.label}
+                    {section.id === 'comments' && parsedComments.length > 0 && (
                       <span className="ml-1 text-xs">({parsedComments.length})</span>
                     )}
                   </Button>
