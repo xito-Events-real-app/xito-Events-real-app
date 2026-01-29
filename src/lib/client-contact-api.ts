@@ -74,8 +74,8 @@ export const emptyContactDetails: Omit<ClientContactDetails, 'rowNumber' | 'regi
 // This URL is completely isolated - clients can only see the form
 export function getClientFormUrl(registeredDateTimeAD: string): string {
   const encodedId = encodeURIComponent(registeredDateTimeAD);
-  // Use published URL for production
-  return `https://wtnclienttracker.lovable.app/client-form/${encodedId}`;
+  // Use custom subdomain for client-facing links
+  return `https://forms.bookedclientscontactdetails.com.chickenkiller.com/client-form/${encodedId}`;
 }
 
 // Generate WhatsApp message with form link
