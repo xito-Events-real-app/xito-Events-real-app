@@ -1,25 +1,24 @@
 
-## Dynamic Dropdowns & Auto-Fill for Event Details Form
+## Dynamic Dropdowns & Auto-Fill for Parlour Section
 
-Based on your requirements, I'll implement a system where the Event Details form fetches venue types from a setup sheet, and when a venue type is selected (like "BANQUET"), it loads the corresponding venue names from that sheet. When a venue is selected, CITY, AREA, and MAP LINK auto-fill. If a venue doesn't exist, it creates a new entry.
+You want the same dynamic dropdown and auto-fill functionality for Parlour that was implemented for Venue. The Parlour types will come from Column C of "EVENT DETAILS SETUP DATA" sheet, and each parlour type (e.g., "MAKEUP STUDIO") will have its own sheet with parlour entries.
 
 ---
 
 ### Data Flow Architecture
 
 ```text
-+---------------------------+      +----------------------------+
-| EVENT DETAILS SETUP DATA  |      | BANQUET / DECORATION / etc |
-| Column A: Venue Types     |      | (Dynamic sheets per type)  |
-| - BANQUET                 |  =>  | A: NAME                    |
-| - DECORATION              |      | B: COMPANY WHATSAPP        |
-| - TRANSPORTATION          |      | ...                        |
-| - etc.                    |      | J: CITY, K: AREA, L: MAP   |
-+---------------------------+      +----------------------------+
-            |                                    |
-            v                                    v
++---------------------------+      +----------------------------------+
+| EVENT DETAILS SETUP DATA  |      | MAKEUP STUDIO / BEAUTY PARLOUR   |
+| Column C: Parlour Types   |      | (Dynamic sheets per type)        |
+| - MAKEUP STUDIO           |  =>  | A: NAME                          |
+| - BEAUTY PARLOUR          |      | B: COMPANY WHATSAPP              |
+| - etc.                    |      | ...                              |
++---------------------------+      | J: CITY, K: AREA, L: MAP         |
+            |                      +----------------------------------+
+            v                                    |
    +------------------+              +------------------------+
-   | Venue Type       |   triggers   | Venue Name Dropdown    |
+   | Parlour Type     |   triggers   | Parlour Name Dropdown  |
    | Dropdown         |  =========>  | (filtered by type)     |
    +------------------+              +------------------------+
                                               |
@@ -38,43 +37,24 @@ Based on your requirements, I'll implement a system where the Event Details form
 
 **File: `supabase/functions/google-sheets/index.ts`**
 
-Add 3 new actions:
+Add 3 new actions to the existing function:
 
 | Action | Purpose |
 |--------|---------|
-| `getEventDetailsSetupData` | Fetch venue types from "EVENT DETAILS SETUP DATA" Column A (row 2+) |
-| `getVenuesByType` | Fetch all venues from dynamic sheet (e.g., "BANQUET", "DECORATION") |
-| `addVenueEntry` | Add new venue with NAME, CITY, AREA, MAP to the appropriate sheet |
+| `getParlourTypes` | Fetch parlour types from "EVENT DETAILS SETUP DATA" Column C (row 2+) |
+| `getParloursByType` | Fetch all parlours from dynamic sheet (e.g., "MAKEUP STUDIO") |
+| `addParlourEntry` | Add new parlour with NAME, CITY, AREA, MAP to the appropriate sheet |
 
-**New Functions:**
+The parlour sheets follow the same schema as venue sheets (A-S columns).
 
-```typescript
-// Get venue types from EVENT DETAILS SETUP DATA
-async function getEventDetailsSetupData(accessToken: string, spreadsheetId: string) {
-  const range = "'EVENT DETAILS SETUP DATA'!A2:A100";
-  // Returns: ["BANQUET", "DECORATION", "TRANSPORTATION", ...]
-}
-
-// Get venues from a specific type sheet (dynamic sheet name)
-async function getVenuesByType(accessToken: string, spreadsheetId: string, venueType: string) {
-  const sheetName = venueType.toUpperCase();
-  const range = `'${sheetName}'!A2:S500`;
-  // Returns array with: name, companyWhatsapp, companyContact, owner1, etc.
-}
-
-// Add new venue entry to type-specific sheet
-async function addVenueEntry(accessToken: string, spreadsheetId: string, venueType: string, venueData: {...}) {
-  const sheetName = venueType.toUpperCase();
-  // Inserts row with: name, city, area, mapLink
-}
-```
+---
 
 #### 2. Frontend: New API Helper
 
-**New File: `src/lib/event-venue-api.ts`**
+**New File: `src/lib/parlour-api.ts`**
 
 ```typescript
-export interface VenueEntry {
+export interface ParlourEntry {
   rowNumber: number;
   name: string;
   companyWhatsapp: string;
@@ -97,72 +77,69 @@ export interface VenueEntry {
   rating: string;
 }
 
-export async function getVenueTypes(): Promise<string[]>;
-export async function getVenuesByType(venueType: string): Promise<VenueEntry[]>;
-export async function addVenueEntry(venueType: string, data: Partial<VenueEntry>): Promise<void>;
+export async function getParlourTypes(): Promise<string[]>;
+export async function getParloursByType(parlourType: string): Promise<ParlourEntry[]>;
+export async function addParlourEntry(parlourType: string, data: Partial<ParlourEntry>): Promise<void>;
 ```
+
+---
 
 #### 3. Frontend: New Custom Hook
 
-**New File: `src/hooks/useVenueData.ts`**
+**New File: `src/hooks/useParlourData.ts`**
 
-This hook will:
-- Fetch and cache venue types on mount
-- Fetch venues when type changes
-- Handle auto-fill when venue is selected
-- Handle adding new venues
+This hook mirrors useVenueData but for parlour data:
+- Fetch and cache parlour types on mount
+- Fetch parlours when type changes
+- Handle auto-fill when parlour is selected
+- Handle adding new parlours
 
 ```typescript
-export function useVenueData() {
-  const [venueTypes, setVenueTypes] = useState<string[]>([]);
-  const [venues, setVenues] = useState<VenueEntry[]>([]);
+export function useParlourData() {
+  const [parlourTypes, setParlourTypes] = useState<string[]>([]);
+  const [parlours, setParlours] = useState<ParlourEntry[]>([]);
   const [isLoadingTypes, setIsLoadingTypes] = useState(false);
-  const [isLoadingVenues, setIsLoadingVenues] = useState(false);
+  const [isLoadingParlours, setIsLoadingParlours] = useState(false);
   
-  const fetchVenueTypes = useCallback(async () => { ... });
-  const fetchVenuesByType = useCallback(async (type: string) => { ... });
-  const addNewVenue = useCallback(async (type, name, city, area, map) => { ... });
+  const fetchParlourTypes = useCallback(async () => { ... });
+  const fetchParloursByType = useCallback(async (type: string) => { ... });
+  const addNewParlour = useCallback(async (type, name, city, area, map) => { ... });
   
-  return { venueTypes, venues, fetchVenueTypes, fetchVenuesByType, addNewVenue, ... };
+  return { parlourTypes, parlours, fetchParlourTypes, fetchParloursByType, addNewParlour, ... };
 }
 ```
+
+---
 
 #### 4. Frontend: Update FullScreenEventCard
 
 **File: `src/components/client-detail/FullScreenEventCard.tsx`**
 
-Replace current static venue type dropdown and text input with:
+Update the Parlour Details Section (lines 748-847) to:
 
-1. **Venue Type Dropdown** - Fetches from `EVENT DETAILS SETUP DATA` Column A
-2. **Venue Name Combobox** - Shows suggestions from the type-specific sheet, allows new entries
-3. **Auto-fill logic** - When venue selected, populate City, Area, Map Link
-4. **Create-on-save** - If venue doesn't exist, add entry when form is saved
+1. **Import and use useParlourData hook** - Similar to useVenueData
+2. **Add parlour state variables** - isNewParlour, parlourTypeOpen, parlourNameOpen
+3. **Replace Parlour Type dropdown** - Use parlourTypes from Column C instead of venueTypes
+4. **Add Parlour Name combobox** - Shows suggestions from the type-specific sheet
+5. **Add auto-fill logic** - When parlour selected, populate City, Area, Map Link
+6. **Add create-on-save logic** - If parlour doesn't exist, add entry when form is saved
 
-**UI Changes:**
-
+**Current (Using venueTypes incorrectly):**
 ```tsx
-{/* Venue Details Section */}
-<div className="space-y-3 bg-slate-800/40 rounded-lg p-4 border border-slate-700/40">
-  {/* Venue Type - Dynamic Dropdown */}
-  <Select value={venueType} onValueChange={handleVenueTypeChange}>
-    {venueTypes.map(type => (
-      <SelectItem key={type} value={type}>{type}</SelectItem>
-    ))}
-  </Select>
+{venueTypes.map((type) => (
+  <CommandItem key={type} value={type} onSelect={(val) => setParlourType(val)}>
+    {type}
+  </CommandItem>
+))}
+```
 
-  {/* Venue Name - Combobox with suggestions */}
-  <Combobox
-    value={venueName}
-    options={venues.map(v => v.name)}
-    onSelect={handleVenueSelect}  // Auto-fills city, area, map
-    onCreateNew={handleCreateNewVenue}
-  />
-
-  {/* City, Area, Map - Auto-filled or editable */}
-  <Input value={venueCity} ... />
-  <Input value={venueArea} ... />
-  <Input value={venueMap} ... />
-</div>
+**After (Using parlourTypes from Column C):**
+```tsx
+{parlourTypes.map((type) => (
+  <CommandItem key={type} value={type} onSelect={handleParlourTypeChange}>
+    {type}
+  </CommandItem>
+))}
 ```
 
 ---
@@ -173,8 +150,9 @@ Replace current static venue type dropdown and text input with:
 | Column | Content |
 |--------|---------|
 | A | Venue Types (BANQUET, DECORATION, etc.) |
+| C | Parlour Types (MAKEUP STUDIO, BEAUTY PARLOUR, etc.) |
 
-**Type-Specific Sheets (BANQUET, DECORATION, etc.):**
+**Type-Specific Sheets (MAKEUP STUDIO, BEAUTY PARLOUR, etc.):**
 | Column | Field |
 |--------|-------|
 | A | NAME |
@@ -202,11 +180,11 @@ Replace current static venue type dropdown and text input with:
 ### User Experience Flow
 
 1. **User opens Event Details edit form**
-2. **Selects Venue Type** from dropdown (fetched from setup sheet)
-3. **Types Venue Name** - sees suggestions from that type's sheet
-4. **Selects existing venue** - City, Area, Map auto-fill from sheet data
+2. **Selects Parlour Type** from dropdown (fetched from Column C of setup sheet)
+3. **Types Parlour Name** - sees suggestions from that type's sheet (e.g., MAKEUP STUDIO sheet)
+4. **Selects existing parlour** - City, Area, Map auto-fill from sheet data
 5. **OR types new name** - enters City, Area, Map manually
-6. **Saves form** - if venue is new, creates entry in the type sheet with the 4 fields
+6. **Saves form** - if parlour is new, creates entry in the type sheet with the 4 fields
 
 ---
 
@@ -214,18 +192,34 @@ Replace current static venue type dropdown and text input with:
 
 | File | Action | Description |
 |------|--------|-------------|
-| `supabase/functions/google-sheets/index.ts` | Modify | Add `getEventDetailsSetupData`, `getVenuesByType`, `addVenueEntry` actions |
-| `src/lib/event-venue-api.ts` | Create | API helper functions for venue data |
-| `src/hooks/useVenueData.ts` | Create | Custom hook for venue state management |
-| `src/components/client-detail/FullScreenEventCard.tsx` | Modify | Integrate dynamic dropdowns and auto-fill logic |
+| `supabase/functions/google-sheets/index.ts` | Modify | Add `getParlourTypes`, `getParloursByType`, `addParlourEntry` actions |
+| `src/lib/parlour-api.ts` | Create | API helper functions for parlour data |
+| `src/hooks/useParlourData.ts` | Create | Custom hook for parlour state management |
+| `src/components/client-detail/FullScreenEventCard.tsx` | Modify | Integrate parlour dynamic dropdowns and auto-fill logic |
 
 ---
 
-### Technical Notes
+### Technical Details
 
-- The venue type dropdown will dynamically fetch from Column A of "EVENT DETAILS SETUP DATA"
-- Each venue type maps to a sheet with the same name (e.g., type "BANQUET" uses "BANQUET" sheet)
-- The system follows the existing vendor pattern already in the codebase
-- Error handling: If a type's sheet doesn't exist, show empty options and allow manual entry
-- Caching: Venue types fetched once, venues fetched on type change
-- This same pattern can apply to Parlour details if needed in the future
+**Edge Function Changes:**
+- `getParlourTypes`: Fetches from `'EVENT DETAILS SETUP DATA'!C2:C100`
+- `getParloursByType`: Uses `parlourType.toUpperCase()` as sheet name (same structure as getVenuesByType)
+- `addParlourEntry`: Appends to the type-specific sheet with NAME, CITY, AREA, GOOGLE MAP
+
+**FullScreenEventCard Integration:**
+- Add `useParlourData` hook import and usage
+- Add state: `parlourTypeOpen`, `parlourNameOpen`, `isNewParlour`
+- Add handlers: `handleParlourTypeChange`, `handleParlourSelect`, `handleParlourNameInput`
+- Update save logic to add new parlour if `isNewParlour` is true
+- Connect parlour section dropdowns to the new hook data
+
+---
+
+### Result
+
+After this change:
+- Parlour Type dropdown fetches from Column C of "EVENT DETAILS SETUP DATA"
+- Parlour Name shows suggestions from the type-specific sheet (e.g., "MAKEUP STUDIO")
+- Selecting existing parlour auto-fills City, Area, and Map Link
+- New parlours are automatically saved to their type sheet when the form is saved
+- Follows the exact same pattern as the Venue implementation
