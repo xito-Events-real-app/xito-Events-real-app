@@ -1,115 +1,152 @@
 
-# Fetch Relation Dropdown from Google Sheet
+
+# Secure Admin Authentication System
 
 ## Overview
 
-Currently, the relation dropdown options for bride and groom backup contacts are hardcoded in the code. The user wants these options to be fetched dynamically from the **"CLIENT TRACKER SETUP DATA"** sheet, **Column R** (starting from row 2).
+Implement a proper database-backed authentication system that protects the entire app while keeping the Client Contact Form (`/client-form/:clientId`) public. Team members will have their own login credentials, with admin capabilities to add more users.
 
-## Current State
-
-| Location | Current Implementation |
-|----------|----------------------|
-| `src/lib/client-contact-api.ts` | `brideBackupRelationOptions = ['Mother', 'Father', 'Sister', 'Other']` |
-| `src/lib/client-contact-api.ts` | `groomBackupRelationOptions = ['Father', 'Brother', 'Other']` |
-| `src/components/client-detail/ClientDetailsCard.tsx` | Uses hardcoded arrays for relation dropdowns |
-
-## Solution
-
-### Data Flow
+## Architecture
 
 ```text
-CLIENT TRACKER SETUP DATA (Column R)
-         |
-         v
-Edge Function getDropdowns()
-         |
-         v
-DropdownData.relationOptions
-         |
-         v
-ClientDetailsCard.tsx
-         |
-         v
-Bride/Groom Relation Dropdowns
+┌─────────────────────────────────────────────────────────────┐
+│                        App Entry                            │
+│                                                             │
+│   /client-form/:clientId ──→ PUBLIC (No auth required)     │
+│                                                             │
+│   All other routes ──→ AuthProvider ──→ Login Required     │
+│                           │                                 │
+│                           ▼                                 │
+│                    Check Session                            │
+│                           │                                 │
+│              ┌────────────┴────────────┐                   │
+│              │                         │                    │
+│         Logged In               Not Logged In               │
+│              │                         │                    │
+│              ▼                         ▼                    │
+│         Show App               Show Login Page              │
+└─────────────────────────────────────────────────────────────┘
 ```
+
+## What You'll Get
+
+| Feature | Description |
+|---------|-------------|
+| Email/Password Login | Secure login using Lovable Cloud database |
+| Team Support | Multiple team members with own credentials |
+| User Management | Admin can add/remove team members |
+| Session Persistence | Stay logged in across browser sessions |
+| Public Client Form | `/client-form/:clientId` remains accessible without login |
+| Auto Email Confirm | New users are automatically confirmed (no email verification needed) |
+
+## Database Schema
+
+### 1. Profiles Table
+Stores user information linked to authentication:
+
+```sql
+CREATE TABLE public.profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  full_name TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+### 2. User Roles Table
+Stores roles separately (security best practice):
+
+```sql
+CREATE TYPE public.app_role AS ENUM ('admin', 'member');
+
+CREATE TABLE public.user_roles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  role app_role NOT NULL,
+  UNIQUE (user_id, role)
+);
+```
+
+### 3. Security Functions & Policies
+- Auto-create profile when user signs up (trigger)
+- RLS policies for secure data access
+- `has_role()` function for role checking
 
 ## Implementation Steps
 
-### 1. Update Edge Function - Add Column R to getDropdowns
+### Step 1: Database Setup
+Create the profiles and user_roles tables with:
+- RLS policies enabled
+- Trigger to auto-create profile on signup
+- Security definer function for role checking
 
-**File: `supabase/functions/google-sheets/index.ts`**
+### Step 2: Auth Context & Hooks
+Create authentication infrastructure:
 
-The `getDropdowns` function already fetches columns A-X from "CLIENT TRACKER SETUP DATA". Column R is index 17.
+| File | Purpose |
+|------|---------|
+| `src/contexts/AuthContext.tsx` | Auth state management, session handling |
+| `src/hooks/useAuth.ts` | Easy access to auth context |
 
-```typescript
-// In getDropdowns function, add:
-return {
-  // ... existing fields
-  relationOptions: getColumn(17),  // Column R - Relation options for backup contacts
-};
-```
+### Step 3: Login Page
+Create a beautiful login page (`src/pages/Login.tsx`):
+- Email and password inputs
+- Pink/rose gradient theme (matching your app style)
+- Loading states and error handling
+- "Remember me" functionality
 
-### 2. Update DropdownData Interface
+### Step 4: Protected Routes Component
+Create route protection (`src/components/auth/ProtectedRoute.tsx`):
+- Wraps all protected routes
+- Redirects to login if not authenticated
+- Shows loading state while checking session
 
-**File: `src/lib/sheets-api.ts`**
+### Step 5: User Management UI
+Add admin features in Settings:
+- View all team members
+- Invite new team members (email/password)
+- Remove team members
+- Only visible to admins
 
-Add the new field to the DropdownData interface:
+### Step 6: Update App.tsx
+Modify routing structure:
+- Wrap protected routes with `ProtectedRoute`
+- Keep `/client-form/:clientId` outside protection
+- Add `/login` route
 
-```typescript
-export interface DropdownData {
-  // ... existing fields
-  relationOptions: string[];  // Column R - Relation options for backup contacts
-}
-```
+## New Files to Create
 
-### 3. Update useDropdownData Hook
-
-**File: `src/hooks/useDropdownData.ts`**
-
-Add fallback for relationOptions when using mock data:
-
-```typescript
-relationOptions: ['Mother', 'Father', 'Sister', 'Brother', 'Other'],
-```
-
-### 4. Update ClientDetailsCard Component
-
-**File: `src/components/client-detail/ClientDetailsCard.tsx`**
-
-Replace hardcoded arrays with dropdown data:
-
-```typescript
-// Before:
-import { brideBackupRelationOptions, groomBackupRelationOptions } from '@/lib/client-contact-api';
-
-// After:
-import { useDropdownData } from '@/hooks/useDropdownData';
-
-// In component:
-const { data: dropdownData } = useDropdownData();
-const relationOptions = dropdownData?.relationOptions || ['Mother', 'Father', 'Sister', 'Brother', 'Other'];
-
-// Use relationOptions for BOTH bride and groom dropdowns
-{relationOptions.map((rel) => (
-  <SelectItem key={rel} value={rel}>{rel}</SelectItem>
-))}
-```
+| File | Description |
+|------|-------------|
+| `src/contexts/AuthContext.tsx` | Auth provider with session management |
+| `src/hooks/useAuth.ts` | Hook to access auth context |
+| `src/pages/Login.tsx` | Login page UI |
+| `src/components/auth/ProtectedRoute.tsx` | Route protection wrapper |
+| `src/components/auth/LogoutButton.tsx` | Logout functionality |
+| `src/components/settings/TeamManagement.tsx` | User management for admins |
 
 ## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `supabase/functions/google-sheets/index.ts` | Add `relationOptions: getColumn(17)` to getDropdowns return |
-| `src/lib/sheets-api.ts` | Add `relationOptions: string[]` to DropdownData interface |
-| `src/hooks/useDropdownData.ts` | Add relationOptions fallback in mock data |
-| `src/components/client-detail/ClientDetailsCard.tsx` | Use dropdown data instead of hardcoded options |
+| `src/App.tsx` | Add AuthProvider, ProtectedRoute, Login route |
+| `src/pages/Settings.tsx` | Add Team Management section |
+| `supabase/config.toml` | Enable auto-confirm for email signups |
 
-## Technical Notes
+## First Admin Account
 
-1. **Single Source of Truth**: Both bride and groom relation dropdowns will use the same Column R options, providing consistency and easy management from the sheet.
+After implementing, you'll create your first admin account:
+1. Go to `/login`
+2. Sign up with your email and password
+3. The first user will automatically become admin
+4. Then you can add more team members through Settings
 
-2. **Backward Compatibility**: The hardcoded options will remain as fallback if the sheet data isn't available.
+## Security Features
 
-3. **Cache Integration**: Since dropdowns are already cached via IndexedDB, the relation options will also be cached and available offline.
+- Passwords stored securely (bcrypt hashing by Supabase)
+- JWT tokens for session management
+- RLS policies protect database access
+- Roles stored in separate table (prevents privilege escalation)
+- Auto session refresh
 
-4. **Column Mapping**: Column R is index 17 (0-indexed: A=0, B=1, ... R=17).
