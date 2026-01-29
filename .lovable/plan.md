@@ -1,158 +1,136 @@
 
 
-## Fix Missing Form Fields + Styling in FullScreenEventCard
+## Fix: Consolidate "QUOTATION SENT" Variants to Single Category
 
-The current `FullScreenEventCard` is missing several form sections that exist in the original `EventDetailCard`, and the styling doesn't match the dashboard's dark gradient theme.
+Currently, two separate categories can appear in the sidebar:
+- "QUOTATION SENT"  
+- "QUOTATION SENT : REVIEW PENDING"
 
----
-
-### Missing Form Fields
-
-| Feature | EventDetailCard | FullScreenEventCard |
-|---------|-----------------|---------------------|
-| Open Maps button | Has button next to map input | Missing |
-| Event Demands | Dynamic list (4 default slots, add/remove) | Missing entirely |
-| Event References | Dynamic list (2 default slots, add/remove) | Missing entirely |
-| Groom in Mehndi | Uses Switch component | Uses Select dropdown |
-| Urgency Warning | Red banner when < 20 days | Missing |
+These should be consolidated into a single canonical status: **"QUOTATION SENT : REVIEW PENDING"**
 
 ---
 
-### Styling Issues
+### Root Cause
 
-**Current (FullScreenEventCard):**
-- Card background: `bg-blue-500/20` (solid color overlay)
-- No gradient background in expanded mode
-- Labels: `text-white/50`
-
-**Original (EventDetailCard):**
-- Card background: `bg-gradient-to-br from-blue-500/20 to-indigo-500/20`
-- Proper dark theme inputs: `bg-white/5 border-white/10 placeholder:text-white/30`
-- Section headers use gradient-matching colors
-
----
-
-### Solution
-
-Update `FullScreenEventCard.tsx` to:
-
-1. **Add Event Demands section** - Dynamic list with 4 default inputs, add/remove buttons
-2. **Add Event References section** - Dynamic list with 2 default inputs, add/remove buttons  
-3. **Change Groom switch** - Replace Select with Switch component
-4. **Add "Open Maps" buttons** - Next to venue and parlour map inputs
-5. **Add Urgency Warning banner** - Show when event is within 20 days and has empty fields
-6. **Fix card styling** - Use gradient backgrounds matching EventDetailCard
-
----
-
-### Visual Result
-
-**Expanded Edit Form (after fix):**
-```
-┌─────────────────────────────────────────────────────────────┐
-│ WEDDING - Baisakh 15, 2082                           [▲]   │
-├─────────────────────────────────────────────────────────────┤
-│ ⚠️ Event is in less than 20 days! Some details missing.    │
-├─────────────────────────────────────────────────────────────┤
-│ 📍 Venue Details                                            │
-│ ┌─────────────┐ ┌─────────────┐                            │
-│ │ Type ▼      │ │ Venue Name  │                            │
-│ └─────────────┘ └─────────────┘                            │
-│ ┌─────────────┐ ┌─────────────┐                            │
-│ │ City        │ │ Area        │                            │
-│ └─────────────┘ └─────────────┘                            │
-│ ┌───────────────────────────────┐ ┌─────────────┐          │
-│ │ Google Maps URL               │ │ Open Maps   │          │
-│ └───────────────────────────────┘ └─────────────┘          │
-├─────────────────────────────────────────────────────────────┤
-│ 🕐 Event Timing                                             │
-│ ┌─────────────┐ ┌─────────────┐                            │
-│ │ Start: 10:00│ │ End: 18:00  │                            │
-│ └─────────────┘ └─────────────┘                            │
-├─────────────────────────────────────────────────────────────┤
-│ 📍 Parlour Details                                          │
-│ ... (same as venue)                                        │
-├─────────────────────────────────────────────────────────────┤
-│ 👥 Additional Info                                          │
-│ ┌──────────────────────────────┐ ┌─────────────┐           │
-│ │ Groom comes in Mehndi?  [⚪] │ │ Guests: 500 │           │
-│ └──────────────────────────────┘ └─────────────┘           │
-├─────────────────────────────────────────────────────────────┤
-│ 📝 Event Demands                    (NEW!)                  │
-│ 1. ┌─────────────────────────┐ [🗑]                         │
-│ 2. ┌─────────────────────────┐ [🗑]                         │
-│ 3. ┌─────────────────────────┐ [🗑]                         │
-│ 4. ┌─────────────────────────┐ [🗑]                         │
-│ [+ Add More]                                                │
-├─────────────────────────────────────────────────────────────┤
-│ 🔗 Event References                 (NEW!)                  │
-│ 1. ┌─────────────────────────┐ [🗑]                         │
-│ 2. ┌─────────────────────────┐ [🗑]                         │
-│ [+ Add More]                                                │
-├─────────────────────────────────────────────────────────────┤
-│           [Cancel]      [💾 Save Changes]                   │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-### Files to Modify
-
-| File | Changes |
-|------|---------|
-| `src/components/client-detail/FullScreenEventCard.tsx` | Add missing form sections (Demands, References), fix Groom switch, add Open Maps buttons, add urgency warning, update styling to use gradients |
-
----
-
-### Technical Details
-
-**1. Add Event Demands state:**
+The `normalizeStatus()` function in `src/lib/status-config.ts` already correctly maps:
 ```typescript
-const [demands, setDemands] = useState<string[]>(
-  event.eventDemands?.length ? event.eventDemands : ['', '', '', '']
-);
+if (s.includes('QUOTATION SENT')) return 'QUOTATION SENT : REVIEW PENDING';
 ```
 
-**2. Add Event References state:**
-```typescript
-const [references, setReferences] = useState<string[]>(
-  event.eventReferences?.length ? event.eventReferences : ['', '']
-);
-```
+However, this normalization is **not applied consistently** in all places where statuses are grouped/counted.
 
-**3. Replace Groom Select with Switch:**
-```typescript
-const [doGroomComeInMehndi, setDoGroomComeInMehndi] = useState(
-  event.doGroomComeInMehndi === 'YES'
-);
-```
+---
 
-**4. Fix card gradient styling:**
-```typescript
-// Match EventDetailCard gradient pattern
-const getEventColor = () => {
-  const upper = eventName.toUpperCase();
-  if (upper.includes('WEDDING')) return 'from-blue-500/20 to-indigo-500/20 border-blue-500/30';
-  if (upper.includes('RECEPTION')) return 'from-purple-500/20 to-violet-500/20 border-purple-500/30';
-  // ... etc
-};
+### Files Using Normalization (Already Fixed)
 
-// Apply in Card className
-<Card className={cn(
-  "transition-all duration-300 border rounded-xl",
-  isExpanded && `bg-gradient-to-br ${getEventColor()}`
-)}>
-```
+| File | Status |
+|------|--------|
+| `src/components/desktop/DesktopAppLayout.tsx` | Uses `normalizeStatus()` when counting categories |
 
-**5. Update save handler to include demands/references:**
+---
+
+### Files Missing Normalization (Need Fix)
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `src/components/desktop/DesktopDashboard.tsx` | Counts raw status strings (lines 141-148) | Apply `normalizeStatus()` before counting |
+| `src/pages/FreshClients.tsx` | Groups clients by raw status (lines 65-77) | Apply `normalizeStatus()` when grouping |
+| `src/hooks/useSuiteStats.ts` | Uses hardcoded "QUOTATION SENT" in active leads check (line 116) | Update to canonical status or use includes pattern |
+
+---
+
+### Changes Required
+
+**1. `src/components/desktop/DesktopDashboard.tsx` (lines 141-148)**
 ```typescript
-const handleSave = async () => {
-  await onSave(event.eventIndex, {
-    ...formData,
-    doGroomComeInMehndi: doGroomComeInMehndi ? 'YES' : '',
-    eventDemands: demands.filter(d => d.trim()),
-    eventReferences: references.filter(r => r.trim()),
+// Before:
+const statusCounts = useMemo(() => {
+  const counts: Record<string, number> = {};
+  statsClients.forEach(client => {
+    const status = getCurrentStatus(client.statusLog || '').toUpperCase();
+    counts[status] = (counts[status] || 0) + 1;
   });
-};
+  return counts;
+}, [statsClients]);
+
+// After:
+const statusCounts = useMemo(() => {
+  const counts: Record<string, number> = {};
+  statsClients.forEach(client => {
+    const rawStatus = getCurrentStatus(client.statusLog || '').toUpperCase();
+    const status = normalizeStatus(rawStatus);  // ← ADD THIS
+    if (status !== 'UNTOUCHED') {
+      counts[status] = (counts[status] || 0) + 1;
+    }
+  });
+  return counts;
+}, [statsClients]);
 ```
+
+**2. `src/pages/FreshClients.tsx` (lines 65-77)**
+```typescript
+// Before:
+const clientsByStatus = useMemo(() => {
+  const grouped: Record<string, ClientData[]> = {};
+  localClients.forEach(client => {
+    const status = getCurrentStatus(client.statusLog || '');
+    if (!grouped[status]) {
+      grouped[status] = [];
+    }
+    grouped[status].push(client);
+  });
+  return grouped;
+}, [localClients]);
+
+// After:
+const clientsByStatus = useMemo(() => {
+  const grouped: Record<string, ClientData[]> = {};
+  localClients.forEach(client => {
+    const rawStatus = getCurrentStatus(client.statusLog || '');
+    const status = normalizeStatus(rawStatus);  // ← ADD THIS
+    if (status !== 'UNTOUCHED') {
+      if (!grouped[status]) {
+        grouped[status] = [];
+      }
+      grouped[status].push(client);
+    }
+  });
+  return grouped;
+}, [localClients]);
+```
+
+**3. `src/hooks/useSuiteStats.ts` (line 116)**
+```typescript
+// Before:
+"QUOTATION SENT",
+
+// After (use includes pattern for safety):
+// The check already uses .includes() pattern, so both variants will match
+// No change needed here - it's checking if status CONTAINS these strings
+```
+
+---
+
+### Import Addition Required
+
+Add `normalizeStatus` import in files where it's missing:
+
+**`src/components/desktop/DesktopDashboard.tsx`:**
+```typescript
+import { getStatusConfig, sortCategoriesByOrder, normalizeStatus } from "@/lib/status-config";
+```
+
+**`src/pages/FreshClients.tsx`:**
+```typescript
+import { normalizeStatus } from "@/lib/status-config";
+```
+
+---
+
+### Result
+
+After this fix:
+- Only **"QUOTATION SENT : REVIEW PENDING"** will appear in sidebar
+- Both raw variants ("QUOTATION SENT" and "QUOTATION SENT : REVIEW PENDING") will be merged into single count
+- Consistent behavior across all dashboard views
 
