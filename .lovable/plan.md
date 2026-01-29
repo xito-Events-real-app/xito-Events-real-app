@@ -1,104 +1,65 @@
 
-# Fix: Off-By-One Client Navigation Bug
+# Fix: Global Client Navigation Inconsistency
 
-## Problem Analysis
+## Problem Identified
 
-When clicking on a client in the Booked Events table, the wrong client page opens (e.g., clicking PRASANNA MAINALI at position 44 opens PABINA ADHIKARI at position 45).
+The client navigation utility was updated, but **6 files still use hardcoded navigation logic** that doesn't use the centralized `getClientDetailPath` function. This causes the off-by-one navigation bug to persist on the published site.
 
-### Root Cause
+### Files with Incorrect Navigation
 
-The navigation utility `client-navigation.ts` prioritizes `originalRowNumber` over `registeredDateTimeAD` when building the URL:
+| File | Current Pattern (Broken) |
+|------|-------------------------|
+| `src/pages/Dashboard.tsx` | Uses `client.registeredDateTimeAD` directly (line 802) and `client.id` (line 929) |
+| `src/pages/Search.tsx` | Uses `clientId` without consistent resolution |
+| `src/components/booked/DesktopBookedDashboard.tsx` | Uses `originalRowNumber` or encoded `registeredDateTimeAD` (lines 409, 752, 843) |
+| `src/components/desktop/DesktopClientRow.tsx` | Uses `rowNumber` first, then fallback (line 731) |
+| `src/components/dashboard/FreshClientCard.tsx` | Uses `rowNumber` first, then fallback (line 1586) |
 
-```typescript
-// Current priority (problematic)
-1. originalRowNumber  ← Uses row number that may be stale
-2. rowNumber
-3. registeredDateTimeAD  ← True unique identifier (safest)
-```
-
-The issue occurs because:
-1. Booked clients use `originalRowNumber` which is resolved from CLIENT TRACKER at fetch time
-2. If the CLIENT TRACKER cache is stale or rows shifted since the lookup, the row number no longer matches
-3. The ClientDetail page then finds the wrong client at that row number
-
-### Why +1 offset?
-
-The off-by-one error likely occurs because:
-- A new client was added to CLIENT TRACKER after the lookup was performed
-- Or the cached data has a slightly different row index than the live sheet
+### Files Already Fixed (Using `getClientDetailPath`)
+- `src/components/booked/EventClientCard.tsx`
+- `src/components/booked/BookedClientCard.tsx`
+- `src/components/booked/DesktopBookedClients.tsx`
 
 ## Solution
 
-**Invert the navigation priority to use `registeredDateTimeAD` first** since it's the true unique identifier that never changes:
+Refactor all 5 remaining files to use the centralized `getClientDetailPath()` utility, ensuring:
+1. `registeredDateTimeAD` is always prioritized (true unique ID)
+2. Consistent URL encoding across all navigation points
+3. No more row-based navigation that can become stale
 
-```typescript
-// New priority (correct)
-1. registeredDateTimeAD  ← Always correct (unique ID)
-2. rowNumber             ← Fallback for older clients
-3. originalRowNumber     ← Last resort
-```
+## Implementation Plan
 
-This ensures navigation always uses the stable unique identifier rather than position-based row numbers that can shift.
+### 1. Update `src/pages/Dashboard.tsx`
+- Import `getClientDetailPath` from `@/lib/client-navigation`
+- Replace line 802: `navigate(\`/client-tracker/client/${client.registeredDateTimeAD}\`)` with `navigate(getClientDetailPath(client))`
+- Replace line 929: `navigate(\`/client-tracker/client/${client.id}\`)` with `navigate(getClientDetailPath(client))`
 
-## Files to Modify
+### 2. Update `src/pages/Search.tsx`
+- Import `getClientDetailPath` from `@/lib/client-navigation`
+- Replace line 88-92: Use `getClientDetailPath(client)` for navigation with proper state passing
 
-| File | Change |
-|------|--------|
-| `src/lib/client-navigation.ts` | Invert priority: use `registeredDateTimeAD` first |
+### 3. Update `src/components/booked/DesktopBookedDashboard.tsx`
+- Import `getClientDetailPath` from `@/lib/client-navigation`
+- Replace lines 409-410, 752, and 843 with `navigate(getClientDetailPath(client))`
 
-## Implementation Details
+### 4. Update `src/components/desktop/DesktopClientRow.tsx`
+- Import `getClientDetailPath` from `@/lib/client-navigation`
+- Replace lines 731-733 with `navigate(getClientDetailPath(client), { state: ... })`
 
-### `src/lib/client-navigation.ts`
+### 5. Update `src/components/dashboard/FreshClientCard.tsx`
+- Import `getClientDetailPath` from `@/lib/client-navigation`
+- Replace lines 1586-1587 with `navigate(getClientDetailPath(client))`
 
-Update `getClientNavigationId()` function:
+## Why This Fixes the Issue on Other Devices
 
-```typescript
-export function getClientNavigationId(
-  client: ClientData | BookedClientData | { 
-    originalRowNumber?: number; 
-    rowNumber?: number; 
-    registeredDateTimeAD?: string;
-  }
-): string {
-  // Priority 1: Use registeredDateTimeAD (most reliable - true unique ID)
-  if (client.registeredDateTimeAD) {
-    return encodeURIComponent(client.registeredDateTimeAD);
-  }
-  
-  // Priority 2: Use rowNumber if available (for regular clients without registeredDateTimeAD)
-  if ('rowNumber' in client && client.rowNumber) {
-    return String(client.rowNumber);
-  }
-  
-  // Priority 3: Use originalRowNumber as last resort
-  if ('originalRowNumber' in client && client.originalRowNumber) {
-    return String(client.originalRowNumber);
-  }
-  
-  console.warn('Client has no valid navigation ID:', client);
-  return '';
-}
-```
+The published site was still using old code that prioritized `rowNumber`. Once we:
+1. Update all files to use the centralized utility
+2. Publish the changes
 
-## Why This Works
+All devices will use `registeredDateTimeAD` as the primary navigation ID, which is immutable and never changes regardless of row shifts.
 
-1. **`registeredDateTimeAD` is immutable**: It's set when the client is first registered and never changes
-2. **ClientDetail already supports it**: The lookup logic (lines 270-283) already handles both row number and registeredDateTimeAD lookups
-3. **URL-safe encoding**: `encodeURIComponent()` handles special characters in the datetime string
-4. **Backward compatible**: Falls back to row numbers for any edge cases
+## Technical Notes
 
-## Testing Verification
-
-After implementation:
-1. Navigate to Booked Events page
-2. Click on PRASANNA MAINALI (row 44)
-3. Verify the Client Detail page shows PRASANNA MAINALI (not PABINA ADHIKARI)
-4. Test navigation from other views (Fresh Clients, Search, etc.) to ensure they still work
-
----
-
-### Technical Notes
-
-- The `registeredDateTimeAD` format is typically `YYYY-MM-DDTHH:MM:SS.sssZ` which, when URL-encoded, becomes safe for use in routes
-- The ClientDetail page's lookup logic at lines 277-279 handles decoding and matching by `registeredDateTimeAD`
-- This fix applies globally to all navigation from any client list view
+- The `registeredDateTimeAD` format (e.g., `2026-01-18T19:25:45.624Z`) is URL-encoded via `encodeURIComponent()`
+- The `ClientDetail.tsx` page already handles decoding and matching by `registeredDateTimeAD` (lines 277-280)
+- This is a code-level fix that will work globally once published
