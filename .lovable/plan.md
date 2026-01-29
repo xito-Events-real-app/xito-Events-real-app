@@ -1,141 +1,260 @@
 
-# Fix: Global Back Button Navigation
 
-## Problem Summary
+# Client Details Section - Full Implementation Plan
 
-The back button on the Client Detail page doesn't work reliably because:
+## Overview
 
-1. **`handleBack` uses `navigate(-1)`** which relies solely on browser history - this fails when the page is opened directly (from a link, bookmark, or different device)
-2. **Most navigation sources don't pass `from` state** - Only 2 out of 8 files pass the origin path when navigating to client details
-3. **The `fromState` captured in ClientDetail is never utilized** for back navigation
+This plan implements a new "Client Details" section in the Client Detail page that displays comprehensive bride and groom contact/location information in an expandable card format (matching the Event Details pattern).
 
-## Solution
+---
 
-### Part 1: Fix `handleBack` in ClientDetail.tsx
+## Part 1: Sidebar Navigation Updates
 
-Update the `handleBack` function to:
-1. First check if `fromState.from` exists and use it
-2. Fall back to `navigate(-1)` only if no state is available
-3. Use a sensible default (e.g., `/client-tracker`) if nothing else works
+### File: `src/components/client-detail/ClientDetailSidebar.tsx`
 
-```typescript
-const handleBack = () => {
-  // Priority 1: Use the from state if available
-  if (fromState?.from) {
-    navigate(fromState.from, { 
-      state: fromState.filters 
-    });
-    return;
-  }
-  
-  // Priority 2: Try browser history if there's a referrer
-  if (window.history.length > 1) {
-    navigate(-1);
-    return;
-  }
-  
-  // Priority 3: Default to client tracker dashboard
-  navigate('/client-tracker');
-};
+**Changes:**
+1. Add `Users` icon import from lucide-react
+2. Rename section ID from `'contact'` to `'clientDetails'`
+3. Update label from "Contact" to "Client Details"
+4. Reorder `sidebarItems` array to place Client Details directly after Event Details:
+
+```
+dashboard -> events -> clientDetails -> registration -> inquiry -> sales -> activity -> comments -> financials
 ```
 
-### Part 2: Add `from` State to All Navigation Sources
+---
 
-Update the following files to pass `from` state when navigating to client details:
+## Part 2: Data Types and API Layer
 
-| File | Lines | Current | Fix |
-|------|-------|---------|-----|
-| `Dashboard.tsx` | 803, 930 | `navigate(getClientDetailPath(client))` | Add `state: { from: location.pathname }` |
-| `FreshClientCard.tsx` | 1586 | `navigate(getClientDetailPath(client))` | Add `state: { from: location.pathname }` |
-| `DesktopBookedDashboard.tsx` | 409, 747, 833 | `navigate(getClientDetailPath(client))` | Add `state: { from: location.pathname }` |
-| `BookedClientCard.tsx` | 133 | `navigate(getClientDetailPath(client))` | Add `state: { from: location.pathname }` |
-| `EventClientCard.tsx` | 102 | `navigate(getClientDetailPath(client))` | Add `state: { from: location.pathname }` |
-| `DesktopBookedClients.tsx` | 222 | `navigate(getClientDetailPath(client))` | Add `state: { from: location.pathname }` |
+### New File: `src/lib/client-contact-api.ts`
 
-## Files to Modify
-
-| File | Change |
-|------|--------|
-| `src/pages/ClientDetail.tsx` | Fix `handleBack` to use `fromState.from` with fallbacks |
-| `src/pages/Dashboard.tsx` | Add `state: { from: location.pathname }` to navigation calls |
-| `src/components/dashboard/FreshClientCard.tsx` | Add `state: { from: location.pathname }` to navigation |
-| `src/components/booked/DesktopBookedDashboard.tsx` | Add `state: { from: location.pathname }` to 3 navigation calls |
-| `src/components/booked/BookedClientCard.tsx` | Add `state: { from: location.pathname }` to navigation |
-| `src/components/booked/EventClientCard.tsx` | Add `state: { from: location.pathname }` to navigation |
-| `src/components/booked/DesktopBookedClients.tsx` | Add `state: { from: location.pathname }` to navigation |
-
-## Implementation Details
-
-### ClientDetail.tsx - handleBack function
+Create TypeScript interfaces and API functions:
 
 ```typescript
-const handleBack = () => {
-  // Priority 1: Use the from state if available (passed from navigation source)
-  if (fromState?.from) {
-    navigate(fromState.from, { 
-      state: fromState.filters 
-    });
-    return;
-  }
+export interface ClientContactDetails {
+  rowNumber: number;
+  registeredDateTimeAD: string;
+  registeredDateBS: string;
+  clientName: string;
   
-  // Priority 2: Try browser history if available
-  if (window.history.length > 1) {
-    navigate(-1);
-    return;
-  }
+  // Bride Details (Columns D-O)
+  brideFullName: string;
+  brideContactNumber: string;
+  brideWhatsappNumber: string;
+  brideBackupNumber: string;
+  brideBackupRelation: string;        // Mother / Father / Sister / Other
+  brideBackupNumber2: string;
+  brideBackupRelation2: string;
+  brideInstagram: string;             // Without @
+  brideHomeCity: string;
+  brideHomeArea: string;
+  brideHomeMap: string;               // Google Maps link
+  brideHomeLandmark: string;
   
-  // Priority 3: Default to client tracker dashboard
-  navigate('/client-tracker');
-};
+  // Groom Details (Columns P-AA)
+  groomFullName: string;
+  groomContactNumber: string;
+  groomWhatsappNumber: string;
+  groomBackupNumber: string;
+  groomBackupRelation: string;        // Father / Brother / Other
+  groomBackupNumber2: string;
+  groomBackupRelation2: string;
+  groomInstagram: string;             // Without @
+  groomHomeCity: string;
+  groomHomeArea: string;
+  groomHomeMap: string;               // Google Maps link
+  groomHomeLandmark: string;
+}
 ```
 
-### Example: Dashboard.tsx navigation update
+---
 
-```typescript
-// Before
-onClick={() => navigate(getClientDetailPath(client))}
+## Part 3: React Hook for Data Fetching
 
-// After
-onClick={() => navigate(getClientDetailPath(client), { 
-  state: { from: location.pathname } 
-})}
+### New File: `src/hooks/useClientContactDetails.ts`
+
+Similar pattern to `useEventDetails.ts`:
+- `fetchContactDetails()` - fetches data from the sheet
+- `updateContactDetails()` - updates data in the sheet
+- Auto-creates row if client doesn't exist (syncing Columns A-C from BOOKED CLIENTS)
+
+---
+
+## Part 4: Backend Edge Function
+
+### File: `supabase/functions/google-sheets/index.ts`
+
+Add 2 new actions to the edge function:
+
+**1. `getClientContactDetails`**
+- Input: `registeredDateTimeAD`
+- Finds client in "BOOKED CLIENTS CONTACT DETAILS" sheet by Column A
+- If not found, auto-creates row with synced A-C data from BOOKED CLIENTS
+- Returns all contact fields (Columns D-AA)
+- Column mapping: A(0) through AA(26)
+
+**2. `updateClientContactDetails`**
+- Input: `registeredDateTimeAD`, `updates` (partial contact details)
+- Updates specified columns for the matching client
+- Uses row verification pattern (like event details)
+
+---
+
+## Part 5: UI Component - ClientDetailsCard
+
+### New File: `src/components/client-detail/ClientDetailsCard.tsx`
+
+Following the `FullScreenEventCard.tsx` pattern with expandable read/edit modes.
+
+### Form Structure (Edit Mode)
+
+**BRIDE'S DETAILS Section (Pink/Rose theme: `bg-pink-500/10`, `text-pink-400`)**
+
+| Field | Type | Placeholder/Options | Notes |
+|-------|------|---------------------|-------|
+| Full Name | Text Input | "Enter bride's full name (as per official records)" | Required |
+| Contact Number | PhoneInputField (NP) | "Enter bride's 10-digit Nepali mobile number" | Required |
+| WhatsApp Number | PhoneInputField (NP) | "Enter bride's WhatsApp number" | Checkbox: "Same as Contact Number" |
+| Backup Number | PhoneInputField (NP) | "Enter alternate Nepali mobile number" | |
+| Backup Relation | Select | Mother / Father / Sister / Other | |
+| Backup Number 2 | PhoneInputField (NP) | "Enter second alternate mobile (optional)" | Optional |
+| Backup Relation 2 | Select | Mother / Father / Sister / Other | |
+| Instagram Handle | Text Input | "Enter Instagram username (without @)" | Prefix shown as "@" |
+| Home City | Combobox | Nepal cities from `nepal-cities.ts` | |
+| Home Area | Text Input | "Enter locality / area name" | |
+| Google Map Location | Text Input | "Paste Google Maps location link" | Button: "Open Google Maps" |
+| Home Landmark | Text Input | "Enter nearby landmark" | |
+
+**GROOM'S DETAILS Section (Blue/Indigo theme: `bg-blue-500/10`, `text-blue-400`)**
+
+| Field | Type | Placeholder/Options | Notes |
+|-------|------|---------------------|-------|
+| Full Name | Text Input | "Enter groom's full name (as per official records)" | Required |
+| Contact Number | PhoneInputField (NP) | "Enter groom's 10-digit Nepali mobile number" | Required |
+| WhatsApp Number | PhoneInputField (NP) | "Enter groom's WhatsApp number" | Checkbox: "Same as Contact Number" |
+| Backup Number | PhoneInputField (NP) | "Enter alternate Nepali mobile number" | |
+| Backup Relation | Select | Father / Brother / Other | |
+| Backup Number 2 | PhoneInputField (NP) | "Enter second alternate mobile (optional)" | Optional |
+| Backup Relation 2 | Select | Father / Brother / Other | |
+| Instagram Handle | Text Input | "Enter Instagram username (without @)" | Prefix shown as "@" |
+| Home City | Combobox | Nepal cities from `nepal-cities.ts` | |
+| Home Area | Text Input | "Enter locality / area name" | |
+| Google Map Location | Text Input | "Paste Google Maps location link" | Button: "Open Google Maps" |
+| Home Landmark | Text Input | "Enter nearby landmark" | |
+
+### Read-Only View (Collapsed State)
+
+```
++------------------------------------------------------------+
+| [Users Icon] CLIENT DETAILS       [Filled/Empty Badge]     |
+|                                            [Expand Button] |
++------------------------------------------------------------+
+| LEFT: BRIDE                    | RIGHT: GROOM              |
+| Name: [name]                   | Name: [name]              |
+| Contact: [clickable tel]       | Contact: [clickable tel]  |
+| WhatsApp: [clickable wa]       | WhatsApp: [clickable wa]  |
+| Instagram: [@handle link]      | Instagram: [@handle link] |
+| Home: [city, area] [map icon]  | Home: [city, area] [map]  |
++------------------------------------------------------------+
 ```
 
-### Example: FreshClientCard.tsx
+### Special Features
 
-```typescript
-// Need to add useLocation hook import and usage
-import { useNavigate, useLocation } from "react-router-dom";
+1. **"Same as Contact" Toggle**: For WhatsApp numbers, show a Switch component that auto-copies the contact number
+2. **External Links**: 
+   - Phone numbers: `tel:` links
+   - WhatsApp: `https://wa.me/` links
+   - Instagram: `https://instagram.com/[handle]` links
+   - Maps: External link icon that opens in new tab
+3. **Empty State**: "No contact details recorded. Click to add bride and groom information."
+4. **Validation**: Phone fields use Nepal (NP) as default country
 
-// Inside component
-const location = useLocation();
+---
 
-// Update navigation
-onClick={() => navigate(getClientDetailPath(client), { 
-  state: { from: location.pathname } 
-})}
-```
+## Part 6: ClientDetail Page Integration
 
-## Why This Works
+### File: `src/pages/ClientDetail.tsx`
 
-1. **Reliable back navigation**: Uses explicit `from` state instead of relying on browser history
-2. **Works on all devices**: Since the path is stored in navigation state, it persists across sessions
-3. **Graceful fallbacks**: If state is missing, tries browser history, then defaults to dashboard
-4. **Consistent behavior**: All navigation sources now pass the origin path
+**Changes:**
+1. Update `SectionType` import to include `'clientDetails'`
+2. Import and use `useClientContactDetails` hook
+3. Import `ClientDetailsCard` component
+4. Update mobile tabs array with new section order
+5. Replace old "Contact" section render with new `ClientDetailsCard`
 
-## Technical Notes
+---
 
-- The `fromState` interface is already defined in ClientDetail.tsx (lines 191-198)
-- All components already import `useNavigate`, most need to add `useLocation`
-- The `location.pathname` gives the current route (e.g., `/booked-clients`, `/client-tracker`)
-- Filters can be preserved using `fromState.filters` for advanced back navigation
+## Part 7: Export Updates
 
-## Testing Verification
+### File: `src/components/client-detail/index.ts`
 
-After implementation:
-1. Open a client from Booked Events → Back should return to Booked Events
-2. Open a client from Fresh Clients → Back should return to Fresh Clients
-3. Open a client from Dashboard → Back should return to Dashboard
-4. Open a client from Search → Back should return to Search
-5. Open a client directly via URL → Back should go to Client Tracker dashboard
-6. Test on different devices/browsers to ensure consistent behavior
+Add export for the new `ClientDetailsCard` component.
+
+---
+
+## Files Summary
+
+| File | Action | Purpose |
+|------|--------|---------|
+| `src/components/client-detail/ClientDetailSidebar.tsx` | Modify | Rename section, update icon, reorder tabs |
+| `src/lib/client-contact-api.ts` | Create | TypeScript interfaces |
+| `src/hooks/useClientContactDetails.ts` | Create | Data fetching/updating hook |
+| `supabase/functions/google-sheets/index.ts` | Modify | Add 2 new actions |
+| `src/components/client-detail/ClientDetailsCard.tsx` | Create | Expandable UI component with form |
+| `src/pages/ClientDetail.tsx` | Modify | Integrate new section |
+| `src/components/client-detail/index.ts` | Modify | Export new component |
+
+---
+
+## Sheet Column Mapping
+
+| Column | Index | Field |
+|--------|-------|-------|
+| A | 0 | registeredDateTimeAD (synced) |
+| B | 1 | registeredDateBS (synced) |
+| C | 2 | clientName (synced) |
+| D | 3 | brideFullName |
+| E | 4 | brideContactNumber |
+| F | 5 | brideWhatsappNumber |
+| G | 6 | brideBackupNumber |
+| H | 7 | brideBackupRelation |
+| I | 8 | brideBackupNumber2 |
+| J | 9 | brideBackupRelation2 |
+| K | 10 | brideInstagram |
+| L | 11 | brideHomeCity |
+| M | 12 | brideHomeArea |
+| N | 13 | brideHomeMap |
+| O | 14 | brideHomeLandmark |
+| P | 15 | groomFullName |
+| Q | 16 | groomContactNumber |
+| R | 17 | groomWhatsappNumber |
+| S | 18 | groomBackupNumber |
+| T | 19 | groomBackupRelation |
+| U | 20 | groomBackupNumber2 |
+| V | 21 | groomBackupRelation2 |
+| W | 22 | groomInstagram |
+| X | 23 | groomHomeCity |
+| Y | 24 | groomHomeArea |
+| Z | 25 | groomHomeMap |
+| AA | 26 | groomHomeLandmark |
+
+---
+
+## UI/UX Design Notes
+
+1. **Color Scheme**:
+   - Bride section: Pink/Rose accent (`bg-pink-500/10`, `text-pink-400`, `border-pink-500/30`)
+   - Groom section: Blue/Indigo accent (`bg-blue-500/10`, `text-blue-400`, `border-blue-500/30`)
+
+2. **Dark Theme Styling**: Following the `FullScreenEventCard` pattern with `bg-slate-800` containers
+
+3. **Responsive Layout**: Two-column layout on desktop, stacked on mobile
+
+4. **Form Field Groupings**:
+   - Personal Info (Name, Primary Contact, WhatsApp)
+   - Backup Contacts (2 backup numbers with relations)
+   - Social (Instagram)
+   - Address (City, Area, Map, Landmark)
+
+5. **Quick Actions**: All phone/WhatsApp numbers are clickable to open respective apps
+
