@@ -1,89 +1,122 @@
 
 
-## Fix: Always Show Client Notes Section
+## Show Event Details for All Clients (Not Just Booked)
 
-The "Client Notes" section (description) sometimes doesn't appear because the code conditionally renders it only when `client.description` has a truthy value. When the description is empty or contains only whitespace, the section is hidden entirely.
+Display event information on the Dashboard section for ALL clients, using basic event data from the client record when detailed logistics data isn't available.
 
 ---
 
 ### Root Cause
 
-In `ClientHeroSection.tsx` at line 242:
-```tsx
-{client.description && (
-  <div className="bg-gradient-to-r ...">
-    ...Client Notes...
-  </div>
-)}
-```
-
-When `client.description` is:
-- Empty string `""`
-- `null` or `undefined`
-- Only whitespace
-
-The entire Client Notes box doesn't render at all.
+Currently:
+1. `getClientEventDetails` only fetches from **'BOOKED CLIENTS EVENT DETAILS'** sheet
+2. Non-booked clients don't exist in that sheet
+3. `DashboardEventDetails` returns `null` when no event details data exists
 
 ---
 
 ### Solution
 
-Always render the Client Notes section, but show a placeholder message when there's no description.
+Pass the client's basic event data as a fallback prop to `DashboardEventDetails`. When detailed event data from the BOOKED sheet isn't available, display the basic event info (name, date) with "Not set" for venue/parlour.
 
-**Before:**
-```tsx
-{client.description && (
-  <div className="...">Client Notes content</div>
-)}
+---
+
+### Layout for Non-Booked Clients
+
 ```
-
-**After:**
-```tsx
-<div className="...">
-  {client.description?.trim() 
-    ? formatDescription(client.description) 
-    : <span className="text-white/40 italic">No notes added</span>
-  }
-</div>
+┌─────────────────────────┬──────────────────────────────────────────────────────────┐
+│ EVENT DETAILS           │                                                          │
+├─────────────────────────┼──────────────────────────────────────────────────────────┤
+│ MAGH 16                 │ Venue: Not set                                           │
+│ WEDDING                 │ Parlour: Not set                                         │
+├─────────────────────────┼──────────────────────────────────────────────────────────┤
+│ MAGH 17                 │ Venue: Not set                                           │
+│ RECEPTION               │ Parlour: Not set                                         │
+└─────────────────────────┴──────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### File to Modify
+### Technical Changes
+
+#### 1. Update `DashboardEventDetails.tsx`
+
+Add a new prop for fallback client data:
+
+```typescript
+interface DashboardEventDetailsProps {
+  eventDetailsData: EventDetailsData | null;
+  isLoading?: boolean;
+  // NEW: Fallback client data for non-booked clients
+  clientEvents?: {
+    events: string;      // newline-separated
+    eventYear: string;   // newline-separated
+    eventMonth: string;  // newline-separated
+    eventDay: string;    // newline-separated
+  };
+}
+```
+
+Build basic events from client data when `eventDetailsData` is null:
+
+```typescript
+// If no detailed event data, build from client events
+const events = eventDetailsData?.events || buildBasicEvents(clientEvents);
+
+function buildBasicEvents(clientData) {
+  if (!clientData?.events) return [];
+  
+  const names = clientData.events.split('\n');
+  const years = clientData.eventYear.split('\n');
+  const months = clientData.eventMonth.split('\n');
+  const days = clientData.eventDay.split('\n');
+  
+  return names.map((name, i) => ({
+    eventIndex: i,
+    eventName: name.trim(),
+    eventYear: years[i] || '',
+    eventMonth: months[i] || '',
+    eventDay: days[i] || '',
+    // All logistics fields empty
+    venueName: '', venueArea: '', venueCity: '', venueMap: '',
+    eventStartTime: '', eventEndTime: '',
+    parlourName: '', parlourArea: '', parlourCity: '', parlourMap: '',
+    parlourStartTime: '', parlourEndTime: '',
+    guestCount: ''
+  })).filter(e => e.eventName);
+}
+```
+
+#### 2. Update `ClientHeroSection.tsx`
+
+Pass client event data as fallback:
+
+```typescript
+<DashboardEventDetails 
+  eventDetailsData={eventDetailsData}
+  isLoading={eventDetailsLoading}
+  clientEvents={{
+    events: client.events || '',
+    eventYear: client.eventYear || '',
+    eventMonth: client.eventMonth || '',
+    eventDay: client.eventDay || '',
+  }}
+/>
+```
+
+---
+
+### Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/components/client-detail/ClientHeroSection.tsx` | Remove conditional, always show section with fallback text |
+| `src/components/client-detail/DashboardEventDetails.tsx` | Add `clientEvents` prop, build fallback events when no detailed data |
+| `src/components/client-detail/ClientHeroSection.tsx` | Pass client event data as fallback prop |
 
 ---
 
-### Visual Change
+### Result
 
-**Current (Hidden when empty):**
-```
-[Quotation Section]
-[Event Details]
-<nothing here if no description>
-```
-
-**After (Always visible):**
-```
-[Quotation Section]
-[Event Details]
-┌─────────────────────────────────────────────────┐
-│ " CLIENT NOTES                                  │
-│   No notes added                                │
-│                                               " │
-└─────────────────────────────────────────────────┘
-```
-
----
-
-### Technical Details
-
-The fix involves:
-1. Removing the `{client.description && (...)}` wrapper
-2. Adding a ternary inside the content area to show either:
-   - The formatted description (if exists and not just whitespace)
-   - An italicized "No notes added" placeholder
+- **Booked clients**: Show full details (venue, parlour, timing, guests)
+- **Non-booked clients**: Show event names and dates with "Not set" placeholders for logistics
 
