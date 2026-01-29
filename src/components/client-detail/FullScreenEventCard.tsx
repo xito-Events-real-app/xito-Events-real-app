@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Calendar, MapPin, Clock, Users, Scissors, ChevronDown, ChevronUp, Save, X, Loader2, ExternalLink, FileText, Link2, Plus, Trash2, AlertTriangle } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Calendar, MapPin, Clock, Users, Scissors, ChevronDown, ChevronUp, Save, X, Loader2, ExternalLink, FileText, Link2, Plus, Trash2, AlertTriangle, Check, ChevronsUpDown } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -7,9 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
 import { getMonthName } from '@/lib/nepali-months';
 import { EventDetail } from '@/hooks/useEventDetails';
+import { useVenueData } from '@/hooks/useVenueData';
+import { VenueEntry } from '@/lib/event-venue-api';
 
 interface FullScreenEventCardProps {
   event: EventDetail;
@@ -19,17 +23,6 @@ interface FullScreenEventCardProps {
   onSave: (eventIndex: number, updates: Partial<EventDetail> & { eventDemands?: string[]; eventReferences?: string[] }) => Promise<boolean>;
   isUrgent?: boolean;
 }
-
-const VENUE_TYPE_OPTIONS = [
-  { value: '', label: 'Select type...' },
-  { value: 'INDOOR', label: 'Indoor' },
-  { value: 'OUTDOOR', label: 'Outdoor' },
-  { value: 'MIXED', label: 'Mixed' },
-  { value: 'HOTEL', label: 'Hotel' },
-  { value: 'BANQUET', label: 'Banquet' },
-  { value: 'HOME', label: 'Home' },
-  { value: 'OTHER', label: 'Other' },
-];
 
 // Check if an event is within urgency threshold (20 days)
 function isEventUrgent(eventDateAD: string): boolean {
@@ -83,6 +76,23 @@ export const FullScreenEventCard = ({
 }: FullScreenEventCardProps) => {
   const [isSaving, setIsSaving] = useState(false);
   
+  // Venue data hook - for dynamic dropdowns
+  const { 
+    venueTypes, 
+    venues, 
+    isLoadingTypes, 
+    isLoadingVenues, 
+    fetchVenuesByType,
+    addNewVenue,
+    getVenueByName,
+    clearVenues,
+  } = useVenueData();
+  
+  // Combobox state
+  const [venueTypeOpen, setVenueTypeOpen] = useState(false);
+  const [venueNameOpen, setVenueNameOpen] = useState(false);
+  const [isNewVenue, setIsNewVenue] = useState(false);
+  
   // Form state
   const [venueType, setVenueType] = useState(event.venueType || '');
   const [venueName, setVenueName] = useState(event.venueName || '');
@@ -130,7 +140,64 @@ export const FullScreenEventCard = ({
     setGuestCount(event.guestCount || '');
     setDemands(event.eventDemands && event.eventDemands.length > 0 ? event.eventDemands : ['', '', '', '']);
     setReferences(event.eventReferences && event.eventReferences.length > 0 ? event.eventReferences : ['', '']);
+    setIsNewVenue(false);
   }, [event]);
+
+  // Fetch venues when venue type changes
+  useEffect(() => {
+    if (venueType && isExpanded) {
+      fetchVenuesByType(venueType);
+    } else {
+      clearVenues();
+    }
+  }, [venueType, isExpanded, fetchVenuesByType, clearVenues]);
+
+  // Handle venue type change
+  const handleVenueTypeChange = useCallback((newType: string) => {
+    setVenueType(newType);
+    // Clear venue name and details when type changes
+    setVenueName('');
+    setVenueCity('');
+    setVenueArea('');
+    setVenueMap('');
+    setIsNewVenue(false);
+    setVenueTypeOpen(false);
+  }, []);
+
+  // Handle venue selection from combobox - auto-fill city, area, map
+  const handleVenueSelect = useCallback((selectedName: string) => {
+    setVenueName(selectedName);
+    const venue = venues.find(v => v.name.toLowerCase() === selectedName.toLowerCase());
+    if (venue) {
+      // Auto-fill from existing venue
+      setVenueCity(venue.city);
+      setVenueArea(venue.area);
+      setVenueMap(venue.googleMap);
+      setIsNewVenue(false);
+    } else {
+      // New venue - user needs to enter details manually
+      setVenueCity('');
+      setVenueArea('');
+      setVenueMap('');
+      setIsNewVenue(true);
+    }
+    setVenueNameOpen(false);
+  }, [venues]);
+
+  // Handle manual venue name input
+  const handleVenueNameInput = useCallback((value: string) => {
+    setVenueName(value);
+    // Check if this matches an existing venue
+    const venue = venues.find(v => v.name.toLowerCase() === value.toLowerCase());
+    if (venue) {
+      setVenueCity(venue.city);
+      setVenueArea(venue.area);
+      setVenueMap(venue.googleMap);
+      setIsNewVenue(false);
+    } else if (value.trim()) {
+      setIsNewVenue(true);
+    }
+  }, [venues]);
 
   const eventName = event.eventName || '';
   const monthName = event.eventMonth ? getMonthName(parseInt(event.eventMonth)) : '';
@@ -163,6 +230,11 @@ export const FullScreenEventCard = ({
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      // If this is a new venue, add it to the sheet first
+      if (isNewVenue && venueType && venueName.trim()) {
+        await addNewVenue(venueType, venueName.trim(), venueCity, venueArea, venueMap);
+      }
+
       const updates = {
         venueType,
         venueName,
@@ -475,37 +547,136 @@ export const FullScreenEventCard = ({
 
           {/* Venue Details Section */}
           <div className="space-y-3 bg-slate-800/40 rounded-lg p-4 border border-slate-700/40">
-            <div className="flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-amber-400" />
-              <span className="text-sm font-semibold text-amber-400">Venue Details</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-amber-400" />
+                <span className="text-sm font-semibold text-amber-400">Venue Details</span>
+              </div>
+              {isNewVenue && venueName.trim() && (
+                <Badge variant="outline" className="text-xs bg-emerald-500/20 text-emerald-300 border-emerald-500/30">
+                  + New venue will be saved
+                </Badge>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-amber-400/80">Type</Label>
-                <Select value={venueType} onValueChange={setVenueType}>
-                  <SelectTrigger className="bg-slate-900/60 border-slate-600/50 text-white hover:border-amber-400/50 focus:border-amber-400">
-                    <SelectValue placeholder="Select type..." />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-600">
-                    {VENUE_TYPE_OPTIONS.map(opt => (
-                      <SelectItem key={opt.value} value={opt.value || '__empty__'}>{opt.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={venueTypeOpen} onOpenChange={setVenueTypeOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={venueTypeOpen}
+                      className="w-full justify-between bg-slate-900/60 border-slate-600/50 text-white hover:border-amber-400/50 hover:bg-slate-800/60"
+                    >
+                      {venueType || "Select type..."}
+                      {isLoadingTypes ? (
+                        <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin opacity-50" />
+                      ) : (
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[200px] p-0 bg-slate-800 border-slate-600 z-[9999]">
+                    <Command className="bg-transparent">
+                      <CommandInput placeholder="Search type..." className="text-white" />
+                      <CommandList>
+                        <CommandEmpty>No venue type found.</CommandEmpty>
+                        <CommandGroup>
+                          {venueTypes.map((type) => (
+                            <CommandItem
+                              key={type}
+                              value={type}
+                              onSelect={() => handleVenueTypeChange(type)}
+                              className="text-white hover:bg-slate-700"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  venueType === type ? "opacity-100 text-amber-400" : "opacity-0"
+                                )}
+                              />
+                              {type}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-amber-400/80">Name</Label>
-                <Input 
-                  value={venueName} 
-                  onChange={e => setVenueName(e.target.value)}
-                  placeholder="Venue name"
-                  className="bg-slate-900/60 border-slate-600/50 text-white placeholder:text-slate-500 hover:border-amber-400/50 focus:border-amber-400"
-                />
+                <Popover open={venueNameOpen} onOpenChange={setVenueNameOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={venueNameOpen}
+                      disabled={!venueType}
+                      className="w-full justify-between bg-slate-900/60 border-slate-600/50 text-white hover:border-amber-400/50 hover:bg-slate-800/60 disabled:opacity-50"
+                    >
+                      <span className="truncate">{venueName || (venueType ? "Select or type..." : "Select type first")}</span>
+                      {isLoadingVenues ? (
+                        <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin opacity-50" />
+                      ) : (
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[250px] p-0 bg-slate-800 border-slate-600 z-[9999]">
+                    <Command className="bg-transparent">
+                      <CommandInput 
+                        placeholder="Search or add new..." 
+                        className="text-white"
+                        value={venueName}
+                        onValueChange={handleVenueNameInput}
+                      />
+                      <CommandList>
+                        <CommandEmpty>
+                          {venueName.trim() ? (
+                            <div 
+                              className="p-2 text-sm text-emerald-400 cursor-pointer hover:bg-slate-700"
+                              onClick={() => handleVenueSelect(venueName.trim())}
+                            >
+                              + Add "{venueName.trim()}" as new venue
+                            </div>
+                          ) : (
+                            "Type to search or add new..."
+                          )}
+                        </CommandEmpty>
+                        <CommandGroup>
+                          {venues.map((venue) => (
+                            <CommandItem
+                              key={venue.rowNumber}
+                              value={venue.name}
+                              onSelect={() => handleVenueSelect(venue.name)}
+                              className="text-white hover:bg-slate-700"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  venueName.toLowerCase() === venue.name.toLowerCase() ? "opacity-100 text-amber-400" : "opacity-0"
+                                )}
+                              />
+                              <div className="flex flex-col">
+                                <span>{venue.name}</span>
+                                {venue.city && (
+                                  <span className="text-xs text-slate-400">{venue.city}{venue.area ? `, ${venue.area}` : ''}</span>
+                                )}
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-amber-400/80">City</Label>
+                <Label className="text-xs font-medium text-amber-400/80">City {isNewVenue && <span className="text-emerald-400">(new)</span>}</Label>
                 <Input 
                   value={venueCity} 
                   onChange={e => setVenueCity(e.target.value)}
@@ -514,7 +685,7 @@ export const FullScreenEventCard = ({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-amber-400/80">Area</Label>
+                <Label className="text-xs font-medium text-amber-400/80">Area {isNewVenue && <span className="text-emerald-400">(new)</span>}</Label>
                 <Input 
                   value={venueArea} 
                   onChange={e => setVenueArea(e.target.value)}
@@ -524,7 +695,7 @@ export const FullScreenEventCard = ({
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-blue-400">Map Link</Label>
+              <Label className="text-xs font-medium text-blue-400">Map Link {isNewVenue && <span className="text-emerald-400">(new)</span>}</Label>
               <div className="flex gap-2">
                 <Input 
                   value={venueMap} 
@@ -583,16 +754,44 @@ export const FullScreenEventCard = ({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-purple-400/80">Type</Label>
-                <Select value={parlourType} onValueChange={setParlourType}>
-                  <SelectTrigger className="bg-slate-900/60 border-slate-600/50 text-white hover:border-purple-400/50 focus:border-purple-400">
-                    <SelectValue placeholder="Select type..." />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-600">
-                    {VENUE_TYPE_OPTIONS.map(opt => (
-                      <SelectItem key={opt.value} value={opt.value || '__empty__'}>{opt.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between bg-slate-900/60 border-slate-600/50 text-white hover:border-purple-400/50 hover:bg-slate-800/60"
+                    >
+                      {parlourType || "Select type..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[200px] p-0 bg-slate-800 border-slate-600 z-[9999]">
+                    <Command className="bg-transparent">
+                      <CommandInput placeholder="Search type..." className="text-white" />
+                      <CommandList>
+                        <CommandEmpty>No type found.</CommandEmpty>
+                        <CommandGroup>
+                          {venueTypes.map((type) => (
+                            <CommandItem
+                              key={type}
+                              value={type}
+                              onSelect={(val) => setParlourType(val)}
+                              className="text-white hover:bg-slate-700"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  parlourType === type ? "opacity-100 text-purple-400" : "opacity-0"
+                                )}
+                              />
+                              {type}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-purple-400/80">Name</Label>
