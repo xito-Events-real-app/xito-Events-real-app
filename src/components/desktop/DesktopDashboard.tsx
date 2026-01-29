@@ -23,7 +23,7 @@ import { getCurrentStatus, DropdownData } from "@/lib/sheets-api";
 import { parseEventDetails, getMonthName, NEPALI_MONTHS } from "@/lib/nepali-months";
 import { DesktopClientRow } from "./DesktopClientRow";
 import { ClientDetailSheet } from "@/components/dashboard/ClientDetailSheet";
-import { getStatusConfig, sortCategoriesByOrder } from "@/lib/status-config";
+import { getStatusConfig, sortCategoriesByOrder, normalizeStatus } from "@/lib/status-config";
 import {
   Users,
   CalendarPlus,
@@ -141,8 +141,11 @@ export function DesktopDashboard({
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     statsClients.forEach(client => {
-      const status = getCurrentStatus(client.statusLog || '').toUpperCase();
-      counts[status] = (counts[status] || 0) + 1;
+      const rawStatus = getCurrentStatus(client.statusLog || '').toUpperCase();
+      const status = normalizeStatus(rawStatus);
+      if (status !== 'UNTOUCHED') {
+        counts[status] = (counts[status] || 0) + 1;
+      }
     });
     return counts;
   }, [statsClients]);
