@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Phone, MessageCircle, Calendar, User, MapPin, Lock, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,6 +18,7 @@ interface BookedClientCardProps {
 
 const BookedClientCard = ({ client, onRefresh }: BookedClientCardProps) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [showPaymentDrawer, setShowPaymentDrawer] = useState(false);
   const [localPaymentsMade, setLocalPaymentsMade] = useState(client.paymentsMade || "");
   const [localRemainingPayment, setLocalRemainingPayment] = useState(client.remainingPayment || "");
@@ -130,7 +131,7 @@ const BookedClientCard = ({ client, onRefresh }: BookedClientCardProps) => {
           <div className="flex items-start justify-between mb-3">
             <div className="flex-1 min-w-0">
               <button 
-                onClick={() => navigate(getClientDetailPath(client))}
+                onClick={() => navigate(getClientDetailPath(client), { state: { from: location.pathname } })}
                 className="font-semibold text-white truncate hover:text-blue-400 transition-colors cursor-pointer text-left w-full"
               >
                 {client.clientName}

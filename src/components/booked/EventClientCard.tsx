@@ -1,5 +1,5 @@
 import { Phone, MessageCircle, Calendar, MapPin, AlertTriangle, User } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ interface EventClientCardProps {
 
 const EventClientCard = ({ client }: EventClientCardProps) => {
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Calculate days until event
   const getDaysUntilEvent = (): number | null => {
@@ -99,7 +100,7 @@ const EventClientCard = ({ client }: EventClientCardProps) => {
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1 min-w-0">
             <button 
-              onClick={() => navigate(getClientDetailPath(client))}
+              onClick={() => navigate(getClientDetailPath(client), { state: { from: location.pathname } })}
               className="font-semibold text-white truncate hover:text-blue-400 transition-colors cursor-pointer text-left w-full"
             >
               {client.clientName}

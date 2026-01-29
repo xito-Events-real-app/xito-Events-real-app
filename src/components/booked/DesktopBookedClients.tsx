@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, RefreshCw, Calendar, Users, Bell, AlertTriangle, Phone, MessageCircle, LayoutGrid, Table as TableIcon, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,6 +17,7 @@ import NepaliDate from "nepali-date-converter";
 
 const DesktopBookedClients = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [clients, setClients] = useState<BookedClientData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isMigrating, setIsMigrating] = useState(false);
@@ -219,7 +220,7 @@ const DesktopBookedClients = () => {
                       >
                         <TableCell>
                           <button 
-                            onClick={() => navigate(getClientDetailPath(client))}
+                            onClick={() => navigate(getClientDetailPath(client), { state: { from: location.pathname } })}
                             className="font-medium text-white hover:text-blue-400 transition-colors cursor-pointer text-left"
                           >
                             {client.clientName}

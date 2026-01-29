@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -69,6 +69,7 @@ export function DesktopBookedDashboard({
   allClients = [],
 }: DesktopBookedDashboardProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [showAllOpenDates, setShowAllOpenDates] = useState(false);
   const [showClientWise, setShowClientWise] = useState(false);
 
@@ -406,7 +407,7 @@ export function DesktopBookedDashboard({
                           <TableRow key={client.bookedRowNumber} className="hover:bg-muted/30">
                             <TableCell>
                               <button 
-                                onClick={() => navigate(getClientDetailPath(client))}
+                              onClick={() => navigate(getClientDetailPath(client), { state: { from: location.pathname } })}
                                 className="font-medium text-foreground hover:text-primary transition-colors cursor-pointer text-left"
                               >
                                 {client.clientName}
@@ -744,7 +745,7 @@ export function DesktopBookedDashboard({
                         return (
                           <button
                             key={`${client.name}-${client.registeredDateTimeAD}`}
-                            onClick={() => navigate(getClientDetailPath(client))}
+                            onClick={() => navigate(getClientDetailPath(client), { state: { from: location.pathname } })}
                             className={cn(
                               "border rounded-lg p-3 transition-all text-left w-full relative overflow-hidden",
                               "hover:border-green-500/50 hover:bg-green-500/5"
@@ -830,7 +831,7 @@ export function DesktopBookedDashboard({
                                   key={`${c.clientName}-${c.registeredDateTimeAD}-${i}`}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    navigate(getClientDetailPath(c));
+                                    navigate(getClientDetailPath(c), { state: { from: location.pathname } });
                                   }}
                                   className="w-full text-left text-[10px] text-muted-foreground truncate border-l-2 border-green-500 pl-2 hover:bg-green-500/10 rounded-r py-0.5 transition-colors cursor-pointer"
                                 >
