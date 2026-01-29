@@ -1,194 +1,200 @@
 
-
-# Client Details Section - Full Implementation Plan
+# Client Details Enhancement Plan
 
 ## Overview
 
-This plan implements a new "Client Details" section in the Client Detail page that displays comprehensive bride and groom contact/location information in an expandable card format (matching the Event Details pattern).
+This plan addresses 4 user requirements:
+1. **Automatic Syncing** - Sync booked clients to "BOOKED CLIENTS CONTACT DETAILS" sheet when app opens
+2. **Manual Resync Button** - Add a resync button on the Client Details form
+3. **Form Aesthetics** - Make the form more visually appealing for clients to fill out
+4. **WhatsApp Input** - Remove country code restriction, allow any number to be pasted
 
 ---
 
-## Part 1: Sidebar Navigation Updates
+## Part 1: Automatic Syncing on App Open
 
-### File: `src/components/client-detail/ClientDetailSidebar.tsx`
+### Backend: Add `fullSyncContactDetails` Action
 
-**Changes:**
-1. Add `Users` icon import from lucide-react
-2. Rename section ID from `'contact'` to `'clientDetails'`
-3. Update label from "Contact" to "Client Details"
-4. Reorder `sidebarItems` array to place Client Details directly after Event Details:
+**File: `supabase/functions/google-sheets/index.ts`**
 
-```
-dashboard -> events -> clientDetails -> registration -> inquiry -> sales -> activity -> comments -> financials
-```
+Add a new action similar to `fullSyncEventDetails` that:
+1. Fetches all clients from "BOOKED CLIENTS" sheet (Columns A-C)
+2. Checks which clients are missing in "BOOKED CLIENTS CONTACT DETAILS" sheet
+3. Creates rows for missing clients with A-C synced, D-AA empty
+4. Updates A-C for existing entries (preserving D-AA user data)
 
----
+### Frontend: Add Sync Helper Function
 
-## Part 2: Data Types and API Layer
+**File: `src/lib/sheets-api.ts`**
 
-### New File: `src/lib/client-contact-api.ts`
-
-Create TypeScript interfaces and API functions:
-
+Add export function:
 ```typescript
-export interface ClientContactDetails {
-  rowNumber: number;
-  registeredDateTimeAD: string;
-  registeredDateBS: string;
-  clientName: string;
-  
-  // Bride Details (Columns D-O)
-  brideFullName: string;
-  brideContactNumber: string;
-  brideWhatsappNumber: string;
-  brideBackupNumber: string;
-  brideBackupRelation: string;        // Mother / Father / Sister / Other
-  brideBackupNumber2: string;
-  brideBackupRelation2: string;
-  brideInstagram: string;             // Without @
-  brideHomeCity: string;
-  brideHomeArea: string;
-  brideHomeMap: string;               // Google Maps link
-  brideHomeLandmark: string;
-  
-  // Groom Details (Columns P-AA)
-  groomFullName: string;
-  groomContactNumber: string;
-  groomWhatsappNumber: string;
-  groomBackupNumber: string;
-  groomBackupRelation: string;        // Father / Brother / Other
-  groomBackupNumber2: string;
-  groomBackupRelation2: string;
-  groomInstagram: string;             // Without @
-  groomHomeCity: string;
-  groomHomeArea: string;
-  groomHomeMap: string;               // Google Maps link
-  groomHomeLandmark: string;
+export async function fullSyncContactDetails(): Promise<{ 
+  success: boolean; 
+  copiedCount: number; 
+  updatedCount: number; 
+  totalClients: number;
+}>
+```
+
+### Frontend: Trigger on App Load
+
+**Option A - Integration with Master Sync**
+
+**File: `src/components/suite/MasterSyncButton.tsx`**
+
+Add Phase 5 after Vendor Sync:
+- Label: "Contact Details"
+- Description: "Syncing client contact data..."
+- Call `fullSyncContactDetails()` API
+
+**Option B - Automatic on Client Detail Load**
+
+**File: `src/pages/ClientDetail.tsx`**
+
+On component mount, check if client exists in Contact Details sheet (already done via `getClientContactDetails` which auto-creates missing entries).
+
+**Recommended**: Combine both - auto-create on individual page load (already working) AND bulk sync during Master Sync.
+
+---
+
+## Part 2: Manual Resync Button on Client Details Form
+
+### UI Changes
+
+**File: `src/components/client-detail/ClientDetailsCard.tsx`**
+
+Add a "Resync" button next to Save/Cancel:
+```tsx
+<Button
+  variant="outline"
+  size="sm"
+  onClick={handleResync}
+  disabled={isResyncing}
+  className="border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10"
+>
+  {isResyncing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RefreshCw className="h-4 w-4 mr-1" />}
+  Resync
+</Button>
+```
+
+The resync will:
+1. Re-fetch the latest A-C data from BOOKED CLIENTS
+2. Update the CONTACT DETAILS sheet with refreshed client name/dates
+3. Refresh the form display
+
+### Props Update
+
+**File: `src/components/client-detail/ClientDetailsCard.tsx`**
+
+Add `onResync` prop:
+```typescript
+interface ClientDetailsCardProps {
+  data: ClientContactDetails | null;
+  isLoading: boolean;
+  onSave: (updates: Partial<ClientContactDetails>) => Promise<boolean>;
+  onResync: () => Promise<void>; // NEW
 }
 ```
 
----
+### Hook Update
 
-## Part 3: React Hook for Data Fetching
+**File: `src/hooks/useClientContactDetails.ts`**
 
-### New File: `src/hooks/useClientContactDetails.ts`
-
-Similar pattern to `useEventDetails.ts`:
-- `fetchContactDetails()` - fetches data from the sheet
-- `updateContactDetails()` - updates data in the sheet
-- Auto-creates row if client doesn't exist (syncing Columns A-C from BOOKED CLIENTS)
+Add `resyncClient` function that calls a new backend action to force-refresh A-C columns from BOOKED CLIENTS.
 
 ---
 
-## Part 4: Backend Edge Function
+## Part 3: Enhanced Form Aesthetics (Client-Facing)
 
-### File: `supabase/functions/google-sheets/index.ts`
+### Design Goals
+- More welcoming and elegant appearance
+- Clear visual hierarchy
+- Decorative elements (icons, gradients, subtle animations)
+- Better spacing and typography
+- Clear section headers with icons
+- Progress indicators for completion
 
-Add 2 new actions to the edge function:
+### UI Enhancements
 
-**1. `getClientContactDetails`**
-- Input: `registeredDateTimeAD`
-- Finds client in "BOOKED CLIENTS CONTACT DETAILS" sheet by Column A
-- If not found, auto-creates row with synced A-C data from BOOKED CLIENTS
-- Returns all contact fields (Columns D-AA)
-- Column mapping: A(0) through AA(26)
+**File: `src/components/client-detail/ClientDetailsCard.tsx`**
 
-**2. `updateClientContactDetails`**
-- Input: `registeredDateTimeAD`, `updates` (partial contact details)
-- Updates specified columns for the matching client
-- Uses row verification pattern (like event details)
+1. **Hero Header with Welcome Message**
+   ```tsx
+   <div className="text-center mb-6">
+     <h2 className="text-2xl font-bold text-white">Welcome! ✨</h2>
+     <p className="text-white/70">Please fill in your contact details</p>
+   </div>
+   ```
+
+2. **Section Cards with Icons and Gradients**
+   - Bride Section: Soft pink gradient with heart/crown icon
+   - Groom Section: Soft blue gradient with ring icon
+
+3. **Field Groupings with Decorative Headers**
+   ```tsx
+   <div className="relative mb-4">
+     <div className="flex items-center gap-3">
+       <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-400 to-rose-500 flex items-center justify-center">
+         <Phone className="h-5 w-5 text-white" />
+       </div>
+       <div>
+         <h4 className="font-semibold text-white">Contact Information</h4>
+         <p className="text-xs text-white/50">Primary and backup numbers</p>
+       </div>
+     </div>
+   </div>
+   ```
+
+4. **Input Styling Improvements**
+   - Larger input fields (h-12 instead of h-10)
+   - Rounded corners (rounded-xl)
+   - Subtle focus animations
+   - Helper text under each field
+
+5. **Completion Progress Indicator**
+   ```tsx
+   <div className="flex items-center gap-2 mb-4">
+     <Progress value={completionPercentage} className="h-2" />
+     <span className="text-sm text-white/60">{completionPercentage}% Complete</span>
+   </div>
+   ```
+
+6. **Decorative Elements**
+   - Subtle sparkle/heart decorations
+   - Gradient backgrounds
+   - Soft shadows and borders
 
 ---
 
-## Part 5: UI Component - ClientDetailsCard
+## Part 4: WhatsApp Number - Remove Country Code Restriction
 
-### New File: `src/components/client-detail/ClientDetailsCard.tsx`
+### Current Issue
+Using `PhoneInputField` which enforces Nepal country code format.
 
-Following the `FullScreenEventCard.tsx` pattern with expandable read/edit modes.
+### Solution
 
-### Form Structure (Edit Mode)
+**File: `src/components/client-detail/ClientDetailsCard.tsx`**
 
-**BRIDE'S DETAILS Section (Pink/Rose theme: `bg-pink-500/10`, `text-pink-400`)**
+Replace `PhoneInputField` for WhatsApp fields with a simple `Input`:
 
-| Field | Type | Placeholder/Options | Notes |
-|-------|------|---------------------|-------|
-| Full Name | Text Input | "Enter bride's full name (as per official records)" | Required |
-| Contact Number | PhoneInputField (NP) | "Enter bride's 10-digit Nepali mobile number" | Required |
-| WhatsApp Number | PhoneInputField (NP) | "Enter bride's WhatsApp number" | Checkbox: "Same as Contact Number" |
-| Backup Number | PhoneInputField (NP) | "Enter alternate Nepali mobile number" | |
-| Backup Relation | Select | Mother / Father / Sister / Other | |
-| Backup Number 2 | PhoneInputField (NP) | "Enter second alternate mobile (optional)" | Optional |
-| Backup Relation 2 | Select | Mother / Father / Sister / Other | |
-| Instagram Handle | Text Input | "Enter Instagram username (without @)" | Prefix shown as "@" |
-| Home City | Combobox | Nepal cities from `nepal-cities.ts` | |
-| Home Area | Text Input | "Enter locality / area name" | |
-| Google Map Location | Text Input | "Paste Google Maps location link" | Button: "Open Google Maps" |
-| Home Landmark | Text Input | "Enter nearby landmark" | |
-
-**GROOM'S DETAILS Section (Blue/Indigo theme: `bg-blue-500/10`, `text-blue-400`)**
-
-| Field | Type | Placeholder/Options | Notes |
-|-------|------|---------------------|-------|
-| Full Name | Text Input | "Enter groom's full name (as per official records)" | Required |
-| Contact Number | PhoneInputField (NP) | "Enter groom's 10-digit Nepali mobile number" | Required |
-| WhatsApp Number | PhoneInputField (NP) | "Enter groom's WhatsApp number" | Checkbox: "Same as Contact Number" |
-| Backup Number | PhoneInputField (NP) | "Enter alternate Nepali mobile number" | |
-| Backup Relation | Select | Father / Brother / Other | |
-| Backup Number 2 | PhoneInputField (NP) | "Enter second alternate mobile (optional)" | Optional |
-| Backup Relation 2 | Select | Father / Brother / Other | |
-| Instagram Handle | Text Input | "Enter Instagram username (without @)" | Prefix shown as "@" |
-| Home City | Combobox | Nepal cities from `nepal-cities.ts` | |
-| Home Area | Text Input | "Enter locality / area name" | |
-| Google Map Location | Text Input | "Paste Google Maps location link" | Button: "Open Google Maps" |
-| Home Landmark | Text Input | "Enter nearby landmark" | |
-
-### Read-Only View (Collapsed State)
-
+```tsx
+<Input
+  value={brideWhatsappNumber}
+  onChange={(e) => setBrideWhatsappNumber(e.target.value)}
+  placeholder="Enter WhatsApp number (paste any format)"
+  type="tel"
+  className="bg-white/5 border-white/20 text-white"
+/>
 ```
-+------------------------------------------------------------+
-| [Users Icon] CLIENT DETAILS       [Filled/Empty Badge]     |
-|                                            [Expand Button] |
-+------------------------------------------------------------+
-| LEFT: BRIDE                    | RIGHT: GROOM              |
-| Name: [name]                   | Name: [name]              |
-| Contact: [clickable tel]       | Contact: [clickable tel]  |
-| WhatsApp: [clickable wa]       | WhatsApp: [clickable wa]  |
-| Instagram: [@handle link]      | Instagram: [@handle link] |
-| Home: [city, area] [map icon]  | Home: [city, area] [map]  |
-+------------------------------------------------------------+
-```
 
-### Special Features
+This allows clients to paste:
+- `+977 9801234567`
+- `9801234567`
+- `+1 555-123-4567`
+- Any international format
 
-1. **"Same as Contact" Toggle**: For WhatsApp numbers, show a Switch component that auto-copies the contact number
-2. **External Links**: 
-   - Phone numbers: `tel:` links
-   - WhatsApp: `https://wa.me/` links
-   - Instagram: `https://instagram.com/[handle]` links
-   - Maps: External link icon that opens in new tab
-3. **Empty State**: "No contact details recorded. Click to add bride and groom information."
-4. **Validation**: Phone fields use Nepal (NP) as default country
-
----
-
-## Part 6: ClientDetail Page Integration
-
-### File: `src/pages/ClientDetail.tsx`
-
-**Changes:**
-1. Update `SectionType` import to include `'clientDetails'`
-2. Import and use `useClientContactDetails` hook
-3. Import `ClientDetailsCard` component
-4. Update mobile tabs array with new section order
-5. Replace old "Contact" section render with new `ClientDetailsCard`
-
----
-
-## Part 7: Export Updates
-
-### File: `src/components/client-detail/index.ts`
-
-Add export for the new `ClientDetailsCard` component.
+The `formatWhatsAppLink` helper in `client-contact-api.ts` already handles stripping non-digits.
 
 ---
 
@@ -196,65 +202,108 @@ Add export for the new `ClientDetailsCard` component.
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `src/components/client-detail/ClientDetailSidebar.tsx` | Modify | Rename section, update icon, reorder tabs |
-| `src/lib/client-contact-api.ts` | Create | TypeScript interfaces |
-| `src/hooks/useClientContactDetails.ts` | Create | Data fetching/updating hook |
-| `supabase/functions/google-sheets/index.ts` | Modify | Add 2 new actions |
-| `src/components/client-detail/ClientDetailsCard.tsx` | Create | Expandable UI component with form |
-| `src/pages/ClientDetail.tsx` | Modify | Integrate new section |
-| `src/components/client-detail/index.ts` | Modify | Export new component |
+| `supabase/functions/google-sheets/index.ts` | Modify | Add `fullSyncContactDetails` and `resyncClientContactDetails` actions |
+| `src/lib/sheets-api.ts` | Modify | Add `fullSyncContactDetails()` export function |
+| `src/components/suite/MasterSyncButton.tsx` | Modify | Add Phase 5 for Contact Details sync |
+| `src/hooks/useClientContactDetails.ts` | Modify | Add `resyncClient` function |
+| `src/components/client-detail/ClientDetailsCard.tsx` | Modify | Add resync button, enhance form UI, change WhatsApp inputs |
 
 ---
 
-## Sheet Column Mapping
+## Technical Details
 
-| Column | Index | Field |
-|--------|-------|-------|
-| A | 0 | registeredDateTimeAD (synced) |
-| B | 1 | registeredDateBS (synced) |
-| C | 2 | clientName (synced) |
-| D | 3 | brideFullName |
-| E | 4 | brideContactNumber |
-| F | 5 | brideWhatsappNumber |
-| G | 6 | brideBackupNumber |
-| H | 7 | brideBackupRelation |
-| I | 8 | brideBackupNumber2 |
-| J | 9 | brideBackupRelation2 |
-| K | 10 | brideInstagram |
-| L | 11 | brideHomeCity |
-| M | 12 | brideHomeArea |
-| N | 13 | brideHomeMap |
-| O | 14 | brideHomeLandmark |
-| P | 15 | groomFullName |
-| Q | 16 | groomContactNumber |
-| R | 17 | groomWhatsappNumber |
-| S | 18 | groomBackupNumber |
-| T | 19 | groomBackupRelation |
-| U | 20 | groomBackupNumber2 |
-| V | 21 | groomBackupRelation2 |
-| W | 22 | groomInstagram |
-| X | 23 | groomHomeCity |
-| Y | 24 | groomHomeArea |
-| Z | 25 | groomHomeMap |
-| AA | 26 | groomHomeLandmark |
+### New Backend Action: `fullSyncContactDetails`
+
+```typescript
+async function fullSyncContactDetails(accessToken: string, spreadsheetId: string) {
+  // 1. Fetch all BOOKED CLIENTS data (A-C)
+  const bookedRange = "'BOOKED CLIENTS'!A2:C2000";
+  
+  // 2. Fetch existing CONTACT DETAILS entries
+  const contactRange = "'BOOKED CLIENTS CONTACT DETAILS'!A2:C2000";
+  
+  // 3. Build map of existing entries by registeredDateTimeAD
+  
+  // 4. For each booked client:
+  //    - If exists: Update A-C only (preserve D-AA)
+  //    - If missing: Create new row with A-C, empty D-AA
+  
+  return { copiedCount, updatedCount, totalClients };
+}
+```
+
+### New Backend Action: `resyncClientContactDetails`
+
+```typescript
+async function resyncClientContactDetails(
+  accessToken: string, 
+  spreadsheetId: string, 
+  registeredDateTimeAD: string
+) {
+  // 1. Get latest data from BOOKED CLIENTS for this client
+  // 2. Update A-C in CONTACT DETAILS sheet
+  // 3. Return refreshed data
+}
+```
+
+### WhatsApp Input Changes
+
+For WhatsApp fields, use plain `<Input type="tel">` instead of `PhoneInputField`:
+- No country code dropdown
+- No formatting restrictions
+- Client can paste any phone number format
+- Backend handles cleanup when generating WhatsApp links
 
 ---
 
-## UI/UX Design Notes
+## UI Mockup - Enhanced Form
 
-1. **Color Scheme**:
-   - Bride section: Pink/Rose accent (`bg-pink-500/10`, `text-pink-400`, `border-pink-500/30`)
-   - Groom section: Blue/Indigo accent (`bg-blue-500/10`, `text-blue-400`, `border-blue-500/30`)
+```
+╔══════════════════════════════════════════════════════════════╗
+║  ✨ CLIENT DETAILS FORM ✨                    [Resync] [Save] ║
+║                                                               ║
+║  ┌─────────────────────────────────────────────────────────┐  ║
+║  │ Progress: ████████░░░░░░░░ 45% Complete                 │  ║
+║  └─────────────────────────────────────────────────────────┘  ║
+║                                                               ║
+║  ┌─────────────────── 👰 BRIDE'S DETAILS ──────────────────┐  ║
+║  │ 🌸 Pink gradient background                              │  ║
+║  │                                                          │  ║
+║  │  ┌── 📞 Contact Information ──┐                          │  ║
+║  │  │ Full Name: [____________]  │                          │  ║
+║  │  │ Contact:   [+977 ________] │                          │  ║
+║  │  │ WhatsApp:  [____________]  │ (any format)             │  ║
+║  │  └────────────────────────────┘                          │  ║
+║  │                                                          │  ║
+║  │  ┌── 👥 Backup Contacts ──────┐                          │  ║
+║  │  │ Backup 1: [___] Relation: [Mother ▼]                  │  ║
+║  │  │ Backup 2: [___] Relation: [Father ▼]                  │  ║
+║  │  └────────────────────────────┘                          │  ║
+║  │                                                          │  ║
+║  │  ┌── 📍 Address ──────────────┐                          │  ║
+║  │  │ City: [Kathmandu ▼] Area: [___]                       │  ║
+║  │  │ Map Link: [___________] [🔗]                          │  ║
+║  │  │ Landmark: [___________]                               │  ║
+║  │  └────────────────────────────┘                          │  ║
+║  └──────────────────────────────────────────────────────────┘  ║
+║                                                               ║
+║  ┌─────────────────── 🤵 GROOM'S DETAILS ──────────────────┐  ║
+║  │ 💙 Blue gradient background                              │  ║
+║  │ ... (Same structure as Bride)                            │  ║
+║  └──────────────────────────────────────────────────────────┘  ║
+╚══════════════════════════════════════════════════════════════╝
+```
 
-2. **Dark Theme Styling**: Following the `FullScreenEventCard` pattern with `bg-slate-800` containers
+---
 
-3. **Responsive Layout**: Two-column layout on desktop, stacked on mobile
+## Implementation Order
 
-4. **Form Field Groupings**:
-   - Personal Info (Name, Primary Contact, WhatsApp)
-   - Backup Contacts (2 backup numbers with relations)
-   - Social (Instagram)
-   - Address (City, Area, Map, Landmark)
-
-5. **Quick Actions**: All phone/WhatsApp numbers are clickable to open respective apps
-
+1. **Backend first**: Add `fullSyncContactDetails` and `resyncClientContactDetails` actions
+2. **Sheets API**: Add frontend wrapper function
+3. **Master Sync**: Add Phase 5 for bulk contact sync
+4. **Hook Update**: Add resync capability to `useClientContactDetails`
+5. **Form Enhancement**: Update ClientDetailsCard with:
+   - Resync button
+   - Plain Input for WhatsApp fields
+   - Enhanced visual styling
+6. **Deploy and test**
