@@ -2,8 +2,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Rocket } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
-import { getClients, getDropdowns, fullResyncAllBookedClients, fullSyncEventDetails, fullSyncContactDetails } from "@/lib/sheets-api";
-import { setCachedData, notifyCacheUpdate, CACHE_SCHEMA_VERSION } from "@/lib/cache-manager";
+import { getClients, getDropdowns, fullResyncAllBookedClients, fullSyncEventDetails, fullSyncContactDetails, getBookedClients } from "@/lib/sheets-api";
+import { setCachedData, notifyCacheUpdate, CACHE_SCHEMA_VERSION, setCachedBookedClients } from "@/lib/cache-manager";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -73,6 +73,12 @@ export function MasterSyncButton() {
       setProgress(30);
       
       const bookedResult = await fullResyncAllBookedClients(true);
+      
+      // Refresh booked clients cache after sync
+      setProgress(40);
+      const freshBookedClients = await getBookedClients(500);
+      await setCachedBookedClients(freshBookedClients);
+      notifyCacheUpdate('booked-clients', freshBookedClients);
       
       setSyncStats(prev => ({ ...prev, synced: bookedResult.syncedCount + bookedResult.copiedCount }));
       setProgress(50);

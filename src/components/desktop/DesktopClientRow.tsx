@@ -86,6 +86,7 @@ import {
 import { bsToAD } from "@/lib/nepali-date";
 import { getStatusConfig } from "@/lib/status-config";
 import { FinalQuotationDialog, AdvancePaymentDialog } from "@/components/status-dialogs";
+import { notifyCacheUpdate } from "@/lib/cache-manager";
 
 interface DesktopClientRowProps {
   client: ClientData;
@@ -435,6 +436,9 @@ export function DesktopClientRow({
           statusLog: statusResult.statusLog
         });
       }
+      
+      // Invalidate booked clients cache to force refresh on next access
+      notifyCacheUpdate('booked-clients-invalidate');
       
       toast.success(`Payment recorded & status updated to BOOKED`);
       setShowBookedPaymentDialog(false);

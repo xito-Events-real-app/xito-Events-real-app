@@ -21,7 +21,7 @@ import {
 import { useCachedData } from "@/hooks/useCachedData";
 import { useDropdownData } from "@/hooks/useDropdownData";
 import { updateClient, ClientData, updateClientStatus, logCallAttempt, addPayment, updateClientQuotation, addClientComment, updateFinalQuotation } from "@/lib/sheets-api";
-import { forceResetDatabase } from "@/lib/cache-manager";
+import { forceResetDatabase, notifyCacheUpdate } from "@/lib/cache-manager";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { 
@@ -829,6 +829,9 @@ const ClientDetail = () => {
           statusLog: statusResult.statusLog
         });
       }
+      
+      // Invalidate booked clients cache to force refresh on next access
+      notifyCacheUpdate('booked-clients-invalidate');
       
       toast({ title: `Payment recorded & status updated to BOOKED` });
       setShowBookedPaymentDialog(false);

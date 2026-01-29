@@ -259,7 +259,7 @@ export async function clearCache(): Promise<void> {
 // Debounced cache update notification
 let cacheUpdateTimeout: ReturnType<typeof setTimeout> | null = null;
 
-export function notifyCacheUpdate(type: 'clients' | 'dropdowns' | 'all' | 'booked-clients', data?: unknown): void {
+export function notifyCacheUpdate(type: 'clients' | 'dropdowns' | 'all' | 'booked-clients' | 'booked-clients-invalidate', data?: unknown): void {
   if (cacheUpdateTimeout) {
     clearTimeout(cacheUpdateTimeout);
   }
