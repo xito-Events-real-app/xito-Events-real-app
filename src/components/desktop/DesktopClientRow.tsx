@@ -85,6 +85,7 @@ import {
 } from "@/lib/sheets-api";
 import { bsToAD } from "@/lib/nepali-date";
 import { getStatusConfig } from "@/lib/status-config";
+import { FinalQuotationDialog, AdvancePaymentDialog } from "@/components/status-dialogs";
 
 interface DesktopClientRowProps {
   client: ClientData;
@@ -157,6 +158,15 @@ export function DesktopClientRow({
   const [showFinalQuotationDialog, setShowFinalQuotationDialog] = useState(false);
   const [showPaymentDrawer, setShowPaymentDrawer] = useState(false);
   const [showPaymentCalendar, setShowPaymentCalendar] = useState(false);
+  
+  // ADVANCE PENDING interception state
+  const [showAdvancePendingDialog, setShowAdvancePendingDialog] = useState(false);
+  const [isSavingAdvancePending, setIsSavingAdvancePending] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState('');
+  
+  // BOOKED interception state
+  const [showBookedPaymentDialog, setShowBookedPaymentDialog] = useState(false);
+  const [isSavingBookedPayment, setIsSavingBookedPayment] = useState(false);
 
   // Form states
   const [quotationAmounts, setQuotationAmounts] = useState<Record<string, string>>({});
@@ -298,6 +308,23 @@ export function DesktopClientRow({
       return;
     }
     
+    // INTERCEPT: If moving to ADVANCE PENDING, show final quotation dialog
+    const isToAdvancePending = newStatus.toUpperCase().includes('ADVANCE PENDING');
+    if (isToAdvancePending) {
+      setPendingStatus(newStatus);
+      setShowAdvancePendingDialog(true);
+      return;
+    }
+    
+    // INTERCEPT: If moving to BOOKED (but not BOOKED SOMEWHERE ELSE), show payment dialog
+    const isToBooked = newStatus.toUpperCase().includes('BOOKED') && 
+                       !newStatus.toUpperCase().includes('SOMEWHERE ELSE');
+    if (isToBooked) {
+      setPendingStatus(newStatus);
+      setShowBookedPaymentDialog(true);
+      return;
+    }
+    
     setIsUpdatingStatus(true);
     try {
       const result = await updateClientStatus(client.rowNumber, newStatus, currentStatusLog);
@@ -316,6 +343,107 @@ export function DesktopClientRow({
       toast.error('Failed to update status');
     } finally {
       setIsUpdatingStatus(false);
+    }
+  };
+
+  // Handle ADVANCE PENDING final quotation save
+  const handleSaveAdvancePendingQuotation = async (packageName: string, amount: string) => {
+    if (!client.rowNumber) return;
+    
+    const finalData = `${packageName}: NPR ${formatNPR(amount)}/-`;
+    
+    setIsSavingAdvancePending(true);
+    try {
+      // Save final quotation
+      const quotationResult = await updateFinalQuotation(client.rowNumber, finalData);
+      setCurrentFinalQuotation(quotationResult.finalQuotation);
+      
+      // Update status to ADVANCE PENDING
+      const statusResult = await updateClientStatus(client.rowNumber, pendingStatus, currentStatusLog);
+      setCurrentStatusLog(statusResult.statusLog);
+      
+      // Trigger green flash animation
+      setShowSuccessFlash(true);
+      setTimeout(() => setShowSuccessFlash(false), 1000);
+      
+      if (onClientUpdate) {
+        onClientUpdate({
+          ...client,
+          finalQuotation: quotationResult.finalQuotation,
+          statusLog: statusResult.statusLog
+        });
+      }
+      
+      toast.success('Final quotation locked & status updated to ADVANCE PENDING');
+      setShowAdvancePendingDialog(false);
+      setPendingStatus('');
+    } catch (err) {
+      console.error('Failed to save final quotation:', err);
+      toast.error('Failed to save final quotation');
+    } finally {
+      setIsSavingAdvancePending(false);
+    }
+  };
+
+  // Handle BOOKED advance payment save
+  const handleSaveBookedPayment = async (data: {
+    amount: string;
+    paymentType: string;
+    bank: string;
+    nepaliDate: string;
+    adDate: string;
+  }) => {
+    if (!client.rowNumber) return;
+    
+    const parsedFinal = parseFinalQuotation(currentFinalQuotation);
+    const finalAmount = parsedFinal ? parseInt(parsedFinal.amount.replace(/[^0-9]/g, '')) : 0;
+    
+    setIsSavingBookedPayment(true);
+    try {
+      // Add payment
+      const paymentResult = await addPayment(
+        client.rowNumber,
+        data.amount,
+        data.paymentType,
+        data.nepaliDate,
+        data.adDate,
+        data.bank,
+        currentPaymentsMade,
+        currentPaymentDatesAD,
+        finalAmount,
+        client.registeredDateTimeAD,
+        'tracker',
+        client.clientName
+      );
+      
+      setCurrentPaymentsMade(paymentResult.paymentsMade);
+      setCurrentRemainingPayment(paymentResult.remainingPayment);
+      
+      // Update status to BOOKED
+      const statusResult = await updateClientStatus(client.rowNumber, pendingStatus, currentStatusLog);
+      setCurrentStatusLog(statusResult.statusLog);
+      
+      // Trigger green flash animation
+      setShowSuccessFlash(true);
+      setTimeout(() => setShowSuccessFlash(false), 1000);
+      
+      if (onClientUpdate) {
+        onClientUpdate({
+          ...client,
+          paymentsMade: paymentResult.paymentsMade,
+          remainingPayment: paymentResult.remainingPayment,
+          statusLog: statusResult.statusLog
+        });
+      }
+      
+      toast.success(`Payment recorded & status updated to BOOKED`);
+      setShowBookedPaymentDialog(false);
+      setPendingStatus('');
+    } catch (err) {
+      console.error('Failed to save payment:', err);
+      toast.error('Failed to record payment');
+    } finally {
+      setIsSavingBookedPayment(false);
     }
   };
 
@@ -1837,6 +1965,38 @@ export function DesktopClientRow({
           </ScrollArea>
         </DrawerContent>
       </Drawer>
+
+      {/* ADVANCE PENDING - Final Quotation Dialog */}
+      <FinalQuotationDialog
+        open={showAdvancePendingDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowAdvancePendingDialog(false);
+            setPendingStatus('');
+          }
+        }}
+        clientName={client.clientName || ''}
+        existingQuotationData={currentQuotationData}
+        onSave={handleSaveAdvancePendingQuotation}
+        isSaving={isSavingAdvancePending}
+      />
+
+      {/* BOOKED - Advance Payment Dialog */}
+      <AdvancePaymentDialog
+        open={showBookedPaymentDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowBookedPaymentDialog(false);
+            setPendingStatus('');
+          }
+        }}
+        clientName={client.clientName || ''}
+        finalQuotation={currentFinalQuotation}
+        paymentTypes={paymentTypes}
+        banks={banks}
+        onSave={handleSaveBookedPayment}
+        isSaving={isSavingBookedPayment}
+      />
     </>
   );
 }
