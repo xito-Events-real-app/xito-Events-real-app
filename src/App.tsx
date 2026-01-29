@@ -61,7 +61,7 @@ const App = () => (
           <Sonner />
           <Routes>
             {/* Public routes - no auth required */}
-            <Route path="/client-form/:clientId" element={<ClientContactForm />} />
+            <Route path="/client-form/:clientName/:clientId" element={<ClientContactForm />} />
             <Route path="/login" element={<Login />} />
             
             {/* Protected routes */}

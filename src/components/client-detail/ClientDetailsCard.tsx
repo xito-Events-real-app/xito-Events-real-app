@@ -216,12 +216,13 @@ export const ClientDetailsCard = ({ data, isLoading, isResyncing, onSave, onResy
   const hasFilled = hasFilledContactDetails(data);
   const formSentDate = data?.formSentDate;
   const registeredDateTimeAD = data?.registeredDateTimeAD;
+  const clientName = data?.clientName;
 
   // Handle Copy Link
   const handleCopyLink = async () => {
     if (!registeredDateTimeAD) return;
     
-    const link = getClientFormUrl(registeredDateTimeAD);
+    const link = getClientFormUrl(registeredDateTimeAD, clientName);
     try {
       await navigator.clipboard.writeText(link);
       toast({
@@ -244,7 +245,7 @@ export const ClientDetailsCard = ({ data, isLoading, isResyncing, onSave, onResy
     
     setIsSendingToWhatsApp(true);
     try {
-      const message = generateFormWhatsAppMessage(registeredDateTimeAD);
+      const message = generateFormWhatsAppMessage(registeredDateTimeAD, clientName);
       const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
       
       // Open WhatsApp

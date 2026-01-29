@@ -70,18 +70,29 @@ export const emptyContactDetails: Omit<ClientContactDetails, 'rowNumber' | 'regi
   formSentDate: '',
 };
 
+// Generate URL-friendly slug from client name
+function slugifyName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '') // Remove special chars
+    .replace(/\s+/g, '-') // Replace spaces with hyphens
+    .replace(/-+/g, '-') // Remove consecutive hyphens
+    .trim();
+}
+
 // Generate the in-app form URL for a client
 // This URL is completely isolated - clients can only see the form
-export function getClientFormUrl(registeredDateTimeAD: string): string {
+export function getClientFormUrl(registeredDateTimeAD: string, clientName?: string): string {
   const encodedId = encodeURIComponent(registeredDateTimeAD);
+  const nameSlug = clientName ? slugifyName(clientName) : 'client';
   // Temporarily using main app URL until custom domain is active
   // TODO: Switch back to https://forms.bookedclientscontactdetails.chickenkiller.com once domain is verified
-  return `https://wtnclienttracker.lovable.app/client-form/${encodedId}`;
+  return `https://wtnclienttracker.lovable.app/client-form/${nameSlug}/${encodedId}`;
 }
 
 // Generate WhatsApp message with form link
-export function generateFormWhatsAppMessage(registeredDateTimeAD: string): string {
-  const formUrl = getClientFormUrl(registeredDateTimeAD);
+export function generateFormWhatsAppMessage(registeredDateTimeAD: string, clientName?: string): string {
+  const formUrl = getClientFormUrl(registeredDateTimeAD, clientName);
   return `Hello 👋
 Greetings from Wedding Tales Nepal 💍✨
 
