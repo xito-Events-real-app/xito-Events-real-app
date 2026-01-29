@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BookedClientData } from "@/lib/sheets-api";
 import { getMonthName } from "@/lib/nepali-months";
+import { getClientDetailPath } from "@/lib/client-navigation";
 import NepaliDate from "nepali-date-converter";
 
 interface EventClientCardProps {
@@ -98,10 +99,7 @@ const EventClientCard = ({ client }: EventClientCardProps) => {
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1 min-w-0">
             <button 
-              onClick={() => {
-                const clientId = client.originalRowNumber || encodeURIComponent(client.registeredDateTimeAD || '');
-                navigate(`/client-tracker/client/${clientId}`);
-              }}
+              onClick={() => navigate(getClientDetailPath(client))}
               className="font-semibold text-white truncate hover:text-blue-400 transition-colors cursor-pointer text-left w-full"
             >
               {client.clientName}

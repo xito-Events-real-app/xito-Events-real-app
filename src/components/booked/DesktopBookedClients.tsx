@@ -12,6 +12,7 @@ import { getBookedClients, migrateExistingBookedClients, fullResyncAllBookedClie
 import EventClientCard from "./EventClientCard";
 import NepaliDateFilter from "./NepaliDateFilter";
 import { getMonthName, parseEventDetails } from "@/lib/nepali-months";
+import { getClientDetailPath } from "@/lib/client-navigation";
 import NepaliDate from "nepali-date-converter";
 
 const DesktopBookedClients = () => {
@@ -218,10 +219,7 @@ const DesktopBookedClients = () => {
                       >
                         <TableCell>
                           <button 
-                            onClick={() => {
-                              const clientId = client.originalRowNumber || encodeURIComponent(client.registeredDateTimeAD || '');
-                              navigate(`/client-tracker/client/${clientId}`);
-                            }}
+                            onClick={() => navigate(getClientDetailPath(client))}
                             className="font-medium text-white hover:text-blue-400 transition-colors cursor-pointer text-left"
                           >
                             {client.clientName}
