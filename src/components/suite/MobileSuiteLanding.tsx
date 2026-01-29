@@ -1,5 +1,5 @@
 import { suiteModules } from "@/lib/suite-modules";
-import { Construction } from "lucide-react";
+import { Construction, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { GlobalModeToggle } from "@/components/layout/GlobalModeToggle";
@@ -10,11 +10,21 @@ import { MasterSyncButton } from "./MasterSyncButton";
 import { useSuiteStats } from "@/hooks/useSuiteStats";
 import { formatNPR } from "@/lib/client-card-utils";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
+import { useNavigate } from "react-router-dom";
 
 export function MobileSuiteLanding() {
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
   const activeModules = suiteModules.filter(m => m.status === 'active');
   const comingSoonModules = suiteModules.filter(m => m.status === 'coming-soon');
   const stats = useSuiteStats();
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/login', { replace: true });
+  };
 
   const handleComingSoonClick = (moduleName: string) => {
     toast.info(`${moduleName} is coming soon!`, {
@@ -71,13 +81,23 @@ export function MobileSuiteLanding() {
 
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-4 pb-2 bg-white border-b border-gray-200">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">Xito Business Suite</h1>
-          <p className="text-sm text-gray-500">Your complete business toolkit</p>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg shadow-violet-500/30">
+            <span className="text-white font-bold text-lg">X</span>
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-gray-900">Xito Business Suite</h1>
+            <p className="text-xs text-gray-500">Your complete business toolkit</p>
+          </div>
         </div>
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg shadow-violet-500/30">
-          <span className="text-white font-bold text-xl">X</span>
-        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleLogout}
+          className="text-gray-500 hover:text-red-600 hover:bg-red-50"
+        >
+          <LogOut className="w-5 h-5" />
+        </Button>
       </div>
 
       <div className="px-4 py-4 space-y-5 animate-fade-in max-w-lg mx-auto">
