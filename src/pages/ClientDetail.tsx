@@ -52,7 +52,7 @@ import { EventSelector } from "@/components/form/EventSelector";
 import { getCountryCodeFromName } from "@/components/form/CountrySelector";
 import { valleyCities, nepalCitiesOutsideValley, clientLocationOptions } from "@/lib/form-data";
 import PaymentDrawer from "@/components/finance/PaymentDrawer";
-import { ClientDetailSidebar, ClientHeroSection, SectionType, EventDetailsSummaryCard } from "@/components/client-detail";
+import { ClientDetailSidebar, ClientHeroSection, SectionType, EventDetailsSummaryCard, FullScreenEventCard } from "@/components/client-detail";
 import { EventDetailCard } from "@/components/client-detail/EventDetailCard";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useEventDetails } from "@/hooks/useEventDetails";
@@ -1155,10 +1155,18 @@ const ClientDetail = () => {
             />
           )}
 
-          {/* Events Section */}
+          {/* Events Section - Full Screen Expandable View */}
           {activeSection === 'events' && (
             <div className="space-y-4">
-              <h2 className="text-xl font-bold text-white mb-4">Events & Dates</h2>
+              {/* Compact Header with Client Name and Handler */}
+              <div className="flex items-center justify-between py-2 px-1 border-b border-white/10 mb-4">
+                <h2 className="text-lg font-bold text-white">{client.clientName}</h2>
+                {client.clientHandler && (
+                  <Badge variant="outline" className="text-xs text-white/70 border-white/30">
+                    Handler: {client.clientHandler}
+                  </Badge>
+                )}
+              </div>
               
               {events.length > 0 ? (
                 eventDetailsLoading ? (
@@ -1167,131 +1175,61 @@ const ClientDetail = () => {
                     <span className="ml-2 text-white/40">Loading event details...</span>
                   </div>
                 ) : (
-                  <>
-                    {/* Event Tabs */}
-                    <Tabs defaultValue={eventDetailsData?.events?.[0]?.eventIndex?.toString() || "0"} className="w-full">
-                      <TabsList className="w-full flex flex-wrap gap-1 h-auto p-1 bg-white/5 rounded-xl">
-                        {(eventDetailsData?.events || events.map((e, i) => ({ eventIndex: i, eventName: e.name, eventMonth: e.month, eventDay: e.day, eventYear: e.year }))).map((eventDetail: any) => {
-                          const upper = eventDetail.eventName?.toUpperCase() || '';
-                          const tabClass = upper.includes('WEDDING') ? 'data-[state=active]:bg-blue-500/30 data-[state=active]:text-blue-200' :
-                            upper.includes('RECEPTION') ? 'data-[state=active]:bg-purple-500/30 data-[state=active]:text-purple-200' :
-                            upper.includes('ENGAGEMENT') ? 'data-[state=active]:bg-pink-500/30 data-[state=active]:text-pink-200' :
-                            upper.includes('PRE') || upper.includes('MEHNDI') ? 'data-[state=active]:bg-orange-500/30 data-[state=active]:text-orange-200' :
-                            'data-[state=active]:bg-emerald-500/30 data-[state=active]:text-emerald-200';
-                          
-                          const monthName = eventDetail.eventMonth ? getMonthName(parseInt(eventDetail.eventMonth)) : '';
-                          
-                          return (
-                            <TabsTrigger 
-                              key={eventDetail.eventIndex} 
-                              value={eventDetail.eventIndex.toString()}
-                              className={`flex-1 min-w-[120px] flex flex-col items-center gap-0.5 px-3 py-2 rounded-lg text-white/60 ${tabClass}`}
-                            >
-                              <span className="font-semibold text-xs">{eventDetail.eventName}</span>
-                              <span className="text-[10px] opacity-70">
-                                {monthName} {eventDetail.eventDay}{eventDetail.eventYear ? `, ${eventDetail.eventYear}` : ''}
-                              </span>
-                            </TabsTrigger>
-                          );
-                        })}
-                      </TabsList>
-                      
-                      {/* Tab Content - Summary Cards */}
-                      {(eventDetailsData?.events || events.map((e, i) => ({
-                        eventIndex: i,
-                        eventName: e.name,
-                        eventYear: e.year || '',
-                        eventMonth: e.month || '',
-                        eventDay: e.day || '',
-                        eventDateAD: '',
-                        venueType: '',
-                        venueName: '',
-                        venueCity: '',
-                        venueArea: '',
-                        venueMap: '',
-                        eventStartTime: '',
-                        eventEndTime: '',
-                        parlourType: '',
-                        parlourName: '',
-                        parlourCity: '',
-                        parlourArea: '',
-                        parlourMap: '',
-                        parlourStartTime: '',
-                        parlourEndTime: '',
-                        doGroomComeInMehndi: '',
-                        guestCount: '',
-                        eventDemands: [],
-                        eventReferences: [],
-                      }))).map((eventDetail: any) => (
-                        <TabsContent key={eventDetail.eventIndex} value={eventDetail.eventIndex.toString()} className="mt-4">
-                          <EventDetailsSummaryCard
-                            event={eventDetail}
-                            onEdit={() => setEditingEventIndex(eventDetail.eventIndex)}
-                          />
-                        </TabsContent>
-                      ))}
-                    </Tabs>
+                  <div className="space-y-4">
+                    {(eventDetailsData?.events || events.map((e, i) => ({
+                      eventIndex: i,
+                      eventName: e.name,
+                      eventYear: e.year || '',
+                      eventMonth: e.month || '',
+                      eventDay: e.day || '',
+                      eventDateAD: '',
+                      venueType: '',
+                      venueName: '',
+                      venueCity: '',
+                      venueArea: '',
+                      venueMap: '',
+                      eventStartTime: '',
+                      eventEndTime: '',
+                      parlourType: '',
+                      parlourName: '',
+                      parlourCity: '',
+                      parlourArea: '',
+                      parlourMap: '',
+                      parlourStartTime: '',
+                      parlourEndTime: '',
+                      doGroomComeInMehndi: '',
+                      guestCount: '',
+                      eventDemands: [],
+                      eventReferences: [],
+                    }))).map((eventDetail: any) => {
+                      // Check if event is urgent (within 20 days and missing key fields)
+                      const isUrgent = (() => {
+                        if (!eventDetail.eventDateAD) return false;
+                        try {
+                          const eventDate = new Date(eventDetail.eventDateAD);
+                          const now = new Date();
+                          const daysUntil = Math.ceil((eventDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                          const isMissingFields = !eventDetail.venueName || !eventDetail.eventStartTime;
+                          return daysUntil <= 20 && daysUntil > 0 && isMissingFields;
+                        } catch { return false; }
+                      })();
 
-                    {/* Edit Event Details Sheet */}
-                    <Sheet open={editingEventIndex !== null} onOpenChange={(open) => !open && setEditingEventIndex(null)}>
-                      <SheetContent side="right" className="w-full sm:max-w-lg bg-background overflow-y-auto">
-                        <SheetHeader>
-                          <SheetTitle className="text-white">
-                            Edit Event Details
-                          </SheetTitle>
-                        </SheetHeader>
-                        {editingEventIndex !== null && (
-                          <div className="mt-4">
-                            {(() => {
-                              const eventToEdit = eventDetailsData?.events?.find(e => e.eventIndex === editingEventIndex) ||
-                                (events[editingEventIndex] ? {
-                                  eventIndex: editingEventIndex,
-                                  eventName: events[editingEventIndex].name,
-                                  eventYear: events[editingEventIndex].year || '',
-                                  eventMonth: events[editingEventIndex].month || '',
-                                  eventDay: events[editingEventIndex].day || '',
-                                  eventDateAD: '',
-                                  venueType: '',
-                                  venueName: '',
-                                  venueCity: '',
-                                  venueArea: '',
-                                  venueMap: '',
-                                  eventStartTime: '',
-                                  eventEndTime: '',
-                                  parlourType: '',
-                                  parlourName: '',
-                                  parlourCity: '',
-                                  parlourArea: '',
-                                  parlourMap: '',
-                                  parlourStartTime: '',
-                                  parlourEndTime: '',
-                                  doGroomComeInMehndi: '',
-                                  guestCount: '',
-                                  eventDemands: [],
-                                  eventReferences: [],
-                                } : null);
-                              
-                              if (!eventToEdit) return null;
-                              
-                              return (
-                                <EventDetailCard
-                                  event={eventToEdit}
-                                  eventDateAD={eventToEdit.eventDateAD}
-                                  onSave={async (eventIndex, updates) => {
-                                    const success = await updateEventDetail(eventIndex, updates);
-                                    if (success) {
-                                      setEditingEventIndex(null);
-                                    }
-                                    return success;
-                                  }}
-                                />
-                              );
-                            })()}
-                          </div>
-                        )}
-                      </SheetContent>
-                    </Sheet>
-                  </>
+                      return (
+                        <FullScreenEventCard
+                          key={eventDetail.eventIndex}
+                          event={eventDetail}
+                          isExpanded={editingEventIndex === eventDetail.eventIndex}
+                          onToggleExpand={() => {
+                            setEditingEventIndex(
+                              editingEventIndex === eventDetail.eventIndex ? null : eventDetail.eventIndex
+                            );
+                          }}
+                          onSave={updateEventDetail}
+                          isUrgent={isUrgent}
+                        />
+                      );
+                    })}
+                  </div>
                 )
               ) : (
                 <div className="text-center text-white/40 py-12 bg-white/5 rounded-xl border border-dashed border-white/20">
