@@ -1,200 +1,223 @@
 
-# Client Details Enhancement Plan
+
+# Client Contact Form Enhancement Plan
 
 ## Overview
 
-This plan addresses 4 user requirements:
-1. **Automatic Syncing** - Sync booked clients to "BOOKED CLIENTS CONTACT DETAILS" sheet when app opens
-2. **Manual Resync Button** - Add a resync button on the Client Details form
-3. **Form Aesthetics** - Make the form more visually appealing for clients to fill out
-4. **WhatsApp Input** - Remove country code restriction, allow any number to be pasted
+This plan implements a shareable public form link system with the following features:
+
+1. **Anonymous Form Page** - Generic greeting "Dear Sir/Ma'am" instead of client name
+2. **Send to WhatsApp Button** - Opens WhatsApp with pre-filled message
+3. **Copy Link Button** - Copies the unique form URL
+4. **Form Sent Status** - Shows "Form sent" badge only when sent via WhatsApp
+5. **Thank You Message** - Displays wishes for client events after submission
+6. **Form Disclaimer** - Shows "Anyone can fill the form with this link"
 
 ---
 
-## Part 1: Automatic Syncing on App Open
+## Part 1: Public Client Form Page
 
-### Backend: Add `fullSyncContactDetails` Action
+### New File: `src/pages/ClientContactForm.tsx`
 
-**File: `supabase/functions/google-sheets/index.ts`**
+A public-facing form that:
+- Uses generic greeting: "Dear Sir/Ma'am" (no client name shown)
+- Does NOT reveal Google Sheets backend
+- Shows Wedding Tales Nepal branding
+- Displays disclaimer: "Anyone can fill the form with this link"
+- After submission shows thank you message with event wishes
+- Mobile-first design for WhatsApp access
 
-Add a new action similar to `fullSyncEventDetails` that:
-1. Fetches all clients from "BOOKED CLIENTS" sheet (Columns A-C)
-2. Checks which clients are missing in "BOOKED CLIENTS CONTACT DETAILS" sheet
-3. Creates rows for missing clients with A-C synced, D-AA empty
-4. Updates A-C for existing entries (preserving D-AA user data)
-
-### Frontend: Add Sync Helper Function
-
-**File: `src/lib/sheets-api.ts`**
-
-Add export function:
-```typescript
-export async function fullSyncContactDetails(): Promise<{ 
-  success: boolean; 
-  copiedCount: number; 
-  updatedCount: number; 
-  totalClients: number;
-}>
+**Form Page UI:**
+```text
++========================================+
+|     Wedding Tales Nepal                |
+|     💍✨                                |
++========================================+
+|                                        |
+|  Dear Sir/Ma'am,                       |
+|                                        |
+|  Please fill in your contact details  |
+|  to help us coordinate your event.    |
+|                                        |
+|  ⚠️ Anyone can fill the form with     |
+|     this link                          |
+|                                        |
++----------------------------------------+
+|  👰 BRIDE'S DETAILS                    |
+|  [Full form fields...]                 |
++----------------------------------------+
+|  🤵 GROOM'S DETAILS                    |
+|  [Full form fields...]                 |
++----------------------------------------+
+|       [Submit Details]                 |
++----------------------------------------+
+|  Contact: 9705255025 / 9749494560     |
++========================================+
 ```
 
-### Frontend: Trigger on App Load
-
-**Option A - Integration with Master Sync**
-
-**File: `src/components/suite/MasterSyncButton.tsx`**
-
-Add Phase 5 after Vendor Sync:
-- Label: "Contact Details"
-- Description: "Syncing client contact data..."
-- Call `fullSyncContactDetails()` API
-
-**Option B - Automatic on Client Detail Load**
-
-**File: `src/pages/ClientDetail.tsx`**
-
-On component mount, check if client exists in Contact Details sheet (already done via `getClientContactDetails` which auto-creates missing entries).
-
-**Recommended**: Combine both - auto-create on individual page load (already working) AND bulk sync during Master Sync.
+**Success Screen (After Submission):**
+```text
++========================================+
+|     Wedding Tales Nepal                |
++========================================+
+|                                        |
+|      ✓ THANK YOU!                      |
+|                                        |
+|  Your contact details have been        |
+|  submitted successfully.               |
+|                                        |
+|  🎉 We wish you a beautiful wedding   |
+|  filled with love, joy, and           |
+|  unforgettable moments!               |
+|                                        |
+|  May your journey together be         |
+|  blessed with happiness! 💕           |
+|                                        |
+|  Our team will contact you soon.      |
++----------------------------------------+
+|  Contact: 9705255025 / 9749494560     |
++========================================+
+```
 
 ---
 
-## Part 2: Manual Resync Button on Client Details Form
+## Part 2: Route Configuration
 
-### UI Changes
+### File: `src/App.tsx`
 
-**File: `src/components/client-detail/ClientDetailsCard.tsx`**
+Add a new public route:
+```typescript
+import ClientContactForm from "./pages/ClientContactForm";
 
-Add a "Resync" button next to Save/Cancel:
-```tsx
-<Button
-  variant="outline"
-  size="sm"
-  onClick={handleResync}
-  disabled={isResyncing}
-  className="border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10"
->
-  {isResyncing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RefreshCw className="h-4 w-4 mr-1" />}
-  Resync
-</Button>
+// In Routes - public form route:
+<Route path="/client-form/:clientId" element={<ClientContactForm />} />
 ```
 
-The resync will:
-1. Re-fetch the latest A-C data from BOOKED CLIENTS
-2. Update the CONTACT DETAILS sheet with refreshed client name/dates
-3. Refresh the form display
+The `clientId` parameter is the URL-encoded `registeredDateTimeAD`.
 
-### Props Update
+---
 
-**File: `src/components/client-detail/ClientDetailsCard.tsx`**
+## Part 3: Schema Update - Add "Form Sent Date" Column
 
-Add `onResync` prop:
+### File: `src/lib/client-contact-api.ts`
+
+Add new field to interface:
 ```typescript
-interface ClientDetailsCardProps {
-  data: ClientContactDetails | null;
-  isLoading: boolean;
-  onSave: (updates: Partial<ClientContactDetails>) => Promise<boolean>;
-  onResync: () => Promise<void>; // NEW
+export interface ClientContactDetails {
+  // ... existing fields (A-AA)
+  
+  // Form tracking (Column AB)
+  formSentDate: string;  // ISO date when form link was sent via WhatsApp
 }
 ```
 
-### Hook Update
+### File: `supabase/functions/google-sheets/index.ts`
 
-**File: `src/hooks/useClientContactDetails.ts`**
-
-Add `resyncClient` function that calls a new backend action to force-refresh A-C columns from BOOKED CLIENTS.
-
----
-
-## Part 3: Enhanced Form Aesthetics (Client-Facing)
-
-### Design Goals
-- More welcoming and elegant appearance
-- Clear visual hierarchy
-- Decorative elements (icons, gradients, subtle animations)
-- Better spacing and typography
-- Clear section headers with icons
-- Progress indicators for completion
-
-### UI Enhancements
-
-**File: `src/components/client-detail/ClientDetailsCard.tsx`**
-
-1. **Hero Header with Welcome Message**
-   ```tsx
-   <div className="text-center mb-6">
-     <h2 className="text-2xl font-bold text-white">Welcome! ✨</h2>
-     <p className="text-white/70">Please fill in your contact details</p>
-   </div>
-   ```
-
-2. **Section Cards with Icons and Gradients**
-   - Bride Section: Soft pink gradient with heart/crown icon
-   - Groom Section: Soft blue gradient with ring icon
-
-3. **Field Groupings with Decorative Headers**
-   ```tsx
-   <div className="relative mb-4">
-     <div className="flex items-center gap-3">
-       <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-400 to-rose-500 flex items-center justify-center">
-         <Phone className="h-5 w-5 text-white" />
-       </div>
-       <div>
-         <h4 className="font-semibold text-white">Contact Information</h4>
-         <p className="text-xs text-white/50">Primary and backup numbers</p>
-       </div>
-     </div>
-   </div>
-   ```
-
-4. **Input Styling Improvements**
-   - Larger input fields (h-12 instead of h-10)
-   - Rounded corners (rounded-xl)
-   - Subtle focus animations
-   - Helper text under each field
-
-5. **Completion Progress Indicator**
-   ```tsx
-   <div className="flex items-center gap-2 mb-4">
-     <Progress value={completionPercentage} className="h-2" />
-     <span className="text-sm text-white/60">{completionPercentage}% Complete</span>
-   </div>
-   ```
-
-6. **Decorative Elements**
-   - Subtle sparkle/heart decorations
-   - Gradient backgrounds
-   - Soft shadows and borders
+Update column range from A:AA to A:AB (28 columns total)
+- Column AB (index 27): formSentDate
 
 ---
 
-## Part 4: WhatsApp Number - Remove Country Code Restriction
+## Part 4: "Send to WhatsApp" and "Copy Link" Buttons
 
-### Current Issue
-Using `PhoneInputField` which enforces Nepal country code format.
+### File: `src/components/client-detail/ClientDetailsCard.tsx`
 
-### Solution
+Add new buttons in the header area with these functions:
 
-**File: `src/components/client-detail/ClientDetailsCard.tsx`**
+**1. Copy Link Button:**
+- Generates URL: `https://wtnclienttracker.lovable.app/client-form/{encodedClientId}`
+- Copies to clipboard
+- Shows toast: "Link copied!"
 
-Replace `PhoneInputField` for WhatsApp fields with a simple `Input`:
+**2. Send to WhatsApp Button:**
+- Generates the WhatsApp message (from your template)
+- Opens WhatsApp with the message
+- Updates `formSentDate` column to current timestamp
+- Shows toast: "Sent to WhatsApp!"
 
-```tsx
-<Input
-  value={brideWhatsappNumber}
-  onChange={(e) => setBrideWhatsappNumber(e.target.value)}
-  placeholder="Enter WhatsApp number (paste any format)"
-  type="tel"
-  className="bg-white/5 border-white/20 text-white"
-/>
+**WhatsApp Message Template:**
+```
+Hello 👋
+Greetings from Wedding Tales Nepal 💍✨
+
+To help us plan and coordinate your event smoothly, we kindly request you to fill in the contact details using the form link below.
+
+The information will be used only for wedding coordination purposes (communication, location access, and scheduling) and will be kept strictly confidential.
+
+👉 Please fill the form at your convenience:
+https://wtnclienttracker.lovable.app/client-form/{clientId}
+
+If you have any questions or face any difficulty while filling the form, feel free to contact us anytime.
+
+Thank you for choosing Wedding Tales Nepal — we're excited to be a part of your special journey ❤️
+
+Warm regards,
+Wedding Tales Nepal
+📞 Contact: 9705255025 / 9749494560 / 9847335279
 ```
 
-This allows clients to paste:
-- `+977 9801234567`
-- `9801234567`
-- `+1 555-123-4567`
-- Any international format
+**Button Layout in Header:**
+```text
++---------------------------------------------------+
+| [Users] CLIENT DETAILS  [✓ Form Sent]  [Filled]   |
+|                                                   |
+| [Copy Link] [Send to WhatsApp]                    |
++---------------------------------------------------+
+```
 
-The `formatWhatsAppLink` helper in `client-contact-api.ts` already handles stripping non-digits.
+---
+
+## Part 5: "Form Sent" Status Badge
+
+### File: `src/components/client-detail/ClientDetailsCard.tsx`
+
+In the header section, conditionally show a "Form sent" badge:
+- **If `formSentDate` has a value:** Show green badge "📤 Form sent" with relative time
+- **If `formSentDate` is empty:** Show nothing (no badge)
+
+**Visual:**
+```text
+When sent:    [📤 Form sent 2h ago]
+When not:     (nothing displayed)
+```
+
+---
+
+## Part 6: Backend Updates
+
+### File: `supabase/functions/google-sheets/index.ts`
+
+**1. Update `getClientContactDetails`:**
+- Read Column AB (index 27) for formSentDate
+- Return in response
+
+**2. Update `updateClientContactDetails`:**
+- Accept formSentDate in updates
+- Write to Column AB
+
+**3. New action: `submitClientContactForm`:**
+- Public endpoint for form submission
+- Takes clientId (registeredDateTimeAD) and form data
+- Updates only columns D-AA (bride/groom details)
+- Does NOT update formSentDate (that's only set when sending WhatsApp)
+
+---
+
+## Part 7: Hook Updates
+
+### File: `src/hooks/useClientContactDetails.ts`
+
+Add new function:
+```typescript
+const markFormAsSent = async (): Promise<boolean> => {
+  // Updates formSentDate to current ISO timestamp
+  return await updateContactDetails({ 
+    formSentDate: new Date().toISOString() 
+  });
+};
+```
+
+Return `markFormAsSent` from the hook.
 
 ---
 
@@ -202,108 +225,46 @@ The `formatWhatsAppLink` helper in `client-contact-api.ts` already handles strip
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `supabase/functions/google-sheets/index.ts` | Modify | Add `fullSyncContactDetails` and `resyncClientContactDetails` actions |
-| `src/lib/sheets-api.ts` | Modify | Add `fullSyncContactDetails()` export function |
-| `src/components/suite/MasterSyncButton.tsx` | Modify | Add Phase 5 for Contact Details sync |
-| `src/hooks/useClientContactDetails.ts` | Modify | Add `resyncClient` function |
-| `src/components/client-detail/ClientDetailsCard.tsx` | Modify | Add resync button, enhance form UI, change WhatsApp inputs |
+| `src/pages/ClientContactForm.tsx` | **Create** | Public form page with generic greeting |
+| `src/App.tsx` | Modify | Add public route `/client-form/:clientId` |
+| `src/lib/client-contact-api.ts` | Modify | Add `formSentDate` field |
+| `src/hooks/useClientContactDetails.ts` | Modify | Add `markFormAsSent` function |
+| `src/components/client-detail/ClientDetailsCard.tsx` | Modify | Add Copy Link, Send WhatsApp, Form Sent badge |
+| `supabase/functions/google-sheets/index.ts` | Modify | Handle Column AB, add public form submission |
 
 ---
 
-## Technical Details
+## Column Mapping Update
 
-### New Backend Action: `fullSyncContactDetails`
-
-```typescript
-async function fullSyncContactDetails(accessToken: string, spreadsheetId: string) {
-  // 1. Fetch all BOOKED CLIENTS data (A-C)
-  const bookedRange = "'BOOKED CLIENTS'!A2:C2000";
-  
-  // 2. Fetch existing CONTACT DETAILS entries
-  const contactRange = "'BOOKED CLIENTS CONTACT DETAILS'!A2:C2000";
-  
-  // 3. Build map of existing entries by registeredDateTimeAD
-  
-  // 4. For each booked client:
-  //    - If exists: Update A-C only (preserve D-AA)
-  //    - If missing: Create new row with A-C, empty D-AA
-  
-  return { copiedCount, updatedCount, totalClients };
-}
-```
-
-### New Backend Action: `resyncClientContactDetails`
-
-```typescript
-async function resyncClientContactDetails(
-  accessToken: string, 
-  spreadsheetId: string, 
-  registeredDateTimeAD: string
-) {
-  // 1. Get latest data from BOOKED CLIENTS for this client
-  // 2. Update A-C in CONTACT DETAILS sheet
-  // 3. Return refreshed data
-}
-```
-
-### WhatsApp Input Changes
-
-For WhatsApp fields, use plain `<Input type="tel">` instead of `PhoneInputField`:
-- No country code dropdown
-- No formatting restrictions
-- Client can paste any phone number format
-- Backend handles cleanup when generating WhatsApp links
+| Column | Index | Field |
+|--------|-------|-------|
+| A | 0 | registeredDateTimeAD |
+| B | 1 | registeredDateBS |
+| C | 2 | clientName |
+| D-O | 3-14 | Bride details (12 fields) |
+| P-AA | 15-26 | Groom details (12 fields) |
+| **AB** | **27** | **formSentDate** (NEW) |
 
 ---
 
-## UI Mockup - Enhanced Form
+## Key Design Decisions
 
-```
-╔══════════════════════════════════════════════════════════════╗
-║  ✨ CLIENT DETAILS FORM ✨                    [Resync] [Save] ║
-║                                                               ║
-║  ┌─────────────────────────────────────────────────────────┐  ║
-║  │ Progress: ████████░░░░░░░░ 45% Complete                 │  ║
-║  └─────────────────────────────────────────────────────────┘  ║
-║                                                               ║
-║  ┌─────────────────── 👰 BRIDE'S DETAILS ──────────────────┐  ║
-║  │ 🌸 Pink gradient background                              │  ║
-║  │                                                          │  ║
-║  │  ┌── 📞 Contact Information ──┐                          │  ║
-║  │  │ Full Name: [____________]  │                          │  ║
-║  │  │ Contact:   [+977 ________] │                          │  ║
-║  │  │ WhatsApp:  [____________]  │ (any format)             │  ║
-║  │  └────────────────────────────┘                          │  ║
-║  │                                                          │  ║
-║  │  ┌── 👥 Backup Contacts ──────┐                          │  ║
-║  │  │ Backup 1: [___] Relation: [Mother ▼]                  │  ║
-║  │  │ Backup 2: [___] Relation: [Father ▼]                  │  ║
-║  │  └────────────────────────────┘                          │  ║
-║  │                                                          │  ║
-║  │  ┌── 📍 Address ──────────────┐                          │  ║
-║  │  │ City: [Kathmandu ▼] Area: [___]                       │  ║
-║  │  │ Map Link: [___________] [🔗]                          │  ║
-║  │  │ Landmark: [___________]                               │  ║
-║  │  └────────────────────────────┘                          │  ║
-║  └──────────────────────────────────────────────────────────┘  ║
-║                                                               ║
-║  ┌─────────────────── 🤵 GROOM'S DETAILS ──────────────────┐  ║
-║  │ 💙 Blue gradient background                              │  ║
-║  │ ... (Same structure as Bride)                            │  ║
-║  └──────────────────────────────────────────────────────────┘  ║
-╚══════════════════════════════════════════════════════════════╝
-```
+1. **Anonymity**: Client never sees their name or Google Sheets connection
+2. **Generic Greeting**: "Dear Sir/Ma'am" instead of personalized name
+3. **Client ID in URL**: Uses `registeredDateTimeAD` as unique identifier (non-guessable)
+4. **Form Sent Tracking**: Only logged when WhatsApp button is clicked
+5. **Thank You Message**: Includes wedding wishes after form submission
+6. **Disclaimer**: Clear warning that anyone with the link can fill the form
 
 ---
 
 ## Implementation Order
 
-1. **Backend first**: Add `fullSyncContactDetails` and `resyncClientContactDetails` actions
-2. **Sheets API**: Add frontend wrapper function
-3. **Master Sync**: Add Phase 5 for bulk contact sync
-4. **Hook Update**: Add resync capability to `useClientContactDetails`
-5. **Form Enhancement**: Update ClientDetailsCard with:
-   - Resync button
-   - Plain Input for WhatsApp fields
-   - Enhanced visual styling
-6. **Deploy and test**
+1. Update schema (`client-contact-api.ts`) to add `formSentDate`
+2. Update backend (`google-sheets/index.ts`) to handle Column AB
+3. Create public form page (`ClientContactForm.tsx`)
+4. Add route in `App.tsx`
+5. Update hook with `markFormAsSent` function
+6. Add buttons and badge to `ClientDetailsCard.tsx`
+7. Deploy edge function and test end-to-end
+
