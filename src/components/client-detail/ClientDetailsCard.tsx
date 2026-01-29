@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { 
   Users, ChevronDown, ChevronUp, Save, X, Loader2, ExternalLink, 
   Phone, MessageCircle, Instagram, MapPin, RefreshCw, Heart, 
-  Crown, UserCheck, Home, Sparkles
+  Crown, UserCheck, Home, Sparkles, Copy, Send
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,9 +23,13 @@ import {
   groomBackupRelationOptions,
   hasFilledContactDetails,
   formatWhatsAppLink,
-  formatInstagramLink 
+  formatInstagramLink,
+  getClientFormUrl,
+  generateFormWhatsAppMessage,
+  getRelativeTime
 } from '@/lib/client-contact-api';
 import { ChevronsUpDown, Check } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 
 interface ClientDetailsCardProps {
   data: ClientContactDetails | null;
@@ -33,11 +37,13 @@ interface ClientDetailsCardProps {
   isResyncing?: boolean;
   onSave: (updates: Partial<ClientContactDetails>) => Promise<boolean>;
   onResync?: () => Promise<boolean>;
+  onMarkFormSent?: () => Promise<boolean>;
 }
 
-export const ClientDetailsCard = ({ data, isLoading, isResyncing, onSave, onResync }: ClientDetailsCardProps) => {
+export const ClientDetailsCard = ({ data, isLoading, isResyncing, onSave, onResync, onMarkFormSent }: ClientDetailsCardProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSendingToWhatsApp, setIsSendingToWhatsApp] = useState(false);
   
   // Bride form state
   const [brideFullName, setBrideFullName] = useState('');
@@ -205,6 +211,57 @@ export const ClientDetailsCard = ({ data, isLoading, isResyncing, onSave, onResy
   };
 
   const hasFilled = hasFilledContactDetails(data);
+  const formSentDate = data?.formSentDate;
+  const registeredDateTimeAD = data?.registeredDateTimeAD;
+
+  // Handle Copy Link
+  const handleCopyLink = async () => {
+    if (!registeredDateTimeAD) return;
+    
+    const link = getClientFormUrl(registeredDateTimeAD);
+    try {
+      await navigator.clipboard.writeText(link);
+      toast({
+        title: "Link Copied!",
+        description: "Form link copied to clipboard",
+      });
+    } catch (err) {
+      console.error('Failed to copy:', err);
+      toast({
+        title: "Copy Failed",
+        description: "Unable to copy link to clipboard",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle Send to WhatsApp
+  const handleSendToWhatsApp = async () => {
+    if (!registeredDateTimeAD) return;
+    
+    setIsSendingToWhatsApp(true);
+    try {
+      const message = generateFormWhatsAppMessage(registeredDateTimeAD);
+      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+      
+      // Open WhatsApp
+      window.open(whatsappUrl, '_blank');
+      
+      // Mark form as sent (update formSentDate)
+      if (onMarkFormSent) {
+        await onMarkFormSent();
+      }
+      
+      toast({
+        title: "WhatsApp Opened",
+        description: "Form link ready to send",
+      });
+    } catch (err) {
+      console.error('Error opening WhatsApp:', err);
+    } finally {
+      setIsSendingToWhatsApp(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -281,44 +338,87 @@ export const ClientDetailsCard = ({ data, isLoading, isResyncing, onSave, onResy
         : "bg-slate-800/60 border-slate-700/50 hover:border-slate-600/70 hover:shadow-lg"
     )}>
       {/* Header */}
-      <button
-        onClick={() => !isExpanded && setIsExpanded(true)}
-        className="w-full p-5 flex items-center justify-between text-left"
-      >
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-violet-500 to-purple-600 shadow-lg shadow-violet-500/25">
-            <Users className="h-6 w-6 text-white" />
-          </div>
-          <div>
-            <div className="font-bold text-lg text-white flex items-center gap-2">
-              Client Details
-              <Sparkles className="h-4 w-4 text-amber-400" />
+      <div className="p-5">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => !isExpanded && setIsExpanded(true)}
+            className="flex items-center gap-4 text-left flex-1"
+          >
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-violet-500 to-purple-600 shadow-lg shadow-violet-500/25">
+              <Users className="h-6 w-6 text-white" />
             </div>
-            <div className="text-sm text-white/60">
-              Bride & Groom contact information
+            <div>
+              <div className="font-bold text-lg text-white flex items-center gap-2">
+                Client Details
+                <Sparkles className="h-4 w-4 text-amber-400" />
+              </div>
+              <div className="text-sm text-white/60">
+                Bride & Groom contact information
+              </div>
             </div>
+          </button>
+          
+          <div className="flex items-center gap-2">
+            {/* Form Sent Badge - only show if sent */}
+            {formSentDate && (
+              <Badge 
+                variant="outline" 
+                className="text-xs px-3 py-1 bg-cyan-500/20 border-cyan-500/50 text-cyan-300"
+              >
+                📤 Form sent {getRelativeTime(formSentDate)}
+              </Badge>
+            )}
+            
+            <Badge 
+              variant="outline" 
+              className={cn(
+                "text-xs px-3 py-1",
+                hasFilled 
+                  ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300" 
+                  : "bg-amber-500/20 border-amber-500/50 text-amber-300"
+              )}
+            >
+              {hasFilled ? '✓ Filled' : 'Pending'}
+            </Badge>
+            
+            <button onClick={() => setIsExpanded(!isExpanded)} className="p-1">
+              {isExpanded ? (
+                <ChevronUp className="h-5 w-5 text-white/60" />
+              ) : (
+                <ChevronDown className="h-5 w-5 text-white/60" />
+              )}
+            </button>
           </div>
         </div>
         
-        <div className="flex items-center gap-3">
-          <Badge 
-            variant="outline" 
-            className={cn(
-              "text-xs px-3 py-1",
-              hasFilled 
-                ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300" 
-                : "bg-amber-500/20 border-amber-500/50 text-amber-300"
-            )}
-          >
-            {hasFilled ? '✓ Filled' : 'Pending'}
-          </Badge>
-          {isExpanded ? (
-            <ChevronUp className="h-5 w-5 text-white/60" />
-          ) : (
-            <ChevronDown className="h-5 w-5 text-white/60" />
-          )}
-        </div>
-      </button>
+        {/* Copy Link and WhatsApp Buttons - Always visible */}
+        {registeredDateTimeAD && (
+          <div className="flex items-center gap-2 mt-4 pt-4 border-t border-white/10">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCopyLink}
+              className="border-slate-600 text-white/80 hover:bg-white/10 hover:text-white"
+            >
+              <Copy className="h-4 w-4 mr-1" />
+              Copy Link
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSendToWhatsApp}
+              disabled={isSendingToWhatsApp}
+              className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white"
+            >
+              {isSendingToWhatsApp ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+              ) : (
+                <Send className="h-4 w-4 mr-1" />
+              )}
+              Send to WhatsApp
+            </Button>
+          </div>
+        )}
+      </div>
 
       {/* Collapsed View - Quick Summary */}
       {!isExpanded && hasFilled && (
