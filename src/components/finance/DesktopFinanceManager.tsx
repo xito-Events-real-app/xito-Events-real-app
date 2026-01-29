@@ -138,6 +138,25 @@ const DesktopFinanceManager = () => {
     fetchClients();
   }, []);
 
+  // Get payment status for a client - MUST be defined before useMemo that uses it
+  const getPaymentStatus = (client: BookedClientData): 'fully-paid' | 'partial' | 'no-payment' => {
+    const quotationMatch = client.finalQuotation?.match(/NPR\s*([\d,]+)/);
+    const quotationAmount = quotationMatch ? parseInt(quotationMatch[1].replace(/,/g, '')) : 0;
+    
+    let paidAmount = 0;
+    if (client.paymentsMade) {
+      const payments = client.paymentsMade.split('\n');
+      paidAmount = payments.reduce((sum, entry) => {
+        const match = entry.match(/NPR\s*([\d,]+)/);
+        return sum + (match ? parseInt(match[1].replace(/,/g, '')) : 0);
+      }, 0);
+    }
+
+    if (paidAmount >= quotationAmount && quotationAmount > 0) return 'fully-paid';
+    if (paidAmount > 0) return 'partial';
+    return 'no-payment';
+  };
+
   // Filter clients (moved up so stats can use filteredClients)
   const filteredClients = useMemo(() => {
     return clients.filter(client => {
@@ -194,25 +213,6 @@ const DesktopFinanceManager = () => {
 
   const remainingValue = useMemo(() => totalBookedValue - totalPaidValue, [totalBookedValue, totalPaidValue]);
   const collectionRate = useMemo(() => totalBookedValue > 0 ? (totalPaidValue / totalBookedValue) * 100 : 0, [totalBookedValue, totalPaidValue]);
-
-  // Get payment status for a client
-  const getPaymentStatus = (client: BookedClientData): 'fully-paid' | 'partial' | 'no-payment' => {
-    const quotationMatch = client.finalQuotation?.match(/NPR\s*([\d,]+)/);
-    const quotationAmount = quotationMatch ? parseInt(quotationMatch[1].replace(/,/g, '')) : 0;
-    
-    let paidAmount = 0;
-    if (client.paymentsMade) {
-      const payments = client.paymentsMade.split('\n');
-      paidAmount = payments.reduce((sum, entry) => {
-        const match = entry.match(/NPR\s*([\d,]+)/);
-        return sum + (match ? parseInt(match[1].replace(/,/g, '')) : 0);
-      }, 0);
-    }
-
-    if (paidAmount >= quotationAmount && quotationAmount > 0) return 'fully-paid';
-    if (paidAmount > 0) return 'partial';
-    return 'no-payment';
-  };
 
   // Extract unique handlers from clients
   const handlers = useMemo(() => {
