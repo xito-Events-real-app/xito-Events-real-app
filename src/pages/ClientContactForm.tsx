@@ -43,14 +43,15 @@ const emptyPerson: PersonDetails = {
 };
 
 export default function ClientContactForm() {
-  const { clientId } = useParams<{ clientId: string }>();
+  const { clientId, clientName } = useParams<{ clientId: string; clientName: string }>();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [bride, setBride] = useState<PersonDetails>(emptyPerson);
   const [groom, setGroom] = useState<PersonDetails>(emptyPerson);
 
-  // Decode the client ID for display
+  // Decode the client ID and name for display
   const decodedClientId = clientId ? decodeURIComponent(clientId) : "";
+  const displayName = clientName ? clientName.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : "";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
