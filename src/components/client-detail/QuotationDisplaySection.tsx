@@ -299,70 +299,78 @@ const QuotationDisplaySection = ({
     const ourCounterTiers = parseQuotationData(ourBargainedRates || '');
     
     return (
-      <div className="mt-3 bg-amber-500/20 rounded-lg border border-amber-500/30 p-3 space-y-2">
-        <div className="text-[10px] text-amber-300 font-semibold uppercase tracking-wide">
-          Negotiation In Progress
-        </div>
-        
-        {/* Our Original Proposal */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
-          <span className="text-white/60 text-xs shrink-0">Our Proposal</span>
-          {quotationTiers.length > 0 ? (
-            <div className="flex flex-wrap gap-1">
-              {quotationTiers.map((tier, idx) => (
-                <span key={idx} className={`px-1.5 py-0.5 rounded text-[10px] ${getTierColorDark(tier.tier)}`}>
-                  {tier.tier}: {tier.amount}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <span className="text-white/40 text-xs">Not set</span>
-          )}
-        </div>
-        
-        {/* Client's Ask */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
-          <span className="text-white/60 text-xs shrink-0">Client Asking</span>
-          {clientTiers.length > 0 ? (
-            <div className="flex flex-wrap gap-1">
-              {clientTiers.map((tier, idx) => {
-                const diff = quotationData ? calculateDiff(quotationData, tier) : '';
-                return (
-                  <span key={idx} className="px-1.5 py-0.5 rounded text-[10px] bg-red-500/30 text-red-200">
+      <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="bg-amber-500/20 rounded-lg border border-amber-500/30 p-3 space-y-2">
+          <div className="text-[10px] text-amber-300 font-semibold uppercase tracking-wide">
+            Negotiation In Progress
+          </div>
+          
+          {/* Our Original Proposal */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
+            <span className="text-white/60 text-xs shrink-0">Our Proposal</span>
+            {quotationTiers.length > 0 ? (
+              <div className="flex flex-wrap gap-1">
+                {quotationTiers.map((tier, idx) => (
+                  <span key={idx} className={`px-1.5 py-0.5 rounded text-[10px] ${getTierColorDark(tier.tier)}`}>
                     {tier.tier}: {tier.amount}
-                    {diff && <span className="ml-1 text-red-400">↓{diff}/-</span>}
                   </span>
-                );
-              })}
-            </div>
-          ) : (
-            <span className="text-white/40 text-xs">Not set</span>
+                ))}
+              </div>
+            ) : (
+              <span className="text-white/40 text-xs">Not set</span>
+            )}
+          </div>
+          
+          {/* Client's Ask */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
+            <span className="text-white/60 text-xs shrink-0">Client Asking</span>
+            {clientTiers.length > 0 ? (
+              <div className="flex flex-wrap gap-1">
+                {clientTiers.map((tier, idx) => {
+                  const diff = quotationData ? calculateDiff(quotationData, tier) : '';
+                  return (
+                    <span key={idx} className="px-1.5 py-0.5 rounded text-[10px] bg-red-500/30 text-red-200">
+                      {tier.tier}: {tier.amount}
+                      {diff && <span className="ml-1 text-red-400">↓{diff}/-</span>}
+                    </span>
+                  );
+                })}
+              </div>
+            ) : (
+              <span className="text-white/40 text-xs">Not set</span>
+            )}
+          </div>
+          
+          {/* Our Counter */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
+            <span className="text-white/60 text-xs shrink-0">Our Counter</span>
+            {ourCounterTiers.length > 0 ? (
+              <div className="flex flex-wrap gap-1">
+                {ourCounterTiers.map((tier, idx) => (
+                  <span key={idx} className="px-1.5 py-0.5 rounded text-[10px] bg-green-500/30 text-green-200">
+                    {tier.tier}: {tier.amount}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <span className="text-white/40 text-xs">Not set</span>
+            )}
+          </div>
+          
+          {/* Show Add Quotation if original not set */}
+          {quotationTiers.length === 0 && (
+            <Button size="sm" onClick={onAddQuotation} className="mt-1 bg-amber-500 hover:bg-amber-600 text-black h-7 text-xs">
+              <Plus className="h-3 w-3 mr-1" />
+              Add Original Quotation
+            </Button>
           )}
         </div>
         
-        {/* Our Counter */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
-          <span className="text-white/60 text-xs shrink-0">Our Counter</span>
-          {ourCounterTiers.length > 0 ? (
-            <div className="flex flex-wrap gap-1">
-              {ourCounterTiers.map((tier, idx) => (
-                <span key={idx} className="px-1.5 py-0.5 rounded text-[10px] bg-green-500/30 text-green-200">
-                  {tier.tier}: {tier.amount}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <span className="text-white/40 text-xs">Not set</span>
-          )}
-        </div>
-        
-        {/* Show Add Quotation if original not set */}
-        {quotationTiers.length === 0 && (
-          <Button size="sm" onClick={onAddQuotation} className="mt-1 bg-amber-500 hover:bg-amber-600 text-black h-7 text-xs">
-            <Plus className="h-3 w-3 mr-1" />
-            Add Original Quotation
-          </Button>
-        )}
+        <InlineComments 
+          comments={comments} 
+          onAddComment={onAddComment} 
+          isAddingComment={isAddingComment} 
+        />
       </div>
     );
   }
@@ -370,67 +378,85 @@ const QuotationDisplaySection = ({
   // QUOTATION SENT or ADVANCE PENDING - compact
   if (isQuotationSent || isAdvancePending) {
     return (
-      <div className="mt-3">
-        {quotationTiers.length > 0 ? (
-          <div className="bg-blue-500/20 rounded-lg border border-blue-500/30 p-3">
-            <div className="text-[10px] text-blue-300 mb-1.5 font-semibold uppercase tracking-wide">
-              {isAdvancePending ? 'Quotation Details' : 'Quotation Sent'}
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {quotationTiers.map((tier, idx) => (
-                <div key={idx} className={`px-2 py-1 rounded text-xs font-medium ${getTierColorDark(tier.tier)}`}>
-                  <span className="opacity-70">{tier.tier}:</span> {tier.amount}
+      <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          {quotationTiers.length > 0 ? (
+            <div className="bg-blue-500/20 rounded-lg border border-blue-500/30 p-3 h-full">
+              <div className="text-[10px] text-blue-300 mb-1.5 font-semibold uppercase tracking-wide">
+                {isAdvancePending ? 'Quotation Details' : 'Quotation Sent'}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {quotationTiers.map((tier, idx) => (
+                  <div key={idx} className={`px-2 py-1 rounded text-xs font-medium ${getTierColorDark(tier.tier)}`}>
+                    <span className="opacity-70">{tier.tier}:</span> {tier.amount}
+                  </div>
+                ))}
+              </div>
+              {/* Show final quotation for ADVANCE PENDING if available */}
+              {isAdvancePending && parsedFinal && (
+                <div className="mt-2 pt-2 border-t border-blue-500/30">
+                  <div className="flex items-center gap-1.5">
+                    <Lock className="h-3 w-3 text-emerald-400" />
+                    <span className="text-xs text-emerald-300 font-medium">
+                      Final: {parsedFinal.package} - NPR {formatNPR(parsedFinal.amount)}/-
+                    </span>
+                  </div>
                 </div>
-              ))}
+              )}
             </div>
-            {/* Show final quotation for ADVANCE PENDING if available */}
-            {isAdvancePending && parsedFinal && (
-              <div className="mt-2 pt-2 border-t border-blue-500/30">
-                <div className="flex items-center gap-1.5">
-                  <Lock className="h-3 w-3 text-emerald-400" />
-                  <span className="text-xs text-emerald-300 font-medium">
-                    Final: {parsedFinal.package} - NPR {formatNPR(parsedFinal.amount)}/-
-                  </span>
+          ) : (
+            <div className="bg-amber-500/20 rounded-lg border border-amber-500/30 p-3 h-full">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-400" />
+                <div>
+                  <div className="font-medium text-amber-200 text-sm">Quotation Not Recorded</div>
+                  <div className="text-[10px] text-amber-300/70">Add quotation to proceed</div>
                 </div>
               </div>
-            )}
-          </div>
-        ) : (
-          <div className="bg-amber-500/20 rounded-lg border border-amber-500/30 p-3">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-400" />
-              <div>
-                <div className="font-medium text-amber-200 text-sm">Quotation Not Recorded</div>
-                <div className="text-[10px] text-amber-300/70">Add quotation to proceed</div>
-              </div>
+              <Button 
+                size="sm" 
+                onClick={onAddQuotation}
+                className="mt-2 bg-amber-500 hover:bg-amber-600 text-black h-7 text-xs"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Add Quotation
+              </Button>
             </div>
-            <Button 
-              size="sm" 
-              onClick={onAddQuotation}
-              className="mt-2 bg-amber-500 hover:bg-amber-600 text-black h-7 text-xs"
-            >
-              <Plus className="h-3 w-3 mr-1" />
-              Add Quotation
-            </Button>
-          </div>
-        )}
+          )}
+        </div>
+        
+        <InlineComments 
+          comments={comments} 
+          onAddComment={onAddComment} 
+          isAddingComment={isAddingComment} 
+        />
       </div>
     );
   }
 
   // End states (CANCELLED, POSTPONED, BOOKED SOMEWHERE ELSE) - show for reference
   if (isEndState) {
-    if (quotationTiers.length === 0) return null;
-    
     return (
-      <div className="mt-3 bg-white/5 rounded-lg border border-white/10 p-2">
-        <div className="text-[10px] text-white/40 mb-1.5">Quotation (For Reference)</div>
-        <div className="flex flex-wrap gap-1.5">
-          {quotationTiers.map((tier, idx) => (
-            <div key={idx} className={`px-2 py-1 rounded text-xs font-medium ${getTierColorDark(tier.tier)} opacity-70`}>
-              <span className="opacity-70">{tier.tier}:</span> {tier.amount}
+      <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+        {quotationTiers.length > 0 && (
+          <div className="bg-white/5 rounded-lg border border-white/10 p-2 h-full">
+            <div className="text-[10px] text-white/40 mb-1.5">Quotation (For Reference)</div>
+            <div className="flex flex-wrap gap-1.5">
+              {quotationTiers.map((tier, idx) => (
+                <div key={idx} className={`px-2 py-1 rounded text-xs font-medium ${getTierColorDark(tier.tier)} opacity-70`}>
+                  <span className="opacity-70">{tier.tier}:</span> {tier.amount}
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
+        )}
+        
+        <div className={quotationTiers.length === 0 ? 'md:col-span-2' : ''}>
+          <InlineComments 
+            comments={comments} 
+            onAddComment={onAddComment} 
+            isAddingComment={isAddingComment} 
+          />
         </div>
       </div>
     );
