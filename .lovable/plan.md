@@ -1,82 +1,57 @@
 
 
-## Fix: Always Show Comments Section on Client Dashboard
+## Fix: Show Comments Section for ALL Client Statuses
 
-The comments section only appears for clients with specific statuses (like BOOKED). For clients with early statuses (UNTOUCHED, FRESH, etc.), the entire `QuotationDisplaySection` returns `null`, hiding comments.
+Currently, the comments section only appears for:
+- BOOKED clients (side by side with quotation)
+- Early-stage clients (FRESH, UNTOUCHED, etc.)
+
+But it's **missing** for:
+- QUOTATION SENT
+- BARGAINING
+- ADVANCE PENDING
+- CANCELLED
+- POSTPONED
+- BOOKED SOMEWHERE ELSE
 
 ---
 
-### Root Cause
+### Current Behavior
 
-In `QuotationDisplaySection.tsx`:
-
-```typescript
-// Lines 209-211
-if (!needsQuotation(status)) {
-  return null;  // <-- Comments are inside this component, so they get hidden too!
-}
-```
-
-The `needsQuotation()` function only returns `true` for:
-- QUOTATION SENT
-- BARGAINING  
-- ADVANCE PENDING
-- BOOKED
-- CANCELLED
-- POSTPONED
-
-For early statuses like UNTOUCHED, FRESH, FOLLOW UP - the entire component (including comments) is hidden.
-
-Additionally, comments are only shown inline for BOOKED clients (lines 279-283).
+| Status | Quotation Display | Comments |
+|--------|------------------|----------|
+| FRESH/UNTOUCHED | None | Shows |
+| QUOTATION SENT | Shows tiers | **Missing** |
+| BARGAINING | Shows negotiation | **Missing** |
+| ADVANCE PENDING | Shows tiers | **Missing** |
+| BOOKED | Final quotation | Shows |
+| CANCELLED/POSTPONED | Reference tiers | **Missing** |
 
 ---
 
 ### Solution
 
-When the status doesn't need quotation display, still show the comments section standalone instead of returning `null`.
+Add the `InlineComments` component to ALL status displays in a consistent two-column layout:
 
-**Before:**
-```typescript
-if (!needsQuotation(status)) {
-  return null;
-}
 ```
-
-**After:**
-```typescript
-if (!needsQuotation(status)) {
-  // Still show comments section for all clients
-  return (
-    <div className="mt-3">
-      <InlineComments 
-        comments={comments} 
-        onAddComment={onAddComment} 
-        isAddingComment={isAddingComment} 
-      />
-    </div>
-  );
-}
+┌─────────────────────────────┬────────────────────────────┐
+│  QUOTATION/STATUS INFO      │  COMMENTS                  │
+│  (varies by status)         │  (always shown)            │
+└─────────────────────────────┴────────────────────────────┘
 ```
 
 ---
 
-### Visual Result
+### Changes by Status
 
-**For UNTOUCHED/FRESH/FOLLOW UP clients:**
-```
-┌──────────────────────────────────────────────────┐
-│ 💬 COMMENTS (3)                            [+]   │
-├──────────────────────────────────────────────────┤
-│ ┌────────────────────────────────────────────┐   │
-│ │ Spoke with bride, wants to meet tomorrow  │   │
-│ │                              2 hours ago  │   │
-│ └────────────────────────────────────────────┘   │
-│ ┌────────────────────────────────────────────┐   │
-│ │ Inquired about wedding packages           │   │
-│ │                              1 day ago    │   │
-│ └────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────┘
-```
+**BARGAINING (lines 297-367)**:
+Wrap in grid, add comments column on right
+
+**QUOTATION SENT / ADVANCE PENDING (lines 371-418)**:
+Wrap in grid, add comments column on right
+
+**END STATES - CANCELLED/POSTPONED (lines 422-436)**:
+Wrap in grid, add comments column on right
 
 ---
 
@@ -84,16 +59,16 @@ if (!needsQuotation(status)) {
 
 | File | Changes |
 |------|---------|
-| `src/components/client-detail/QuotationDisplaySection.tsx` | Show comments section when status doesn't need quotation instead of returning null |
+| `src/components/client-detail/QuotationDisplaySection.tsx` | Add `InlineComments` to BARGAINING, QUOTATION SENT, ADVANCE PENDING, and END STATE renders |
 
 ---
 
 ### Technical Details
 
-The fix changes the early return at lines 209-211 to return the comments component instead of `null`. This ensures:
+Each status section will be updated to:
+1. Use `grid grid-cols-1 md:grid-cols-2 gap-3` wrapper (same as BOOKED)
+2. Keep quotation/status content in left column
+3. Add `InlineComments` component in right column
 
-1. **BOOKED clients**: See quotation + comments side by side (existing behavior)
-2. **BARGAINING/QUOTATION SENT/ADVANCE PENDING**: See quotation details (existing behavior)
-3. **UNTOUCHED/FRESH/FOLLOW UP/etc.**: Now see comments section (new behavior)
-4. **CANCELLED/POSTPONED**: See quotation reference if available (existing behavior)
+This ensures a consistent UI where comments are always visible alongside whatever quotation/status info is relevant for that client's stage.
 
