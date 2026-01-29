@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, AlertTriangle, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { ClientData, getCurrentStatus } from "@/lib/sheets-api";
+import { normalizeStatus } from "@/lib/status-config";
 import { FreshClientCard } from "@/components/dashboard/FreshClientCard";
 import { ClientDetailSheet } from "@/components/dashboard/ClientDetailSheet";
 import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
@@ -61,16 +62,19 @@ export default function FreshClients() {
   const paymentTypes = dropdowns?.paymentTypes || [];
   const banks = dropdowns?.banks || [];
 
-  // Group clients by their current status
+  // Group clients by their current status (normalized)
   const clientsByStatus = useMemo(() => {
     const grouped: Record<string, ClientData[]> = {};
     
     localClients.forEach(client => {
-      const status = getCurrentStatus(client.statusLog || '');
-      if (!grouped[status]) {
-        grouped[status] = [];
+      const rawStatus = getCurrentStatus(client.statusLog || '');
+      const status = normalizeStatus(rawStatus);
+      if (status !== 'UNTOUCHED') {
+        if (!grouped[status]) {
+          grouped[status] = [];
+        }
+        grouped[status].push(client);
       }
-      grouped[status].push(client);
     });
 
     return grouped;
