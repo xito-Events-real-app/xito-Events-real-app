@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -303,6 +303,104 @@ async function addParlourEntry(
   }
 
   return { success: true };
+}
+
+// ============= REFRESH CLIENT VENDOR DATA =============
+// Auto-syncs venue/parlour data (City, Area, Map) from vendor type sheets to client event details
+async function refreshClientVendorData(
+  accessToken: string,
+  spreadsheetId: string,
+  registeredDateTimeAD: string
+) {
+  console.info(`[VENDOR REFRESH] Starting refresh for client: ${registeredDateTimeAD}`);
+  
+  // 1. Get client's current event details
+  const clientData = await getClientEventDetails(accessToken, spreadsheetId, registeredDateTimeAD);
+  
+  if (!clientData.events || clientData.events.length === 0) {
+    console.info('[VENDOR REFRESH] No events found for client');
+    return { success: true, refreshed: false, eventsUpdated: 0 };
+  }
+
+  let eventsUpdated = 0;
+  
+  // 2. For each event, check and refresh vendor data
+  for (const event of clientData.events) {
+    let hasChanges = false;
+    const updates: Record<string, string> = {};
+    
+    // Check venue data
+    if (event.venueType && event.venueName) {
+      try {
+        const venues = await getVenuesByType(accessToken, spreadsheetId, event.venueType);
+        const matchingVenue = venues.find(
+          (v: { name: string }) => v.name.toLowerCase() === event.venueName.toLowerCase()
+        );
+        
+        if (matchingVenue) {
+          // Only update if vendor has a value AND it differs from stored
+          if (matchingVenue.city && matchingVenue.city !== event.venueCity) {
+            updates.venueCity = matchingVenue.city;
+            hasChanges = true;
+          }
+          if (matchingVenue.area && matchingVenue.area !== event.venueArea) {
+            updates.venueArea = matchingVenue.area;
+            hasChanges = true;
+          }
+          if (matchingVenue.googleMap && matchingVenue.googleMap !== event.venueMap) {
+            updates.venueMap = matchingVenue.googleMap;
+            hasChanges = true;
+          }
+        }
+      } catch (err) {
+        console.warn(`[VENDOR REFRESH] Error fetching venue type ${event.venueType}:`, err);
+      }
+    }
+    
+    // Check parlour data
+    if (event.parlourType && event.parlourName) {
+      try {
+        const parlours = await getParloursByType(accessToken, spreadsheetId, event.parlourType);
+        const matchingParlour = parlours.find(
+          (p: { name: string }) => p.name.toLowerCase() === event.parlourName.toLowerCase()
+        );
+        
+        if (matchingParlour) {
+          // Only update if vendor has a value AND it differs from stored
+          if (matchingParlour.city && matchingParlour.city !== event.parlourCity) {
+            updates.parlourCity = matchingParlour.city;
+            hasChanges = true;
+          }
+          if (matchingParlour.area && matchingParlour.area !== event.parlourArea) {
+            updates.parlourArea = matchingParlour.area;
+            hasChanges = true;
+          }
+          if (matchingParlour.googleMap && matchingParlour.googleMap !== event.parlourMap) {
+            updates.parlourMap = matchingParlour.googleMap;
+            hasChanges = true;
+          }
+        }
+      } catch (err) {
+        console.warn(`[VENDOR REFRESH] Error fetching parlour type ${event.parlourType}:`, err);
+      }
+    }
+    
+    // Update if changes found
+    if (hasChanges) {
+      console.info(`[VENDOR REFRESH] Updating event ${event.eventIndex} with:`, updates);
+      await updateClientEventDetails(
+        accessToken,
+        spreadsheetId,
+        registeredDateTimeAD,
+        event.eventIndex,
+        updates
+      );
+      eventsUpdated++;
+    }
+  }
+
+  console.info(`[VENDOR REFRESH] Complete. Events updated: ${eventsUpdated}`);
+  return { success: true, refreshed: eventsUpdated > 0, eventsUpdated };
 }
 
 // Get venues from a specific type sheet (e.g., "BANQUET", "DECORATION")
@@ -3980,6 +4078,10 @@ Deno.serve(async (req) => {
           area: (data.area as string) || '',
           googleMap: (data.googleMap as string) || '',
         });
+        break;
+      case 'refreshClientVendorData':
+        if (!data || !data.registeredDateTimeAD) throw new Error('registeredDateTimeAD is required for refreshClientVendorData');
+        result = await refreshClientVendorData(accessToken, spreadsheetId, data.registeredDateTimeAD as string);
         break;
       default:
         throw new Error(`Unknown action: ${action}`);
