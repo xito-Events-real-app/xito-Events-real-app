@@ -51,6 +51,8 @@ export default function ClientContactForm() {
   const [bride, setBride] = useState<PersonDetails>(emptyPerson);
   const [groom, setGroom] = useState<PersonDetails>(emptyPerson);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [dataLoaded, setDataLoaded] = useState(false);
+  const [submittedData, setSubmittedData] = useState<{ bride: PersonDetails; groom: PersonDetails } | null>(null);
 
   // Decode the client ID and name for display
   const decodedClientId = clientId ? decodeURIComponent(clientId) : "";
@@ -59,6 +61,8 @@ export default function ClientContactForm() {
   // Fetch existing data on mount
   useEffect(() => {
     const fetchExistingData = async () => {
+      console.log('[ClientContactForm] Fetching data for:', decodedClientId);
+      
       if (!decodedClientId) {
         setIsLoading(false);
         setFetchError("Invalid form link");
@@ -73,13 +77,16 @@ export default function ClientContactForm() {
           }
         });
 
+        console.log('[ClientContactForm] API Response:', { result, error });
+
         if (error) throw new Error(error.message);
         if (!result?.success) throw new Error(result?.error || 'Failed to load form data');
 
         const contactData = result.data;
+        console.log('[ClientContactForm] Data loaded:', contactData);
         
         // Pre-fill bride data
-        setBride({
+        const brideData: PersonDetails = {
           fullName: contactData.brideFullName || '',
           contactNumber: contactData.brideContactNumber || '',
           whatsappNumber: contactData.brideWhatsappNumber || '',
@@ -92,10 +99,11 @@ export default function ClientContactForm() {
           homeArea: contactData.brideHomeArea || '',
           homeMapLink: contactData.brideHomeMap || '',
           homeLandmark: contactData.brideHomeLandmark || '',
-        });
+        };
+        setBride(brideData);
 
         // Pre-fill groom data
-        setGroom({
+        const groomData: PersonDetails = {
           fullName: contactData.groomFullName || '',
           contactNumber: contactData.groomContactNumber || '',
           whatsappNumber: contactData.groomWhatsappNumber || '',
@@ -108,7 +116,12 @@ export default function ClientContactForm() {
           homeArea: contactData.groomHomeArea || '',
           homeMapLink: contactData.groomHomeMap || '',
           homeLandmark: contactData.groomHomeLandmark || '',
-        });
+        };
+        setGroom(groomData);
+
+        // Check if any data was actually loaded
+        const hasData = brideData.fullName || brideData.contactNumber || groomData.fullName || groomData.contactNumber;
+        setDataLoaded(!!hasData);
 
       } catch (err) {
         console.error('Error fetching existing data:', err);
@@ -155,6 +168,8 @@ export default function ClientContactForm() {
         groomHomeLandmark: groom.homeLandmark,
       };
 
+      console.log('[ClientContactForm] Submitting updates:', updates);
+
       const { data: result, error } = await supabase.functions.invoke('google-sheets', {
         body: {
           action: 'updateClientContactDetails',
@@ -165,13 +180,17 @@ export default function ClientContactForm() {
         }
       });
 
+      console.log('[ClientContactForm] Submit response:', { result, error });
+
       if (error) throw new Error(error.message);
       if (!result?.success) throw new Error(result?.error || 'Failed to save details');
       
+      // Store submitted data for success screen
+      setSubmittedData({ bride, groom });
       setIsSubmitted(true);
       toast.success("Thank you! Your details have been submitted.");
     } catch (error) {
-      console.error('Submit error:', error);
+      console.error('[ClientContactForm] Submit error:', error);
       toast.error("Failed to submit. Please try again.");
     } finally {
       setIsSubmitting(false);
@@ -217,26 +236,73 @@ export default function ClientContactForm() {
     );
   }
 
-  // Success screen
-  if (isSubmitted) {
+  // Success screen with submitted data summary
+  if (isSubmitted && submittedData) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-sky-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md text-center border-0 shadow-2xl bg-white/90 backdrop-blur">
-          <CardContent className="pt-12 pb-10 px-8">
-            <div className="w-20 h-20 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
-              <CheckCircle2 className="w-10 h-10 text-white" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-3">Thank You!</h2>
-            <p className="text-gray-600 mb-6">
-              Your contact details have been submitted successfully. Our team will use this information to coordinate your special day.
-            </p>
-            <div className="flex items-center justify-center gap-2 text-rose-500">
-              <Heart className="w-5 h-5 fill-current" />
-              <span className="font-medium">Wedding Tales Nepal</span>
-              <Heart className="w-5 h-5 fill-current" />
-            </div>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-sky-50 p-4 pb-20">
+        <div className="max-w-2xl mx-auto">
+          <Card className="border-0 shadow-2xl bg-white/90 backdrop-blur mb-6">
+            <CardContent className="pt-10 pb-8 px-6 text-center">
+              <div className="w-16 h-16 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                <CheckCircle2 className="w-8 h-8 text-white" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">Thank You!</h2>
+              <p className="text-gray-600 text-sm">
+                Your contact details have been submitted successfully.
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Submitted Data Summary */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide text-center">
+              Submitted Details
+            </h3>
+            
+            {/* Bride Summary */}
+            {submittedData.bride.fullName && (
+              <Card className="border-0 shadow-lg">
+                <CardHeader className="bg-gradient-to-r from-rose-500 to-pink-500 text-white py-3 px-4">
+                  <h4 className="font-semibold flex items-center gap-2">
+                    <User className="w-4 h-4" /> Bride's Details
+                  </h4>
+                </CardHeader>
+                <CardContent className="p-4 space-y-2 text-sm">
+                  <div className="flex justify-between"><span className="text-gray-500">Name:</span><span className="font-medium">{submittedData.bride.fullName}</span></div>
+                  {submittedData.bride.contactNumber && <div className="flex justify-between"><span className="text-gray-500">Contact:</span><span>{submittedData.bride.contactNumber}</span></div>}
+                  {submittedData.bride.whatsappNumber && <div className="flex justify-between"><span className="text-gray-500">WhatsApp:</span><span>{submittedData.bride.whatsappNumber}</span></div>}
+                  {submittedData.bride.instagram && <div className="flex justify-between"><span className="text-gray-500">Instagram:</span><span>@{submittedData.bride.instagram}</span></div>}
+                  {submittedData.bride.homeCity && <div className="flex justify-between"><span className="text-gray-500">City:</span><span>{submittedData.bride.homeCity}</span></div>}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Groom Summary */}
+            {submittedData.groom.fullName && (
+              <Card className="border-0 shadow-lg">
+                <CardHeader className="bg-gradient-to-r from-sky-500 to-blue-500 text-white py-3 px-4">
+                  <h4 className="font-semibold flex items-center gap-2">
+                    <User className="w-4 h-4" /> Groom's Details
+                  </h4>
+                </CardHeader>
+                <CardContent className="p-4 space-y-2 text-sm">
+                  <div className="flex justify-between"><span className="text-gray-500">Name:</span><span className="font-medium">{submittedData.groom.fullName}</span></div>
+                  {submittedData.groom.contactNumber && <div className="flex justify-between"><span className="text-gray-500">Contact:</span><span>{submittedData.groom.contactNumber}</span></div>}
+                  {submittedData.groom.whatsappNumber && <div className="flex justify-between"><span className="text-gray-500">WhatsApp:</span><span>{submittedData.groom.whatsappNumber}</span></div>}
+                  {submittedData.groom.instagram && <div className="flex justify-between"><span className="text-gray-500">Instagram:</span><span>@{submittedData.groom.instagram}</span></div>}
+                  {submittedData.groom.homeCity && <div className="flex justify-between"><span className="text-gray-500">City:</span><span>{submittedData.groom.homeCity}</span></div>}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-center gap-2 text-rose-500 mt-8">
+            <Heart className="w-5 h-5 fill-current" />
+            <span className="font-medium">Wedding Tales Nepal</span>
+            <Heart className="w-5 h-5 fill-current" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -262,6 +328,12 @@ export default function ClientContactForm() {
           <p className="text-gray-600 text-sm leading-relaxed max-w-md mx-auto">
             Dear Sir/Ma'am, please fill in your contact details below. This information will be used only for wedding coordination purposes.
           </p>
+          {dataLoaded && (
+            <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-full text-xs font-medium">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Your previously saved data has been loaded
+            </div>
+          )}
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-8">
