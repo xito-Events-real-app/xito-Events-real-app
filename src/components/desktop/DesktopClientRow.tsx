@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ClientData } from "@/lib/sheets-api";
 import { getMonthName } from "@/lib/nepali-months";
+import { getClientDetailPath } from "@/lib/client-navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TableRow, TableCell } from "@/components/ui/table";
@@ -728,8 +729,7 @@ export function DesktopClientRow({
               )}
               onClick={(e) => {
                 e.stopPropagation();
-                const clientId = client.rowNumber || encodeURIComponent(client.registeredDateTimeAD || '');
-                navigate(`/client-tracker/client/${clientId}`, {
+                navigate(getClientDetailPath(client), {
                   state: { from: location.pathname, filters: location.state }
                 });
               }}

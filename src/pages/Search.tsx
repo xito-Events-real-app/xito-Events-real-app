@@ -9,7 +9,7 @@ import { useCachedData } from "@/hooks/useCachedData";
 import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
 import { Link, useNavigate } from "react-router-dom";
 import { nepaliMonthsEnglish } from "@/lib/nepali-date";
-
+import { getClientDetailPath, getClientNavigationId } from "@/lib/client-navigation";
 // Helper to get month names from month numbers
 function getMonthNamesFromColumn(monthCol: string): string {
   if (!monthCol) return '';
@@ -82,14 +82,12 @@ export default function Search() {
 
   // Navigate to client detail with navigation context
   const handleClientClick = (client: ClientData, resultIndex: number) => {
-    const clientId = client.rowNumber || encodeURIComponent(client.registeredDateTimeAD || '');
-    
     // Pass search results context for left/right navigation
-    navigate(`/client-tracker/client/${clientId}`, {
+    navigate(getClientDetailPath(client), {
       state: {
         from: 'search',
         searchQuery: query,
-        resultIds: results.map(r => r.rowNumber || r.registeredDateTimeAD),
+        resultIds: results.map(r => getClientNavigationId(r)),
         currentIndex: resultIndex
       }
     });

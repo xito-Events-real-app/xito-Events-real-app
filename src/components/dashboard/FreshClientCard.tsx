@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { ClientData, updateClientStatus, updateClientHandler, logCallAttempt, getCurrentStatus, updateClientQuotation, updateClientMindset, updateBargainingRates, updateClientBargainedRates, updateOurCounterRates, addClientComment, updateFinalQuotation, addPayment } from "@/lib/sheets-api";
 import { getHandlerInitials, parseEventDetails, formatLocationDisplay } from "@/lib/nepali-months";
+import { getClientDetailPath } from "@/lib/client-navigation";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -1582,10 +1583,7 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
         <div className="flex-1 min-w-0">
           {/* Client Name - Clickable to navigate to detail */}
           <button 
-            onClick={() => {
-              const clientId = client.rowNumber || encodeURIComponent(client.registeredDateTimeAD || '');
-              navigate(`/client-tracker/client/${clientId}`);
-            }}
+            onClick={() => navigate(getClientDetailPath(client))}
             className="text-sm font-semibold text-foreground truncate hover:text-primary transition-colors text-left w-full"
           >
             {client.clientName}

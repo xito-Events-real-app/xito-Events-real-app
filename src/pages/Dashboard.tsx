@@ -30,6 +30,7 @@ import { DesktopAppLayout, DesktopDashboard } from "@/components/desktop";
 import { getStatusConfig, sortCategoriesByOrder } from "@/lib/status-config";
 import { parseEventDetails } from "@/lib/nepali-months";
 import { isBSDatePast } from "@/lib/nepali-date";
+import { getClientDetailPath } from "@/lib/client-navigation";
 
 // Handler avatar colors
 const handlerColors = [
@@ -799,7 +800,7 @@ export default function Dashboard() {
                       return (
                         <div 
                           key={client.rowNumber}
-                          onClick={() => navigate(`/client-tracker/client/${client.registeredDateTimeAD}`)}
+                          onClick={() => navigate(getClientDetailPath(client))}
                           className={cn(
                             "flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] border",
                             isBooked 
@@ -926,7 +927,7 @@ export default function Dashboard() {
                     {selectedColdDateInfo.enquiringClients.map((client, i) => (
                       <div 
                         key={i}
-                        onClick={() => navigate(`/client-tracker/client/${client.id}`)}
+                        onClick={() => navigate(`/client-tracker/client/${encodeURIComponent(client.id)}`)}
                         className="flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] border bg-cyan-500/10 border-cyan-500/30"
                       >
                         <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-bold bg-gradient-to-br from-cyan-500 to-cyan-700">
