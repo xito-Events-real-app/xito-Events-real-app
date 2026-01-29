@@ -25,6 +25,7 @@ export function useDropdownData() {
           mindsetOptions: ['NOT SEEN', 'IGNORED', 'BARGAINING', 'EXPENSIVE', 'READY TO PAY ADVANCE', 'NEED TIME', 'NEED MORE TIME', 'FAMILY DISCUSSION', 'OFFICE VISIT', 'DATE POSTPONED', 'BOOKED SOMEWHERE ELSE'],
           paymentTypes: ['ADVANCE PAYMENT', 'PARTIAL PAYMENT', 'FULL PAYMENT'],
           banks: ['MASTER BARUN', 'KRIPA SAVINGS', 'KRIPA CURRENT', 'ESEWA', 'KHALTI'],
+          relationOptions: ['Mother', 'Father', 'Sister', 'Brother', 'Other'],
           companyNames: ['WEDDING TALES NEPAL', 'WEDDING PAPARAZZI', 'OTHER'],
           serviceTypes: ['PHOTOGRAPHY', 'VIDEOGRAPHY', 'DRONE', 'LED', 'ALBUM', 'FRAME'],
           allEvents: [], // From EVENT SETUP DATA sheet
@@ -55,6 +56,7 @@ export function useDropdownData() {
           mindsetOptions: ['NOT SEEN', 'IGNORED', 'BARGAINING', 'EXPENSIVE', 'READY TO PAY ADVANCE', 'NEED TIME', 'NEED MORE TIME', 'FAMILY DISCUSSION', 'OFFICE VISIT', 'DATE POSTPONED', 'BOOKED SOMEWHERE ELSE'],
           paymentTypes: ['ADVANCE PAYMENT', 'PARTIAL PAYMENT', 'FULL PAYMENT'],
           banks: ['MASTER BARUN', 'KRIPA SAVINGS', 'KRIPA CURRENT', 'ESEWA', 'KHALTI'],
+          relationOptions: ['Mother', 'Father', 'Sister', 'Brother', 'Other'],
           companyNames: ['WEDDING TALES NEPAL', 'WEDDING PAPARAZZI', 'OTHER'],
           serviceTypes: ['PHOTOGRAPHY', 'VIDEOGRAPHY', 'DRONE', 'LED', 'ALBUM', 'FRAME'],
           allEvents: [], // From EVENT SETUP DATA sheet

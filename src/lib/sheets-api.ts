@@ -15,6 +15,7 @@ export interface DropdownData {
   mindsetOptions: string[]; // Column K - Mindset options for QUOTATION SENT
   paymentTypes: string[]; // Column P - Payment types
   banks: string[]; // Column Q - Bank names
+  relationOptions: string[]; // Column R - Relation options for backup contacts
   companyNames: string[]; // Column W - Company names
   serviceTypes: string[]; // Column X - Service types
   allEvents: string[]; // From EVENT SETUP DATA sheet - single source of truth
