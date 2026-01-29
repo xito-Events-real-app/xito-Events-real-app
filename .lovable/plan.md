@@ -1,42 +1,69 @@
 
-# Fix Domain Mismatch in Client Form URLs
+# Diagnosis: Client Contact Form Data Saving
 
-## The Problem
+## Investigation Results
 
-Your code is generating form URLs with the wrong domain:
-- **Current (wrong):** `forms.bookedclientscontactdetails.com.chickenkiller.com`
-- **Correct (matching your DNS):** `forms.bookedclientscontactdetails.chickenkiller.com`
+I performed a thorough investigation and tested the backend API directly:
 
-## The Fix
+### Backend API Testing (All Passed)
 
-Update the `getClientFormUrl` function in `src/lib/client-contact-api.ts` to use the correct domain.
+| Test | Result | Details |
+|------|--------|---------|
+| GET without auth | SUCCESS | Returns client data correctly |
+| UPDATE without auth | SUCCESS | Data saved to row 2 |
+| Verify save | SUCCESS | "TEST BRIDE NAME" appeared in sheet immediately |
 
-## Changes Required
+### What I Found
 
-**File:** `src/lib/client-contact-api.ts`
+1. **The Edge Function works correctly** - No authentication is required for `getClientContactDetails` and `updateClientContactDetails` actions
+2. **Data IS being saved** - When I called the API with test data, it was reflected in Google Sheets immediately
+3. **The session replay shows dashboard usage** - The user was on `/client-tracker/client/...` (internal dashboard), not the public form
 
-| Line | Current | Updated |
-|------|---------|---------|
-| 78 | `https://forms.bookedclientscontactdetails.com.chickenkiller.com/client-form/...` | `https://forms.bookedclientscontactdetails.chickenkiller.com/client-form/...` |
+### Possible User Confusion
 
-## What This Affects
+The network request from the session shows:
+```
+Request: updateClientContactDetails with empty bride fields
+Response: {"success":true}
+```
 
-All client form links shared via:
-- "Copy Link" button
-- "Send to WhatsApp" button
+This suggests the form is **saving what the user entered** - which happens to be empty fields.
 
-## After This Change
+## Potential Issues and Fixes
 
-1. Wait for DNS verification to complete (status changes from "Verifying" to "Active")
-2. Test a form link to ensure it loads correctly
-3. New WhatsApp messages will use the correct domain
+### Issue 1: Form Not Pre-Filling Existing Data
+
+When a client opens the public form, it should load and display any existing data. If this fails silently, the client sees an empty form and may submit empty values (overwriting existing data).
+
+**Fix:** Add better error visibility when data fetch fails
+
+### Issue 2: No Confirmation of What Was Saved
+
+After submission, clients only see "Thank you!" but don't see what data was actually saved. This could cause confusion.
+
+**Fix:** Show a summary of submitted data on the success screen
+
+### Issue 3: Dashboard Not Refreshing After External Update
+
+If a client submits via public form, the dashboard user won't see the changes until they manually refresh.
+
+**Fix:** This is expected behavior - no immediate fix needed (real-time sync would be complex)
+
+## Recommended Changes
+
+1. **Add console logging in public form** - To help debug issues when clients report problems
+2. **Show submitted data on success screen** - So clients can verify what was saved
+3. **Add a "data loaded" indicator** - Show when existing data is pre-filled vs when form is empty
+
+## Files to Modify
+
+- `src/pages/ClientContactForm.tsx` - Add debug logging and success screen summary
 
 ## Technical Details
 
 ```typescript
-// Before
-return `https://forms.bookedclientscontactdetails.com.chickenkiller.com/client-form/${encodedId}`;
-
-// After
-return `https://forms.bookedclientscontactdetails.chickenkiller.com/client-form/${encodedId}`;
+// Add logging for debugging
+console.log('[ClientContactForm] Fetching data for:', decodedClientId);
+console.log('[ClientContactForm] Data loaded:', contactData);
+console.log('[ClientContactForm] Submitting updates:', updates);
 ```
