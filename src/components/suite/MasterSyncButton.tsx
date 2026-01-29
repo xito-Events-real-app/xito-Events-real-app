@@ -6,9 +6,10 @@ import { getClients, getDropdowns, fullResyncAllBookedClients, fullSyncEventDeta
 import { setCachedData, notifyCacheUpdate, CACHE_SCHEMA_VERSION } from "@/lib/cache-manager";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 interface SyncPhase {
-  id: 'tracker' | 'booked' | 'events';
+  id: 'tracker' | 'booked' | 'events' | 'vendors';
   label: string;
   description: string;
 }
@@ -17,15 +18,16 @@ const SYNC_PHASES: SyncPhase[] = [
   { id: 'tracker', label: 'Client Tracker', description: 'Fetching fresh client data...' },
   { id: 'booked', label: 'Booked Clients', description: 'Syncing to booked clients sheet...' },
   { id: 'events', label: 'Event Details', description: 'Updating event logistics...' },
+  { id: 'vendors', label: 'Vendor Sync', description: 'Refreshing venue & parlour data...' },
 ];
 
 export function MasterSyncButton() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [showOverlay, setShowOverlay] = useState(false);
-  const [currentPhase, setCurrentPhase] = useState<'countdown' | 'tracker' | 'booked' | 'events' | 'complete'>('countdown');
+  const [currentPhase, setCurrentPhase] = useState<'countdown' | 'tracker' | 'booked' | 'events' | 'vendors' | 'complete'>('countdown');
   const [progress, setProgress] = useState(0);
   const [countdown, setCountdown] = useState(3);
-  const [syncStats, setSyncStats] = useState({ clients: 0, synced: 0, events: 0 });
+  const [syncStats, setSyncStats] = useState({ clients: 0, synced: 0, events: 0, vendors: 0 });
   const [showSuccess, setShowSuccess] = useState(false);
 
   const handleMasterSync = async () => {
@@ -34,7 +36,7 @@ export function MasterSyncButton() {
     setCurrentPhase('countdown');
     setProgress(0);
     setCountdown(3);
-    setSyncStats({ clients: 0, synced: 0, events: 0 });
+    setSyncStats({ clients: 0, synced: 0, events: 0, vendors: 0 });
     setShowSuccess(false);
     
     // Countdown animation
@@ -44,7 +46,7 @@ export function MasterSyncButton() {
     }
     
     try {
-      // Phase 1: Client Tracker (0-33%)
+      // Phase 1: Client Tracker (0-25%)
       setCurrentPhase('tracker');
       setProgress(5);
       
@@ -62,26 +64,67 @@ export function MasterSyncButton() {
       notifyCacheUpdate('all');
       
       setSyncStats(prev => ({ ...prev, clients: clients.length }));
-      setProgress(33);
+      setProgress(25);
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Phase 2: Booked Clients (34-66%)
+      // Phase 2: Booked Clients (26-50%)
       setCurrentPhase('booked');
-      setProgress(40);
+      setProgress(30);
       
       const bookedResult = await fullResyncAllBookedClients(true);
       
       setSyncStats(prev => ({ ...prev, synced: bookedResult.syncedCount + bookedResult.copiedCount }));
-      setProgress(66);
+      setProgress(50);
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Phase 3: Event Details (67-100%)
+      // Phase 3: Event Details (51-75%)
       setCurrentPhase('events');
-      setProgress(75);
+      setProgress(55);
       
       const eventsResult = await fullSyncEventDetails();
       
       setSyncStats(prev => ({ ...prev, events: eventsResult.copiedCount + eventsResult.updatedCount }));
+      setProgress(75);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Phase 4: Vendor Sync (76-100%)
+      setCurrentPhase('vendors');
+      setProgress(80);
+      
+      // Get all booked clients and refresh their vendor data
+      const { data: bookedClientsData } = await supabase.functions.invoke('google-sheets', {
+        body: { action: 'getBookedClients', limit: 500 }
+      });
+      
+      let vendorUpdatesCount = 0;
+      const bookedClients = bookedClientsData?.data || [];
+      
+      // Refresh vendor data for each booked client (in batches to avoid rate limits)
+      for (let i = 0; i < bookedClients.length; i++) {
+        const client = bookedClients[i];
+        if (!client.registeredDateTimeAD) continue;
+        
+        try {
+          const { data: refreshResult } = await supabase.functions.invoke('google-sheets', {
+            body: {
+              action: 'refreshClientVendorData',
+              data: { registeredDateTimeAD: client.registeredDateTimeAD }
+            }
+          });
+          
+          if (refreshResult?.data?.eventsUpdated > 0) {
+            vendorUpdatesCount += refreshResult.data.eventsUpdated;
+          }
+        } catch (err) {
+          console.warn(`Failed to refresh vendor data for ${client.clientName}:`, err);
+        }
+        
+        // Update progress incrementally
+        const progressIncrement = (100 - 80) * ((i + 1) / bookedClients.length);
+        setProgress(80 + progressIncrement);
+      }
+      
+      setSyncStats(prev => ({ ...prev, vendors: vendorUpdatesCount }));
       setProgress(100);
       await new Promise(resolve => setTimeout(resolve, 500));
       
@@ -92,7 +135,7 @@ export function MasterSyncButton() {
       await new Promise(resolve => setTimeout(resolve, 3000));
       
       toast.success("Master Sync Complete!", {
-        description: `${syncStats.clients} clients • ${syncStats.synced} synced • ${syncStats.events} events updated`,
+        description: `${syncStats.clients} clients • ${syncStats.synced} synced • ${syncStats.events} events • ${vendorUpdatesCount} vendor updates`,
       });
       
     } catch (error) {
@@ -189,7 +232,7 @@ export function MasterSyncButton() {
             )}
 
             {/* Syncing Phases */}
-            {(currentPhase === 'tracker' || currentPhase === 'booked' || currentPhase === 'events') && (
+            {(currentPhase === 'tracker' || currentPhase === 'booked' || currentPhase === 'events' || currentPhase === 'vendors') && (
               <>
                 {/* Rocket with Flames */}
                 <div className="relative mb-12 animate-bounce" style={{ animationDuration: '2s' }}>
@@ -222,9 +265,9 @@ export function MasterSyncButton() {
                     className="h-4 bg-gray-800 [&>div]:bg-gradient-to-r [&>div]:from-cyan-400 [&>div]:to-purple-500 [&>div]:shadow-[0_0_20px_rgba(34,211,238,0.5)]"
                   />
                   <div className="flex justify-between mt-3">
-                    <span className="text-cyan-400 font-medium">{progress}%</span>
+                    <span className="text-cyan-400 font-medium">{Math.round(progress)}%</span>
                     <span className="text-gray-400 text-sm">
-                      Phase {currentPhase === 'tracker' ? 1 : currentPhase === 'booked' ? 2 : 3} of 3
+                      Phase {currentPhase === 'tracker' ? 1 : currentPhase === 'booked' ? 2 : currentPhase === 'events' ? 3 : 4} of 4
                     </span>
                   </div>
                 </div>
@@ -279,6 +322,10 @@ export function MasterSyncButton() {
                   <div className="text-center">
                     <div className="text-3xl font-bold text-green-400">{syncStats.events}</div>
                     <div className="text-sm text-gray-400">Events</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-amber-400">{syncStats.vendors}</div>
+                    <div className="text-sm text-gray-400">Vendors</div>
                   </div>
                 </div>
                 
