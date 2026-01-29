@@ -297,6 +297,7 @@ const ClientDetail = () => {
     isResyncing: contactDetailsResyncing,
     updateContactDetails,
     resyncClient: resyncContactDetails,
+    markFormAsSent,
   } = useClientContactDetails(client?.registeredDateTimeAD);
 
   // All event options for the event selector
@@ -1300,6 +1301,7 @@ const ClientDetail = () => {
                 isResyncing={contactDetailsResyncing}
                 onSave={updateContactDetails}
                 onResync={resyncContactDetails}
+                onMarkFormSent={markFormAsSent}
               />
             </div>
           )}

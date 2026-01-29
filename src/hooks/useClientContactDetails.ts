@@ -118,6 +118,20 @@ export function useClientContactDetails(registeredDateTimeAD: string | undefined
     }
   }, [registeredDateTimeAD]);
 
+  const markFormAsSent = useCallback(async (): Promise<boolean> => {
+    if (!registeredDateTimeAD) return false;
+    
+    try {
+      const success = await updateContactDetails({ 
+        formSentDate: new Date().toISOString() 
+      });
+      return success;
+    } catch (err) {
+      console.error('Error marking form as sent:', err);
+      return false;
+    }
+  }, [registeredDateTimeAD, updateContactDetails]);
+
   return {
     data,
     isLoading,
@@ -126,5 +140,6 @@ export function useClientContactDetails(registeredDateTimeAD: string | undefined
     refetch: fetchContactDetails,
     updateContactDetails,
     resyncClient,
+    markFormAsSent,
   };
 }

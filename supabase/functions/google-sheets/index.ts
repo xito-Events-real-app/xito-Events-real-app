@@ -405,7 +405,7 @@ async function refreshClientVendorData(
 
 // ============= CLIENT CONTACT DETAILS FUNCTIONS =============
 // Get client contact details from "BOOKED CLIENTS CONTACT DETAILS" sheet
-// Schema: A: registeredDateTimeAD, B: registeredDateBS, C: clientName, D-O: Bride details, P-AA: Groom details
+// Schema: A: registeredDateTimeAD, B: registeredDateBS, C: clientName, D-O: Bride details, P-AA: Groom details, AB: formSentDate
 async function getClientContactDetails(
   accessToken: string,
   spreadsheetId: string,
@@ -413,8 +413,8 @@ async function getClientContactDetails(
 ) {
   console.info(`[CONTACT DETAILS] Fetching for client: ${registeredDateTimeAD}`);
   
-  // 1. Try to find client in BOOKED CLIENTS CONTACT DETAILS by Column A
-  const range = encodeURIComponent("'BOOKED CLIENTS CONTACT DETAILS'!A2:AA1000");
+  // 1. Try to find client in BOOKED CLIENTS CONTACT DETAILS by Column A (now A:AB = 28 columns)
+  const range = encodeURIComponent("'BOOKED CLIENTS CONTACT DETAILS'!A2:AB1000");
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   const response = await fetch(url, {
@@ -456,6 +456,7 @@ async function getClientContactDetails(
         groomHomeArea: '',
         groomHomeMap: '',
         groomHomeLandmark: '',
+        formSentDate: '',
       };
     }
     throw new Error(`Google Sheets API error: ${response.status}`);
@@ -499,11 +500,12 @@ async function getClientContactDetails(
             bookedRow[0] || '', // A: registeredDateTimeAD
             bookedRow[1] || '', // B: registeredDateBS
             bookedRow[2] || '', // C: clientName
-            '', '', '', '', '', '', '', '', '', '', '', '', // D-O: Bride (empty)
-            '', '', '', '', '', '', '', '', '', '', '', ''  // P-AA: Groom (empty)
+            '', '', '', '', '', '', '', '', '', '', '', '', // D-O: Bride (12 fields empty)
+            '', '', '', '', '', '', '', '', '', '', '', '', // P-AA: Groom (12 fields empty)
+            ''  // AB: formSentDate (empty)
           ];
           
-          const appendRange = encodeURIComponent("'BOOKED CLIENTS CONTACT DETAILS'!A:AA");
+          const appendRange = encodeURIComponent("'BOOKED CLIENTS CONTACT DETAILS'!A:AB");
           const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${appendRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
           
           const appendResponse = await fetch(appendUrl, {
@@ -552,6 +554,7 @@ async function getClientContactDetails(
               groomHomeArea: '',
               groomHomeMap: '',
               groomHomeLandmark: '',
+              formSentDate: '',
             };
           }
           break;
@@ -589,6 +592,7 @@ async function getClientContactDetails(
       groomHomeArea: '',
       groomHomeMap: '',
       groomHomeLandmark: '',
+      formSentDate: '',
     };
   }
 
@@ -622,6 +626,7 @@ async function getClientContactDetails(
     groomHomeArea: foundRow[24] || '',
     groomHomeMap: foundRow[25] || '',
     groomHomeLandmark: foundRow[26] || '',
+    formSentDate: foundRow[27] || '',
   };
 }
 
@@ -669,10 +674,11 @@ async function updateClientContactDetails(
     groomHomeArea: 24,
     groomHomeMap: 25,
     groomHomeLandmark: 26,
+    formSentDate: 27,
   };
 
-  // Build the update row (columns D-AA)
-  const rowValues: string[] = new Array(24).fill('');
+  // Build the update row (columns D-AB = 25 columns)
+  const rowValues: string[] = new Array(25).fill('');
   
   // Start with current values
   rowValues[0] = currentData.brideFullName;
@@ -699,6 +705,7 @@ async function updateClientContactDetails(
   rowValues[21] = currentData.groomHomeArea;
   rowValues[22] = currentData.groomHomeMap;
   rowValues[23] = currentData.groomHomeLandmark;
+  rowValues[24] = currentData.formSentDate;
   
   // Apply updates
   for (const [key, value] of Object.entries(updates)) {
@@ -708,8 +715,8 @@ async function updateClientContactDetails(
     }
   }
 
-  // Update the row (columns D-AA)
-  const updateRange = encodeURIComponent(`'BOOKED CLIENTS CONTACT DETAILS'!D${rowNumber}:AA${rowNumber}`);
+  // Update the row (columns D-AB)
+  const updateRange = encodeURIComponent(`'BOOKED CLIENTS CONTACT DETAILS'!D${rowNumber}:AB${rowNumber}`);
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`;
   
   const response = await fetch(updateUrl, {
@@ -758,8 +765,8 @@ async function fullSyncContactDetails(accessToken: string, spreadsheetId: string
     return { copiedCount: 0, updatedCount: 0, totalClients: 0 };
   }
   
-  // 2. Fetch existing CONTACT DETAILS entries
-  const contactRange = encodeURIComponent("'BOOKED CLIENTS CONTACT DETAILS'!A2:AA2000");
+  // 2. Fetch existing CONTACT DETAILS entries (now including column AB)
+  const contactRange = encodeURIComponent("'BOOKED CLIENTS CONTACT DETAILS'!A2:AB2000");
   const contactUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${contactRange}`;
   
   const contactResponse = await fetch(contactUrl, {
@@ -794,13 +801,14 @@ async function fullSyncContactDetails(accessToken: string, spreadsheetId: string
     const existing = existingMap.get(registeredDateTimeAD);
     
     if (!existing) {
-      // Create new row with A-C synced, D-AA empty
+      // Create new row with A-C synced, D-AB empty
       const newRow = [
         bookedRow[0] || '', // A: registeredDateTimeAD
         bookedRow[1] || '', // B: registeredDateBS
         bookedRow[2] || '', // C: clientName
-        '', '', '', '', '', '', '', '', '', '', '', '', // D-O: Bride (empty)
-        '', '', '', '', '', '', '', '', '', '', '', ''  // P-AA: Groom (empty)
+        '', '', '', '', '', '', '', '', '', '', '', '', // D-O: Bride (12 fields empty)
+        '', '', '', '', '', '', '', '', '', '', '', '', // P-AA: Groom (12 fields empty)
+        ''  // AB: formSentDate (empty)
       ];
       newRows.push(newRow);
       copiedCount++;
@@ -830,7 +838,7 @@ async function fullSyncContactDetails(accessToken: string, spreadsheetId: string
   
   // 5. Batch append new rows
   if (newRows.length > 0) {
-    const appendRange = encodeURIComponent("'BOOKED CLIENTS CONTACT DETAILS'!A:AA");
+    const appendRange = encodeURIComponent("'BOOKED CLIENTS CONTACT DETAILS'!A:AB");
     const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${appendRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
     
     await fetch(appendUrl, {
