@@ -249,10 +249,35 @@ export const FullScreenEventCard = ({
     return start || end;
   };
 
+  // Format time for display (e.g., "8:00 AM")
+  const formatTime = (time: string): string => {
+    if (!time) return '';
+    if (time.includes('AM') || time.includes('PM')) return time;
+    const match = time.match(/(\d{1,2}):?(\d{2})?/);
+    if (match) {
+      let hours = parseInt(match[1]);
+      const mins = match[2] || '00';
+      const isPM = hours >= 12;
+      const displayHours = hours % 12 || 12;
+      return `${displayHours}:${mins} ${isPM ? 'PM' : 'AM'}`;
+    }
+    return time;
+  };
+
+  // Build venue time range
+  const venueTimeRange = event.eventStartTime && event.eventEndTime
+    ? `${formatTime(event.eventStartTime)} - ${formatTime(event.eventEndTime)}`
+    : event.eventStartTime ? formatTime(event.eventStartTime) : '';
+
+  // Build parlour time range  
+  const parlourTimeRange = event.parlourStartTime && event.parlourEndTime
+    ? `${formatTime(event.parlourStartTime)} - ${formatTime(event.parlourEndTime)}`
+    : event.parlourStartTime ? formatTime(event.parlourStartTime) : '';
+
   return (
     <div className={cn(
       "rounded-xl border transition-all duration-300",
-      isExpanded ? `bg-gradient-to-br ${getEventColor()}` : "bg-white/5 border-white/10 hover:border-white/20",
+      isExpanded ? `bg-gradient-to-br ${getEventColor()}` : "bg-slate-800/60 border-slate-700/50 hover:border-slate-600/70",
       showUrgencyWarning && !isExpanded && "ring-2 ring-red-500/50"
     )}>
       {/* Header - Always visible, clickable to expand/collapse */}
@@ -308,98 +333,116 @@ export const FullScreenEventCard = ({
 
       {/* Content - Read-only when collapsed, Form when expanded */}
       {!isExpanded ? (
-        /* Read-only Details View */
-        <div className="px-4 pb-4 space-y-3 text-sm">
-          {/* Venue Row */}
-          <div className="flex items-start gap-3">
-            <MapPin className="h-4 w-4 mt-0.5 text-white/50 shrink-0" />
-            <div className="flex-1">
-              <span className="text-white/50 text-xs">Venue:</span>
-              <div className="text-white/90">
-                {event.venueType && <Badge variant="outline" className="mr-2 text-xs bg-white/5 border-white/20">{event.venueType}</Badge>}
-                {formatVenueDisplay()}
-                {event.venueMap && (
-                  <a href={event.venueMap} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-400 hover:text-blue-300">
-                    <ExternalLink className="h-3 w-3 inline" />
-                  </a>
+        /* Read-only Details View - Dashboard Style */
+        <div className="px-4 pb-4">
+          <div className="flex gap-4 border-t border-slate-700/30 pt-3">
+            {/* LEFT - Date Column */}
+            <div className="w-1/4 min-w-[80px]">
+              <div className="text-sm font-bold uppercase text-emerald-400">
+                {monthName} {event.eventDay}
+              </div>
+              <div className="text-xs text-white/70 mt-0.5">
+                {event.eventYear}
+              </div>
+              {event.venueType && (
+                <Badge variant="outline" className="mt-1.5 text-xs bg-white/10 border-white/20 text-white/80">
+                  {event.venueType}
+                </Badge>
+              )}
+            </div>
+            
+            {/* RIGHT - Details Column */}
+            <div className="w-3/4 space-y-2">
+              {/* Venue Row */}
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span className="text-xs font-medium text-amber-400">Venue:</span>
+                {event.venueName ? (
+                  <>
+                    <span className="text-sm font-semibold text-white">{event.venueName}</span>
+                    {(event.venueArea || event.venueCity) && (
+                      <span className="text-xs text-white/70">
+                        {[event.venueArea, event.venueCity].filter(Boolean).join(', ')}
+                      </span>
+                    )}
+                    {event.venueMap && (
+                      <a
+                        href={event.venueMap}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-0.5 text-blue-400 hover:text-blue-300"
+                      >
+                        <MapPin className="h-3 w-3" />
+                        <ExternalLink className="h-2.5 w-2.5" />
+                      </a>
+                    )}
+                    {venueTimeRange && (
+                      <span className="text-xs font-medium text-emerald-400">{venueTimeRange}</span>
+                    )}
+                    {event.guestCount && (
+                      <span className="text-xs font-medium text-amber-400">({event.guestCount})</span>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-xs text-white/40 italic">Not set</span>
                 )}
               </div>
-            </div>
-          </div>
-
-          {/* Event Timing Row */}
-          <div className="flex items-start gap-3">
-            <Clock className="h-4 w-4 mt-0.5 text-white/50 shrink-0" />
-            <div className="flex-1">
-              <span className="text-white/50 text-xs">Event Time:</span>
-              <div className="text-white/90">{formatTimeDisplay(event.eventStartTime, event.eventEndTime)}</div>
-            </div>
-          </div>
-
-          {/* Parlour Row */}
-          <div className="flex items-start gap-3">
-            <Scissors className="h-4 w-4 mt-0.5 text-white/50 shrink-0" />
-            <div className="flex-1">
-              <span className="text-white/50 text-xs">Parlour:</span>
-              <div className="text-white/90">
-                {event.parlourType && <Badge variant="outline" className="mr-2 text-xs bg-white/5 border-white/20">{event.parlourType}</Badge>}
-                {formatParlourDisplay()}
-                {event.parlourMap && (
-                  <a href={event.parlourMap} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-400 hover:text-blue-300">
-                    <ExternalLink className="h-3 w-3 inline" />
-                  </a>
+              
+              {/* Parlour Row */}
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span className="text-xs font-medium text-purple-400">Parlour:</span>
+                {event.parlourName ? (
+                  <>
+                    <span className="text-sm font-semibold text-white">{event.parlourName}</span>
+                    {(event.parlourArea || event.parlourCity) && (
+                      <span className="text-xs text-white/70">
+                        {[event.parlourArea, event.parlourCity].filter(Boolean).join(', ')}
+                      </span>
+                    )}
+                    {event.parlourMap && (
+                      <a
+                        href={event.parlourMap}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-0.5 text-blue-400 hover:text-blue-300"
+                      >
+                        <MapPin className="h-3 w-3" />
+                        <ExternalLink className="h-2.5 w-2.5" />
+                      </a>
+                    )}
+                    {parlourTimeRange && (
+                      <span className="text-xs font-medium text-emerald-400">{parlourTimeRange}</span>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-xs text-white/40 italic">Not set</span>
                 )}
               </div>
-            </div>
-          </div>
 
-          {/* Parlour Timing Row */}
-          <div className="flex items-start gap-3">
-            <Clock className="h-4 w-4 mt-0.5 text-white/50 shrink-0" />
-            <div className="flex-1">
-              <span className="text-white/50 text-xs">Parlour Time:</span>
-              <div className="text-white/90">{formatTimeDisplay(event.parlourStartTime, event.parlourEndTime)}</div>
-            </div>
-          </div>
+              {/* Groom in Mehndi (if applicable) */}
+              {eventName.toUpperCase().includes('MEHNDI') && (
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <span className="text-xs font-medium text-pink-400">Groom Comes:</span>
+                  <span className={cn(
+                    "text-xs font-medium",
+                    event.doGroomComeInMehndi === 'YES' ? "text-emerald-400" : "text-white/40 italic"
+                  )}>
+                    {event.doGroomComeInMehndi || 'Not set'}
+                  </span>
+                </div>
+              )}
 
-          {/* Guest Count Row */}
-          <div className="flex items-start gap-3">
-            <Users className="h-4 w-4 mt-0.5 text-white/50 shrink-0" />
-            <div className="flex-1">
-              <span className="text-white/50 text-xs">Guest Count:</span>
-              <div className="text-white/90">{event.guestCount || 'Not set'}</div>
-            </div>
-          </div>
+              {/* Demands (if any) */}
+              {event.eventDemands && event.eventDemands.some(d => d.trim()) && (
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <span className="text-xs font-medium text-cyan-400">Demands:</span>
+                  <span className="text-xs text-white/80">{event.eventDemands.filter(d => d.trim()).join(', ')}</span>
+                </div>
+              )}
 
-          {/* Groom in Mehndi (if applicable) */}
-          {eventName.toUpperCase().includes('MEHNDI') && (
-            <div className="flex items-start gap-3">
-              <Users className="h-4 w-4 mt-0.5 text-white/50 shrink-0" />
-              <div className="flex-1">
-                <span className="text-white/50 text-xs">Groom Comes:</span>
-                <div className="text-white/90">{event.doGroomComeInMehndi || 'Not set'}</div>
-              </div>
-            </div>
-          )}
-
-          {/* Demands (if any) */}
-          {event.eventDemands && event.eventDemands.some(d => d.trim()) && (
-            <div className="flex items-start gap-3">
-              <FileText className="h-4 w-4 mt-0.5 text-white/50 shrink-0" />
-              <div className="flex-1">
-                <span className="text-white/50 text-xs">Demands:</span>
-                <div className="text-white/90">{event.eventDemands.filter(d => d.trim()).join(', ')}</div>
-              </div>
-            </div>
-          )}
-
-          {/* References (if any) */}
-          {event.eventReferences && event.eventReferences.some(r => r.trim()) && (
-            <div className="flex items-start gap-3">
-              <Link2 className="h-4 w-4 mt-0.5 text-white/50 shrink-0" />
-              <div className="flex-1">
-                <span className="text-white/50 text-xs">References:</span>
-                <div className="text-white/90 flex flex-wrap gap-2">
+              {/* References (if any) */}
+              {event.eventReferences && event.eventReferences.some(r => r.trim()) && (
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <span className="text-xs font-medium text-sky-400">References:</span>
                   {event.eventReferences.filter(r => r.trim()).map((ref, idx) => (
                     <a 
                       key={idx} 
@@ -412,9 +455,9 @@ export const FullScreenEventCard = ({
                     </a>
                   ))}
                 </div>
-              </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       ) : (
         /* Expanded Edit Form */
