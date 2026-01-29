@@ -1,7 +1,7 @@
 import { suiteModules } from "@/lib/suite-modules";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Smartphone, Construction } from "lucide-react";
+import { Smartphone, Construction, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useDesktopMode } from "@/hooks/useDesktopMode";
@@ -11,12 +11,21 @@ import { ModuleCard } from "./ModuleCard";
 import { MasterSyncButton } from "./MasterSyncButton";
 import { useSuiteStats } from "@/hooks/useSuiteStats";
 import { formatNPR } from "@/lib/client-card-utils";
+import { useAuth } from "@/hooks/useAuth";
+import { useNavigate } from "react-router-dom";
 
 export function DesktopSuiteLanding() {
+  const navigate = useNavigate();
   const { toggleDesktopMode } = useDesktopMode();
+  const { signOut } = useAuth();
   const activeModules = suiteModules.filter(m => m.status === 'active');
   const comingSoonModules = suiteModules.filter(m => m.status === 'coming-soon');
   const stats = useSuiteStats();
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/login', { replace: true });
+  };
 
   const handleComingSoonClick = (moduleName: string) => {
     toast.info(`${moduleName} is coming soon!`, {
@@ -80,15 +89,26 @@ export function DesktopSuiteLanding() {
               <p className="text-sm text-gray-500">Your complete business toolkit</p>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={toggleDesktopMode}
-            className="gap-2 bg-white border-gray-300 text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-          >
-            <Smartphone className="w-4 h-4" />
-            Switch to Mobile
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleDesktopMode}
+              className="gap-2 bg-white border-gray-300 text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+            >
+              <Smartphone className="w-4 h-4" />
+              Switch to Mobile
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLogout}
+              className="gap-2 text-gray-500 hover:text-red-600 hover:bg-red-50"
+            >
+              <LogOut className="w-4 h-4" />
+              Logout
+            </Button>
+          </div>
         </div>
       </div>
 
