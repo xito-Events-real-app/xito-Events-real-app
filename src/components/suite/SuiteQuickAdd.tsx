@@ -42,7 +42,7 @@ export function SuiteQuickAdd() {
   );
 
   const handleAddClient = () => {
-    navigate("/client-tracker/add");
+    navigate("/client-tracker/quick-add");
   };
 
   const handleAddPayment = () => {
