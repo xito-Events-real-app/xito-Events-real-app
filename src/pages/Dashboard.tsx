@@ -41,8 +41,6 @@ const handlerColors = [
   'from-amber-500 to-yellow-600',
 ];
 
-// Casino audio URL
-const CASINO_AUDIO_URL = "https://assets.mixkit.co/active_storage/sfx/212/212-preview.mp3";
 
 export default function Dashboard() {
   const { 
@@ -93,9 +91,6 @@ export default function Dashboard() {
   const pullThreshold = 120;
   const swipeLeftThreshold = 60;
   
-  // Audio refs
-  const casinoAudioRef = useRef<HTMLAudioElement | null>(null);
-  const audioInitialized = useRef(false);
 
   // Listen for online/offline status
   useState(() => {
@@ -444,29 +439,9 @@ export default function Dashboard() {
   };
 
 
-  // Initialize audio on first touch
-  const initAudio = useCallback(() => {
-    if (!audioInitialized.current) {
-      casinoAudioRef.current = new Audio(CASINO_AUDIO_URL);
-      casinoAudioRef.current.loop = true;
-      casinoAudioRef.current.volume = 0;
-      audioInitialized.current = true;
-    }
-  }, []);
 
-  // Cleanup audio on unmount
-  useEffect(() => {
-    return () => {
-      if (casinoAudioRef.current) {
-        casinoAudioRef.current.pause();
-        casinoAudioRef.current = null;
-      }
-    };
-  }, []);
-
-  // Pull to refresh handlers with audio fade-in
+  // Pull to refresh handlers
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    initAudio();
     if (containerRef.current) {
       scrollTop.current = containerRef.current.scrollTop;
     }
@@ -478,7 +453,7 @@ export default function Dashboard() {
     
     // Check if touch started from left edge of screen (for date converter)
     swipeStartedFromLeft.current = startX < 40;
-  }, [initAudio]);
+  }, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     const currentX = e.touches[0].clientX;
@@ -511,18 +486,6 @@ export default function Dashboard() {
       // Calculate pull progress (0 to 1)
       const pullProgress = distance / pullThreshold;
       
-      // Start fading in audio at 10% pull
-      if (pullProgress > 0.1 && casinoAudioRef.current) {
-        // Volume increases from 0 to 0.4 as we pull
-        const targetVolume = Math.min(pullProgress * 0.5, 0.4);
-        casinoAudioRef.current.volume = targetVolume;
-        
-        // Start playing if not already
-        if (casinoAudioRef.current.paused) {
-          casinoAudioRef.current.play().catch(() => {});
-        }
-      }
-      
       // Show jackpot popup when threshold reached
       if (distance >= pullThreshold && !showJackpot) {
         // Check if device has a valid handler (within 24 hours)
@@ -552,21 +515,6 @@ export default function Dashboard() {
     // Reset pull distance if didn't reach threshold
     if (pullDistance < pullThreshold) {
       setPullDistance(0);
-      
-      // Fade out audio if didn't reach threshold
-      if (casinoAudioRef.current && !showJackpot) {
-        const fadeOut = setInterval(() => {
-          if (casinoAudioRef.current && casinoAudioRef.current.volume > 0.05) {
-            casinoAudioRef.current.volume -= 0.05;
-          } else {
-            clearInterval(fadeOut);
-            if (casinoAudioRef.current) {
-              casinoAudioRef.current.pause();
-              casinoAudioRef.current.currentTime = 0;
-            }
-          }
-        }, 30);
-      }
     }
   }, [pullDistance, showJackpot]);
 
@@ -629,7 +577,6 @@ export default function Dashboard() {
         handlers={jackpotHandlers}
         onSelectHandler={handleJackpotSelect}
         onClose={handleJackpotClose}
-        casinoAudioRef={casinoAudioRef}
         soloHandler={soloHandler}
       />
 

@@ -14,27 +14,16 @@ interface HandlerJackpotPopupProps {
   handlers: Handler[];
   onSelectHandler: (handler: string, shouldRemember: boolean) => void;
   onClose: () => void;
-  casinoAudioRef: React.RefObject<HTMLAudioElement | null>;
-  soloHandler?: { name: string; colorClass: string } | null; // For device-registered handler
+  soloHandler?: { name: string; colorClass: string } | null;
 }
-
-// Audio URLs
-const AUDIO_URLS = {
-  spin: "https://assets.mixkit.co/active_storage/sfx/2003/2003-preview.mp3", // Fast tick
-  win: "https://assets.mixkit.co/active_storage/sfx/270/270-preview.mp3", // Big win explosion
-};
 
 export function HandlerJackpotPopup({
   isOpen,
   handlers,
   onSelectHandler,
   onClose,
-  casinoAudioRef,
   soloHandler,
 }: HandlerJackpotPopupProps) {
-  const winAudioRef = useRef<HTMLAudioElement | null>(null);
-  const tickAudioRef = useRef<HTMLAudioElement | null>(null);
-  
   const [selectedHandler, setSelectedHandler] = useState<string | null>(null);
   const [showWinEffect, setShowWinEffect] = useState(false);
   const [spinIndex, setSpinIndex] = useState(0);
@@ -44,52 +33,22 @@ export function HandlerJackpotPopup({
   const spinIntervalRef = useRef<number | null>(null);
   const spinCountRef = useRef(0);
 
-  // Stop all audio immediately
-  const stopAllAudio = useCallback(() => {
-    if (casinoAudioRef.current) {
-      casinoAudioRef.current.pause();
-      casinoAudioRef.current.currentTime = 0;
-      casinoAudioRef.current.volume = 0;
-    }
-    if (tickAudioRef.current) {
-      tickAudioRef.current.pause();
-    }
-  }, [casinoAudioRef]);
-
   // SOLO MODE: Auto-redirect for registered device handler
   useEffect(() => {
     if (!isOpen || !soloHandler) return;
-    
-    // Stop casino music, play win sound
-    if (casinoAudioRef.current) {
-      casinoAudioRef.current.pause();
-      casinoAudioRef.current.currentTime = 0;
-    }
-    
-    // Prepare win sound
-    if (!winAudioRef.current) {
-      winAudioRef.current = new Audio(AUDIO_URLS.win);
-    }
     
     // Brief celebration then auto-redirect
     setShowWinEffect(true);
     setSelectedHandler(soloHandler.name);
     setIsSpinning(false);
     
-    // Play win sound
-    if (winAudioRef.current) {
-      winAudioRef.current.currentTime = 0;
-      winAudioRef.current.volume = 0.7;
-      winAudioRef.current.play().catch(() => {});
-    }
-    
     // Auto-redirect after brief celebration (800ms)
     const timer = setTimeout(() => {
-      onSelectHandler(soloHandler.name, false); // Already remembered, no need to save again
+      onSelectHandler(soloHandler.name, false);
     }, 800);
     
     return () => clearTimeout(timer);
-  }, [isOpen, soloHandler, casinoAudioRef, onSelectHandler]);
+  }, [isOpen, soloHandler, onSelectHandler]);
 
   // NORMAL MODE: Ultra fast slot spin effect (only when no soloHandler)
   useEffect(() => {
@@ -100,49 +59,22 @@ export function HandlerJackpotPopup({
     setShowWinEffect(false);
     spinCountRef.current = 0;
 
-    // Ensure casino music plays
-    if (casinoAudioRef.current) {
-      casinoAudioRef.current.volume = 0.4;
-      casinoAudioRef.current.play().catch(() => {});
-    }
-
-    // Prepare tick sound
-    if (!tickAudioRef.current) {
-      tickAudioRef.current = new Audio(AUDIO_URLS.spin);
-    }
-
-    // Prepare win sound
-    if (!winAudioRef.current) {
-      winAudioRef.current = new Audio(AUDIO_URLS.win);
-    }
-
     // ULTRA FAST spinning - 30ms intervals
-    const totalSpins = 25; // Only 25 spins = ~750ms total
+    const totalSpins = 25;
     let currentSpeed = 30;
     
     const spin = () => {
       spinCountRef.current++;
       setSpinIndex(prev => (prev + 1) % handlers.length);
-      
-      // Play tick every few spins
-      if (tickAudioRef.current && spinCountRef.current % 3 === 0) {
-        tickAudioRef.current.currentTime = 0;
-        tickAudioRef.current.volume = 0.15;
-        tickAudioRef.current.play().catch(() => {});
-      }
 
       if (spinCountRef.current < totalSpins) {
-        // Speed up slightly at end
         currentSpeed = spinCountRef.current > 20 ? 60 : 30;
         spinIntervalRef.current = window.setTimeout(spin, currentSpeed);
       } else {
-        // Stop immediately
         setIsSpinning(false);
-        if (tickAudioRef.current) tickAudioRef.current.pause();
       }
     };
 
-    // Start spinning immediately
     spinIntervalRef.current = window.setTimeout(spin, 30);
 
     return () => {
@@ -150,7 +82,7 @@ export function HandlerJackpotPopup({
         clearTimeout(spinIntervalRef.current);
       }
     };
-  }, [isOpen, handlers, casinoAudioRef, soloHandler]);
+  }, [isOpen, handlers, soloHandler]);
 
   // Cleanup
   useEffect(() => {
@@ -164,16 +96,6 @@ export function HandlerJackpotPopup({
     
     setSelectedHandler(handler);
     setShowWinEffect(true);
-
-    // Stop all audio IMMEDIATELY
-    stopAllAudio();
-
-    // Play win sound
-    if (winAudioRef.current) {
-      winAudioRef.current.currentTime = 0;
-      winAudioRef.current.volume = 0.7;
-      winAudioRef.current.play().catch(() => {});
-    }
 
     // Show remember prompt after brief win effect
     setTimeout(() => {
@@ -192,7 +114,6 @@ export function HandlerJackpotPopup({
   };
 
   const handleSkip = () => {
-    stopAllAudio();
     if (spinIntervalRef.current) clearTimeout(spinIntervalRef.current);
     onClose();
   };
@@ -459,59 +380,54 @@ export function HandlerJackpotPopup({
 
       {/* Remember Me Prompt */}
       {showRememberPrompt && pendingHandler && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
-          <div className="relative z-10 w-[85%] max-w-xs bg-gradient-to-b from-gray-900 to-black rounded-2xl p-5 border-2 border-yellow-500/50 shadow-2xl animate-jackpot-entrance">
-            {/* Handler Display */}
-            <div className="flex flex-col items-center mb-4">
-              <div className={cn(
-                "w-16 h-16 rounded-full flex items-center justify-center text-white font-black text-xl bg-gradient-to-br mb-2",
-                handlers.find(h => h.name === pendingHandler)?.colorClass || "from-violet-500 to-purple-600"
-              )} style={{ boxShadow: '0 0 25px rgba(255,215,0,0.5)' }}>
-                {getInitials(pendingHandler)}
+        <div className="fixed inset-0 z-[110] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/80" />
+          <div className="relative z-10 bg-gradient-to-b from-gray-900 to-black rounded-2xl p-6 w-[85%] max-w-xs border-2 border-yellow-500/50 shadow-[0_0_30px_rgba(255,215,0,0.3)]">
+            <div className="text-center">
+              <Trophy className="w-12 h-12 text-yellow-400 mx-auto mb-3" style={{ filter: 'drop-shadow(0 0 10px gold)' }} />
+              <h3 className="text-lg font-black text-white mb-2">
+                Remember This Device?
+              </h3>
+              <p className="text-sm text-gray-400 mb-4">
+                Skip the jackpot next time and go straight to <span className="text-yellow-400 font-bold">{pendingHandler}</span>'s tasks?
+              </p>
+              
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => handleRememberChoice(false)}
+                  variant="outline"
+                  className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-800"
+                >
+                  <X className="w-4 h-4 mr-1" />
+                  No
+                </Button>
+                <Button
+                  onClick={() => handleRememberChoice(true)}
+                  className="flex-1 bg-gradient-to-r from-yellow-500 to-amber-500 text-black font-bold hover:from-yellow-400 hover:to-amber-400"
+                >
+                  <Check className="w-4 h-4 mr-1" />
+                  Yes!
+                </Button>
               </div>
-              <h3 className="text-xl font-black text-yellow-400">{pendingHandler}</h3>
-            </div>
-
-            {/* Question */}
-            <div className="text-center mb-5">
-              <p className="text-sm text-gray-300 mb-1">Is this <span className="font-bold text-white">YOUR</span> device?</p>
-              <p className="text-[10px] text-gray-500">App will auto-open your tasks next time</p>
-            </div>
-
-            {/* Buttons */}
-            <div className="flex gap-3">
-              <Button
-                onClick={() => handleRememberChoice(false)}
-                variant="outline"
-                className="flex-1 bg-gray-800 border-gray-600 text-gray-300 hover:bg-gray-700"
-              >
-                <X className="w-4 h-4 mr-1.5" />
-                No, Skip
-              </Button>
-              <Button
-                onClick={() => handleRememberChoice(true)}
-                className="flex-1 bg-gradient-to-r from-yellow-500 to-amber-500 text-black font-bold hover:from-yellow-400 hover:to-amber-400"
-              >
-                <Check className="w-4 h-4 mr-1.5" />
-                Yes, Remember
-              </Button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Animations */}
       <style>{`
         @keyframes slotScan {
-          0% { transform: translateY(-100%); }
-          100% { transform: translateY(100%); }
+          0% { transform: translateY(0); }
+          100% { transform: translateY(4px); }
         }
-        .animate-flash {
-          animation: flash 0.2s ease-out forwards;
-        }
+        
         @keyframes flash {
-          0% { opacity: 0.6; }
-          100% { opacity: 0; }
+          0%, 100% { opacity: 0; }
+          50% { opacity: 1; }
+        }
+        
+        .animate-flash {
+          animation: flash 0.15s ease-in-out 3;
         }
       `}</style>
     </div>
