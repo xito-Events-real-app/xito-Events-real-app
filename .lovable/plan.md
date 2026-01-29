@@ -1,180 +1,115 @@
 
-# Fix Master Sync and Cache Synchronization Issues
+# Fetch Relation Dropdown from Google Sheet
 
-## Problem Summary
+## Overview
 
-The user is experiencing a data inconsistency where:
-- The client status shows as "BOOKED" in the Booked Clients module
-- But shows as "ADVANCE PENDING" in the Client Tracker
+Currently, the relation dropdown options for bride and groom backup contacts are hardcoded in the code. The user wants these options to be fetched dynamically from the **"CLIENT TRACKER SETUP DATA"** sheet, **Column R** (starting from row 2).
 
-This happens because:
-1. **Separate Caches**: The CLIENT TRACKER and BOOKED CLIENTS data use separate IndexedDB caches that aren't kept in sync
-2. **Missing Cache Refresh**: After Master Sync completes Phase 2 (syncing sheets), the local BOOKED CLIENTS cache is not refreshed with the new data
-3. **Stale Data Display**: The Booked Clients module reads from its own cache, which contains outdated data
+## Current State
 
-## Root Cause Analysis
-
-The current data flow has gaps:
-
-```text
-Master Sync Phase 1: Refresh CLIENT TRACKER
-    ↓
-    Saves to IndexedDB cache (app_cache_v1) ✓
-    ↓
-Master Sync Phase 2: fullResyncAllBookedClients
-    ↓
-    Syncs CLIENT TRACKER → BOOKED CLIENTS (Google Sheets) ✓
-    ↓
-    MISSING: Does NOT refresh booked_clients_cache_v1 ✗
-    ↓
-User navigates to Booked Clients module
-    ↓
-    Reads from stale booked_clients_cache_v1 ✗
-```
+| Location | Current Implementation |
+|----------|----------------------|
+| `src/lib/client-contact-api.ts` | `brideBackupRelationOptions = ['Mother', 'Father', 'Sister', 'Other']` |
+| `src/lib/client-contact-api.ts` | `groomBackupRelationOptions = ['Father', 'Brother', 'Other']` |
+| `src/components/client-detail/ClientDetailsCard.tsx` | Uses hardcoded arrays for relation dropdowns |
 
 ## Solution
 
-### 1. Update MasterSyncButton to Refresh Booked Cache After Sync
+### Data Flow
 
-**File: `src/components/suite/MasterSyncButton.tsx`**
-
-After Phase 2 (fullResyncAllBookedClients) completes successfully:
-- Fetch fresh booked clients data from the API
-- Save it to the booked clients IndexedDB cache
-- Notify cache update listeners
-
-```typescript
-// After Phase 2 completes
-import { setCachedBookedClients, notifyCacheUpdate } from "@/lib/cache-manager";
-import { getBookedClients } from "@/lib/sheets-api";
-
-// Phase 2: Booked Clients (26-50%)
-setCurrentPhase('booked');
-setProgress(30);
-
-const bookedResult = await fullResyncAllBookedClients(true);
-
-// NEW: Refresh booked clients cache after sync
-const freshBookedClients = await getBookedClients(500);
-await setCachedBookedClients(freshBookedClients);
-notifyCacheUpdate('booked-clients', freshBookedClients);
-
-setSyncStats(prev => ({ ...prev, synced: bookedResult.syncedCount + bookedResult.copiedCount }));
-setProgress(50);
+```text
+CLIENT TRACKER SETUP DATA (Column R)
+         |
+         v
+Edge Function getDropdowns()
+         |
+         v
+DropdownData.relationOptions
+         |
+         v
+ClientDetailsCard.tsx
+         |
+         v
+Bride/Groom Relation Dropdowns
 ```
 
-### 2. Ensure Status Change Updates Both Caches
+## Implementation Steps
 
-When a status change occurs (especially to BOOKED), both caches should be updated:
+### 1. Update Edge Function - Add Column R to getDropdowns
 
-**File: `src/pages/ClientDetail.tsx`**
+**File: `supabase/functions/google-sheets/index.ts`**
 
-After a successful status change to BOOKED:
-- Update the client tracker cache (already done)
-- Invalidate/refresh the booked clients cache
+The `getDropdowns` function already fetches columns A-X from "CLIENT TRACKER SETUP DATA". Column R is index 17.
 
 ```typescript
-// After successful BOOKED status change
-import { setCachedBookedClients, notifyCacheUpdate, getCachedBookedClients } from "@/lib/cache-manager";
+// In getDropdowns function, add:
+return {
+  // ... existing fields
+  relationOptions: getColumn(17),  // Column R - Relation options for backup contacts
+};
+```
 
-// Update status to BOOKED
-const statusResult = await updateClientStatus(client.rowNumber, pendingStatus, currentStatusLog || client.statusLog || '');
-setCurrentStatusLog(statusResult.statusLog);
+### 2. Update DropdownData Interface
 
-// Update global client tracker cache
-if (updateClientCache) {
-  updateClientCache({
-    ...client,
-    paymentsMade: paymentResult.paymentsMade,
-    remainingPayment: paymentResult.remainingPayment,
-    statusLog: statusResult.statusLog
-  });
+**File: `src/lib/sheets-api.ts`**
+
+Add the new field to the DropdownData interface:
+
+```typescript
+export interface DropdownData {
+  // ... existing fields
+  relationOptions: string[];  // Column R - Relation options for backup contacts
 }
-
-// NEW: Invalidate booked clients cache to force refresh on next access
-// This ensures the booked module shows the new BOOKED client
-notifyCacheUpdate('booked-clients-invalidate');
 ```
 
-### 3. Apply Same Fix to DesktopClientRow.tsx
+### 3. Update useDropdownData Hook
 
-**File: `src/components/desktop/DesktopClientRow.tsx`**
+**File: `src/hooks/useDropdownData.ts`**
 
-Same pattern: after status change to BOOKED, invalidate the booked cache.
-
-### 4. Listen for Cache Invalidation in useBookedCachedData
-
-**File: `src/hooks/useBookedCachedData.ts`**
-
-Add a listener for cache invalidation events:
+Add fallback for relationOptions when using mock data:
 
 ```typescript
-// Listen for cache updates/invalidation from other operations
-useEffect(() => {
-  const handleCacheUpdate = (e: CustomEvent<{ type: string; data: unknown }>) => {
-    if (e.detail.type === 'booked-clients' && Array.isArray(e.detail.data)) {
-      setClients(e.detail.data as BookedClientData[]);
-      setLastSyncedAt(new Date());
-      setIsFromCache(false);
-    }
-    // Handle invalidation - trigger refresh
-    if (e.detail.type === 'booked-clients-invalidate') {
-      fetchState.hasRefreshed = false; // Reset refresh flag
-      refreshData(); // Force a fresh fetch
-    }
-  };
-  
-  window.addEventListener('cache-updated', handleCacheUpdate as EventListener);
-  return () => window.removeEventListener('cache-updated', handleCacheUpdate as EventListener);
-}, [refreshData]);
+relationOptions: ['Mother', 'Father', 'Sister', 'Brother', 'Other'],
+```
+
+### 4. Update ClientDetailsCard Component
+
+**File: `src/components/client-detail/ClientDetailsCard.tsx`**
+
+Replace hardcoded arrays with dropdown data:
+
+```typescript
+// Before:
+import { brideBackupRelationOptions, groomBackupRelationOptions } from '@/lib/client-contact-api';
+
+// After:
+import { useDropdownData } from '@/hooks/useDropdownData';
+
+// In component:
+const { data: dropdownData } = useDropdownData();
+const relationOptions = dropdownData?.relationOptions || ['Mother', 'Father', 'Sister', 'Brother', 'Other'];
+
+// Use relationOptions for BOTH bride and groom dropdowns
+{relationOptions.map((rel) => (
+  <SelectItem key={rel} value={rel}>{rel}</SelectItem>
+))}
 ```
 
 ## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/components/suite/MasterSyncButton.tsx` | Add booked cache refresh after Phase 2 sync |
-| `src/pages/ClientDetail.tsx` | Invalidate booked cache after BOOKED status change |
-| `src/components/desktop/DesktopClientRow.tsx` | Invalidate booked cache after BOOKED status change |
-| `src/hooks/useBookedCachedData.ts` | Add cache invalidation listener |
-| `src/lib/cache-manager.ts` | Add helper for cache invalidation notification |
-
-## Implementation Order
-
-1. Update `cache-manager.ts` to handle invalidation event type
-2. Update `useBookedCachedData.ts` to listen for invalidation
-3. Update `MasterSyncButton.tsx` to refresh booked cache after sync
-4. Update `ClientDetail.tsx` to invalidate booked cache on BOOKED status
-5. Update `DesktopClientRow.tsx` with same invalidation logic
-
-## Data Flow After Fix
-
-```text
-Master Sync Phase 1: Refresh CLIENT TRACKER
-    ↓
-    Saves to IndexedDB cache (app_cache_v1) ✓
-    ↓
-Master Sync Phase 2: fullResyncAllBookedClients
-    ↓
-    Syncs CLIENT TRACKER → BOOKED CLIENTS (Google Sheets) ✓
-    ↓
-    NEW: Fetch fresh booked clients ✓
-    ↓
-    NEW: Save to booked_clients_cache_v1 ✓
-    ↓
-    NEW: Notify listeners ✓
-    ↓
-User navigates to Booked Clients module
-    ↓
-    Reads fresh booked_clients_cache_v1 ✓
-```
+| `supabase/functions/google-sheets/index.ts` | Add `relationOptions: getColumn(17)` to getDropdowns return |
+| `src/lib/sheets-api.ts` | Add `relationOptions: string[]` to DropdownData interface |
+| `src/hooks/useDropdownData.ts` | Add relationOptions fallback in mock data |
+| `src/components/client-detail/ClientDetailsCard.tsx` | Use dropdown data instead of hardcoded options |
 
 ## Technical Notes
 
-1. **API Call Efficiency**: The extra `getBookedClients` call after sync is necessary because `fullResyncAllBookedClients` only returns sync statistics, not the actual client data.
+1. **Single Source of Truth**: Both bride and groom relation dropdowns will use the same Column R options, providing consistency and easy management from the sheet.
 
-2. **Cache Invalidation vs Refresh**: Using invalidation + refresh pattern ensures components can decide when to fetch, preventing unnecessary API calls during rapid updates.
+2. **Backward Compatibility**: The hardcoded options will remain as fallback if the sheet data isn't available.
 
-3. **Event-Based Communication**: The `cache-updated` CustomEvent pattern is already established in the codebase and is HMR-safe.
+3. **Cache Integration**: Since dropdowns are already cached via IndexedDB, the relation options will also be cached and available offline.
 
-4. **Backward Compatibility**: The existing `notifyCacheUpdate` function already supports arbitrary type strings, so no breaking changes are needed.
+4. **Column Mapping**: Column R is index 17 (0-indexed: A=0, B=1, ... R=17).
