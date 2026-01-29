@@ -16,7 +16,7 @@ export default function ComingSoon({ moduleId }: ComingSoonProps) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/30 flex flex-col">
       {/* Global Mode Toggle */}
-      <GlobalModeToggle showMute={false} />
+      <GlobalModeToggle />
 
       {/* Header */}
       <header className="p-4 flex items-center gap-3">

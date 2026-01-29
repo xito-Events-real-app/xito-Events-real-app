@@ -7,9 +7,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { DateConverterDrawer } from "@/components/dashboard/DateConverterDrawer";
 import { Button } from "@/components/ui/button";
 
-// Unique whoosh/teleport sound for sync
-const SYNC_START_URL = "https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3";
-const SYNC_COMPLETE_URL = "https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3";
 
 interface NavItem {
   icon: typeof Home;
@@ -30,28 +27,12 @@ export function DesktopNav() {
   const navigate = useNavigate();
   const [isSyncing, setIsSyncing] = useState(false);
   const [showDateConverter, setShowDateConverter] = useState(false);
-  const syncAudioRef = useRef<HTMLAudioElement | null>(null);
-  const completeAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Handle sync
   const handleSync = async () => {
     if (isSyncing) return;
     
     setIsSyncing(true);
-    
-    // Play whoosh sound
-    if (!syncAudioRef.current) {
-      syncAudioRef.current = new Audio(SYNC_START_URL);
-    }
-    syncAudioRef.current.currentTime = 0;
-    syncAudioRef.current.volume = 0.5;
-    syncAudioRef.current.loop = false;
-    syncAudioRef.current.play().catch(() => {});
-    
-    // Prepare completion sound
-    if (!completeAudioRef.current) {
-      completeAudioRef.current = new Audio(SYNC_COMPLETE_URL);
-    }
     
     try {
       const [clientsResult, dropdownsResult] = await Promise.all([
@@ -73,24 +54,8 @@ export function DesktopNav() {
         notifyCacheUpdate('dropdowns', dropdownsResult.data.data);
       }
       
-      // Stop sync sound and play completion sound
-      if (syncAudioRef.current) {
-        syncAudioRef.current.pause();
-        syncAudioRef.current.currentTime = 0;
-      }
-      
-      if (completeAudioRef.current) {
-        completeAudioRef.current.currentTime = 0;
-        completeAudioRef.current.volume = 0.6;
-        completeAudioRef.current.play().catch(() => {});
-      }
-      
     } catch (error) {
       console.error("Sync failed:", error);
-      if (syncAudioRef.current) {
-        syncAudioRef.current.pause();
-        syncAudioRef.current.currentTime = 0;
-      }
     } finally {
       setIsSyncing(false);
     }

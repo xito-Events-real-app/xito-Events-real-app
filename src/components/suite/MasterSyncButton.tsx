@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Rocket } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
@@ -19,9 +19,6 @@ const SYNC_PHASES: SyncPhase[] = [
   { id: 'events', label: 'Event Details', description: 'Updating event logistics...' },
 ];
 
-// Epic music URL - royalty-free cinematic track
-const EPIC_MUSIC_URL = "https://cdn.pixabay.com/audio/2022/10/25/audio_052b9294a0.mp3";
-
 export function MasterSyncButton() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [showOverlay, setShowOverlay] = useState(false);
@@ -30,56 +27,6 @@ export function MasterSyncButton() {
   const [countdown, setCountdown] = useState(3);
   const [syncStats, setSyncStats] = useState({ clients: 0, synced: 0, events: 0 });
   const [showSuccess, setShowSuccess] = useState(false);
-  
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const successAudioRef = useRef<HTMLAudioElement | null>(null);
-
-  // Initialize audio
-  useEffect(() => {
-    audioRef.current = new Audio(EPIC_MUSIC_URL);
-    audioRef.current.volume = 0.5;
-    audioRef.current.loop = true;
-    
-    // Success sound
-    successAudioRef.current = new Audio("/audio/meditation-music.mp3");
-    successAudioRef.current.volume = 0.3;
-    
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = "";
-      }
-    };
-  }, []);
-
-  const playMusic = () => {
-    if (audioRef.current) {
-      audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(() => {
-        // Autoplay blocked
-      });
-    }
-  };
-
-  const stopMusic = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-    }
-  };
-
-  const fadeOutMusic = () => {
-    if (audioRef.current) {
-      const fadeInterval = setInterval(() => {
-        if (audioRef.current && audioRef.current.volume > 0.05) {
-          audioRef.current.volume = Math.max(0, audioRef.current.volume - 0.05);
-        } else {
-          clearInterval(fadeInterval);
-          stopMusic();
-          if (audioRef.current) audioRef.current.volume = 0.5;
-        }
-      }, 100);
-    }
-  };
 
   const handleMasterSync = async () => {
     setIsSyncing(true);
@@ -89,8 +36,6 @@ export function MasterSyncButton() {
     setCountdown(3);
     setSyncStats({ clients: 0, synced: 0, events: 0 });
     setShowSuccess(false);
-    
-    playMusic();
     
     // Countdown animation
     for (let i = 3; i >= 1; i--) {
@@ -143,13 +88,6 @@ export function MasterSyncButton() {
       // Success!
       setCurrentPhase('complete');
       setShowSuccess(true);
-      fadeOutMusic();
-      
-      // Play success sound
-      if (successAudioRef.current) {
-        successAudioRef.current.currentTime = 0;
-        successAudioRef.current.play().catch(() => {});
-      }
       
       await new Promise(resolve => setTimeout(resolve, 3000));
       
@@ -159,7 +97,6 @@ export function MasterSyncButton() {
       
     } catch (error) {
       console.error("Master sync failed:", error);
-      stopMusic();
       toast.error("Sync failed", {
         description: error instanceof Error ? error.message : "Unknown error occurred",
       });

@@ -152,7 +152,7 @@ const MobileBookedClients = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      <GlobalModeToggle showMute={false} />
+      <GlobalModeToggle />
 
       {/* Header */}
       <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-sm border-b border-slate-700/50 px-4 py-3">
