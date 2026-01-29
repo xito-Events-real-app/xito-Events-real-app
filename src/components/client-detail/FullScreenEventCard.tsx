@@ -460,8 +460,8 @@ export const FullScreenEventCard = ({
           </div>
         </div>
       ) : (
-        /* Expanded Edit Form */
-        <div className="px-4 pb-4 space-y-6 animate-fade-in">
+        /* Expanded Edit Form - Dashboard Style */
+        <div className="px-4 pb-4 space-y-5 animate-fade-in border-t border-slate-700/30 pt-4">
           {/* Urgency Warning */}
           {showUrgencyWarning && (
             <div className="p-3 bg-red-500/20 rounded-lg border border-red-500/30 flex items-center gap-2">
@@ -473,257 +473,257 @@ export const FullScreenEventCard = ({
             </div>
           )}
 
-          {/* Venue Details */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-white/70">
-              <MapPin className="h-4 w-4" />
-              Venue Details
+          {/* Venue Details Section */}
+          <div className="space-y-3 bg-slate-800/40 rounded-lg p-4 border border-slate-700/40">
+            <div className="flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-amber-400" />
+              <span className="text-sm font-semibold text-amber-400">Venue Details</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs text-white/50">Type</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-amber-400/80">Type</Label>
                 <Select value={venueType} onValueChange={setVenueType}>
-                  <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                  <SelectTrigger className="bg-slate-900/60 border-slate-600/50 text-white hover:border-amber-400/50 focus:border-amber-400">
                     <SelectValue placeholder="Select type..." />
                   </SelectTrigger>
-                  <SelectContent className="bg-background border-white/10">
+                  <SelectContent className="bg-slate-800 border-slate-600">
                     {VENUE_TYPE_OPTIONS.map(opt => (
                       <SelectItem key={opt.value} value={opt.value || '__empty__'}>{opt.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-white/50">Name</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-amber-400/80">Name</Label>
                 <Input 
                   value={venueName} 
                   onChange={e => setVenueName(e.target.value)}
                   placeholder="Venue name"
-                  className="bg-white/5 border-white/10 text-white placeholder:text-white/30"
+                  className="bg-slate-900/60 border-slate-600/50 text-white placeholder:text-slate-500 hover:border-amber-400/50 focus:border-amber-400"
                 />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs text-white/50">City</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-amber-400/80">City</Label>
                 <Input 
                   value={venueCity} 
                   onChange={e => setVenueCity(e.target.value)}
                   placeholder="City"
-                  className="bg-white/5 border-white/10 text-white placeholder:text-white/30"
+                  className="bg-slate-900/60 border-slate-600/50 text-white placeholder:text-slate-500 hover:border-amber-400/50 focus:border-amber-400"
                 />
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-white/50">Area</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-amber-400/80">Area</Label>
                 <Input 
                   value={venueArea} 
                   onChange={e => setVenueArea(e.target.value)}
                   placeholder="Area/Locality"
-                  className="bg-white/5 border-white/10 text-white placeholder:text-white/30"
+                  className="bg-slate-900/60 border-slate-600/50 text-white placeholder:text-slate-500 hover:border-amber-400/50 focus:border-amber-400"
                 />
               </div>
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-white/50">Map Link</Label>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-blue-400">Map Link</Label>
               <div className="flex gap-2">
                 <Input 
                   value={venueMap} 
                   onChange={e => setVenueMap(e.target.value)}
                   placeholder="Paste Google Maps link..."
                   type="url"
-                  className="flex-1 bg-white/5 border-white/10 text-white placeholder:text-white/30"
+                  className="flex-1 bg-slate-900/60 border-slate-600/50 text-white placeholder:text-slate-500 hover:border-blue-400/50 focus:border-blue-400"
                 />
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => window.open('https://maps.google.com', '_blank')}
-                  className="text-white/70 border-white/20 hover:bg-white/10"
+                  className="text-blue-400 border-blue-400/30 hover:bg-blue-400/10 hover:border-blue-400/50"
                 >
                   <MapPin className="h-4 w-4 mr-1" />
-                  Open Maps
+                  Maps
                 </Button>
               </div>
             </div>
           </div>
 
-          {/* Event Timing */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-white/70">
-              <Clock className="h-4 w-4" />
-              Event Timing
+          {/* Event Timing Section */}
+          <div className="space-y-3 bg-slate-800/40 rounded-lg p-4 border border-slate-700/40">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-emerald-400" />
+              <span className="text-sm font-semibold text-emerald-400">Event Timing</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs text-white/50">Start Time</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-emerald-400/80">Start Time</Label>
                 <Input 
                   type="time"
                   value={eventStartTime} 
                   onChange={e => setEventStartTime(e.target.value)}
-                  className="bg-white/5 border-white/10 text-white"
+                  className="bg-slate-900/60 border-slate-600/50 text-white hover:border-emerald-400/50 focus:border-emerald-400"
                 />
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-white/50">End Time</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-emerald-400/80">End Time</Label>
                 <Input 
                   type="time"
                   value={eventEndTime} 
                   onChange={e => setEventEndTime(e.target.value)}
-                  className="bg-white/5 border-white/10 text-white"
+                  className="bg-slate-900/60 border-slate-600/50 text-white hover:border-emerald-400/50 focus:border-emerald-400"
                 />
               </div>
             </div>
           </div>
 
-          {/* Parlour Details */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-white/70">
-              <Scissors className="h-4 w-4" />
-              Parlour Details
+          {/* Parlour Details Section */}
+          <div className="space-y-3 bg-slate-800/40 rounded-lg p-4 border border-slate-700/40">
+            <div className="flex items-center gap-2">
+              <Scissors className="h-4 w-4 text-purple-400" />
+              <span className="text-sm font-semibold text-purple-400">Parlour Details</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs text-white/50">Type</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-purple-400/80">Type</Label>
                 <Select value={parlourType} onValueChange={setParlourType}>
-                  <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                  <SelectTrigger className="bg-slate-900/60 border-slate-600/50 text-white hover:border-purple-400/50 focus:border-purple-400">
                     <SelectValue placeholder="Select type..." />
                   </SelectTrigger>
-                  <SelectContent className="bg-background border-white/10">
+                  <SelectContent className="bg-slate-800 border-slate-600">
                     {VENUE_TYPE_OPTIONS.map(opt => (
                       <SelectItem key={opt.value} value={opt.value || '__empty__'}>{opt.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-white/50">Name</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-purple-400/80">Name</Label>
                 <Input 
                   value={parlourName} 
                   onChange={e => setParlourName(e.target.value)}
                   placeholder="Parlour name"
-                  className="bg-white/5 border-white/10 text-white placeholder:text-white/30"
+                  className="bg-slate-900/60 border-slate-600/50 text-white placeholder:text-slate-500 hover:border-purple-400/50 focus:border-purple-400"
                 />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs text-white/50">City</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-purple-400/80">City</Label>
                 <Input 
                   value={parlourCity} 
                   onChange={e => setParlourCity(e.target.value)}
                   placeholder="City"
-                  className="bg-white/5 border-white/10 text-white placeholder:text-white/30"
+                  className="bg-slate-900/60 border-slate-600/50 text-white placeholder:text-slate-500 hover:border-purple-400/50 focus:border-purple-400"
                 />
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-white/50">Area</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-purple-400/80">Area</Label>
                 <Input 
                   value={parlourArea} 
                   onChange={e => setParlourArea(e.target.value)}
                   placeholder="Area/Locality"
-                  className="bg-white/5 border-white/10 text-white placeholder:text-white/30"
+                  className="bg-slate-900/60 border-slate-600/50 text-white placeholder:text-slate-500 hover:border-purple-400/50 focus:border-purple-400"
                 />
               </div>
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-white/50">Map Link</Label>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-blue-400">Map Link</Label>
               <div className="flex gap-2">
                 <Input 
                   value={parlourMap} 
                   onChange={e => setParlourMap(e.target.value)}
                   placeholder="Paste Google Maps link..."
                   type="url"
-                  className="flex-1 bg-white/5 border-white/10 text-white placeholder:text-white/30"
+                  className="flex-1 bg-slate-900/60 border-slate-600/50 text-white placeholder:text-slate-500 hover:border-blue-400/50 focus:border-blue-400"
                 />
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => window.open('https://maps.google.com', '_blank')}
-                  className="text-white/70 border-white/20 hover:bg-white/10"
+                  className="text-blue-400 border-blue-400/30 hover:bg-blue-400/10 hover:border-blue-400/50"
                 >
                   <MapPin className="h-4 w-4 mr-1" />
-                  Open Maps
+                  Maps
                 </Button>
               </div>
             </div>
           </div>
 
-          {/* Parlour Timing */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-white/70">
-              <Clock className="h-4 w-4" />
-              Parlour Timing
+          {/* Parlour Timing Section */}
+          <div className="space-y-3 bg-slate-800/40 rounded-lg p-4 border border-slate-700/40">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-emerald-400" />
+              <span className="text-sm font-semibold text-emerald-400">Parlour Timing</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs text-white/50">Start Time</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-emerald-400/80">Start Time</Label>
                 <Input 
                   type="time"
                   value={parlourStartTime} 
                   onChange={e => setParlourStartTime(e.target.value)}
-                  className="bg-white/5 border-white/10 text-white"
+                  className="bg-slate-900/60 border-slate-600/50 text-white hover:border-emerald-400/50 focus:border-emerald-400"
                 />
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-white/50">End Time</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-emerald-400/80">End Time</Label>
                 <Input 
                   type="time"
                   value={parlourEndTime} 
                   onChange={e => setParlourEndTime(e.target.value)}
-                  className="bg-white/5 border-white/10 text-white"
+                  className="bg-slate-900/60 border-slate-600/50 text-white hover:border-emerald-400/50 focus:border-emerald-400"
                 />
               </div>
             </div>
           </div>
 
-          {/* Additional Info */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-white/70">
-              <Users className="h-4 w-4" />
-              Additional Info
+          {/* Additional Info Section */}
+          <div className="space-y-3 bg-slate-800/40 rounded-lg p-4 border border-slate-700/40">
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-pink-400" />
+              <span className="text-sm font-semibold text-pink-400">Additional Info</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/10">
-                <Label className="text-sm text-white/70">Groom comes in Mehndi?</Label>
+              <div className="flex items-center justify-between p-3 bg-slate-900/60 rounded-lg border border-slate-600/50">
+                <Label className="text-sm text-white/80">Groom comes in Mehndi?</Label>
                 <Switch
                   checked={doGroomComeInMehndi}
                   onCheckedChange={setDoGroomComeInMehndi}
                 />
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-white/50">Guest Count</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-pink-400/80">Guest Count</Label>
                 <Input 
                   type="number"
                   value={guestCount} 
                   onChange={e => setGuestCount(e.target.value)}
                   placeholder="Number of guests"
-                  className="bg-white/5 border-white/10 text-white placeholder:text-white/30"
+                  className="bg-slate-900/60 border-slate-600/50 text-white placeholder:text-slate-500 hover:border-pink-400/50 focus:border-pink-400"
                 />
               </div>
             </div>
           </div>
 
-          {/* Event Demands */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-white/70">
-              <FileText className="h-4 w-4" />
-              Event Demands
+          {/* Event Demands Section */}
+          <div className="space-y-3 bg-slate-800/40 rounded-lg p-4 border border-slate-700/40">
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-cyan-400" />
+              <span className="text-sm font-semibold text-cyan-400">Event Demands</span>
             </div>
             <div className="space-y-2">
               {demands.map((demand, idx) => (
                 <div key={idx} className="flex gap-2 items-center">
-                  <span className="text-white/40 text-sm w-6">{idx + 1}.</span>
+                  <span className="text-cyan-400/60 text-sm w-6 font-medium">{idx + 1}.</span>
                   <Input 
                     value={demand} 
                     onChange={e => updateDemand(idx, e.target.value)}
                     placeholder={`Demand ${idx + 1}`}
-                    className="flex-1 bg-white/5 border-white/10 text-white placeholder:text-white/30"
+                    className="flex-1 bg-slate-900/60 border-slate-600/50 text-white placeholder:text-slate-500 hover:border-cyan-400/50 focus:border-cyan-400"
                   />
                   {demands.length > 1 && (
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => removeDemand(idx)}
-                      className="h-8 w-8 text-white/40 hover:text-red-400 hover:bg-red-500/10"
+                      className="h-8 w-8 text-slate-400 hover:text-red-400 hover:bg-red-500/10"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -734,7 +734,7 @@ export const FullScreenEventCard = ({
                 variant="ghost"
                 size="sm"
                 onClick={addDemand}
-                className="text-white/60 hover:text-white hover:bg-white/10"
+                className="text-cyan-400/70 hover:text-cyan-400 hover:bg-cyan-400/10"
               >
                 <Plus className="h-4 w-4 mr-1" />
                 Add More
@@ -742,29 +742,29 @@ export const FullScreenEventCard = ({
             </div>
           </div>
 
-          {/* Event References */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-white/70">
-              <Link2 className="h-4 w-4" />
-              Event References (Links)
+          {/* Event References Section */}
+          <div className="space-y-3 bg-slate-800/40 rounded-lg p-4 border border-slate-700/40">
+            <div className="flex items-center gap-2">
+              <Link2 className="h-4 w-4 text-sky-400" />
+              <span className="text-sm font-semibold text-sky-400">Event References (Links)</span>
             </div>
             <div className="space-y-2">
               {references.map((ref, idx) => (
                 <div key={idx} className="flex gap-2 items-center">
-                  <span className="text-white/40 text-sm w-6">{idx + 1}.</span>
+                  <span className="text-sky-400/60 text-sm w-6 font-medium">{idx + 1}.</span>
                   <Input 
                     type="url"
                     value={ref} 
                     onChange={e => updateReference(idx, e.target.value)}
                     placeholder={`https://...`}
-                    className="flex-1 bg-white/5 border-white/10 text-white placeholder:text-white/30"
+                    className="flex-1 bg-slate-900/60 border-slate-600/50 text-white placeholder:text-slate-500 hover:border-sky-400/50 focus:border-sky-400"
                   />
                   {references.length > 1 && (
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => removeReference(idx)}
-                      className="h-8 w-8 text-white/40 hover:text-red-400 hover:bg-red-500/10"
+                      className="h-8 w-8 text-slate-400 hover:text-red-400 hover:bg-red-500/10"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -775,7 +775,7 @@ export const FullScreenEventCard = ({
                 variant="ghost"
                 size="sm"
                 onClick={addReference}
-                className="text-white/60 hover:text-white hover:bg-white/10"
+                className="text-sky-400/70 hover:text-sky-400 hover:bg-sky-400/10"
               >
                 <Plus className="h-4 w-4 mr-1" />
                 Add More
@@ -784,12 +784,12 @@ export const FullScreenEventCard = ({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex justify-end gap-2 pt-4 border-t border-white/10">
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-700/40">
             <Button
               variant="ghost"
               onClick={handleCancel}
               disabled={isSaving}
-              className="text-white/70 hover:text-white hover:bg-white/10"
+              className="text-slate-300 hover:text-white hover:bg-slate-700/50"
             >
               <X className="h-4 w-4 mr-1" />
               Cancel
@@ -797,7 +797,7 @@ export const FullScreenEventCard = ({
             <Button
               onClick={handleSave}
               disabled={isSaving}
-              className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+              className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-medium"
             >
               {isSaving ? (
                 <Loader2 className="h-4 w-4 mr-1 animate-spin" />
