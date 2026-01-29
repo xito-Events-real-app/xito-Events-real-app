@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -729,6 +729,224 @@ async function updateClientContactDetails(
 
   console.info(`[CONTACT DETAILS UPDATE] Successfully updated row ${rowNumber}`);
   return { success: true, rowNumber };
+}
+
+// ============= FULL SYNC CONTACT DETAILS =============
+// Syncs ALL booked clients from BOOKED CLIENTS to BOOKED CLIENTS CONTACT DETAILS
+// Creates missing entries with A-C synced, D-AA empty
+// Updates A-C for existing entries (preserving D-AA user data)
+async function fullSyncContactDetails(accessToken: string, spreadsheetId: string) {
+  console.info('[CONTACT SYNC] Starting full sync of contact details...');
+  
+  // 1. Fetch all BOOKED CLIENTS data (A-C)
+  const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:C2000");
+  const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}`;
+  
+  const bookedResponse = await fetch(bookedUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  
+  if (!bookedResponse.ok) {
+    throw new Error('Failed to fetch BOOKED CLIENTS data');
+  }
+  
+  const bookedData = await bookedResponse.json();
+  const bookedRows = bookedData.values || [];
+  
+  if (bookedRows.length === 0) {
+    console.info('[CONTACT SYNC] No booked clients found');
+    return { copiedCount: 0, updatedCount: 0, totalClients: 0 };
+  }
+  
+  // 2. Fetch existing CONTACT DETAILS entries
+  const contactRange = encodeURIComponent("'BOOKED CLIENTS CONTACT DETAILS'!A2:AA2000");
+  const contactUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${contactRange}`;
+  
+  const contactResponse = await fetch(contactUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  
+  // Handle case where sheet might not exist or be empty
+  let contactRows: string[][] = [];
+  if (contactResponse.ok) {
+    const contactData = await contactResponse.json();
+    contactRows = contactData.values || [];
+  }
+  
+  // 3. Build map of existing entries by registeredDateTimeAD
+  const existingMap = new Map<string, { rowNumber: number; row: string[] }>();
+  for (let i = 0; i < contactRows.length; i++) {
+    const row = contactRows[i];
+    if (row[0]) {
+      existingMap.set(row[0].trim(), { rowNumber: i + 2, row });
+    }
+  }
+  
+  let copiedCount = 0;
+  let updatedCount = 0;
+  const newRows: string[][] = [];
+  
+  // 4. Process each booked client
+  for (const bookedRow of bookedRows) {
+    const registeredDateTimeAD = bookedRow[0]?.trim();
+    if (!registeredDateTimeAD) continue;
+    
+    const existing = existingMap.get(registeredDateTimeAD);
+    
+    if (!existing) {
+      // Create new row with A-C synced, D-AA empty
+      const newRow = [
+        bookedRow[0] || '', // A: registeredDateTimeAD
+        bookedRow[1] || '', // B: registeredDateBS
+        bookedRow[2] || '', // C: clientName
+        '', '', '', '', '', '', '', '', '', '', '', '', // D-O: Bride (empty)
+        '', '', '', '', '', '', '', '', '', '', '', ''  // P-AA: Groom (empty)
+      ];
+      newRows.push(newRow);
+      copiedCount++;
+    } else {
+      // Check if A-C needs updating
+      const needsUpdate = 
+        existing.row[1] !== bookedRow[1] || 
+        existing.row[2] !== bookedRow[2];
+      
+      if (needsUpdate) {
+        // Update columns A-C (preserve D-AA)
+        const updateRange = encodeURIComponent(`'BOOKED CLIENTS CONTACT DETAILS'!A${existing.rowNumber}:C${existing.rowNumber}`);
+        const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`;
+        
+        await fetch(updateUrl, {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ values: [[bookedRow[0], bookedRow[1], bookedRow[2]]] }),
+        });
+        updatedCount++;
+      }
+    }
+  }
+  
+  // 5. Batch append new rows
+  if (newRows.length > 0) {
+    const appendRange = encodeURIComponent("'BOOKED CLIENTS CONTACT DETAILS'!A:AA");
+    const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${appendRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+    
+    await fetch(appendUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ values: newRows }),
+    });
+  }
+  
+  console.info(`[CONTACT SYNC] Complete: ${copiedCount} created, ${updatedCount} updated, ${bookedRows.length} total`);
+  return { copiedCount, updatedCount, totalClients: bookedRows.length };
+}
+
+// ============= RESYNC CLIENT CONTACT DETAILS =============
+// Force-refresh A-C data from BOOKED CLIENTS for a single client
+async function resyncClientContactDetails(
+  accessToken: string,
+  spreadsheetId: string,
+  registeredDateTimeAD: string
+) {
+  console.info(`[CONTACT RESYNC] Resyncing client: ${registeredDateTimeAD}`);
+  
+  // 1. Find client in BOOKED CLIENTS
+  const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:C2000");
+  const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}`;
+  
+  const bookedResponse = await fetch(bookedUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  
+  if (!bookedResponse.ok) {
+    throw new Error('Failed to fetch BOOKED CLIENTS data');
+  }
+  
+  const bookedData = await bookedResponse.json();
+  const bookedRows = bookedData.values || [];
+  
+  let bookedClient: string[] | null = null;
+  for (const row of bookedRows) {
+    if (row[0]?.trim() === registeredDateTimeAD.trim()) {
+      bookedClient = row;
+      break;
+    }
+  }
+  
+  if (!bookedClient) {
+    throw new Error('Client not found in BOOKED CLIENTS');
+  }
+  
+  // 2. Find or create client in CONTACT DETAILS
+  const contactRange = encodeURIComponent("'BOOKED CLIENTS CONTACT DETAILS'!A2:AA2000");
+  const contactUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${contactRange}`;
+  
+  const contactResponse = await fetch(contactUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  
+  let contactRows: string[][] = [];
+  if (contactResponse.ok) {
+    const contactData = await contactResponse.json();
+    contactRows = contactData.values || [];
+  }
+  
+  let rowNumber = 0;
+  for (let i = 0; i < contactRows.length; i++) {
+    if (contactRows[i][0]?.trim() === registeredDateTimeAD.trim()) {
+      rowNumber = i + 2;
+      break;
+    }
+  }
+  
+  if (rowNumber === 0) {
+    // Create new row
+    const newRow = [
+      bookedClient[0] || '',
+      bookedClient[1] || '',
+      bookedClient[2] || '',
+      '', '', '', '', '', '', '', '', '', '', '', '',
+      '', '', '', '', '', '', '', '', '', '', '', ''
+    ];
+    
+    const appendRange = encodeURIComponent("'BOOKED CLIENTS CONTACT DETAILS'!A:AA");
+    const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${appendRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+    
+    await fetch(appendUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ values: [newRow] }),
+    });
+    
+    console.info('[CONTACT RESYNC] Created new entry');
+  } else {
+    // Update A-C columns
+    const updateRange = encodeURIComponent(`'BOOKED CLIENTS CONTACT DETAILS'!A${rowNumber}:C${rowNumber}`);
+    const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`;
+    
+    await fetch(updateUrl, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ values: [[bookedClient[0], bookedClient[1], bookedClient[2]]] }),
+    });
+    
+    console.info(`[CONTACT RESYNC] Updated row ${rowNumber}`);
+  }
+  
+  // 3. Fetch and return refreshed data
+  return await getClientContactDetails(accessToken, spreadsheetId, registeredDateTimeAD);
 }
 
 
@@ -4423,6 +4641,13 @@ Deno.serve(async (req) => {
           data.registeredDateTimeAD as string,
           data.updates as Record<string, string> || {}
         );
+        break;
+      case 'fullSyncContactDetails':
+        result = await fullSyncContactDetails(accessToken, spreadsheetId);
+        break;
+      case 'resyncClientContactDetails':
+        if (!data || !data.registeredDateTimeAD) throw new Error('registeredDateTimeAD is required for resyncClientContactDetails');
+        result = await resyncClientContactDetails(accessToken, spreadsheetId, data.registeredDateTimeAD as string);
         break;
       default:
         throw new Error(`Unknown action: ${action}`);

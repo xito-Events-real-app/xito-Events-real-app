@@ -598,3 +598,57 @@ export async function updateClientEventDetails(
     data: { registeredDateTimeAD, eventIndex, updates },
   });
 }
+
+// ============= CONTACT DETAILS SYNC API =============
+
+// Full sync: Copy all missing clients from BOOKED CLIENTS to BOOKED CLIENTS CONTACT DETAILS
+// Also updates columns A-C for existing entries (preserving D-AA user data)
+export async function fullSyncContactDetails(): Promise<{ 
+  success: boolean; 
+  copiedCount: number; 
+  updatedCount: number; 
+  totalClients: number;
+}> {
+  return callSheetsFunction<{ 
+    success: boolean; 
+    copiedCount: number; 
+    updatedCount: number; 
+    totalClients: number;
+  }>("fullSyncContactDetails");
+}
+
+// Resync a single client's A-C data from BOOKED CLIENTS to CONTACT DETAILS
+export async function resyncClientContactDetails(registeredDateTimeAD: string): Promise<{
+  rowNumber: number;
+  registeredDateTimeAD: string;
+  registeredDateBS: string;
+  clientName: string;
+  brideFullName: string;
+  brideContactNumber: string;
+  brideWhatsappNumber: string;
+  brideBackupNumber: string;
+  brideBackupRelation: string;
+  brideBackupNumber2: string;
+  brideBackupRelation2: string;
+  brideInstagram: string;
+  brideHomeCity: string;
+  brideHomeArea: string;
+  brideHomeMap: string;
+  brideHomeLandmark: string;
+  groomFullName: string;
+  groomContactNumber: string;
+  groomWhatsappNumber: string;
+  groomBackupNumber: string;
+  groomBackupRelation: string;
+  groomBackupNumber2: string;
+  groomBackupRelation2: string;
+  groomInstagram: string;
+  groomHomeCity: string;
+  groomHomeArea: string;
+  groomHomeMap: string;
+  groomHomeLandmark: string;
+}> {
+  return callSheetsFunction("resyncClientContactDetails", {
+    data: { registeredDateTimeAD },
+  });
+}
