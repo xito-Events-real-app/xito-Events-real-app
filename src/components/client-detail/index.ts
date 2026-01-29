@@ -8,3 +8,4 @@ export { default as DashboardEventDetails } from './DashboardEventDetails';
 export { EventDetailCard } from './EventDetailCard';
 export { EventDetailsSummaryCard } from './EventDetailsSummaryCard';
 export { FullScreenEventCard } from './FullScreenEventCard';
+export { ClientDetailsCard } from './ClientDetailsCard';

@@ -1,9 +1,9 @@
-import { Calendar, FileText, Phone, Clock, DollarSign, Activity, MessageSquare, CreditCard, ArrowLeft, ChevronLeft, ChevronRight, LayoutDashboard } from "lucide-react";
+import { Calendar, FileText, Users, Clock, DollarSign, Activity, MessageSquare, CreditCard, ArrowLeft, ChevronLeft, ChevronRight, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
-export type SectionType = 'dashboard' | 'events' | 'registration' | 'contact' | 'inquiry' | 'sales' | 'activity' | 'comments' | 'financials';
+export type SectionType = 'dashboard' | 'events' | 'clientDetails' | 'registration' | 'inquiry' | 'sales' | 'activity' | 'comments' | 'financials';
 
 interface ClientDetailSidebarProps {
   activeSection: SectionType;
@@ -24,8 +24,8 @@ interface ClientDetailSidebarProps {
 const sidebarItems: { id: SectionType; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'events', label: 'Event Details', icon: Calendar },
+  { id: 'clientDetails', label: 'Client Details', icon: Users },
   { id: 'registration', label: 'Registration', icon: FileText },
-  { id: 'contact', label: 'Contact', icon: Phone },
   { id: 'inquiry', label: 'Inquiry', icon: Clock },
   { id: 'sales', label: 'Sales', icon: DollarSign },
   { id: 'activity', label: 'Activity', icon: Activity },

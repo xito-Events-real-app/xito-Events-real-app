@@ -52,10 +52,11 @@ import { EventSelector } from "@/components/form/EventSelector";
 import { getCountryCodeFromName } from "@/components/form/CountrySelector";
 import { valleyCities, nepalCitiesOutsideValley, clientLocationOptions } from "@/lib/form-data";
 import PaymentDrawer from "@/components/finance/PaymentDrawer";
-import { ClientDetailSidebar, ClientHeroSection, SectionType, EventDetailsSummaryCard, FullScreenEventCard } from "@/components/client-detail";
+import { ClientDetailSidebar, ClientHeroSection, SectionType, EventDetailsSummaryCard, FullScreenEventCard, ClientDetailsCard } from "@/components/client-detail";
 import { EventDetailCard } from "@/components/client-detail/EventDetailCard";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useEventDetails } from "@/hooks/useEventDetails";
+import { useClientContactDetails } from "@/hooks/useClientContactDetails";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 // Helper to convert AD date to BS formatted string
@@ -288,6 +289,13 @@ const ClientDetail = () => {
     isLoading: eventDetailsLoading, 
     updateEventDetail 
   } = useEventDetails(client?.registeredDateTimeAD);
+
+  // Fetch client contact details
+  const {
+    data: contactDetailsData,
+    isLoading: contactDetailsLoading,
+    updateContactDetails
+  } = useClientContactDetails(client?.registeredDateTimeAD);
 
   // All event options for the event selector
   const allEventOptions = useMemo(() => {
@@ -1280,44 +1288,15 @@ const ClientDetail = () => {
             </div>
           )}
 
-          {/* Contact Section */}
-          {activeSection === 'contact' && (
+          {/* Client Details Section */}
+          {activeSection === 'clientDetails' && (
             <div className="space-y-4">
-              <h2 className="text-xl font-bold text-white mb-4">Contact Information</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-                  <div className="text-xs text-white/40 mb-1">Client Location</div>
-                  <div className="font-semibold text-white">{client.clientLocation || 'Not specified'}</div>
-                </div>
-                <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-                  <div className="text-xs text-white/40 mb-1">Current Country</div>
-                  <div className="font-semibold text-white">{client.currentCountry || 'Not specified'}</div>
-                </div>
-                <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-                  <div className="text-xs text-white/40 mb-1">Contact Number</div>
-                  <div className="font-semibold text-white">
-                    {client.contactNo ? (
-                      <a href={`tel:${client.contactNo}`} className="text-blue-400 hover:underline">{client.contactNo}</a>
-                    ) : 'Not provided'}
-                  </div>
-                </div>
-                <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-                  <div className="text-xs text-white/40 mb-1">WhatsApp Number</div>
-                  <div className="font-semibold text-white">
-                    {client.whatsappNo ? (
-                      <a href={`https://wa.me/${client.whatsappNo.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:underline">{client.whatsappNo}</a>
-                    ) : 'Not provided'}
-                  </div>
-                </div>
-                <div className="p-4 rounded-xl bg-white/5 border border-white/10 md:col-span-2">
-                  <div className="text-xs text-white/40 mb-1">Email</div>
-                  <div className="font-semibold text-white">
-                    {client.email ? (
-                      <a href={`mailto:${client.email}`} className="text-amber-400 hover:underline">{client.email}</a>
-                    ) : 'Not provided'}
-                  </div>
-                </div>
-              </div>
+              <h2 className="text-xl font-bold text-white mb-4">Client Details</h2>
+              <ClientDetailsCard
+                data={contactDetailsData}
+                isLoading={contactDetailsLoading}
+                onSave={updateContactDetails}
+              />
             </div>
           )}
 

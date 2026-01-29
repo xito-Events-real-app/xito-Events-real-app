@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -403,7 +403,335 @@ async function refreshClientVendorData(
   return { success: true, refreshed: eventsUpdated > 0, eventsUpdated };
 }
 
-// Get venues from a specific type sheet (e.g., "BANQUET", "DECORATION")
+// ============= CLIENT CONTACT DETAILS FUNCTIONS =============
+// Get client contact details from "BOOKED CLIENTS CONTACT DETAILS" sheet
+// Schema: A: registeredDateTimeAD, B: registeredDateBS, C: clientName, D-O: Bride details, P-AA: Groom details
+async function getClientContactDetails(
+  accessToken: string,
+  spreadsheetId: string,
+  registeredDateTimeAD: string
+) {
+  console.info(`[CONTACT DETAILS] Fetching for client: ${registeredDateTimeAD}`);
+  
+  // 1. Try to find client in BOOKED CLIENTS CONTACT DETAILS by Column A
+  const range = encodeURIComponent("'BOOKED CLIENTS CONTACT DETAILS'!A2:AA1000");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (getClientContactDetails):', response.status, errorText);
+    // If sheet doesn't exist or error, return empty data
+    if (response.status === 400 || errorText.includes('Unable to parse range')) {
+      console.warn('[CONTACT DETAILS] Sheet may not exist, returning empty data');
+      return {
+        rowNumber: 0,
+        registeredDateTimeAD,
+        registeredDateBS: '',
+        clientName: '',
+        brideFullName: '',
+        brideContactNumber: '',
+        brideWhatsappNumber: '',
+        brideBackupNumber: '',
+        brideBackupRelation: '',
+        brideBackupNumber2: '',
+        brideBackupRelation2: '',
+        brideInstagram: '',
+        brideHomeCity: '',
+        brideHomeArea: '',
+        brideHomeMap: '',
+        brideHomeLandmark: '',
+        groomFullName: '',
+        groomContactNumber: '',
+        groomWhatsappNumber: '',
+        groomBackupNumber: '',
+        groomBackupRelation: '',
+        groomBackupNumber2: '',
+        groomBackupRelation2: '',
+        groomInstagram: '',
+        groomHomeCity: '',
+        groomHomeArea: '',
+        groomHomeMap: '',
+        groomHomeLandmark: '',
+      };
+    }
+    throw new Error(`Google Sheets API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const rows = data.values || [];
+  
+  // Find the client by registeredDateTimeAD (Column A)
+  let foundRow: string[] | null = null;
+  let rowNumber = 0;
+  
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if ((row[0] || '').trim() === registeredDateTimeAD.trim()) {
+      foundRow = row;
+      rowNumber = i + 2; // +2 because we start from row 2
+      break;
+    }
+  }
+
+  // If not found, auto-create from BOOKED CLIENTS
+  if (!foundRow) {
+    console.info('[CONTACT DETAILS] Client not found, attempting to auto-create from BOOKED CLIENTS');
+    
+    // Get client data from BOOKED CLIENTS
+    const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:C1000");
+    const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}`;
+    const bookedResponse = await fetch(bookedUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (bookedResponse.ok) {
+      const bookedData = await bookedResponse.json();
+      const bookedRows = bookedData.values || [];
+      
+      for (const bookedRow of bookedRows) {
+        if ((bookedRow[0] || '').trim() === registeredDateTimeAD.trim()) {
+          // Found in BOOKED CLIENTS, create new row in CONTACT DETAILS
+          const newRow = [
+            bookedRow[0] || '', // A: registeredDateTimeAD
+            bookedRow[1] || '', // B: registeredDateBS
+            bookedRow[2] || '', // C: clientName
+            '', '', '', '', '', '', '', '', '', '', '', '', // D-O: Bride (empty)
+            '', '', '', '', '', '', '', '', '', '', '', ''  // P-AA: Groom (empty)
+          ];
+          
+          const appendRange = encodeURIComponent("'BOOKED CLIENTS CONTACT DETAILS'!A:AA");
+          const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${appendRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+          
+          const appendResponse = await fetch(appendUrl, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ values: [newRow] }),
+          });
+
+          if (appendResponse.ok) {
+            const appendResult = await appendResponse.json();
+            const updatedRange = appendResult.updates?.updatedRange || '';
+            const match = updatedRange.match(/!A(\d+):/);
+            rowNumber = match ? parseInt(match[1]) : rows.length + 2;
+            
+            console.info(`[CONTACT DETAILS] Auto-created row ${rowNumber} for client`);
+            
+            return {
+              rowNumber,
+              registeredDateTimeAD: bookedRow[0] || '',
+              registeredDateBS: bookedRow[1] || '',
+              clientName: bookedRow[2] || '',
+              brideFullName: '',
+              brideContactNumber: '',
+              brideWhatsappNumber: '',
+              brideBackupNumber: '',
+              brideBackupRelation: '',
+              brideBackupNumber2: '',
+              brideBackupRelation2: '',
+              brideInstagram: '',
+              brideHomeCity: '',
+              brideHomeArea: '',
+              brideHomeMap: '',
+              brideHomeLandmark: '',
+              groomFullName: '',
+              groomContactNumber: '',
+              groomWhatsappNumber: '',
+              groomBackupNumber: '',
+              groomBackupRelation: '',
+              groomBackupNumber2: '',
+              groomBackupRelation2: '',
+              groomInstagram: '',
+              groomHomeCity: '',
+              groomHomeArea: '',
+              groomHomeMap: '',
+              groomHomeLandmark: '',
+            };
+          }
+          break;
+        }
+      }
+    }
+    
+    // Return empty if client not found anywhere
+    return {
+      rowNumber: 0,
+      registeredDateTimeAD,
+      registeredDateBS: '',
+      clientName: '',
+      brideFullName: '',
+      brideContactNumber: '',
+      brideWhatsappNumber: '',
+      brideBackupNumber: '',
+      brideBackupRelation: '',
+      brideBackupNumber2: '',
+      brideBackupRelation2: '',
+      brideInstagram: '',
+      brideHomeCity: '',
+      brideHomeArea: '',
+      brideHomeMap: '',
+      brideHomeLandmark: '',
+      groomFullName: '',
+      groomContactNumber: '',
+      groomWhatsappNumber: '',
+      groomBackupNumber: '',
+      groomBackupRelation: '',
+      groomBackupNumber2: '',
+      groomBackupRelation2: '',
+      groomInstagram: '',
+      groomHomeCity: '',
+      groomHomeArea: '',
+      groomHomeMap: '',
+      groomHomeLandmark: '',
+    };
+  }
+
+  // Return found data
+  return {
+    rowNumber,
+    registeredDateTimeAD: foundRow[0] || '',
+    registeredDateBS: foundRow[1] || '',
+    clientName: foundRow[2] || '',
+    brideFullName: foundRow[3] || '',
+    brideContactNumber: foundRow[4] || '',
+    brideWhatsappNumber: foundRow[5] || '',
+    brideBackupNumber: foundRow[6] || '',
+    brideBackupRelation: foundRow[7] || '',
+    brideBackupNumber2: foundRow[8] || '',
+    brideBackupRelation2: foundRow[9] || '',
+    brideInstagram: foundRow[10] || '',
+    brideHomeCity: foundRow[11] || '',
+    brideHomeArea: foundRow[12] || '',
+    brideHomeMap: foundRow[13] || '',
+    brideHomeLandmark: foundRow[14] || '',
+    groomFullName: foundRow[15] || '',
+    groomContactNumber: foundRow[16] || '',
+    groomWhatsappNumber: foundRow[17] || '',
+    groomBackupNumber: foundRow[18] || '',
+    groomBackupRelation: foundRow[19] || '',
+    groomBackupNumber2: foundRow[20] || '',
+    groomBackupRelation2: foundRow[21] || '',
+    groomInstagram: foundRow[22] || '',
+    groomHomeCity: foundRow[23] || '',
+    groomHomeArea: foundRow[24] || '',
+    groomHomeMap: foundRow[25] || '',
+    groomHomeLandmark: foundRow[26] || '',
+  };
+}
+
+// Update client contact details in "BOOKED CLIENTS CONTACT DETAILS" sheet
+async function updateClientContactDetails(
+  accessToken: string,
+  spreadsheetId: string,
+  registeredDateTimeAD: string,
+  updates: Record<string, string>
+) {
+  console.info(`[CONTACT DETAILS UPDATE] Updating for client: ${registeredDateTimeAD}`);
+  
+  // First, get the current data to find the row
+  const currentData = await getClientContactDetails(accessToken, spreadsheetId, registeredDateTimeAD);
+  
+  if (!currentData.rowNumber) {
+    throw new Error('Client not found in contact details sheet');
+  }
+
+  const rowNumber = currentData.rowNumber;
+  
+  // Column mapping: D=3, E=4, ... AA=26
+  const columnMap: Record<string, number> = {
+    brideFullName: 3,
+    brideContactNumber: 4,
+    brideWhatsappNumber: 5,
+    brideBackupNumber: 6,
+    brideBackupRelation: 7,
+    brideBackupNumber2: 8,
+    brideBackupRelation2: 9,
+    brideInstagram: 10,
+    brideHomeCity: 11,
+    brideHomeArea: 12,
+    brideHomeMap: 13,
+    brideHomeLandmark: 14,
+    groomFullName: 15,
+    groomContactNumber: 16,
+    groomWhatsappNumber: 17,
+    groomBackupNumber: 18,
+    groomBackupRelation: 19,
+    groomBackupNumber2: 20,
+    groomBackupRelation2: 21,
+    groomInstagram: 22,
+    groomHomeCity: 23,
+    groomHomeArea: 24,
+    groomHomeMap: 25,
+    groomHomeLandmark: 26,
+  };
+
+  // Build the update row (columns D-AA)
+  const rowValues: string[] = new Array(24).fill('');
+  
+  // Start with current values
+  rowValues[0] = currentData.brideFullName;
+  rowValues[1] = currentData.brideContactNumber;
+  rowValues[2] = currentData.brideWhatsappNumber;
+  rowValues[3] = currentData.brideBackupNumber;
+  rowValues[4] = currentData.brideBackupRelation;
+  rowValues[5] = currentData.brideBackupNumber2;
+  rowValues[6] = currentData.brideBackupRelation2;
+  rowValues[7] = currentData.brideInstagram;
+  rowValues[8] = currentData.brideHomeCity;
+  rowValues[9] = currentData.brideHomeArea;
+  rowValues[10] = currentData.brideHomeMap;
+  rowValues[11] = currentData.brideHomeLandmark;
+  rowValues[12] = currentData.groomFullName;
+  rowValues[13] = currentData.groomContactNumber;
+  rowValues[14] = currentData.groomWhatsappNumber;
+  rowValues[15] = currentData.groomBackupNumber;
+  rowValues[16] = currentData.groomBackupRelation;
+  rowValues[17] = currentData.groomBackupNumber2;
+  rowValues[18] = currentData.groomBackupRelation2;
+  rowValues[19] = currentData.groomInstagram;
+  rowValues[20] = currentData.groomHomeCity;
+  rowValues[21] = currentData.groomHomeArea;
+  rowValues[22] = currentData.groomHomeMap;
+  rowValues[23] = currentData.groomHomeLandmark;
+  
+  // Apply updates
+  for (const [key, value] of Object.entries(updates)) {
+    const colIndex = columnMap[key];
+    if (colIndex !== undefined) {
+      rowValues[colIndex - 3] = value; // -3 because rowValues starts at column D (index 3)
+    }
+  }
+
+  // Update the row (columns D-AA)
+  const updateRange = encodeURIComponent(`'BOOKED CLIENTS CONTACT DETAILS'!D${rowNumber}:AA${rowNumber}`);
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`;
+  
+  const response = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [rowValues] }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (updateClientContactDetails):', response.status, errorText);
+    throw new Error(`Failed to update contact details: ${response.status}`);
+  }
+
+  console.info(`[CONTACT DETAILS UPDATE] Successfully updated row ${rowNumber}`);
+  return { success: true, rowNumber };
+}
+
+
 // Schema: A: NAME, B: COMPANY WHATSAPP, C: COMPANY CONTACT, D: OWNER 1, E: OWNER 1 CONTACT,
 //         F: OWNER 1 WHATSAPP, G: OWNER 2, H: OWNER 2 CONTACT, I: OWNER 2 WHATSAPP,
 //         J: CITY, K: AREA, L: GOOGLE MAP, M: INSTAGRAM, N: FACEBOOK, O: TIKTOK,
@@ -4082,6 +4410,19 @@ Deno.serve(async (req) => {
       case 'refreshClientVendorData':
         if (!data || !data.registeredDateTimeAD) throw new Error('registeredDateTimeAD is required for refreshClientVendorData');
         result = await refreshClientVendorData(accessToken, spreadsheetId, data.registeredDateTimeAD as string);
+        break;
+      case 'getClientContactDetails':
+        if (!data || !data.registeredDateTimeAD) throw new Error('registeredDateTimeAD is required for getClientContactDetails');
+        result = await getClientContactDetails(accessToken, spreadsheetId, data.registeredDateTimeAD as string);
+        break;
+      case 'updateClientContactDetails':
+        if (!data || !data.registeredDateTimeAD) throw new Error('registeredDateTimeAD is required for updateClientContactDetails');
+        result = await updateClientContactDetails(
+          accessToken,
+          spreadsheetId,
+          data.registeredDateTimeAD as string,
+          data.updates as Record<string, string> || {}
+        );
         break;
       default:
         throw new Error(`Unknown action: ${action}`);
