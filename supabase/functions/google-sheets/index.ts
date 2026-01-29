@@ -3460,6 +3460,27 @@ async function resyncAllBookedClients(accessToken: string, spreadsheetId: string
 }
 
 // Full resync all booked clients: sync ALL data (columns A-AI) from CLIENT TRACKER to BOOKED CLIENTS
+// Helper: Extract the LATEST status from a status log (returns the most recent status entry)
+function getLatestStatusFromLog(statusLog: string): string {
+  if (!statusLog) return '';
+  
+  // Status log format: "STATUS [timestamp]\nSTATUS - timestamp\n..."
+  // Split by newlines and get the last non-empty entry
+  const entries = statusLog.split('\n').filter(e => e.trim());
+  if (entries.length === 0) return '';
+  
+  const lastEntry = entries[entries.length - 1].trim().toUpperCase();
+  
+  // Extract just the status part (before any timestamp markers like [ or -)
+  // Format examples: "BOOKED [2026-01-28 12:14:59]" or "ADVANCE PENDING - 01/29/2026, 20:55:20"
+  const statusMatch = lastEntry.match(/^([A-Z\s:]+?)(?:\s*[\[\-]|$)/);
+  if (statusMatch) {
+    return statusMatch[1].trim();
+  }
+  
+  return lastEntry;
+}
+
 // Also scans for BOOKED clients in tracker that are missing from BOOKED CLIENTS and copies them
 // forceSync = true will skip comparison and always copy data from tracker
 async function fullResyncAllBookedClients(accessToken: string, spreadsheetId: string, forceSync: boolean = false) {
@@ -3481,23 +3502,31 @@ async function fullResyncAllBookedClients(accessToken: string, spreadsheetId: st
   const trackerRows = trackerData.values || [];
   
   // Build a map of registeredDateTimeAD -> full row data from CLIENT TRACKER
-  const trackerFullDataMap: Map<string, { rowData: string[]; trackerRowNumber: number }> = new Map();
+  const trackerFullDataMap: Map<string, { rowData: string[]; trackerRowNumber: number; latestStatus: string }> = new Map();
   // Also track all BOOKED clients in tracker for Phase 1
   const bookedInTracker: { registeredDateTime: string; trackerRowNumber: number }[] = [];
   
   for (let i = 0; i < trackerRows.length; i++) {
     const row = trackerRows[i];
     const registeredDateTime = (row[0] || '').trim();
-    const statusLog = (row[22] || '').toUpperCase(); // Column W (index 22) - status log
+    const statusLog = (row[22] || ''); // Column W (index 22) - status log
     
     if (registeredDateTime) {
+      // Extract the LATEST status from the log, not just any mention
+      const latestStatus = getLatestStatusFromLog(statusLog);
+      
       trackerFullDataMap.set(registeredDateTime, {
         rowData: row,
-        trackerRowNumber: i + 2
+        trackerRowNumber: i + 2,
+        latestStatus
       });
       
-      // Check if this client has BOOKED status (but not "BOOKED SOMEWHERE ELSE")
-      if (statusLog.includes('BOOKED') && !statusLog.includes('SOMEWHERE ELSE')) {
+      // Check if this client's CURRENT status is BOOKED (not just historically BOOKED)
+      // Must be exactly "BOOKED" and NOT "BOOKED SOMEWHERE ELSE"
+      const isCurrentlyBooked = latestStatus === 'BOOKED' || 
+                                 latestStatus.startsWith('BOOKED ') && !latestStatus.includes('SOMEWHERE ELSE');
+      
+      if (isCurrentlyBooked) {
         bookedInTracker.push({
           registeredDateTime,
           trackerRowNumber: i + 2
@@ -3507,7 +3536,7 @@ async function fullResyncAllBookedClients(accessToken: string, spreadsheetId: st
   }
   
   console.log(`[FULL RESYNC] Built tracker map with ${trackerFullDataMap.size} entries`);
-  console.log(`[FULL RESYNC] Found ${bookedInTracker.length} BOOKED clients in tracker`);
+  console.log(`[FULL RESYNC] Found ${bookedInTracker.length} BOOKED clients in tracker (based on LATEST status)`);
   
   // Get all data from BOOKED CLIENTS
   const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:AI500");
@@ -3595,7 +3624,7 @@ async function fullResyncAllBookedClients(accessToken: string, spreadsheetId: st
           restoredToTrackerCount++;
           restoredToTracker.push(clientName || registeredDateTime.substring(0, 20));
           // Add to tracker map so we don't try to copy it again
-          trackerFullDataMap.set(registeredDateTime, { rowData: row, trackerRowNumber: 2 });
+          trackerFullDataMap.set(registeredDateTime, { rowData: row, trackerRowNumber: 2, latestStatus: getLatestStatusFromLog(row[22] || '') });
           console.log(`[FULL RESYNC] Successfully restored "${clientName}" to CLIENT TRACKER`);
         } else {
           console.error(`[FULL RESYNC] Failed to restore "${clientName}" to tracker:`, await writeResponse.text());
