@@ -96,12 +96,12 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents }: Da
   }
 
   return (
-    <div className="bg-slate-800/60 rounded-xl p-4 mt-4 border border-slate-700/50">
-      <h3 className="text-xs font-semibold text-white/60 uppercase tracking-wider mb-3">
+    <div className="bg-gray-900 rounded-xl p-4 mt-4 border border-gray-700">
+      <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">
         Event Details
       </h3>
 
-      <div className="space-y-3">
+      <div className="space-y-4">
         {events.map((event, idx) => {
           const monthName = getMonthName(parseInt(event.eventMonth) || 0);
           
@@ -120,28 +120,28 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents }: Da
           return (
             <div 
               key={event.eventIndex} 
-              className="flex gap-4 border-b border-slate-700/30 pb-3 last:border-0 last:pb-0"
+              className="flex gap-4 bg-gray-800/50 rounded-lg p-3 border border-gray-700/50"
             >
-              {/* LEFT - Event Name/Date */}
-              <div className="w-1/4 min-w-[100px]">
-                <div className="text-sm font-bold uppercase text-emerald-400">
+              {/* LEFT - Event Date Badge */}
+              <div className="bg-emerald-900/50 rounded-lg px-3 py-2 text-center min-w-[100px] flex-shrink-0">
+                <div className="text-base font-bold text-emerald-400 uppercase">
                   {monthName} {event.eventDay}
                 </div>
-                <div className="text-xs text-white/70 mt-0.5">
+                <div className="text-sm font-medium text-gray-300 mt-0.5">
                   {event.eventName || 'Event'}
                 </div>
               </div>
 
               {/* RIGHT - Venue & Parlour */}
-              <div className="w-3/4 space-y-1.5">
+              <div className="flex-1 space-y-2">
                 {/* Venue */}
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                  <span className="text-xs font-medium text-amber-400">Venue:</span>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="text-sm font-semibold text-amber-400">Venue:</span>
                   {venueLocation ? (
                     <>
-                      <span className="text-sm font-semibold text-white">{event.venueName}</span>
+                      <span className="text-base font-semibold text-white">{event.venueName}</span>
                       {(event.venueArea || event.venueCity) && (
-                        <span className="text-xs text-white/70">
+                        <span className="text-sm text-gray-300">
                           {[event.venueArea, event.venueCity].filter(Boolean).join(', ')}
                         </span>
                       )}
@@ -150,32 +150,32 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents }: Da
                           href={event.venueMap}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-0.5 text-blue-400 hover:text-blue-300"
+                          className="inline-flex items-center gap-0.5 text-blue-400 hover:text-blue-300 hover:underline"
                         >
-                          <MapPin className="h-3 w-3" />
-                          <ExternalLink className="h-2.5 w-2.5" />
+                          <MapPin className="h-4 w-4" />
+                          <ExternalLink className="h-3 w-3" />
                         </a>
                       )}
                       {venueTimeRange && (
-                        <span className="text-xs font-medium text-emerald-400">{venueTimeRange}</span>
+                        <span className="text-sm font-medium text-emerald-400">{venueTimeRange}</span>
                       )}
                       {event.guestCount && (
-                        <span className="text-xs font-medium text-amber-400">({event.guestCount})</span>
+                        <span className="text-sm font-medium text-amber-400">• {event.guestCount} guests</span>
                       )}
                     </>
                   ) : (
-                    <span className="text-xs text-white/40 italic">Not set</span>
+                    <span className="text-sm text-gray-500">Not set</span>
                   )}
                 </div>
 
                 {/* Parlour */}
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                  <span className="text-xs font-medium text-purple-400">Parlour:</span>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="text-sm font-semibold text-purple-400">Parlour:</span>
                   {parlourLocation ? (
                     <>
-                      <span className="text-sm font-semibold text-white">{event.parlourName}</span>
+                      <span className="text-base font-semibold text-white">{event.parlourName}</span>
                       {(event.parlourArea || event.parlourCity) && (
-                        <span className="text-xs text-white/70">
+                        <span className="text-sm text-gray-300">
                           {[event.parlourArea, event.parlourCity].filter(Boolean).join(', ')}
                         </span>
                       )}
@@ -184,18 +184,18 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents }: Da
                           href={event.parlourMap}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-0.5 text-blue-400 hover:text-blue-300"
+                          className="inline-flex items-center gap-0.5 text-blue-400 hover:text-blue-300 hover:underline"
                         >
-                          <MapPin className="h-3 w-3" />
-                          <ExternalLink className="h-2.5 w-2.5" />
+                          <MapPin className="h-4 w-4" />
+                          <ExternalLink className="h-3 w-3" />
                         </a>
                       )}
                       {parlourTimeRange && (
-                        <span className="text-xs font-medium text-emerald-400">{parlourTimeRange}</span>
+                        <span className="text-sm font-medium text-emerald-400">{parlourTimeRange}</span>
                       )}
                     </>
                   ) : (
-                    <span className="text-xs text-white/40 italic">Not set</span>
+                    <span className="text-sm text-gray-500">Not set</span>
                   )}
                 </div>
               </div>
