@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useCachedData } from "@/hooks/useCachedData";
 import { useDropdownData } from "@/hooks/useDropdownData";
-import { updateClient, ClientData, updateClientStatus, logCallAttempt, addPayment, updateClientQuotation, addClientComment } from "@/lib/sheets-api";
+import { updateClient, ClientData, updateClientStatus, logCallAttempt, addPayment, updateClientQuotation, addClientComment, updateFinalQuotation } from "@/lib/sheets-api";
 import { forceResetDatabase } from "@/lib/cache-manager";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -58,6 +58,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { useEventDetails } from "@/hooks/useEventDetails";
 import { useClientContactDetails } from "@/hooks/useClientContactDetails";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { FinalQuotationDialog, AdvancePaymentDialog } from "@/components/status-dialogs";
 
 // Helper to convert AD date to BS formatted string
 function formatADtoBS(adDateStr: string): string {
@@ -184,6 +185,15 @@ const ClientDetail = () => {
   const [isSavingQuotation, setIsSavingQuotation] = useState(false);
   const [pendingStatus, setPendingStatus] = useState("");
   const [currentQuotationData, setCurrentQuotationData] = useState("");
+
+  // ADVANCE PENDING interception state
+  const [showAdvancePendingDialog, setShowAdvancePendingDialog] = useState(false);
+  const [isSavingAdvancePending, setIsSavingAdvancePending] = useState(false);
+  
+  // BOOKED interception state
+  const [showBookedPaymentDialog, setShowBookedPaymentDialog] = useState(false);
+  const [isSavingBookedPayment, setIsSavingBookedPayment] = useState(false);
+  const [currentFinalQuotation, setCurrentFinalQuotation] = useState("");
 
   // Event details editing state
   const [editingEventIndex, setEditingEventIndex] = useState<number | null>(null);
@@ -642,6 +652,23 @@ const ClientDetail = () => {
       return;
     }
     
+    // INTERCEPT: If moving to ADVANCE PENDING, show final quotation dialog
+    const isToAdvancePending = newStatus.toUpperCase().includes('ADVANCE PENDING');
+    if (isToAdvancePending) {
+      setPendingStatus(newStatus);
+      setShowAdvancePendingDialog(true);
+      return;
+    }
+    
+    // INTERCEPT: If moving to BOOKED (but not BOOKED SOMEWHERE ELSE), show payment dialog
+    const isToBooked = newStatus.toUpperCase().includes('BOOKED') && 
+                       !newStatus.toUpperCase().includes('SOMEWHERE ELSE');
+    if (isToBooked) {
+      setPendingStatus(newStatus);
+      setShowBookedPaymentDialog(true);
+      return;
+    }
+    
     // Continue with normal status change
     await performStatusChange(newStatus);
   };
@@ -716,6 +743,101 @@ const ClientDetail = () => {
       toast({ title: "Failed to save quotation", variant: "destructive" });
     } finally {
       setIsSavingQuotation(false);
+    }
+  };
+
+  // Handle ADVANCE PENDING final quotation save
+  const handleSaveAdvancePendingQuotation = async (packageName: string, amount: string) => {
+    if (!client?.rowNumber) return;
+    
+    const finalData = `${packageName}: NPR ${formatNPR(amount)}/-`;
+    
+    setIsSavingAdvancePending(true);
+    try {
+      // Save final quotation
+      const quotationResult = await updateFinalQuotation(client.rowNumber, finalData);
+      setCurrentFinalQuotation(quotationResult.finalQuotation);
+      
+      // Update status to ADVANCE PENDING
+      const statusResult = await updateClientStatus(client.rowNumber, pendingStatus, currentStatusLog || client.statusLog || '');
+      setCurrentStatusLog(statusResult.statusLog);
+      
+      // Update global cache
+      if (updateClientCache) {
+        updateClientCache({
+          ...client,
+          finalQuotation: quotationResult.finalQuotation,
+          statusLog: statusResult.statusLog
+        });
+      }
+      
+      toast({ title: "Final quotation locked & status updated to ADVANCE PENDING" });
+      setShowAdvancePendingDialog(false);
+      setPendingStatus("");
+    } catch (err) {
+      console.error('Failed to save final quotation:', err);
+      toast({ title: "Failed to save final quotation", variant: "destructive" });
+    } finally {
+      setIsSavingAdvancePending(false);
+    }
+  };
+
+  // Handle BOOKED advance payment save
+  const handleSaveBookedPayment = async (data: {
+    amount: string;
+    paymentType: string;
+    bank: string;
+    nepaliDate: string;
+    adDate: string;
+  }) => {
+    if (!client?.rowNumber) return;
+    
+    const parsedFinal = parseFinalQuotation(currentFinalQuotation || client.finalQuotation || '');
+    const finalAmount = parsedFinal ? parseInt(parsedFinal.amount.replace(/[^0-9]/g, '')) : 0;
+    
+    setIsSavingBookedPayment(true);
+    try {
+      // Add payment
+      const paymentResult = await addPayment(
+        client.rowNumber,
+        data.amount,
+        data.paymentType,
+        data.nepaliDate,
+        data.adDate,
+        data.bank,
+        currentPaymentsMade || client.paymentsMade || '',
+        client.paymentDatesAD || '',
+        finalAmount,
+        client.registeredDateTimeAD,
+        'tracker',
+        client.clientName
+      );
+      
+      setCurrentPaymentsMade(paymentResult.paymentsMade);
+      setCurrentRemainingPayment(paymentResult.remainingPayment);
+      
+      // Update status to BOOKED
+      const statusResult = await updateClientStatus(client.rowNumber, pendingStatus, currentStatusLog || client.statusLog || '');
+      setCurrentStatusLog(statusResult.statusLog);
+      
+      // Update global cache
+      if (updateClientCache) {
+        updateClientCache({
+          ...client,
+          paymentsMade: paymentResult.paymentsMade,
+          remainingPayment: paymentResult.remainingPayment,
+          statusLog: statusResult.statusLog
+        });
+      }
+      
+      toast({ title: `Payment recorded & status updated to BOOKED` });
+      setShowBookedPaymentDialog(false);
+      setPendingStatus("");
+    } catch (err) {
+      console.error('Failed to save payment:', err);
+      toast({ title: "Failed to record payment", variant: "destructive" });
+    } finally {
+      setIsSavingBookedPayment(false);
     }
   };
 
@@ -821,8 +943,9 @@ const ClientDetail = () => {
       setCurrentQuotationData(client.quotationData || '');
       setCurrentPaymentsMade(client.paymentsMade || '');
       setCurrentRemainingPayment(client.remainingPayment || '');
+      setCurrentFinalQuotation(client.finalQuotation || '');
     }
-  }, [client?.rowNumber, client?.registeredDateTimeAD, client?.statusLog, client?.comments, client?.quotationData, client?.paymentsMade, client?.remainingPayment]);
+  }, [client?.rowNumber, client?.registeredDateTimeAD, client?.statusLog, client?.comments, client?.quotationData, client?.paymentsMade, client?.remainingPayment, client?.finalQuotation]);
 
   // Only show loading if we have no clients AND still loading
   if (isLoading && clients.length === 0) {
@@ -1760,6 +1883,38 @@ const ClientDetail = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ADVANCE PENDING - Final Quotation Dialog */}
+      <FinalQuotationDialog
+        open={showAdvancePendingDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowAdvancePendingDialog(false);
+            setPendingStatus("");
+          }
+        }}
+        clientName={client?.clientName || ''}
+        existingQuotationData={currentQuotationData || client?.quotationData || ''}
+        onSave={handleSaveAdvancePendingQuotation}
+        isSaving={isSavingAdvancePending}
+      />
+
+      {/* BOOKED - Advance Payment Dialog */}
+      <AdvancePaymentDialog
+        open={showBookedPaymentDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowBookedPaymentDialog(false);
+            setPendingStatus("");
+          }
+        }}
+        clientName={client?.clientName || ''}
+        finalQuotation={currentFinalQuotation || client?.finalQuotation || ''}
+        paymentTypes={dropdowns?.paymentTypes || ['ADVANCE PAYMENT', 'PARTIAL PAYMENT', 'FULL PAYMENT']}
+        banks={dropdowns?.banks || ['MASTER BARUN', 'KRIPA SAVINGS', 'KRIPA CURRENT', 'ESEWA', 'KHALTI']}
+        onSave={handleSaveBookedPayment}
+        isSaving={isSavingBookedPayment}
+      />
     </div>
   );
 };
