@@ -20,6 +20,7 @@ import Vendors from "./pages/Vendors";
 import MyAccounts from "./pages/MyAccounts";
 import NotFound from "./pages/NotFound";
 import ClientDetail from "./pages/ClientDetail";
+import ClientContactForm from "./pages/ClientContactForm";
 import HotDates from "./pages/HotDates";
 
 import { fullResyncAllBookedClients } from "./lib/sheets-api";
@@ -57,6 +58,8 @@ const App = () => (
         <BookedClientsAutoSync />
         <BrowserRouter>
           <Routes>
+            {/* Public Client Form - Isolated, no app access */}
+            <Route path="/client-form/:clientId" element={<ClientContactForm />} />
             {/* Suite Landing */}
             <Route path="/" element={<SuiteLanding />} />
             
