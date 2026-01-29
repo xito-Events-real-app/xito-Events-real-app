@@ -6,6 +6,7 @@ import { ClientContactDetails, emptyContactDetails } from '@/lib/client-contact-
 export function useClientContactDetails(registeredDateTimeAD: string | undefined) {
   const [data, setData] = useState<ClientContactDetails | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isResyncing, setIsResyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchContactDetails = useCallback(async () => {
@@ -79,11 +80,51 @@ export function useClientContactDetails(registeredDateTimeAD: string | undefined
     }
   }, [registeredDateTimeAD, fetchContactDetails]);
 
+  const resyncClient = useCallback(async (): Promise<boolean> => {
+    if (!registeredDateTimeAD) return false;
+
+    setIsResyncing(true);
+    try {
+      const { data: result, error: resyncError } = await supabase.functions.invoke('google-sheets', {
+        body: {
+          action: 'resyncClientContactDetails',
+          data: { registeredDateTimeAD }
+        }
+      });
+
+      if (resyncError) throw new Error(resyncError.message);
+      if (!result?.success) throw new Error(result?.error || 'Failed to resync contact details');
+
+      // Update local state with refreshed data
+      setData(result.data);
+
+      toast({
+        title: "Resynced",
+        description: "Client data refreshed from booked clients",
+      });
+
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to resync contact details';
+      toast({
+        title: "Error",
+        description: message,
+        variant: "destructive",
+      });
+      console.error('Error resyncing contact details:', err);
+      return false;
+    } finally {
+      setIsResyncing(false);
+    }
+  }, [registeredDateTimeAD]);
+
   return {
     data,
     isLoading,
+    isResyncing,
     error,
     refetch: fetchContactDetails,
     updateContactDetails,
+    resyncClient,
   };
 }

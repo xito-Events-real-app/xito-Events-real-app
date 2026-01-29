@@ -294,7 +294,9 @@ const ClientDetail = () => {
   const {
     data: contactDetailsData,
     isLoading: contactDetailsLoading,
-    updateContactDetails
+    isResyncing: contactDetailsResyncing,
+    updateContactDetails,
+    resyncClient: resyncContactDetails,
   } = useClientContactDetails(client?.registeredDateTimeAD);
 
   // All event options for the event selector
@@ -1295,7 +1297,9 @@ const ClientDetail = () => {
               <ClientDetailsCard
                 data={contactDetailsData}
                 isLoading={contactDetailsLoading}
+                isResyncing={contactDetailsResyncing}
                 onSave={updateContactDetails}
+                onResync={resyncContactDetails}
               />
             </div>
           )}

@@ -2,14 +2,14 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Rocket } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
-import { getClients, getDropdowns, fullResyncAllBookedClients, fullSyncEventDetails } from "@/lib/sheets-api";
+import { getClients, getDropdowns, fullResyncAllBookedClients, fullSyncEventDetails, fullSyncContactDetails } from "@/lib/sheets-api";
 import { setCachedData, notifyCacheUpdate, CACHE_SCHEMA_VERSION } from "@/lib/cache-manager";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 interface SyncPhase {
-  id: 'tracker' | 'booked' | 'events' | 'vendors';
+  id: 'tracker' | 'booked' | 'events' | 'vendors' | 'contacts';
   label: string;
   description: string;
 }
@@ -19,15 +19,16 @@ const SYNC_PHASES: SyncPhase[] = [
   { id: 'booked', label: 'Booked Clients', description: 'Syncing to booked clients sheet...' },
   { id: 'events', label: 'Event Details', description: 'Updating event logistics...' },
   { id: 'vendors', label: 'Vendor Sync', description: 'Refreshing venue & parlour data...' },
+  { id: 'contacts', label: 'Contact Details', description: 'Syncing client contact data...' },
 ];
 
 export function MasterSyncButton() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [showOverlay, setShowOverlay] = useState(false);
-  const [currentPhase, setCurrentPhase] = useState<'countdown' | 'tracker' | 'booked' | 'events' | 'vendors' | 'complete'>('countdown');
+  const [currentPhase, setCurrentPhase] = useState<'countdown' | 'tracker' | 'booked' | 'events' | 'vendors' | 'contacts' | 'complete'>('countdown');
   const [progress, setProgress] = useState(0);
   const [countdown, setCountdown] = useState(3);
-  const [syncStats, setSyncStats] = useState({ clients: 0, synced: 0, events: 0, vendors: 0 });
+  const [syncStats, setSyncStats] = useState({ clients: 0, synced: 0, events: 0, vendors: 0, contacts: 0 });
   const [showSuccess, setShowSuccess] = useState(false);
 
   const handleMasterSync = async () => {
@@ -36,7 +37,7 @@ export function MasterSyncButton() {
     setCurrentPhase('countdown');
     setProgress(0);
     setCountdown(3);
-    setSyncStats({ clients: 0, synced: 0, events: 0, vendors: 0 });
+    setSyncStats({ clients: 0, synced: 0, events: 0, vendors: 0, contacts: 0 });
     setShowSuccess(false);
     
     // Countdown animation
@@ -87,9 +88,9 @@ export function MasterSyncButton() {
       setProgress(75);
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Phase 4: Vendor Sync (76-100%)
+      // Phase 4: Vendor Sync (76-88%)
       setCurrentPhase('vendors');
-      setProgress(80);
+      setProgress(76);
       
       // Get all booked clients and refresh their vendor data
       const { data: bookedClientsData } = await supabase.functions.invoke('google-sheets', {
@@ -120,11 +121,21 @@ export function MasterSyncButton() {
         }
         
         // Update progress incrementally
-        const progressIncrement = (100 - 80) * ((i + 1) / bookedClients.length);
-        setProgress(80 + progressIncrement);
+        const progressIncrement = (88 - 76) * ((i + 1) / bookedClients.length);
+        setProgress(76 + progressIncrement);
       }
       
       setSyncStats(prev => ({ ...prev, vendors: vendorUpdatesCount }));
+      setProgress(88);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Phase 5: Contact Details Sync (89-100%)
+      setCurrentPhase('contacts');
+      setProgress(89);
+      
+      const contactsResult = await fullSyncContactDetails();
+      
+      setSyncStats(prev => ({ ...prev, contacts: contactsResult.copiedCount + contactsResult.updatedCount }));
       setProgress(100);
       await new Promise(resolve => setTimeout(resolve, 500));
       
@@ -135,7 +146,7 @@ export function MasterSyncButton() {
       await new Promise(resolve => setTimeout(resolve, 3000));
       
       toast.success("Master Sync Complete!", {
-        description: `${syncStats.clients} clients • ${syncStats.synced} synced • ${syncStats.events} events • ${vendorUpdatesCount} vendor updates`,
+        description: `${syncStats.clients} clients • ${syncStats.synced} synced • ${syncStats.events} events • ${vendorUpdatesCount} vendor updates • ${contactsResult.copiedCount + contactsResult.updatedCount} contacts`,
       });
       
     } catch (error) {
@@ -232,7 +243,7 @@ export function MasterSyncButton() {
             )}
 
             {/* Syncing Phases */}
-            {(currentPhase === 'tracker' || currentPhase === 'booked' || currentPhase === 'events' || currentPhase === 'vendors') && (
+            {(currentPhase === 'tracker' || currentPhase === 'booked' || currentPhase === 'events' || currentPhase === 'vendors' || currentPhase === 'contacts') && (
               <>
                 {/* Rocket with Flames */}
                 <div className="relative mb-12 animate-bounce" style={{ animationDuration: '2s' }}>
@@ -267,7 +278,7 @@ export function MasterSyncButton() {
                   <div className="flex justify-between mt-3">
                     <span className="text-cyan-400 font-medium">{Math.round(progress)}%</span>
                     <span className="text-gray-400 text-sm">
-                      Phase {currentPhase === 'tracker' ? 1 : currentPhase === 'booked' ? 2 : currentPhase === 'events' ? 3 : 4} of 4
+                      Phase {currentPhase === 'tracker' ? 1 : currentPhase === 'booked' ? 2 : currentPhase === 'events' ? 3 : currentPhase === 'vendors' ? 4 : 5} of 5
                     </span>
                   </div>
                 </div>
@@ -326,6 +337,10 @@ export function MasterSyncButton() {
                   <div className="text-center">
                     <div className="text-3xl font-bold text-amber-400">{syncStats.vendors}</div>
                     <div className="text-sm text-gray-400">Vendors</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-violet-400">{syncStats.contacts}</div>
+                    <div className="text-sm text-gray-400">Contacts</div>
                   </div>
                 </div>
                 
