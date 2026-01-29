@@ -15,7 +15,7 @@ import {
   Users, CalendarPlus, TrendingUp, Menu, 
   ChevronRight, RefreshCw, AlertTriangle, Bell, Flame, CheckCircle, Snowflake
 } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { getCurrentStatus } from "@/lib/sheets-api";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
@@ -57,6 +57,7 @@ export default function Dashboard() {
   } = useCachedData();
   
   const navigate = useNavigate();
+  const location = useLocation();
   
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -800,7 +801,7 @@ export default function Dashboard() {
                       return (
                         <div 
                           key={client.rowNumber}
-                          onClick={() => navigate(getClientDetailPath(client))}
+                          onClick={() => navigate(getClientDetailPath(client), { state: { from: location.pathname } })}
                           className={cn(
                             "flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] border",
                             isBooked 
@@ -927,7 +928,7 @@ export default function Dashboard() {
                     {selectedColdDateInfo.enquiringClients.map((client, i) => (
                       <div 
                         key={i}
-                        onClick={() => navigate(`/client-tracker/client/${encodeURIComponent(client.id)}`)}
+                        onClick={() => navigate(`/client-tracker/client/${encodeURIComponent(client.id)}`, { state: { from: location.pathname } })}
                         className="flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] border bg-cyan-500/10 border-cyan-500/30"
                       >
                         <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-bold bg-gradient-to-br from-cyan-500 to-cyan-700">

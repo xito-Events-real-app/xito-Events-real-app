@@ -568,7 +568,22 @@ const ClientDetail = () => {
   };
 
   const handleBack = () => {
-    navigate(-1);
+    // Priority 1: Use the from state if available (passed from navigation source)
+    if (fromState?.from) {
+      navigate(fromState.from, { 
+        state: fromState.filters 
+      });
+      return;
+    }
+    
+    // Priority 2: Try browser history if available
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    
+    // Priority 3: Default to client tracker dashboard
+    navigate('/client-tracker');
   };
 
   // FAB handlers
