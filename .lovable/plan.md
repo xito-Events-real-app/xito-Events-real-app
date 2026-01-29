@@ -1,136 +1,219 @@
 
 
-## Fix: Consolidate "QUOTATION SENT" Variants to Single Category
+## Master Sync Button for Xito Business Suite
 
-Currently, two separate categories can appear in the sidebar:
-- "QUOTATION SENT"  
-- "QUOTATION SENT : REVIEW PENDING"
-
-These should be consolidated into a single canonical status: **"QUOTATION SENT : REVIEW PENDING"**
+Add a powerful "Master Sync" button to the suite landing page that performs a complete 3-phase synchronization across all data sources with an immersive rocket launch animation and epic motivational music.
 
 ---
 
-### Root Cause
+### Sync Phases
 
-The `normalizeStatus()` function in `src/lib/status-config.ts` already correctly maps:
-```typescript
-if (s.includes('QUOTATION SENT')) return 'QUOTATION SENT : REVIEW PENDING';
-```
-
-However, this normalization is **not applied consistently** in all places where statuses are grouped/counted.
-
----
-
-### Files Using Normalization (Already Fixed)
-
-| File | Status |
-|------|--------|
-| `src/components/desktop/DesktopAppLayout.tsx` | Uses `normalizeStatus()` when counting categories |
-
----
-
-### Files Missing Normalization (Need Fix)
-
-| File | Issue | Fix |
-|------|-------|-----|
-| `src/components/desktop/DesktopDashboard.tsx` | Counts raw status strings (lines 141-148) | Apply `normalizeStatus()` before counting |
-| `src/pages/FreshClients.tsx` | Groups clients by raw status (lines 65-77) | Apply `normalizeStatus()` when grouping |
-| `src/hooks/useSuiteStats.ts` | Uses hardcoded "QUOTATION SENT" in active leads check (line 116) | Update to canonical status or use includes pattern |
-
----
-
-### Changes Required
-
-**1. `src/components/desktop/DesktopDashboard.tsx` (lines 141-148)**
-```typescript
-// Before:
-const statusCounts = useMemo(() => {
-  const counts: Record<string, number> = {};
-  statsClients.forEach(client => {
-    const status = getCurrentStatus(client.statusLog || '').toUpperCase();
-    counts[status] = (counts[status] || 0) + 1;
-  });
-  return counts;
-}, [statsClients]);
-
-// After:
-const statusCounts = useMemo(() => {
-  const counts: Record<string, number> = {};
-  statsClients.forEach(client => {
-    const rawStatus = getCurrentStatus(client.statusLog || '').toUpperCase();
-    const status = normalizeStatus(rawStatus);  // ← ADD THIS
-    if (status !== 'UNTOUCHED') {
-      counts[status] = (counts[status] || 0) + 1;
-    }
-  });
-  return counts;
-}, [statsClients]);
-```
-
-**2. `src/pages/FreshClients.tsx` (lines 65-77)**
-```typescript
-// Before:
-const clientsByStatus = useMemo(() => {
-  const grouped: Record<string, ClientData[]> = {};
-  localClients.forEach(client => {
-    const status = getCurrentStatus(client.statusLog || '');
-    if (!grouped[status]) {
-      grouped[status] = [];
-    }
-    grouped[status].push(client);
-  });
-  return grouped;
-}, [localClients]);
-
-// After:
-const clientsByStatus = useMemo(() => {
-  const grouped: Record<string, ClientData[]> = {};
-  localClients.forEach(client => {
-    const rawStatus = getCurrentStatus(client.statusLog || '');
-    const status = normalizeStatus(rawStatus);  // ← ADD THIS
-    if (status !== 'UNTOUCHED') {
-      if (!grouped[status]) {
-        grouped[status] = [];
-      }
-      grouped[status].push(client);
-    }
-  });
-  return grouped;
-}, [localClients]);
-```
-
-**3. `src/hooks/useSuiteStats.ts` (line 116)**
-```typescript
-// Before:
-"QUOTATION SENT",
-
-// After (use includes pattern for safety):
-// The check already uses .includes() pattern, so both variants will match
-// No change needed here - it's checking if status CONTAINS these strings
+```text
+┌──────────────────────────────────────────────────────────────────────────┐
+│                          MASTER SYNC FLOW                                │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  PHASE 1: CLIENT TRACKER                                                 │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │  • Fetch all clients from CLIENT TRACKER sheet                   │   │
+│  │  • Fetch dropdowns data                                          │   │
+│  │  • Update local IndexedDB cache                                  │   │
+│  │  → Progress: 0% - 33%                                            │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│                             ↓                                            │
+│  PHASE 2: BOOKED CLIENTS                                                 │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │  • Call fullResyncAllBookedClients(true)                         │   │
+│  │  • Syncs CLIENT TRACKER → BOOKED CLIENTS                         │   │
+│  │  • Copies missing BOOKED status clients                          │   │
+│  │  → Progress: 34% - 66%                                           │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│                             ↓                                            │
+│  PHASE 3: EVENT DETAILS                                                  │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │  • Call fullSyncEventDetails()                                   │   │
+│  │  • Syncs BOOKED CLIENTS → EVENT DETAILS sheet                    │   │
+│  │  • Updates client/event info, preserves logistics data           │   │
+│  │  → Progress: 67% - 100%                                          │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Import Addition Required
+### Animation Sequence
 
-Add `normalizeStatus` import in files where it's missing:
+**Full-Screen Overlay with Rocket Launch Theme:**
 
-**`src/components/desktop/DesktopDashboard.tsx`:**
-```typescript
-import { getStatusConfig, sortCategoriesByOrder, normalizeStatus } from "@/lib/status-config";
+```text
+┌─────────────────────────────────────────────────────────────────────────┐
+│                                                                         │
+│     ★  ★           ★              ★            ★            ★          │
+│           ★                 ★                        ★                  │
+│                    ★                    ★                  ★            │
+│     ★                                                                   │
+│                          🚀                                             │
+│                     ╭───────────╮                                       │
+│                     │  ROCKET   │   ← Animated rocket with flames       │
+│                     ╰─────┬─────╯                                       │
+│                        ╲▽╱       ← Exhaust flames animation             │
+│                       ╲▽▽▽╱                                             │
+│                                                                         │
+│   ═══════════════════════════════════════════════════════════════       │
+│   ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░       │
+│   ═══════════════════════════════════════════════════════════════       │
+│                                                                         │
+│           PHASE 2: SYNCING BOOKED CLIENTS                               │
+│                      45% Complete                                       │
+│                                                                         │
+│                  ♫ Epic Music Playing ♫                                 │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-**`src/pages/FreshClients.tsx`:**
-```typescript
-import { normalizeStatus } from "@/lib/status-config";
-```
+**Animation Stages:**
+1. **Countdown** (3-2-1) with pulsing numbers
+2. **Liftoff** - Rocket shakes and starts rising
+3. **Ascent** - Rocket moves up through starfield with flame particles
+4. **Warp Speed** - At 100%, rocket accelerates into a light streak
+5. **Success** - Screen flashes with "SYNC COMPLETE" celebration
 
 ---
 
-### Result
+### Music
 
-After this fix:
-- Only **"QUOTATION SENT : REVIEW PENDING"** will appear in sidebar
-- Both raw variants ("QUOTATION SENT" and "QUOTATION SENT : REVIEW PENDING") will be merged into single count
-- Consistent behavior across all dashboard views
+**Epic Orchestral/Electronic Track:**
+- Using free royalty-free track similar to "Inception: Time" vibe
+- Options:
+  - Mixkit cinematic trailer music
+  - Free epic orchestral build-up track
+- Music fades in on button press, builds during sync, crescendo at completion
+
+---
+
+### UI Placement
+
+**Mobile Layout:**
+```text
+┌─────────────────────────────────────┐
+│  Xito Business Suite           [X] │
+│  Your complete business toolkit    │
+├─────────────────────────────────────┤
+│                                     │
+│  ┌─────────────┐ ┌─────────────┐   │
+│  │ Add Client  │ │ Add Payment │   │
+│  └─────────────┘ └─────────────┘   │
+│                                     │
+│  ╔═════════════════════════════╗   │  ← NEW: Master Sync Button
+│  ║  🚀  MASTER SYNC            ║   │     (Full width, gradient, 
+│  ║  Sync All Data Across Apps  ║   │      rocket icon)
+│  ╚═════════════════════════════╝   │
+│                                     │
+│  [Today's Schedule Hero]           │
+│  ...                               │
+└─────────────────────────────────────┘
+```
+
+**Desktop Layout:**
+- Same button, placed in Quick Actions section alongside Add Client/Add Payment
+
+---
+
+### Files to Create/Modify
+
+| File | Action | Purpose |
+|------|--------|---------|
+| `src/components/suite/MasterSyncButton.tsx` | **CREATE** | New component with sync logic, rocket animation overlay, and music |
+| `src/components/suite/MobileSuiteLanding.tsx` | **MODIFY** | Add MasterSyncButton below quick add buttons |
+| `src/components/suite/DesktopSuiteLanding.tsx` | **MODIFY** | Add MasterSyncButton in Quick Actions section |
+
+---
+
+### Technical Implementation
+
+**1. MasterSyncButton Component Structure:**
+```typescript
+interface SyncPhase {
+  id: 'tracker' | 'booked' | 'events';
+  label: string;
+  description: string;
+}
+
+const SYNC_PHASES: SyncPhase[] = [
+  { id: 'tracker', label: 'Client Tracker', description: 'Fetching fresh client data...' },
+  { id: 'booked', label: 'Booked Clients', description: 'Syncing to booked clients sheet...' },
+  { id: 'events', label: 'Event Details', description: 'Updating event details...' },
+];
+```
+
+**2. Sync Execution:**
+```typescript
+const handleMasterSync = async () => {
+  setIsSyncing(true);
+  setShowOverlay(true);
+  playEpicMusic();
+  
+  try {
+    // Phase 1: Client Tracker (0-33%)
+    setCurrentPhase('tracker');
+    await syncClientTracker();
+    setProgress(33);
+    
+    // Phase 2: Booked Clients (34-66%)
+    setCurrentPhase('booked');
+    await fullResyncAllBookedClients(true);
+    setProgress(66);
+    
+    // Phase 3: Event Details (67-100%)
+    setCurrentPhase('events');
+    await fullSyncEventDetails();
+    setProgress(100);
+    
+    // Success celebration
+    await playSuccessAnimation();
+  } finally {
+    stopMusic();
+    setIsSyncing(false);
+    setShowOverlay(false);
+  }
+};
+```
+
+**3. Rocket Animation CSS:**
+- Starfield background with animated stars
+- Rocket SVG with exhaust flame particles
+- Progress bar with glowing effect
+- Phase labels with typewriter effect
+- Warp speed lines on completion
+
+**4. Audio:**
+- Epic orchestral track for sync duration
+- Success chime at completion
+- Volume fades in/out smoothly
+
+---
+
+### Visual Details
+
+**Button Design:**
+- Gradient: `from-orange-500 via-red-500 to-purple-600`
+- Icon: Rocket icon (Lucide)
+- Shadow: Warm glow effect
+- Hover: Scale + increased glow
+- Loading state: Disabled with spinner
+
+**Overlay Colors:**
+- Background: Deep space blue (#0a0a1a)
+- Stars: White with varying opacity
+- Rocket: Orange/red gradient
+- Flames: Animated orange/yellow/red
+- Progress bar: Cyan gradient
+- Text: White with glow effect
+
+**Completion Animation:**
+- Screen flash (white)
+- Confetti burst
+- "SYNC COMPLETE" with scale animation
+- Stats summary (clients synced, events updated)
 
