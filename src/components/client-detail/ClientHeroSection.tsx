@@ -238,27 +238,28 @@ const ClientHeroSection = ({
           isLoading={eventDetailsLoading}
         />
 
-        {/* Description Box - Compact */}
-        {client.description && (
-          <div className="bg-gradient-to-r from-amber-950/40 via-amber-900/20 to-transparent rounded-xl border-l-4 border-amber-500 p-3 mt-4 animate-fade-in">
-            <div className="flex items-start gap-2">
-              <div className="shrink-0 text-amber-400/60">
-                <span className="text-xl font-serif leading-none">"</span>
+        {/* Description Box - Always visible */}
+        <div className="bg-gradient-to-r from-amber-950/40 via-amber-900/20 to-transparent rounded-xl border-l-4 border-amber-500 p-3 mt-4 animate-fade-in">
+          <div className="flex items-start gap-2">
+            <div className="shrink-0 text-amber-400/60">
+              <span className="text-xl font-serif leading-none">"</span>
+            </div>
+            <div className="flex-1">
+              <div className="text-[10px] font-semibold text-amber-400 mb-1 uppercase tracking-widest">
+                Client Notes
               </div>
-              <div className="flex-1">
-                <div className="text-[10px] font-semibold text-amber-400 mb-1 uppercase tracking-widest">
-                  Client Notes
-                </div>
-                <div className="text-white/95 leading-relaxed text-xs">
-                  {formatDescription(client.description)}
-                </div>
-              </div>
-              <div className="shrink-0 text-amber-400/60 self-end">
-                <span className="text-xl font-serif leading-none">"</span>
+              <div className="text-white/95 leading-relaxed text-xs">
+                {client.description?.trim() 
+                  ? formatDescription(client.description) 
+                  : <span className="text-white/40 italic">No notes added</span>
+                }
               </div>
             </div>
+            <div className="shrink-0 text-amber-400/60 self-end">
+              <span className="text-xl font-serif leading-none">"</span>
+            </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
