@@ -1,10 +1,58 @@
 import { MapPin, ExternalLink } from "lucide-react";
-import { EventDetailsData } from "@/hooks/useEventDetails";
+import { EventDetailsData, EventDetail } from "@/hooks/useEventDetails";
 import { getMonthName } from "@/lib/nepali-months";
+
+interface ClientEventsData {
+  events: string;
+  eventYear: string;
+  eventMonth: string;
+  eventDay: string;
+}
 
 interface DashboardEventDetailsProps {
   eventDetailsData: EventDetailsData | null;
   isLoading?: boolean;
+  clientEvents?: ClientEventsData;
+}
+
+// Build basic events from client data when no detailed event data exists
+function buildBasicEvents(clientData?: ClientEventsData): EventDetail[] {
+  if (!clientData?.events) return [];
+  
+  const names = clientData.events.split('\n');
+  const years = clientData.eventYear?.split('\n') || [];
+  const months = clientData.eventMonth?.split('\n') || [];
+  const days = clientData.eventDay?.split('\n') || [];
+  
+  return names
+    .map((name, i) => ({
+      eventIndex: i,
+      eventName: name.trim(),
+      eventYear: years[i]?.trim() || '',
+      eventMonth: months[i]?.trim() || '',
+      eventDay: days[i]?.trim() || '',
+      eventDateAD: '',
+      // All logistics fields empty for non-booked clients
+      venueType: '',
+      venueName: '',
+      venueArea: '',
+      venueCity: '',
+      venueMap: '',
+      eventStartTime: '',
+      eventEndTime: '',
+      parlourType: '',
+      parlourName: '',
+      parlourArea: '',
+      parlourCity: '',
+      parlourMap: '',
+      parlourStartTime: '',
+      parlourEndTime: '',
+      doGroomComeInMehndi: '',
+      guestCount: '',
+      eventDemands: [],
+      eventReferences: []
+    }))
+    .filter(e => e.eventName);
 }
 
 // Format time for display (e.g., "8:00 AM")
@@ -23,7 +71,7 @@ function formatTime(time: string): string {
   return time;
 }
 
-const DashboardEventDetails = ({ eventDetailsData, isLoading }: DashboardEventDetailsProps) => {
+const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents }: DashboardEventDetailsProps) => {
   if (isLoading) {
     return (
       <div className="bg-slate-800/50 rounded-xl p-4 mt-4 animate-pulse">
@@ -38,11 +86,14 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading }: DashboardEventDe
     );
   }
 
-  if (!eventDetailsData?.events?.length) {
+  // Use detailed event data if available, otherwise build from client events
+  const events = eventDetailsData?.events?.length 
+    ? eventDetailsData.events 
+    : buildBasicEvents(clientEvents);
+
+  if (!events.length) {
     return null;
   }
-
-  const events = eventDetailsData.events;
 
   return (
     <div className="bg-slate-800/60 rounded-xl p-4 mt-4 border border-slate-700/50">

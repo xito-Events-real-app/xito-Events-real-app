@@ -236,6 +236,12 @@ const ClientHeroSection = ({
         <DashboardEventDetails 
           eventDetailsData={eventDetailsData}
           isLoading={eventDetailsLoading}
+          clientEvents={{
+            events: client.events || '',
+            eventYear: client.eventYear || '',
+            eventMonth: client.eventMonth || '',
+            eventDay: client.eventDay || '',
+          }}
         />
 
         {/* Description Box - Always visible */}
