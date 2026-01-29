@@ -1,77 +1,98 @@
 
 
-## Rename "Events" to "Event Details" + Full-Screen Expandable View
+## Fix Missing Form Fields + Styling in FullScreenEventCard
 
-Currently, the sidebar tab is named "Events" and shows event details in a tabbed UI with summary cards. The request is to:
-1. Rename sidebar tab "Events" to "Event Details"
-2. Create a full-screen event details view (not embedded in dashboard layout)
-3. Show client name and handler as a compact header
-4. Click on event date to expand into edit mode
-5. In normal mode, show all event details expanded
+The current `FullScreenEventCard` is missing several form sections that exist in the original `EventDetailCard`, and the styling doesn't match the dashboard's dark gradient theme.
 
 ---
 
-### Current Structure
+### Missing Form Fields
 
+| Feature | EventDetailCard | FullScreenEventCard |
+|---------|-----------------|---------------------|
+| Open Maps button | Has button next to map input | Missing |
+| Event Demands | Dynamic list (4 default slots, add/remove) | Missing entirely |
+| Event References | Dynamic list (2 default slots, add/remove) | Missing entirely |
+| Groom in Mehndi | Uses Switch component | Uses Select dropdown |
+| Urgency Warning | Red banner when < 20 days | Missing |
+
+---
+
+### Styling Issues
+
+**Current (FullScreenEventCard):**
+- Card background: `bg-blue-500/20` (solid color overlay)
+- No gradient background in expanded mode
+- Labels: `text-white/50`
+
+**Original (EventDetailCard):**
+- Card background: `bg-gradient-to-br from-blue-500/20 to-indigo-500/20`
+- Proper dark theme inputs: `bg-white/5 border-white/10 placeholder:text-white/30`
+- Section headers use gradient-matching colors
+
+---
+
+### Solution
+
+Update `FullScreenEventCard.tsx` to:
+
+1. **Add Event Demands section** - Dynamic list with 4 default inputs, add/remove buttons
+2. **Add Event References section** - Dynamic list with 2 default inputs, add/remove buttons  
+3. **Change Groom switch** - Replace Select with Switch component
+4. **Add "Open Maps" buttons** - Next to venue and parlour map inputs
+5. **Add Urgency Warning banner** - Show when event is within 20 days and has empty fields
+6. **Fix card styling** - Use gradient backgrounds matching EventDetailCard
+
+---
+
+### Visual Result
+
+**Expanded Edit Form (after fix):**
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  SIDEBAR  │            CONTENT AREA                         │
-│           │  ┌─────────────────────────────────────────────┐│
-│  Dashboard│  │  "Events & Dates" heading                  ││
-│  Events   │  │  ┌────────────────────────────────────┐    ││
-│  Reg...   │  │  │ Tab: WEDDING │ Tab: RECEPTION       │    ││
-│           │  │  ├────────────────────────────────────┤    ││
-│           │  │  │  EventDetailsSummaryCard           │    ││
-│           │  │  │  (with Edit button -> opens Sheet) │    ││
-│           │  │  └────────────────────────────────────┘    ││
-│           │  └─────────────────────────────────────────────┘│
+│ WEDDING - Baisakh 15, 2082                           [▲]   │
+├─────────────────────────────────────────────────────────────┤
+│ ⚠️ Event is in less than 20 days! Some details missing.    │
+├─────────────────────────────────────────────────────────────┤
+│ 📍 Venue Details                                            │
+│ ┌─────────────┐ ┌─────────────┐                            │
+│ │ Type ▼      │ │ Venue Name  │                            │
+│ └─────────────┘ └─────────────┘                            │
+│ ┌─────────────┐ ┌─────────────┐                            │
+│ │ City        │ │ Area        │                            │
+│ └─────────────┘ └─────────────┘                            │
+│ ┌───────────────────────────────┐ ┌─────────────┐          │
+│ │ Google Maps URL               │ │ Open Maps   │          │
+│ └───────────────────────────────┘ └─────────────┘          │
+├─────────────────────────────────────────────────────────────┤
+│ 🕐 Event Timing                                             │
+│ ┌─────────────┐ ┌─────────────┐                            │
+│ │ Start: 10:00│ │ End: 18:00  │                            │
+│ └─────────────┘ └─────────────┘                            │
+├─────────────────────────────────────────────────────────────┤
+│ 📍 Parlour Details                                          │
+│ ... (same as venue)                                        │
+├─────────────────────────────────────────────────────────────┤
+│ 👥 Additional Info                                          │
+│ ┌──────────────────────────────┐ ┌─────────────┐           │
+│ │ Groom comes in Mehndi?  [⚪] │ │ Guests: 500 │           │
+│ └──────────────────────────────┘ └─────────────┘           │
+├─────────────────────────────────────────────────────────────┤
+│ 📝 Event Demands                    (NEW!)                  │
+│ 1. ┌─────────────────────────┐ [🗑]                         │
+│ 2. ┌─────────────────────────┐ [🗑]                         │
+│ 3. ┌─────────────────────────┐ [🗑]                         │
+│ 4. ┌─────────────────────────┐ [🗑]                         │
+│ [+ Add More]                                                │
+├─────────────────────────────────────────────────────────────┤
+│ 🔗 Event References                 (NEW!)                  │
+│ 1. ┌─────────────────────────┐ [🗑]                         │
+│ 2. ┌─────────────────────────┐ [🗑]                         │
+│ [+ Add More]                                                │
+├─────────────────────────────────────────────────────────────┤
+│           [Cancel]      [💾 Save Changes]                   │
 └─────────────────────────────────────────────────────────────┘
 ```
-
----
-
-### Proposed Structure
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  SIDEBAR       │         FULL-SCREEN EVENT DETAILS          │
-│                │  ┌─────────────────────────────────────────┐│
-│  Dashboard     │  │ CLIENT NAME          HANDLER: XY       ││
-│  Event Details │  ├─────────────────────────────────────────┤│
-│  Reg...        │  │                                         ││
-│                │  │ ┌─────────────────────────────────────┐ ││
-│                │  │ │ WEDDING - BAISAKH 15, 2082          │ ││
-│                │  │ │ (Click to expand/edit)              │ ││
-│                │  │ │                                     │ ││
-│                │  │ │ Venue: Hotel Yak, Kathmandu         │ ││
-│                │  │ │ Time: 10:00 AM - 6:00 PM            │ ││
-│                │  │ │ Parlour: Jasmine Salon, Patan       │ ││
-│                │  │ │ ... (all details shown)             │ ││
-│                │  │ └─────────────────────────────────────┘ ││
-│                │  │                                         ││
-│                │  │ ┌─────────────────────────────────────┐ ││
-│                │  │ │ RECEPTION - BAISAKH 16, 2082        │ ││
-│                │  │ │ (Click to expand/edit)              │ ││
-│                │  │ │ ... details ...                     │ ││
-│                │  │ └─────────────────────────────────────┘ ││
-│                │  └─────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-### Visual Behavior
-
-**Normal Mode (Collapsed):**
-- All events listed vertically as cards
-- Each card shows ALL details in a compact read-only format
-- Click anywhere on the card expands it into edit mode
-
-**Edit Mode (Expanded):**
-- Card expands with form fields visible
-- Inline editing of all event details
-- Save/Cancel buttons at the bottom
-- Other cards remain collapsed
 
 ---
 
@@ -79,35 +100,59 @@ Currently, the sidebar tab is named "Events" and shows event details in a tabbed
 
 | File | Changes |
 |------|---------|
-| `src/components/client-detail/ClientDetailSidebar.tsx` | Rename label from "Events" to "Event Details" (line 26) |
-| `src/pages/ClientDetail.tsx` | Replace Events section (lines 1158-1303) with new full-screen layout showing compact header + expandable event cards |
-| `src/components/client-detail/FullScreenEventCard.tsx` | **NEW** - Create new component for full-screen event cards with click-to-expand edit functionality |
+| `src/components/client-detail/FullScreenEventCard.tsx` | Add missing form sections (Demands, References), fix Groom switch, add Open Maps buttons, add urgency warning, update styling to use gradients |
 
 ---
 
 ### Technical Details
 
-**1. Sidebar Label Change:**
+**1. Add Event Demands state:**
 ```typescript
-// ClientDetailSidebar.tsx line 26
-{ id: 'events', label: 'Event Details', icon: Calendar },
+const [demands, setDemands] = useState<string[]>(
+  event.eventDemands?.length ? event.eventDemands : ['', '', '', '']
+);
 ```
 
-**2. Full-Screen Event Section Layout:**
-- Remove "Events & Dates" heading
-- Add compact header bar with client name (left) and handler badge (right)
-- Render events as vertical list of expandable cards
-- Each card shows all details by default (not hidden behind tabs)
+**2. Add Event References state:**
+```typescript
+const [references, setReferences] = useState<string[]>(
+  event.eventReferences?.length ? event.eventReferences : ['', '']
+);
+```
 
-**3. FullScreenEventCard Component:**
-- Props: `event`, `onSave`, `isExpanded`, `onToggleExpand`
-- Collapsed state: Shows all details in read-only format
-- Expanded state: Shows edit form (similar to current EventDetailCard)
-- Click on card header/date toggles expand/collapse
-- Visual indicator showing which card is in edit mode
+**3. Replace Groom Select with Switch:**
+```typescript
+const [doGroomComeInMehndi, setDoGroomComeInMehndi] = useState(
+  event.doGroomComeInMehndi === 'YES'
+);
+```
 
-**4. State Management:**
-- Track `expandedEventIndex: number | null` for which card is in edit mode
-- Click on collapsed card sets that index as expanded
-- Save or click elsewhere collapses back to read-only
+**4. Fix card gradient styling:**
+```typescript
+// Match EventDetailCard gradient pattern
+const getEventColor = () => {
+  const upper = eventName.toUpperCase();
+  if (upper.includes('WEDDING')) return 'from-blue-500/20 to-indigo-500/20 border-blue-500/30';
+  if (upper.includes('RECEPTION')) return 'from-purple-500/20 to-violet-500/20 border-purple-500/30';
+  // ... etc
+};
+
+// Apply in Card className
+<Card className={cn(
+  "transition-all duration-300 border rounded-xl",
+  isExpanded && `bg-gradient-to-br ${getEventColor()}`
+)}>
+```
+
+**5. Update save handler to include demands/references:**
+```typescript
+const handleSave = async () => {
+  await onSave(event.eventIndex, {
+    ...formData,
+    doGroomComeInMehndi: doGroomComeInMehndi ? 'YES' : '',
+    eventDemands: demands.filter(d => d.trim()),
+    eventReferences: references.filter(r => r.trim()),
+  });
+};
+```
 
