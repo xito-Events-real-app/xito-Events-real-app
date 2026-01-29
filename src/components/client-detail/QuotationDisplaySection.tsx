@@ -205,9 +205,17 @@ const QuotationDisplaySection = ({
 }: QuotationDisplaySectionProps) => {
   const upper = status.toUpperCase();
   
-  // Don't show anything for early statuses
+  // For early statuses, still show comments section
   if (!needsQuotation(status)) {
-    return null;
+    return (
+      <div className="mt-3">
+        <InlineComments 
+          comments={comments} 
+          onAddComment={onAddComment} 
+          isAddingComment={isAddingComment} 
+        />
+      </div>
+    );
   }
 
   const quotationTiers = parseQuotationData(quotationData || '');
