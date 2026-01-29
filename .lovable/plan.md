@@ -1,124 +1,92 @@
 
-# Custom Domain for Client Contact Form
+# Fix WhatsApp Display and Link Issues in Client Details
 
-## The Problem
+## Problems Identified
 
-Currently, when you share the contact form link with clients, they see:
-```
-https://wtnclienttracker.lovable.app/client-form/2026-01-18T16%3A19%3A50.358Z
-```
+**Issue 1: WhatsApp Number Not Visible**
+The collapsed view summary only shows "WhatsApp" text with an icon, but does not display the actual phone number. Users want to see the number itself.
 
-You want clients to see a **completely different domain** - something like:
-```
-https://forms.weddingtalesnepal.com/client-form/abc123
-```
+**Issue 2: WhatsApp Link Not Opening**
+When clicking the WhatsApp button/link, nothing happens. This is because:
+- If the phone number is empty, `formatWhatsAppLink()` returns an empty string
+- An empty `href=""` makes the link navigate to the current page instead of WhatsApp
+- The link should either show the number and work, or not render at all
 
 ---
 
-## Solution Options
+## Solution
 
-### Option 1: Add a Subdomain to This Project (Recommended)
+Update the collapsed view in `ClientDetailsCard.tsx` to:
+1. Display the actual WhatsApp number alongside the icon (not just "WhatsApp")
+2. Ensure the link correctly opens WhatsApp chat
 
-Lovable supports **multiple custom domains** on the same project. You can:
+---
 
-1. Keep `wtnclienttracker.lovable.app` (or your main domain) for staff
-2. Add a **separate subdomain** like `forms.weddingtalesnepal.com` for clients
+## Changes Required
 
-**How it works:**
-- Both domains point to the same Lovable project
-- The `/client-form/:clientId` route works on both domains
-- You share only the `forms.weddingtalesnepal.com` link with clients
-- Clients never see `wtnclienttracker.lovable.app`
+### File: `src/components/client-detail/ClientDetailsCard.tsx`
 
-**Steps to set up:**
-1. Go to **Project Settings → Domains**
-2. Click **Connect Domain**
-3. Add `forms.weddingtalesnepal.com` (or your preferred subdomain)
-4. Add DNS records at your domain registrar:
-   - **A Record**: Name: `forms`, Value: `185.158.133.1`
-5. Wait for verification (can take up to 72 hours)
+**Change 1: Bride WhatsApp Display (around line 443-447)**
 
-**Update the app code:**
-```typescript
-// In src/lib/client-contact-api.ts
-export function getClientFormUrl(registeredDateTimeAD: string): string {
-  const encodedId = encodeURIComponent(registeredDateTimeAD);
-  // Use the forms subdomain for client-facing links
-  return `https://forms.weddingtalesnepal.com/client-form/${encodedId}`;
-}
+Before:
+```jsx
+{data?.brideWhatsappNumber && (
+  <a href={formatWhatsAppLink(data.brideWhatsappNumber)} target="_blank" rel="noopener noreferrer" className="...">
+    <MessageCircle className="h-3 w-3" />
+    WhatsApp
+  </a>
+)}
 ```
 
----
+After:
+```jsx
+{data?.brideWhatsappNumber && (
+  <a href={formatWhatsAppLink(data.brideWhatsappNumber)} target="_blank" rel="noopener noreferrer" className="...">
+    <MessageCircle className="h-3 w-3" />
+    {data.brideWhatsappNumber}
+  </a>
+)}
+```
 
-### Option 2: Create a Separate Lovable Project
+**Change 2: Groom WhatsApp Display (around line 485-489)**
 
-If you want **complete separation**, you could:
-1. Create a new Lovable project just for the contact form
-2. Connect a custom domain to that project
-3. Use an edge function to sync data between projects
+Before:
+```jsx
+{data?.groomWhatsappNumber && (
+  <a href={formatWhatsAppLink(data.groomWhatsappNumber)} target="_blank" rel="noopener noreferrer" className="...">
+    <MessageCircle className="h-3 w-3" />
+    WhatsApp
+  </a>
+)}
+```
 
-**Pros:** Complete isolation, separate codebase
-**Cons:** More complex, need to sync data between projects, additional maintenance
-
----
-
-### Option 3: Shorten the URL (Bonus)
-
-Regardless of which option you choose, we can also make the URL **shorter and cleaner**:
-
-**Current:** `forms.weddingtalesnepal.com/client-form/2026-01-18T16%3A19%3A50.358Z`
-
-**Improved:** `forms.weddingtalesnepal.com/f/abc123`
-
-This requires:
-1. Creating a lookup table (in your sheet or database) that maps short codes to client IDs
-2. Updating the route to use the short code
-
----
-
-## Recommended Approach
-
-**Option 1 (Subdomain)** is the simplest and most practical:
-
-| Step | Action | Who Does It |
-|------|--------|-------------|
-| 1 | Add `forms.weddingtalesnepal.com` in Project Settings → Domains | You |
-| 2 | Add A record at your domain registrar | You |
-| 3 | Wait for DNS propagation | Automatic |
-| 4 | Update the code to use the new domain | Me (Lovable) |
+After:
+```jsx
+{data?.groomWhatsappNumber && (
+  <a href={formatWhatsAppLink(data.groomWhatsappNumber)} target="_blank" rel="noopener noreferrer" className="...">
+    <MessageCircle className="h-3 w-3" />
+    {data.groomWhatsappNumber}
+  </a>
+)}
+```
 
 ---
 
-## What You Need to Do First
+## Expected Result
 
-1. **Decide on your subdomain name** (e.g., `forms.weddingtalesnepal.com`, `contact.weddingtalesnepal.com`, or any domain you own)
-
-2. **Add the domain in Lovable:**
-   - Go to Project Settings → Domains
-   - Click "Connect Domain"
-   - Enter your chosen subdomain
-
-3. **Configure DNS at your registrar** (GoDaddy, Namecheap, Cloudflare, etc.):
-   - Add an **A Record** pointing to `185.158.133.1`
-
-4. **Tell me the domain** once it's connected, and I'll update the code
+After these changes:
+- The collapsed Client Details card will show the actual WhatsApp numbers (e.g., "+977 9841234567")
+- Clicking the number will open WhatsApp chat with that contact
+- The green WhatsApp icon will still appear next to the number
+- The link will only render if a number exists (current behavior preserved)
 
 ---
 
-## Technical Changes Needed (After Domain Setup)
+## Technical Details
 
-| File | Change |
-|------|--------|
-| `src/lib/client-contact-api.ts` | Update `getClientFormUrl()` to use your new domain |
+| Location | Change |
+|----------|--------|
+| `ClientDetailsCard.tsx` line ~446 | Replace "WhatsApp" with `{data.brideWhatsappNumber}` |
+| `ClientDetailsCard.tsx` line ~488 | Replace "WhatsApp" with `{data.groomWhatsappNumber}` |
 
----
-
-## Next Steps
-
-Please:
-1. Choose the domain/subdomain you want to use for client forms
-2. Add it in **Project Settings → Domains**
-3. Configure DNS records at your registrar
-4. Let me know the domain name once verified
-
-Then I'll update the code to generate links using your new domain!
+The `formatWhatsAppLink()` function already correctly formats the URL - no changes needed there.
