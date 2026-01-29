@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { testConnection, ConnectionTestResult } from "@/lib/sheets-api";
 import { toast } from "@/hooks/use-toast";
-import { Settings as SettingsIcon, Link, CheckCircle, AlertCircle, Loader2, RefreshCw, Copy, FileSpreadsheet, User, Trash2, UserCog, Clock } from "lucide-react";
+import { Settings as SettingsIcon, Link, CheckCircle, AlertCircle, Loader2, RefreshCw, Copy, FileSpreadsheet, User, Trash2, UserCog, Clock, LogOut } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 import { getDeviceHandler, clearDeviceHandler, DeviceHandler, getHandlerExpiryHours } from "@/lib/handler-memory";
 import {
   AlertDialog,
@@ -21,12 +22,24 @@ import {
 
 export default function Settings() {
   const navigate = useNavigate();
+  const { signOut, user } = useAuth();
   const [connectionStatus, setConnectionStatus] = useState<'loading' | 'connected' | 'error'>('loading');
   const [connectionData, setConnectionData] = useState<ConnectionTestResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isTesting, setIsTesting] = useState(false);
   const [deviceHandler, setDeviceHandler] = useState<DeviceHandler | null>(null);
   const [expiryHours, setExpiryHours] = useState<number | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await signOut();
+      navigate('/login', { replace: true });
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
 
   // Load device handler on mount
   useEffect(() => {
@@ -322,6 +335,52 @@ export default function Settings() {
           <CardContent className="space-y-2 text-sm text-muted-foreground">
             <p><strong>Version:</strong> 1.0.0</p>
             <p><strong>PWA Status:</strong> Ready to install</p>
+            {user && (
+              <p><strong>Logged in as:</strong> {user.email}</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Logout Section */}
+        <Card className="border-destructive/30">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-destructive">
+              <LogOut className="w-5 h-5" />
+              Sign Out
+            </CardTitle>
+            <CardDescription>
+              Sign out of your account on this device
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" className="w-full">
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Sign Out
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Sign Out?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    You'll need to sign in again to access the app.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction 
+                    onClick={handleLogout}
+                    disabled={isLoggingOut}
+                  >
+                    {isLoggingOut ? (
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    ) : null}
+                    Sign Out
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </CardContent>
         </Card>
       </div>
