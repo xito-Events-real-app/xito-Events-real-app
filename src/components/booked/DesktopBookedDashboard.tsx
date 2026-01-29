@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { parseEventDetails, NEPALI_MONTHS } from "@/lib/nepali-months";
 import { isBSDatePast } from "@/lib/nepali-date";
 import { getBookingDate, getRelativeTime } from "@/lib/client-card-utils";
+import { getClientDetailPath } from "@/lib/client-navigation";
 import {
   Users,
   Calendar,
@@ -405,10 +406,7 @@ export function DesktopBookedDashboard({
                           <TableRow key={client.bookedRowNumber} className="hover:bg-muted/30">
                             <TableCell>
                               <button 
-                                onClick={() => {
-                                  const clientId = client.originalRowNumber || encodeURIComponent(client.registeredDateTimeAD || '');
-                                  navigate(`/client-tracker/client/${clientId}`);
-                                }}
+                                onClick={() => navigate(getClientDetailPath(client))}
                                 className="font-medium text-foreground hover:text-primary transition-colors cursor-pointer text-left"
                               >
                                 {client.clientName}
@@ -728,9 +726,6 @@ export function DesktopBookedDashboard({
                   ) : (
                     <div className="grid grid-cols-4 gap-4">
                       {filteredClientList.map((client) => {
-                        // Use ID directly from allClients - no re-lookup needed
-                        const clientId = client.originalRowNumber || encodeURIComponent(client.registeredDateTimeAD || '');
-                        
                         // Get events for this client, filtered by selected month if applicable
                         const clientEvents = clients
                           .filter(c => c.clientName === client.name)
@@ -749,7 +744,7 @@ export function DesktopBookedDashboard({
                         return (
                           <button
                             key={`${client.name}-${client.registeredDateTimeAD}`}
-                            onClick={() => navigate(`/client-tracker/client/${clientId}`)}
+                            onClick={() => navigate(getClientDetailPath(client))}
                             className={cn(
                               "border rounded-lg p-3 transition-all text-left w-full relative overflow-hidden",
                               "hover:border-green-500/50 hover:bg-green-500/5"
@@ -830,26 +825,19 @@ export function DesktopBookedDashboard({
                         {/* Events List - Show ALL events with scroll if needed */}
                         <ScrollArea className={dateInfo.events.length > 5 ? "h-28" : ""}>
                           <div className="space-y-1">
-                            {dateInfo.events.map((c, i) => {
-                              // Use ID directly from event data - no re-lookup needed
-                              const clientId = c.originalRowNumber || encodeURIComponent(c.registeredDateTimeAD || '');
-                              
-                              return (
+                            {dateInfo.events.map((c, i) => (
                                 <button
                                   key={`${c.clientName}-${c.registeredDateTimeAD}-${i}`}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    if (clientId) {
-                                      navigate(`/client-tracker/client/${clientId}`);
-                                    }
+                                    navigate(getClientDetailPath(c));
                                   }}
                                   className="w-full text-left text-[10px] text-muted-foreground truncate border-l-2 border-green-500 pl-2 hover:bg-green-500/10 rounded-r py-0.5 transition-colors cursor-pointer"
                                 >
                                   <span className="font-medium text-foreground">{c.eventName}</span>
                                   <span className="hover:text-primary hover:underline"> • {c.clientName}</span>
                                 </button>
-                              );
-                            })}
+                            ))}
                           </div>
                         </ScrollArea>
                       </button>
