@@ -19,8 +19,6 @@ import { PhoneInputField } from '@/components/form/PhoneInputField';
 import { allNepalCities } from '@/lib/nepal-cities';
 import { 
   ClientContactDetails, 
-  brideBackupRelationOptions, 
-  groomBackupRelationOptions,
   hasFilledContactDetails,
   formatWhatsAppLink,
   formatInstagramLink,
@@ -28,6 +26,7 @@ import {
   generateFormWhatsAppMessage,
   getRelativeTime
 } from '@/lib/client-contact-api';
+import { useDropdownData } from '@/hooks/useDropdownData';
 import { ChevronsUpDown, Check } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
@@ -44,6 +43,10 @@ export const ClientDetailsCard = ({ data, isLoading, isResyncing, onSave, onResy
   const [isExpanded, setIsExpanded] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSendingToWhatsApp, setIsSendingToWhatsApp] = useState(false);
+  
+  // Get relation options from dropdown data
+  const { data: dropdownData } = useDropdownData();
+  const relationOptions = dropdownData?.relationOptions || ['Mother', 'Father', 'Sister', 'Brother', 'Other'];
   
   // Bride form state
   const [brideFullName, setBrideFullName] = useState('');
@@ -699,7 +702,7 @@ export const ClientDetailsCard = ({ data, isLoading, isResyncing, onSave, onResy
                         <SelectValue placeholder="Select relation" />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-800 border-slate-700">
-                        {brideBackupRelationOptions.map((rel) => (
+                        {relationOptions.map((rel) => (
                           <SelectItem key={rel} value={rel} className="text-white">{rel}</SelectItem>
                         ))}
                       </SelectContent>
@@ -725,7 +728,7 @@ export const ClientDetailsCard = ({ data, isLoading, isResyncing, onSave, onResy
                         <SelectValue placeholder="Select relation" />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-800 border-slate-700">
-                        {brideBackupRelationOptions.map((rel) => (
+                        {relationOptions.map((rel) => (
                           <SelectItem key={rel} value={rel} className="text-white">{rel}</SelectItem>
                         ))}
                       </SelectContent>
@@ -917,7 +920,7 @@ export const ClientDetailsCard = ({ data, isLoading, isResyncing, onSave, onResy
                         <SelectValue placeholder="Select relation" />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-800 border-slate-700">
-                        {groomBackupRelationOptions.map((rel) => (
+                        {relationOptions.map((rel) => (
                           <SelectItem key={rel} value={rel} className="text-white">{rel}</SelectItem>
                         ))}
                       </SelectContent>
@@ -943,7 +946,7 @@ export const ClientDetailsCard = ({ data, isLoading, isResyncing, onSave, onResy
                         <SelectValue placeholder="Select relation" />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-800 border-slate-700">
-                        {groomBackupRelationOptions.map((rel) => (
+                        {relationOptions.map((rel) => (
                           <SelectItem key={rel} value={rel} className="text-white">{rel}</SelectItem>
                         ))}
                       </SelectContent>

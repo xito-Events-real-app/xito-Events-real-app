@@ -124,6 +124,7 @@ async function getDropdowns(accessToken: string, spreadsheetId: string) {
     mindsetOptions: getColumn(10),    // Column K - Mindset options for QUOTATION SENT
     banks: getColumn(15),             // Column P - Bank names
     paymentTypes: getColumn(16),      // Column Q - Payment types (ADVANCE, PARTIAL, FULL)
+    relationOptions: getColumn(17),   // Column R - Relation options for backup contacts
     companyNames: getColumn(22),      // Column W - Company names
     serviceTypes: getColumn(23),      // Column X - Service types
   };
