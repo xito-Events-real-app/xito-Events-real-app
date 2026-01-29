@@ -3,7 +3,6 @@ import { useLocation, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { useAudio } from "@/contexts/AudioContext";
 import { useDesktopMode } from "@/hooks/useDesktopMode";
 import { DateConverterDrawer } from "@/components/dashboard/DateConverterDrawer";
 import {
@@ -16,8 +15,6 @@ import {
 import {
   RefreshCw,
   Calendar,
-  Volume2,
-  VolumeX,
   Smartphone,
   ChevronRight,
   Home,
@@ -108,7 +105,6 @@ export function DesktopHeader({
   filteredCount = 0,
 }: DesktopHeaderProps) {
   const location = useLocation();
-  const { isMuted, toggleMute } = useAudio();
   const { toggleDesktopMode } = useDesktopMode();
   const [showDateConverter, setShowDateConverter] = useState(false);
 
@@ -163,16 +159,6 @@ export function DesktopHeader({
             >
               <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} />
               <span className="hidden lg:inline">{isSyncing ? "Syncing..." : "Sync"}</span>
-            </Button>
-
-            {/* Mute */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleMute}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
             </Button>
 
             {/* Switch to Mobile */}

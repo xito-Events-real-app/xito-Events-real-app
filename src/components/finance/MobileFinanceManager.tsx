@@ -192,7 +192,7 @@ const MobileFinanceManager = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-950/20 to-slate-900">
       {/* Global Mode Toggle */}
-      <GlobalModeToggle showMute={false} />
+      <GlobalModeToggle />
 
       {/* Header */}
       <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-sm border-b border-emerald-900/50 px-4 py-3">
