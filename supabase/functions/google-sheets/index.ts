@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -171,6 +171,138 @@ async function getEventDetailsSetupData(accessToken: string, spreadsheetId: stri
   
   // Extract venue types from Column A, filter empty values
   return data.values.map((row: string[]) => row[0]).filter(Boolean);
+}
+
+// Get parlour types from EVENT DETAILS SETUP DATA sheet (Column C, starting from row 2)
+async function getParlourTypes(accessToken: string, spreadsheetId: string) {
+  const range = encodeURIComponent("'EVENT DETAILS SETUP DATA'!C2:C100");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (getParlourTypes):', response.status, errorText);
+    throw new Error(`Google Sheets API error: ${response.status} - ${errorText.substring(0, 200)}`);
+  }
+
+  const data = await response.json();
+  if (!data.values) return [];
+  
+  // Extract parlour types from Column C, filter empty values
+  return data.values.map((row: string[]) => row[0]).filter(Boolean);
+}
+
+// Get parlours from a specific type sheet (e.g., "MAKEUP STUDIO", "BEAUTY PARLOUR")
+// Schema: A: NAME, B: COMPANY WHATSAPP, C: COMPANY CONTACT, D: OWNER 1, E: OWNER 1 CONTACT,
+//         F: OWNER 1 WHATSAPP, G: OWNER 2, H: OWNER 2 CONTACT, I: OWNER 2 WHATSAPP,
+//         J: CITY, K: AREA, L: GOOGLE MAP, M: INSTAGRAM, N: FACEBOOK, O: TIKTOK,
+//         P: YOUTUBE, Q: WEBSITE, R: GMAIL, S: RATING
+async function getParloursByType(accessToken: string, spreadsheetId: string, parlourType: string) {
+  if (!parlourType) return [];
+  
+  const sheetName = parlourType.toUpperCase();
+  const range = encodeURIComponent(`'${sheetName}'!A2:S500`);
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`Google Sheets API error (getParloursByType - ${sheetName}):`, response.status, errorText);
+    // If sheet doesn't exist, return empty array instead of throwing
+    if (response.status === 400 || errorText.includes('Unable to parse range')) {
+      return [];
+    }
+    throw new Error(`Google Sheets API error: ${response.status} - ${errorText.substring(0, 200)}`);
+  }
+
+  const data = await response.json();
+  if (!data.values) return [];
+  
+  return data.values.map((row: string[], index: number) => ({
+    rowNumber: index + 2,
+    name: row[0] || '',
+    companyWhatsapp: row[1] || '',
+    companyContact: row[2] || '',
+    owner1: row[3] || '',
+    owner1Contact: row[4] || '',
+    owner1Whatsapp: row[5] || '',
+    owner2: row[6] || '',
+    owner2Contact: row[7] || '',
+    owner2Whatsapp: row[8] || '',
+    city: row[9] || '',
+    area: row[10] || '',
+    googleMap: row[11] || '',
+    instagram: row[12] || '',
+    facebook: row[13] || '',
+    tiktok: row[14] || '',
+    youtube: row[15] || '',
+    website: row[16] || '',
+    gmail: row[17] || '',
+    rating: row[18] || '',
+  })).filter((parlour: { name: string }) => parlour.name); // Filter out empty rows
+}
+
+// Add a new parlour entry to the type-specific sheet
+async function addParlourEntry(
+  accessToken: string, 
+  spreadsheetId: string, 
+  parlourType: string, 
+  parlourData: { name: string; city: string; area: string; googleMap: string }
+) {
+  if (!parlourType || !parlourData.name) {
+    throw new Error('Parlour type and name are required');
+  }
+
+  const sheetName = parlourType.toUpperCase();
+  const range = encodeURIComponent(`'${sheetName}'!A:S`);
+  const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+
+  // Build the row with values in correct columns
+  // A: NAME, B-I: empty, J: CITY, K: AREA, L: GOOGLE MAP, M-S: empty
+  const newRow = [
+    parlourData.name,     // A: NAME
+    '',                   // B: COMPANY WHATSAPP
+    '',                   // C: COMPANY CONTACT
+    '',                   // D: OWNER 1
+    '',                   // E: OWNER 1 CONTACT
+    '',                   // F: OWNER 1 WHATSAPP
+    '',                   // G: OWNER 2
+    '',                   // H: OWNER 2 CONTACT
+    '',                   // I: OWNER 2 WHATSAPP
+    parlourData.city,     // J: CITY
+    parlourData.area,     // K: AREA
+    parlourData.googleMap,// L: GOOGLE MAP
+    '',                   // M: INSTAGRAM
+    '',                   // N: FACEBOOK
+    '',                   // O: TIKTOK
+    '',                   // P: YOUTUBE
+    '',                   // Q: WEBSITE
+    '',                   // R: GMAIL
+    '',                   // S: RATING
+  ];
+
+  const response = await fetch(appendUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [newRow] }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`Google Sheets API error (addParlourEntry - ${sheetName}):`, response.status, errorText);
+    throw new Error(`Failed to add parlour: ${response.status}`);
+  }
+
+  return { success: true };
 }
 
 // Get venues from a specific type sheet (e.g., "BANQUET", "DECORATION")
@@ -3827,6 +3959,22 @@ Deno.serve(async (req) => {
       case 'addVenueEntry':
         if (!data || !data.venueType || !data.name) throw new Error('venueType and name are required for addVenueEntry');
         result = await addVenueEntry(accessToken, spreadsheetId, data.venueType as string, {
+          name: data.name as string,
+          city: (data.city as string) || '',
+          area: (data.area as string) || '',
+          googleMap: (data.googleMap as string) || '',
+        });
+        break;
+      case 'getParlourTypes':
+        result = await getParlourTypes(accessToken, spreadsheetId);
+        break;
+      case 'getParloursByType':
+        if (!data || !data.parlourType) throw new Error('parlourType is required for getParloursByType');
+        result = await getParloursByType(accessToken, spreadsheetId, data.parlourType as string);
+        break;
+      case 'addParlourEntry':
+        if (!data || !data.parlourType || !data.name) throw new Error('parlourType and name are required for addParlourEntry');
+        result = await addParlourEntry(accessToken, spreadsheetId, data.parlourType as string, {
           name: data.name as string,
           city: (data.city as string) || '',
           area: (data.area as string) || '',
