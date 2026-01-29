@@ -2087,7 +2087,8 @@ async function getClientEventDetails(accessToken: string, spreadsheetId: string,
   }
 
   if (!foundRow) {
-    throw new Error('Client not found in EVENT DETAILS sheet');
+    // Return null data instead of throwing - allows frontend fallback to basic event data
+    return { rowNumber: 0, events: [] };
   }
 
   // Parse multi-line columns to build event-indexed data
