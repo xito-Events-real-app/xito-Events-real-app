@@ -1,122 +1,99 @@
 
 
-## Show Event Details for All Clients (Not Just Booked)
+## Fix: Always Show Comments Section on Client Dashboard
 
-Display event information on the Dashboard section for ALL clients, using basic event data from the client record when detailed logistics data isn't available.
+The comments section only appears for clients with specific statuses (like BOOKED). For clients with early statuses (UNTOUCHED, FRESH, etc.), the entire `QuotationDisplaySection` returns `null`, hiding comments.
 
 ---
 
 ### Root Cause
 
-Currently:
-1. `getClientEventDetails` only fetches from **'BOOKED CLIENTS EVENT DETAILS'** sheet
-2. Non-booked clients don't exist in that sheet
-3. `DashboardEventDetails` returns `null` when no event details data exists
+In `QuotationDisplaySection.tsx`:
+
+```typescript
+// Lines 209-211
+if (!needsQuotation(status)) {
+  return null;  // <-- Comments are inside this component, so they get hidden too!
+}
+```
+
+The `needsQuotation()` function only returns `true` for:
+- QUOTATION SENT
+- BARGAINING  
+- ADVANCE PENDING
+- BOOKED
+- CANCELLED
+- POSTPONED
+
+For early statuses like UNTOUCHED, FRESH, FOLLOW UP - the entire component (including comments) is hidden.
+
+Additionally, comments are only shown inline for BOOKED clients (lines 279-283).
 
 ---
 
 ### Solution
 
-Pass the client's basic event data as a fallback prop to `DashboardEventDetails`. When detailed event data from the BOOKED sheet isn't available, display the basic event info (name, date) with "Not set" for venue/parlour.
+When the status doesn't need quotation display, still show the comments section standalone instead of returning `null`.
 
----
-
-### Layout for Non-Booked Clients
-
-```
-┌─────────────────────────┬──────────────────────────────────────────────────────────┐
-│ EVENT DETAILS           │                                                          │
-├─────────────────────────┼──────────────────────────────────────────────────────────┤
-│ MAGH 16                 │ Venue: Not set                                           │
-│ WEDDING                 │ Parlour: Not set                                         │
-├─────────────────────────┼──────────────────────────────────────────────────────────┤
-│ MAGH 17                 │ Venue: Not set                                           │
-│ RECEPTION               │ Parlour: Not set                                         │
-└─────────────────────────┴──────────────────────────────────────────────────────────┘
-```
-
----
-
-### Technical Changes
-
-#### 1. Update `DashboardEventDetails.tsx`
-
-Add a new prop for fallback client data:
-
+**Before:**
 ```typescript
-interface DashboardEventDetailsProps {
-  eventDetailsData: EventDetailsData | null;
-  isLoading?: boolean;
-  // NEW: Fallback client data for non-booked clients
-  clientEvents?: {
-    events: string;      // newline-separated
-    eventYear: string;   // newline-separated
-    eventMonth: string;  // newline-separated
-    eventDay: string;    // newline-separated
-  };
+if (!needsQuotation(status)) {
+  return null;
 }
 ```
 
-Build basic events from client data when `eventDetailsData` is null:
-
+**After:**
 ```typescript
-// If no detailed event data, build from client events
-const events = eventDetailsData?.events || buildBasicEvents(clientEvents);
-
-function buildBasicEvents(clientData) {
-  if (!clientData?.events) return [];
-  
-  const names = clientData.events.split('\n');
-  const years = clientData.eventYear.split('\n');
-  const months = clientData.eventMonth.split('\n');
-  const days = clientData.eventDay.split('\n');
-  
-  return names.map((name, i) => ({
-    eventIndex: i,
-    eventName: name.trim(),
-    eventYear: years[i] || '',
-    eventMonth: months[i] || '',
-    eventDay: days[i] || '',
-    // All logistics fields empty
-    venueName: '', venueArea: '', venueCity: '', venueMap: '',
-    eventStartTime: '', eventEndTime: '',
-    parlourName: '', parlourArea: '', parlourCity: '', parlourMap: '',
-    parlourStartTime: '', parlourEndTime: '',
-    guestCount: ''
-  })).filter(e => e.eventName);
+if (!needsQuotation(status)) {
+  // Still show comments section for all clients
+  return (
+    <div className="mt-3">
+      <InlineComments 
+        comments={comments} 
+        onAddComment={onAddComment} 
+        isAddingComment={isAddingComment} 
+      />
+    </div>
+  );
 }
-```
-
-#### 2. Update `ClientHeroSection.tsx`
-
-Pass client event data as fallback:
-
-```typescript
-<DashboardEventDetails 
-  eventDetailsData={eventDetailsData}
-  isLoading={eventDetailsLoading}
-  clientEvents={{
-    events: client.events || '',
-    eventYear: client.eventYear || '',
-    eventMonth: client.eventMonth || '',
-    eventDay: client.eventDay || '',
-  }}
-/>
 ```
 
 ---
 
-### Files to Modify
+### Visual Result
+
+**For UNTOUCHED/FRESH/FOLLOW UP clients:**
+```
+┌──────────────────────────────────────────────────┐
+│ 💬 COMMENTS (3)                            [+]   │
+├──────────────────────────────────────────────────┤
+│ ┌────────────────────────────────────────────┐   │
+│ │ Spoke with bride, wants to meet tomorrow  │   │
+│ │                              2 hours ago  │   │
+│ └────────────────────────────────────────────┘   │
+│ ┌────────────────────────────────────────────┐   │
+│ │ Inquired about wedding packages           │   │
+│ │                              1 day ago    │   │
+│ └────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────┘
+```
+
+---
+
+### File to Modify
 
 | File | Changes |
 |------|---------|
-| `src/components/client-detail/DashboardEventDetails.tsx` | Add `clientEvents` prop, build fallback events when no detailed data |
-| `src/components/client-detail/ClientHeroSection.tsx` | Pass client event data as fallback prop |
+| `src/components/client-detail/QuotationDisplaySection.tsx` | Show comments section when status doesn't need quotation instead of returning null |
 
 ---
 
-### Result
+### Technical Details
 
-- **Booked clients**: Show full details (venue, parlour, timing, guests)
-- **Non-booked clients**: Show event names and dates with "Not set" placeholders for logistics
+The fix changes the early return at lines 209-211 to return the comments component instead of `null`. This ensures:
+
+1. **BOOKED clients**: See quotation + comments side by side (existing behavior)
+2. **BARGAINING/QUOTATION SENT/ADVANCE PENDING**: See quotation details (existing behavior)
+3. **UNTOUCHED/FRESH/FOLLOW UP/etc.**: Now see comments section (new behavior)
+4. **CANCELLED/POSTPONED**: See quotation reference if available (existing behavior)
 
