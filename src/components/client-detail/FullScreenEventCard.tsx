@@ -13,7 +13,9 @@ import { cn } from '@/lib/utils';
 import { getMonthName } from '@/lib/nepali-months';
 import { EventDetail } from '@/hooks/useEventDetails';
 import { useVenueData } from '@/hooks/useVenueData';
+import { useParlourData } from '@/hooks/useParlourData';
 import { VenueEntry } from '@/lib/event-venue-api';
+import { ParlourEntry } from '@/lib/parlour-api';
 
 interface FullScreenEventCardProps {
   event: EventDetail;
@@ -87,11 +89,28 @@ export const FullScreenEventCard = ({
     getVenueByName,
     clearVenues,
   } = useVenueData();
+
+  // Parlour data hook - for dynamic dropdowns
+  const { 
+    parlourTypes, 
+    parlours, 
+    isLoadingTypes: isLoadingParlourTypes, 
+    isLoadingParlours, 
+    fetchParloursByType,
+    addNewParlour,
+    getParlourByName,
+    clearParlours,
+  } = useParlourData();
   
-  // Combobox state
+  // Venue Combobox state
   const [venueTypeOpen, setVenueTypeOpen] = useState(false);
   const [venueNameOpen, setVenueNameOpen] = useState(false);
   const [isNewVenue, setIsNewVenue] = useState(false);
+  
+  // Parlour Combobox state
+  const [parlourTypeOpen, setParlourTypeOpen] = useState(false);
+  const [parlourNameOpen, setParlourNameOpen] = useState(false);
+  const [isNewParlour, setIsNewParlour] = useState(false);
   
   // Form state
   const [venueType, setVenueType] = useState(event.venueType || '');
@@ -141,6 +160,7 @@ export const FullScreenEventCard = ({
     setDemands(event.eventDemands && event.eventDemands.length > 0 ? event.eventDemands : ['', '', '', '']);
     setReferences(event.eventReferences && event.eventReferences.length > 0 ? event.eventReferences : ['', '']);
     setIsNewVenue(false);
+    setIsNewParlour(false);
   }, [event]);
 
   // Fetch venues when venue type changes
@@ -151,6 +171,15 @@ export const FullScreenEventCard = ({
       clearVenues();
     }
   }, [venueType, isExpanded, fetchVenuesByType, clearVenues]);
+
+  // Fetch parlours when parlour type changes
+  useEffect(() => {
+    if (parlourType && isExpanded) {
+      fetchParloursByType(parlourType);
+    } else {
+      clearParlours();
+    }
+  }, [parlourType, isExpanded, fetchParloursByType, clearParlours]);
 
   // Handle venue type change
   const handleVenueTypeChange = useCallback((newType: string) => {
@@ -199,6 +228,53 @@ export const FullScreenEventCard = ({
     }
   }, [venues]);
 
+  // Handle parlour type change
+  const handleParlourTypeChange = useCallback((newType: string) => {
+    setParlourType(newType);
+    // Clear parlour name and details when type changes
+    setParlourName('');
+    setParlourCity('');
+    setParlourArea('');
+    setParlourMap('');
+    setIsNewParlour(false);
+    setParlourTypeOpen(false);
+  }, []);
+
+  // Handle parlour selection from combobox - auto-fill city, area, map
+  const handleParlourSelect = useCallback((selectedName: string) => {
+    setParlourName(selectedName);
+    const parlour = parlours.find(p => p.name.toLowerCase() === selectedName.toLowerCase());
+    if (parlour) {
+      // Auto-fill from existing parlour
+      setParlourCity(parlour.city);
+      setParlourArea(parlour.area);
+      setParlourMap(parlour.googleMap);
+      setIsNewParlour(false);
+    } else {
+      // New parlour - user needs to enter details manually
+      setParlourCity('');
+      setParlourArea('');
+      setParlourMap('');
+      setIsNewParlour(true);
+    }
+    setParlourNameOpen(false);
+  }, [parlours]);
+
+  // Handle manual parlour name input
+  const handleParlourNameInput = useCallback((value: string) => {
+    setParlourName(value);
+    // Check if this matches an existing parlour
+    const parlour = parlours.find(p => p.name.toLowerCase() === value.toLowerCase());
+    if (parlour) {
+      setParlourCity(parlour.city);
+      setParlourArea(parlour.area);
+      setParlourMap(parlour.googleMap);
+      setIsNewParlour(false);
+    } else if (value.trim()) {
+      setIsNewParlour(true);
+    }
+  }, [parlours]);
+
   const eventName = event.eventName || '';
   const monthName = event.eventMonth ? getMonthName(parseInt(event.eventMonth)) : '';
   const dateDisplay = `${monthName} ${event.eventDay}, ${event.eventYear}`;
@@ -233,6 +309,11 @@ export const FullScreenEventCard = ({
       // If this is a new venue, add it to the sheet first
       if (isNewVenue && venueType && venueName.trim()) {
         await addNewVenue(venueType, venueName.trim(), venueCity, venueArea, venueMap);
+      }
+
+      // If this is a new parlour, add it to the sheet first
+      if (isNewParlour && parlourType && parlourName.trim()) {
+        await addNewParlour(parlourType, parlourName.trim(), parlourCity, parlourArea, parlourMap);
       }
 
       const updates = {
@@ -750,15 +831,22 @@ export const FullScreenEventCard = ({
             <div className="flex items-center gap-2">
               <Scissors className="h-4 w-4 text-purple-400" />
               <span className="text-sm font-semibold text-purple-400">Parlour Details</span>
+              {isNewParlour && parlourName && (
+                <Badge variant="outline" className="text-xs bg-purple-500/20 text-purple-300 border-purple-500/30">
+                  New - will be added
+                </Badge>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
+              {/* Parlour Type Dropdown */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-purple-400/80">Type</Label>
-                <Popover>
+                <Popover open={parlourTypeOpen} onOpenChange={setParlourTypeOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
                       role="combobox"
+                      aria-expanded={parlourTypeOpen}
                       className="w-full justify-between bg-slate-900/60 border-slate-600/50 text-white hover:border-purple-400/50 hover:bg-slate-800/60"
                     >
                       {parlourType || "Select type..."}
@@ -769,13 +857,15 @@ export const FullScreenEventCard = ({
                     <Command className="bg-transparent">
                       <CommandInput placeholder="Search type..." className="text-white" />
                       <CommandList>
-                        <CommandEmpty>No type found.</CommandEmpty>
+                        <CommandEmpty>
+                          {isLoadingParlourTypes ? "Loading..." : "No type found."}
+                        </CommandEmpty>
                         <CommandGroup>
-                          {venueTypes.map((type) => (
+                          {parlourTypes.map((type) => (
                             <CommandItem
                               key={type}
                               value={type}
-                              onSelect={(val) => setParlourType(val)}
+                              onSelect={handleParlourTypeChange}
                               className="text-white hover:bg-slate-700"
                             >
                               <Check
@@ -793,14 +883,74 @@ export const FullScreenEventCard = ({
                   </PopoverContent>
                 </Popover>
               </div>
+              {/* Parlour Name Combobox */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-purple-400/80">Name</Label>
-                <Input 
-                  value={parlourName} 
-                  onChange={e => setParlourName(e.target.value)}
-                  placeholder="Parlour name"
-                  className="bg-slate-900/60 border-slate-600/50 text-white placeholder:text-slate-500 hover:border-purple-400/50 focus:border-purple-400"
-                />
+                <Popover open={parlourNameOpen} onOpenChange={setParlourNameOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={parlourNameOpen}
+                      disabled={!parlourType}
+                      className="w-full justify-between bg-slate-900/60 border-slate-600/50 text-white hover:border-purple-400/50 hover:bg-slate-800/60 disabled:opacity-50"
+                    >
+                      {parlourName || (parlourType ? "Select or type name..." : "Select type first")}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[250px] p-0 bg-slate-800 border-slate-600 z-[9999]">
+                    <Command className="bg-transparent">
+                      <CommandInput 
+                        placeholder="Search or type new name..." 
+                        className="text-white"
+                        value={parlourName}
+                        onValueChange={handleParlourNameInput}
+                      />
+                      <CommandList>
+                        <CommandEmpty>
+                          {isLoadingParlours ? (
+                            <div className="flex items-center gap-2 p-2">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Loading...
+                            </div>
+                          ) : parlourName ? (
+                            <div className="p-2 text-sm text-purple-300">
+                              "{parlourName}" will be added as new
+                            </div>
+                          ) : (
+                            "Type to search or add new..."
+                          )}
+                        </CommandEmpty>
+                        <CommandGroup>
+                          {parlours.map((parlour) => (
+                            <CommandItem
+                              key={parlour.rowNumber}
+                              value={parlour.name}
+                              onSelect={handleParlourSelect}
+                              className="text-white hover:bg-slate-700"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  parlourName.toLowerCase() === parlour.name.toLowerCase() ? "opacity-100 text-purple-400" : "opacity-0"
+                                )}
+                              />
+                              <div className="flex flex-col">
+                                <span>{parlour.name}</span>
+                                {(parlour.city || parlour.area) && (
+                                  <span className="text-xs text-white/50">
+                                    {[parlour.area, parlour.city].filter(Boolean).join(', ')}
+                                  </span>
+                                )}
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
