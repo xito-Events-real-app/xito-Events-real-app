@@ -6,8 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Heart, Send, CheckCircle2, User, Phone, MapPin, Instagram } from "lucide-react";
+import { Heart, Send, CheckCircle2, User, Phone, MapPin, Instagram, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 // Relation options for backup contacts
 const relationOptions = ["Mother", "Father", "Sister", "Brother", "Spouse", "Friend", "Other"];
@@ -44,27 +45,133 @@ const emptyPerson: PersonDetails = {
 
 export default function ClientContactForm() {
   const { clientId, clientName } = useParams<{ clientId: string; clientName: string }>();
+  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [bride, setBride] = useState<PersonDetails>(emptyPerson);
   const [groom, setGroom] = useState<PersonDetails>(emptyPerson);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Decode the client ID and name for display
   const decodedClientId = clientId ? decodeURIComponent(clientId) : "";
   const displayName = clientName ? clientName.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : "";
+
+  // Fetch existing data on mount
+  useEffect(() => {
+    const fetchExistingData = async () => {
+      if (!decodedClientId) {
+        setIsLoading(false);
+        setFetchError("Invalid form link");
+        return;
+      }
+
+      try {
+        const { data: result, error } = await supabase.functions.invoke('google-sheets', {
+          body: {
+            action: 'getClientContactDetails',
+            data: { registeredDateTimeAD: decodedClientId }
+          }
+        });
+
+        if (error) throw new Error(error.message);
+        if (!result?.success) throw new Error(result?.error || 'Failed to load form data');
+
+        const contactData = result.data;
+        
+        // Pre-fill bride data
+        setBride({
+          fullName: contactData.brideFullName || '',
+          contactNumber: contactData.brideContactNumber || '',
+          whatsappNumber: contactData.brideWhatsappNumber || '',
+          backupNumber1: contactData.brideBackupNumber || '',
+          backupRelation1: contactData.brideBackupRelation || '',
+          backupNumber2: contactData.brideBackupNumber2 || '',
+          backupRelation2: contactData.brideBackupRelation2 || '',
+          instagram: contactData.brideInstagram || '',
+          homeCity: contactData.brideHomeCity || '',
+          homeArea: contactData.brideHomeArea || '',
+          homeMapLink: contactData.brideHomeMap || '',
+          homeLandmark: contactData.brideHomeLandmark || '',
+        });
+
+        // Pre-fill groom data
+        setGroom({
+          fullName: contactData.groomFullName || '',
+          contactNumber: contactData.groomContactNumber || '',
+          whatsappNumber: contactData.groomWhatsappNumber || '',
+          backupNumber1: contactData.groomBackupNumber || '',
+          backupRelation1: contactData.groomBackupRelation || '',
+          backupNumber2: contactData.groomBackupNumber2 || '',
+          backupRelation2: contactData.groomBackupRelation2 || '',
+          instagram: contactData.groomInstagram || '',
+          homeCity: contactData.groomHomeCity || '',
+          homeArea: contactData.groomHomeArea || '',
+          homeMapLink: contactData.groomHomeMap || '',
+          homeLandmark: contactData.groomHomeLandmark || '',
+        });
+
+      } catch (err) {
+        console.error('Error fetching existing data:', err);
+        // Don't show error - just start with empty form
+        // setFetchError(err instanceof Error ? err.message : 'Failed to load form');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchExistingData();
+  }, [decodedClientId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     try {
-      // TODO: Implement actual submission to Google Sheets via edge function
-      // For now, simulate a submission
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // Build updates object matching the sheet schema
+      const updates = {
+        brideFullName: bride.fullName,
+        brideContactNumber: bride.contactNumber,
+        brideWhatsappNumber: bride.whatsappNumber,
+        brideBackupNumber: bride.backupNumber1,
+        brideBackupRelation: bride.backupRelation1,
+        brideBackupNumber2: bride.backupNumber2,
+        brideBackupRelation2: bride.backupRelation2,
+        brideInstagram: bride.instagram,
+        brideHomeCity: bride.homeCity,
+        brideHomeArea: bride.homeArea,
+        brideHomeMap: bride.homeMapLink,
+        brideHomeLandmark: bride.homeLandmark,
+        groomFullName: groom.fullName,
+        groomContactNumber: groom.contactNumber,
+        groomWhatsappNumber: groom.whatsappNumber,
+        groomBackupNumber: groom.backupNumber1,
+        groomBackupRelation: groom.backupRelation1,
+        groomBackupNumber2: groom.backupNumber2,
+        groomBackupRelation2: groom.backupRelation2,
+        groomInstagram: groom.instagram,
+        groomHomeCity: groom.homeCity,
+        groomHomeArea: groom.homeArea,
+        groomHomeMap: groom.homeMapLink,
+        groomHomeLandmark: groom.homeLandmark,
+      };
+
+      const { data: result, error } = await supabase.functions.invoke('google-sheets', {
+        body: {
+          action: 'updateClientContactDetails',
+          data: { 
+            registeredDateTimeAD: decodedClientId,
+            updates 
+          }
+        }
+      });
+
+      if (error) throw new Error(error.message);
+      if (!result?.success) throw new Error(result?.error || 'Failed to save details');
       
       setIsSubmitted(true);
       toast.success("Thank you! Your details have been submitted.");
     } catch (error) {
+      console.error('Submit error:', error);
       toast.error("Failed to submit. Please try again.");
     } finally {
       setIsSubmitting(false);
@@ -78,6 +185,37 @@ export default function ClientContactForm() {
   const updateGroom = (field: keyof PersonDetails, value: string) => {
     setGroom((prev) => ({ ...prev, [field]: value }));
   };
+
+  // Loading screen
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-sky-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md text-center border-0 shadow-2xl bg-white/90 backdrop-blur">
+          <CardContent className="pt-12 pb-10 px-8">
+            <Loader2 className="w-12 h-12 animate-spin text-rose-500 mx-auto mb-4" />
+            <p className="text-gray-600">Loading your form...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Error screen
+  if (fetchError) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-sky-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md text-center border-0 shadow-2xl bg-white/90 backdrop-blur">
+          <CardContent className="pt-12 pb-10 px-8">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-2xl">⚠️</span>
+            </div>
+            <h2 className="text-xl font-bold text-gray-800 mb-2">Form Not Found</h2>
+            <p className="text-gray-600">{fetchError}</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   // Success screen
   if (isSubmitted) {
