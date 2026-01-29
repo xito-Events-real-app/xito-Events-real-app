@@ -18,20 +18,19 @@ export function getClientNavigationId(
     registeredDateTimeAD?: string;
   }
 ): string {
-  // Priority 1: Use originalRowNumber if available (most reliable for booked clients)
-  if ('originalRowNumber' in client && client.originalRowNumber) {
-    return String(client.originalRowNumber);
+  // Priority 1: Use registeredDateTimeAD (most reliable - true unique ID)
+  if (client.registeredDateTimeAD) {
+    return encodeURIComponent(client.registeredDateTimeAD);
   }
   
-  // Priority 2: Use rowNumber if available (for regular clients)
+  // Priority 2: Use rowNumber if available (for regular clients without registeredDateTimeAD)
   if ('rowNumber' in client && client.rowNumber) {
     return String(client.rowNumber);
   }
   
-  // Priority 3: Fallback to encoded registeredDateTimeAD
-  if (client.registeredDateTimeAD) {
-    // Use encodeURIComponent to safely encode the datetime string
-    return encodeURIComponent(client.registeredDateTimeAD);
+  // Priority 3: Use originalRowNumber as last resort
+  if ('originalRowNumber' in client && client.originalRowNumber) {
+    return String(client.originalRowNumber);
   }
   
   // Last resort: return empty string (should not happen in practice)
