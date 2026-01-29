@@ -70,10 +70,16 @@ export const emptyContactDetails: Omit<ClientContactDetails, 'rowNumber' | 'regi
   formSentDate: '',
 };
 
-// Generate the public form URL for a client
+// Google Form configuration
+// TODO: Replace with your actual Google Form ID and Entry ID after creating the form
+const GOOGLE_FORM_ID = 'YOUR_FORM_ID_HERE'; // e.g., '1FAIpQLSe...'
+const GOOGLE_FORM_ENTRY_ID = 'YOUR_ENTRY_ID_HERE'; // e.g., 'entry.123456789'
+
+// Generate the Google Form URL with pre-filled client reference
 export function getClientFormUrl(registeredDateTimeAD: string): string {
   const encodedId = encodeURIComponent(registeredDateTimeAD);
-  return `https://wtnclienttracker.lovable.app/client-form/${encodedId}`;
+  // Pre-filled Google Form URL format
+  return `https://docs.google.com/forms/d/e/${GOOGLE_FORM_ID}/viewform?usp=pp_url&${GOOGLE_FORM_ENTRY_ID}=${encodedId}`;
 }
 
 // Generate WhatsApp message with form link
