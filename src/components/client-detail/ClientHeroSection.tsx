@@ -1,4 +1,5 @@
 import { MessageCircle, Mail, MapPin, RefreshCw, Pencil, Clock } from "lucide-react";
+import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ClientData } from "@/lib/sheets-api";
@@ -79,8 +80,7 @@ const ClientHeroSection = ({
   // Handle WhatsApp click - opens app AND logs call
   const handleWhatsAppClick = () => {
     if (client.whatsappNo) {
-      const cleanNumber = client.whatsappNo.replace(/[^0-9]/g, '');
-      window.open(`https://wa.me/${cleanNumber}`, '_blank');
+      openWhatsApp(client.whatsappNo);
       // Fire and forget call logging
       onCall('WHATSAPP');
     }

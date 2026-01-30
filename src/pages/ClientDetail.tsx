@@ -1,6 +1,7 @@
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, Calendar, User, Clock, DollarSign, FileText, Activity, MessageSquare, Briefcase, Pencil, X, Check, Loader2, Plus, CreditCard, RefreshCw, RotateCcw, Send } from "lucide-react";
+import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -620,7 +621,7 @@ const ClientDetail = () => {
       if (type === 'DIRECT' && phoneNumber) {
         window.location.href = `tel:${phoneNumber}`;
       } else if (type === 'WHATSAPP' && phoneNumber) {
-        window.open(`https://wa.me/${phoneNumber.replace(/\D/g, '')}`, '_blank');
+        openWhatsApp(phoneNumber);
       }
       
       toast({ title: "Success", description: `${type} call logged` });

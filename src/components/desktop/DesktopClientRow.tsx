@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { ClientData } from "@/lib/sheets-api";
 import { getMonthName } from "@/lib/nepali-months";
 import { getClientDetailPath } from "@/lib/client-navigation";
@@ -284,7 +285,7 @@ export function DesktopClientRow({
       if (type === 'DIRECT' && phoneNumber) {
         window.location.href = `tel:${phoneNumber}`;
       } else if (type === 'WHATSAPP' && phoneNumber) {
-        window.open(`https://wa.me/${phoneNumber.replace(/\D/g, '')}`, '_blank');
+        openWhatsApp(phoneNumber);
       }
       
       toast.success(`${type} call logged`);
