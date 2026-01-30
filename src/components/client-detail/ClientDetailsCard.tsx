@@ -34,12 +34,13 @@ interface ClientDetailsCardProps {
   data: ClientContactDetails | null;
   isLoading: boolean;
   isResyncing?: boolean;
+  clientWhatsAppNumber?: string;
   onSave: (updates: Partial<ClientContactDetails>) => Promise<boolean>;
   onResync?: () => Promise<boolean>;
   onMarkFormSent?: () => Promise<boolean>;
 }
 
-export const ClientDetailsCard = ({ data, isLoading, isResyncing, onSave, onResync, onMarkFormSent }: ClientDetailsCardProps) => {
+export const ClientDetailsCard = ({ data, isLoading, isResyncing, clientWhatsAppNumber, onSave, onResync, onMarkFormSent }: ClientDetailsCardProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSendingToWhatsApp, setIsSendingToWhatsApp] = useState(false);
@@ -246,7 +247,14 @@ export const ClientDetailsCard = ({ data, isLoading, isResyncing, onSave, onResy
     setIsSendingToWhatsApp(true);
     try {
       const message = generateFormWhatsAppMessage(registeredDateTimeAD, clientName);
-      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+      
+      // Clean phone number (remove non-digits except leading +)
+      const cleanPhone = clientWhatsAppNumber?.replace(/[^\d+]/g, '').replace('+', '') || '';
+      
+      // Build URL with phone number if available
+      const whatsappUrl = cleanPhone 
+        ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
+        : `https://wa.me/?text=${encodeURIComponent(message)}`;
       
       // Open WhatsApp
       window.open(whatsappUrl, '_blank');
