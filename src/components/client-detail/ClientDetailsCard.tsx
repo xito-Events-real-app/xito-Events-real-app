@@ -397,14 +397,14 @@ export const ClientDetailsCard = ({ data, isLoading, isResyncing, onSave, onResy
         
         {/* Copy Link and WhatsApp Buttons - Always visible */}
         {registeredDateTimeAD && (
-          <div className="flex items-center gap-2 mt-4 pt-4 border-t border-white/10">
+          <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-600/50">
             <Button
               variant="outline"
               size="sm"
               onClick={handleCopyLink}
-              className="border-slate-600 text-white/80 hover:bg-white/10 hover:text-white"
+              className="border-violet-400 bg-violet-500/20 text-violet-200 hover:bg-violet-500/30 hover:text-white hover:border-violet-300"
             >
-              <Copy className="h-4 w-4 mr-1" />
+              <Copy className="h-4 w-4 mr-1.5" />
               Copy Link
             </Button>
             <Button
