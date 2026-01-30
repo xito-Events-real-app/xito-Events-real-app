@@ -299,12 +299,12 @@ export function DesktopClientRow({
   const handleStatusChange = async (newStatus: string) => {
     if (!client.rowNumber) return;
     
-    // INTERCEPT: If moving to QUOTATION SENT from QUOTATION PENDING, show quotation dialog first
-    const isFromQuotationPending = currentStatus?.toUpperCase().includes('QUOTATION PENDING');
+    // INTERCEPT: If moving to QUOTATION SENT, ALWAYS show quotation dialog first
     const isToQuotationSent = newStatus.toUpperCase().includes('QUOTATION SENT');
     
-    if (isFromQuotationPending && isToQuotationSent) {
+    if (isToQuotationSent) {
       // Show quotation dialog - user must enter quotation before status change
+      setPendingStatus(newStatus);
       setShowQuotationDialog(true);
       return;
     }

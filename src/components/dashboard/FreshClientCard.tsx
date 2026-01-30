@@ -45,6 +45,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { NepaliDateObject, getCurrentBSDate, nepaliMonthsEnglish, bsToAD } from "@/lib/nepali-date";
 import { NepaliCalendar } from "@/components/form/NepaliCalendar";
+import { FinalQuotationDialog, AdvancePaymentDialog } from "@/components/status-dialogs";
+import { formatNPR, parseFinalQuotation } from "@/lib/client-card-utils";
+import { notifyCacheUpdate } from "@/lib/cache-manager";
 
 // Parse call log to get structured entries
 interface CallEntry {
@@ -407,6 +410,14 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
   const [ourCounterPrices, setOurCounterPrices] = useState<Record<string, string>>({});
   const [isSavingOurCounter, setIsSavingOurCounter] = useState(false);
   
+  // ADVANCE PENDING interception state
+  const [showAdvancePendingDialog, setShowAdvancePendingDialog] = useState(false);
+  const [isSavingAdvancePending, setIsSavingAdvancePending] = useState(false);
+  
+  // BOOKED interception state
+  const [showBookedPaymentDialog, setShowBookedPaymentDialog] = useState(false);
+  const [isSavingBookedPayment, setIsSavingBookedPayment] = useState(false);
+  
   // Use handler initials if set, otherwise fall back to who added
   const displayInitials = getHandlerInitials(currentHandler || client.whoAdded || '');
   const hasHandler = !!currentHandler;
@@ -456,14 +467,30 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
       return; // Same status, no update needed
     }
 
-    // INTERCEPT: If moving from QUOTATION PENDING to QUOTATION SENT, show quotation dialog first
-    const isFromQuotationPending = currentStatus?.toUpperCase().includes('QUOTATION PENDING');
+    // INTERCEPT: If moving to QUOTATION SENT, ALWAYS show quotation dialog first
     const isToQuotationSent = newStatus.toUpperCase().includes('QUOTATION SENT');
     
-    if (isFromQuotationPending && isToQuotationSent) {
+    if (isToQuotationSent) {
       // Show quotation dialog - user must enter quotation before status change
       setPendingStatus(newStatus);
       setShowQuotationDialog(true);
+      return;
+    }
+    
+    // INTERCEPT: If moving to ADVANCE PENDING, show final quotation dialog
+    const isToAdvancePending = newStatus.toUpperCase().includes('ADVANCE PENDING');
+    if (isToAdvancePending) {
+      setPendingStatus(newStatus);
+      setShowAdvancePendingDialog(true);
+      return;
+    }
+    
+    // INTERCEPT: If moving to BOOKED (but not BOOKED SOMEWHERE ELSE), show payment dialog
+    const isToBooked = newStatus.toUpperCase().includes('BOOKED') && 
+                       !newStatus.toUpperCase().includes('SOMEWHERE ELSE');
+    if (isToBooked) {
+      setPendingStatus(newStatus);
+      setShowBookedPaymentDialog(true);
       return;
     }
 
@@ -1143,6 +1170,96 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
       toast.error("Failed to save quotation");
     } finally {
       setIsSavingQuotation(false);
+    }
+  };
+
+  // Handle ADVANCE PENDING final quotation save
+  const handleSaveAdvancePendingQuotation = async (packageName: string, amount: string) => {
+    if (!client.rowNumber) return;
+    
+    const finalData = `${packageName}: NPR ${formatNPR(amount)}/-`;
+    
+    setIsSavingAdvancePending(true);
+    try {
+      // Save final quotation
+      const quotationResult = await updateFinalQuotation(client.rowNumber, finalData);
+      setCurrentFinalQuotation(quotationResult.finalQuotation);
+      
+      // Update status to ADVANCE PENDING
+      const statusResult = await updateClientStatus(client.rowNumber, pendingStatus || 'ADVANCE PENDING', currentStatusLog);
+      setCurrentStatusLog(statusResult.statusLog);
+      
+      if (onStatusChange) {
+        onStatusChange(client, pendingStatus || 'ADVANCE PENDING', statusResult.statusLog);
+      }
+      
+      toast.success('Final quotation locked & status updated to ADVANCE PENDING');
+      setShowAdvancePendingDialog(false);
+      setPendingStatus(null);
+    } catch (err) {
+      console.error('Failed to save final quotation:', err);
+      toast.error('Failed to save final quotation');
+    } finally {
+      setIsSavingAdvancePending(false);
+    }
+  };
+
+  // Handle BOOKED advance payment save
+  const handleSaveBookedPayment = async (data: {
+    amount: string;
+    paymentType: string;
+    bank: string;
+    nepaliDate: string;
+    adDate: string;
+  }) => {
+    if (!client.rowNumber) return;
+    
+    const parsedFinal = parseFinalQuotation(currentFinalQuotation);
+    const finalAmount = parsedFinal ? parseInt(parsedFinal.amount.replace(/[^0-9]/g, '')) : 0;
+    
+    setIsSavingBookedPayment(true);
+    try {
+      // Add payment
+      const paymentResult = await addPayment(
+        client.rowNumber,
+        data.amount,
+        data.paymentType,
+        data.nepaliDate,
+        data.adDate,
+        data.bank,
+        currentPaymentsMade,
+        currentPaymentDatesAD,
+        finalAmount,
+        client.registeredDateTimeAD,
+        client.clientName
+      );
+      
+      setCurrentPaymentsMade(paymentResult.paymentsMade);
+      setCurrentRemainingPayment(paymentResult.remainingPayment);
+      
+      // Update status to BOOKED
+      const statusResult = await updateClientStatus(client.rowNumber, pendingStatus || 'BOOKED', currentStatusLog);
+      setCurrentStatusLog(statusResult.statusLog);
+      
+      if (onStatusChange) {
+        onStatusChange(client, pendingStatus || 'BOOKED', statusResult.statusLog);
+      }
+      
+      if (onPaymentAdded) {
+        onPaymentAdded(client, paymentResult.paymentsMade, paymentResult.remainingPayment);
+      }
+      
+      // Invalidate booked clients cache to force refresh on next access
+      notifyCacheUpdate('booked-clients-invalidate');
+      
+      toast.success('Payment recorded & status updated to BOOKED');
+      setShowBookedPaymentDialog(false);
+      setPendingStatus(null);
+    } catch (err) {
+      console.error('Failed to save payment:', err);
+      toast.error('Failed to record payment');
+    } finally {
+      setIsSavingBookedPayment(false);
     }
   };
 
@@ -3196,6 +3313,34 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
           </ScrollArea>
         </DrawerContent>
       </Drawer>
+
+      {/* ADVANCE PENDING Interception Dialog */}
+      <FinalQuotationDialog
+        open={showAdvancePendingDialog}
+        onOpenChange={(open) => {
+          setShowAdvancePendingDialog(open);
+          if (!open) setPendingStatus(null);
+        }}
+        clientName={client.clientName || 'Client'}
+        existingQuotationData={currentQuotationData}
+        onSave={handleSaveAdvancePendingQuotation}
+        isSaving={isSavingAdvancePending}
+      />
+
+      {/* BOOKED Interception Dialog */}
+      <AdvancePaymentDialog
+        open={showBookedPaymentDialog}
+        onOpenChange={(open) => {
+          setShowBookedPaymentDialog(open);
+          if (!open) setPendingStatus(null);
+        }}
+        clientName={client.clientName || 'Client'}
+        finalQuotation={currentFinalQuotation}
+        paymentTypes={paymentTypes}
+        banks={banks}
+        onSave={handleSaveBookedPayment}
+        isSaving={isSavingBookedPayment}
+      />
     </div>
   );
 }
