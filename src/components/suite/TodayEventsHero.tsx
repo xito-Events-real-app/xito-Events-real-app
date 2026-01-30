@@ -64,11 +64,83 @@ function formatVenueDisplay(name: string, area: string, city: string): string {
   return parts.join(', ');
 }
 
-// Format time range
+// Convert time to 12hr format
+function formatTo12Hr(time: string): string {
+  if (!time) return '';
+  // Already in 12hr format
+  if (time.toLowerCase().includes('am') || time.toLowerCase().includes('pm')) {
+    return time.toUpperCase();
+  }
+  // Parse 24hr format (e.g., "14:00" or "14:30")
+  const match = time.match(/^(\d{1,2}):?(\d{2})?/);
+  if (match) {
+    let hours = parseInt(match[1]);
+    const mins = match[2] || '00';
+    const isPM = hours >= 12;
+    const displayHours = hours % 12 || 12;
+    return `${displayHours}:${mins} ${isPM ? 'PM' : 'AM'}`;
+  }
+  return time;
+}
+
+// Calculate remaining time until event start
+function getRemainingTime(eventDateStr: string, startTime: string): string {
+  if (!eventDateStr || !startTime) return '';
+  
+  try {
+    const eventDate = new Date(eventDateStr.trim());
+    if (isNaN(eventDate.getTime())) return '';
+    
+    // Parse start time
+    let hours = 0, mins = 0;
+    const time12Match = startTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+    const time24Match = startTime.match(/^(\d{1,2}):?(\d{2})?/);
+    
+    if (time12Match) {
+      hours = parseInt(time12Match[1]);
+      mins = parseInt(time12Match[2]);
+      const isPM = time12Match[3].toUpperCase() === 'PM';
+      if (isPM && hours !== 12) hours += 12;
+      if (!isPM && hours === 12) hours = 0;
+    } else if (time24Match) {
+      hours = parseInt(time24Match[1]);
+      mins = parseInt(time24Match[2] || '0');
+    } else {
+      return '';
+    }
+    
+    eventDate.setHours(hours, mins, 0, 0);
+    
+    const now = new Date();
+    const diffMs = eventDate.getTime() - now.getTime();
+    
+    if (diffMs <= 0) return ''; // Event has started
+    
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMins / 60);
+    const remainingMins = diffMins % 60;
+    const diffDays = Math.floor(diffHours / 24);
+    const remainingHours = diffHours % 24;
+    
+    if (diffDays > 0) {
+      return `${diffDays}d ${remainingHours}h rem`;
+    } else if (diffHours > 0) {
+      return `${diffHours}h ${remainingMins}m rem`;
+    } else {
+      return `${remainingMins}m rem`;
+    }
+  } catch {
+    return '';
+  }
+}
+
+// Format time range with remaining
 function formatTimeRange(start: string, end: string): string {
   if (!start && !end) return '';
-  if (start && end) return `${start} - ${end}`;
-  return start || end;
+  const startFormatted = formatTo12Hr(start);
+  const endFormatted = formatTo12Hr(end);
+  if (startFormatted && endFormatted) return `${startFormatted} to ${endFormatted}`;
+  return startFormatted || endFormatted;
 }
 
 export function TodayEventsHero() {
@@ -286,7 +358,7 @@ export function TodayEventsHero() {
                           <p className="text-gray-900 font-semibold truncate group-hover:text-emerald-700 transition-colors">
                             {event.client.clientName}
                           </p>
-                          <p className="text-sm text-gray-500 truncate">
+                          <p className="text-sm font-medium text-emerald-600 truncate">
                             {event.eventName}
                           </p>
                         </Link>
@@ -339,7 +411,15 @@ export function TodayEventsHero() {
                                 <>
                                   <span className="text-gray-700 font-medium">{venueDisplay}</span>
                                   {venueTime && (
-                                    <span className="text-gray-500 ml-1.5">• {venueTime}</span>
+                                    <>
+                                      <span className="text-gray-500 ml-1.5">• {venueTime}</span>
+                                      {(() => {
+                                        const remaining = getRemainingTime(event.dateStr, eventDetail?.eventStartTime || '');
+                                        return remaining ? (
+                                          <span className="text-amber-600 font-medium ml-1.5">({remaining})</span>
+                                        ) : null;
+                                      })()}
+                                    </>
                                   )}
                                   {eventDetail?.guestCount && (
                                     <span className="text-gray-400 ml-1.5">({eventDetail.guestCount} guests)</span>
@@ -359,7 +439,15 @@ export function TodayEventsHero() {
                                 <>
                                   <span className="text-gray-700 font-medium">{parlourDisplay}</span>
                                   {parlourTime && (
-                                    <span className="text-gray-500 ml-1.5">• {parlourTime}</span>
+                                    <>
+                                      <span className="text-gray-500 ml-1.5">• {parlourTime}</span>
+                                      {(() => {
+                                        const remaining = getRemainingTime(event.dateStr, eventDetail?.parlourStartTime || '');
+                                        return remaining ? (
+                                          <span className="text-amber-600 font-medium ml-1.5">({remaining})</span>
+                                        ) : null;
+                                      })()}
+                                    </>
                                   )}
                                 </>
                               ) : (
