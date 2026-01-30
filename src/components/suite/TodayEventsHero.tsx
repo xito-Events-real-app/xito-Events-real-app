@@ -1,10 +1,15 @@
 import { Link } from "react-router-dom";
 import { useBookedCachedData } from "@/hooks/useBookedCachedData";
 import { useBulkEventDetails } from "@/hooks/useBulkEventDetails";
-import { Calendar, Sparkles, ArrowRight, Clock, MapPin, Scissors } from "lucide-react";
+import { Calendar, Sparkles, ArrowRight, Clock, MapPin, Scissors, Phone, MessageCircle, MessageSquare, Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useMemo } from "react";
-
+import { useMemo, useState } from "react";
+import { parseComments, getRelativeTime } from "@/lib/client-card-utils";
+import { addClientComment } from "@/lib/sheets-api";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from "@/components/ui/drawer";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 // Helper to get upcoming events
 function getUpcomingEvents(clients: any[]) {
   const today = new Date();
@@ -67,8 +72,18 @@ function formatTimeRange(start: string, end: string): string {
 }
 
 export function TodayEventsHero() {
-  const { clients: bookedClients, isLoading } = useBookedCachedData();
+  const { clients: bookedClients, isLoading, refreshData } = useBookedCachedData();
   const upcomingEvents = useMemo(() => getUpcomingEvents(bookedClients), [bookedClients]);
+  
+  // Comment drawer state
+  const [commentDrawerOpen, setCommentDrawerOpen] = useState(false);
+  const [selectedEventForComment, setSelectedEventForComment] = useState<{
+    clientName: string;
+    rowNumber: number;
+    existingComments: string;
+  } | null>(null);
+  const [newComment, setNewComment] = useState('');
+  const [isAddingComment, setIsAddingComment] = useState(false);
   
   // Extract unique client IDs for bulk fetch (limit to first 30 events)
   const clientIds = useMemo(() => {
@@ -77,6 +92,36 @@ export function TodayEventsHero() {
   }, [upcomingEvents]);
   
   const { eventDetailsMap, isLoading: isLoadingDetails } = useBulkEventDetails(clientIds);
+  
+  // Handle adding a comment
+  const handleAddComment = async () => {
+    if (!selectedEventForComment || !newComment.trim()) return;
+    
+    setIsAddingComment(true);
+    try {
+      await addClientComment(
+        selectedEventForComment.rowNumber,
+        newComment.trim(),
+        selectedEventForComment.existingComments
+      );
+      setNewComment('');
+      setCommentDrawerOpen(false);
+      toast.success('Comment added');
+      refreshData(); // Refresh to show new comment
+    } catch (error) {
+      console.error('Failed to add comment:', error);
+      toast.error('Failed to add comment');
+    } finally {
+      setIsAddingComment(false);
+    }
+  };
+  
+  // Open comment drawer for a specific event
+  const openCommentDrawer = (clientName: string, rowNumber: number, existingComments: string) => {
+    setSelectedEventForComment({ clientName, rowNumber, existingComments });
+    setNewComment('');
+    setCommentDrawerOpen(true);
+  };
 
   if (isLoading) {
     return (
@@ -161,15 +206,19 @@ export function TodayEventsHero() {
                   const hasParlour = Boolean(parlourDisplay);
                   const hasDetails = hasVenue || hasParlour;
                   
+                  // Parse comments
+                  const parsedComments = parseComments(event.client.comments);
+                  const lastComment = parsedComments.length > 0 ? parsedComments[parsedComments.length - 1] : null;
+                  
                   return (
-                    <Link 
+                    <div 
                       key={`${event.client.clientName}-${event.dateStr}-${idx}`}
-                      to={`/client-tracker/client/${encodeURIComponent(clientId)}`}
-                      className="block p-3 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-200 hover:border-emerald-300 transition-all group"
+                      className="p-3 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-200 hover:border-emerald-300 transition-all group"
                     >
-                      {/* Header row */}
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2 shrink-0">
+                      {/* Header row with contact icons */}
+                      <div className="flex items-start gap-2">
+                        {/* Day badge */}
+                        <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
                           {isToday ? (
                             <>
                               <Sparkles className="w-4 h-4 text-emerald-500" />
@@ -193,15 +242,55 @@ export function TodayEventsHero() {
                             </>
                           )}
                         </div>
-                        <div className="flex-1 min-w-0">
+                        
+                        {/* Client name and event - clickable link */}
+                        <Link 
+                          to={`/client-tracker/client/${encodeURIComponent(clientId)}`}
+                          className="flex-1 min-w-0"
+                        >
                           <p className="text-gray-900 font-semibold truncate group-hover:text-emerald-700 transition-colors">
                             {event.client.clientName}
                           </p>
                           <p className="text-sm text-gray-500 truncate">
                             {event.eventName}
                           </p>
+                        </Link>
+                        
+                        {/* Contact icons */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          {event.client.contactNo && (
+                            <a 
+                              href={`tel:${event.client.contactNo}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-1 px-1.5 py-1 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs transition-colors"
+                              title={`Call ${event.client.contactNo}`}
+                            >
+                              <Phone className="w-3 h-3" />
+                              <span className="hidden sm:inline">...{event.client.contactNo.slice(-4)}</span>
+                            </a>
+                          )}
+                          {event.client.whatsappNo && (
+                            <a 
+                              href={`https://wa.me/${event.client.whatsappNo.replace(/\D/g, '')}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-1 px-1.5 py-1 rounded-full bg-green-50 hover:bg-green-100 text-green-600 text-xs transition-colors"
+                              title={`WhatsApp ${event.client.whatsappNo}`}
+                            >
+                              <MessageCircle className="w-3 h-3" />
+                              <span className="hidden sm:inline">...{event.client.whatsappNo.slice(-4)}</span>
+                            </a>
+                          )}
                         </div>
-                        <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all shrink-0" />
+                        
+                        {/* Arrow link */}
+                        <Link 
+                          to={`/client-tracker/client/${encodeURIComponent(clientId)}`}
+                          className="shrink-0"
+                        >
+                          <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all" />
+                        </Link>
                       </div>
                       
                       {/* Event Details - Venue & Parlour */}
@@ -252,7 +341,41 @@ export function TodayEventsHero() {
                           <div className="h-3 w-32 bg-gray-200 rounded animate-pulse" />
                         </div>
                       )}
-                    </Link>
+                      
+                      {/* Comment section */}
+                      <div className="mt-2 pt-2 border-t border-gray-200 flex items-center gap-2">
+                        <MessageSquare className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                        {lastComment ? (
+                          <>
+                            <span className="text-xs text-gray-600 truncate flex-1">
+                              "{lastComment.text.length > 40 ? lastComment.text.slice(0, 40) + '...' : lastComment.text}"
+                            </span>
+                            {lastComment.timestamp && (
+                              <span className="text-xs text-gray-400 shrink-0">
+                                {getRelativeTime(lastComment.timestamp)}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-xs text-gray-400 italic flex-1">No comments</span>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            openCommentDrawer(
+                              event.client.clientName,
+                              event.client.bookedRowNumber,
+                              event.client.comments || ''
+                            );
+                          }}
+                          className="p-1 rounded-full bg-emerald-100 hover:bg-emerald-200 text-emerald-600 transition-colors shrink-0"
+                          title="Add comment"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
                   );
               })}
             </div>
@@ -265,6 +388,53 @@ export function TodayEventsHero() {
           </div>
         )}
       </div>
+      
+      {/* Comment Drawer */}
+      <Drawer open={commentDrawerOpen} onOpenChange={setCommentDrawerOpen}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Add Comment</DrawerTitle>
+            {selectedEventForComment && (
+              <p className="text-sm text-muted-foreground">
+                For {selectedEventForComment.clientName}
+              </p>
+            )}
+          </DrawerHeader>
+          <div className="px-4 pb-4">
+            <Input
+              placeholder="Type your comment..."
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleAddComment();
+                }
+              }}
+              autoFocus
+            />
+          </div>
+          <DrawerFooter>
+            <Button 
+              onClick={handleAddComment} 
+              disabled={!newComment.trim() || isAddingComment}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              {isAddingComment ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                'Add Comment'
+              )}
+            </Button>
+            <Button variant="outline" onClick={() => setCommentDrawerOpen(false)}>
+              Cancel
+            </Button>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 }
