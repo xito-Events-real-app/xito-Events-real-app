@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Calendar, Users, Bell, AlertTriangle, Database } from "lucide-react";
+import { ArrowLeft, RefreshCw, Calendar, Users, Bell, AlertTriangle, Database, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { migrateExistingBookedClients, fullResyncAllBookedClients, BookedClientData, SyncDetail } from "@/lib/sheets-api";
+import { migrateExistingBookedClients, fullResyncAllBookedClients, cleanupDuplicateBookedFromTracker, BookedClientData, SyncDetail } from "@/lib/sheets-api";
 import EventClientCard from "./EventClientCard";
 import NepaliDateFilter from "./NepaliDateFilter";
 import { SyncReportSheet } from "./SyncReportSheet";
@@ -29,6 +29,7 @@ const MobileBookedClients = () => {
   
   const [isMigrating, setIsMigrating] = useState(false);
   const [isFullResyncing, setIsFullResyncing] = useState(false);
+  const [isCleaningUp, setIsCleaningUp] = useState(false);
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
   
@@ -82,6 +83,24 @@ const MobileBookedClients = () => {
       toast.error("Failed to perform full resync");
     } finally {
       setIsFullResyncing(false);
+    }
+  };
+
+  const handleCleanupDuplicates = async () => {
+    try {
+      setIsCleaningUp(true);
+      const result = await cleanupDuplicateBookedFromTracker();
+      if (result.deletedCount > 0) {
+        toast.success(`Cleaned up ${result.deletedCount} duplicate(s) from Client Tracker`);
+      } else {
+        toast.info("No duplicates found - Client Tracker is clean!");
+      }
+      await refreshData();
+    } catch (error) {
+      console.error("Error cleaning up duplicates:", error);
+      toast.error("Failed to cleanup duplicates");
+    } finally {
+      setIsCleaningUp(false);
     }
   };
 
@@ -217,6 +236,29 @@ const MobileBookedClients = () => {
             </Card>
 
             {/* Sync buttons */}
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleCleanupDuplicates} 
+                disabled={isCleaningUp} 
+                className="flex-1 border-red-600 text-red-400 hover:bg-red-950/50"
+              >
+                {isCleaningUp ? (
+                  <>
+                    <Trash2 className="h-4 w-4 mr-1 animate-pulse" />
+                    Cleaning...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Cleanup Duplicates
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {/* Other sync buttons */}
             <div className="flex gap-2">
               <Button 
                 variant="outline" 
