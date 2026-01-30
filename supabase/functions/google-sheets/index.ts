@@ -3206,7 +3206,8 @@ async function getBulkEventDetails(
   }
 
   // Fetch all event details at once (limit to reasonable amount)
-  const range = encodeURIComponent("'BOOKED CLIENTS EVENT DETAILS'!A2:AF500");
+  // Range includes up to AH for eventDemand (AG) and eventReferences (AH)
+  const range = encodeURIComponent("'BOOKED CLIENTS EVENT DETAILS'!A2:AH500");
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   const response = await fetch(url, {
