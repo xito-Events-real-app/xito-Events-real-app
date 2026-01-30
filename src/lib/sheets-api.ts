@@ -437,9 +437,9 @@ export interface SyncDetail {
   changedColumns: string[];
 }
 
-// Full resync all booked clients: sync ALL data (not just payments) from CLIENT TRACKER to BOOKED CLIENTS
-// Also finds and copies missing BOOKED clients from CLIENT TRACKER
-// forceSync = true will skip comparison and always copy ALL data from tracker
+// Full resync all booked clients: validates existing data in BOOKED CLIENTS
+// NOTE: This function NO LONGER copies clients between sheets (single source of truth)
+// The ONLY way to add a client to BOOKED CLIENTS is via status change to "BOOKED"
 export async function fullResyncAllBookedClients(forceSync: boolean = false): Promise<{ 
   success: boolean;
   restoredToTrackerCount?: number;
@@ -450,6 +450,7 @@ export async function fullResyncAllBookedClients(forceSync: boolean = false): Pr
   notFoundCount: number; 
   totalBooked: number;
   syncDetails?: SyncDetail[];
+  message?: string;
 }> {
   return callSheetsFunction<{ 
     success: boolean;
@@ -461,7 +462,24 @@ export async function fullResyncAllBookedClients(forceSync: boolean = false): Pr
     notFoundCount: number; 
     totalBooked: number;
     syncDetails?: SyncDetail[];
+    message?: string;
   }>("fullResyncAllBookedClients", { data: { forceSync } });
+}
+
+// One-time cleanup: Delete BOOKED clients from CLIENT TRACKER that already exist in BOOKED CLIENTS
+// This enforces the single source of truth architecture
+export async function cleanupDuplicateBookedFromTracker(): Promise<{
+  success: boolean;
+  deletedCount: number;
+  deletedClients: string[];
+  message: string;
+}> {
+  return callSheetsFunction<{
+    success: boolean;
+    deletedCount: number;
+    deletedClients: string[];
+    message: string;
+  }>("cleanupDuplicateBookedFromTracker");
 }
 
 // Update a booked client (syncs to both sheets)

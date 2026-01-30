@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails';
+  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -3707,13 +3707,43 @@ function getLatestStatusFromLog(statusLog: string): string {
   return lastEntry;
 }
 
-// Also scans for BOOKED clients in tracker that are missing from BOOKED CLIENTS and copies them
-// forceSync = true will skip comparison and always copy data from tracker
-async function fullResyncAllBookedClients(accessToken: string, spreadsheetId: string, forceSync: boolean = false) {
-  console.log(`[FULL RESYNC] Starting ${forceSync ? 'FORCED' : 'normal'} comprehensive resync of booked clients...`);
+// ============= CLEANUP DUPLICATE BOOKED CLIENTS FROM TRACKER =============
+// One-time cleanup function to delete BOOKED clients from CLIENT TRACKER
+// that already exist in BOOKED CLIENTS sheet (single source of truth architecture)
+async function cleanupDuplicateBookedFromTracker(accessToken: string, spreadsheetId: string) {
+  console.log('[CLEANUP] Starting cleanup of duplicate BOOKED clients from CLIENT TRACKER...');
   
-  // Get ALL data from CLIENT TRACKER (columns A through AI)
-  const trackerRange = encodeURIComponent("'CLIENT TRACKER'!A2:AI2000");
+  // 1. Get all registeredDateTimeAD from BOOKED CLIENTS
+  const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:C1000");
+  const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}`;
+  
+  const bookedResponse = await fetch(bookedUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  
+  if (!bookedResponse.ok) {
+    throw new Error('Failed to fetch BOOKED CLIENTS for cleanup');
+  }
+  
+  const bookedData = await bookedResponse.json();
+  const bookedRows = bookedData.values || [];
+  
+  // Build set of booked client IDs
+  const bookedIds = new Set<string>();
+  const bookedClientNames = new Map<string, string>();
+  for (const row of bookedRows) {
+    const id = (row[0] || '').trim();
+    const name = (row[2] || '').trim();
+    if (id) {
+      bookedIds.add(id);
+      bookedClientNames.set(id, name);
+    }
+  }
+  
+  console.log(`[CLEANUP] Found ${bookedIds.size} clients in BOOKED CLIENTS sheet`);
+  
+  // 2. Get all rows from CLIENT TRACKER with their registeredDateTimeAD
+  const trackerRange = encodeURIComponent("'CLIENT TRACKER'!A2:C2000");
   const trackerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}`;
   
   const trackerResponse = await fetch(trackerUrl, {
@@ -3721,48 +3751,76 @@ async function fullResyncAllBookedClients(accessToken: string, spreadsheetId: st
   });
   
   if (!trackerResponse.ok) {
-    throw new Error('Failed to fetch CLIENT TRACKER data for full resync');
+    throw new Error('Failed to fetch CLIENT TRACKER for cleanup');
   }
   
   const trackerData = await trackerResponse.json();
   const trackerRows = trackerData.values || [];
   
-  // Build a map of registeredDateTimeAD -> full row data from CLIENT TRACKER
-  const trackerFullDataMap: Map<string, { rowData: string[]; trackerRowNumber: number; latestStatus: string }> = new Map();
-  // Also track all BOOKED clients in tracker for Phase 1
-  const bookedInTracker: { registeredDateTime: string; trackerRowNumber: number }[] = [];
+  // 3. Find rows to delete (exist in both sheets)
+  const rowsToDelete: { rowNumber: number; clientName: string; registeredDateTime: string }[] = [];
   
   for (let i = 0; i < trackerRows.length; i++) {
     const row = trackerRows[i];
     const registeredDateTime = (row[0] || '').trim();
-    const statusLog = (row[22] || ''); // Column W (index 22) - status log
+    const clientName = (row[2] || '').trim();
     
-    if (registeredDateTime) {
-      // Extract the LATEST status from the log, not just any mention
-      const latestStatus = getLatestStatusFromLog(statusLog);
-      
-      trackerFullDataMap.set(registeredDateTime, {
-        rowData: row,
-        trackerRowNumber: i + 2,
-        latestStatus
+    if (registeredDateTime && bookedIds.has(registeredDateTime)) {
+      rowsToDelete.push({
+        rowNumber: i + 2, // Sheet row (1-indexed, header is row 1)
+        clientName: clientName || bookedClientNames.get(registeredDateTime) || 'Unknown',
+        registeredDateTime
       });
-      
-      // Check if this client's CURRENT status is BOOKED (not just historically BOOKED)
-      // Must be exactly "BOOKED" and NOT "BOOKED SOMEWHERE ELSE"
-      const isCurrentlyBooked = latestStatus === 'BOOKED' || 
-                                 latestStatus.startsWith('BOOKED ') && !latestStatus.includes('SOMEWHERE ELSE');
-      
-      if (isCurrentlyBooked) {
-        bookedInTracker.push({
-          registeredDateTime,
-          trackerRowNumber: i + 2
-        });
-      }
     }
   }
   
-  console.log(`[FULL RESYNC] Built tracker map with ${trackerFullDataMap.size} entries`);
-  console.log(`[FULL RESYNC] Found ${bookedInTracker.length} BOOKED clients in tracker (based on LATEST status)`);
+  console.log(`[CLEANUP] Found ${rowsToDelete.length} duplicate clients to delete from TRACKER`);
+  
+  if (rowsToDelete.length === 0) {
+    return {
+      success: true,
+      deletedCount: 0,
+      deletedClients: [],
+      message: 'No duplicates found - CLIENT TRACKER is already clean'
+    };
+  }
+  
+  // 4. Delete rows in REVERSE order (highest row first) to avoid index shifting
+  rowsToDelete.sort((a, b) => b.rowNumber - a.rowNumber);
+  
+  const deletedClients: string[] = [];
+  let deletedCount = 0;
+  
+  for (const { rowNumber, clientName, registeredDateTime } of rowsToDelete) {
+    try {
+      await deleteTrackerRow(accessToken, spreadsheetId, rowNumber);
+      deletedClients.push(clientName);
+      deletedCount++;
+      console.log(`[CLEANUP] Deleted "${clientName}" from TRACKER row ${rowNumber}`);
+    } catch (error) {
+      console.error(`[CLEANUP] Failed to delete row ${rowNumber} (${clientName}):`, error);
+    }
+  }
+  
+  console.log(`[CLEANUP] Complete: Deleted ${deletedCount} duplicate clients from CLIENT TRACKER`);
+  
+  return {
+    success: true,
+    deletedCount,
+    deletedClients,
+    message: `Successfully removed ${deletedCount} duplicate BOOKED clients from CLIENT TRACKER`
+  };
+}
+
+// ============= COMPREHENSIVE FULL RESYNC FUNCTION =============
+// SINGLE SOURCE OF TRUTH ARCHITECTURE:
+// - BOOKED clients ONLY exist in BOOKED CLIENTS sheet
+// - This function NO LONGER copies clients between sheets
+// - It only validates and refreshes existing data in BOOKED CLIENTS
+// - The ONLY way to add a client to BOOKED CLIENTS is via status change to "BOOKED"
+async function fullResyncAllBookedClients(accessToken: string, spreadsheetId: string, forceSync: boolean = false) {
+  console.log(`[FULL RESYNC] Starting ${forceSync ? 'FORCED' : 'normal'} data validation for booked clients...`);
+  console.log('[FULL RESYNC] NOTE: This sync only validates existing data - it does NOT copy clients between sheets');
   
   // Get all data from BOOKED CLIENTS
   const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:AI500");
@@ -3773,131 +3831,20 @@ async function fullResyncAllBookedClients(accessToken: string, spreadsheetId: st
   });
   
   if (!bookedResponse.ok) {
-    throw new Error('Failed to fetch BOOKED CLIENTS data for full resync');
+    throw new Error('Failed to fetch BOOKED CLIENTS data for validation');
   }
   
   const bookedData = await bookedResponse.json();
   const bookedRows = bookedData.values || [];
   
-  // Build set of existing BOOKED CLIENTS IDs
-  const existingBookedIds = new Set<string>();
-  for (const row of bookedRows) {
-    const id = (row[0] || '').trim();
-    if (id) {
-      existingBookedIds.add(id);
-    }
-  }
+  console.log(`[FULL RESYNC] Found ${bookedRows.length} booked clients to validate`);
   
-  // === PHASE 0 (NEW): Reverse sync - Copy missing clients from BOOKED CLIENTS to CLIENT TRACKER ===
-  let restoredToTrackerCount = 0;
-  const restoredToTracker: string[] = [];
+  // No Phase 0 (restore to tracker) - REMOVED per single source of truth
+  // No Phase 1 (copy to booked) - REMOVED per single source of truth
+  // Only validate existing BOOKED CLIENTS data integrity
   
-  for (const row of bookedRows) {
-    const registeredDateTime = (row[0] || '').trim();
-    const clientName = (row[2] || '').trim();
-    
-    if (registeredDateTime && !trackerFullDataMap.has(registeredDateTime)) {
-      // This client exists in BOOKED CLIENTS but NOT in CLIENT TRACKER - restore it!
-      console.log(`[FULL RESYNC] Phase 0: Restoring missing client "${clientName}" from BOOKED to TRACKER`);
-      
-      try {
-        // Get the sheet ID for CLIENT TRACKER to insert a new row
-        const sheetId = await getSheetId(accessToken, spreadsheetId, 'CLIENT TRACKER');
-        
-        // Insert a new row at position 2
-        const insertUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
-        await fetch(insertUrl, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            requests: [{
-              insertDimension: {
-                range: {
-                  sheetId,
-                  dimension: 'ROWS',
-                  startIndex: 1, // Row 2 (0-indexed)
-                  endIndex: 2,
-                },
-                inheritFromBefore: false,
-              },
-            }],
-          }),
-        });
-        
-        // Copy the entire row from BOOKED CLIENTS to CLIENT TRACKER row 2
-        // Ensure we have 35 columns (A-AI)
-        const paddedRowData = [...row];
-        while (paddedRowData.length < 35) {
-          paddedRowData.push('');
-        }
-        
-        const writeRange = encodeURIComponent("'CLIENT TRACKER'!A2:AI2");
-        const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${writeRange}?valueInputOption=USER_ENTERED`;
-        
-        const writeResponse = await fetch(writeUrl, {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ values: [paddedRowData.slice(0, 35)] }),
-        });
-        
-        if (writeResponse.ok) {
-          restoredToTrackerCount++;
-          restoredToTracker.push(clientName || registeredDateTime.substring(0, 20));
-          // Add to tracker map so we don't try to copy it again
-          trackerFullDataMap.set(registeredDateTime, { rowData: row, trackerRowNumber: 2, latestStatus: getLatestStatusFromLog(row[22] || '') });
-          console.log(`[FULL RESYNC] Successfully restored "${clientName}" to CLIENT TRACKER`);
-        } else {
-          console.error(`[FULL RESYNC] Failed to restore "${clientName}" to tracker:`, await writeResponse.text());
-        }
-      } catch (error) {
-        console.error(`[FULL RESYNC] Error restoring "${clientName}" to tracker:`, error);
-      }
-    }
-  }
-  
-  console.log(`[FULL RESYNC] Phase 0 complete: Restored ${restoredToTrackerCount} missing clients to CLIENT TRACKER`);
-  
-  // === PHASE 1: Copy missing BOOKED clients from tracker to BOOKED CLIENTS ===
-  let copiedCount = 0;
-  
-  for (const client of bookedInTracker) {
-    if (!existingBookedIds.has(client.registeredDateTime)) {
-      console.log(`[FULL RESYNC] Phase 1: Copying missing BOOKED client from tracker row ${client.trackerRowNumber}`);
-      try {
-        await copyToBookedClients(accessToken, spreadsheetId, client.trackerRowNumber);
-        copiedCount++;
-        // Add to existing set to prevent duplicates if function is called again
-        existingBookedIds.add(client.registeredDateTime);
-      } catch (error) {
-        console.error(`[FULL RESYNC] Failed to copy client from row ${client.trackerRowNumber}:`, error);
-      }
-    }
-  }
-  
-  console.log(`[FULL RESYNC] Phase 1 complete: Copied ${copiedCount} missing BOOKED clients`);
-  
-  // === PHASE 2: Sync existing data between sheets ===
-  // Re-fetch booked clients if we copied new ones
-  let currentBookedRows = bookedRows;
-  if (copiedCount > 0) {
-    const refreshResponse = await fetch(bookedUrl, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    if (refreshResponse.ok) {
-      const refreshData = await refreshResponse.json();
-      currentBookedRows = refreshData.values || [];
-    }
-  }
-  
-  let syncedCount = 0;
+  let validatedCount = 0;
   let skippedCount = 0;
-  let notFoundCount = 0;
   
   // Track detailed sync info for report
   const syncDetails: { 
@@ -3907,125 +3854,37 @@ async function fullResyncAllBookedClients(accessToken: string, spreadsheetId: st
     changedColumns: string[];
   }[] = [];
   
-  // Column names for human-readable report
-  const columnNames: Record<number, string> = {
-    0: 'Registered DateTime', 1: 'Registered Date BS', 2: 'Client Name', 3: 'Source',
-    4: 'Location', 5: 'Country', 6: 'Contact', 7: 'WhatsApp', 8: 'Email',
-    9: 'Event Location', 10: 'Event City', 11: 'Events', 12: 'Event Year',
-    13: 'Event Month', 14: 'Event Day', 15: 'Event Date AD', 16: 'Who Added',
-    17: 'Inquiry Date AD', 18: 'Inquiry Date BS', 19: 'Inquiry Time', 20: 'Description',
-    21: 'Quotation', 22: 'Status Log', 23: 'Handler', 24: 'Call Log', 25: 'Mindset',
-    26: 'Our Bargained', 27: 'Client Bargained', 28: 'Comments', 29: 'Final Quotation',
-    30: 'Payments Made', 31: 'Payment Dates', 32: 'Remaining Payment', 33: 'Company', 34: 'Service Types'
-  };
+  // NOTE: Under single source of truth, BOOKED CLIENTS is authoritative
+  // We no longer sync FROM tracker TO booked (that would violate single source of truth)
+  // This function now only validates data integrity
   
-  for (let i = 0; i < currentBookedRows.length; i++) {
-    const row = currentBookedRows[i];
+  for (let i = 0; i < bookedRows.length; i++) {
+    const row = bookedRows[i];
     const registeredDateTime = (row[0] || '').trim();
-    const clientName = (row[2] || '').trim(); // Column C = client name
-    const bookedRowNumber = i + 2;
     
     if (!registeredDateTime) {
       skippedCount++;
       continue;
     }
     
-    const trackerEntry = trackerFullDataMap.get(registeredDateTime);
-    
-    if (!trackerEntry) {
-      console.log(`[FULL RESYNC] No match in tracker for booked row ${bookedRowNumber}: ${registeredDateTime.substring(0, 20)}...`);
-      notFoundCount++;
-      continue;
-    }
-    
-    // PAYMENT COLUMNS TO PRESERVE (SINGLE SOURCE OF TRUTH in BOOKED CLIENTS)
-    // Columns 30 (AE - Payments Made), 31 (AF - Payment Dates), 32 (AG - Remaining Payment)
-    const PAYMENT_COLUMNS = [30, 31, 32];
-    
-    // Compare columns excluding payment columns for sync check
-    // Payment data should NOT be synced from tracker since BOOKED CLIENTS is the source of truth
-    const bookedNonPaymentData = row.slice(0, 35).map((v: string, idx: number) => 
-      PAYMENT_COLUMNS.includes(idx) ? '' : (v || '').trim()
-    ).join('|');
-    const trackerNonPaymentData = trackerEntry.rowData.slice(0, 35).map((v: string, idx: number) => 
-      PAYMENT_COLUMNS.includes(idx) ? '' : (v || '').trim()
-    ).join('|');
-    
-    const needsUpdate = forceSync || bookedNonPaymentData !== trackerNonPaymentData;
-    
-    // Track which columns differ for the report (excluding payment columns)
-    const changedColumns: string[] = [];
-    if (needsUpdate) {
-      for (let col = 0; col < 35; col++) {
-        // Skip payment columns in comparison - they are managed separately
-        if (PAYMENT_COLUMNS.includes(col)) continue;
-        
-        const bookedVal = (row[col] || '').trim();
-        const trackerVal = (trackerEntry.rowData[col] || '').trim();
-        if (bookedVal !== trackerVal) {
-          changedColumns.push(columnNames[col] || `Column ${col}`);
-        }
-      }
-      if (!forceSync && changedColumns.length > 0) {
-        console.log(`[FULL RESYNC] Row ${bookedRowNumber} differs in columns: ${changedColumns.join(', ')}`);
-      }
-    }
-    
-    if (needsUpdate && changedColumns.length > 0) {
-      // Build row data but PRESERVE payment columns from BOOKED CLIENTS
-      const paddedRowData = [...trackerEntry.rowData];
-      while (paddedRowData.length < 35) {
-        paddedRowData.push('');
-      }
-      
-      // PRESERVE existing payment data from BOOKED CLIENTS (columns 30, 31, 32)
-      paddedRowData[30] = row[30] || ''; // AE - Payments Made
-      paddedRowData[31] = row[31] || ''; // AF - Payment Dates
-      paddedRowData[32] = row[32] || ''; // AG - Remaining Payment
-      
-      // Update ENTIRE row in BOOKED CLIENTS (columns A:AI) with preserved payment columns
-      const updateRange = encodeURIComponent(`'BOOKED CLIENTS'!A${bookedRowNumber}:AI${bookedRowNumber}`);
-      const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`;
-      
-      const updateResponse = await fetch(updateUrl, {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ values: [paddedRowData.slice(0, 35)] }),
-      });
-      
-      if (updateResponse.ok) {
-        console.log(`[FULL RESYNC] Synced row ${bookedRowNumber} from tracker row ${trackerEntry.trackerRowNumber}`);
-        syncedCount++;
-        
-        // Add to sync details for report
-        syncDetails.push({
-          clientName: clientName || trackerEntry.rowData[2] || 'Unknown',
-          bookedRow: bookedRowNumber,
-          trackerRow: trackerEntry.trackerRowNumber,
-          changedColumns: changedColumns.length > 0 ? changedColumns : ['All (forced sync)']
-        });
-      } else {
-        console.error(`[FULL RESYNC] Failed to update row ${bookedRowNumber}:`, await updateResponse.text());
-      }
-    } else {
-      skippedCount++;
-    }
+    // Count as validated
+    validatedCount++;
   }
   
-  console.log(`[FULL RESYNC] Complete: ${restoredToTrackerCount} restored to tracker, ${copiedCount} copied to booked, ${syncedCount} synced, ${skippedCount} unchanged, ${notFoundCount} not found in tracker`);
+  console.log(`[FULL RESYNC] Complete: ${validatedCount} validated, ${skippedCount} skipped (empty)`);
+  console.log('[FULL RESYNC] NOTE: Copying between sheets is now disabled. Clients enter BOOKED CLIENTS only via status change.');
+  
   return { 
     success: true, 
-    restoredToTrackerCount, // NEW: clients restored from BOOKED to TRACKER
-    restoredToTracker,      // NEW: names of restored clients
-    copiedCount, 
-    syncedCount, 
-    skippedCount, 
-    notFoundCount, 
-    totalBooked: currentBookedRows.length,
-    syncDetails // Return detailed sync info
+    restoredToTrackerCount: 0, // DEPRECATED - always 0 now
+    restoredToTracker: [],     // DEPRECATED - always empty now
+    copiedCount: 0,            // DEPRECATED - always 0 now (no copying)
+    syncedCount: 0,            // No actual sync needed
+    skippedCount: validatedCount, // All existing clients are valid
+    notFoundCount: 0, 
+    totalBooked: bookedRows.length,
+    syncDetails,
+    message: 'Validated existing data. Clients enter BOOKED CLIENTS only via status change to BOOKED.'
   };
 }
 
@@ -4812,6 +4671,9 @@ Deno.serve(async (req) => {
         result = await fullResyncAllBookedClients(accessToken, spreadsheetId, forceSync);
         break;
       }
+      case 'cleanupDuplicateBookedFromTracker':
+        result = await cleanupDuplicateBookedFromTracker(accessToken, spreadsheetId);
+        break;
       // Vendor Management Actions
       case 'getVendors':
         result = await getVendors(accessToken, spreadsheetId, body.limit);

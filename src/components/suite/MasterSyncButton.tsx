@@ -16,7 +16,7 @@ interface SyncPhase {
 
 const SYNC_PHASES: SyncPhase[] = [
   { id: 'tracker', label: 'Client Tracker', description: 'Fetching fresh client data...' },
-  { id: 'booked', label: 'Booked Clients', description: 'Syncing to booked clients sheet...' },
+  { id: 'booked', label: 'Booked Clients', description: 'Validating booked clients data...' },
   { id: 'events', label: 'Event Details', description: 'Updating event logistics...' },
   { id: 'vendors', label: 'Vendor Sync', description: 'Refreshing venue & parlour data...' },
   { id: 'contacts', label: 'Contact Details', description: 'Syncing client contact data...' },
