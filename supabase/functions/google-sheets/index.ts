@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails';
+  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -172,6 +172,28 @@ async function getEventDetailsSetupData(accessToken: string, spreadsheetId: stri
   
   // Extract venue types from Column A, filter empty values
   return data.values.map((row: string[]) => row[0]).filter(Boolean);
+}
+
+// Get public form data (relation options) for the client contact form - no auth required
+async function getPublicFormData(accessToken: string, spreadsheetId: string) {
+  const range = encodeURIComponent("'CLIENT TRACKER SETUP DATA'!R2:R100");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    console.warn('Failed to fetch relation options, using defaults');
+    return { relationOptions: ['Mother', 'Father', 'Sister', 'Brother', 'Spouse', 'Friend', 'Other'] };
+  }
+
+  const data = await response.json();
+  const relationOptions = data.values 
+    ? data.values.map((row: string[]) => row[0]).filter(Boolean)
+    : ['Mother', 'Father', 'Sister', 'Brother', 'Spouse', 'Friend', 'Other'];
+
+  return { relationOptions };
 }
 
 // Get parlour types from EVENT DETAILS SETUP DATA sheet (Column C, starting from row 2)
@@ -4817,6 +4839,9 @@ Deno.serve(async (req) => {
       case 'resyncClientContactDetails':
         if (!data || !data.registeredDateTimeAD) throw new Error('registeredDateTimeAD is required for resyncClientContactDetails');
         result = await resyncClientContactDetails(accessToken, spreadsheetId, data.registeredDateTimeAD as string);
+        break;
+      case 'getPublicFormData':
+        result = await getPublicFormData(accessToken, spreadsheetId);
         break;
       default:
         throw new Error(`Unknown action: ${action}`);

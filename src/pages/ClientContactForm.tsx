@@ -10,8 +10,8 @@ import { Heart, Send, CheckCircle2, User, Phone, MapPin, Instagram, Loader2 } fr
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
-// Relation options for backup contacts
-const relationOptions = ["Mother", "Father", "Sister", "Brother", "Spouse", "Friend", "Other"];
+// Default fallback relation options (will be replaced with dynamic data from sheet)
+const DEFAULT_RELATION_OPTIONS = ["Mother", "Father", "Sister", "Brother", "Spouse", "Friend", "Other"];
 
 interface PersonDetails {
   fullName: string;
@@ -53,10 +53,32 @@ export default function ClientContactForm() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [dataLoaded, setDataLoaded] = useState(false);
   const [submittedData, setSubmittedData] = useState<{ bride: PersonDetails; groom: PersonDetails } | null>(null);
+  const [relationOptions, setRelationOptions] = useState<string[]>(DEFAULT_RELATION_OPTIONS);
 
   // Decode the client ID and name for display
   const decodedClientId = clientId ? decodeURIComponent(clientId) : "";
   const displayName = clientName ? clientName.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : "";
+
+  // Fetch relation options on mount (syncs every time form opens)
+  useEffect(() => {
+    const fetchRelationOptions = async () => {
+      try {
+        console.log('[ClientContactForm] Fetching relation options from sheet...');
+        const { data: result, error } = await supabase.functions.invoke('google-sheets', {
+          body: { action: 'getPublicFormData' }
+        });
+        
+        if (!error && result?.success && result.data?.relationOptions?.length > 0) {
+          console.log('[ClientContactForm] Relation options loaded:', result.data.relationOptions);
+          setRelationOptions(result.data.relationOptions);
+        }
+      } catch (err) {
+        console.warn('[ClientContactForm] Error fetching relation options, using defaults:', err);
+        // Keep default fallback - no need to show error
+      }
+    };
+    fetchRelationOptions();
+  }, []);
 
   // Fetch existing data on mount
   useEffect(() => {
@@ -355,6 +377,7 @@ export default function ClientContactForm() {
                 person={bride}
                 onChange={updateBride}
                 accentColor="rose"
+                relationOptions={relationOptions}
               />
             </CardContent>
           </Card>
@@ -377,6 +400,7 @@ export default function ClientContactForm() {
                 person={groom}
                 onChange={updateGroom}
                 accentColor="sky"
+                relationOptions={relationOptions}
               />
             </CardContent>
           </Card>
@@ -424,9 +448,10 @@ interface PersonFormProps {
   person: PersonDetails;
   onChange: (field: keyof PersonDetails, value: string) => void;
   accentColor: "rose" | "sky";
+  relationOptions: string[];
 }
 
-function PersonForm({ person, onChange, accentColor }: PersonFormProps) {
+function PersonForm({ person, onChange, accentColor, relationOptions }: PersonFormProps) {
   const borderColor = accentColor === "rose" ? "focus:border-rose-400" : "focus:border-sky-400";
   const ringColor = accentColor === "rose" ? "focus:ring-rose-200" : "focus:ring-sky-200";
 
