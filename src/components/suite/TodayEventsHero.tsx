@@ -3,7 +3,6 @@ import { useBookedCachedData } from "@/hooks/useBookedCachedData";
 import { useBulkEventDetails } from "@/hooks/useBulkEventDetails";
 import { Calendar, Sparkles, ArrowRight, Clock, MapPin, Scissors } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMemo } from "react";
 
 // Helper to get upcoming events
@@ -127,10 +126,9 @@ export function TodayEventsHero() {
 
         {/* Events List - Scrollable with fixed height container */}
         {hasEvents ? (
-          <div className="max-h-[300px] md:max-h-[400px] overflow-hidden">
-            <ScrollArea className="h-full">
-              <div className="pr-4 space-y-3">
-                {upcomingEvents.slice(0, 30).map((event, idx) => {
+          <div className="max-h-[300px] md:max-h-[400px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+            <div className="space-y-3">
+              {upcomingEvents.slice(0, 30).map((event, idx) => {
                   const clientId = event.client.registeredDateTimeAD || event.client.originalRowNumber;
                   const isToday = event.daysUntil === 0;
                   const isTomorrow = event.daysUntil === 1;
@@ -256,9 +254,8 @@ export function TodayEventsHero() {
                       )}
                     </Link>
                   );
-                })}
-              </div>
-            </ScrollArea>
+              })}
+            </div>
           </div>
         ) : (
           <div className="mt-4 p-4 rounded-xl bg-gray-50 border border-gray-200">
