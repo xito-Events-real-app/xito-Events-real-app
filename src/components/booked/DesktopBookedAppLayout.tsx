@@ -3,13 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { DesktopBookedSidebar, HotDatesSortOrder } from "./DesktopBookedSidebar";
 import { DesktopBookedDashboard } from "./DesktopBookedDashboard";
 import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
-import { fullResyncAllBookedClients, fullSyncEventDetails, BookedClientData, SyncDetail } from "@/lib/sheets-api";
+import { fullResyncAllBookedClients, fullSyncEventDetails, cleanupDuplicateBookedFromTracker, BookedClientData, SyncDetail } from "@/lib/sheets-api";
 import { parseEventDetails, NEPALI_MONTHS } from "@/lib/nepali-months";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { RefreshCw, Database, X, Calendar, CheckCircle, Copy, ArrowUpCircle } from "lucide-react";
+import { RefreshCw, Database, X, Calendar, CheckCircle, Copy, ArrowUpCircle, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBookedCachedData } from "@/hooks/useBookedCachedData";
 import { SyncReportSheet } from "./SyncReportSheet";
@@ -30,6 +30,7 @@ export function DesktopBookedAppLayout() {
   
   const [isFullResyncing, setIsFullResyncing] = useState(false);
   const [isEventDetailsSyncing, setIsEventDetailsSyncing] = useState(false);
+  const [isCleaningUp, setIsCleaningUp] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   
   // Sync report state
@@ -115,7 +116,25 @@ export function DesktopBookedAppLayout() {
     }
   };
 
-  useEffect(() => { 
+  const handleCleanupDuplicates = async () => {
+    try {
+      setIsCleaningUp(true);
+      const result = await cleanupDuplicateBookedFromTracker();
+      if (result.deletedCount > 0) {
+        toast.success(`Cleaned up ${result.deletedCount} duplicate(s) from Client Tracker`);
+      } else {
+        toast.info("No duplicates found - Client Tracker is clean!");
+      }
+      await refreshData();
+    } catch (error) {
+      console.error("Error cleaning up duplicates:", error);
+      toast.error("Failed to cleanup duplicates");
+    } finally {
+      setIsCleaningUp(false);
+    }
+  };
+
+  useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     
@@ -272,6 +291,25 @@ export function DesktopBookedAppLayout() {
           </div>
           
           <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleCleanupDuplicates} 
+              disabled={isCleaningUp}
+              className="border-red-600 text-red-600 hover:bg-red-600/10"
+            >
+              {isCleaningUp ? (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2 animate-pulse" />
+                  Cleaning...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Cleanup Duplicates
+                </>
+              )}
+            </Button>
             <Button 
               variant="outline" 
               size="sm"
