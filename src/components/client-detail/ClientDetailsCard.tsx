@@ -256,8 +256,14 @@ export const ClientDetailsCard = ({ data, isLoading, isResyncing, clientWhatsApp
         ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
         : `https://wa.me/?text=${encodeURIComponent(message)}`;
       
-      // Open WhatsApp
-      window.open(whatsappUrl, '_blank');
+      // Open WhatsApp using anchor element (bypasses popup blockers in iframes)
+      const link = document.createElement('a');
+      link.href = whatsappUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
       
       // Mark form as sent (update formSentDate)
       if (onMarkFormSent) {
