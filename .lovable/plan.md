@@ -1,69 +1,175 @@
 
-# Diagnosis: Client Contact Form Data Saving
+# Plan: Add Event Details to Upcoming Events & Fix Scrolling
 
-## Investigation Results
+## Problem Summary
 
-I performed a thorough investigation and tested the backend API directly:
+The user wants two fixes for the Xito Business Suite homepage:
+1. **Event Details Missing**: The upcoming events cards should show venue/parlour/timing info, not just client name and event name
+2. **Scrolling Not Working**: The upcoming events list cannot be scrolled when there are many events
 
-### Backend API Testing (All Passed)
+---
 
-| Test | Result | Details |
-|------|--------|---------|
-| GET without auth | SUCCESS | Returns client data correctly |
-| UPDATE without auth | SUCCESS | Data saved to row 2 |
-| Verify save | SUCCESS | "TEST BRIDE NAME" appeared in sheet immediately |
+## Current Architecture
 
-### What I Found
-
-1. **The Edge Function works correctly** - No authentication is required for `getClientContactDetails` and `updateClientContactDetails` actions
-2. **Data IS being saved** - When I called the API with test data, it was reflected in Google Sheets immediately
-3. **The session replay shows dashboard usage** - The user was on `/client-tracker/client/...` (internal dashboard), not the public form
-
-### Possible User Confusion
-
-The network request from the session shows:
+```text
+┌─────────────────────────────────────────┐
+│         TodayEventsHero.tsx             │
+│  ┌─────────────────────────────────┐    │
+│  │  useBookedCachedData()          │    │
+│  │  Returns: clientName, eventName,│    │
+│  │  eventDateAD, registeredDateTime│    │
+│  │                                 │    │
+│  │  MISSING: venue, parlour, times │    │
+│  └─────────────────────────────────┘    │
+│                                         │
+│  ┌─────────────────────────────────┐    │
+│  │  ScrollArea (Radix)             │    │
+│  │  class="max-h-[300px]"          │    │
+│  │  Issue: Viewport needs explicit │    │
+│  │  height for scroll to work      │    │
+│  └─────────────────────────────────┘    │
+└─────────────────────────────────────────┘
 ```
-Request: updateClientContactDetails with empty bride fields
-Response: {"success":true}
+
+Event logistics (venue, parlour, timing) are stored in a separate sheet (`BOOKED CLIENTS EVENT DETAILS`) and fetched per-client via the `useEventDetails` hook, but this requires a separate API call for each client.
+
+---
+
+## Solution Overview
+
+### 1. Fix Scrolling Issue
+- Update the ScrollArea component in TodayEventsHero to ensure the viewport has proper height constraints
+- Add `overflow-hidden` to parent containers and explicit height to the viewport
+
+### 2. Add Event Details to Cards
+Create a new backend action to batch-fetch event details for multiple clients in one API call, then display venue/parlour/timing info in each event card.
+
+---
+
+## Implementation Steps
+
+### Step 1: Fix ScrollArea Scrolling
+
+**File**: `src/components/suite/TodayEventsHero.tsx`
+
+**Issue**: The Radix ScrollArea viewport needs the container to have explicit `overflow-hidden` and the viewport needs proper sizing.
+
+**Change**:
+```tsx
+// Before
+<ScrollArea className="max-h-[300px] md:max-h-[400px] -mr-4 pr-4">
+
+// After - Add explicit height and ensure overflow is handled
+<div className="max-h-[300px] md:max-h-[400px] overflow-hidden">
+  <ScrollArea className="h-full">
+    <div className="pr-4 space-y-2">
+      {/* events */}
+    </div>
+  </ScrollArea>
+</div>
 ```
 
-This suggests the form is **saving what the user entered** - which happens to be empty fields.
+### Step 2: Create Batch Event Details API Action
 
-## Potential Issues and Fixes
+**File**: `supabase/functions/google-sheets/index.ts`
 
-### Issue 1: Form Not Pre-Filling Existing Data
+Add a new action `getBulkEventDetails` that:
+- Accepts an array of `registeredDateTimeAD` values
+- Fetches all event details rows in one API call
+- Returns a map keyed by `registeredDateTimeAD`
 
-When a client opens the public form, it should load and display any existing data. If this fails silently, the client sees an empty form and may submit empty values (overwriting existing data).
+```typescript
+async function getBulkEventDetails(
+  accessToken: string, 
+  spreadsheetId: string, 
+  clientIds: string[]
+): Promise<Record<string, EventDetail[]>> {
+  // Fetch entire EVENT DETAILS sheet once
+  // Filter and parse for requested clientIds
+  // Return { [registeredDateTimeAD]: EventDetail[] }
+}
+```
 
-**Fix:** Add better error visibility when data fetch fails
+### Step 3: Create Frontend Hook
 
-### Issue 2: No Confirmation of What Was Saved
+**File**: `src/hooks/useBulkEventDetails.ts` (new file)
 
-After submission, clients only see "Thank you!" but don't see what data was actually saved. This could cause confusion.
+```typescript
+export function useBulkEventDetails(clientIds: string[]) {
+  // Calls getBulkEventDetails action
+  // Returns { eventDetailsMap, isLoading, error }
+}
+```
 
-**Fix:** Show a summary of submitted data on the success screen
+### Step 4: Update TodayEventsHero Component
 
-### Issue 3: Dashboard Not Refreshing After External Update
+**File**: `src/components/suite/TodayEventsHero.tsx`
 
-If a client submits via public form, the dashboard user won't see the changes until they manually refresh.
+**Changes**:
+1. Extract all unique `registeredDateTimeAD` values from upcoming events
+2. Call `useBulkEventDetails` with those IDs
+3. Match event details to each event card by client ID and event index
+4. Display venue, timing, and parlour in a compact format
 
-**Fix:** This is expected behavior - no immediate fix needed (real-time sync would be complex)
+**Updated Event Card Layout**:
+```text
+┌─────────────────────────────────────────────────┐
+│ [TODAY] Client Name                          → │
+│         RECEPTION                               │
+│ ┌─────────────────────────────────────────────┐ │
+│ │ 📍 PALIFAL RESTAURANT, KRITIPUR            │ │
+│ │    10:00 AM - 7:00 PM                       │ │
+│ │ 💄 Not set                                   │ │
+│ └─────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────┘
+```
 
-## Recommended Changes
+### Step 5: Add API Action to sheets-api.ts
 
-1. **Add console logging in public form** - To help debug issues when clients report problems
-2. **Show submitted data on success screen** - So clients can verify what was saved
-3. **Add a "data loaded" indicator** - Show when existing data is pre-filled vs when form is empty
+**File**: `src/lib/sheets-api.ts`
 
-## Files to Modify
+```typescript
+export async function getBulkEventDetails(
+  clientIds: string[]
+): Promise<Record<string, EventDetail[]>> {
+  return callSheetsFunction<Record<string, EventDetail[]>>(
+    "getBulkEventDetails", 
+    { data: { clientIds } }
+  );
+}
+```
 
-- `src/pages/ClientContactForm.tsx` - Add debug logging and success screen summary
+---
 
 ## Technical Details
 
-```typescript
-// Add logging for debugging
-console.log('[ClientContactForm] Fetching data for:', decodedClientId);
-console.log('[ClientContactForm] Data loaded:', contactData);
-console.log('[ClientContactForm] Submitting updates:', updates);
+### Event Detail Compact Display Format
+
+```text
+Venue: VENUE_NAME, AREA, CITY • START_TIME - END_TIME (GUESTS)
+Parlour: PARLOUR_NAME, AREA • START_TIME - END_TIME
 ```
+
+If no venue/parlour is set, show "Not set" in muted text.
+
+### Scroll Fix Explanation
+
+The Radix ScrollArea requires:
+1. The container to have a fixed max-height with `overflow-hidden`
+2. The ScrollArea to have `h-full` to fill the container
+3. The inner content wrapper to handle spacing (not the ScrollArea itself)
+
+### Performance Consideration
+
+The bulk fetch approach loads all event details for the displayed upcoming events in a single API call rather than N calls (one per client). This is more efficient but may return more data. We'll limit to the first 20-30 upcoming events to keep response size reasonable.
+
+---
+
+## Files to Create/Modify
+
+| File | Action |
+|------|--------|
+| `supabase/functions/google-sheets/index.ts` | Add `getBulkEventDetails` action |
+| `src/lib/sheets-api.ts` | Add `getBulkEventDetails` function |
+| `src/hooks/useBulkEventDetails.ts` | Create new hook |
+| `src/components/suite/TodayEventsHero.tsx` | Fix scroll + add event details display |
