@@ -1,175 +1,200 @@
 
-# Plan: Add Event Details to Upcoming Events & Fix Scrolling
+# Plan: Add Contact Info & Comments to Upcoming Events Cards
 
 ## Problem Summary
 
-The user wants two fixes for the Xito Business Suite homepage:
-1. **Event Details Missing**: The upcoming events cards should show venue/parlour/timing info, not just client name and event name
-2. **Scrolling Not Working**: The upcoming events list cannot be scrolled when there are many events
+The user wants to enhance the upcoming events cards on the Xito Business Suite homepage (TodayEventsHero component) with:
+1. **Phone number** with call icon (clickable)
+2. **WhatsApp number** with WhatsApp icon (clickable)  
+3. **Plus button** to add new comments
+4. **Most recent comment** displayed on the card
 
 ---
 
-## Current Architecture
+## Current State Analysis
+
+The `TodayEventsHero.tsx` component currently shows:
+- Client name
+- Event name (RECEPTION, WEDDING, etc.)
+- Days until event badge (TODAY, Tomorrow, X days)
+- Venue information (name, area, timing)
+- Parlour information (name, area, timing)
+
+**What's available in the data:**
+- `client.contactNo` - Phone number (Column G)
+- `client.whatsappNo` - WhatsApp number (Column H)
+- `client.comments` - Comments with timestamps (Column AC)
+- `client.bookedRowNumber` - Row number for API updates
+
+**Comment format:** `"Comment text [MM/DD/YYYY HH:MM]|||Another comment [MM/DD/YYYY HH:MM]"`
+
+---
+
+## Solution Architecture
 
 ```text
-┌─────────────────────────────────────────┐
-│         TodayEventsHero.tsx             │
-│  ┌─────────────────────────────────┐    │
-│  │  useBookedCachedData()          │    │
-│  │  Returns: clientName, eventName,│    │
-│  │  eventDateAD, registeredDateTime│    │
-│  │                                 │    │
-│  │  MISSING: venue, parlour, times │    │
-│  └─────────────────────────────────┘    │
-│                                         │
-│  ┌─────────────────────────────────┐    │
-│  │  ScrollArea (Radix)             │    │
-│  │  class="max-h-[300px]"          │    │
-│  │  Issue: Viewport needs explicit │    │
-│  │  height for scroll to work      │    │
-│  └─────────────────────────────────┘    │
-└─────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│  Event Card - Enhanced Layout                                    │
+├─────────────────────────────────────────────────────────────────┤
+│  [TODAY]  Client Name                    📞 9841...  💬 9851... │
+│           RECEPTION                                          → │
+├─────────────────────────────────────────────────────────────────┤
+│  📍 PALIFAL RESTAURANT, KRITIPUR • 10:00 AM - 7:00 PM           │
+│  ✂️ Parlour not set                                             │
+├─────────────────────────────────────────────────────────────────┤
+│  💬 "Last comment text here..."              [+]    2 hours ago │
+└─────────────────────────────────────────────────────────────────┘
 ```
-
-Event logistics (venue, parlour, timing) are stored in a separate sheet (`BOOKED CLIENTS EVENT DETAILS`) and fetched per-client via the `useEventDetails` hook, but this requires a separate API call for each client.
-
----
-
-## Solution Overview
-
-### 1. Fix Scrolling Issue
-- Update the ScrollArea component in TodayEventsHero to ensure the viewport has proper height constraints
-- Add `overflow-hidden` to parent containers and explicit height to the viewport
-
-### 2. Add Event Details to Cards
-Create a new backend action to batch-fetch event details for multiple clients in one API call, then display venue/parlour/timing info in each event card.
 
 ---
 
 ## Implementation Steps
 
-### Step 1: Fix ScrollArea Scrolling
+### Step 1: Add Phone & WhatsApp Icons to Header Row
 
-**File**: `src/components/suite/TodayEventsHero.tsx`
+**Location:** Right side of client name row
 
-**Issue**: The Radix ScrollArea viewport needs the container to have explicit `overflow-hidden` and the viewport needs proper sizing.
+**Changes:**
+- Add Phone icon with truncated number (last 4 digits visible)
+- Add WhatsApp icon with truncated number
+- Both icons are clickable (tel: and wa.me links)
+- Use `stopPropagation()` to prevent card navigation when clicking icons
 
-**Change**:
 ```tsx
-// Before
-<ScrollArea className="max-h-[300px] md:max-h-[400px] -mr-4 pr-4">
-
-// After - Add explicit height and ensure overflow is handled
-<div className="max-h-[300px] md:max-h-[400px] overflow-hidden">
-  <ScrollArea className="h-full">
-    <div className="pr-4 space-y-2">
-      {/* events */}
-    </div>
-  </ScrollArea>
+{/* Contact icons - right side */}
+<div className="flex items-center gap-1.5 shrink-0">
+  {client.contactNo && (
+    <a 
+      href={`tel:${client.contactNo}`}
+      onClick={(e) => e.stopPropagation()}
+      className="flex items-center gap-1 px-2 py-1 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs transition-colors"
+    >
+      <Phone className="w-3 h-3" />
+      <span className="hidden sm:inline">...{client.contactNo.slice(-4)}</span>
+    </a>
+  )}
+  {client.whatsappNo && (
+    <a 
+      href={`https://wa.me/${client.whatsappNo.replace(/\D/g, '')}`}
+      target="_blank"
+      onClick={(e) => e.stopPropagation()}
+      className="flex items-center gap-1 px-2 py-1 rounded-full bg-green-50 hover:bg-green-100 text-green-600 text-xs transition-colors"
+    >
+      <MessageCircle className="w-3 h-3" />
+      <span className="hidden sm:inline">...{client.whatsappNo.slice(-4)}</span>
+    </a>
+  )}
 </div>
 ```
 
-### Step 2: Create Batch Event Details API Action
+### Step 2: Add Comment Section
 
-**File**: `supabase/functions/google-sheets/index.ts`
+**Location:** Below venue/parlour details
 
-Add a new action `getBulkEventDetails` that:
-- Accepts an array of `registeredDateTimeAD` values
-- Fetches all event details rows in one API call
-- Returns a map keyed by `registeredDateTimeAD`
+**Features:**
+- Show most recent comment text (truncated to 50 chars)
+- Show relative time ("2 hours ago")
+- Plus button to open comment drawer
+- Use existing `parseComments` and `getRelativeTime` utilities
 
-```typescript
-async function getBulkEventDetails(
-  accessToken: string, 
-  spreadsheetId: string, 
-  clientIds: string[]
-): Promise<Record<string, EventDetail[]>> {
-  // Fetch entire EVENT DETAILS sheet once
-  // Filter and parse for requested clientIds
-  // Return { [registeredDateTimeAD]: EventDetail[] }
-}
+```tsx
+{/* Recent Comment */}
+{parsedComments.length > 0 && (
+  <div className="flex items-center gap-2 text-xs mt-1.5 pt-1.5 border-t border-gray-100">
+    <MessageSquare className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+    <span className="text-gray-600 truncate flex-1">
+      "{parsedComments[parsedComments.length - 1].text}"
+    </span>
+    {parsedComments[parsedComments.length - 1].timestamp && (
+      <span className="text-gray-400 shrink-0">
+        {getRelativeTime(parsedComments[parsedComments.length - 1].timestamp)}
+      </span>
+    )}
+  </div>
+)}
 ```
 
-### Step 3: Create Frontend Hook
+### Step 3: Add Comment Drawer (Plus Button)
 
-**File**: `src/hooks/useBulkEventDetails.ts` (new file)
+**Approach:** 
+- Add a small floating plus button on each card
+- When clicked, open a Drawer with input field
+- Use existing `addClientComment` API function
+- Refresh data after comment is added
 
-```typescript
-export function useBulkEventDetails(clientIds: string[]) {
-  // Calls getBulkEventDetails action
-  // Returns { eventDetailsMap, isLoading, error }
-}
+**New State Required:**
+```tsx
+const [commentDrawerOpen, setCommentDrawerOpen] = useState(false);
+const [selectedEventForComment, setSelectedEventForComment] = useState<{
+  clientName: string;
+  rowNumber: number;
+  existingComments: string;
+} | null>(null);
+const [newComment, setNewComment] = useState('');
+const [isAddingComment, setIsAddingComment] = useState(false);
 ```
 
-### Step 4: Update TodayEventsHero Component
-
-**File**: `src/components/suite/TodayEventsHero.tsx`
-
-**Changes**:
-1. Extract all unique `registeredDateTimeAD` values from upcoming events
-2. Call `useBulkEventDetails` with those IDs
-3. Match event details to each event card by client ID and event index
-4. Display venue, timing, and parlour in a compact format
-
-**Updated Event Card Layout**:
-```text
-┌─────────────────────────────────────────────────┐
-│ [TODAY] Client Name                          → │
-│         RECEPTION                               │
-│ ┌─────────────────────────────────────────────┐ │
-│ │ 📍 PALIFAL RESTAURANT, KRITIPUR            │ │
-│ │    10:00 AM - 7:00 PM                       │ │
-│ │ 💄 Not set                                   │ │
-│ └─────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────┘
-```
-
-### Step 5: Add API Action to sheets-api.ts
-
-**File**: `src/lib/sheets-api.ts`
-
-```typescript
-export async function getBulkEventDetails(
-  clientIds: string[]
-): Promise<Record<string, EventDetail[]>> {
-  return callSheetsFunction<Record<string, EventDetail[]>>(
-    "getBulkEventDetails", 
-    { data: { clientIds } }
-  );
-}
+**Comment Handler:**
+```tsx
+const handleAddComment = async () => {
+  if (!selectedEventForComment || !newComment.trim()) return;
+  
+  setIsAddingComment(true);
+  try {
+    await addClientComment(
+      selectedEventForComment.rowNumber,
+      newComment.trim(),
+      selectedEventForComment.existingComments
+    );
+    setNewComment('');
+    setCommentDrawerOpen(false);
+    // Trigger refresh of booked clients data
+    // (useBookedCachedData will handle cache invalidation)
+  } catch (error) {
+    console.error('Failed to add comment:', error);
+  } finally {
+    setIsAddingComment(false);
+  }
+};
 ```
 
 ---
 
-## Technical Details
+## Files to Modify
 
-### Event Detail Compact Display Format
-
-```text
-Venue: VENUE_NAME, AREA, CITY • START_TIME - END_TIME (GUESTS)
-Parlour: PARLOUR_NAME, AREA • START_TIME - END_TIME
-```
-
-If no venue/parlour is set, show "Not set" in muted text.
-
-### Scroll Fix Explanation
-
-The Radix ScrollArea requires:
-1. The container to have a fixed max-height with `overflow-hidden`
-2. The ScrollArea to have `h-full` to fill the container
-3. The inner content wrapper to handle spacing (not the ScrollArea itself)
-
-### Performance Consideration
-
-The bulk fetch approach loads all event details for the displayed upcoming events in a single API call rather than N calls (one per client). This is more efficient but may return more data. We'll limit to the first 20-30 upcoming events to keep response size reasonable.
+| File | Changes |
+|------|---------|
+| `src/components/suite/TodayEventsHero.tsx` | Add phone/WhatsApp icons, comment display, comment drawer |
 
 ---
 
-## Files to Create/Modify
+## New Imports Required
 
-| File | Action |
-|------|--------|
-| `supabase/functions/google-sheets/index.ts` | Add `getBulkEventDetails` action |
-| `src/lib/sheets-api.ts` | Add `getBulkEventDetails` function |
-| `src/hooks/useBulkEventDetails.ts` | Create new hook |
-| `src/components/suite/TodayEventsHero.tsx` | Fix scroll + add event details display |
+```tsx
+import { Phone, MessageCircle, MessageSquare, Plus, Loader2 } from "lucide-react";
+import { parseComments, getRelativeTime } from "@/lib/client-card-utils";
+import { addClientComment } from "@/lib/sheets-api";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter } from "@/components/ui/drawer";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { useState } from "react";
+```
+
+---
+
+## UI/UX Considerations
+
+1. **Mobile-first:** Phone numbers are truncated on mobile, shown fuller on desktop
+2. **Non-blocking clicks:** Phone/WhatsApp/Comment buttons use `stopPropagation()` to prevent card navigation
+3. **Visual hierarchy:** Contact icons are subtle (pill badges), comment is at bottom
+4. **Feedback:** Loading spinner on plus button while adding comment
+5. **Cache refresh:** After adding comment, the booked clients cache is invalidated to show updated data
+
+---
+
+## Edge Cases
+
+- **No phone/WhatsApp:** Icons don't render if numbers are missing
+- **No comments:** Comment section doesn't render if empty
+- **Long comments:** Truncated with ellipsis (max 50 chars)
+- **Missing row number:** Plus button disabled if row number is unavailable
