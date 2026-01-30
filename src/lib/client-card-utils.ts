@@ -348,12 +348,19 @@ export function parseComments(comments?: string): ParsedComment[] {
   const entries = comments.split('|||').filter(Boolean);
   
   return entries.map(entry => {
-    // Format: "Comment text [MM/DD/YYYY HH:MM]"
-    const match = entry.match(/^(.+?)\s*\[(\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2})\]$/);
+    // Try format 1: Timestamp at END - "Comment text [MM/DD/YYYY HH:MM]"
+    const endMatch = entry.match(/^(.+?)\s*\[(\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2})\]$/);
+    
+    // Try format 2: Timestamp at BEGINNING - "[MM/DD/YYYY HH:MM] Comment text"
+    const startMatch = entry.match(/^\[(\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2})\]\s*(.+)$/);
+    
+    const match = endMatch || startMatch;
     
     if (match) {
-      const text = match[1].trim();
-      const dateTimeStr = match[2];
+      // For endMatch: match[1] is text, match[2] is datetime
+      // For startMatch: match[1] is datetime, match[2] is text
+      const text = endMatch ? match[1].trim() : match[2].trim();
+      const dateTimeStr = endMatch ? match[2] : match[1];
       
       // Parse date/time manually for Safari compatibility
       const dateTimeMatch = dateTimeStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
