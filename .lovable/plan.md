@@ -1,153 +1,252 @@
 
 
-# Plan: Make BOOKED CLIENTS the Single Source of Truth for Payments
+# Plan: Remove BOOKED Clients from CLIENT TRACKER (Single Source of Truth)
 
 ## Overview
 
-This plan modifies the payment system so that **columns AE (Payments Made), AF (Payment Date), and AG (Remaining Payment)** are only stored in and read from the `BOOKED CLIENTS` sheet, eliminating the current two-way sync.
+This plan restructures the data flow so that **clients with BOOKED status are ONLY stored in the BOOKED CLIENTS sheet**, removing them from the CLIENT TRACKER. This creates a true single source of truth architecture.
 
 ---
 
 ## Current Architecture (Before)
 
 ```text
-                    ┌─────────────────┐
-                    │  Add Payment    │
-                    └────────┬────────┘
-                             │
-              ┌──────────────┴──────────────┐
-              ▼                             ▼
-   ┌──────────────────────┐      ┌──────────────────────┐
-   │   CLIENT TRACKER     │      │   BOOKED CLIENTS     │
-   │   (AE, AF, AG)       │◄────►│   (AE, AF, AG)       │
-   └──────────────────────┘      └──────────────────────┘
-              │                             │
-              └──────────────┬──────────────┘
+┌──────────────────────────────────┐      ┌──────────────────────────────────┐
+│        CLIENT TRACKER            │      │        BOOKED CLIENTS            │
+│  (All clients including BOOKED)  │◄────►│   (Copy of BOOKED clients)       │
+└──────────────────────────────────┘      └──────────────────────────────────┘
+              │                                        │
+              ▼                                        ▼
+       Hot Dates, Calendar,                    Finance Module,
+       Search, Filters, etc.                   Payment History
+              │                                        │
+              └──────────────┬─────────────────────────┘
                              ▼
-                    Full Resync copies
-                    ALL data (including payments)
-                    from Tracker → Booked
+                    Same client appears in
+                    BOTH sheets (duplicated)
 ```
 
-Problem: Two-way sync creates confusion, and full resync overwrites BOOKED CLIENTS payments.
+**Problems:**
+- Same client exists in TWO places
+- Two-way sync causes confusion
+- Data can drift between sheets
+- Resync operations are complex
 
 ---
 
 ## New Architecture (After)
 
 ```text
-                    ┌─────────────────┐
-                    │  Add Payment    │
-                    └────────┬────────┘
-                             │
+┌──────────────────────────────────┐      ┌──────────────────────────────────┐
+│        CLIENT TRACKER            │      │        BOOKED CLIENTS            │
+│  (Non-booked clients ONLY)       │      │   (BOOKED clients ONLY)          │
+│  - Just Enquired                 │      │   - Status: BOOKED               │
+│  - Quotation Sent                │      │   - Payment Data                 │
+│  - Bargaining                    │      │   - Event Details                │
+│  - Advance Pending               │      │                                  │
+│  - Cancelled / Gone Elsewhere    │      │                                  │
+└──────────────────────────────────┘      └──────────────────────────────────┘
+              │                                        │
+              ▼                                        ▼
+     Active Sales Pipeline                    Confirmed Bookings
+              │                                        │
+              └──────────────┬─────────────────────────┘
                              ▼
-   ┌──────────────────────┐      ┌──────────────────────┐
-   │   CLIENT TRACKER     │      │   BOOKED CLIENTS     │
-   │   (AE, AF, AG: EMPTY)│      │   (AE, AF, AG)       │ ◄── Single Source!
-   └──────────────────────┘      └──────────────────────┘
-              │                             │
-              └──────────────┬──────────────┘
-                             ▼
-                    Full Resync skips
-                    columns 30-32 (AE-AG)
+                     COMBINED DATA
+           Hot Dates, Calendar, Search, etc.
+           (Fetches from BOTH sheets)
 ```
+
+---
+
+## Critical Risk Assessment
+
+### HIGH RISK AREAS
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| Existing features break | Hot Dates, Calendar, Booking stats | Modify to query BOTH sheets |
+| Search functionality | Won't find BOOKED clients | Update search to query BOTH sheets |
+| Client Detail navigation | Links may break | Update navigation to handle both sources |
+| Status transitions | BOOKED → other status breaks | Move client back to Tracker on status change |
+| Reverse transitions | Non-BOOKED → BOOKED | Move client from Tracker to Booked sheet |
+| Cache architecture | Two separate caches | Unified cache or merged queries |
+
+### WHAT STAYS THE SAME
+- Hot Dates will show same data (from combined sources)
+- Calendar/Booking Open Dates display unchanged
+- Client Detail pages work identically
+- Finance Manager unchanged (already uses BOOKED CLIENTS)
+- Event Details unchanged (linked to BOOKED CLIENTS)
 
 ---
 
 ## Changes Required
 
-### 1. Backend: Modify `addPayment` Function
+### 1. Backend: Modify `getClients` to Exclude BOOKED
 **File**: `supabase/functions/google-sheets/index.ts`
 
-Current behavior:
-- Writes payment data to BOTH sheets
-- Uses `sourceSheet` parameter to determine primary sheet
+Currently returns ALL clients from CLIENT TRACKER. 
 
-New behavior:
-- **ONLY write to `BOOKED CLIENTS`** for payment columns (AE, AF, AG)
-- Remove the two-way sync logic for payment data
-- Still sync to INCOME WTN sheet (this stays the same)
+**New behavior**: Filter out clients whose latest status is "BOOKED"
 
-Changes:
-- Remove the logic that syncs payment to CLIENT TRACKER
-- Always use `BOOKED CLIENTS` as the target sheet for payment writes
-- Keep the row lookup logic using `registeredDateTimeAD` but only for BOOKED CLIENTS
-
-### 2. Backend: Modify `updatePaymentEntry` Function
+### 2. Backend: Create `getAllClientsFromBothSheets` Function
 **File**: `supabase/functions/google-sheets/index.ts`
 
-Current behavior:
-- Updates BOOKED CLIENTS, then syncs to CLIENT TRACKER
+New function that:
+- Fetches from CLIENT TRACKER (non-BOOKED)
+- Fetches from BOOKED CLIENTS
+- Merges and returns unified client list
+- Used by Hot Dates, Calendar, Search features
 
-New behavior:
-- **ONLY update `BOOKED CLIENTS`** 
-- Remove the CLIENT TRACKER sync entirely
-
-### 3. Backend: Modify `fullResyncAllBookedClients` Function
+### 3. Backend: Modify `updateClientStatus` for BOOKED Transitions
 **File**: `supabase/functions/google-sheets/index.ts`
 
-Current behavior:
-- Copies ALL 35 columns (A-AI) from CLIENT TRACKER to BOOKED CLIENTS
-- This overwrites payment data in BOOKED CLIENTS with (potentially empty) Tracker data
+When status changes TO "BOOKED":
+1. Copy client row to BOOKED CLIENTS sheet
+2. DELETE the row from CLIENT TRACKER
+3. Update Event Details sheet
 
-New behavior:
-- **Skip columns 30, 31, 32** (indices for AE, AF, AG) when syncing
-- Preserve existing BOOKED CLIENTS payment data during resync
-- Still sync all other columns (A-AD, AH-AI)
+When status changes FROM "BOOKED" to something else:
+1. Copy client row back to CLIENT TRACKER
+2. DELETE from BOOKED CLIENTS (but preserve payment history?)
 
-### 4. Backend: Modify `updateBookedClient` Function  
+### 4. Backend: Modify `searchClients` to Query Both Sheets
 **File**: `supabase/functions/google-sheets/index.ts`
 
-Current behavior:
-- Updates payment columns in BOTH sheets
+Current: Searches only CLIENT TRACKER
 
-New behavior:
-- **Only update payment columns (AE, AF, AG) in BOOKED CLIENTS**
-- Other fields can still sync to CLIENT TRACKER if needed
+**New behavior**: Search BOTH sheets, merge results
 
-### 5. Frontend: Update API Call Parameters
-**File**: `src/lib/sheets-api.ts`
+### 5. Backend: Remove/Simplify Full Resync
+**File**: `supabase/functions/google-sheets/index.ts`
 
-- Remove `sourceSheet` parameter from `addPayment` (no longer needed)
-- Simplify the API since we always target BOOKED CLIENTS for payments
+The `fullResyncAllBookedClients` function becomes simpler:
+- No longer needs to copy between sheets
+- Only validates data integrity
+
+### 6. Frontend: Update `useCachedData` Hook
+**File**: `src/hooks/useCachedData.ts`
+
+Options:
+- **Option A**: Merge booked clients into unified cache
+- **Option B**: Create separate fetch for "all clients" endpoint
+
+### 7. Frontend: Update Hot Dates Page
+**File**: `src/pages/HotDates.tsx`
+
+Currently uses `useCachedData()` which reads CLIENT TRACKER.
+
+**Update**: Use new unified data source or merge both caches.
+
+### 8. Frontend: Update Desktop Dashboard
+**File**: `src/components/desktop/DesktopDashboard.tsx`
+
+Calendar data, Hot Dates, Cold Dates all need unified data source.
+
+---
+
+## Migration Strategy
+
+### Phase 1: Preparation (Backend)
+1. Create `getAllClients` endpoint that merges both sheets
+2. Ensure all read operations can source from both sheets
+3. Add DELETE row capability for CLIENT TRACKER
+
+### Phase 2: Status Transition Logic
+1. Modify status change to MOVE (not copy) clients
+2. Test BOOKED → other status reverse transitions
+3. Handle edge cases (payment data preservation)
+
+### Phase 3: Frontend Updates
+1. Update cache hooks to use unified endpoint
+2. Verify Hot Dates, Calendar, Search all work
+3. Test navigation between modules
+
+### Phase 4: Cleanup
+1. Simplify/remove two-way sync functions
+2. Update resync to only handle edge cases
+3. Remove redundant BOOKED clients from TRACKER
 
 ---
 
 ## Technical Details
 
-### Column Indices Reference
-| Column | Letter | Index | Description |
-|--------|--------|-------|-------------|
-| AE | 30 | Payments Made log |
-| AF | 31 | Payment Dates (AD format) |
-| AG | 32 | Remaining Payment |
-
-### Full Resync Column Skip Logic
+### Row Deletion (New Operation)
 ```typescript
-// In fullResyncAllBookedClients, when copying row data:
-const PAYMENT_COLUMNS = [30, 31, 32]; // AE, AF, AG
+async function deleteTrackerRow(
+  accessToken: string,
+  spreadsheetId: string,
+  rowNumber: number
+) {
+  const sheetId = await getSheetId(accessToken, spreadsheetId, 'CLIENT TRACKER');
+  
+  const deleteUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+  await fetch(deleteUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      requests: [{
+        deleteDimension: {
+          range: {
+            sheetId,
+            dimension: 'ROWS',
+            startIndex: rowNumber - 1, // 0-indexed
+            endIndex: rowNumber,
+          },
+        },
+      }],
+    }),
+  });
+}
+```
 
-// For each column comparison/copy:
-for (let col = 0; col < 35; col++) {
-  if (PAYMENT_COLUMNS.includes(col)) {
-    // SKIP - preserve BOOKED CLIENTS payment data
-    continue;
-  }
-  // Copy other columns from TRACKER to BOOKED
+### Merged Client Query
+```typescript
+async function getAllClients(accessToken: string, spreadsheetId: string, limit = 500) {
+  const [trackerClients, bookedClients] = await Promise.all([
+    getClients(accessToken, spreadsheetId, limit), // Non-BOOKED only
+    getBookedClients(accessToken, spreadsheetId, limit),
+  ]);
+  
+  // Merge with source indicator
+  const merged = [
+    ...trackerClients.map(c => ({ ...c, _source: 'tracker' })),
+    ...bookedClients.map(c => ({ ...c, _source: 'booked', rowNumber: c.bookedRowNumber })),
+  ];
+  
+  return merged;
 }
 ```
 
 ---
 
-## Edge Cases Handled
+## Concerns & Open Questions
 
-1. **New Clients Copied to BOOKED CLIENTS**: When a client first gets status "BOOKED", they're copied to BOOKED CLIENTS with empty payment columns - this is correct, payments will be added later directly to BOOKED CLIENTS
+### 1. Payment History When Un-Booking
+If a client goes from BOOKED → CANCELLED BY CLIENT:
+- Should payment data move with them?
+- Should it stay in BOOKED CLIENTS for financial records?
 
-2. **Existing Payment Data**: Clients who already have payments in BOOKED CLIENTS will have their data preserved during resyncs
+**Recommendation**: Keep a reference/archive but move client back to Tracker.
 
-3. **CLIENT TRACKER Payment Columns**: Will remain empty/unused for future clients - the system won't break, just won't be used for payments anymore
+### 2. Existing Duplicate Data
+Currently, BOOKED clients exist in BOTH sheets.
+- Migration needed to clean up Tracker
+- One-time script to delete BOOKED rows from Tracker
 
-4. **Income Statement Sync**: The sync to WTN INCOME & EXPENSES sheet remains unchanged - this is a separate destination
+### 3. Row Number Stability
+Deleting rows shifts all subsequent row numbers.
+- All operations must use `registeredDateTimeAD` as primary key
+- Row numbers become temporary references only
+
+### 4. Offline/Cache Sync
+With clients split across sheets:
+- Cache invalidation becomes more complex
+- May need unified cache key strategy
 
 ---
 
@@ -155,16 +254,33 @@ for (let col = 0; col < 35; col++) {
 
 | File | Changes |
 |------|---------|
-| `supabase/functions/google-sheets/index.ts` | Modify `addPayment`, `updatePaymentEntry`, `fullResyncAllBookedClients`, `updateBookedClient` |
-| `src/lib/sheets-api.ts` | Simplify `addPayment` parameters (remove sourceSheet) |
-| Multiple UI components | Update `addPayment` calls to remove `sourceSheet` parameter |
+| `supabase/functions/google-sheets/index.ts` | Major: Add `getAllClients`, modify `updateClientStatus`, add `deleteTrackerRow`, modify `searchClients` |
+| `src/lib/sheets-api.ts` | Add new API wrapper functions |
+| `src/hooks/useCachedData.ts` | Fetch from unified endpoint or merge |
+| `src/hooks/useBookedCachedData.ts` | May become primary source for booked |
+| `src/pages/HotDates.tsx` | Use unified data source |
+| `src/components/desktop/DesktopDashboard.tsx` | Use unified data source |
+| `src/pages/Search.tsx` | Update search to query both |
+| Multiple components | Update any direct `getClients` calls |
 
 ---
 
-## Migration Notes
+## Estimated Effort
 
-No data migration is needed. The change is backward-compatible:
-- Existing payment data in BOOKED CLIENTS is preserved
-- New payments only go to BOOKED CLIENTS
-- Old payment data in CLIENT TRACKER remains but becomes stale/unused
+- **Backend changes**: Complex (row deletion, merged queries, status transitions)
+- **Frontend changes**: Moderate (cache merging, data source updates)
+- **Testing**: Extensive (all features use client data)
+- **Risk level**: HIGH - this touches nearly every feature
+
+---
+
+## Alternative Approach (Safer)
+
+Instead of deleting from Tracker, consider:
+1. Keep Tracker as "archive/history"
+2. Mark BOOKED clients as "archived" in Tracker (new column)
+3. Exclude archived from normal queries
+4. Benefits: No row deletion, reversible, simpler
+
+This preserves data while achieving "single source" for active use.
 
