@@ -1,171 +1,127 @@
 
-# Plan: Global Status Change Interception Dialogs
+# Plan: Add Yellow Visual Indicators for ADVANCE PENDING Clients in Booking Calendar
 
 ## Overview
 
-This plan implements mandatory data entry dialogs when changing client status across the entire application. Currently, some components have partial interceptions while others are missing them entirely. This plan will ensure **consistent behavior globally**.
+This plan adds yellow visual indicators to the Booking Calendar in both **CLIENT TRACKER** and **BOOKED CLIENTS** pages to highlight dates where clients with "ADVANCE PENDING" status have events planned.
 
 ---
 
-## Current State Analysis
+## Current Behavior
 
-| Component | QUOTATION SENT | ADVANCE PENDING | BOOKED |
-|-----------|----------------|-----------------|--------|
-| **ClientDetail.tsx** | From QUOTATION PENDING only | Has dialog | Has dialog |
-| **DesktopClientRow.tsx** | From QUOTATION PENDING only | Has dialog | Has dialog |
-| **FreshClientCard.tsx** | From QUOTATION PENDING only | MISSING | MISSING |
-
-### Issues to Fix:
-1. **QUOTATION SENT** - Currently only triggers when coming FROM "QUOTATION PENDING". User wants it to trigger **always** when changing to QUOTATION SENT
-2. **FreshClientCard.tsx** - Missing ADVANCE PENDING and BOOKED interception dialogs entirely
-3. Need to create a reusable **QuotationSentDialog** component for consistency
+The booking calendar currently shows:
+- **Plain numbers** = Open dates (no bookings)
+- **Green filled circles** = BOOKED events (with concentric rings for multiple events)
+- **Gray/Muted circles** = Completed (past) events
 
 ---
 
-## User Requirements
+## Requested Behavior
 
-| Status Change | Required Data | Column |
-|---------------|---------------|--------|
-| **QUOTATION SENT : REVIEW PENDING** | Quotation amounts for tiers (BASIC, STANDARD, PREMIUM, WTN SPECIAL) | Column V |
-| **ADVANCE PENDING** | Final fixed quotation (Package + Price) | Column AD |
-| **BOOKED** | Final quotation (if not set) + Advance payment amount | Columns AD, AE, AF, AG |
+When a date has **ADVANCE PENDING** client events:
+
+| Scenario | Visual |
+|----------|--------|
+| **No booked events on date** | Yellow text for the day number |
+| **Has booked events on date** | Yellow outer ring around the green booked circle |
+
+This creates a visual hierarchy:
+1. **Green** = Confirmed booking
+2. **Yellow** = Advance pending (almost booked)
+3. **Plain text** = Open date
 
 ---
 
-## Changes Required
+## Technical Changes
 
-### 1. Create New Component: `QuotationSentDialog`
-**File**: `src/components/status-dialogs/QuotationSentDialog.tsx`
+### 1. Modify Calendar Data Structure
 
-New reusable dialog component for capturing quotation amounts when transitioning to QUOTATION SENT:
-- Input fields for BASIC, STANDARD, PREMIUM, WTN SPECIAL tiers
-- NPR formatting with preview
-- At least one tier must have a value
-- Cancel and Save buttons
+**Files**: 
+- `src/components/desktop/DesktopDashboard.tsx`
+- `src/components/booked/DesktopBookedDashboard.tsx`
+
+Extend the `calendarData` object to track ADVANCE PENDING events per date:
+
+**Before**:
+```typescript
+days: { day: number; isBooked: boolean; eventCount: number }[]
+```
+
+**After**:
+```typescript
+days: { 
+  day: number; 
+  isBooked: boolean; 
+  eventCount: number;
+  advancePendingCount: number;  // NEW: Count of ADVANCE PENDING events
+}[]
+```
+
+### 2. Update Calendar Data Computation
+
+**File**: `src/components/desktop/DesktopDashboard.tsx`
 
 ```text
-Props:
-- open: boolean
-- onOpenChange: (open: boolean) => void
-- clientName: string
-- existingQuotationData?: string
-- onSave: (quotationData: string) => Promise<void>
-- isSaving: boolean
+Algorithm:
+1. Build TWO maps:
+   - bookedMap: dateKey → count of BOOKED events
+   - advancePendingMap: dateKey → count of ADVANCE PENDING events
+
+2. For each client:
+   - Get status from statusLog
+   - If status includes "ADVANCE PENDING":
+     → Add events to advancePendingMap
+   - If status includes "BOOKED" (not SOMEWHERE ELSE):
+     → Add events to bookedMap
+
+3. For each calendar day:
+   - isBooked = bookedMap.get(dateKey) > 0
+   - eventCount = bookedMap.get(dateKey) || 0
+   - advancePendingCount = advancePendingMap.get(dateKey) || 0
 ```
 
-### 2. Update Status Dialogs Index
-**File**: `src/components/status-dialogs/index.ts`
+### 3. Update Calendar Rendering
 
-Export the new QuotationSentDialog component.
+**File**: `src/components/desktop/DesktopDashboard.tsx` (lines 614-668)
 
-### 3. Update `ClientDetail.tsx`
-**File**: `src/pages/ClientDetail.tsx`
+**Scenario 1**: Date has ADVANCE PENDING events but NO booked events
+- Render day number in **yellow/amber text** instead of plain muted text
+- Add subtle yellow background on hover
 
-Changes:
-- Remove the condition that only intercepts from QUOTATION PENDING
-- Trigger QUOTATION SENT dialog for **any** status change to QUOTATION SENT
-- Replace inline dialog with new `QuotationSentDialog` component
+**Scenario 2**: Date has BOTH booked AND advance pending events  
+- Render the normal green circles for booked events
+- Add an **additional outer yellow ring** around the outermost green ring
 
-**Before:**
-```typescript
-if (isFromQuotationPending && isToQuotationSent) {
-  // Only triggers from QUOTATION PENDING
-}
-```
+**Scenario 3**: Date has only booked events (no advance pending)
+- Keep current green circle rendering (no change)
 
-**After:**
-```typescript
-if (isToQuotationSent) {
-  // Always trigger regardless of source status
-}
-```
+**Scenario 4**: Date has no events at all
+- Keep current plain text rendering (no change)
 
-### 4. Update `DesktopClientRow.tsx`
-**File**: `src/components/desktop/DesktopClientRow.tsx`
+### 4. Apply Same Logic to Booked Clients Dashboard
 
-Same changes as ClientDetail:
-- Remove the "from QUOTATION PENDING" condition
-- Always show quotation dialog when changing to QUOTATION SENT
-- Use new `QuotationSentDialog` component
+**File**: `src/components/booked/DesktopBookedDashboard.tsx` (lines 271-327, 583-648)
 
-### 5. Update `FreshClientCard.tsx` (Major Update)
-**File**: `src/components/dashboard/FreshClientCard.tsx`
+Since the Booked Clients page only shows BOOKED clients (not ADVANCE PENDING clients), we need to pass the ADVANCE PENDING data from the full client list via props, OR fetch it separately.
 
-Add missing interception dialogs:
-
-**a) QUOTATION SENT Interception:**
-- Remove "from QUOTATION PENDING" condition
-- Show quotation dialog for any change to QUOTATION SENT
-
-**b) ADVANCE PENDING Interception:**
-- Add state: `showAdvancePendingDialog`, `isSavingAdvancePending`
-- Import and use `FinalQuotationDialog` component
-- Intercept status change to ADVANCE PENDING
-- Require final quotation before status change
-
-**c) BOOKED Interception:**
-- Add state: `showBookedPaymentDialog`, `isSavingBookedPayment`
-- Import and use `AdvancePaymentDialog` component
-- Intercept status change to BOOKED (not BOOKED SOMEWHERE ELSE)
-- Require advance payment before status change
+**Approach**: The Booked Clients dashboard should receive an additional prop `trackerClients` that includes all CLIENT TRACKER clients with ADVANCE PENDING status, so it can overlay the yellow indicators.
 
 ---
 
-## Technical Details
+## Visual Design
 
-### New QuotationSentDialog Component Structure
-
-```typescript
-interface QuotationSentDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  clientName: string;
-  existingQuotationData?: string;
-  onSave: (quotationData: string) => Promise<void>;
-  isSaving: boolean;
-}
-
-// Features:
-// - Pre-fills existing quotation amounts if available
-// - Input validation (at least one tier required)
-// - NPR formatting with live preview
-// - Consistent styling with other status dialogs
-```
-
-### Status Change Flow (After Implementation)
+### Yellow Styling Classes
 
 ```text
-User Selects Status Change
-          │
-          ▼
-    ┌─────────────────────────────┐
-    │  Is target QUOTATION SENT?  │──────Yes────▶ Show QuotationSentDialog
-    └─────────────────────────────┘               │
-                                                  ▼
-          │                                   Save quotation data
-          │                                   Then change status
-          │                                       │
-          ▼                                       │
-    ┌─────────────────────────────┐               │
-    │  Is target ADVANCE PENDING? │──────Yes────▶ Show FinalQuotationDialog
-    └─────────────────────────────┘               │
-                                                  ▼
-          │                                   Lock final quotation
-          │                                   Then change status
-          │                                       │
-          ▼                                       │
-    ┌─────────────────────────────┐               │
-    │    Is target BOOKED?        │──────Yes────▶ Show AdvancePaymentDialog
-    │  (not SOMEWHERE ELSE)       │               │
-    └─────────────────────────────┘               ▼
-                                              Record payment
-          │                                   Move to BOOKED CLIENTS
-          │                                   Delete from TRACKER
-          ▼                                       │
-    ┌─────────────────────────────┐               │
-    │  Normal status change       │◀──────────────┘
-    │  (no dialog required)       │
-    └─────────────────────────────┘
+Yellow Text (no booking on date):
+  - text-amber-500 (light mode)
+  - dark:text-yellow-400 (dark mode)
+  - bg-amber-500/10 on hover
+
+Yellow Outer Ring (has booking + advance pending):
+  - border-amber-500 (2px border)
+  - Positioned as outermost ring
+  - Size = largest green ring + 8px
 ```
 
 ---
@@ -174,41 +130,85 @@ User Selects Status Change
 
 | File | Changes |
 |------|---------|
-| `src/components/status-dialogs/QuotationSentDialog.tsx` | **NEW** - Create reusable quotation entry dialog |
-| `src/components/status-dialogs/index.ts` | Export new QuotationSentDialog |
-| `src/pages/ClientDetail.tsx` | Remove "from QUOTATION PENDING" condition, use new dialog component |
-| `src/components/desktop/DesktopClientRow.tsx` | Remove "from QUOTATION PENDING" condition, use new dialog component |
-| `src/components/dashboard/FreshClientCard.tsx` | Add all three interception dialogs (QUOTATION SENT, ADVANCE PENDING, BOOKED) |
+| `src/components/desktop/DesktopDashboard.tsx` | Add `advancePendingMap`, update `calendarData` structure, update calendar day rendering logic |
+| `src/components/booked/DesktopBookedDashboard.tsx` | Add props for tracker clients, update `calendarData` to include ADVANCE PENDING from tracker, update rendering |
+| `src/components/booked/DesktopBookedAppLayout.tsx` | Pass tracker clients data to dashboard component |
 
 ---
 
-## Expected Behavior After Implementation
+## Data Flow
 
-### When changing to QUOTATION SENT:
-1. Dialog opens asking for quotation amounts
-2. User enters amounts for at least one tier (BASIC, STANDARD, PREMIUM, WTN SPECIAL)
-3. Data saved to Column V
-4. Status changes to QUOTATION SENT : REVIEW PENDING
+```text
+                    CLIENT TRACKER PAGE
+                    ┌─────────────────────┐
+                    │  All Clients Data   │
+                    │  (includes ADVANCE  │
+                    │   PENDING clients)  │
+                    └─────────┬───────────┘
+                              │
+                              ▼
+                    ┌─────────────────────┐
+                    │   calendarData      │
+                    │ - bookedMap         │
+                    │ - advancePendingMap │
+                    └─────────┬───────────┘
+                              │
+                              ▼
+                    ┌─────────────────────┐
+                    │   Calendar UI       │
+                    │ - Green = Booked    │
+                    │ - Yellow = Advance  │
+                    └─────────────────────┘
 
-### When changing to ADVANCE PENDING:
-1. Dialog opens asking for final fixed quotation
-2. User selects package (BASIC/STANDARD/PREMIUM/WTN SPECIAL) and enters final amount
-3. Data saved to Column AD
-4. Status changes to ADVANCE PENDING
 
-### When changing to BOOKED:
-1. Dialog checks if final quotation exists
-2. If not set, shows warning but allows payment entry
-3. User enters advance payment amount, type, bank, and date
-4. Payment saved to Columns AE, AF, AG
-5. Status changes to BOOKED
-6. Client MOVES from CLIENT TRACKER to BOOKED CLIENTS sheet
+                    BOOKED CLIENTS PAGE
+                    ┌─────────────────────┐
+                    │  Booked Clients     │─────┐
+                    │  (BOOKED only)      │     │
+                    └─────────────────────┘     │
+                              +                 │
+                    ┌─────────────────────┐     │
+                    │  Tracker Clients    │     │
+                    │  (ADVANCE PENDING)  │─────┼──▶ calendarData
+                    │  (passed as prop)   │     │
+                    └─────────────────────┘     │
+                                                ▼
+                                   ┌─────────────────────┐
+                                   │   Calendar UI       │
+                                   │ - Green = Booked    │
+                                   │ - Yellow = Advance  │
+                                   └─────────────────────┘
+```
 
 ---
 
-## Notes
+## Legend Update
 
-- All dialogs prevent status change until required data is entered
-- Cancel button allows user to abort the status change
-- Existing data pre-fills the dialogs when available
-- Consistent UI styling across all dialogs
+Update the calendar header legend in both dashboards:
+
+**Before**:
+```text
+(Plain = Open, ● = Booked)
+```
+
+**After**:
+```text
+(Plain = Open, 🟢 = Booked, 🟡 = Advance Pending)
+```
+
+---
+
+## Expected Visual Result
+
+```text
+Calendar Row Example:
+┌──────────────────────────────────────────────────────────────────┐
+│ Magh 2082:  1  2  🟢3  4  5  🟡6  7  🟢🟡8  9  10  11  🟢12  ... │
+└──────────────────────────────────────────────────────────────────┘
+
+Where:
+- "3" is a green circle (1 booked event)
+- "6" is yellow text (1 advance pending, 0 booked)
+- "8" is a green circle with yellow outer ring (1 booked + 1 advance pending)
+- "12" is a green circle (1 booked event)
+```
