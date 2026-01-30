@@ -3198,6 +3198,8 @@ async function getBulkEventDetails(
   parlourStartTime: string;
   parlourEndTime: string;
   guestCount: string;
+  eventDemand: string;
+  eventReferences: string;
 }>>> {
   if (!clientIds || clientIds.length === 0) {
     return {};
@@ -3240,6 +3242,8 @@ async function getBulkEventDetails(
     parlourStartTime: string;
     parlourEndTime: string;
     guestCount: string;
+    eventDemand: string;
+    eventReferences: string;
   }>> = {};
 
   // Process each row looking for matching client IDs
@@ -3266,6 +3270,8 @@ async function getBulkEventDetails(
     const parlourStartTimes = (row[21] || '').split('\n');
     const parlourEndTimes = (row[22] || '').split('\n');
     const guestCounts = (row[31] || '').split('\n');
+    const eventDemands = (row[32] || '').split('\n');
+    const eventReferences = (row[33] || '').split('\n');
 
     const events = [];
     for (let i = 0; i < eventNames.length; i++) {
@@ -3289,6 +3295,8 @@ async function getBulkEventDetails(
         parlourStartTime: parlourStartTimes[i]?.trim() || '',
         parlourEndTime: parlourEndTimes[i]?.trim() || '',
         guestCount: guestCounts[i]?.trim() || '',
+        eventDemand: eventDemands[i]?.trim() || '',
+        eventReferences: eventReferences[i]?.trim() || '',
       });
     }
 
