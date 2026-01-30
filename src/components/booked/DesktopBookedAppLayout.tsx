@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { DesktopBookedSidebar, HotDatesSortOrder } from "./DesktopBookedSidebar";
 import { DesktopBookedDashboard } from "./DesktopBookedDashboard";
 import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
-import { fullResyncAllBookedClients, fullSyncEventDetails, cleanupDuplicateBookedFromTracker, BookedClientData, SyncDetail } from "@/lib/sheets-api";
+import { fullResyncAllBookedClients, fullSyncEventDetails, cleanupDuplicateBookedFromTracker, BookedClientData, SyncDetail, getCurrentStatus } from "@/lib/sheets-api";
 import { parseEventDetails, NEPALI_MONTHS } from "@/lib/nepali-months";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { RefreshCw, Database, X, Calendar, CheckCircle, Copy, ArrowUpCircle, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBookedCachedData } from "@/hooks/useBookedCachedData";
+import { useCachedData } from "@/hooks/useCachedData";
 import { SyncReportSheet } from "./SyncReportSheet";
 
 export function DesktopBookedAppLayout() {
@@ -28,6 +29,16 @@ export function DesktopBookedAppLayout() {
     error 
   } = useBookedCachedData();
   
+  // Also fetch tracker clients to show ADVANCE PENDING in calendar
+  const { clients: trackerClients } = useCachedData();
+  
+  // Extract ADVANCE PENDING clients from tracker for calendar overlay
+  const advancePendingClients = useMemo(() => {
+    return trackerClients.filter(client => {
+      const status = getCurrentStatus(client.statusLog || '').toUpperCase();
+      return status.includes('ADVANCE PENDING');
+    });
+  }, [trackerClients]);
   const [isFullResyncing, setIsFullResyncing] = useState(false);
   const [isEventDetailsSyncing, setIsEventDetailsSyncing] = useState(false);
   const [isCleaningUp, setIsCleaningUp] = useState(false);
@@ -376,6 +387,7 @@ export function DesktopBookedAppLayout() {
             hotDatesSortOrder={hotDatesSortOrder}
             selectedMonth={selectedMonth}
             allClients={uniqueClients}
+            advancePendingClients={advancePendingClients}
           />
         </main>
       </div>
