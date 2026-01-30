@@ -1,146 +1,153 @@
 
-# Plan: Fix Comment Sync & Display in Upcoming Events
 
-## Problem Summary
+# Plan: Make BOOKED CLIENTS the Single Source of Truth for Payments
 
-The user reports that after adding a comment via the plus button on an upcoming event card:
-1. **Comment Not Showing**: The new comment doesn't appear on the card immediately
-2. **Date Stamp Not Wanted**: The user only wants to see the comment text, not the timestamp
+## Overview
 
-## Root Cause Analysis
-
-There are **three issues** preventing comments from showing:
-
-### Issue 1: Wrong Sheet Being Updated
-The `addClientComment` API only updates the `CLIENT TRACKER` sheet (Column AC), but the `TodayEventsHero` component displays data from the `BOOKED CLIENTS` sheet. The `bookedRowNumber` passed to the API doesn't match the tracker row.
-
-```text
-TodayEventsHero.tsx passes:
-  event.client.bookedRowNumber (row in BOOKED CLIENTS sheet)
-  
-addClientComment() updates:
-  'CLIENT TRACKER'!AC${rowNumber} (wrong sheet!)
-```
-
-### Issue 2: No Optimistic Update
-After adding a comment, the code calls `refreshData()` which fetches data from the API. However, there's no optimistic update to show the new comment immediately in the local state.
-
-### Issue 3: Timestamp Display Not Wanted
-The user wants to see only the comment text, not the date/time stamp.
+This plan modifies the payment system so that **columns AE (Payments Made), AF (Payment Date), and AG (Remaining Payment)** are only stored in and read from the `BOOKED CLIENTS` sheet, eliminating the current two-way sync.
 
 ---
 
-## Solution
+## Current Architecture (Before)
 
-### Step 1: Create New Backend Action for Booked Comments
+```text
+                    ┌─────────────────┐
+                    │  Add Payment    │
+                    └────────┬────────┘
+                             │
+              ┌──────────────┴──────────────┐
+              ▼                             ▼
+   ┌──────────────────────┐      ┌──────────────────────┐
+   │   CLIENT TRACKER     │      │   BOOKED CLIENTS     │
+   │   (AE, AF, AG)       │◄────►│   (AE, AF, AG)       │
+   └──────────────────────┘      └──────────────────────┘
+              │                             │
+              └──────────────┬──────────────┘
+                             ▼
+                    Full Resync copies
+                    ALL data (including payments)
+                    from Tracker → Booked
+```
 
-Add a new `addBookedClientComment` action to the edge function that:
-- Updates Column AC in the **BOOKED CLIENTS** sheet
-- Uses the `bookedRowNumber` correctly
-- Also syncs the comment to `CLIENT TRACKER` for consistency
+Problem: Two-way sync creates confusion, and full resync overwrites BOOKED CLIENTS payments.
 
+---
+
+## New Architecture (After)
+
+```text
+                    ┌─────────────────┐
+                    │  Add Payment    │
+                    └────────┬────────┘
+                             │
+                             ▼
+   ┌──────────────────────┐      ┌──────────────────────┐
+   │   CLIENT TRACKER     │      │   BOOKED CLIENTS     │
+   │   (AE, AF, AG: EMPTY)│      │   (AE, AF, AG)       │ ◄── Single Source!
+   └──────────────────────┘      └──────────────────────┘
+              │                             │
+              └──────────────┬──────────────┘
+                             ▼
+                    Full Resync skips
+                    columns 30-32 (AE-AG)
+```
+
+---
+
+## Changes Required
+
+### 1. Backend: Modify `addPayment` Function
 **File**: `supabase/functions/google-sheets/index.ts`
 
-```typescript
-// Add comment to BOOKED CLIENTS Column AC and sync to CLIENT TRACKER
-async function addBookedClientComment(
-  accessToken: string,
-  spreadsheetId: string,
-  bookedRowNumber: number,
-  comment: string,
-  existingComments: string,
-  clientTimestamp: string,
-  registeredDateTimeAD?: string
-) {
-  // 1. Update BOOKED CLIENTS sheet
-  const newCommentEntry = `[${clientTimestamp}] ${comment}`;
-  const updatedComments = existingComments 
-    ? `${existingComments}|||${newCommentEntry}` 
-    : newCommentEntry;
+Current behavior:
+- Writes payment data to BOTH sheets
+- Uses `sourceSheet` parameter to determine primary sheet
 
-  // Update BOOKED CLIENTS sheet
-  const bookedRange = encodeURIComponent(`'BOOKED CLIENTS'!AC${bookedRowNumber}`);
-  await fetch(updateUrl, { method: 'PUT', body: updatedComments });
-
-  // 2. Sync to CLIENT TRACKER if registeredDateTimeAD provided
-  if (registeredDateTimeAD) {
-    const trackerRow = await findTrackerRowByDateTime(registeredDateTimeAD);
-    if (trackerRow) {
-      // Update CLIENT TRACKER sheet too
-    }
-  }
-
-  return { success: true, comments: updatedComments };
-}
-```
-
-### Step 2: Add API Wrapper Function
-
-**File**: `src/lib/sheets-api.ts`
-
-```typescript
-export async function addBookedClientComment(
-  bookedRowNumber: number,
-  comment: string,
-  existingComments: string,
-  registeredDateTimeAD?: string
-): Promise<{ success: boolean; comments: string }> {
-  const now = new Date();
-  const clientTimestamp = `${month}/${day}/${year} ${hours}:${mins}`;
-  
-  return callSheetsFunction<{ success: boolean; comments: string }>("addBookedClientComment", {
-    data: { bookedRowNumber, comment, existingComments, clientTimestamp, registeredDateTimeAD },
-  });
-}
-```
-
-### Step 3: Update TodayEventsHero Component
-
-**File**: `src/components/suite/TodayEventsHero.tsx`
+New behavior:
+- **ONLY write to `BOOKED CLIENTS`** for payment columns (AE, AF, AG)
+- Remove the two-way sync logic for payment data
+- Still sync to INCOME WTN sheet (this stays the same)
 
 Changes:
-1. Use the new `addBookedClientComment` API instead of `addClientComment`
-2. Add optimistic update to show comment immediately
-3. Remove timestamp display from the comment section
-4. Pass `registeredDateTimeAD` for cross-sheet sync
+- Remove the logic that syncs payment to CLIENT TRACKER
+- Always use `BOOKED CLIENTS` as the target sheet for payment writes
+- Keep the row lookup logic using `registeredDateTimeAD` but only for BOOKED CLIENTS
 
-```tsx
-// Optimistic update after adding comment
-const handleAddComment = async () => {
-  const optimisticComment = newComment.trim();
-  
-  // Optimistically update local state
-  setLocalComments(prev => ({
-    ...prev,
-    [selectedEventForComment.clientId]: optimisticComment
-  }));
-  
-  await addBookedClientComment(
-    selectedEventForComment.bookedRowNumber,
-    optimisticComment,
-    selectedEventForComment.existingComments,
-    selectedEventForComment.registeredDateTimeAD
-  );
-  
-  // Background refresh for full sync
-  refreshData();
-};
+### 2. Backend: Modify `updatePaymentEntry` Function
+**File**: `supabase/functions/google-sheets/index.ts`
+
+Current behavior:
+- Updates BOOKED CLIENTS, then syncs to CLIENT TRACKER
+
+New behavior:
+- **ONLY update `BOOKED CLIENTS`** 
+- Remove the CLIENT TRACKER sync entirely
+
+### 3. Backend: Modify `fullResyncAllBookedClients` Function
+**File**: `supabase/functions/google-sheets/index.ts`
+
+Current behavior:
+- Copies ALL 35 columns (A-AI) from CLIENT TRACKER to BOOKED CLIENTS
+- This overwrites payment data in BOOKED CLIENTS with (potentially empty) Tracker data
+
+New behavior:
+- **Skip columns 30, 31, 32** (indices for AE, AF, AG) when syncing
+- Preserve existing BOOKED CLIENTS payment data during resync
+- Still sync all other columns (A-AD, AH-AI)
+
+### 4. Backend: Modify `updateBookedClient` Function  
+**File**: `supabase/functions/google-sheets/index.ts`
+
+Current behavior:
+- Updates payment columns in BOTH sheets
+
+New behavior:
+- **Only update payment columns (AE, AF, AG) in BOOKED CLIENTS**
+- Other fields can still sync to CLIENT TRACKER if needed
+
+### 5. Frontend: Update API Call Parameters
+**File**: `src/lib/sheets-api.ts`
+
+- Remove `sourceSheet` parameter from `addPayment` (no longer needed)
+- Simplify the API since we always target BOOKED CLIENTS for payments
+
+---
+
+## Technical Details
+
+### Column Indices Reference
+| Column | Letter | Index | Description |
+|--------|--------|-------|-------------|
+| AE | 30 | Payments Made log |
+| AF | 31 | Payment Dates (AD format) |
+| AG | 32 | Remaining Payment |
+
+### Full Resync Column Skip Logic
+```typescript
+// In fullResyncAllBookedClients, when copying row data:
+const PAYMENT_COLUMNS = [30, 31, 32]; // AE, AF, AG
+
+// For each column comparison/copy:
+for (let col = 0; col < 35; col++) {
+  if (PAYMENT_COLUMNS.includes(col)) {
+    // SKIP - preserve BOOKED CLIENTS payment data
+    continue;
+  }
+  // Copy other columns from TRACKER to BOOKED
+}
 ```
 
-### Step 4: Remove Timestamp from Display
+---
 
-Update the comment display to show only text (no relative time):
+## Edge Cases Handled
 
-```tsx
-{/* Comment section - text only, no timestamp */}
-{lastComment ? (
-  <span className="text-xs text-gray-600 truncate flex-1">
-    "{lastComment.text.length > 50 ? lastComment.text.slice(0, 50) + '...' : lastComment.text}"
-  </span>
-) : (
-  <span className="text-xs text-gray-400 italic flex-1">No comments</span>
-)}
-```
+1. **New Clients Copied to BOOKED CLIENTS**: When a client first gets status "BOOKED", they're copied to BOOKED CLIENTS with empty payment columns - this is correct, payments will be added later directly to BOOKED CLIENTS
+
+2. **Existing Payment Data**: Clients who already have payments in BOOKED CLIENTS will have their data preserved during resyncs
+
+3. **CLIENT TRACKER Payment Columns**: Will remain empty/unused for future clients - the system won't break, just won't be used for payments anymore
+
+4. **Income Statement Sync**: The sync to WTN INCOME & EXPENSES sheet remains unchanged - this is a separate destination
 
 ---
 
@@ -148,32 +155,16 @@ Update the comment display to show only text (no relative time):
 
 | File | Changes |
 |------|---------|
-| `supabase/functions/google-sheets/index.ts` | Add `addBookedClientComment` function |
-| `src/lib/sheets-api.ts` | Add API wrapper for new function |
-| `src/components/suite/TodayEventsHero.tsx` | Use new API, add optimistic update, remove timestamp display |
+| `supabase/functions/google-sheets/index.ts` | Modify `addPayment`, `updatePaymentEntry`, `fullResyncAllBookedClients`, `updateBookedClient` |
+| `src/lib/sheets-api.ts` | Simplify `addPayment` parameters (remove sourceSheet) |
+| Multiple UI components | Update `addPayment` calls to remove `sourceSheet` parameter |
 
 ---
 
-## Technical Details
+## Migration Notes
 
-### Comment Storage Format
-Comments are stored with timestamps: `[MM/DD/YYYY HH:MM] Comment text|||[MM/DD/YYYY HH:MM] Another comment`
+No data migration is needed. The change is backward-compatible:
+- Existing payment data in BOOKED CLIENTS is preserved
+- New payments only go to BOOKED CLIENTS
+- Old payment data in CLIENT TRACKER remains but becomes stale/unused
 
-The timestamp is still stored (for history purposes) but NOT displayed on the card.
-
-### Cross-Sheet Sync
-When adding a comment to BOOKED CLIENTS, we also sync to CLIENT TRACKER using the `registeredDateTimeAD` unique identifier to find the correct row.
-
-### Optimistic Update Strategy
-To ensure the comment appears instantly:
-1. Show the new comment in local state immediately
-2. Call the API in background
-3. Trigger `refreshData()` to fully sync from server
-
----
-
-## Edge Cases
-
-- **No registeredDateTimeAD**: Skip tracker sync, update only booked sheet
-- **API failure**: Revert optimistic update and show error toast
-- **Empty comment**: Button disabled when input is empty
