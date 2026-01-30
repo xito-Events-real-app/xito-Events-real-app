@@ -4,8 +4,8 @@ import { useBulkEventDetails } from "@/hooks/useBulkEventDetails";
 import { Calendar, Sparkles, ArrowRight, Clock, MapPin, Scissors, Phone, MessageCircle, MessageSquare, Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemo, useState } from "react";
-import { parseComments, getRelativeTime } from "@/lib/client-card-utils";
-import { addClientComment } from "@/lib/sheets-api";
+import { parseComments } from "@/lib/client-card-utils";
+import { addBookedClientComment } from "@/lib/sheets-api";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -79,11 +79,16 @@ export function TodayEventsHero() {
   const [commentDrawerOpen, setCommentDrawerOpen] = useState(false);
   const [selectedEventForComment, setSelectedEventForComment] = useState<{
     clientName: string;
-    rowNumber: number;
+    clientId: string;
+    bookedRowNumber: number;
     existingComments: string;
+    registeredDateTimeAD: string;
   } | null>(null);
   const [newComment, setNewComment] = useState('');
   const [isAddingComment, setIsAddingComment] = useState(false);
+  
+  // Local state for optimistic comment updates
+  const [localComments, setLocalComments] = useState<Record<string, string>>({});
   
   // Extract unique client IDs for bulk fetch (limit to first 30 events)
   const clientIds = useMemo(() => {
@@ -97,19 +102,37 @@ export function TodayEventsHero() {
   const handleAddComment = async () => {
     if (!selectedEventForComment || !newComment.trim()) return;
     
+    const optimisticComment = newComment.trim();
+    const clientId = selectedEventForComment.clientId;
+    
     setIsAddingComment(true);
+    
+    // Optimistic update - show comment immediately
+    setLocalComments(prev => ({
+      ...prev,
+      [clientId]: optimisticComment
+    }));
+    
     try {
-      await addClientComment(
-        selectedEventForComment.rowNumber,
-        newComment.trim(),
-        selectedEventForComment.existingComments
+      await addBookedClientComment(
+        selectedEventForComment.bookedRowNumber,
+        optimisticComment,
+        selectedEventForComment.existingComments,
+        selectedEventForComment.registeredDateTimeAD
       );
       setNewComment('');
       setCommentDrawerOpen(false);
       toast.success('Comment added');
-      refreshData(); // Refresh to show new comment
+      // Background refresh for full sync
+      refreshData();
     } catch (error) {
       console.error('Failed to add comment:', error);
+      // Revert optimistic update on error
+      setLocalComments(prev => {
+        const updated = { ...prev };
+        delete updated[clientId];
+        return updated;
+      });
       toast.error('Failed to add comment');
     } finally {
       setIsAddingComment(false);
@@ -117,8 +140,20 @@ export function TodayEventsHero() {
   };
   
   // Open comment drawer for a specific event
-  const openCommentDrawer = (clientName: string, rowNumber: number, existingComments: string) => {
-    setSelectedEventForComment({ clientName, rowNumber, existingComments });
+  const openCommentDrawer = (
+    clientName: string, 
+    clientId: string,
+    bookedRowNumber: number, 
+    existingComments: string,
+    registeredDateTimeAD: string
+  ) => {
+    setSelectedEventForComment({ 
+      clientName, 
+      clientId,
+      bookedRowNumber, 
+      existingComments,
+      registeredDateTimeAD
+    });
     setNewComment('');
     setCommentDrawerOpen(true);
   };
@@ -343,38 +378,41 @@ export function TodayEventsHero() {
                       )}
                       
                       {/* Comment section */}
-                      <div className="mt-2 pt-2 border-t border-gray-200 flex items-center gap-2">
-                        <MessageSquare className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                        {lastComment ? (
-                          <>
-                            <span className="text-xs text-gray-600 truncate flex-1">
-                              "{lastComment.text.length > 40 ? lastComment.text.slice(0, 40) + '...' : lastComment.text}"
-                            </span>
-                            {lastComment.timestamp && (
-                              <span className="text-xs text-gray-400 shrink-0">
-                                {getRelativeTime(lastComment.timestamp)}
+                      {(() => {
+                        const clientIdForComments = event.client.registeredDateTimeAD || `${event.client.clientName}-${event.client.bookedRowNumber}`;
+                        const localComment = localComments[clientIdForComments];
+                        const displayComment = localComment || (lastComment?.text);
+                        
+                        return (
+                          <div className="mt-2 pt-2 border-t border-gray-200 flex items-center gap-2">
+                            <MessageSquare className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                            {displayComment ? (
+                              <span className="text-xs text-gray-600 truncate flex-1">
+                                "{displayComment.length > 50 ? displayComment.slice(0, 50) + '...' : displayComment}"
                               </span>
+                            ) : (
+                              <span className="text-xs text-gray-400 italic flex-1">No comments</span>
                             )}
-                          </>
-                        ) : (
-                          <span className="text-xs text-gray-400 italic flex-1">No comments</span>
-                        )}
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            openCommentDrawer(
-                              event.client.clientName,
-                              event.client.bookedRowNumber,
-                              event.client.comments || ''
-                            );
-                          }}
-                          className="p-1 rounded-full bg-emerald-100 hover:bg-emerald-200 text-emerald-600 transition-colors shrink-0"
-                          title="Add comment"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                openCommentDrawer(
+                                  event.client.clientName,
+                                  clientIdForComments,
+                                  event.client.bookedRowNumber,
+                                  event.client.comments || '',
+                                  event.client.registeredDateTimeAD || ''
+                                );
+                              }}
+                              className="p-1 rounded-full bg-emerald-100 hover:bg-emerald-200 text-emerald-600 transition-colors shrink-0"
+                              title="Add comment"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
               })}
