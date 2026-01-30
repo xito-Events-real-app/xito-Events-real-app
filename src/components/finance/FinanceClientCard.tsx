@@ -203,7 +203,6 @@ const FinanceClientCard = ({ client, onRefresh }: FinanceClientCardProps) => {
         existingPaymentDatesAD={client.paymentDatesAD || ""}
         finalQuotationAmount={quotationAmount}
         onPaymentAdded={handlePaymentAdded}
-        sourceSheet="booked"
       />
 
       {/* Payment History Sheet */}

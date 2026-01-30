@@ -346,8 +346,7 @@ export async function addPayment(
   existingPaymentsMade: string,
   existingPaymentDatesAD: string,
   finalQuotationAmount: number,
-  registeredDateTimeAD?: string, // For two-way sync
-  sourceSheet?: 'tracker' | 'booked', // Which sheet the payment is coming from
+  registeredDateTimeAD?: string, // For row lookup in BOOKED CLIENTS
   clientName?: string // For income statement in WTN INCOME & EXPENSES
 ): Promise<{ 
   success: boolean; 
@@ -374,7 +373,6 @@ export async function addPayment(
       existingPaymentDatesAD,
       finalQuotationAmount,
       registeredDateTimeAD,
-      sourceSheet,
       clientName
     },
   });

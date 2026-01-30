@@ -180,7 +180,6 @@ export function SuiteQuickAdd() {
           existingPaymentDatesAD={selectedClient.paymentDatesAD || ""}
           finalQuotationAmount={parseQuotationAmount(selectedClient.finalQuotation || "")}
           onPaymentAdded={handlePaymentAdded}
-          sourceSheet="booked"
         />
       )}
     </>

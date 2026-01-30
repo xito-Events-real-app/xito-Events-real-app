@@ -2097,8 +2097,8 @@ async function updateFinalQuotation(
   return { success: true, finalQuotation, actualRowNumber };
 }
 
-// Add payment entry to Columns AE, AF, AG for BOOKED clients
-// Now supports two-way sync: CLIENT TRACKER + BOOKED CLIENTS sheet
+// Add payment entry to Columns AE, AF, AG
+// SINGLE SOURCE OF TRUTH: Payments are ONLY written to BOOKED CLIENTS sheet
 // Also syncs to INCOME WTN sheet in WTN INCOME & EXPENSES spreadsheet
 async function addPayment(
   accessToken: string, 
@@ -2113,7 +2113,7 @@ async function addPayment(
   existingPaymentDatesAD: string,
   finalQuotationAmount: number,
   registeredDateTimeAD?: string, // Used to find matching row in BOOKED CLIENTS
-  sourceSheet?: 'tracker' | 'booked', // Which sheet the payment is coming from
+  _sourceSheet?: 'tracker' | 'booked', // DEPRECATED - kept for API compatibility, always writes to BOOKED CLIENTS
   clientName?: string // For income statement in WTN INCOME & EXPENSES
 ) {
   if (!rowNumber || rowNumber < 2) {
@@ -2171,17 +2171,15 @@ async function addPayment(
   
   const paymentValues = [[updatedPaymentsMade, updatedPaymentDatesAD, remainingFormatted]];
   
-  // Determine primary and secondary sheets based on source
-  const primarySheet = sourceSheet === 'booked' ? 'BOOKED CLIENTS' : 'CLIENT TRACKER';
-  const secondarySheet = sourceSheet === 'booked' ? 'CLIENT TRACKER' : 'BOOKED CLIENTS';
+  // SINGLE SOURCE OF TRUTH: Always write to BOOKED CLIENTS only
+  const targetSheet = 'BOOKED CLIENTS';
   
-  // Find the correct row in primary sheet using registeredDateTimeAD lookup
-  // This ensures we update the correct row even if row numbers have shifted
+  // Find the correct row in BOOKED CLIENTS using registeredDateTimeAD lookup
   let actualRowNumber = rowNumber;
   
   if (registeredDateTimeAD) {
     try {
-      const verifyRange = encodeURIComponent(`'${primarySheet}'!A2:A2000`);
+      const verifyRange = encodeURIComponent(`'${targetSheet}'!A2:A2000`);
       const verifyUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${verifyRange}`;
       
       const verifyResponse = await fetch(verifyUrl, {
@@ -2198,7 +2196,7 @@ async function addPayment(
             if (rowDateTime === normalizedDateTime) {
               const foundRow = i + 2; // Row 2 is index 0
               if (foundRow !== rowNumber) {
-                console.log(`[PRIMARY] Row correction: ${rowNumber} -> ${foundRow} for ${registeredDateTimeAD}`);
+                console.log(`[PAYMENT] Row correction: ${rowNumber} -> ${foundRow} for ${registeredDateTimeAD}`);
               }
               actualRowNumber = foundRow;
               break;
@@ -2207,15 +2205,15 @@ async function addPayment(
         }
       }
     } catch (lookupError) {
-      console.error('Error looking up primary row, falling back to provided rowNumber:', lookupError);
+      console.error('Error looking up row, falling back to provided rowNumber:', lookupError);
     }
   }
   
-  // Update primary sheet (the one the request came from) using verified row number
-  const primaryRange = encodeURIComponent(`'${primarySheet}'!AE${actualRowNumber}:AG${actualRowNumber}`);
-  const primaryUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${primaryRange}?valueInputOption=USER_ENTERED`;
+  // Update BOOKED CLIENTS sheet (single source of truth for payments)
+  const paymentRange = encodeURIComponent(`'${targetSheet}'!AE${actualRowNumber}:AG${actualRowNumber}`);
+  const paymentUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${paymentRange}?valueInputOption=USER_ENTERED`;
   
-  const primaryResponse = await fetch(primaryUrl, {
+  const paymentResponse = await fetch(paymentUrl, {
     method: 'PUT',
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -2224,68 +2222,13 @@ async function addPayment(
     body: JSON.stringify({ values: paymentValues }),
   });
 
-  if (!primaryResponse.ok) {
-    const errorText = await primaryResponse.text();
-    console.error(`Google Sheets API error (addPayment to ${primarySheet}):`, primaryResponse.status, errorText);
-    throw new Error(`Failed to add payment: ${primaryResponse.status}`);
+  if (!paymentResponse.ok) {
+    const errorText = await paymentResponse.text();
+    console.error(`Google Sheets API error (addPayment to ${targetSheet}):`, paymentResponse.status, errorText);
+    throw new Error(`Failed to add payment: ${paymentResponse.status}`);
   }
   
-  console.log(`[PRIMARY] Payment updated in ${primarySheet} row ${actualRowNumber} (original: ${rowNumber})`);
-
-  // Two-way sync: Update the corresponding row in the other sheet
-  if (registeredDateTimeAD) {
-    try {
-      // Find the matching row in the secondary sheet using registeredDateTimeAD
-      const searchRange = encodeURIComponent(`'${secondarySheet}'!A2:A1000`);
-      const searchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${searchRange}`;
-      
-      const searchResponse = await fetch(searchUrl, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-
-      if (searchResponse.ok) {
-        const searchData = await searchResponse.json();
-        if (searchData.values) {
-          const normalizedDateTime = registeredDateTimeAD.trim();
-          let matchingRowIndex = -1;
-          
-          for (let i = 0; i < searchData.values.length; i++) {
-            const rowDateTime = (searchData.values[i][0] || '').trim();
-            if (rowDateTime === normalizedDateTime) {
-              matchingRowIndex = i;
-              break;
-            }
-          }
-          
-          if (matchingRowIndex !== -1) {
-            const secondaryRowNumber = matchingRowIndex + 2; // Row 2 is index 0
-            const secondaryRange = encodeURIComponent(`'${secondarySheet}'!AE${secondaryRowNumber}:AG${secondaryRowNumber}`);
-            const secondaryUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${secondaryRange}?valueInputOption=USER_ENTERED`;
-            
-            const secondaryResponse = await fetch(secondaryUrl, {
-              method: 'PUT',
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ values: paymentValues }),
-            });
-            
-            if (secondaryResponse.ok) {
-              console.log(`Payment synced to ${secondarySheet} row ${secondaryRowNumber}`);
-            } else {
-              console.error(`Failed to sync payment to ${secondarySheet}:`, await secondaryResponse.text());
-            }
-          } else {
-            console.log(`No matching row found in ${secondarySheet} for registeredDateTimeAD: ${registeredDateTimeAD}`);
-          }
-        }
-      }
-    } catch (syncError) {
-      // Log but don't fail the primary update
-      console.error('Error syncing payment to secondary sheet:', syncError);
-    }
-  }
+  console.log(`[PAYMENT] Payment recorded in ${targetSheet} row ${actualRowNumber} (SINGLE SOURCE OF TRUTH)`);
 
   // Sync to INCOME WTN sheet in WTN INCOME & EXPENSES spreadsheet
   const incomeSpreadsheetId = Deno.env.get('WTN_INCOME_EXPENSES_SPREADSHEET_ID');
@@ -2348,6 +2291,7 @@ async function addPayment(
 }
 
 // Update an existing payment entry at a specific index
+// SINGLE SOURCE OF TRUTH: Only updates BOOKED CLIENTS sheet (no sync to CLIENT TRACKER)
 async function updatePaymentEntry(
   accessToken: string,
   spreadsheetId: string,
@@ -2419,10 +2363,7 @@ async function updatePaymentEntry(
   // Note: We're not updating paymentDatesAD (column AF) for simplicity
   const paymentValues = [[updatedPaymentsMade, '', remainingFormatted]];
 
-  // Determine which sheet to update - for booked clients, update BOOKED CLIENTS first
-  // We'll update both sheets using registeredDateTimeAD as the key
-  
-  // Update BOOKED CLIENTS sheet first
+  // SINGLE SOURCE OF TRUTH: Only update BOOKED CLIENTS sheet
   const actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'BOOKED CLIENTS', rowNumber, registeredDateTimeAD);
   
   const bookedRange = encodeURIComponent(`'BOOKED CLIENTS'!AE${actualRowNumber}:AG${actualRowNumber}`);
@@ -2443,58 +2384,7 @@ async function updatePaymentEntry(
     throw new Error(`Failed to update payment: ${bookedResponse.status}`);
   }
   
-  console.log(`[UPDATE PAYMENT] Updated BOOKED CLIENTS row ${actualRowNumber}`);
-
-  // Two-way sync: Update CLIENT TRACKER
-  if (registeredDateTimeAD) {
-    try {
-      const searchRange = encodeURIComponent(`'CLIENT TRACKER'!A2:A2000`);
-      const searchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${searchRange}`;
-      
-      const searchResponse = await fetch(searchUrl, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-
-      if (searchResponse.ok) {
-        const searchData = await searchResponse.json();
-        if (searchData.values) {
-          const normalizedDateTime = registeredDateTimeAD.trim();
-          let matchingRowIndex = -1;
-          
-          for (let i = 0; i < searchData.values.length; i++) {
-            const rowDateTime = (searchData.values[i][0] || '').trim();
-            if (rowDateTime === normalizedDateTime) {
-              matchingRowIndex = i;
-              break;
-            }
-          }
-          
-          if (matchingRowIndex !== -1) {
-            const trackerRowNumber = matchingRowIndex + 2;
-            const trackerRange = encodeURIComponent(`'CLIENT TRACKER'!AE${trackerRowNumber}:AG${trackerRowNumber}`);
-            const trackerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}?valueInputOption=USER_ENTERED`;
-            
-            const trackerResponse = await fetch(trackerUrl, {
-              method: 'PUT',
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ values: paymentValues }),
-            });
-            
-            if (trackerResponse.ok) {
-              console.log(`[UPDATE PAYMENT] Synced to CLIENT TRACKER row ${trackerRowNumber}`);
-            } else {
-              console.error(`[UPDATE PAYMENT] Failed to sync to CLIENT TRACKER:`, await trackerResponse.text());
-            }
-          }
-        }
-      }
-    } catch (syncError) {
-      console.error('[UPDATE PAYMENT] Error syncing to CLIENT TRACKER:', syncError);
-    }
-  }
+  console.log(`[UPDATE PAYMENT] Updated BOOKED CLIENTS row ${actualRowNumber} (SINGLE SOURCE OF TRUTH)`);
 
   return { 
     success: true, 
@@ -3933,38 +3823,54 @@ async function fullResyncAllBookedClients(accessToken: string, spreadsheetId: st
       continue;
     }
     
-    // Compare ALL columns (A-AI = 35 columns) for comprehensive check
-    // Or force update if forceSync is true
-    const bookedAllData = row.slice(0, 35).map((v: string) => (v || '').trim()).join('|');
-    const trackerAllData = trackerEntry.rowData.slice(0, 35).map((v: string) => (v || '').trim()).join('|');
+    // PAYMENT COLUMNS TO PRESERVE (SINGLE SOURCE OF TRUTH in BOOKED CLIENTS)
+    // Columns 30 (AE - Payments Made), 31 (AF - Payment Dates), 32 (AG - Remaining Payment)
+    const PAYMENT_COLUMNS = [30, 31, 32];
     
-    const needsUpdate = forceSync || bookedAllData !== trackerAllData;
+    // Compare columns excluding payment columns for sync check
+    // Payment data should NOT be synced from tracker since BOOKED CLIENTS is the source of truth
+    const bookedNonPaymentData = row.slice(0, 35).map((v: string, idx: number) => 
+      PAYMENT_COLUMNS.includes(idx) ? '' : (v || '').trim()
+    ).join('|');
+    const trackerNonPaymentData = trackerEntry.rowData.slice(0, 35).map((v: string, idx: number) => 
+      PAYMENT_COLUMNS.includes(idx) ? '' : (v || '').trim()
+    ).join('|');
     
-    // Track which columns differ for the report
+    const needsUpdate = forceSync || bookedNonPaymentData !== trackerNonPaymentData;
+    
+    // Track which columns differ for the report (excluding payment columns)
     const changedColumns: string[] = [];
     if (needsUpdate) {
       for (let col = 0; col < 35; col++) {
+        // Skip payment columns in comparison - they are managed separately
+        if (PAYMENT_COLUMNS.includes(col)) continue;
+        
         const bookedVal = (row[col] || '').trim();
         const trackerVal = (trackerEntry.rowData[col] || '').trim();
         if (bookedVal !== trackerVal) {
           changedColumns.push(columnNames[col] || `Column ${col}`);
         }
       }
-      if (!forceSync) {
+      if (!forceSync && changedColumns.length > 0) {
         console.log(`[FULL RESYNC] Row ${bookedRowNumber} differs in columns: ${changedColumns.join(', ')}`);
       }
     }
     
-    if (needsUpdate) {
-      // Update ENTIRE row in BOOKED CLIENTS (columns A:AI)
-      const updateRange = encodeURIComponent(`'BOOKED CLIENTS'!A${bookedRowNumber}:AI${bookedRowNumber}`);
-      const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`;
-      
-      // Ensure the row data has 35 columns (A-AI)
+    if (needsUpdate && changedColumns.length > 0) {
+      // Build row data but PRESERVE payment columns from BOOKED CLIENTS
       const paddedRowData = [...trackerEntry.rowData];
       while (paddedRowData.length < 35) {
         paddedRowData.push('');
       }
+      
+      // PRESERVE existing payment data from BOOKED CLIENTS (columns 30, 31, 32)
+      paddedRowData[30] = row[30] || ''; // AE - Payments Made
+      paddedRowData[31] = row[31] || ''; // AF - Payment Dates
+      paddedRowData[32] = row[32] || ''; // AG - Remaining Payment
+      
+      // Update ENTIRE row in BOOKED CLIENTS (columns A:AI) with preserved payment columns
+      const updateRange = encodeURIComponent(`'BOOKED CLIENTS'!A${bookedRowNumber}:AI${bookedRowNumber}`);
+      const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`;
       
       const updateResponse = await fetch(updateUrl, {
         method: 'PUT',
@@ -4008,10 +3914,9 @@ async function fullResyncAllBookedClients(accessToken: string, spreadsheetId: st
   };
 }
 
-// Update a booked client in both BOOKED CLIENTS and CLIENT TRACKER sheets
-// CORRECT COLUMN MAPPING (A-AG identical in both sheets):
-// AD = finalQuotation, AE = paymentsMade, AF = paymentDatesAD, AG = remainingPayment
-// X = clientHandler, AC = comments
+// Update a booked client in BOOKED CLIENTS and CLIENT TRACKER sheets
+// IMPORTANT: Payment columns (AE, AF, AG) are ONLY written to BOOKED CLIENTS (single source of truth)
+// Other columns sync to both sheets
 async function updateBookedClient(
   accessToken: string, 
   spreadsheetId: string, 
@@ -4019,12 +3924,12 @@ async function updateBookedClient(
   originalRowNumber: number,
   updates: Record<string, unknown>
 ) {
-  // BOTH sheets have IDENTICAL structure (A-AG), so same column letters
+  // Column mapping (A-AG identical in both sheets)
   const columnMap: Record<string, string> = {
     finalQuotation: 'AD',     // Column AD (index 29)
-    paymentsMade: 'AE',       // Column AE (index 30)
-    paymentDatesAD: 'AF',     // Column AF (index 31)
-    remainingPayment: 'AG',   // Column AG (index 32)
+    paymentsMade: 'AE',       // Column AE (index 30) - BOOKED CLIENTS ONLY
+    paymentDatesAD: 'AF',     // Column AF (index 31) - BOOKED CLIENTS ONLY
+    remainingPayment: 'AG',   // Column AG (index 32) - BOOKED CLIENTS ONLY
     clientHandler: 'X',       // Column X (index 23)
     comments: 'AC',           // Column AC (index 28)
     mindset: 'Z',             // Column Z (index 25)
@@ -4035,12 +3940,15 @@ async function updateBookedClient(
     statusLog: 'W',           // Column W (index 22)
   };
 
-  // Update each field in both sheets
+  // Payment columns - only write to BOOKED CLIENTS (single source of truth)
+  const paymentOnlyFields = ['paymentsMade', 'paymentDatesAD', 'remainingPayment'];
+
+  // Update each field
   for (const [field, value] of Object.entries(updates)) {
     const column = columnMap[field];
     
     if (column && value !== undefined) {
-      // Update BOOKED CLIENTS
+      // Always update BOOKED CLIENTS
       const bookedRange = encodeURIComponent(`'BOOKED CLIENTS'!${column}${bookedRowNumber}`);
       const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}?valueInputOption=USER_ENTERED`;
       
@@ -4053,8 +3961,8 @@ async function updateBookedClient(
         body: JSON.stringify({ values: [[value]] }),
       });
       
-      // Update CLIENT TRACKER (same column letter since identical structure)
-      if (originalRowNumber >= 2) {
+      // Only sync non-payment fields to CLIENT TRACKER
+      if (!paymentOnlyFields.includes(field) && originalRowNumber >= 2) {
         const trackerRange = encodeURIComponent(`'CLIENT TRACKER'!${column}${originalRowNumber}`);
         const trackerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}?valueInputOption=USER_ENTERED`;
         
