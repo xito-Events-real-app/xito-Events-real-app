@@ -1,161 +1,145 @@
 
-# Plan: Add Contact Info & Comments to Upcoming Events Cards
+# Plan: Fix Comment Sync & Display in Upcoming Events
 
 ## Problem Summary
 
-The user wants to enhance the upcoming events cards on the Xito Business Suite homepage (TodayEventsHero component) with:
-1. **Phone number** with call icon (clickable)
-2. **WhatsApp number** with WhatsApp icon (clickable)  
-3. **Plus button** to add new comments
-4. **Most recent comment** displayed on the card
+The user reports that after adding a comment via the plus button on an upcoming event card:
+1. **Comment Not Showing**: The new comment doesn't appear on the card immediately
+2. **Date Stamp Not Wanted**: The user only wants to see the comment text, not the timestamp
 
----
+## Root Cause Analysis
 
-## Current State Analysis
+There are **three issues** preventing comments from showing:
 
-The `TodayEventsHero.tsx` component currently shows:
-- Client name
-- Event name (RECEPTION, WEDDING, etc.)
-- Days until event badge (TODAY, Tomorrow, X days)
-- Venue information (name, area, timing)
-- Parlour information (name, area, timing)
-
-**What's available in the data:**
-- `client.contactNo` - Phone number (Column G)
-- `client.whatsappNo` - WhatsApp number (Column H)
-- `client.comments` - Comments with timestamps (Column AC)
-- `client.bookedRowNumber` - Row number for API updates
-
-**Comment format:** `"Comment text [MM/DD/YYYY HH:MM]|||Another comment [MM/DD/YYYY HH:MM]"`
-
----
-
-## Solution Architecture
+### Issue 1: Wrong Sheet Being Updated
+The `addClientComment` API only updates the `CLIENT TRACKER` sheet (Column AC), but the `TodayEventsHero` component displays data from the `BOOKED CLIENTS` sheet. The `bookedRowNumber` passed to the API doesn't match the tracker row.
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│  Event Card - Enhanced Layout                                    │
-├─────────────────────────────────────────────────────────────────┤
-│  [TODAY]  Client Name                    📞 9841...  💬 9851... │
-│           RECEPTION                                          → │
-├─────────────────────────────────────────────────────────────────┤
-│  📍 PALIFAL RESTAURANT, KRITIPUR • 10:00 AM - 7:00 PM           │
-│  ✂️ Parlour not set                                             │
-├─────────────────────────────────────────────────────────────────┤
-│  💬 "Last comment text here..."              [+]    2 hours ago │
-└─────────────────────────────────────────────────────────────────┘
+TodayEventsHero.tsx passes:
+  event.client.bookedRowNumber (row in BOOKED CLIENTS sheet)
+  
+addClientComment() updates:
+  'CLIENT TRACKER'!AC${rowNumber} (wrong sheet!)
 ```
+
+### Issue 2: No Optimistic Update
+After adding a comment, the code calls `refreshData()` which fetches data from the API. However, there's no optimistic update to show the new comment immediately in the local state.
+
+### Issue 3: Timestamp Display Not Wanted
+The user wants to see only the comment text, not the date/time stamp.
 
 ---
 
-## Implementation Steps
+## Solution
 
-### Step 1: Add Phone & WhatsApp Icons to Header Row
+### Step 1: Create New Backend Action for Booked Comments
 
-**Location:** Right side of client name row
+Add a new `addBookedClientComment` action to the edge function that:
+- Updates Column AC in the **BOOKED CLIENTS** sheet
+- Uses the `bookedRowNumber` correctly
+- Also syncs the comment to `CLIENT TRACKER` for consistency
 
-**Changes:**
-- Add Phone icon with truncated number (last 4 digits visible)
-- Add WhatsApp icon with truncated number
-- Both icons are clickable (tel: and wa.me links)
-- Use `stopPropagation()` to prevent card navigation when clicking icons
+**File**: `supabase/functions/google-sheets/index.ts`
 
-```tsx
-{/* Contact icons - right side */}
-<div className="flex items-center gap-1.5 shrink-0">
-  {client.contactNo && (
-    <a 
-      href={`tel:${client.contactNo}`}
-      onClick={(e) => e.stopPropagation()}
-      className="flex items-center gap-1 px-2 py-1 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs transition-colors"
-    >
-      <Phone className="w-3 h-3" />
-      <span className="hidden sm:inline">...{client.contactNo.slice(-4)}</span>
-    </a>
-  )}
-  {client.whatsappNo && (
-    <a 
-      href={`https://wa.me/${client.whatsappNo.replace(/\D/g, '')}`}
-      target="_blank"
-      onClick={(e) => e.stopPropagation()}
-      className="flex items-center gap-1 px-2 py-1 rounded-full bg-green-50 hover:bg-green-100 text-green-600 text-xs transition-colors"
-    >
-      <MessageCircle className="w-3 h-3" />
-      <span className="hidden sm:inline">...{client.whatsappNo.slice(-4)}</span>
-    </a>
-  )}
-</div>
-```
+```typescript
+// Add comment to BOOKED CLIENTS Column AC and sync to CLIENT TRACKER
+async function addBookedClientComment(
+  accessToken: string,
+  spreadsheetId: string,
+  bookedRowNumber: number,
+  comment: string,
+  existingComments: string,
+  clientTimestamp: string,
+  registeredDateTimeAD?: string
+) {
+  // 1. Update BOOKED CLIENTS sheet
+  const newCommentEntry = `[${clientTimestamp}] ${comment}`;
+  const updatedComments = existingComments 
+    ? `${existingComments}|||${newCommentEntry}` 
+    : newCommentEntry;
 
-### Step 2: Add Comment Section
+  // Update BOOKED CLIENTS sheet
+  const bookedRange = encodeURIComponent(`'BOOKED CLIENTS'!AC${bookedRowNumber}`);
+  await fetch(updateUrl, { method: 'PUT', body: updatedComments });
 
-**Location:** Below venue/parlour details
-
-**Features:**
-- Show most recent comment text (truncated to 50 chars)
-- Show relative time ("2 hours ago")
-- Plus button to open comment drawer
-- Use existing `parseComments` and `getRelativeTime` utilities
-
-```tsx
-{/* Recent Comment */}
-{parsedComments.length > 0 && (
-  <div className="flex items-center gap-2 text-xs mt-1.5 pt-1.5 border-t border-gray-100">
-    <MessageSquare className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-    <span className="text-gray-600 truncate flex-1">
-      "{parsedComments[parsedComments.length - 1].text}"
-    </span>
-    {parsedComments[parsedComments.length - 1].timestamp && (
-      <span className="text-gray-400 shrink-0">
-        {getRelativeTime(parsedComments[parsedComments.length - 1].timestamp)}
-      </span>
-    )}
-  </div>
-)}
-```
-
-### Step 3: Add Comment Drawer (Plus Button)
-
-**Approach:** 
-- Add a small floating plus button on each card
-- When clicked, open a Drawer with input field
-- Use existing `addClientComment` API function
-- Refresh data after comment is added
-
-**New State Required:**
-```tsx
-const [commentDrawerOpen, setCommentDrawerOpen] = useState(false);
-const [selectedEventForComment, setSelectedEventForComment] = useState<{
-  clientName: string;
-  rowNumber: number;
-  existingComments: string;
-} | null>(null);
-const [newComment, setNewComment] = useState('');
-const [isAddingComment, setIsAddingComment] = useState(false);
-```
-
-**Comment Handler:**
-```tsx
-const handleAddComment = async () => {
-  if (!selectedEventForComment || !newComment.trim()) return;
-  
-  setIsAddingComment(true);
-  try {
-    await addClientComment(
-      selectedEventForComment.rowNumber,
-      newComment.trim(),
-      selectedEventForComment.existingComments
-    );
-    setNewComment('');
-    setCommentDrawerOpen(false);
-    // Trigger refresh of booked clients data
-    // (useBookedCachedData will handle cache invalidation)
-  } catch (error) {
-    console.error('Failed to add comment:', error);
-  } finally {
-    setIsAddingComment(false);
+  // 2. Sync to CLIENT TRACKER if registeredDateTimeAD provided
+  if (registeredDateTimeAD) {
+    const trackerRow = await findTrackerRowByDateTime(registeredDateTimeAD);
+    if (trackerRow) {
+      // Update CLIENT TRACKER sheet too
+    }
   }
+
+  return { success: true, comments: updatedComments };
+}
+```
+
+### Step 2: Add API Wrapper Function
+
+**File**: `src/lib/sheets-api.ts`
+
+```typescript
+export async function addBookedClientComment(
+  bookedRowNumber: number,
+  comment: string,
+  existingComments: string,
+  registeredDateTimeAD?: string
+): Promise<{ success: boolean; comments: string }> {
+  const now = new Date();
+  const clientTimestamp = `${month}/${day}/${year} ${hours}:${mins}`;
+  
+  return callSheetsFunction<{ success: boolean; comments: string }>("addBookedClientComment", {
+    data: { bookedRowNumber, comment, existingComments, clientTimestamp, registeredDateTimeAD },
+  });
+}
+```
+
+### Step 3: Update TodayEventsHero Component
+
+**File**: `src/components/suite/TodayEventsHero.tsx`
+
+Changes:
+1. Use the new `addBookedClientComment` API instead of `addClientComment`
+2. Add optimistic update to show comment immediately
+3. Remove timestamp display from the comment section
+4. Pass `registeredDateTimeAD` for cross-sheet sync
+
+```tsx
+// Optimistic update after adding comment
+const handleAddComment = async () => {
+  const optimisticComment = newComment.trim();
+  
+  // Optimistically update local state
+  setLocalComments(prev => ({
+    ...prev,
+    [selectedEventForComment.clientId]: optimisticComment
+  }));
+  
+  await addBookedClientComment(
+    selectedEventForComment.bookedRowNumber,
+    optimisticComment,
+    selectedEventForComment.existingComments,
+    selectedEventForComment.registeredDateTimeAD
+  );
+  
+  // Background refresh for full sync
+  refreshData();
 };
+```
+
+### Step 4: Remove Timestamp from Display
+
+Update the comment display to show only text (no relative time):
+
+```tsx
+{/* Comment section - text only, no timestamp */}
+{lastComment ? (
+  <span className="text-xs text-gray-600 truncate flex-1">
+    "{lastComment.text.length > 50 ? lastComment.text.slice(0, 50) + '...' : lastComment.text}"
+  </span>
+) : (
+  <span className="text-xs text-gray-400 italic flex-1">No comments</span>
+)}
 ```
 
 ---
@@ -164,37 +148,32 @@ const handleAddComment = async () => {
 
 | File | Changes |
 |------|---------|
-| `src/components/suite/TodayEventsHero.tsx` | Add phone/WhatsApp icons, comment display, comment drawer |
+| `supabase/functions/google-sheets/index.ts` | Add `addBookedClientComment` function |
+| `src/lib/sheets-api.ts` | Add API wrapper for new function |
+| `src/components/suite/TodayEventsHero.tsx` | Use new API, add optimistic update, remove timestamp display |
 
 ---
 
-## New Imports Required
+## Technical Details
 
-```tsx
-import { Phone, MessageCircle, MessageSquare, Plus, Loader2 } from "lucide-react";
-import { parseComments, getRelativeTime } from "@/lib/client-card-utils";
-import { addClientComment } from "@/lib/sheets-api";
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter } from "@/components/ui/drawer";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { useState } from "react";
-```
+### Comment Storage Format
+Comments are stored with timestamps: `[MM/DD/YYYY HH:MM] Comment text|||[MM/DD/YYYY HH:MM] Another comment`
 
----
+The timestamp is still stored (for history purposes) but NOT displayed on the card.
 
-## UI/UX Considerations
+### Cross-Sheet Sync
+When adding a comment to BOOKED CLIENTS, we also sync to CLIENT TRACKER using the `registeredDateTimeAD` unique identifier to find the correct row.
 
-1. **Mobile-first:** Phone numbers are truncated on mobile, shown fuller on desktop
-2. **Non-blocking clicks:** Phone/WhatsApp/Comment buttons use `stopPropagation()` to prevent card navigation
-3. **Visual hierarchy:** Contact icons are subtle (pill badges), comment is at bottom
-4. **Feedback:** Loading spinner on plus button while adding comment
-5. **Cache refresh:** After adding comment, the booked clients cache is invalidated to show updated data
+### Optimistic Update Strategy
+To ensure the comment appears instantly:
+1. Show the new comment in local state immediately
+2. Call the API in background
+3. Trigger `refreshData()` to fully sync from server
 
 ---
 
 ## Edge Cases
 
-- **No phone/WhatsApp:** Icons don't render if numbers are missing
-- **No comments:** Comment section doesn't render if empty
-- **Long comments:** Truncated with ellipsis (max 50 chars)
-- **Missing row number:** Plus button disabled if row number is unavailable
+- **No registeredDateTimeAD**: Skip tracker sync, update only booked sheet
+- **API failure**: Revert optimistic update and show error toast
+- **Empty comment**: Button disabled when input is empty
