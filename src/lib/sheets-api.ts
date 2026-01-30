@@ -600,6 +600,38 @@ export async function updateClientEventDetails(
   });
 }
 
+// ============= BULK EVENT DETAILS API =============
+
+export interface BulkEventDetail {
+  eventIndex: number;
+  eventName: string;
+  eventDateAD: string;
+  venueName: string;
+  venueCity: string;
+  venueArea: string;
+  eventStartTime: string;
+  eventEndTime: string;
+  parlourName: string;
+  parlourCity: string;
+  parlourArea: string;
+  parlourStartTime: string;
+  parlourEndTime: string;
+  guestCount: string;
+}
+
+// Get event details for multiple clients in a single API call
+// Returns a map keyed by registeredDateTimeAD
+export async function getBulkEventDetails(
+  clientIds: string[]
+): Promise<Record<string, BulkEventDetail[]>> {
+  if (!clientIds || clientIds.length === 0) {
+    return {};
+  }
+  return callSheetsFunction<Record<string, BulkEventDetail[]>>("getBulkEventDetails", {
+    data: { clientIds },
+  });
+}
+
 // ============= CONTACT DETAILS SYNC API =============
 
 // Full sync: Copy all missing clients from BOOKED CLIENTS to BOOKED CLIENTS CONTACT DETAILS

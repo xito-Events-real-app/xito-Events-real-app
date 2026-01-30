@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -3087,6 +3087,122 @@ async function getClientEventDetails(accessToken: string, spreadsheetId: string,
   return { rowNumber, events };
 }
 
+// ============= BULK EVENT DETAILS =============
+// Get event details for multiple clients in a single API call
+// Returns a map keyed by registeredDateTimeAD with simplified event details
+async function getBulkEventDetails(
+  accessToken: string,
+  spreadsheetId: string,
+  clientIds: string[]
+): Promise<Record<string, Array<{
+  eventIndex: number;
+  eventName: string;
+  eventDateAD: string;
+  venueName: string;
+  venueCity: string;
+  venueArea: string;
+  eventStartTime: string;
+  eventEndTime: string;
+  parlourName: string;
+  parlourCity: string;
+  parlourArea: string;
+  parlourStartTime: string;
+  parlourEndTime: string;
+  guestCount: string;
+}>>> {
+  if (!clientIds || clientIds.length === 0) {
+    return {};
+  }
+
+  // Fetch all event details at once (limit to reasonable amount)
+  const range = encodeURIComponent("'BOOKED CLIENTS EVENT DETAILS'!A2:AF500");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    console.warn('[BULK EVENT DETAILS] Sheet fetch failed:', response.status);
+    return {};
+  }
+
+  const data = await response.json();
+  if (!data.values) {
+    return {};
+  }
+
+  // Normalize client IDs for comparison
+  const normalizedIds = new Set(clientIds.map(id => id.trim()));
+  const result: Record<string, Array<{
+    eventIndex: number;
+    eventName: string;
+    eventDateAD: string;
+    venueName: string;
+    venueCity: string;
+    venueArea: string;
+    eventStartTime: string;
+    eventEndTime: string;
+    parlourName: string;
+    parlourCity: string;
+    parlourArea: string;
+    parlourStartTime: string;
+    parlourEndTime: string;
+    guestCount: string;
+  }>> = {};
+
+  // Process each row looking for matching client IDs
+  for (const row of data.values) {
+    const registeredDateTimeAD = (row[0] || '').trim();
+    
+    if (!normalizedIds.has(registeredDateTimeAD)) {
+      continue;
+    }
+
+    // Parse multi-line columns
+    const eventNames = (row[3] || '').split('\n');
+    const eventDatesAD = (row[7] || '').split('\n');
+    const venueNames = (row[10] || '').split('\n');
+    const venueCities = (row[11] || '').split('\n');
+    const venueAreas = (row[12] || '').split('\n');
+    const eventStartTimes = (row[14] || '').split('\n');
+    const eventEndTimes = (row[15] || '').split('\n');
+    const parlourNames = (row[17] || '').split('\n');
+    const parlourCities = (row[18] || '').split('\n');
+    const parlourAreas = (row[19] || '').split('\n');
+    const parlourStartTimes = (row[21] || '').split('\n');
+    const parlourEndTimes = (row[22] || '').split('\n');
+    const guestCounts = (row[31] || '').split('\n');
+
+    const events = [];
+    for (let i = 0; i < eventNames.length; i++) {
+      const name = eventNames[i]?.trim();
+      if (!name) continue;
+
+      events.push({
+        eventIndex: i,
+        eventName: name,
+        eventDateAD: eventDatesAD[i]?.trim() || '',
+        venueName: venueNames[i]?.trim() || '',
+        venueCity: venueCities[i]?.trim() || '',
+        venueArea: venueAreas[i]?.trim() || '',
+        eventStartTime: eventStartTimes[i]?.trim() || '',
+        eventEndTime: eventEndTimes[i]?.trim() || '',
+        parlourName: parlourNames[i]?.trim() || '',
+        parlourCity: parlourCities[i]?.trim() || '',
+        parlourArea: parlourAreas[i]?.trim() || '',
+        parlourStartTime: parlourStartTimes[i]?.trim() || '',
+        parlourEndTime: parlourEndTimes[i]?.trim() || '',
+        guestCount: guestCounts[i]?.trim() || '',
+      });
+    }
+
+    result[registeredDateTimeAD] = events;
+  }
+
+  return result;
+}
+
 // ============= NEW: UPDATE CLIENT EVENT DETAILS FOR SPECIFIC EVENT INDEX =============
 // Updates logistics columns (J-AH) for a specific event line, preserving other lines
 async function updateClientEventDetails(
@@ -4602,6 +4718,12 @@ Deno.serve(async (req) => {
           data.eventIndex as number,
           data.updates as Record<string, string> || {}
         );
+        break;
+      case 'getBulkEventDetails':
+        if (!data || !data.clientIds || !Array.isArray(data.clientIds)) {
+          throw new Error('clientIds array is required for getBulkEventDetails');
+        }
+        result = await getBulkEventDetails(accessToken, spreadsheetId, data.clientIds as string[]);
         break;
       case 'getAccounts': {
         // Use WTN SECRETS spreadsheet for accounts (different from main spreadsheet)
