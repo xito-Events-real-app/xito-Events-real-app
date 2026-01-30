@@ -144,6 +144,35 @@ function formatTimeRange(start: string, end: string): string {
   return startFormatted || endFormatted;
 }
 
+// Parse references from space-separated quoted format: "url1" "url2"
+// Or plain URLs separated by spaces/newlines
+function parseReferences(refs: string): string[] {
+  if (!refs) return [];
+  
+  const links: string[] = [];
+  
+  // Try to match quoted strings first: "url1" "url2"
+  const quotedMatches = refs.match(/"([^"]+)"/g);
+  if (quotedMatches && quotedMatches.length > 0) {
+    quotedMatches.forEach(match => {
+      const url = match.replace(/"/g, '').trim();
+      if (url) links.push(url);
+    });
+    return links;
+  }
+  
+  // Otherwise split by spaces/newlines and filter URLs
+  const parts = refs.split(/[\s\n]+/).filter(Boolean);
+  parts.forEach(part => {
+    const trimmed = part.trim();
+    if (trimmed && (trimmed.startsWith('http') || trimmed.includes('.'))) {
+      links.push(trimmed);
+    }
+  });
+  
+  return links;
+}
+
 export function TodayEventsHero() {
   const { clients: bookedClients, isLoading, refreshData } = useBookedCachedData();
   const upcomingEvents = useMemo(() => getUpcomingEvents(bookedClients), [bookedClients]);
@@ -529,7 +558,21 @@ export function TodayEventsHero() {
                                   <Image className="w-3.5 h-3.5 text-purple-500 mt-0.5 shrink-0" />
                                   <div className="min-w-0 flex-1">
                                     <p className="text-gray-500 font-medium mb-0.5">References</p>
-                                    <p className="text-gray-700">{eventReferences}</p>
+                                    <div className="flex flex-wrap gap-2">
+                                      {parseReferences(eventReferences).map((url, refIdx) => (
+                                        <a
+                                          key={refIdx}
+                                          href={url.startsWith('http') ? url : `https://${url}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-purple-100 hover:bg-purple-200 text-purple-700 font-medium transition-colors"
+                                        >
+                                          <ExternalLink className="w-3 h-3" />
+                                          Reference {refIdx + 1}
+                                        </a>
+                                      ))}
+                                    </div>
                                   </div>
                                 </div>
                               )}
