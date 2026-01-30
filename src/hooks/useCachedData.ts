@@ -33,10 +33,12 @@ const fetchState = {
 };
 
 // Fetch fresh data from Google Sheets
+// Uses getAllClients which merges data from BOTH CLIENT TRACKER and BOOKED CLIENTS
+// This ensures Hot Dates, Calendar, and other features see ALL clients
 async function fetchFromSheets(): Promise<{ clients: ClientData[]; dropdowns: DropdownData }> {
   const [clientsResult, dropdownsResult, eventSetupResult] = await Promise.all([
     supabase.functions.invoke("google-sheets", {
-      body: { action: "getClients", limit: 500 },
+      body: { action: "getAllClients", limit: 500 }, // Uses unified endpoint
     }),
     supabase.functions.invoke("google-sheets", {
       body: { action: "getDropdowns" },

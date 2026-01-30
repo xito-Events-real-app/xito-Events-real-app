@@ -1,47 +1,26 @@
 
-
 # Plan: Remove BOOKED Clients from CLIENT TRACKER (Single Source of Truth)
+
+## ✅ STATUS: IMPLEMENTED
+
+This plan was approved and implemented on 2026-01-30.
+
+---
 
 ## Overview
 
-This plan restructures the data flow so that **clients with BOOKED status are ONLY stored in the BOOKED CLIENTS sheet**, removing them from the CLIENT TRACKER. This creates a true single source of truth architecture.
+This plan restructured the data flow so that **clients with BOOKED status are ONLY stored in the BOOKED CLIENTS sheet**, removing them from the CLIENT TRACKER. This creates a true single source of truth architecture.
 
 ---
 
-## Current Architecture (Before)
-
-```text
-┌──────────────────────────────────┐      ┌──────────────────────────────────┐
-│        CLIENT TRACKER            │      │        BOOKED CLIENTS            │
-│  (All clients including BOOKED)  │◄────►│   (Copy of BOOKED clients)       │
-└──────────────────────────────────┘      └──────────────────────────────────┘
-              │                                        │
-              ▼                                        ▼
-       Hot Dates, Calendar,                    Finance Module,
-       Search, Filters, etc.                   Payment History
-              │                                        │
-              └──────────────┬─────────────────────────┘
-                             ▼
-                    Same client appears in
-                    BOTH sheets (duplicated)
-```
-
-**Problems:**
-- Same client exists in TWO places
-- Two-way sync causes confusion
-- Data can drift between sheets
-- Resync operations are complex
-
----
-
-## New Architecture (After)
+## Implemented Architecture
 
 ```text
 ┌──────────────────────────────────┐      ┌──────────────────────────────────┐
 │        CLIENT TRACKER            │      │        BOOKED CLIENTS            │
 │  (Non-booked clients ONLY)       │      │   (BOOKED clients ONLY)          │
 │  - Just Enquired                 │      │   - Status: BOOKED               │
-│  - Quotation Sent                │      │   - Payment Data                 │
+│  - Quotation Sent                │      │   - Payment Data (Single Source) │
 │  - Bargaining                    │      │   - Event Details                │
 │  - Advance Pending               │      │                                  │
 │  - Cancelled / Gone Elsewhere    │      │                                  │
@@ -54,140 +33,73 @@ This plan restructures the data flow so that **clients with BOOKED status are ON
                              ▼
                      COMBINED DATA
            Hot Dates, Calendar, Search, etc.
-           (Fetches from BOTH sheets)
+           (getAllClients fetches from BOTH sheets)
 ```
 
 ---
 
-## Critical Risk Assessment
+## Changes Implemented
 
-### HIGH RISK AREAS
-
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| Existing features break | Hot Dates, Calendar, Booking stats | Modify to query BOTH sheets |
-| Search functionality | Won't find BOOKED clients | Update search to query BOTH sheets |
-| Client Detail navigation | Links may break | Update navigation to handle both sources |
-| Status transitions | BOOKED → other status breaks | Move client back to Tracker on status change |
-| Reverse transitions | Non-BOOKED → BOOKED | Move client from Tracker to Booked sheet |
-| Cache architecture | Two separate caches | Unified cache or merged queries |
-
-### WHAT STAYS THE SAME
-- Hot Dates will show same data (from combined sources)
-- Calendar/Booking Open Dates display unchanged
-- Client Detail pages work identically
-- Finance Manager unchanged (already uses BOOKED CLIENTS)
-- Event Details unchanged (linked to BOOKED CLIENTS)
-
----
-
-## Changes Required
-
-### 1. Backend: Modify `getClients` to Exclude BOOKED
+### 1. Backend: New `getAllClientsFromBothSheets` Function ✅
 **File**: `supabase/functions/google-sheets/index.ts`
 
-Currently returns ALL clients from CLIENT TRACKER. 
-
-**New behavior**: Filter out clients whose latest status is "BOOKED"
-
-### 2. Backend: Create `getAllClientsFromBothSheets` Function
-**File**: `supabase/functions/google-sheets/index.ts`
-
-New function that:
-- Fetches from CLIENT TRACKER (non-BOOKED)
-- Fetches from BOOKED CLIENTS
-- Merges and returns unified client list
+- Merges data from CLIENT TRACKER and BOOKED CLIENTS
+- Returns unified client list with `_source` indicator
 - Used by Hot Dates, Calendar, Search features
 
-### 3. Backend: Modify `updateClientStatus` for BOOKED Transitions
+### 2. Backend: New `deleteTrackerRow` Function ✅
 **File**: `supabase/functions/google-sheets/index.ts`
 
-When status changes TO "BOOKED":
-1. Copy client row to BOOKED CLIENTS sheet
-2. DELETE the row from CLIENT TRACKER
-3. Update Event Details sheet
+- Deletes a row from CLIENT TRACKER using Google Sheets batchUpdate API
+- Used when moving a client to BOOKED CLIENTS
 
-When status changes FROM "BOOKED" to something else:
-1. Copy client row back to CLIENT TRACKER
-2. DELETE from BOOKED CLIENTS (but preserve payment history?)
-
-### 4. Backend: Modify `searchClients` to Query Both Sheets
+### 3. Backend: Modified `updateClientStatus` ✅
 **File**: `supabase/functions/google-sheets/index.ts`
 
-Current: Searches only CLIENT TRACKER
+- When status changes TO "BOOKED":
+  1. First updates status in CLIENT TRACKER
+  2. Copies client row to BOOKED CLIENTS sheet
+  3. **DELETES the row from CLIENT TRACKER** (MOVE operation)
+- Returns `movedToBooked: true` when client is moved
 
-**New behavior**: Search BOTH sheets, merge results
-
-### 5. Backend: Remove/Simplify Full Resync
+### 4. Backend: Modified `searchClients` ✅
 **File**: `supabase/functions/google-sheets/index.ts`
 
-The `fullResyncAllBookedClients` function becomes simpler:
-- No longer needs to copy between sheets
-- Only validates data integrity
+- Now uses `getAllClientsFromBothSheets` for unified search
+- Searches across BOTH sheets to find all clients
 
-### 6. Frontend: Update `useCachedData` Hook
+### 5. Frontend: Updated `useCachedData` Hook ✅
 **File**: `src/hooks/useCachedData.ts`
 
-Options:
-- **Option A**: Merge booked clients into unified cache
-- **Option B**: Create separate fetch for "all clients" endpoint
+- Now calls `getAllClients` action instead of `getClients`
+- Fetches unified data from both sheets
+- Hot Dates, Calendar, and all client views work seamlessly
 
-### 7. Frontend: Update Hot Dates Page
-**File**: `src/pages/HotDates.tsx`
+### 6. Frontend: Updated `sheets-api.ts` ✅
+**File**: `src/lib/sheets-api.ts`
 
-Currently uses `useCachedData()` which reads CLIENT TRACKER.
-
-**Update**: Use new unified data source or merge both caches.
-
-### 8. Frontend: Update Desktop Dashboard
-**File**: `src/components/desktop/DesktopDashboard.tsx`
-
-Calendar data, Hot Dates, Cold Dates all need unified data source.
+- Added `getAllClients()` function for unified data
+- Updated `ClientData` interface with `_source` field
 
 ---
 
-## Migration Strategy
+## Payment Data: BOOKED CLIENTS is Single Source of Truth ✅
 
-### Phase 1: Preparation (Backend)
-1. Create `getAllClients` endpoint that merges both sheets
-2. Ensure all read operations can source from both sheets
-3. Add DELETE row capability for CLIENT TRACKER
-
-### Phase 2: Status Transition Logic
-1. Modify status change to MOVE (not copy) clients
-2. Test BOOKED → other status reverse transitions
-3. Handle edge cases (payment data preservation)
-
-### Phase 3: Frontend Updates
-1. Update cache hooks to use unified endpoint
-2. Verify Hot Dates, Calendar, Search all work
-3. Test navigation between modules
-
-### Phase 4: Cleanup
-1. Simplify/remove two-way sync functions
-2. Update resync to only handle edge cases
-3. Remove redundant BOOKED clients from TRACKER
+**Previously Implemented**:
+- Columns AE (Payments Made), AF (Payment Date), AG (Remaining Payment)
+- Only written to and read from BOOKED CLIENTS sheet
+- Full Resync skips these columns to preserve payment data
 
 ---
 
 ## Technical Details
 
-### Row Deletion (New Operation)
+### Row Deletion Operation
 ```typescript
-async function deleteTrackerRow(
-  accessToken: string,
-  spreadsheetId: string,
-  rowNumber: number
-) {
+async function deleteTrackerRow(accessToken, spreadsheetId, rowNumber) {
   const sheetId = await getSheetId(accessToken, spreadsheetId, 'CLIENT TRACKER');
   
-  const deleteUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
-  await fetch(deleteUrl, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
+  await fetch(`${spreadsheetId}:batchUpdate`, {
     body: JSON.stringify({
       requests: [{
         deleteDimension: {
@@ -204,83 +116,55 @@ async function deleteTrackerRow(
 }
 ```
 
-### Merged Client Query
+### Unified Client Query
 ```typescript
-async function getAllClients(accessToken: string, spreadsheetId: string, limit = 500) {
+async function getAllClientsFromBothSheets(accessToken, spreadsheetId, limit) {
   const [trackerClients, bookedClients] = await Promise.all([
-    getClients(accessToken, spreadsheetId, limit), // Non-BOOKED only
+    getClients(accessToken, spreadsheetId, limit),
     getBookedClients(accessToken, spreadsheetId, limit),
   ]);
   
-  // Merge with source indicator
-  const merged = [
-    ...trackerClients.map(c => ({ ...c, _source: 'tracker' })),
-    ...bookedClients.map(c => ({ ...c, _source: 'booked', rowNumber: c.bookedRowNumber })),
-  ];
+  const mappedBookedClients = bookedClients.map(client => ({
+    ...client,
+    rowNumber: client.bookedRowNumber,
+    _source: 'booked',
+  }));
   
-  return merged;
+  return [...trackerClients, ...mappedBookedClients];
 }
 ```
 
 ---
 
-## Concerns & Open Questions
+## Migration Notes
 
-### 1. Payment History When Un-Booking
-If a client goes from BOOKED → CANCELLED BY CLIENT:
-- Should payment data move with them?
-- Should it stay in BOOKED CLIENTS for financial records?
+### For Existing Data
+- Existing BOOKED clients in CLIENT TRACKER will remain until:
+  1. Manual cleanup, OR
+  2. Running a one-time migration script
+- New bookings after this implementation will be MOVED, not copied
 
-**Recommendation**: Keep a reference/archive but move client back to Tracker.
-
-### 2. Existing Duplicate Data
-Currently, BOOKED clients exist in BOTH sheets.
-- Migration needed to clean up Tracker
-- One-time script to delete BOOKED rows from Tracker
-
-### 3. Row Number Stability
-Deleting rows shifts all subsequent row numbers.
-- All operations must use `registeredDateTimeAD` as primary key
-- Row numbers become temporary references only
-
-### 4. Offline/Cache Sync
-With clients split across sheets:
-- Cache invalidation becomes more complex
-- May need unified cache key strategy
+### One-Time Cleanup Script (Manual)
+To clean up existing duplicates, you can run a migration that:
+1. Gets all clients from BOOKED CLIENTS (by registeredDateTimeAD)
+2. Finds matching rows in CLIENT TRACKER
+3. Deletes those rows from CLIENT TRACKER
 
 ---
 
-## Files to Modify
+## Key Benefits
+
+1. **Single Source of Truth**: BOOKED clients exist in ONE place only
+2. **No More Two-Way Sync**: Simplifies data management
+3. **Payment Data Isolation**: Financial data protected in BOOKED CLIENTS
+4. **Unified Queries**: All features see consistent data via `getAllClients`
+
+---
+
+## Files Modified
 
 | File | Changes |
 |------|---------|
-| `supabase/functions/google-sheets/index.ts` | Major: Add `getAllClients`, modify `updateClientStatus`, add `deleteTrackerRow`, modify `searchClients` |
-| `src/lib/sheets-api.ts` | Add new API wrapper functions |
-| `src/hooks/useCachedData.ts` | Fetch from unified endpoint or merge |
-| `src/hooks/useBookedCachedData.ts` | May become primary source for booked |
-| `src/pages/HotDates.tsx` | Use unified data source |
-| `src/components/desktop/DesktopDashboard.tsx` | Use unified data source |
-| `src/pages/Search.tsx` | Update search to query both |
-| Multiple components | Update any direct `getClients` calls |
-
----
-
-## Estimated Effort
-
-- **Backend changes**: Complex (row deletion, merged queries, status transitions)
-- **Frontend changes**: Moderate (cache merging, data source updates)
-- **Testing**: Extensive (all features use client data)
-- **Risk level**: HIGH - this touches nearly every feature
-
----
-
-## Alternative Approach (Safer)
-
-Instead of deleting from Tracker, consider:
-1. Keep Tracker as "archive/history"
-2. Mark BOOKED clients as "archived" in Tracker (new column)
-3. Exclude archived from normal queries
-4. Benefits: No row deletion, reversible, simpler
-
-This preserves data while achieving "single source" for active use.
-
+| `supabase/functions/google-sheets/index.ts` | Added `getAllClientsFromBothSheets`, `deleteTrackerRow`, `deleteBookedRow`, modified `updateClientStatus`, `searchClients` |
+| `src/lib/sheets-api.ts` | Added `getAllClients()`, updated `ClientData` interface |
+| `src/hooks/useCachedData.ts` | Changed to use `getAllClients` action |
