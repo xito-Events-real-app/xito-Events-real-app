@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useBookedCachedData } from "@/hooks/useBookedCachedData";
 import { useBulkEventDetails } from "@/hooks/useBulkEventDetails";
-import { Calendar, Sparkles, ArrowRight, Clock, MapPin, Scissors, Phone, MessageCircle, MessageSquare, Plus, Loader2 } from "lucide-react";
+import { Calendar, Sparkles, ArrowRight, Clock, MapPin, Scissors, Phone, MessageCircle, MessageSquare, Plus, Loader2, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemo, useState } from "react";
 import { parseComments } from "@/lib/client-card-utils";
@@ -408,23 +408,35 @@ export function TodayEventsHero() {
                             <MapPin className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
                             <div className="min-w-0 flex-1">
                               {hasVenue ? (
-                                <>
+                                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
                                   <span className="text-gray-700 font-medium">{venueDisplay}</span>
+                                  {eventDetail?.venueMap && (
+                                    <a
+                                      href={eventDetail.venueMap}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="inline-flex items-center gap-0.5 text-blue-500 hover:text-blue-700"
+                                      title="Open in Google Maps"
+                                    >
+                                      <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                  )}
                                   {venueTime && (
                                     <>
-                                      <span className="text-gray-500 ml-1.5">• {venueTime}</span>
+                                      <span className="text-gray-500">• {venueTime}</span>
                                       {(() => {
                                         const remaining = getRemainingTime(event.dateStr, eventDetail?.eventStartTime || '');
                                         return remaining ? (
-                                          <span className="text-amber-600 font-medium ml-1.5">({remaining})</span>
+                                          <span className="text-amber-600 font-medium">({remaining})</span>
                                         ) : null;
                                       })()}
                                     </>
                                   )}
                                   {eventDetail?.guestCount && (
-                                    <span className="text-gray-400 ml-1.5">({eventDetail.guestCount} guests)</span>
+                                    <span className="text-gray-400">({eventDetail.guestCount} guests)</span>
                                   )}
-                                </>
+                                </div>
                               ) : (
                                 <span className="text-gray-400 italic">Venue not set</span>
                               )}
@@ -436,20 +448,32 @@ export function TodayEventsHero() {
                             <Scissors className="w-3.5 h-3.5 text-pink-500 mt-0.5 shrink-0" />
                             <div className="min-w-0 flex-1">
                               {hasParlour ? (
-                                <>
+                                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
                                   <span className="text-gray-700 font-medium">{parlourDisplay}</span>
+                                  {eventDetail?.parlourMap && (
+                                    <a
+                                      href={eventDetail.parlourMap}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="inline-flex items-center gap-0.5 text-blue-500 hover:text-blue-700"
+                                      title="Open in Google Maps"
+                                    >
+                                      <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                  )}
                                   {parlourTime && (
                                     <>
-                                      <span className="text-gray-500 ml-1.5">• {parlourTime}</span>
+                                      <span className="text-gray-500">• {parlourTime}</span>
                                       {(() => {
                                         const remaining = getRemainingTime(event.dateStr, eventDetail?.parlourStartTime || '');
                                         return remaining ? (
-                                          <span className="text-amber-600 font-medium ml-1.5">({remaining})</span>
+                                          <span className="text-amber-600 font-medium">({remaining})</span>
                                         ) : null;
                                       })()}
                                     </>
                                   )}
-                                </>
+                                </div>
                               ) : (
                                 <span className="text-gray-400 italic">Parlour not set</span>
                               )}
