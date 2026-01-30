@@ -443,7 +443,6 @@ const PaymentHistorySheet = ({
         existingPaymentDatesAD={paymentDatesAD}
         finalQuotationAmount={quotationAmount}
         onPaymentAdded={handlePaymentAdded}
-        sourceSheet="booked"
       />
 
       {/* Edit Payment Dialog */}

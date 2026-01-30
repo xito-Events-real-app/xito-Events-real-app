@@ -34,7 +34,6 @@ interface PaymentDrawerProps {
   existingPaymentDatesAD: string;
   finalQuotationAmount: number;
   onPaymentAdded: (paymentsMade: string, remainingPayment: string) => void;
-  sourceSheet: 'tracker' | 'booked';
 }
 
 const PaymentDrawer = ({
@@ -47,7 +46,6 @@ const PaymentDrawer = ({
   existingPaymentDatesAD,
   finalQuotationAmount,
   onPaymentAdded,
-  sourceSheet,
 }: PaymentDrawerProps) => {
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentType, setPaymentType] = useState("");
@@ -157,7 +155,6 @@ const PaymentDrawer = ({
         existingPaymentDatesAD,
         finalQuotationAmount,
         registeredDateTimeAD,
-        sourceSheet,
         clientName
       );
 

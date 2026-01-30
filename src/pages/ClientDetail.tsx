@@ -809,7 +809,6 @@ const ClientDetail = () => {
         client.paymentDatesAD || '',
         finalAmount,
         client.registeredDateTimeAD,
-        'tracker',
         client.clientName
       );
       
@@ -1841,7 +1840,6 @@ const ClientDetail = () => {
           existingPaymentDatesAD={client.paymentDatesAD || ''}
           finalQuotationAmount={finalQuotation ? parseInt(finalQuotation.amount.replace(/,/g, '')) : 0}
           onPaymentAdded={handlePaymentAdded}
-          sourceSheet="tracker"
         />
       )}
 

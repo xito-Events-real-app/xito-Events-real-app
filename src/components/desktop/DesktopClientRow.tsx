@@ -413,7 +413,6 @@ export function DesktopClientRow({
         currentPaymentDatesAD,
         finalAmount,
         client.registeredDateTimeAD,
-        'tracker',
         client.clientName
       );
       
