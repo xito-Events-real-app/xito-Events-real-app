@@ -306,6 +306,27 @@ export async function addClientComment(
   });
 }
 
+// Add comment to BOOKED CLIENTS sheet (Column AC) and sync to CLIENT TRACKER
+export async function addBookedClientComment(
+  bookedRowNumber: number,
+  comment: string,
+  existingComments: string,
+  registeredDateTimeAD?: string
+): Promise<{ success: boolean; comments: string }> {
+  // Generate timestamp on client side to ensure correct local time
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const year = now.getFullYear();
+  const hours = String(now.getHours()).padStart(2, '0');
+  const mins = String(now.getMinutes()).padStart(2, '0');
+  const clientTimestamp = `${month}/${day}/${year} ${hours}:${mins}`;
+  
+  return callSheetsFunction<{ success: boolean; comments: string }>("addBookedClientComment", {
+    data: { bookedRowNumber, comment, existingComments, clientTimestamp, registeredDateTimeAD },
+  });
+}
+
 export async function updateFinalQuotation(
   rowNumber: number,
   finalQuotation: string

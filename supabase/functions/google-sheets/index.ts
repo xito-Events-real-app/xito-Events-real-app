@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails';
+  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -1798,6 +1798,93 @@ async function addClientComment(
   }
 
   return { success: true, comments: updatedComments, actualRowNumber };
+}
+
+// Add comment to BOOKED CLIENTS Column AC and sync to CLIENT TRACKER
+async function addBookedClientComment(
+  accessToken: string,
+  spreadsheetId: string,
+  bookedRowNumber: number,
+  comment: string,
+  existingComments: string,
+  clientTimestamp: string,
+  registeredDateTimeAD?: string
+) {
+  if (!bookedRowNumber || bookedRowNumber < 2) {
+    throw new Error('Valid bookedRowNumber is required for adding comment');
+  }
+
+  // Format: "[MM/DD/YYYY HH:MM] Comment text" - using ||| delimiter for multi-line support
+  const newCommentEntry = `[${clientTimestamp}] ${comment}`;
+  const updatedComments = existingComments 
+    ? `${existingComments}|||${newCommentEntry}` 
+    : newCommentEntry;
+
+  // 1. Update BOOKED CLIENTS sheet first
+  const bookedRange = encodeURIComponent(`'BOOKED CLIENTS'!AC${bookedRowNumber}`);
+  const bookedUpdateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}?valueInputOption=USER_ENTERED`;
+  
+  const bookedResponse = await fetch(bookedUpdateUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [[updatedComments]] }),
+  });
+
+  if (!bookedResponse.ok) {
+    const errorText = await bookedResponse.text();
+    console.error('Google Sheets API error (addBookedClientComment - BOOKED):', bookedResponse.status, errorText);
+    throw new Error(`Failed to add comment to BOOKED CLIENTS: ${bookedResponse.status}`);
+  }
+
+  // 2. Sync to CLIENT TRACKER if registeredDateTimeAD provided
+  if (registeredDateTimeAD) {
+    try {
+      // Find the tracker row using the unique registeredDateTimeAD
+      const trackerRange = encodeURIComponent("'CLIENT TRACKER'!A2:A2000");
+      const trackerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}`;
+      
+      const trackerResponse = await fetch(trackerUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      
+      if (trackerResponse.ok) {
+        const trackerData = await trackerResponse.json();
+        const rows = trackerData.values || [];
+        const normalizedSearch = registeredDateTimeAD.trim();
+        
+        for (let i = 0; i < rows.length; i++) {
+          const cellValue = (rows[i][0] || '').trim();
+          if (cellValue === normalizedSearch) {
+            const trackerRowNumber = i + 2;
+            
+            // Update CLIENT TRACKER Column AC
+            const trackerUpdateRange = encodeURIComponent(`'CLIENT TRACKER'!AC${trackerRowNumber}`);
+            const trackerUpdateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerUpdateRange}?valueInputOption=USER_ENTERED`;
+            
+            await fetch(trackerUpdateUrl, {
+              method: 'PUT',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ values: [[updatedComments]] }),
+            });
+            
+            console.info(`[BOOKED COMMENT] Synced comment to CLIENT TRACKER row ${trackerRowNumber}`);
+            break;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[BOOKED COMMENT] Failed to sync to CLIENT TRACKER:', err);
+      // Don't throw - BOOKED CLIENTS update succeeded
+    }
+  }
+
+  return { success: true, comments: updatedComments };
 }
 
 // Update bargaining rates in Columns AA (our rates) and AB (client rates)
@@ -4576,6 +4663,18 @@ Deno.serve(async (req) => {
           accessToken, 
           spreadsheetId, 
           data.rowNumber as number, 
+          data.comment as string,
+          data.existingComments as string || '',
+          data.clientTimestamp as string,
+          data.registeredDateTimeAD as string | undefined
+        );
+        break;
+      case 'addBookedClientComment':
+        if (!data || !data.bookedRowNumber || !data.comment) throw new Error('bookedRowNumber and comment are required for addBookedClientComment');
+        result = await addBookedClientComment(
+          accessToken, 
+          spreadsheetId, 
+          data.bookedRowNumber as number, 
           data.comment as string,
           data.existingComments as string || '',
           data.clientTimestamp as string,
