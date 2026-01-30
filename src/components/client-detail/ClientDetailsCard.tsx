@@ -432,7 +432,7 @@ export const ClientDetailsCard = ({ data, isLoading, isResyncing, clientWhatsApp
         )}
       </div>
 
-      {/* Collapsed View - Quick Summary */}
+      {/* Collapsed View - Complete Summary */}
       {!isExpanded && hasFilled && (
         <div className="px-5 pb-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -445,6 +445,8 @@ export const ClientDetailsCard = ({ data, isLoading, isResyncing, clientWhatsApp
               {data?.brideFullName && (
                 <div className="text-sm text-white font-medium mb-2">{data.brideFullName}</div>
               )}
+              
+              {/* Primary Contacts */}
               <div className="flex flex-wrap gap-2 text-xs">
                 {data?.brideContactNumber && (
                   <a href={`tel:${data.brideContactNumber}`} className="flex items-center gap-1 text-blue-400 hover:underline bg-blue-500/10 px-2 py-1 rounded-full">
@@ -465,15 +467,47 @@ export const ClientDetailsCard = ({ data, isLoading, isResyncing, clientWhatsApp
                   </a>
                 )}
               </div>
-              {(data?.brideHomeCity || data?.brideHomeArea) && (
-                <div className="flex items-center gap-1 text-xs text-white/60 mt-3">
-                  <MapPin className="h-3 w-3" />
-                  {[data.brideHomeArea, data.brideHomeCity].filter(Boolean).join(', ')}
-                  {data?.brideHomeMap && (
-                    <a href={data.brideHomeMap} target="_blank" rel="noopener noreferrer" className="ml-1">
-                      <ExternalLink className="h-3 w-3 text-blue-400" />
-                    </a>
-                  )}
+              
+              {/* Backup Contacts */}
+              {(data?.brideBackupNumber || data?.brideBackupNumber2) && (
+                <div className="mt-2 pt-2 border-t border-pink-500/20">
+                  <div className="text-[10px] text-pink-300/60 uppercase mb-1">Backup Contacts</div>
+                  <div className="flex flex-wrap gap-1.5 text-xs">
+                    {data?.brideBackupNumber && (
+                      <a href={`tel:${data.brideBackupNumber}`} className="flex items-center gap-1 text-amber-400 hover:underline bg-amber-500/10 px-2 py-0.5 rounded-full">
+                        <Phone className="h-2.5 w-2.5" />
+                        {data.brideBackupNumber}
+                        {data?.brideBackupRelation && <span className="text-amber-300/60">({data.brideBackupRelation})</span>}
+                      </a>
+                    )}
+                    {data?.brideBackupNumber2 && (
+                      <a href={`tel:${data.brideBackupNumber2}`} className="flex items-center gap-1 text-amber-400 hover:underline bg-amber-500/10 px-2 py-0.5 rounded-full">
+                        <Phone className="h-2.5 w-2.5" />
+                        {data.brideBackupNumber2}
+                        {data?.brideBackupRelation2 && <span className="text-amber-300/60">({data.brideBackupRelation2})</span>}
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* Location Details */}
+              {(data?.brideHomeCity || data?.brideHomeArea || data?.brideHomeLandmark) && (
+                <div className="mt-2 pt-2 border-t border-pink-500/20">
+                  <div className="flex items-start gap-1 text-xs text-white/70">
+                    <Home className="h-3 w-3 mt-0.5 shrink-0" />
+                    <div>
+                      {[data.brideHomeArea, data.brideHomeCity].filter(Boolean).join(', ')}
+                      {data?.brideHomeLandmark && (
+                        <div className="text-white/50 text-[10px]">Near: {data.brideHomeLandmark}</div>
+                      )}
+                    </div>
+                    {data?.brideHomeMap && (
+                      <a href={data.brideHomeMap} target="_blank" rel="noopener noreferrer" className="ml-auto shrink-0">
+                        <ExternalLink className="h-3 w-3 text-blue-400 hover:text-blue-300" />
+                      </a>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -487,6 +521,8 @@ export const ClientDetailsCard = ({ data, isLoading, isResyncing, clientWhatsApp
               {data?.groomFullName && (
                 <div className="text-sm text-white font-medium mb-2">{data.groomFullName}</div>
               )}
+              
+              {/* Primary Contacts */}
               <div className="flex flex-wrap gap-2 text-xs">
                 {data?.groomContactNumber && (
                   <a href={`tel:${data.groomContactNumber}`} className="flex items-center gap-1 text-blue-400 hover:underline bg-blue-500/10 px-2 py-1 rounded-full">
@@ -507,15 +543,47 @@ export const ClientDetailsCard = ({ data, isLoading, isResyncing, clientWhatsApp
                   </a>
                 )}
               </div>
-              {(data?.groomHomeCity || data?.groomHomeArea) && (
-                <div className="flex items-center gap-1 text-xs text-white/60 mt-3">
-                  <MapPin className="h-3 w-3" />
-                  {[data.groomHomeArea, data.groomHomeCity].filter(Boolean).join(', ')}
-                  {data?.groomHomeMap && (
-                    <a href={data.groomHomeMap} target="_blank" rel="noopener noreferrer" className="ml-1">
-                      <ExternalLink className="h-3 w-3 text-blue-400" />
-                    </a>
-                  )}
+              
+              {/* Backup Contacts */}
+              {(data?.groomBackupNumber || data?.groomBackupNumber2) && (
+                <div className="mt-2 pt-2 border-t border-blue-500/20">
+                  <div className="text-[10px] text-blue-300/60 uppercase mb-1">Backup Contacts</div>
+                  <div className="flex flex-wrap gap-1.5 text-xs">
+                    {data?.groomBackupNumber && (
+                      <a href={`tel:${data.groomBackupNumber}`} className="flex items-center gap-1 text-amber-400 hover:underline bg-amber-500/10 px-2 py-0.5 rounded-full">
+                        <Phone className="h-2.5 w-2.5" />
+                        {data.groomBackupNumber}
+                        {data?.groomBackupRelation && <span className="text-amber-300/60">({data.groomBackupRelation})</span>}
+                      </a>
+                    )}
+                    {data?.groomBackupNumber2 && (
+                      <a href={`tel:${data.groomBackupNumber2}`} className="flex items-center gap-1 text-amber-400 hover:underline bg-amber-500/10 px-2 py-0.5 rounded-full">
+                        <Phone className="h-2.5 w-2.5" />
+                        {data.groomBackupNumber2}
+                        {data?.groomBackupRelation2 && <span className="text-amber-300/60">({data.groomBackupRelation2})</span>}
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* Location Details */}
+              {(data?.groomHomeCity || data?.groomHomeArea || data?.groomHomeLandmark) && (
+                <div className="mt-2 pt-2 border-t border-blue-500/20">
+                  <div className="flex items-start gap-1 text-xs text-white/70">
+                    <Home className="h-3 w-3 mt-0.5 shrink-0" />
+                    <div>
+                      {[data.groomHomeArea, data.groomHomeCity].filter(Boolean).join(', ')}
+                      {data?.groomHomeLandmark && (
+                        <div className="text-white/50 text-[10px]">Near: {data.groomHomeLandmark}</div>
+                      )}
+                    </div>
+                    {data?.groomHomeMap && (
+                      <a href={data.groomHomeMap} target="_blank" rel="noopener noreferrer" className="ml-auto shrink-0">
+                        <ExternalLink className="h-3 w-3 text-blue-400 hover:text-blue-300" />
+                      </a>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
