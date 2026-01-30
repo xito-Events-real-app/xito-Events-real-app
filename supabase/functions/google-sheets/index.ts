@@ -3188,11 +3188,13 @@ async function getBulkEventDetails(
   venueName: string;
   venueCity: string;
   venueArea: string;
+  venueMap: string;
   eventStartTime: string;
   eventEndTime: string;
   parlourName: string;
   parlourCity: string;
   parlourArea: string;
+  parlourMap: string;
   parlourStartTime: string;
   parlourEndTime: string;
   guestCount: string;
@@ -3228,11 +3230,13 @@ async function getBulkEventDetails(
     venueName: string;
     venueCity: string;
     venueArea: string;
+    venueMap: string;
     eventStartTime: string;
     eventEndTime: string;
     parlourName: string;
     parlourCity: string;
     parlourArea: string;
+    parlourMap: string;
     parlourStartTime: string;
     parlourEndTime: string;
     guestCount: string;
@@ -3252,11 +3256,13 @@ async function getBulkEventDetails(
     const venueNames = (row[10] || '').split('\n');
     const venueCities = (row[11] || '').split('\n');
     const venueAreas = (row[12] || '').split('\n');
+    const venueMaps = (row[13] || '').split('\n');
     const eventStartTimes = (row[14] || '').split('\n');
     const eventEndTimes = (row[15] || '').split('\n');
     const parlourNames = (row[17] || '').split('\n');
     const parlourCities = (row[18] || '').split('\n');
     const parlourAreas = (row[19] || '').split('\n');
+    const parlourMaps = (row[20] || '').split('\n');
     const parlourStartTimes = (row[21] || '').split('\n');
     const parlourEndTimes = (row[22] || '').split('\n');
     const guestCounts = (row[31] || '').split('\n');
@@ -3273,11 +3279,13 @@ async function getBulkEventDetails(
         venueName: venueNames[i]?.trim() || '',
         venueCity: venueCities[i]?.trim() || '',
         venueArea: venueAreas[i]?.trim() || '',
+        venueMap: venueMaps[i]?.trim() || '',
         eventStartTime: eventStartTimes[i]?.trim() || '',
         eventEndTime: eventEndTimes[i]?.trim() || '',
         parlourName: parlourNames[i]?.trim() || '',
         parlourCity: parlourCities[i]?.trim() || '',
         parlourArea: parlourAreas[i]?.trim() || '',
+        parlourMap: parlourMaps[i]?.trim() || '',
         parlourStartTime: parlourStartTimes[i]?.trim() || '',
         parlourEndTime: parlourEndTimes[i]?.trim() || '',
         guestCount: guestCounts[i]?.trim() || '',

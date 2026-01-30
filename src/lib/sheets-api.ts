@@ -630,11 +630,13 @@ export interface BulkEventDetail {
   venueName: string;
   venueCity: string;
   venueArea: string;
+  venueMap: string;
   eventStartTime: string;
   eventEndTime: string;
   parlourName: string;
   parlourCity: string;
   parlourArea: string;
+  parlourMap: string;
   parlourStartTime: string;
   parlourEndTime: string;
   guestCount: string;
