@@ -639,14 +639,10 @@ const ClientDetail = () => {
   const handleStatusChange = async (newStatus: string) => {
     if (!client?.rowNumber) return;
     
-    // Get current status to check for quotation transition
-    const currentStatusValue = getCurrentStatus(currentStatusLog || client.statusLog || '');
-    
-    // INTERCEPT: If moving to QUOTATION SENT, show quotation dialog first
-    const isFromQuotationPending = currentStatusValue?.toUpperCase().includes('QUOTATION PENDING');
+    // INTERCEPT: If moving to QUOTATION SENT, ALWAYS show quotation dialog first
     const isToQuotationSent = newStatus.toUpperCase().includes('QUOTATION SENT');
     
-    if (isFromQuotationPending && isToQuotationSent) {
+    if (isToQuotationSent) {
       setPendingStatus(newStatus);
       setShowQuotationDialog(true);
       return;
