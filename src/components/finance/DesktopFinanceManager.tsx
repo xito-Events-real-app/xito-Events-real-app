@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { RefreshCw, DollarSign, Users, TrendingUp, Phone, MessageCircle, Clock, LayoutGrid, Table as TableIcon, Receipt, Database, History } from "lucide-react";
+import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -674,7 +675,7 @@ const DesktopFinanceManager = () => {
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8"
-                                  onClick={() => window.open(`https://wa.me/${client.whatsappNo?.replace(/\D/g, '')}`, '_blank')}
+                                  onClick={() => openWhatsApp(client.whatsappNo || '')}
                                 >
                                   <MessageCircle className="h-4 w-4 text-green-400" />
                                 </Button>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, RefreshCw, Calendar, Users, Bell, AlertTriangle, Phone, MessageCircle, LayoutGrid, Table as TableIcon, Database } from "lucide-react";
+import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -257,7 +258,7 @@ const DesktopBookedClients = () => {
                             </Tooltip>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => window.open(`https://wa.me/${client.whatsappNo?.replace(/\D/g, '')}`, '_blank')}>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openWhatsApp(client.whatsappNo || '')}>
                                   <MessageCircle className="h-4 w-4 text-green-400" />
                                 </Button>
                               </TooltipTrigger>

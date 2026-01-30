@@ -52,8 +52,8 @@ export function AccountDetailSheet({ account, open, onOpenChange }: AccountDetai
 
   const handleWhatsApp = (number: string) => {
     if (number) {
-      const cleanNumber = number.replace(/[^0-9+]/g, '');
-      window.open(`https://wa.me/${cleanNumber.replace('+', '')}`, '_blank');
+      const { openWhatsApp } = require('@/lib/whatsapp-utils');
+      openWhatsApp(number);
     }
   };
 

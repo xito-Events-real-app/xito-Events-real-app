@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { ClientData, updateClientStatus, updateClientHandler, logCallAttempt, getCurrentStatus, updateClientQuotation, updateClientMindset, updateBargainingRates, updateClientBargainedRates, updateOurCounterRates, addClientComment, updateFinalQuotation, addPayment } from "@/lib/sheets-api";
 import { getHandlerInitials, parseEventDetails, formatLocationDisplay } from "@/lib/nepali-months";
 import { getClientDetailPath } from "@/lib/client-navigation";
@@ -1004,8 +1005,7 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
       if (callType === 'DIRECT' && client.contactNo) {
         window.location.href = `tel:${client.contactNo}`;
       } else if (callType === 'WHATSAPP' && client.whatsappNo) {
-        const cleanNumber = client.whatsappNo.replace(/\D/g, '');
-        window.open(`https://wa.me/${cleanNumber}`, '_blank');
+        openWhatsApp(client.whatsappNo);
       }
     } catch (err) {
       console.error("Failed to log call:", err);
@@ -1035,8 +1035,7 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
       if (callType === 'DIRECT' && client.contactNo) {
         window.location.href = `tel:${client.contactNo}`;
       } else if (callType === 'WHATSAPP' && client.whatsappNo) {
-        const cleanNumber = client.whatsappNo.replace(/\D/g, '');
-        window.open(`https://wa.me/${cleanNumber}`, '_blank');
+        openWhatsApp(client.whatsappNo);
       }
       
       // Show post-call dialog after a short delay (to allow phone app to open)

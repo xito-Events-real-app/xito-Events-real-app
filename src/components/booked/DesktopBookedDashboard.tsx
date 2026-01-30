@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
+import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -475,7 +476,7 @@ export function DesktopBookedDashboard({
                                 </Tooltip>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => window.open(`https://wa.me/${client.whatsappNo?.replace(/\D/g, '')}`, '_blank')}>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openWhatsApp(client.whatsappNo || '')}>
                                       <MessageCircle className="h-4 w-4 text-green-500" />
                                     </Button>
                                   </TooltipTrigger>

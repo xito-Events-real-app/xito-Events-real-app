@@ -52,8 +52,8 @@ export function AccountTable({ accounts, onSelectAccount }: AccountTableProps) {
   const handleWhatsApp = (number: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (number) {
-      const cleanNumber = number.replace(/[^0-9+]/g, '');
-      window.open(`https://wa.me/${cleanNumber.replace('+', '')}`, '_blank');
+      const { openWhatsApp } = require('@/lib/whatsapp-utils');
+      openWhatsApp(number);
     }
   };
 

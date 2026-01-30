@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Phone, MessageCircle, Lock, Plus, Calendar, History } from "lucide-react";
+import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -69,8 +70,7 @@ const FinanceClientCard = ({ client, onRefresh }: FinanceClientCardProps) => {
 
   const handleWhatsApp = () => {
     if (client.whatsappNo) {
-      const cleanNumber = client.whatsappNo.replace(/\D/g, '');
-      window.open(`https://wa.me/${cleanNumber}`, '_blank');
+      openWhatsApp(client.whatsappNo);
     }
   };
 

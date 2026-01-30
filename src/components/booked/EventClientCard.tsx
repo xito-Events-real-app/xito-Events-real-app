@@ -1,4 +1,5 @@
 import { Phone, MessageCircle, Calendar, MapPin, AlertTriangle, User } from "lucide-react";
+import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -88,8 +89,7 @@ const EventClientCard = ({ client }: EventClientCardProps) => {
 
   const handleWhatsApp = () => {
     if (client.whatsappNo) {
-      const cleanNumber = client.whatsappNo.replace(/\D/g, '');
-      window.open(`https://wa.me/${cleanNumber}`, '_blank');
+      openWhatsApp(client.whatsappNo);
     }
   };
 
