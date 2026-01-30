@@ -1,158 +1,172 @@
 
-# Plan: Cleanup Duplicates & Fix Sync to Respect Single Source of Truth
+# Plan: Global Status Change Interception Dialogs
 
 ## Overview
 
-This plan implements two major changes:
-1. Creates a **one-time cleanup action** to delete existing BOOKED clients from CLIENT TRACKER (keeping them only in BOOKED CLIENTS)
-2. Modifies all **sync functions** to NEVER copy clients from CLIENT TRACKER to BOOKED CLIENTS (the only way to get into BOOKED CLIENTS is via status change to "BOOKED")
+This plan implements mandatory data entry dialogs when changing client status across the entire application. Currently, some components have partial interceptions while others are missing them entirely. This plan will ensure **consistent behavior globally**.
 
 ---
 
-## Current Problem
+## Current State Analysis
 
-The `fullResyncAllBookedClients` function currently has logic that:
-- **Phase 0**: Copies clients from BOOKED → TRACKER if missing (reverse sync)
-- **Phase 1**: Copies clients from TRACKER → BOOKED if they have BOOKED status
-- **Phase 2**: Syncs data between sheets
+| Component | QUOTATION SENT | ADVANCE PENDING | BOOKED |
+|-----------|----------------|-----------------|--------|
+| **ClientDetail.tsx** | From QUOTATION PENDING only | Has dialog | Has dialog |
+| **DesktopClientRow.tsx** | From QUOTATION PENDING only | Has dialog | Has dialog |
+| **FreshClientCard.tsx** | From QUOTATION PENDING only | MISSING | MISSING |
 
-This contradicts the new Single Source of Truth architecture where:
-- BOOKED clients should ONLY exist in BOOKED CLIENTS sheet
-- CLIENT TRACKER should NOT contain BOOKED clients
+### Issues to Fix:
+1. **QUOTATION SENT** - Currently only triggers when coming FROM "QUOTATION PENDING". User wants it to trigger **always** when changing to QUOTATION SENT
+2. **FreshClientCard.tsx** - Missing ADVANCE PENDING and BOOKED interception dialogs entirely
+3. Need to create a reusable **QuotationSentDialog** component for consistency
 
 ---
 
-## Architecture After Changes
+## User Requirements
 
-```text
-┌────────────────────────────────────────────────────────────────────────────┐
-│                          STATUS CHANGE TO "BOOKED"                          │
-│                   (This is the ONLY way into BOOKED CLIENTS)                │
-└────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-┌──────────────────────────────────┐      ┌──────────────────────────────────┐
-│        CLIENT TRACKER            │      │        BOOKED CLIENTS            │
-│  (Non-booked clients ONLY)       │      │   (BOOKED clients ONLY)          │
-│  - All other statuses            │      │   - Single source of truth       │
-│                                  │      │   - Payment data lives here      │
-└──────────────────────────────────┘      └──────────────────────────────────┘
-              │                                        │
-              │                                        │
-              ▼                                        ▼
-     ┌────────────────────────────────────────────────────────────────┐
-     │                         SYNC OPERATIONS                         │
-     │                                                                 │
-     │  ✅ Event Details Sync: BOOKED CLIENTS → EVENT DETAILS         │
-     │  ✅ Contact Details Sync: BOOKED CLIENTS → CONTACT DETAILS     │
-     │  ✅ Vendor Sync: Refresh vendor data for booked clients        │
-     │  ❌ NO copying from Tracker → Booked (removed)                 │
-     └────────────────────────────────────────────────────────────────┘
-```
+| Status Change | Required Data | Column |
+|---------------|---------------|--------|
+| **QUOTATION SENT : REVIEW PENDING** | Quotation amounts for tiers (BASIC, STANDARD, PREMIUM, WTN SPECIAL) | Column V |
+| **ADVANCE PENDING** | Final fixed quotation (Package + Price) | Column AD |
+| **BOOKED** | Final quotation (if not set) + Advance payment amount | Columns AD, AE, AF, AG |
 
 ---
 
 ## Changes Required
 
-### 1. Backend: Create `cleanupDuplicateBookedFromTracker` Function
-**File**: `supabase/functions/google-sheets/index.ts`
+### 1. Create New Component: `QuotationSentDialog`
+**File**: `src/components/status-dialogs/QuotationSentDialog.tsx`
 
-New function that:
-- Fetches all clients from BOOKED CLIENTS (by `registeredDateTimeAD`)
-- For each, checks if they exist in CLIENT TRACKER
-- If found in both, DELETES from CLIENT TRACKER
-- Returns count of deleted duplicates
+New reusable dialog component for capturing quotation amounts when transitioning to QUOTATION SENT:
+- Input fields for BASIC, STANDARD, PREMIUM, WTN SPECIAL tiers
+- NPR formatting with preview
+- At least one tier must have a value
+- Cancel and Save buttons
 
 ```text
-Algorithm:
-1. Fetch all registeredDateTimeAD from BOOKED CLIENTS
-2. Fetch all rows from CLIENT TRACKER with registeredDateTimeAD
-3. Build a map of TRACKER: registeredDateTimeAD → rowNumber
-4. For each BOOKED client:
-   - If exists in TRACKER map → delete that TRACKER row
-   - Track deleted count
-5. Return { deletedCount, deletedClients }
+Props:
+- open: boolean
+- onOpenChange: (open: boolean) => void
+- clientName: string
+- existingQuotationData?: string
+- onSave: (quotationData: string) => Promise<void>
+- isSaving: boolean
 ```
 
-### 2. Backend: Modify `fullResyncAllBookedClients` Function
-**File**: `supabase/functions/google-sheets/index.ts`
+### 2. Update Status Dialogs Index
+**File**: `src/components/status-dialogs/index.ts`
+
+Export the new QuotationSentDialog component.
+
+### 3. Update `ClientDetail.tsx`
+**File**: `src/pages/ClientDetail.tsx`
 
 Changes:
-- **REMOVE Phase 0** (no longer restore from Booked → Tracker)
-- **REMOVE Phase 1** (no longer copy from Tracker → Booked)
-- **KEEP Phase 2 simplified**: Only sync NON-PAYMENT columns from BOOKED CLIENTS to ensure data consistency (but don't add new clients)
+- Remove the condition that only intercepts from QUOTATION PENDING
+- Trigger QUOTATION SENT dialog for **any** status change to QUOTATION SENT
+- Replace inline dialog with new `QuotationSentDialog` component
 
-The sync now becomes a "refresh" operation - it updates existing BOOKED CLIENTS records but never creates new ones. New clients enter BOOKED CLIENTS ONLY via status change.
-
-### 3. Backend: Add `cleanupDuplicateBookedFromTracker` Action
-**File**: `supabase/functions/google-sheets/index.ts`
-
-Add to the action switch statement to expose the cleanup function.
-
-### 4. Frontend: Add API Wrapper for Cleanup
-**File**: `src/lib/sheets-api.ts`
-
+**Before:**
 ```typescript
-export async function cleanupDuplicateBookedFromTracker(): Promise<{
-  success: boolean;
-  deletedCount: number;
-  deletedClients: string[];
-}> {
-  return callSheetsFunction("cleanupDuplicateBookedFromTracker");
+if (isFromQuotationPending && isToQuotationSent) {
+  // Only triggers from QUOTATION PENDING
 }
 ```
 
-### 5. Frontend: Update Master Sync Button Description
-**File**: `src/components/suite/MasterSyncButton.tsx`
+**After:**
+```typescript
+if (isToQuotationSent) {
+  // Always trigger regardless of source status
+}
+```
 
-Update Phase 2 description from "Syncing to booked clients sheet..." to "Validating booked clients data..." since it no longer copies.
+### 4. Update `DesktopClientRow.tsx`
+**File**: `src/components/desktop/DesktopClientRow.tsx`
 
-### 6. Frontend: Add Cleanup Button to Booked Clients Settings
-**Optional**: Add a one-time "Cleanup Duplicates" button in the Booked Clients module for manual trigger.
+Same changes as ClientDetail:
+- Remove the "from QUOTATION PENDING" condition
+- Always show quotation dialog when changing to QUOTATION SENT
+- Use new `QuotationSentDialog` component
+
+### 5. Update `FreshClientCard.tsx` (Major Update)
+**File**: `src/components/dashboard/FreshClientCard.tsx`
+
+Add missing interception dialogs:
+
+**a) QUOTATION SENT Interception:**
+- Remove "from QUOTATION PENDING" condition
+- Show quotation dialog for any change to QUOTATION SENT
+
+**b) ADVANCE PENDING Interception:**
+- Add state: `showAdvancePendingDialog`, `isSavingAdvancePending`
+- Import and use `FinalQuotationDialog` component
+- Intercept status change to ADVANCE PENDING
+- Require final quotation before status change
+
+**c) BOOKED Interception:**
+- Add state: `showBookedPaymentDialog`, `isSavingBookedPayment`
+- Import and use `AdvancePaymentDialog` component
+- Intercept status change to BOOKED (not BOOKED SOMEWHERE ELSE)
+- Require advance payment before status change
 
 ---
 
 ## Technical Details
 
-### Cleanup Function Logic
+### New QuotationSentDialog Component Structure
 
 ```typescript
-async function cleanupDuplicateBookedFromTracker(
-  accessToken: string, 
-  spreadsheetId: string
-) {
-  // 1. Get all BOOKED CLIENTS registeredDateTimeAD values
-  const bookedIds = await fetchBookedClientIds();
-  
-  // 2. Get all TRACKER rows with their registeredDateTimeAD
-  const trackerRows = await fetchTrackerRows();
-  
-  // 3. Build deletion list (rows to delete from tracker)
-  const rowsToDelete = [];
-  for (const trackerRow of trackerRows) {
-    if (bookedIds.has(trackerRow.registeredDateTimeAD)) {
-      rowsToDelete.push(trackerRow.rowNumber);
-    }
-  }
-  
-  // 4. Delete rows in reverse order (highest first to avoid index shifting)
-  rowsToDelete.sort((a, b) => b - a); // Descending
-  
-  for (const rowNumber of rowsToDelete) {
-    await deleteTrackerRow(accessToken, spreadsheetId, rowNumber);
-  }
-  
-  return { deletedCount: rowsToDelete.length };
+interface QuotationSentDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  clientName: string;
+  existingQuotationData?: string;
+  onSave: (quotationData: string) => Promise<void>;
+  isSaving: boolean;
 }
+
+// Features:
+// - Pre-fills existing quotation amounts if available
+// - Input validation (at least one tier required)
+// - NPR formatting with live preview
+// - Consistent styling with other status dialogs
 ```
 
-### Modified fullResyncAllBookedClients
+### Status Change Flow (After Implementation)
 
-The function becomes simpler:
-1. Fetch BOOKED CLIENTS data
-2. For each booked client, check if their NON-PAYMENT data needs refresh
-3. NO copying of new clients
-4. Return sync report
+```text
+User Selects Status Change
+          │
+          ▼
+    ┌─────────────────────────────┐
+    │  Is target QUOTATION SENT?  │──────Yes────▶ Show QuotationSentDialog
+    └─────────────────────────────┘               │
+                                                  ▼
+          │                                   Save quotation data
+          │                                   Then change status
+          │                                       │
+          ▼                                       │
+    ┌─────────────────────────────┐               │
+    │  Is target ADVANCE PENDING? │──────Yes────▶ Show FinalQuotationDialog
+    └─────────────────────────────┘               │
+                                                  ▼
+          │                                   Lock final quotation
+          │                                   Then change status
+          │                                       │
+          ▼                                       │
+    ┌─────────────────────────────┐               │
+    │    Is target BOOKED?        │──────Yes────▶ Show AdvancePaymentDialog
+    │  (not SOMEWHERE ELSE)       │               │
+    └─────────────────────────────┘               ▼
+                                              Record payment
+          │                                   Move to BOOKED CLIENTS
+          │                                   Delete from TRACKER
+          ▼                                       │
+    ┌─────────────────────────────┐               │
+    │  Normal status change       │◀──────────────┘
+    │  (no dialog required)       │
+    └─────────────────────────────┘
+```
 
 ---
 
@@ -160,27 +174,41 @@ The function becomes simpler:
 
 | File | Changes |
 |------|---------|
-| `supabase/functions/google-sheets/index.ts` | Add `cleanupDuplicateBookedFromTracker`, modify `fullResyncAllBookedClients` to remove copy logic |
-| `src/lib/sheets-api.ts` | Add `cleanupDuplicateBookedFromTracker` wrapper |
-| `src/components/suite/MasterSyncButton.tsx` | Update Phase 2 description |
-| `src/components/booked/SyncReportSheet.tsx` | Update UI to reflect no copying |
+| `src/components/status-dialogs/QuotationSentDialog.tsx` | **NEW** - Create reusable quotation entry dialog |
+| `src/components/status-dialogs/index.ts` | Export new QuotationSentDialog |
+| `src/pages/ClientDetail.tsx` | Remove "from QUOTATION PENDING" condition, use new dialog component |
+| `src/components/desktop/DesktopClientRow.tsx` | Remove "from QUOTATION PENDING" condition, use new dialog component |
+| `src/components/dashboard/FreshClientCard.tsx` | Add all three interception dialogs (QUOTATION SENT, ADVANCE PENDING, BOOKED) |
 
 ---
 
-## Important Notes
+## Expected Behavior After Implementation
 
-1. **One-Way Flow**: After this change, the ONLY way to add a client to BOOKED CLIENTS is via status change to "BOOKED"
-2. **Cleanup is Safe**: The cleanup only deletes from TRACKER if the client exists in BOOKED CLIENTS (no data loss)
-3. **Payment Data Protected**: Payment columns (AE, AF, AG) in BOOKED CLIENTS are never touched during sync
-4. **Reversibility**: If a client's status changes FROM BOOKED to something else, they should be moved back to TRACKER (this logic already exists)
+### When changing to QUOTATION SENT:
+1. Dialog opens asking for quotation amounts
+2. User enters amounts for at least one tier (BASIC, STANDARD, PREMIUM, WTN SPECIAL)
+3. Data saved to Column V
+4. Status changes to QUOTATION SENT : REVIEW PENDING
+
+### When changing to ADVANCE PENDING:
+1. Dialog opens asking for final fixed quotation
+2. User selects package (BASIC/STANDARD/PREMIUM/WTN SPECIAL) and enters final amount
+3. Data saved to Column AD
+4. Status changes to ADVANCE PENDING
+
+### When changing to BOOKED:
+1. Dialog checks if final quotation exists
+2. If not set, shows warning but allows payment entry
+3. User enters advance payment amount, type, bank, and date
+4. Payment saved to Columns AE, AF, AG
+5. Status changes to BOOKED
+6. Client MOVES from CLIENT TRACKER to BOOKED CLIENTS sheet
 
 ---
 
-## Testing Checklist
+## Notes
 
-After implementation:
-1. Run the cleanup to delete duplicates from TRACKER
-2. Verify Master Sync no longer copies clients to BOOKED CLIENTS
-3. Verify status change to BOOKED still moves client correctly
-4. Verify Hot Dates, Calendar, Search still show all clients (via unified endpoint)
-5. Verify payment data is preserved during any sync operation
+- All dialogs prevent status change until required data is entered
+- Cancel button allows user to abort the status change
+- Existing data pre-fills the dialogs when available
+- Consistent UI styling across all dialogs
