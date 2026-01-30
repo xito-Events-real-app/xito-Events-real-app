@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails';
+  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -1186,8 +1186,8 @@ async function updateClientStatus(accessToken: string, spreadsheetId: string, ro
     throw new Error(`Failed to update client status: ${response.status}`);
   }
 
-  // If status is BOOKED, copy to BOOKED CLIENTS sheet
-  let copiedToBooked = false;
+  // If status is BOOKED, MOVE to BOOKED CLIENTS sheet (copy then delete from tracker)
+  let movedToBooked = false;
   if (newStatus.toUpperCase() === 'BOOKED') {
     // Fetch registeredDateTimeAD (Column A) for duplicate checking - this is the unique identifier
     const clientDataRange = encodeURIComponent(`'CLIENT TRACKER'!A${actualRowNumber}`);
@@ -1206,16 +1206,24 @@ async function updateClientStatus(accessToken: string, spreadsheetId: string, ro
     
     const isAlreadyBooked = await checkIfAlreadyBooked(accessToken, spreadsheetId, fetchedRegisteredDateTime);
     if (!isAlreadyBooked) {
+      // First copy to BOOKED CLIENTS
       await copyToBookedClients(accessToken, spreadsheetId, actualRowNumber);
-      copiedToBooked = true;
-      console.log(`Client at row ${actualRowNumber} copied to BOOKED CLIENTS`);
+      console.log(`[STATUS CHANGE] Client at row ${actualRowNumber} copied to BOOKED CLIENTS`);
+      
+      // Then DELETE from CLIENT TRACKER (MOVE operation)
+      await deleteTrackerRow(accessToken, spreadsheetId, actualRowNumber);
+      console.log(`[STATUS CHANGE] Client DELETED from CLIENT TRACKER row ${actualRowNumber} - MOVED to BOOKED CLIENTS`);
+      
+      movedToBooked = true;
     }
   }
 
-  return { success: true, statusLog: updatedLog, copiedToBooked, actualRowNumber };
+  return { success: true, statusLog: updatedLog, copiedToBooked: movedToBooked, movedToBooked, actualRowNumber };
 }
 
 // Get recent clients (now including Column W for status, Column X for handler, Column Y for call log, Column Z for mindset, AA/AB for bargaining, AC for comments, AD for final quotation, AE/AF/AG for payments, AH for company name, AI for service types)
+// NOTE: This returns ONLY clients from CLIENT TRACKER (which now excludes BOOKED clients after migration)
+// For unified data including BOOKED clients, use getAllClientsFromBothSheets
 async function getClients(accessToken: string, spreadsheetId: string, limit = 50) {
   const range = encodeURIComponent("'CLIENT TRACKER'!A2:AI" + (limit + 1));
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
@@ -1270,7 +1278,113 @@ async function getClients(accessToken: string, spreadsheetId: string, limit = 50
     remainingPayment: row[32] || '',      // Column AG - Remaining payment
     companyName: row[33] || '',           // Column AH - Company name
     serviceTypes: row[34] || '',          // Column AI - Service types (multi, "/" separated)
+    _source: 'tracker' as const,          // Source indicator for unified queries
   }));
+}
+
+// ============= GET ALL CLIENTS FROM BOTH SHEETS (UNIFIED) =============
+// Merges data from CLIENT TRACKER (non-BOOKED) and BOOKED CLIENTS
+// This is the primary endpoint for features like Hot Dates, Calendar, Search
+async function getAllClientsFromBothSheets(accessToken: string, spreadsheetId: string, limit = 500) {
+  // Fetch from both sheets in parallel
+  const [trackerClients, bookedClients] = await Promise.all([
+    getClients(accessToken, spreadsheetId, limit),
+    getBookedClients(accessToken, spreadsheetId, limit),
+  ]);
+  
+  // Map booked clients to unified format
+  const mappedBookedClients = bookedClients.map((client: Record<string, unknown>) => ({
+    ...client,
+    rowNumber: client.bookedRowNumber, // Use bookedRowNumber as the primary rowNumber
+    _source: 'booked' as const,        // Source indicator
+  }));
+  
+  // Merge both lists
+  const merged = [...trackerClients, ...mappedBookedClients];
+  
+  console.log(`[UNIFIED FETCH] Tracker: ${trackerClients.length}, Booked: ${bookedClients.length}, Total: ${merged.length}`);
+  
+  return merged;
+}
+
+// ============= DELETE ROW FROM CLIENT TRACKER =============
+// Used when moving a client from TRACKER to BOOKED CLIENTS
+async function deleteTrackerRow(accessToken: string, spreadsheetId: string, rowNumber: number) {
+  if (!rowNumber || rowNumber < 2) {
+    throw new Error('Valid rowNumber is required for deleting from tracker');
+  }
+  
+  const sheetId = await getSheetId(accessToken, spreadsheetId, 'CLIENT TRACKER');
+  
+  const deleteUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+  const response = await fetch(deleteUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      requests: [{
+        deleteDimension: {
+          range: {
+            sheetId,
+            dimension: 'ROWS',
+            startIndex: rowNumber - 1, // 0-indexed
+            endIndex: rowNumber,
+          },
+        },
+      }],
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (deleteTrackerRow):', response.status, errorText);
+    throw new Error(`Failed to delete tracker row: ${response.status}`);
+  }
+
+  console.log(`[DELETE TRACKER ROW] Successfully deleted row ${rowNumber} from CLIENT TRACKER`);
+  return { success: true };
+}
+
+// ============= DELETE ROW FROM BOOKED CLIENTS =============
+// Used when moving a client from BOOKED CLIENTS back to TRACKER
+async function deleteBookedRow(accessToken: string, spreadsheetId: string, rowNumber: number) {
+  if (!rowNumber || rowNumber < 2) {
+    throw new Error('Valid rowNumber is required for deleting from booked clients');
+  }
+  
+  const sheetId = await getSheetId(accessToken, spreadsheetId, 'BOOKED CLIENTS');
+  
+  const deleteUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+  const response = await fetch(deleteUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      requests: [{
+        deleteDimension: {
+          range: {
+            sheetId,
+            dimension: 'ROWS',
+            startIndex: rowNumber - 1, // 0-indexed
+            endIndex: rowNumber,
+          },
+        },
+      }],
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (deleteBookedRow):', response.status, errorText);
+    throw new Error(`Failed to delete booked row: ${response.status}`);
+  }
+
+  console.log(`[DELETE BOOKED ROW] Successfully deleted row ${rowNumber} from BOOKED CLIENTS`);
+  return { success: true };
 }
 
 // Log call attempt to Column Y
@@ -1552,15 +1666,16 @@ async function updateClient(accessToken: string, spreadsheetId: string, clientDa
   return { success: true, actualRowNumber };
 }
 
-// Search clients
+// Search clients - searches BOTH sheets for unified results
 async function searchClients(accessToken: string, spreadsheetId: string, query: string) {
-  const clients = await getClients(accessToken, spreadsheetId, 500);
+  // Search both Tracker and Booked clients
+  const allClients = await getAllClientsFromBothSheets(accessToken, spreadsheetId, 500);
   const lowerQuery = query.toLowerCase();
   
-  return clients.filter((client: Record<string, string>) => 
-    client.clientName?.toLowerCase().includes(lowerQuery) ||
-    client.contactNo?.includes(query) ||
-    client.whatsappNo?.includes(query)
+  return allClients.filter((client: Record<string, unknown>) => 
+    (client.clientName as string)?.toLowerCase().includes(lowerQuery) ||
+    (client.contactNo as string)?.includes(query) ||
+    (client.whatsappNo as string)?.includes(query)
   ).slice(0, 20);
 }
 
@@ -4487,6 +4602,10 @@ Deno.serve(async (req) => {
         break;
       case 'getClients':
         result = await getClients(accessToken, spreadsheetId, body.limit);
+        break;
+      case 'getAllClients':
+        // Returns unified data from both CLIENT TRACKER and BOOKED CLIENTS
+        result = await getAllClientsFromBothSheets(accessToken, spreadsheetId, body.limit);
         break;
       case 'addClient':
         if (!data) throw new Error('data is required for addClient');

@@ -59,6 +59,7 @@ export interface ClientData {
   remainingPayment?: string;       // Column AG - remaining payment
   companyName?: string;            // Column AH - company name
   serviceTypes?: string;           // Column AI - service types (multi, "/" separated)
+  _source?: 'tracker' | 'booked'; // Source sheet indicator for unified queries
 }
 
 export interface BookedClientData extends ClientData {
@@ -148,6 +149,12 @@ export async function getEventSetupData(): Promise<string[]> {
 
 export async function getClients(limit = 50): Promise<ClientData[]> {
   return callSheetsFunction<ClientData[]>("getClients", { limit });
+}
+
+// Get ALL clients from BOTH sheets (CLIENT TRACKER + BOOKED CLIENTS)
+// This is the primary endpoint for features needing unified data: Hot Dates, Calendar, Search
+export async function getAllClients(limit = 500): Promise<ClientData[]> {
+  return callSheetsFunction<ClientData[]>("getAllClients", { limit });
 }
 
 export async function addClient(clientData: ClientData): Promise<void> {
