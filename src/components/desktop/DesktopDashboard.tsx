@@ -366,14 +366,14 @@ export function DesktopDashboard({
       });
   }, [statsClients]);
 
-  // Unified Calendar Data - All days with open/booked status and event counts
+  // Unified Calendar Data - All days with open/booked status, event counts, and ADVANCE PENDING counts
   const calendarData = useMemo(() => {
-    // First, build a map of booked dates with counts
+    // Build TWO maps: one for booked, one for advance pending
     const bookedMap = new Map<string, number>();
+    const advancePendingMap = new Map<string, number>();
     
     statsClients.forEach(client => {
       const status = getCurrentStatus(client.statusLog || '').toUpperCase();
-      if (!status.includes('BOOKED') || status.includes('BOOKED SOMEWHERE ELSE')) return;
       
       const events = parseEventDetails(
         client.events || '',
@@ -385,7 +385,12 @@ export function DesktopDashboard({
       events.forEach(event => {
         if (event.year && event.month && event.day && event.day !== '**') {
           const dateKey = `${event.year}-${event.month}-${event.day}`;
-          bookedMap.set(dateKey, (bookedMap.get(dateKey) || 0) + 1);
+          
+          if (status.includes('BOOKED') && !status.includes('BOOKED SOMEWHERE ELSE')) {
+            bookedMap.set(dateKey, (bookedMap.get(dateKey) || 0) + 1);
+          } else if (status.includes('ADVANCE PENDING')) {
+            advancePendingMap.set(dateKey, (advancePendingMap.get(dateKey) || 0) + 1);
+          }
         }
       });
     });
@@ -403,7 +408,7 @@ export function DesktopDashboard({
       month: number; 
       year: number; 
       monthName: string; 
-      days: { day: number; isBooked: boolean; eventCount: number }[];
+      days: { day: number; isBooked: boolean; eventCount: number; advancePendingCount: number }[];
       bookedCount: number;
     }[] = [];
     
@@ -413,15 +418,16 @@ export function DesktopDashboard({
       const monthName = NEPALI_MONTHS[monthNum];
       const daysInMonth = daysPerMonth[monthNum] || 30;
       
-      const days: { day: number; isBooked: boolean; eventCount: number }[] = [];
+      const days: { day: number; isBooked: boolean; eventCount: number; advancePendingCount: number }[] = [];
       let bookedCount = 0;
       
       for (let day = 1; day <= daysInMonth; day++) {
         const dateKey = `${yearNum}-${monthNum}-${day}`;
         const eventCount = bookedMap.get(dateKey) || 0;
+        const advancePendingCount = advancePendingMap.get(dateKey) || 0;
         const isBooked = eventCount > 0;
         if (isBooked) bookedCount++;
-        days.push({ day, isBooked, eventCount });
+        days.push({ day, isBooked, eventCount, advancePendingCount });
       }
       
       result.push({ month: monthNum, year: yearNum, monthName, days, bookedCount });
@@ -579,8 +585,10 @@ export function DesktopDashboard({
                   <div className="flex items-center gap-3">
                     <Calendar className="w-4 h-4 text-primary" />
                     <span className="font-semibold text-sm">Booking Calendar</span>
-                    <span className="text-xs text-muted-foreground">
-                      (Plain = Open, <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-500 text-white text-[8px]">●</span> = Booked)
+                    <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      (Plain = Open, 
+                      <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-500 text-white text-[8px]">●</span> Booked,
+                      <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-500 text-white text-[8px]">●</span> Advance)
                     </span>
                   </div>
                   <Button 
@@ -611,61 +619,92 @@ export function DesktopDashboard({
                     
                     {/* All Days - Open as plain numbers, Booked as concentric circles */}
                     <div className="flex-1 flex flex-wrap gap-x-1 gap-y-1.5 min-w-0 items-center">
-                      {monthData.days.map(({ day, isBooked, eventCount }) => (
-                        isBooked ? (
-                          // BOOKED: Clickable concentric circles with day number inside
-                          // Dynamic rings: 1 event = 1 circle, 2 events = 2 circles, etc.
-                          <button 
-                            key={day}
-                            onClick={() => onHotDateFilter?.(`${monthData.year}-${monthData.month}-${day}`)}
-                            className={cn(
-                              "relative inline-flex items-center justify-center cursor-pointer transition-all hover:scale-110",
-                              selectedHotDate === `${monthData.year}-${monthData.month}-${day}` 
-                                ? "ring-2 ring-offset-2 ring-green-500 rounded-full"
-                                : ""
-                            )}
-                            style={{ 
-                              // Base size 20px + 8px per additional ring
-                              width: `${20 + (eventCount - 1) * 8}px`,
-                              height: `${20 + (eventCount - 1) * 8}px`
-                            }}
-                            title={`${eventCount} event(s) on day ${day} - Click to filter`}
-                          >
-                            {/* Dynamic outer rings - render from largest to smallest */}
-                            {Array.from({ length: eventCount - 1 }, (_, i) => {
-                              const ringIndex = eventCount - 1 - i; // Render largest first
-                              const size = 20 + ringIndex * 8; // 28px, 36px, 44px, 52px...
-                              return (
+                      {monthData.days.map(({ day, isBooked, eventCount, advancePendingCount }) => {
+                        const hasAdvancePending = advancePendingCount > 0;
+                        
+                        if (isBooked) {
+                          // BOOKED: Concentric circles + optional yellow outer ring for advance pending
+                          const totalRingSize = 20 + (eventCount - 1) * 8 + (hasAdvancePending ? 8 : 0);
+                          return (
+                            <button 
+                              key={day}
+                              onClick={() => onHotDateFilter?.(`${monthData.year}-${monthData.month}-${day}`)}
+                              className={cn(
+                                "relative inline-flex items-center justify-center cursor-pointer transition-all hover:scale-110",
+                                selectedHotDate === `${monthData.year}-${monthData.month}-${day}` 
+                                  ? "ring-2 ring-offset-2 ring-green-500 rounded-full"
+                                  : ""
+                              )}
+                              style={{ 
+                                width: `${totalRingSize}px`,
+                                height: `${totalRingSize}px`
+                              }}
+                              title={`${eventCount} booked${hasAdvancePending ? ` + ${advancePendingCount} advance pending` : ''} on day ${day}`}
+                            >
+                              {/* Yellow outer ring for advance pending */}
+                              {hasAdvancePending && (
                                 <span 
-                                  key={ringIndex}
-                                  className="absolute rounded-full border-2 border-green-500"
-                                  style={{ width: `${size}px`, height: `${size}px` }}
+                                  className="absolute rounded-full border-2 border-amber-500"
+                                  style={{ width: `${totalRingSize}px`, height: `${totalRingSize}px` }}
                                 />
-                              );
-                            })}
-                            {/* Inner filled circle with day number - always present */}
-                            <span className="w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center text-[10px] font-bold z-10">
+                              )}
+                              {/* Green outer rings for booked events */}
+                              {Array.from({ length: eventCount - 1 }, (_, i) => {
+                                const ringIndex = eventCount - 1 - i;
+                                const size = 20 + ringIndex * 8;
+                                return (
+                                  <span 
+                                    key={ringIndex}
+                                    className="absolute rounded-full border-2 border-green-500"
+                                    style={{ width: `${size}px`, height: `${size}px` }}
+                                  />
+                                );
+                              })}
+                              {/* Inner filled circle with day number */}
+                              <span className="w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center text-[10px] font-bold z-10">
+                                {day}
+                              </span>
+                            </button>
+                          );
+                        } else if (hasAdvancePending) {
+                          // ADVANCE PENDING ONLY: Yellow text/circle
+                          return (
+                            <button 
+                              key={day}
+                              onClick={() => onHotDateFilter?.(`${monthData.year}-${monthData.month}-${day}`)}
+                              className={cn(
+                                "w-5 h-5 flex items-center justify-center font-mono text-[10px] font-bold",
+                                "cursor-pointer rounded-full transition-all",
+                                "text-amber-600 bg-amber-500/20 hover:bg-amber-500/30",
+                                selectedHotDate === `${monthData.year}-${monthData.month}-${day}` 
+                                  ? "ring-2 ring-amber-500 bg-amber-500/30"
+                                  : ""
+                              )}
+                              title={`${advancePendingCount} advance pending on day ${day}`}
+                            >
                               {day}
-                            </span>
-                          </button>
-                        ) : (
-                          // OPEN: Clickable plain number
-                          <button 
-                            key={day}
-                            onClick={() => onHotDateFilter?.(`${monthData.year}-${monthData.month}-${day}`)}
-                            className={cn(
-                              "w-5 h-5 flex items-center justify-center font-mono text-[10px] text-muted-foreground",
-                              "cursor-pointer hover:text-foreground hover:bg-muted rounded transition-all",
-                              selectedHotDate === `${monthData.year}-${monthData.month}-${day}` 
-                                ? "ring-2 ring-primary bg-primary/10 text-foreground"
-                                : ""
-                            )}
-                            title={`Day ${day} - Click to filter`}
-                          >
-                            {day}
-                          </button>
-                        )
-                      ))}
+                            </button>
+                          );
+                        } else {
+                          // OPEN: Plain number
+                          return (
+                            <button 
+                              key={day}
+                              onClick={() => onHotDateFilter?.(`${monthData.year}-${monthData.month}-${day}`)}
+                              className={cn(
+                                "w-5 h-5 flex items-center justify-center font-mono text-[10px] text-muted-foreground",
+                                "cursor-pointer hover:text-foreground hover:bg-muted rounded transition-all",
+                                selectedHotDate === `${monthData.year}-${monthData.month}-${day}` 
+                                  ? "ring-2 ring-primary bg-primary/10 text-foreground"
+                                  : ""
+                              )}
+                              title={`Day ${day} - Click to filter`}
+                            >
+                              {day}
+                            </button>
+                          );
+                        }
+                      })}
                     </div>
                     
                     {/* Booked Count Badge */}
