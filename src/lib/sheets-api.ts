@@ -640,6 +640,8 @@ export interface BulkEventDetail {
   parlourStartTime: string;
   parlourEndTime: string;
   guestCount: string;
+  eventDemand: string;
+  eventReferences: string;
 }
 
 // Get event details for multiple clients in a single API call

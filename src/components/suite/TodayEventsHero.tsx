@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useBookedCachedData } from "@/hooks/useBookedCachedData";
 import { useBulkEventDetails } from "@/hooks/useBulkEventDetails";
-import { Calendar, Sparkles, ArrowRight, Clock, MapPin, Scissors, Phone, MessageCircle, MessageSquare, Plus, Loader2, ExternalLink } from "lucide-react";
+import { Calendar, Sparkles, ArrowRight, Clock, MapPin, Scissors, Phone, MessageCircle, MessageSquare, Plus, Loader2, ExternalLink, ChevronDown, ChevronUp, FileText, Image } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemo, useState } from "react";
 import { parseComments } from "@/lib/client-card-utils";
@@ -10,6 +10,7 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 // Helper to get upcoming events
 function getUpcomingEvents(clients: any[]) {
   const today = new Date();
@@ -162,6 +163,9 @@ export function TodayEventsHero() {
   // Local state for optimistic comment updates
   const [localComments, setLocalComments] = useState<Record<string, string>>({});
   
+  // Track which cards are expanded
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+  
   // Extract unique client IDs for bulk fetch (limit to first 30 events)
   const clientIds = useMemo(() => {
     const limitedEvents = upcomingEvents.slice(0, 30);
@@ -313,219 +317,281 @@ export function TodayEventsHero() {
                   const hasParlour = Boolean(parlourDisplay);
                   const hasDetails = hasVenue || hasParlour;
                   
+                  // Get event name from eventDetail if available, fallback to parsed event name
+                  const displayEventName = eventDetail?.eventName || event.eventName;
+                  
+                  // Get demands and references
+                  const eventDemand = eventDetail?.eventDemand || '';
+                  const eventReferences = eventDetail?.eventReferences || '';
+                  const hasExpandableContent = Boolean(eventDemand || eventReferences);
+                  
                   // Parse comments
                   const parsedComments = parseComments(event.client.comments);
                   const lastComment = parsedComments.length > 0 ? parsedComments[parsedComments.length - 1] : null;
                   
+                  const cardKey = `${event.client.clientName}-${event.dateStr}-${idx}`;
+                  const isExpanded = expandedCards[cardKey] || false;
+                  
                   return (
-                    <div 
-                      key={`${event.client.clientName}-${event.dateStr}-${idx}`}
-                      className="p-3 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-200 hover:border-emerald-300 transition-all group"
+                    <Collapsible
+                      key={cardKey}
+                      open={isExpanded}
+                      onOpenChange={(open) => setExpandedCards(prev => ({ ...prev, [cardKey]: open }))}
                     >
-                      {/* Header row with contact icons */}
-                      <div className="flex items-start gap-2">
-                        {/* Day badge */}
-                        <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
-                          {isToday ? (
-                            <>
-                              <Sparkles className="w-4 h-4 text-emerald-500" />
-                              <span className="text-xs font-medium text-white uppercase tracking-wide px-2 py-0.5 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full shadow-sm">
-                                TODAY
-                              </span>
-                            </>
-                          ) : (
-                            <>
-                              <Clock className="w-4 h-4 text-gray-400" />
-                              <span className={cn(
-                                "text-xs font-medium px-2 py-0.5 rounded-full",
-                                isTomorrow 
-                                  ? "bg-amber-100 text-amber-700"
-                                  : isUrgent
-                                    ? "bg-orange-100 text-orange-700"
-                                    : "bg-gray-100 text-gray-600"
-                              )}>
-                                {formatDaysUntil(event.daysUntil)}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                        
-                        {/* Client name and event - clickable link */}
-                        <Link 
-                          to={`/client-tracker/client/${encodeURIComponent(clientId)}`}
-                          className="flex-1 min-w-0"
-                        >
-                          <p className="text-gray-900 font-semibold truncate group-hover:text-emerald-700 transition-colors">
-                            {event.client.clientName}
-                          </p>
-                          <p className="text-sm font-medium text-emerald-600 truncate">
-                            {event.eventName}
-                          </p>
-                        </Link>
-                        
-                        {/* Contact icons */}
-                        <div className="flex items-center gap-1 shrink-0">
-                          {event.client.contactNo && (
-                            <a 
-                              href={`tel:${event.client.contactNo}`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex items-center gap-1 px-1.5 py-1 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs transition-colors"
-                              title={`Call ${event.client.contactNo}`}
-                            >
-                              <Phone className="w-3 h-3" />
-                              <span className="hidden sm:inline">...{event.client.contactNo.slice(-4)}</span>
-                            </a>
-                          )}
-                          {event.client.whatsappNo && (
-                            <a 
-                              href={`https://wa.me/${event.client.whatsappNo.replace(/\D/g, '')}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex items-center gap-1 px-1.5 py-1 rounded-full bg-green-50 hover:bg-green-100 text-green-600 text-xs transition-colors"
-                              title={`WhatsApp ${event.client.whatsappNo}`}
-                            >
-                              <MessageCircle className="w-3 h-3" />
-                              <span className="hidden sm:inline">...{event.client.whatsappNo.slice(-4)}</span>
-                            </a>
-                          )}
-                        </div>
-                        
-                        {/* Arrow link */}
-                        <Link 
-                          to={`/client-tracker/client/${encodeURIComponent(clientId)}`}
-                          className="shrink-0"
-                        >
-                          <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all" />
-                        </Link>
-                      </div>
-                      
-                      {/* Event Details - Venue & Parlour */}
-                      {hasDetails && (
-                        <div className="mt-2 pt-2 border-t border-gray-200 space-y-1.5">
-                          {/* Venue */}
-                          <div className="flex items-start gap-2 text-xs">
-                            <MapPin className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
-                            <div className="min-w-0 flex-1">
-                              {hasVenue ? (
-                                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                                  <span className="text-gray-700 font-medium">{venueDisplay}</span>
-                                  {eventDetail?.venueMap && (
-                                    <a
-                                      href={eventDetail.venueMap}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="inline-flex items-center gap-0.5 text-blue-500 hover:text-blue-700"
-                                      title="Open in Google Maps"
-                                    >
-                                      <ExternalLink className="w-3 h-3" />
-                                    </a>
-                                  )}
-                                  {venueTime && (
-                                    <>
-                                      <span className="text-gray-500">• {venueTime}</span>
-                                      {(() => {
-                                        const remaining = getRemainingTime(event.dateStr, eventDetail?.eventStartTime || '');
-                                        return remaining ? (
-                                          <span className="text-amber-600 font-medium">({remaining})</span>
-                                        ) : null;
-                                      })()}
-                                    </>
-                                  )}
-                                  {eventDetail?.guestCount && (
-                                    <span className="text-gray-400">({eventDetail.guestCount} guests)</span>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-gray-400 italic">Venue not set</span>
-                              )}
-                            </div>
+                      <div 
+                        className="p-3 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-200 hover:border-emerald-300 transition-all group"
+                      >
+                        {/* Header row with contact icons */}
+                        <div className="flex items-start gap-2">
+                          {/* Day badge */}
+                          <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+                            {isToday ? (
+                              <>
+                                <Sparkles className="w-4 h-4 text-emerald-500" />
+                                <span className="text-xs font-medium text-white uppercase tracking-wide px-2 py-0.5 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full shadow-sm">
+                                  TODAY
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <Clock className="w-4 h-4 text-gray-400" />
+                                <span className={cn(
+                                  "text-xs font-medium px-2 py-0.5 rounded-full",
+                                  isTomorrow 
+                                    ? "bg-amber-100 text-amber-700"
+                                    : isUrgent
+                                      ? "bg-orange-100 text-orange-700"
+                                      : "bg-gray-100 text-gray-600"
+                                )}>
+                                  {formatDaysUntil(event.daysUntil)}
+                                </span>
+                              </>
+                            )}
                           </div>
                           
-                          {/* Parlour */}
-                          <div className="flex items-start gap-2 text-xs">
-                            <Scissors className="w-3.5 h-3.5 text-pink-500 mt-0.5 shrink-0" />
-                            <div className="min-w-0 flex-1">
-                              {hasParlour ? (
-                                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                                  <span className="text-gray-700 font-medium">{parlourDisplay}</span>
-                                  {eventDetail?.parlourMap && (
-                                    <a
-                                      href={eventDetail.parlourMap}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="inline-flex items-center gap-0.5 text-blue-500 hover:text-blue-700"
-                                      title="Open in Google Maps"
-                                    >
-                                      <ExternalLink className="w-3 h-3" />
-                                    </a>
-                                  )}
-                                  {parlourTime && (
-                                    <>
-                                      <span className="text-gray-500">• {parlourTime}</span>
-                                      {(() => {
-                                        const remaining = getRemainingTime(event.dateStr, eventDetail?.parlourStartTime || '');
-                                        return remaining ? (
-                                          <span className="text-amber-600 font-medium">({remaining})</span>
-                                        ) : null;
-                                      })()}
-                                    </>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-gray-400 italic">Parlour not set</span>
-                              )}
+                          {/* Client name and event - clickable link */}
+                          <Link 
+                            to={`/client-tracker/client/${encodeURIComponent(clientId)}`}
+                            className="flex-1 min-w-0"
+                          >
+                            <p className="text-gray-900 font-semibold truncate group-hover:text-emerald-700 transition-colors">
+                              {event.client.clientName}
+                            </p>
+                            <p className="text-sm font-medium text-emerald-600 truncate">
+                              {displayEventName}
+                            </p>
+                          </Link>
+                          
+                          {/* Contact icons */}
+                          <div className="flex items-center gap-1 shrink-0">
+                            {event.client.contactNo && (
+                              <a 
+                                href={`tel:${event.client.contactNo}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex items-center gap-1 px-1.5 py-1 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs transition-colors"
+                                title={`Call ${event.client.contactNo}`}
+                              >
+                                <Phone className="w-3 h-3" />
+                                <span className="hidden sm:inline">...{event.client.contactNo.slice(-4)}</span>
+                              </a>
+                            )}
+                            {event.client.whatsappNo && (
+                              <a 
+                                href={`https://wa.me/${event.client.whatsappNo.replace(/\D/g, '')}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex items-center gap-1 px-1.5 py-1 rounded-full bg-green-50 hover:bg-green-100 text-green-600 text-xs transition-colors"
+                                title={`WhatsApp ${event.client.whatsappNo}`}
+                              >
+                                <MessageCircle className="w-3 h-3" />
+                                <span className="hidden sm:inline">...{event.client.whatsappNo.slice(-4)}</span>
+                              </a>
+                            )}
+                          </div>
+                          
+                          {/* Arrow link */}
+                          <Link 
+                            to={`/client-tracker/client/${encodeURIComponent(clientId)}`}
+                            className="shrink-0"
+                          >
+                            <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all" />
+                          </Link>
+                        </div>
+                        
+                        {/* Event Details - Venue & Parlour */}
+                        {hasDetails && (
+                          <div className="mt-2 pt-2 border-t border-gray-200 space-y-1.5">
+                            {/* Venue */}
+                            <div className="flex items-start gap-2 text-xs">
+                              <MapPin className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                {hasVenue ? (
+                                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                                    <span className="text-gray-700 font-medium">{venueDisplay}</span>
+                                    {eventDetail?.venueMap && (
+                                      <a
+                                        href={eventDetail.venueMap}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="inline-flex items-center gap-0.5 text-blue-500 hover:text-blue-700"
+                                        title="Open in Google Maps"
+                                      >
+                                        <ExternalLink className="w-3 h-3" />
+                                      </a>
+                                    )}
+                                    {venueTime && (
+                                      <>
+                                        <span className="text-gray-500">• {venueTime}</span>
+                                        {(() => {
+                                          const remaining = getRemainingTime(event.dateStr, eventDetail?.eventStartTime || '');
+                                          return remaining ? (
+                                            <span className="text-amber-600 font-medium">({remaining})</span>
+                                          ) : null;
+                                        })()}
+                                      </>
+                                    )}
+                                    {eventDetail?.guestCount && (
+                                      <span className="text-gray-400">({eventDetail.guestCount} guests)</span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-400 italic">Venue not set</span>
+                                )}
+                              </div>
+                            </div>
+                            
+                            {/* Parlour */}
+                            <div className="flex items-start gap-2 text-xs">
+                              <Scissors className="w-3.5 h-3.5 text-pink-500 mt-0.5 shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                {hasParlour ? (
+                                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                                    <span className="text-gray-700 font-medium">{parlourDisplay}</span>
+                                    {eventDetail?.parlourMap && (
+                                      <a
+                                        href={eventDetail.parlourMap}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="inline-flex items-center gap-0.5 text-blue-500 hover:text-blue-700"
+                                        title="Open in Google Maps"
+                                      >
+                                        <ExternalLink className="w-3 h-3" />
+                                      </a>
+                                    )}
+                                    {parlourTime && (
+                                      <>
+                                        <span className="text-gray-500">• {parlourTime}</span>
+                                        {(() => {
+                                          const remaining = getRemainingTime(event.dateStr, eventDetail?.parlourStartTime || '');
+                                          return remaining ? (
+                                            <span className="text-amber-600 font-medium">({remaining})</span>
+                                          ) : null;
+                                        })()}
+                                      </>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-400 italic">Parlour not set</span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      )}
-                      
-                      {/* Loading indicator for details */}
-                      {isLoadingDetails && !hasDetails && (
-                        <div className="mt-2 pt-2 border-t border-gray-200">
-                          <div className="h-3 w-32 bg-gray-200 rounded animate-pulse" />
-                        </div>
-                      )}
-                      
-                      {/* Comment section */}
-                      {(() => {
-                        const clientIdForComments = event.client.registeredDateTimeAD || `${event.client.clientName}-${event.client.bookedRowNumber}`;
-                        const localComment = localComments[clientIdForComments];
-                        const displayComment = localComment || (lastComment?.text);
+                        )}
                         
-                        return (
-                          <div className="mt-2 pt-2 border-t border-gray-200 flex items-center gap-2">
-                            <MessageSquare className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                            {displayComment ? (
-                              <span className="text-xs text-gray-600 truncate flex-1">
-                                "{displayComment.length > 50 ? displayComment.slice(0, 50) + '...' : displayComment}"
-                              </span>
-                            ) : (
-                              <span className="text-xs text-gray-400 italic flex-1">No comments</span>
-                            )}
-                            <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                openCommentDrawer(
-                                  event.client.clientName,
-                                  clientIdForComments,
-                                  event.client.bookedRowNumber,
-                                  event.client.comments || '',
-                                  event.client.registeredDateTimeAD || ''
-                                );
-                              }}
-                              className="p-1 rounded-full bg-emerald-100 hover:bg-emerald-200 text-emerald-600 transition-colors shrink-0"
-                              title="Add comment"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                            </button>
+                        {/* Loading indicator for details */}
+                        {isLoadingDetails && !hasDetails && (
+                          <div className="mt-2 pt-2 border-t border-gray-200">
+                            <div className="h-3 w-32 bg-gray-200 rounded animate-pulse" />
                           </div>
-                        );
-                      })()}
-                    </div>
+                        )}
+                        
+                        {/* Expanded content - Demands & References */}
+                        <CollapsibleContent>
+                          {hasExpandableContent && (
+                            <div className="mt-2 pt-2 border-t border-gray-200 space-y-2">
+                              {/* Demands */}
+                              {eventDemand && (
+                                <div className="flex items-start gap-2 text-xs">
+                                  <FileText className="w-3.5 h-3.5 text-cyan-500 mt-0.5 shrink-0" />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-gray-500 font-medium mb-0.5">Demands</p>
+                                    <p className="text-gray-700">{eventDemand}</p>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* References */}
+                              {eventReferences && (
+                                <div className="flex items-start gap-2 text-xs">
+                                  <Image className="w-3.5 h-3.5 text-purple-500 mt-0.5 shrink-0" />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-gray-500 font-medium mb-0.5">References</p>
+                                    <p className="text-gray-700">{eventReferences}</p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </CollapsibleContent>
+                        
+                        {/* Comment section + Expand button */}
+                        {(() => {
+                          const clientIdForComments = event.client.registeredDateTimeAD || `${event.client.clientName}-${event.client.bookedRowNumber}`;
+                          const localComment = localComments[clientIdForComments];
+                          const displayComment = localComment || (lastComment?.text);
+                          
+                          return (
+                            <div className="mt-2 pt-2 border-t border-gray-200 flex items-center gap-2">
+                              {/* Expand/Collapse button */}
+                              {hasExpandableContent && (
+                                <CollapsibleTrigger asChild>
+                                  <button
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="p-1 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 transition-colors shrink-0"
+                                    title={isExpanded ? "Collapse" : "Expand to see demands & references"}
+                                  >
+                                    {isExpanded ? (
+                                      <ChevronUp className="w-3.5 h-3.5" />
+                                    ) : (
+                                      <ChevronDown className="w-3.5 h-3.5" />
+                                    )}
+                                  </button>
+                                </CollapsibleTrigger>
+                              )}
+                              
+                              <MessageSquare className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                              {displayComment ? (
+                                <span className="text-xs text-gray-600 truncate flex-1">
+                                  "{displayComment.length > 50 ? displayComment.slice(0, 50) + '...' : displayComment}"
+                                </span>
+                              ) : (
+                                <span className="text-xs text-gray-400 italic flex-1">No comments</span>
+                              )}
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  openCommentDrawer(
+                                    event.client.clientName,
+                                    clientIdForComments,
+                                    event.client.bookedRowNumber,
+                                    event.client.comments || '',
+                                    event.client.registeredDateTimeAD || ''
+                                  );
+                                }}
+                                className="p-1 rounded-full bg-emerald-100 hover:bg-emerald-200 text-emerald-600 transition-colors shrink-0"
+                                title="Add comment"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </Collapsible>
                   );
               })}
             </div>
