@@ -1430,6 +1430,7 @@ const ClientDetail = () => {
                 data={contactDetailsData}
                 isLoading={contactDetailsLoading}
                 isResyncing={contactDetailsResyncing}
+                clientWhatsAppNumber={client?.whatsappNo}
                 onSave={updateContactDetails}
                 onResync={resyncContactDetails}
                 onMarkFormSent={markFormAsSent}
