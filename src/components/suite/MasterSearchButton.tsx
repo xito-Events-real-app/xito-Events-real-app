@@ -392,23 +392,23 @@ export function MasterSearchButton() {
                   : "scrollbar-hide"
               )}
             >
-              {recentToShow.map((item, i) => (
-                <button
-                  key={i}
-                  onClick={() => handleRecentClick(item.query)}
-                  className={cn(
-                    "shrink-0 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap",
-                    "bg-gradient-to-r from-violet-100 to-purple-100",
-                    "text-violet-700 border border-violet-200",
-                    "hover:from-violet-200 hover:to-purple-200",
-                    "transition-all duration-150",
-                    "animate-pop-in"
-                  )}
-                  style={{ animationDelay: `${i * 30}ms` }}
-                >
-                  {item.query}
-                </button>
-              ))}
+                {recentToShow.map((item, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleRecentClick(item.query)}
+                    className={cn(
+                      "shrink-0 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap",
+                      "bg-gradient-to-r from-violet-100 to-purple-100",
+                      "text-violet-700 border border-violet-200",
+                      "hover:from-violet-200 hover:to-purple-200",
+                      "transition-all duration-150",
+                      "animate-pop-in"
+                    )}
+                    style={{ animationDelay: `${i * 30}ms` }}
+                  >
+                    {item.query}
+                  </button>
+                ))}
             </div>
             
             {/* Right chevron */}
