@@ -59,6 +59,7 @@ export function AdvancePaymentDialog({
   // Parse existing final quotation
   const parsedFinal = parseFinalQuotation(finalQuotation || '');
   const finalAmount = parsedFinal ? parseInt(parsedFinal.amount.replace(/[^0-9]/g, '')) : 0;
+  const hasFinalQuotation = parsedFinal !== null;
 
   // Reset state and initialize date when dialog opens
   useEffect(() => {
@@ -85,7 +86,7 @@ export function AdvancePaymentDialog({
   };
 
   const handleSave = async () => {
-    if (!paymentAmount.trim() || !selectedPaymentType || !selectedBank || !selectedDate || !selectedBSDate) return;
+    if (!hasFinalQuotation || !paymentAmount.trim() || !selectedPaymentType || !selectedBank || !selectedDate || !selectedBSDate) return;
 
     const formattedNepaliDate = `${selectedBSDate.year}-${String(selectedBSDate.month).padStart(2, '0')}-${String(selectedBSDate.day).padStart(2, '0')}`;
     const formattedADDate = selectedDate.toISOString().split('T')[0];
@@ -99,7 +100,8 @@ export function AdvancePaymentDialog({
     });
   };
 
-  const isValid = paymentAmount.trim() && selectedPaymentType && selectedBank && selectedDate && selectedBSDate;
+  // Require final quotation to be set before allowing payment
+  const isValid = hasFinalQuotation && paymentAmount.trim() && selectedPaymentType && selectedBank && selectedDate && selectedBSDate;
 
   // Filter payment types to prioritize ADVANCE
   const sortedPaymentTypes = [...paymentTypes].sort((a, b) => {
@@ -137,10 +139,13 @@ export function AdvancePaymentDialog({
             </div>
           )}
 
-          {!parsedFinal && (
-            <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-              <p className="text-sm text-amber-700 dark:text-amber-400">
-                ⚠️ No final quotation is set. The payment will be recorded but totals may not calculate correctly.
+          {!hasFinalQuotation && (
+            <div className="p-3 rounded-lg bg-destructive/10 border border-destructive">
+              <p className="text-sm text-destructive font-medium">
+                ⛔ Final quotation is required before recording payment.
+              </p>
+              <p className="text-xs text-destructive/80 mt-1">
+                Please set the status to "ADVANCE PENDING" first to lock the final quotation.
               </p>
             </div>
           )}

@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useCachedData } from "@/hooks/useCachedData";
 import { useDropdownData } from "@/hooks/useDropdownData";
-import { updateClient, ClientData, updateClientStatus, logCallAttempt, addPayment, updateClientQuotation, addClientComment, updateFinalQuotation } from "@/lib/sheets-api";
+import { updateClient, ClientData, updateClientStatus, logCallAttempt, addPayment, updateClientQuotation, addClientComment, updateFinalQuotation, getSingleClient } from "@/lib/sheets-api";
 import { forceResetDatabase, notifyCacheUpdate } from "@/lib/cache-manager";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -199,7 +199,8 @@ const ClientDetail = () => {
   // Event details editing state
   const [editingEventIndex, setEditingEventIndex] = useState<number | null>(null);
 
-  // Get the from state to preserve filter position when going back
+  // Client sync state
+  const [isSyncingClient, setIsSyncingClient] = useState(false);
   const fromState = location.state as { 
     from?: string; 
     filters?: any; 
@@ -794,7 +795,11 @@ const ClientDetail = () => {
     
     setIsSavingBookedPayment(true);
     try {
-      // Add payment
+      // Step 1: Update status to BOOKED FIRST - this MOVES the client to BOOKED CLIENTS sheet
+      const statusResult = await updateClientStatus(client.rowNumber, pendingStatus, currentStatusLog || client.statusLog || '');
+      setCurrentStatusLog(statusResult.statusLog);
+      
+      // Step 2: NOW add payment - client exists in BOOKED CLIENTS sheet after status update
       const paymentResult = await addPayment(
         client.rowNumber,
         data.amount,
@@ -811,10 +816,6 @@ const ClientDetail = () => {
       
       setCurrentPaymentsMade(paymentResult.paymentsMade);
       setCurrentRemainingPayment(paymentResult.remainingPayment);
-      
-      // Update status to BOOKED
-      const statusResult = await updateClientStatus(client.rowNumber, pendingStatus, currentStatusLog || client.statusLog || '');
-      setCurrentStatusLog(statusResult.statusLog);
       
       // Update global cache
       if (updateClientCache) {
@@ -837,6 +838,34 @@ const ClientDetail = () => {
       toast({ title: "Failed to record payment", variant: "destructive" });
     } finally {
       setIsSavingBookedPayment(false);
+    }
+  };
+
+  // Handle syncing client data from sheets
+  const handleSyncClient = async () => {
+    if (!client?.registeredDateTimeAD) return;
+    
+    setIsSyncingClient(true);
+    try {
+      const freshClient = await getSingleClient(client.registeredDateTimeAD);
+      if (freshClient && updateClientCache) {
+        updateClientCache(freshClient);
+        // Update local state to reflect fresh data
+        setCurrentStatusLog(freshClient.statusLog || '');
+        setCurrentPaymentsMade(freshClient.paymentsMade || '');
+        setCurrentRemainingPayment(freshClient.remainingPayment || '');
+        setCurrentComments(freshClient.comments || '');
+        setCurrentQuotationData(freshClient.quotationData || '');
+        setCurrentFinalQuotation(freshClient.finalQuotation || '');
+        toast({ title: "Client data synced from sheets" });
+      } else if (!freshClient) {
+        toast({ title: "Client not found in sheets", variant: "destructive" });
+      }
+    } catch (err) {
+      console.error('Failed to sync client:', err);
+      toast({ title: "Failed to sync client data", variant: "destructive" });
+    } finally {
+      setIsSyncingClient(false);
     }
   };
 
@@ -1240,6 +1269,15 @@ const ClientDetail = () => {
               <Button
                 variant="ghost"
                 size="icon"
+                onClick={handleSyncClient}
+                disabled={isSyncingClient}
+                className="rounded-full text-white/70 hover:text-white hover:bg-white/10"
+              >
+                <RefreshCw className={`h-4 w-4 ${isSyncingClient ? 'animate-spin' : ''}`} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={handleEdit}
                 className="rounded-full text-white/70 hover:text-white hover:bg-white/10"
               >
@@ -1298,6 +1336,7 @@ const ClientDetail = () => {
               onCall={handleCall}
               onStatusClick={() => setShowStatusDropdown(true)}
               onEdit={handleEdit}
+              onSync={handleSyncClient}
               onAddComment={async (comment) => {
                 await handleAddCommentDirect(comment);
               }}
@@ -1308,6 +1347,7 @@ const ClientDetail = () => {
               isLoggingCall={isLoggingCall}
               isChangingStatus={isChangingStatus}
               isAddingComment={isAddingComment}
+              isSyncing={isSyncingClient}
               eventDetailsData={eventDetailsData}
               eventDetailsLoading={eventDetailsLoading}
             />
