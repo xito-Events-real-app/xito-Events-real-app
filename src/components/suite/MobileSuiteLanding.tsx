@@ -1,15 +1,21 @@
 import { useState } from "react";
-import { LogOut, Home, Newspaper } from "lucide-react";
+import { LogOut, Home, Newspaper, LayoutGrid, Construction } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { GlobalModeToggle } from "@/components/layout/GlobalModeToggle";
-import { SuiteHomeContent } from "./SuiteHomeContent";
 import { SuiteNewsFeed } from "./SuiteNewsFeed";
 import { useActivityFeed } from "@/hooks/useActivityFeed";
 import { cn } from "@/lib/utils";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { TodayEventsHero } from "./TodayEventsHero";
+import { HandlerActivityGrid } from "./HandlerActivityGrid";
+import { SuiteQuickActionsBar } from "./SuiteQuickActionsBar";
+import { SuiteModuleGrid } from "./SuiteModuleGrid";
+import { MasterSearchButton } from "./MasterSearchButton";
+import { MasterSyncButton } from "./MasterSyncButton";
 
-type TabType = 'home' | 'news';
+type TabType = 'home' | 'news' | 'modules' | 'coming-soon';
 
 export function MobileSuiteLanding() {
   const navigate = useNavigate();
@@ -49,33 +55,63 @@ export function MobileSuiteLanding() {
       </div>
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-hidden animate-fade-in">
-        {activeTab === 'home' && <SuiteHomeContent />}
+      <div className="flex-1 overflow-hidden">
+        {activeTab === 'home' && <HomeTabContent />}
+        {activeTab === 'modules' && <ModulesTabContent />}
+        {activeTab === 'coming-soon' && <ComingSoonTabContent />}
         {activeTab === 'news' && <SuiteNewsFeed />}
       </div>
 
       {/* Bottom Tab Navigation */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 safe-area-bottom">
-        <div className="flex items-center justify-center gap-8 py-2 px-4 max-w-lg mx-auto">
+        <div className="flex items-center justify-around py-2 px-2">
           {/* Home Tab */}
           <button
             onClick={() => setActiveTab('home')}
             className={cn(
-              "flex flex-col items-center gap-1 py-2 px-6 rounded-xl transition-all",
+              "flex flex-col items-center gap-0.5 py-2 px-4 rounded-xl transition-all min-w-[60px]",
               activeTab === 'home' 
                 ? "bg-violet-100 text-violet-700" 
                 : "text-gray-500 hover:text-gray-700"
             )}
           >
             <Home className="w-5 h-5" />
-            <span className="text-xs font-medium">Home</span>
+            <span className="text-[10px] font-medium">Home</span>
+          </button>
+          
+          {/* Modules Tab */}
+          <button
+            onClick={() => setActiveTab('modules')}
+            className={cn(
+              "flex flex-col items-center gap-0.5 py-2 px-4 rounded-xl transition-all min-w-[60px]",
+              activeTab === 'modules' 
+                ? "bg-violet-100 text-violet-700" 
+                : "text-gray-500 hover:text-gray-700"
+            )}
+          >
+            <LayoutGrid className="w-5 h-5" />
+            <span className="text-[10px] font-medium">Modules</span>
+          </button>
+          
+          {/* Coming Soon Tab */}
+          <button
+            onClick={() => setActiveTab('coming-soon')}
+            className={cn(
+              "flex flex-col items-center gap-0.5 py-2 px-4 rounded-xl transition-all min-w-[60px]",
+              activeTab === 'coming-soon' 
+                ? "bg-amber-100 text-amber-700" 
+                : "text-gray-500 hover:text-gray-700"
+            )}
+          >
+            <Construction className="w-5 h-5" />
+            <span className="text-[10px] font-medium">Soon</span>
           </button>
           
           {/* News Tab */}
           <button
             onClick={() => setActiveTab('news')}
             className={cn(
-              "flex flex-col items-center gap-1 py-2 px-6 rounded-xl transition-all relative",
+              "flex flex-col items-center gap-0.5 py-2 px-4 rounded-xl transition-all relative min-w-[60px]",
               activeTab === 'news' 
                 ? "bg-violet-100 text-violet-700" 
                 : "text-gray-500 hover:text-gray-700"
@@ -89,10 +125,61 @@ export function MobileSuiteLanding() {
                 </span>
               )}
             </div>
-            <span className="text-xs font-medium">News</span>
+            <span className="text-[10px] font-medium">News</span>
           </button>
         </div>
       </div>
     </div>
+  );
+}
+
+// Home Tab Content
+function HomeTabContent() {
+  return (
+    <ScrollArea className="flex-1 h-full">
+      <div className="px-4 py-4 space-y-4 pb-24">
+        {/* Quick Actions */}
+        <SuiteQuickActionsBar variant="mobile" />
+        
+        {/* Search and Sync */}
+        <div className="grid grid-cols-2 gap-2">
+          <MasterSearchButton />
+          <MasterSyncButton />
+        </div>
+        
+        {/* Upcoming Events */}
+        <TodayEventsHero />
+        
+        {/* Handler Activity */}
+        <HandlerActivityGrid />
+      </div>
+    </ScrollArea>
+  );
+}
+
+// Modules Tab Content
+function ModulesTabContent() {
+  return (
+    <ScrollArea className="flex-1 h-full">
+      <div className="px-4 py-4 space-y-4 pb-24">
+        <div className="flex items-center gap-2 mb-2">
+          <LayoutGrid className="w-5 h-5 text-violet-500" />
+          <h2 className="text-lg font-bold text-gray-900">Active Modules</h2>
+        </div>
+        
+        <SuiteModuleGrid variant="active" />
+      </div>
+    </ScrollArea>
+  );
+}
+
+// Coming Soon Tab Content
+function ComingSoonTabContent() {
+  return (
+    <ScrollArea className="flex-1 h-full">
+      <div className="px-4 py-4 space-y-4 pb-24">
+        <SuiteModuleGrid variant="coming-soon" />
+      </div>
+    </ScrollArea>
   );
 }
