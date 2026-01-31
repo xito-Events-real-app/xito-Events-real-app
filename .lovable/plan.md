@@ -1,83 +1,144 @@
 
+# Fix Desktop Mode Blank Screen Issue
 
-# Fix Mobile Layout Issues for Xito Business Suite Dashboard
+## Problem Analysis
 
-## Problems Identified
+When users switch from mobile to desktop mode, the screen goes blank. After investigating the code, I identified two root causes:
 
-After analyzing the codebase, I found two issues:
+### Root Cause 1: Race Condition in `useDesktopMode` Hook
+The hook initializes `isDesktopMode` as `false` and only updates it from `localStorage` inside a `useEffect`:
 
-1. **Horizontal overflow on mobile** - The app extends beyond the screen width to the right, causing unwanted horizontal scrolling
-2. **Bottom tabs centered instead of left-aligned** - The Home and News buttons are using `justify-center` and should be `justify-start`
+```typescript
+// Current implementation (problematic)
+const [isDesktopMode, setIsDesktopMode] = useState(false);
 
----
-
-## Root Cause Analysis
-
-### Issue 1: Horizontal Overflow
-The main container in `MobileSuiteLanding.tsx` and child components don't have proper overflow constraints. On mobile, content can push beyond the screen width.
-
-**Current code (line 26):**
-```tsx
-<div className="min-h-screen bg-gray-50 flex flex-col">
+useEffect(() => {
+  const saved = localStorage.getItem(DESKTOP_MODE_KEY);
+  if (saved === "true") {
+    setIsDesktopMode(true);
+  }
+}, []);
 ```
 
-**Problem:** Missing `overflow-x-hidden` and `w-full max-w-full` constraints.
+**The problem**: After the page reloads (triggered by `toggleDesktopMode`):
+1. First render: `isDesktopMode = false` → renders `MobileSuiteLanding`
+2. `useEffect` runs, sets `isDesktopMode = true`
+3. Re-render: should switch to `DesktopSuiteLanding`
+4. If anything goes wrong during this re-render, the screen goes blank
 
-### Issue 2: Centered Bottom Tabs
-The bottom navigation container uses `justify-center` which centers the buttons.
-
-**Current code (line 59):**
-```tsx
-<div className="flex items-center justify-center gap-8 py-2 px-4 max-w-lg mx-auto">
-```
-
-**Problem:** `justify-center` + `max-w-lg mx-auto` centers buttons instead of left-aligning them.
+### Root Cause 2: Missing Error Boundary
+If `DesktopSuiteLanding` or any of its child components throw an error during rendering, there's no error boundary to catch it, resulting in a blank screen.
 
 ---
 
 ## Solution
 
-### File: `src/components/suite/MobileSuiteLanding.tsx`
+### Change 1: Initialize Desktop Mode Synchronously
 
-**Change 1:** Add overflow protection to root container (line 26)
-```tsx
+**File: `src/hooks/useDesktopMode.ts`**
+
+Read from `localStorage` synchronously during initialization to prevent the flash/race condition:
+
+```typescript
 // Before
-<div className="min-h-screen bg-gray-50 flex flex-col">
+const [isDesktopMode, setIsDesktopMode] = useState(false);
 
-// After  
-<div className="min-h-screen bg-gray-50 flex flex-col w-full max-w-full overflow-x-hidden">
+useEffect(() => {
+  const saved = localStorage.getItem(DESKTOP_MODE_KEY);
+  if (saved === "true") {
+    setIsDesktopMode(true);
+  }
+}, []);
+
+// After - Initialize synchronously
+const [isDesktopMode, setIsDesktopMode] = useState(() => {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(DESKTOP_MODE_KEY) === "true";
+});
 ```
 
-**Change 2:** Left-align bottom navigation (line 58-59)
-```tsx
-// Before
-<div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 safe-area-bottom">
-  <div className="flex items-center justify-center gap-8 py-2 px-4 max-w-lg mx-auto">
+This ensures the correct mode is set from the very first render, avoiding any flash or race condition.
 
-// After
-<div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 safe-area-bottom">
-  <div className="flex items-center justify-start gap-4 py-2 px-4">
+### Change 2: Add Error Boundary for Suite Landing
+
+**File: `src/pages/SuiteLanding.tsx`**
+
+Add try-catch and error boundary to prevent blank screens:
+
+```typescript
+import { useState, useEffect } from "react";
+import { useDesktopMode } from "@/hooks/useDesktopMode";
+import { MobileSuiteLanding } from "@/components/suite/MobileSuiteLanding";
+import { DesktopSuiteLanding } from "@/components/suite/DesktopSuiteLanding";
+
+export default function SuiteLanding() {
+  const { isDesktopMode } = useDesktopMode();
+  const [hasError, setHasError] = useState(false);
+
+  // Reset error state when mode changes
+  useEffect(() => {
+    setHasError(false);
+  }, [isDesktopMode]);
+
+  if (hasError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center p-8">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Something went wrong</h2>
+          <p className="text-gray-600 mb-4">Unable to load the dashboard.</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700"
+          >
+            Reload Page
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isDesktopMode) {
+    return <DesktopSuiteLanding />;
+  }
+
+  return <MobileSuiteLanding />;
+}
 ```
 
-**Changes made:**
-- Remove `justify-center` → Add `justify-start` for left alignment
-- Remove `max-w-lg mx-auto` since we want buttons on the left, not centered in a container
-- Reduce `gap-8` to `gap-4` for better spacing
+### Change 3: Also Update `getDesktopMode` Utility Function
+
+Ensure the utility function used in `AppLayout.tsx` is also consistent:
+
+```typescript
+// Already works correctly, but verify it's used properly
+export function getDesktopMode(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(DESKTOP_MODE_KEY) === "true";
+}
+```
 
 ---
 
 ## Summary of Changes
 
-| Location | Before | After |
-|----------|--------|-------|
-| Root container (line 26) | `min-h-screen bg-gray-50 flex flex-col` | `min-h-screen bg-gray-50 flex flex-col w-full max-w-full overflow-x-hidden` |
-| Bottom nav inner div (line 59) | `flex items-center justify-center gap-8 py-2 px-4 max-w-lg mx-auto` | `flex items-center justify-start gap-4 py-2 px-4` |
+| File | Change |
+|------|--------|
+| `src/hooks/useDesktopMode.ts` | Initialize `isDesktopMode` synchronously from `localStorage` using lazy state initialization |
+| `src/pages/SuiteLanding.tsx` | Add error handling fallback UI to prevent blank screens |
 
 ---
 
-## Expected Result
+## Technical Details
 
-1. **No horizontal scrolling** - Content stays within screen bounds
-2. **Home and News buttons on the left** - Buttons are left-aligned at the bottom of the screen
-3. **Clean mobile experience** - No overflow issues when viewing on phone
+**Why this works:**
 
+1. **Lazy state initialization**: Using `useState(() => {...})` allows us to read from `localStorage` synchronously before the first render, ensuring `isDesktopMode` has the correct value immediately
+
+2. **No useEffect needed for initial read**: The `useEffect` was causing a second render cycle which created the race condition. By initializing synchronously, we eliminate this
+
+3. **Error fallback**: Even if something fails during desktop component rendering, users see a helpful message instead of a blank screen
+
+**Testing notes:**
+- After implementing, test by logging in on mobile, then clicking "Switch to Desktop"
+- The desktop view should load immediately without any flash or blank screen
+- If an error occurs, users will see the fallback UI with a reload button
