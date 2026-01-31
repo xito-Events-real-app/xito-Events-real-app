@@ -32,19 +32,16 @@ export function DesktopSuiteLanding() {
   const handleRefreshNews = async () => {
     setIsRefreshing(true);
     try {
-      // Trigger cache invalidation events to force fresh fetch
-      notifyCacheUpdate('clients');
+      // Trigger cache invalidation events to force fresh fetch from Google Sheets
+      notifyCacheUpdate('clients-invalidate');
       notifyCacheUpdate('booked-clients-invalidate');
-      
-      // Dispatch events to trigger refetch in hooks
-      window.dispatchEvent(new CustomEvent('clients-invalidate'));
-      window.dispatchEvent(new CustomEvent('booked-clients-invalidate'));
       
       toast.success("News refreshed!");
     } catch (error) {
       toast.error("Failed to refresh news");
     } finally {
-      setTimeout(() => setIsRefreshing(false), 1000);
+      // Wait a bit longer for the actual data refresh to complete
+      setTimeout(() => setIsRefreshing(false), 2000);
     }
   };
 
