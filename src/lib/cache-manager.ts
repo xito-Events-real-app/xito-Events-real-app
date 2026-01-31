@@ -102,6 +102,7 @@ export async function setCachedDropdowns(dropdowns: DropdownData): Promise<void>
 }
 
 // Update a single client in cache
+// IMPORTANT: Matches by registeredDateTimeAD (preferred) to handle row number shifts after client moves
 export async function updateClientInCache(
   rowNumber: number, 
   updates: Partial<ClientData>
@@ -109,11 +110,17 @@ export async function updateClientInCache(
   const cached = await getCachedData();
   if (!cached?.clients) return;
 
-  const updatedClients = cached.clients.map(client => 
-    client.rowNumber === rowNumber 
-      ? { ...client, ...updates }
-      : client
-  );
+  const updatedClients = cached.clients.map(client => {
+    // Primary match: by registeredDateTimeAD (handles row shifts after client moves between sheets)
+    if (updates.registeredDateTimeAD && client.registeredDateTimeAD === updates.registeredDateTimeAD) {
+      return { ...client, ...updates };
+    }
+    // Secondary match: by rowNumber (legacy/fallback)
+    if (client.rowNumber === rowNumber && !updates.registeredDateTimeAD) {
+      return { ...client, ...updates };
+    }
+    return client;
+  });
 
   await setCachedData({
     ...cached,

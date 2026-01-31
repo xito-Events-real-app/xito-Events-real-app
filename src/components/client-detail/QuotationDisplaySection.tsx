@@ -1,4 +1,4 @@
-import { AlertTriangle, Lock, Plus, MessageSquare, Send, Loader2 } from "lucide-react";
+import { AlertTriangle, Lock, Plus, MessageSquare, Send, Loader2, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ interface QuotationDisplaySectionProps {
   clientBargainedRates?: string;
   finalQuotation?: string;
   onAddQuotation: () => void;
+  onAddFinalQuotation?: () => void; // New: for BOOKED clients to add/edit final quotation
   comments?: string;
   onAddComment?: (comment: string) => Promise<void>;
   isAddingComment?: boolean;
@@ -199,6 +200,7 @@ const QuotationDisplaySection = ({
   clientBargainedRates,
   finalQuotation,
   onAddQuotation,
+  onAddFinalQuotation,
   comments,
   onAddComment,
   isAddingComment,
@@ -235,11 +237,25 @@ const QuotationDisplaySection = ({
         <div className="space-y-2">
           {parsedFinal ? (
             <div className="bg-emerald-500/20 rounded-lg border border-emerald-500/30 p-3">
-              <div className="flex items-center gap-1.5 mb-1.5">
-                <Lock className="h-3 w-3 text-emerald-400" />
-                <span className="text-[10px] text-emerald-300 font-semibold uppercase tracking-wide">
-                  Final Fixed Quotation
-                </span>
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Lock className="h-3 w-3 text-emerald-400" />
+                  <span className="text-[10px] text-emerald-300 font-semibold uppercase tracking-wide">
+                    Final Fixed Quotation
+                  </span>
+                </div>
+                {/* Edit button for existing final quotation */}
+                {onAddFinalQuotation && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onAddFinalQuotation}
+                    className="h-6 px-2 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20"
+                  >
+                    <Pencil className="h-3 w-3 mr-1" />
+                    Edit
+                  </Button>
+                )}
               </div>
               <Badge className={`${getTierColorDark(parsedFinal.package)} text-xs border-0`}>
                 {parsedFinal.package}
@@ -248,25 +264,26 @@ const QuotationDisplaySection = ({
                 NPR {formatNPR(parsedFinal.amount)}/-
               </div>
             </div>
-          ) : quotationTiers.length === 0 ? (
+          ) : (
+            // BOOKED but no final quotation - show "Add Final Quotation" button
             <div className="bg-amber-500/20 rounded-lg border border-amber-500/30 p-3">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 text-amber-400" />
                 <div>
-                  <div className="font-medium text-amber-200 text-sm">Quotation Not Recorded</div>
-                  <div className="text-[10px] text-amber-300/70">Add quotation for records</div>
+                  <div className="font-medium text-amber-200 text-sm">Final Quotation Not Set</div>
+                  <div className="text-[10px] text-amber-300/70">Lock final quotation for records</div>
                 </div>
               </div>
               <Button 
                 size="sm" 
-                onClick={onAddQuotation}
+                onClick={onAddFinalQuotation || onAddQuotation}
                 className="mt-2 bg-amber-500 hover:bg-amber-600 text-black h-7 text-xs"
               >
-                <Plus className="h-3 w-3 mr-1" />
-                Add Quotation
+                <Lock className="h-3 w-3 mr-1" />
+                Add Final Quotation
               </Button>
             </div>
-          ) : null}
+          )}
           
           {/* Original Quotation Tiers - Compact */}
           {quotationTiers.length > 0 && (
