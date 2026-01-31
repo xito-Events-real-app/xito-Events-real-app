@@ -57,10 +57,17 @@ export function ActivityCard({ activity }: ActivityCardProps) {
       
       {/* Content */}
       <div className="flex-1 min-w-0">
-        {/* Client name */}
-        <p className="text-sm font-semibold text-gray-900 truncate">
-          {activity.clientName}
-        </p>
+        {/* Client name + Handler */}
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-semibold text-gray-900 truncate">
+            {activity.clientName}
+          </p>
+          {activity.handlerName && (
+            <span className="text-[10px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full shrink-0">
+              {activity.handlerName}
+            </span>
+          )}
+        </div>
         
         {/* Description */}
         <p className="text-xs text-gray-600">

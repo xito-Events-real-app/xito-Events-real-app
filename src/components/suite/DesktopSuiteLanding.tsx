@@ -26,7 +26,7 @@ export function DesktopSuiteLanding() {
   const comingSoonModules = suiteModules.filter(m => m.status === 'coming-soon');
   const stats = useSuiteStats();
   const { todayCount } = useActivityFeed();
-  const [showNews, setShowNews] = useState(false);
+  const [showNews, setShowNews] = useState(true); // Auto-open on desktop
 
   const handleLogout = async () => {
     await signOut();

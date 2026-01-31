@@ -10,6 +10,7 @@ export interface ActivityItem {
   type: ActivityType;
   clientName: string;
   clientId: string; // registeredDateTimeAD for navigation
+  handlerName?: string; // clientHandler field
   description: string;
   details?: string;
   timestamp: Date;
@@ -54,6 +55,7 @@ export function getActivityColor(type: ActivityType): { bg: string; text: string
 function parseStatusActivities(client: ClientData | BookedClientData): ActivityItem[] {
   const activities: ActivityItem[] = [];
   const statusLog = client.statusLog;
+  const handlerName = 'clientHandler' in client ? client.clientHandler : undefined;
   
   if (!statusLog) return activities;
   
@@ -73,6 +75,7 @@ function parseStatusActivities(client: ClientData | BookedClientData): ActivityI
       type: isBooking ? 'booking' : 'status',
       clientName: client.clientName || 'Unknown',
       clientId: client.registeredDateTimeAD || '',
+      handlerName: handlerName || undefined,
       description: isBooking ? `Confirmed booking` : `Status → ${statusName}`,
       details: isBooking ? 'Client confirmed and booked!' : undefined,
       timestamp,
@@ -87,6 +90,7 @@ function parseStatusActivities(client: ClientData | BookedClientData): ActivityI
 function parseCommentActivities(client: ClientData | BookedClientData): ActivityItem[] {
   const activities: ActivityItem[] = [];
   const comments = client.comments;
+  const handlerName = 'clientHandler' in client ? client.clientHandler : undefined;
   
   if (!comments) return activities;
   
@@ -104,6 +108,7 @@ function parseCommentActivities(client: ClientData | BookedClientData): Activity
       type: 'comment',
       clientName: client.clientName || 'Unknown',
       clientId: client.registeredDateTimeAD || '',
+      handlerName: handlerName || undefined,
       description: `New comment added`,
       details: `"${truncatedText}"`,
       timestamp: comment.timestamp,
@@ -118,6 +123,7 @@ function parseCommentActivities(client: ClientData | BookedClientData): Activity
 function parseCallActivities(client: ClientData | BookedClientData): ActivityItem[] {
   const activities: ActivityItem[] = [];
   const callLog = client.callLog;
+  const handlerName = 'clientHandler' in client ? client.clientHandler : undefined;
   
   if (!callLog) return activities;
   
@@ -151,6 +157,7 @@ function parseCallActivities(client: ClientData | BookedClientData): ActivityIte
         type: 'call',
         clientName: client.clientName || 'Unknown',
         clientId: client.registeredDateTimeAD || '',
+        handlerName: handlerName || undefined,
         description: `${entry.type} call logged`,
         details: entry.label,
         timestamp: callDate,
@@ -168,6 +175,7 @@ function parseCallActivities(client: ClientData | BookedClientData): ActivityIte
 function parsePaymentActivities(client: BookedClientData): ActivityItem[] {
   const activities: ActivityItem[] = [];
   const paymentsMade = client.paymentsMade;
+  const handlerName = client.clientHandler;
   
   if (!paymentsMade) return activities;
   
@@ -213,6 +221,7 @@ function parsePaymentActivities(client: BookedClientData): ActivityItem[] {
       type: 'payment',
       clientName: client.clientName || 'Unknown',
       clientId: client.registeredDateTimeAD || '',
+      handlerName: handlerName || undefined,
       description: `NPR ${amount}/- received`,
       details: `${paymentType} payment`,
       timestamp,
@@ -227,6 +236,7 @@ function parsePaymentActivities(client: BookedClientData): ActivityItem[] {
 // Parse client registration into activity
 function parseClientAddedActivity(client: ClientData | BookedClientData): ActivityItem | null {
   const registeredDateTimeAD = client.registeredDateTimeAD;
+  const handlerName = 'clientHandler' in client ? client.clientHandler : undefined;
   
   if (!registeredDateTimeAD) return null;
   
@@ -249,6 +259,7 @@ function parseClientAddedActivity(client: ClientData | BookedClientData): Activi
       type: 'client_added',
       clientName: client.clientName || 'Unknown',
       clientId: client.registeredDateTimeAD || '',
+      handlerName: handlerName || undefined,
       description: `New client registered`,
       details: eventSource ? `Source: ${eventSource}` : undefined,
       timestamp,
