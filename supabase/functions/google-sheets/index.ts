@@ -2290,7 +2290,8 @@ function adToBSSimple(date: Date): string {
   return `${bsYear}-${String(bsMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
-// Update final quotation in Column AD (for BOOKED clients)
+// Update final quotation in Column AD
+// Smart sheet routing: searches CLIENT TRACKER first, then BOOKED CLIENTS
 async function updateFinalQuotation(
   accessToken: string, 
   spreadsheetId: string, 
@@ -2302,11 +2303,71 @@ async function updateFinalQuotation(
     throw new Error('Valid rowNumber is required for updating final quotation');
   }
 
-  // Verify and correct row number using registeredDateTimeAD
-  const actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, registeredDateTimeAD);
+  let targetSheet = 'CLIENT TRACKER';
+  let actualRowNumber = rowNumber;
 
-  const range = encodeURIComponent(`'CLIENT TRACKER'!AD${actualRowNumber}`);
+  if (registeredDateTimeAD) {
+    // Try to find in CLIENT TRACKER first
+    const trackerRange = encodeURIComponent(`'CLIENT TRACKER'!A2:A2000`);
+    const trackerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}`;
+    
+    const trackerResponse = await fetch(trackerUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    
+    let foundInTracker = false;
+    if (trackerResponse.ok) {
+      const trackerData = await trackerResponse.json();
+      if (trackerData.values) {
+        const normalizedDateTime = registeredDateTimeAD.trim();
+        for (let i = 0; i < trackerData.values.length; i++) {
+          const cellValue = (trackerData.values[i][0] || '').trim();
+          if (cellValue === normalizedDateTime) {
+            targetSheet = 'CLIENT TRACKER';
+            actualRowNumber = i + 2;
+            foundInTracker = true;
+            console.log(`[updateFinalQuotation] Found in CLIENT TRACKER at row ${actualRowNumber}`);
+            break;
+          }
+        }
+      }
+    }
+    
+    // If not in Tracker, try BOOKED CLIENTS
+    if (!foundInTracker) {
+      const bookedRange = encodeURIComponent(`'BOOKED CLIENTS'!A2:A2000`);
+      const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}`;
+      
+      const bookedResponse = await fetch(bookedUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      
+      if (bookedResponse.ok) {
+        const bookedData = await bookedResponse.json();
+        if (bookedData.values) {
+          const normalizedDateTime = registeredDateTimeAD.trim();
+          for (let i = 0; i < bookedData.values.length; i++) {
+            const cellValue = (bookedData.values[i][0] || '').trim();
+            if (cellValue === normalizedDateTime) {
+              targetSheet = 'BOOKED CLIENTS';
+              actualRowNumber = i + 2;
+              console.log(`[updateFinalQuotation] Found in BOOKED CLIENTS at row ${actualRowNumber}`);
+              break;
+            }
+          }
+        }
+      }
+    }
+  } else {
+    // Fallback: verify row in Tracker if no ID provided (legacy behavior)
+    actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, undefined);
+  }
+
+  // Write to Column AD in the correct sheet
+  const range = encodeURIComponent(`'${targetSheet}'!AD${actualRowNumber}`);
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  
+  console.log(`[updateFinalQuotation] Writing to ${targetSheet}!AD${actualRowNumber}: ${finalQuotation}`);
   
   const response = await fetch(updateUrl, {
     method: 'PUT',
@@ -2323,7 +2384,7 @@ async function updateFinalQuotation(
     throw new Error(`Failed to update final quotation: ${response.status}`);
   }
 
-  return { success: true, finalQuotation, actualRowNumber };
+  return { success: true, finalQuotation, actualRowNumber, targetSheet };
 }
 
 // Add payment entry to Columns AE, AF, AG
