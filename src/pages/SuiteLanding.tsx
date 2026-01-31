@@ -1,4 +1,4 @@
-import { useState, useEffect, Component, ReactNode } from "react";
+import { Component, ReactNode } from "react";
 import { useDesktopMode } from "@/hooks/useDesktopMode";
 import { MobileSuiteLanding } from "@/components/suite/MobileSuiteLanding";
 import { DesktopSuiteLanding } from "@/components/suite/DesktopSuiteLanding";

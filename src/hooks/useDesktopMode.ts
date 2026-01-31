@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 const DESKTOP_MODE_KEY = "wtn_desktop_mode";
 
