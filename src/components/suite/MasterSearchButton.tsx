@@ -14,7 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 // Constants
 const MAX_RECENT = 50;
 const MAX_PREVIEW_RESULTS = 5;
-const MAX_DISPLAY_RECENT = 10;
+const MAX_DISPLAY_RECENT = 12;
 const SCROLL_AMOUNT = 150;
 
 // Types
