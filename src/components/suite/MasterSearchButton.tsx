@@ -281,7 +281,13 @@ export function MasterSearchButton() {
             </div>
           ) : recentSearches.length > 0 ? (
             <div 
-              className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide cursor-grab active:cursor-grabbing"
+              className={cn(
+                "flex gap-2 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing",
+                // Show scrollbar when 8+ searches, otherwise hide
+                recentSearches.length > 8 
+                  ? "scrollbar-thin scrollbar-thumb-violet-300 scrollbar-track-transparent hover:scrollbar-thumb-violet-400" 
+                  : "scrollbar-hide"
+              )}
               style={{ scrollBehavior: 'smooth' }}
             >
               {recentSearches.map((item, i) => (
@@ -289,7 +295,7 @@ export function MasterSearchButton() {
                   key={i}
                   onClick={() => handleRecentClick(item.query)}
                   className={cn(
-                    "shrink-0 px-3 py-1.5 rounded-full text-sm font-medium",
+                    "shrink-0 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap",
                     "bg-gradient-to-r from-violet-100 to-purple-100",
                     "text-violet-700 border border-violet-200",
                     "hover:from-violet-200 hover:to-purple-200",
