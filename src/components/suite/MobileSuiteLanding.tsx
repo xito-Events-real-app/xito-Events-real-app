@@ -72,12 +72,12 @@ export function MobileSuiteLanding() {
 
       {/* Bottom Tab Navigation */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 safe-area-bottom">
-        <div className="flex items-center justify-around py-2 px-2">
+        <div className="flex items-center gap-1 py-2 px-2 w-full max-w-full overflow-x-hidden">
           {/* Home Tab */}
           <button
             onClick={() => setActiveTab('home')}
             className={cn(
-              "flex flex-col items-center gap-0.5 py-2 px-4 rounded-xl transition-all min-w-[60px]",
+              "flex flex-col items-center gap-0.5 py-2 px-1 rounded-xl transition-all flex-1 min-w-0",
               activeTab === 'home' 
                 ? "bg-violet-100 text-violet-700" 
                 : "text-gray-500 hover:text-gray-700"
@@ -91,7 +91,7 @@ export function MobileSuiteLanding() {
           <button
             onClick={() => setActiveTab('modules')}
             className={cn(
-              "flex flex-col items-center gap-0.5 py-2 px-4 rounded-xl transition-all min-w-[60px]",
+              "flex flex-col items-center gap-0.5 py-2 px-1 rounded-xl transition-all flex-1 min-w-0",
               activeTab === 'modules' 
                 ? "bg-violet-100 text-violet-700" 
                 : "text-gray-500 hover:text-gray-700"
@@ -105,7 +105,7 @@ export function MobileSuiteLanding() {
           <button
             onClick={() => setActiveTab('coming-soon')}
             className={cn(
-              "flex flex-col items-center gap-0.5 py-2 px-4 rounded-xl transition-all min-w-[60px]",
+              "flex flex-col items-center gap-0.5 py-2 px-1 rounded-xl transition-all flex-1 min-w-0",
               activeTab === 'coming-soon' 
                 ? "bg-amber-100 text-amber-700" 
                 : "text-gray-500 hover:text-gray-700"
@@ -119,7 +119,7 @@ export function MobileSuiteLanding() {
           <button
             onClick={() => setActiveTab('news')}
             className={cn(
-              "flex flex-col items-center gap-0.5 py-2 px-4 rounded-xl transition-all relative min-w-[60px]",
+              "flex flex-col items-center gap-0.5 py-2 px-1 rounded-xl transition-all relative flex-1 min-w-0",
               activeTab === 'news' 
                 ? "bg-violet-100 text-violet-700" 
                 : "text-gray-500 hover:text-gray-700"
@@ -150,9 +150,13 @@ function HomeTabContent() {
         <SuiteQuickActionsBar variant="mobile" />
         
         {/* Search and Sync */}
-        <div className="grid grid-cols-2 gap-2">
-          <MasterSearchButton />
-          <MasterSyncButton />
+        <div className="grid grid-cols-2 gap-2 w-full max-w-full">
+          <div className="min-w-0">
+            <MasterSearchButton />
+          </div>
+          <div className="min-w-0">
+            <MasterSyncButton />
+          </div>
         </div>
         
         {/* Tabbed Interface for Events + Handler Activity */}

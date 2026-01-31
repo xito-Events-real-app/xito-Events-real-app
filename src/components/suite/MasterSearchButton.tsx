@@ -319,7 +319,7 @@ export function MasterSearchButton() {
   
   // Render expanded input with horizontal recent searches
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="relative w-full min-w-0">
       {/* Search Input */}
       <div className="relative">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-violet-500" />
