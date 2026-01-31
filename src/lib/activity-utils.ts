@@ -124,17 +124,30 @@ function parseActivityLogColumn(client: ClientData | BookedClientData): Activity
     const [timestampStr, activityType, ...detailParts] = parts;
     const details = detailParts.join(' | '); // Rejoin in case details contain |
     
-    // Parse timestamp: "MM/DD/YYYY HH:MM:SS"
-    const match = timestampStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})/);
-    if (!match) return;
+    // Parse timestamp - supports both formats:
+    // MM/DD/YYYY HH:MM:SS (new correct format)
+    // YYYY/MM/DD HH:MM:SS (legacy format)
+    let match = timestampStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})/);
+    let year: number, month: number, day: number;
     
-    const [, monthStr, dayStr, yearStr, hoursStr, minsStr, secsStr] = match;
-    const month = parseInt(monthStr, 10);
-    const day = parseInt(dayStr, 10);
-    const year = parseInt(yearStr, 10);
-    const hours = parseInt(hoursStr, 10);
-    const mins = parseInt(minsStr, 10);
-    const secs = parseInt(secsStr, 10);
+    if (match) {
+      // MM/DD/YYYY format
+      month = parseInt(match[1], 10);
+      day = parseInt(match[2], 10);
+      year = parseInt(match[3], 10);
+    } else {
+      // Try YYYY/MM/DD format (legacy fallback)
+      match = timestampStr.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})/);
+      if (!match) return; // Skip if neither format matches
+      
+      year = parseInt(match[1], 10);
+      month = parseInt(match[2], 10);
+      day = parseInt(match[3], 10);
+    }
+    
+    const hours = parseInt(match[4], 10);
+    const mins = parseInt(match[5], 10);
+    const secs = parseInt(match[6], 10);
     
     const timestamp = new Date(year, month - 1, day, hours, mins, secs);
     
