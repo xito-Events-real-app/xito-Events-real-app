@@ -119,6 +119,14 @@ export default {
           "0%, 100%": { borderColor: "rgba(139, 92, 246, 0.5)" },
           "50%": { borderColor: "rgba(139, 92, 246, 1)" },
         },
+        "slide-in-left": {
+          "0%": { opacity: "0", transform: "translateX(-20px)" },
+          "100%": { opacity: "1", transform: "translateX(0)" },
+        },
+        "pop-in": {
+          "0%": { opacity: "0", transform: "scale(0.8)" },
+          "100%": { opacity: "1", transform: "scale(1)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -129,6 +137,8 @@ export default {
         "success-flash": "success-flash 1s ease-out forwards",
         "glow-pulse": "glow-pulse 2s ease-in-out infinite",
         "border-glow": "border-glow 2s ease-in-out infinite",
+        "slide-in-left": "slide-in-left 0.2s ease-out forwards",
+        "pop-in": "pop-in 0.15s ease-out forwards",
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],
