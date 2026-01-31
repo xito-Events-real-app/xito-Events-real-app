@@ -11,6 +11,7 @@ import {
   UserCog,
   Brain,
   Bell,
+  XCircle,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,7 @@ const iconMap: Record<ActivityType, LucideIcon> = {
   quotation: FileText,
   handler_change: UserCog,
   mindset: Brain,
+  lost: XCircle,
 };
 
 export function ActivityCard({ activity }: ActivityCardProps) {
@@ -54,6 +56,8 @@ export function ActivityCard({ activity }: ActivityCardProps) {
         return "bg-emerald-100 border-2 border-emerald-400 ring-2 ring-emerald-200";
       case 'booking':
         return "bg-violet-100 border-2 border-violet-400 ring-2 ring-violet-200";
+      case 'lost':
+        return "bg-red-100 border-2 border-red-400 ring-2 ring-red-200";
       default:
         return "bg-white border border-gray-100";
     }

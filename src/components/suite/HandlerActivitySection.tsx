@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { ChevronDown, User, MessageSquare, UserPlus, Activity, CreditCard, Phone, CalendarCheck, FileText, UserCog, Brain, RefreshCw } from "lucide-react";
+import { ChevronDown, User, MessageSquare, UserPlus, Activity, CreditCard, Phone, CalendarCheck, FileText, UserCog, Brain, RefreshCw, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useHandlerActivityFeed, ActivityItem } from "@/hooks/useHandlerActivityFeed";
 import { useNavigate } from "react-router-dom";
@@ -47,6 +47,7 @@ function getActivityIconComponent(type: string) {
     case 'quotation': return FileText;
     case 'handler_change': return UserCog;
     case 'mindset': return Brain;
+    case 'lost': return XCircle;
     default: return Activity;
   }
 }
@@ -73,6 +74,7 @@ function CompactActivityCard({ activity }: { activity: ActivityItem }) {
       case 'status': return 'bg-blue-50 border-blue-200';
       case 'client_added': return 'bg-purple-50 border-purple-200';
       case 'comment': return 'bg-amber-50 border-amber-200';
+      case 'lost': return 'bg-red-50 border-red-300';
       default: return 'bg-gray-50 border-gray-200';
     }
   };

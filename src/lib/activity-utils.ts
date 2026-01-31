@@ -3,7 +3,7 @@ import { ClientData, BookedClientData } from "@/lib/sheets-api";
 import { parseStatusTimestamp, parseCallLog, parseComments, getRelativeTime } from "@/lib/client-card-utils";
 import NepaliDate from "nepali-date-converter";
 
-export type ActivityType = 'payment' | 'comment' | 'status' | 'client_added' | 'call' | 'booking' | 'quotation' | 'handler_change' | 'mindset';
+export type ActivityType = 'payment' | 'comment' | 'status' | 'client_added' | 'call' | 'booking' | 'quotation' | 'handler_change' | 'mindset' | 'lost';
 
 export interface ActivityItem {
   id: string;
@@ -30,6 +30,7 @@ export function getActivityIcon(type: ActivityType): string {
     case 'quotation': return 'FileText';
     case 'handler_change': return 'UserCog';
     case 'mindset': return 'Brain';
+    case 'lost': return 'XCircle';
     default: return 'Bell';
   }
 }
@@ -55,6 +56,8 @@ export function getActivityColor(type: ActivityType): { bg: string; text: string
       return { bg: 'bg-pink-500/20', text: 'text-pink-400', border: 'border-pink-500/30' };
     case 'mindset':
       return { bg: 'bg-cyan-500/20', text: 'text-cyan-400', border: 'border-cyan-500/30' };
+    case 'lost':
+      return { bg: 'bg-red-500/20', text: 'text-red-500', border: 'border-red-500/30' };
     default:
       return { bg: 'bg-gray-500/20', text: 'text-gray-400', border: 'border-gray-500/30' };
   }
@@ -78,11 +81,23 @@ function mapActivityType(typeStr: string): ActivityType {
   }
 }
 
+// Check if status details indicate a "lost" client (negative outcome)
+function isLostStatus(details: string): boolean {
+  const upper = details.toUpperCase();
+  return upper.includes('BOOKED SOMEWHERE ELSE') ||
+         upper.includes('CANCELLED BY CLIENT') ||
+         upper.includes('CANCELLED BY US') ||
+         upper.includes('CANCELLED');
+}
+
 // Get description based on activity type and details
 function getActivityDescription(activityType: string, details: string): string {
   const type = activityType.toUpperCase().trim();
   switch (type) {
     case 'STATUS_CHANGE':
+      if (isLostStatus(details)) {
+        return `Lost → ${details}`;
+      }
       return details.toUpperCase().includes('BOOKED') ? 'Confirmed booking' : `Status → ${details}`;
     case 'COMMENT':
       return 'New comment added';
@@ -156,14 +171,20 @@ function parseActivityLogColumn(client: ClientData | BookedClientData): Activity
     // Map activity type
     const type = mapActivityType(activityType);
     
-    // Check if this is a booking
-    const isBooking = activityType.toUpperCase() === 'STATUS_CHANGE' && 
-                      details.toUpperCase().includes('BOOKED') && 
-                      !details.toUpperCase().includes('SOMEWHERE ELSE');
+    // Check for negative outcomes (lost clients) FIRST
+    const isLost = activityType.toUpperCase() === 'STATUS_CHANGE' && isLostStatus(details);
+    
+    // Check if this is a positive booking (only if not lost)
+    const isBooking = !isLost && 
+                      activityType.toUpperCase() === 'STATUS_CHANGE' && 
+                      details.toUpperCase().includes('BOOKED');
+    
+    // Determine final type
+    const finalType: ActivityType = isLost ? 'lost' : (isBooking ? 'booking' : type);
     
     activities.push({
       id: `log-${client.registeredDateTimeAD}-${index}`,
-      type: isBooking ? 'booking' : type,
+      type: finalType,
       clientName: client.clientName || 'Unknown',
       clientId: client.registeredDateTimeAD || '',
       handlerName: handlerName || undefined,
@@ -193,17 +214,24 @@ function parseStatusActivities(client: ClientData | BookedClientData): ActivityI
     
     // Extract status name (everything before the bracket or dash)
     const statusName = line.split(/[\[\-]/)[0].trim();
-    const isBooking = statusName.toUpperCase().includes('BOOKED') && 
-                      !statusName.toUpperCase().includes('SOMEWHERE ELSE');
+    
+    // Check for negative outcomes FIRST
+    const isLost = isLostStatus(statusName);
+    
+    // Check for positive booking only if not lost
+    const isBooking = !isLost && statusName.toUpperCase().includes('BOOKED');
+    
+    // Determine final type
+    const finalType: ActivityType = isLost ? 'lost' : (isBooking ? 'booking' : 'status');
     
     activities.push({
       id: `status-${client.registeredDateTimeAD}-${index}`,
-      type: isBooking ? 'booking' : 'status',
+      type: finalType,
       clientName: client.clientName || 'Unknown',
       clientId: client.registeredDateTimeAD || '',
       handlerName: handlerName || undefined,
-      description: isBooking ? `Confirmed booking` : `Status → ${statusName}`,
-      details: isBooking ? 'Client confirmed and booked!' : undefined,
+      description: isLost ? `Lost → ${statusName}` : (isBooking ? `Confirmed booking` : `Status → ${statusName}`),
+      details: isLost ? 'Client was lost' : (isBooking ? 'Client confirmed and booked!' : undefined),
       timestamp,
       relativeTime: getRelativeTime(timestamp),
     });
