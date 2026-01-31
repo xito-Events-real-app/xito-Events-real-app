@@ -304,7 +304,7 @@ export function MasterSearchButton() {
       <button
         onClick={() => setIsExpanded(true)}
         className={cn(
-          "w-full h-14 rounded-2xl font-semibold flex items-center justify-center gap-3",
+          "w-full min-w-0 h-14 rounded-2xl font-semibold flex items-center justify-center gap-3",
           "bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600",
           "text-white shadow-lg transition-all",
           "hover:scale-[1.02] active:scale-[0.98]",
