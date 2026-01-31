@@ -2,7 +2,7 @@ import { useState } from "react";
 import { suiteModules } from "@/lib/suite-modules";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Smartphone, Construction, LogOut, Newspaper } from "lucide-react";
+import { Smartphone, Construction, LogOut, Newspaper, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useDesktopMode } from "@/hooks/useDesktopMode";
@@ -16,7 +16,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { SuiteNewsFeed } from "./SuiteNewsFeed";
 import { useActivityFeed } from "@/hooks/useActivityFeed";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { notifyCacheUpdate } from "@/lib/cache-manager";
 
 export function DesktopSuiteLanding() {
   const navigate = useNavigate();
@@ -26,7 +26,27 @@ export function DesktopSuiteLanding() {
   const comingSoonModules = suiteModules.filter(m => m.status === 'coming-soon');
   const stats = useSuiteStats();
   const { todayCount } = useActivityFeed();
-  const [showNews, setShowNews] = useState(true); // Auto-open on desktop
+  const [showNews, setShowNews] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefreshNews = async () => {
+    setIsRefreshing(true);
+    try {
+      // Trigger cache invalidation events to force fresh fetch
+      notifyCacheUpdate('clients');
+      notifyCacheUpdate('booked-clients-invalidate');
+      
+      // Dispatch events to trigger refetch in hooks
+      window.dispatchEvent(new CustomEvent('clients-invalidate'));
+      window.dispatchEvent(new CustomEvent('booked-clients-invalidate'));
+      
+      toast.success("News refreshed!");
+    } catch (error) {
+      toast.error("Failed to refresh news");
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 1000);
+    }
+  };
 
   const handleLogout = async () => {
     await signOut();
@@ -247,14 +267,25 @@ export function DesktopSuiteLanding() {
                 <Newspaper className="w-5 h-5 text-violet-500" />
                 Breaking News
               </h2>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowNews(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRefreshNews}
+                  disabled={isRefreshing}
+                  className="text-gray-400 hover:text-violet-600 hover:bg-violet-50"
+                >
+                  <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowNews(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </Button>
+              </div>
             </div>
             <p className="text-xs text-gray-500 mt-1">
               Real-time updates from your business
