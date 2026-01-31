@@ -9,3 +9,7 @@ export { ActivityCard } from './ActivityCard';
 export { MasterSearchButton } from './MasterSearchButton';
 export { HandlerActivitySection } from './HandlerActivitySection';
 export { HandlerActivityGrid } from './HandlerActivityGrid';
+export { SuiteLeftSidebar } from './SuiteLeftSidebar';
+export { SuiteQuickActionsBar } from './SuiteQuickActionsBar';
+export { SuiteDashboardContent } from './SuiteDashboardContent';
+export { SuiteModuleGrid } from './SuiteModuleGrid';
