@@ -1111,6 +1111,95 @@ async function getClientStatuses(accessToken: string, spreadsheetId: string) {
   return data.values.flat().filter(Boolean);
 }
 
+// ============= ACTIVITY LOG HELPERS (Column AJ) =============
+// Generate Nepal timezone timestamp for activity logging
+function getNepalTimestamp(): string {
+  const now = new Date();
+  const nepalOffset = 5 * 60 + 45; // 5:45 in minutes
+  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const nepalTime = new Date(utcTime + (nepalOffset * 60000));
+  
+  const month = String(nepalTime.getMonth() + 1).padStart(2, '0');
+  const day = String(nepalTime.getDate()).padStart(2, '0');
+  const year = nepalTime.getFullYear();
+  const hours = String(nepalTime.getHours()).padStart(2, '0');
+  const mins = String(nepalTime.getMinutes()).padStart(2, '0');
+  const secs = String(nepalTime.getSeconds()).padStart(2, '0');
+  
+  return `${month}/${day}/${year} ${hours}:${mins}:${secs}`;
+}
+
+// Fetch current activity log from Column AJ
+async function getCurrentActivityLog(
+  accessToken: string,
+  spreadsheetId: string,
+  sheetName: string,
+  rowNumber: number
+): Promise<string> {
+  const range = encodeURIComponent(`'${sheetName}'!AJ${rowNumber}`);
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  try {
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    
+    if (!response.ok) return '';
+    
+    const data = await response.json();
+    return data.values?.[0]?.[0] || '';
+  } catch {
+    return '';
+  }
+}
+
+// Append a new activity entry to Column AJ (newest entry on top)
+async function appendActivityLog(
+  accessToken: string,
+  spreadsheetId: string,
+  sheetName: 'CLIENT TRACKER' | 'BOOKED CLIENTS',
+  rowNumber: number,
+  activityType: string,
+  details: string,
+  existingLog?: string
+): Promise<string> {
+  // Fetch existing log if not provided
+  const currentLog = existingLog !== undefined ? existingLog : await getCurrentActivityLog(accessToken, spreadsheetId, sheetName, rowNumber);
+  
+  // Generate timestamp
+  const timestamp = getNepalTimestamp();
+  
+  // Truncate details to 100 chars max
+  const truncatedDetails = details.length > 100 ? details.substring(0, 100) + '...' : details;
+  
+  // Format: "MM/DD/YYYY HH:MM:SS | ACTIVITY_TYPE | Details"
+  const newEntry = `${timestamp} | ${activityType} | ${truncatedDetails}`;
+  
+  // Prepend new entry (newest on top)
+  const updatedLog = currentLog ? `${newEntry}\n${currentLog}` : newEntry;
+  
+  // Write to Column AJ
+  const range = encodeURIComponent(`'${sheetName}'!AJ${rowNumber}`);
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  
+  try {
+    await fetch(updateUrl, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ values: [[updatedLog]] }),
+    });
+    
+    console.log(`[ACTIVITY LOG] ${sheetName} row ${rowNumber}: ${activityType} - ${truncatedDetails.substring(0, 30)}...`);
+  } catch (err) {
+    console.error('[ACTIVITY LOG] Failed to append activity:', err);
+  }
+  
+  return updatedLog;
+}
+
 // ============= ROW VERIFICATION HELPER =============
 // Finds the correct row number in a sheet using registeredDateTimeAD (Column A) as unique identifier
 // This prevents data corruption when row numbers shift due to new client insertions
@@ -1237,7 +1326,19 @@ async function updateClientStatus(accessToken: string, spreadsheetId: string, ro
       console.log(`[STATUS CHANGE] Client DELETED from CLIENT TRACKER row ${actualRowNumber} - MOVED to BOOKED CLIENTS`);
       
       movedToBooked = true;
+      
+      // Log activity to BOOKED CLIENTS (the client was moved there)
+      // Find the new row in BOOKED CLIENTS
+      const bookedRow = await findBookedClientRow(accessToken, spreadsheetId, fetchedRegisteredDateTime);
+      if (bookedRow) {
+        await appendActivityLog(accessToken, spreadsheetId, 'BOOKED CLIENTS', bookedRow, 'STATUS_CHANGE', newStatus);
+      }
     }
+  }
+  
+  // Log activity to CLIENT TRACKER if client is still there (not moved)
+  if (!movedToBooked) {
+    await appendActivityLog(accessToken, spreadsheetId, 'CLIENT TRACKER', actualRowNumber, 'STATUS_CHANGE', newStatus);
   }
 
   return { success: true, statusLog: updatedLog, copiedToBooked: movedToBooked, movedToBooked, actualRowNumber };
@@ -1247,7 +1348,7 @@ async function updateClientStatus(accessToken: string, spreadsheetId: string, ro
 // NOTE: This returns ONLY clients from CLIENT TRACKER (which now excludes BOOKED clients after migration)
 // For unified data including BOOKED clients, use getAllClientsFromBothSheets
 async function getClients(accessToken: string, spreadsheetId: string, limit = 50) {
-  const range = encodeURIComponent("'CLIENT TRACKER'!A2:AI" + (limit + 1));
+  const range = encodeURIComponent("'CLIENT TRACKER'!A2:AJ" + (limit + 1));
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   const response = await fetch(url, {
@@ -1300,6 +1401,7 @@ async function getClients(accessToken: string, spreadsheetId: string, limit = 50
     remainingPayment: row[32] || '',      // Column AG - Remaining payment
     companyName: row[33] || '',           // Column AH - Company name
     serviceTypes: row[34] || '',          // Column AI - Service types (multi, "/" separated)
+    lastActivityLog: row[35] || '',       // Column AJ - Last activity timestamp log
     _source: 'tracker' as const,          // Source indicator for unified queries
   }));
 }
@@ -1351,11 +1453,12 @@ async function getSingleClient(accessToken: string, spreadsheetId: string, regis
     remainingPayment: row[32] || '',
     companyName: row[33] || '',
     serviceTypes: row[34] || '',
+    lastActivityLog: row[35] || '',       // Column AJ - Last activity timestamp log
     _source: source,
   });
 
   // PRIORITY: Search BOOKED CLIENTS FIRST (booked wins over tracker duplicates)
-  const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:AI2000");
+  const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:AJ2000");
   const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}`;
   
   const bookedResponse = await fetch(bookedUrl, {
@@ -1374,7 +1477,7 @@ async function getSingleClient(accessToken: string, spreadsheetId: string, regis
   }
 
   // Not found in BOOKED CLIENTS, search CLIENT TRACKER
-  const trackerRange = encodeURIComponent("'CLIENT TRACKER'!A2:AI2000");
+  const trackerRange = encodeURIComponent("'CLIENT TRACKER'!A2:AJ2000");
   const trackerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}`;
   
   const trackerResponse = await fetch(trackerUrl, {
@@ -1574,6 +1677,9 @@ async function logCallAttempt(
     throw new Error(`Failed to log call attempt: ${response.status}`);
   }
 
+  // Log activity to Column AJ
+  await appendActivityLog(accessToken, spreadsheetId, 'CLIENT TRACKER', actualRowNumber, 'CALL', newLogEntry);
+
   return { success: true, callLog: updatedLog, actualRowNumber };
 }
 
@@ -1656,9 +1762,10 @@ async function addClient(accessToken: string, spreadsheetId: string, clientData:
     '',                                      // AG: remaining_payment (empty for new)
     clientData.companyName || '',            // AH: company_name
     clientData.serviceTypes || '',           // AI: service_types (multi, "/" separated)
+    `${nepalTimeStr.replace('T', ' ').substring(0, 19).replace(/-/g, '/')} | CLIENT_ADDED | New registration from ${clientData.source || 'Unknown'}`, // AJ: Initial activity log
   ]];
 
-  const range = encodeURIComponent("'CLIENT TRACKER'!A2:AI2");
+  const range = encodeURIComponent("'CLIENT TRACKER'!A2:AJ2");
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
   
   const response = await fetch(updateUrl, {
@@ -1935,6 +2042,9 @@ async function updateClientHandler(accessToken: string, spreadsheetId: string, r
     throw new Error(`Failed to update client handler: ${response.status}`);
   }
 
+  // Log activity to Column AJ
+  await appendActivityLog(accessToken, spreadsheetId, 'CLIENT TRACKER', actualRowNumber, 'HANDLER_CHANGE', `Assigned to ${handler}`);
+
   return { success: true, actualRowNumber };
 }
 
@@ -1964,6 +2074,11 @@ async function updateClientQuotation(accessToken: string, spreadsheetId: string,
     console.error('Google Sheets API error (updateClientQuotation):', response.status, errorText);
     throw new Error(`Failed to update quotation: ${response.status}`);
   }
+
+  // Log activity to Column AJ - extract amount for summary
+  const amountMatch = quotationData.match(/NPR\s*([\d,]+)/i);
+  const amountSummary = amountMatch ? `NPR ${amountMatch[1]}` : 'Quotation updated';
+  await appendActivityLog(accessToken, spreadsheetId, 'CLIENT TRACKER', actualRowNumber, 'QUOTATION', amountSummary);
 
   return { success: true, actualRowNumber };
 }
@@ -1997,6 +2112,9 @@ async function updateClientMindset(accessToken: string, spreadsheetId: string, r
     console.error('Google Sheets API error (updateClientMindset):', response.status, errorText);
     throw new Error(`Failed to update mindset: ${response.status}`);
   }
+
+  // Log activity to Column AJ
+  await appendActivityLog(accessToken, spreadsheetId, 'CLIENT TRACKER', actualRowNumber, 'MINDSET', mindset);
 
   return { success: true, mindset: mindsetWithTimestamp, actualRowNumber };
 }
@@ -2041,6 +2159,10 @@ async function addClientComment(
     console.error('Google Sheets API error (addClientComment):', response.status, errorText);
     throw new Error(`Failed to add comment: ${response.status}`);
   }
+
+  // Log activity to Column AJ
+  const truncatedComment = comment.length > 50 ? comment.substring(0, 50) + '...' : comment;
+  await appendActivityLog(accessToken, spreadsheetId, 'CLIENT TRACKER', actualRowNumber, 'COMMENT', truncatedComment);
 
   return { success: true, comments: updatedComments, actualRowNumber };
 }
@@ -2128,6 +2250,10 @@ async function addBookedClientComment(
       // Don't throw - BOOKED CLIENTS update succeeded
     }
   }
+
+  // Log activity to Column AJ in BOOKED CLIENTS
+  const truncatedComment = comment.length > 50 ? comment.substring(0, 50) + '...' : comment;
+  await appendActivityLog(accessToken, spreadsheetId, 'BOOKED CLIENTS', bookedRowNumber, 'COMMENT', truncatedComment);
 
   return { success: true, comments: updatedComments };
 }
@@ -2400,6 +2526,11 @@ async function updateFinalQuotation(
     throw new Error(`Failed to update final quotation: ${response.status}`);
   }
 
+  // Log activity to Column AJ - extract amount for summary
+  const amountMatch = finalQuotation.match(/NPR\s*([\d,]+)/i);
+  const amountSummary = amountMatch ? `Final quotation locked: NPR ${amountMatch[1]}` : 'Final quotation set';
+  await appendActivityLog(accessToken, spreadsheetId, targetSheet as 'CLIENT TRACKER' | 'BOOKED CLIENTS', actualRowNumber, 'FINAL_QUOTATION', amountSummary);
+
   return { success: true, finalQuotation, actualRowNumber, targetSheet };
 }
 
@@ -2618,6 +2749,10 @@ async function addPayment(
       console.error('Error syncing payment to INCOME WTN:', incomeError);
     }
   }
+
+  // Log activity to Column AJ in BOOKED CLIENTS
+  const paymentDetails = `NPR ${parseInt(paymentAmount).toLocaleString('en-IN')}/- ${paymentType} via ${bank}`;
+  await appendActivityLog(accessToken, spreadsheetId, 'BOOKED CLIENTS', actualRowNumber, 'PAYMENT', paymentDetails);
 
   return { 
     success: true, 
@@ -3684,11 +3819,11 @@ async function updateClientEventDetails(
   return { success: true };
 }
 
-// Get all clients from BOOKED CLIENTS sheet (same structure as CLIENT TRACKER: A-AG)
+// Get all clients from BOOKED CLIENTS sheet (same structure as CLIENT TRACKER: A-AJ)
 // Now includes a lookup to resolve originalRowNumber from CLIENT TRACKER
 async function getBookedClients(accessToken: string, spreadsheetId: string, limit = 100) {
-  // 1. Fetch booked clients data
-  const range = encodeURIComponent("'BOOKED CLIENTS'!A2:AG" + (limit + 1));
+  // 1. Fetch booked clients data (now including Column AJ)
+  const range = encodeURIComponent("'BOOKED CLIENTS'!A2:AJ" + (limit + 1));
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   const response = await fetch(url, {
@@ -3764,6 +3899,9 @@ async function getBookedClients(accessToken: string, spreadsheetId: string, limi
       paymentsMade: row[30] || '',          // Column AE
       paymentDatesAD: row[31] || '',        // Column AF
       remainingPayment: row[32] || '',      // Column AG
+      companyName: row[33] || '',           // Column AH
+      serviceTypes: row[34] || '',          // Column AI
+      lastActivityLog: row[35] || '',       // Column AJ - Activity timestamp log
       bookedDateTime: '',                   // Not stored separately
     };
   });

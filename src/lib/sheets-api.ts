@@ -59,6 +59,7 @@ export interface ClientData {
   remainingPayment?: string;       // Column AG - remaining payment
   companyName?: string;            // Column AH - company name
   serviceTypes?: string;           // Column AI - service types (multi, "/" separated)
+  lastActivityLog?: string;        // Column AJ - Last activity timestamp log
   _source?: 'tracker' | 'booked'; // Source sheet indicator for unified queries
 }
 
