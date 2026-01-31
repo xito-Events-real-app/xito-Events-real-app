@@ -196,6 +196,9 @@ const ClientDetail = () => {
   const [isSavingBookedPayment, setIsSavingBookedPayment] = useState(false);
   const [currentFinalQuotation, setCurrentFinalQuotation] = useState("");
 
+  // BOOKED - Save-only final quotation dialog (no status change)
+  const [showFinalQuotationSaveDialog, setShowFinalQuotationSaveDialog] = useState(false);
+
   // Event details editing state
   const [editingEventIndex, setEditingEventIndex] = useState<number | null>(null);
 
@@ -780,6 +783,43 @@ const ClientDetail = () => {
     }
   };
 
+  // Handle BOOKED client - Save ONLY final quotation (no status change)
+  // Used when a client is already BOOKED but needs to add/edit their final quotation in Column AD
+  const handleSaveFinalQuotationOnly = async (packageName: string, amount: string) => {
+    if (!client?.rowNumber) return;
+    
+    const finalData = `${packageName}: NPR ${formatNPR(amount)}/-`;
+    
+    setIsSavingAdvancePending(true); // Reuse existing saving state
+    try {
+      // Save final quotation ONLY - no status change
+      const quotationResult = await updateFinalQuotation(
+        client.rowNumber, 
+        finalData, 
+        client.registeredDateTimeAD
+      );
+      
+      setCurrentFinalQuotation(quotationResult.finalQuotation);
+      
+      // Immediately refetch to get fresh data from the correct sheet
+      const freshClient = await getSingleClient(client.registeredDateTimeAD!);
+      if (freshClient && updateClientCache) {
+        updateClientCache(freshClient);
+        // Also update local state
+        setCurrentStatusLog(freshClient.statusLog || '');
+        setCurrentFinalQuotation(freshClient.finalQuotation || '');
+      }
+      
+      toast({ title: "Final quotation saved" });
+      setShowFinalQuotationSaveDialog(false);
+    } catch (err) {
+      console.error('Failed to save final quotation:', err);
+      toast({ title: "Failed to save final quotation", variant: "destructive" });
+    } finally {
+      setIsSavingAdvancePending(false);
+    }
+  };
+
   // Handle BOOKED advance payment save
   const handleSaveBookedPayment = async (data: {
     amount: string;
@@ -1343,6 +1383,10 @@ const ClientDetail = () => {
               onAddQuotation={() => {
                 setPendingStatus('QUOTATION SENT : REVIEW PENDING');
                 setShowQuotationDialog(true);
+              }}
+              onAddFinalQuotation={() => {
+                // For BOOKED clients: open save-only dialog (no status change)
+                setShowFinalQuotationSaveDialog(true);
               }}
               isLoggingCall={isLoggingCall}
               isChangingStatus={isChangingStatus}
@@ -1946,6 +1990,20 @@ const ClientDetail = () => {
         existingQuotationData={currentQuotationData || client?.quotationData || ''}
         onSave={handleSaveAdvancePendingQuotation}
         isSaving={isSavingAdvancePending}
+      />
+
+      {/* BOOKED - Save Final Quotation ONLY (no status change) */}
+      <FinalQuotationDialog
+        open={showFinalQuotationSaveDialog}
+        onOpenChange={(open) => {
+          if (!open) setShowFinalQuotationSaveDialog(false);
+        }}
+        clientName={client?.clientName || ''}
+        existingQuotationData={currentQuotationData || client?.quotationData || ''}
+        existingFinalQuotation={currentFinalQuotation || client?.finalQuotation || ''}
+        onSave={handleSaveFinalQuotationOnly}
+        isSaving={isSavingAdvancePending}
+        saveButtonText="Save Final Quotation"
       />
 
       {/* BOOKED - Advance Payment Dialog */}

@@ -17,6 +17,7 @@ interface ClientHeroSectionProps {
   onSync: () => void;
   onAddComment: (comment: string) => Promise<void>;
   onAddQuotation: () => void;
+  onAddFinalQuotation?: () => void; // New: for BOOKED clients to add/edit final quotation
   isLoggingCall?: boolean;
   isChangingStatus?: boolean;
   isAddingComment?: boolean;
@@ -62,6 +63,7 @@ const ClientHeroSection = ({
   onSync,
   onAddComment,
   onAddQuotation,
+  onAddFinalQuotation,
   isLoggingCall = false,
   isChangingStatus = false,
   isAddingComment = false,
@@ -240,6 +242,7 @@ const ClientHeroSection = ({
           clientBargainedRates={client.clientBargainedRates}
           finalQuotation={client.finalQuotation}
           onAddQuotation={onAddQuotation}
+          onAddFinalQuotation={onAddFinalQuotation}
           comments={client.comments}
           onAddComment={onAddComment}
           isAddingComment={isAddingComment}

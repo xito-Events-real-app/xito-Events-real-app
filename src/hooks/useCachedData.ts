@@ -206,11 +206,19 @@ export function useCachedData(): UseCachedDataResult {
   }, []);
 
   // Update a single client in both state and cache
+  // IMPORTANT: Matches by registeredDateTimeAD (preferred) to handle row number shifts
   const updateClient = useCallback(async (updatedClient: ClientData) => {
     // 1. Update local state immediately for instant UI feedback
-    setClients(prev => prev.map(c => 
-      c.rowNumber === updatedClient.rowNumber ? { ...c, ...updatedClient } : c
-    ));
+    // Match by registeredDateTimeAD (preferred) or rowNumber (fallback)
+    setClients(prev => prev.map(c => {
+      if (updatedClient.registeredDateTimeAD && c.registeredDateTimeAD === updatedClient.registeredDateTimeAD) {
+        return { ...c, ...updatedClient };
+      }
+      if (c.rowNumber === updatedClient.rowNumber && !updatedClient.registeredDateTimeAD) {
+        return { ...c, ...updatedClient };
+      }
+      return c;
+    }));
     
     // 2. Update IndexedDB cache
     await updateClientInCache(updatedClient.rowNumber, updatedClient);

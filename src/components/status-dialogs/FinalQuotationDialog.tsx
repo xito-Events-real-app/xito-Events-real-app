@@ -13,15 +13,17 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { Lock, Loader2 } from "lucide-react";
-import { parseQuotationData, formatNPR, getQuotationTierColor } from "@/lib/client-card-utils";
+import { parseQuotationData, formatNPR, getQuotationTierColor, parseFinalQuotation } from "@/lib/client-card-utils";
 
 interface FinalQuotationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   clientName: string;
   existingQuotationData?: string;
+  existingFinalQuotation?: string; // For pre-filling when editing
   onSave: (packageName: string, amount: string) => Promise<void>;
   isSaving: boolean;
+  saveButtonText?: string; // Customizable button text
 }
 
 const PACKAGE_TIERS = ['BASIC', 'STANDARD', 'PREMIUM', 'WTN SPECIAL'] as const;
@@ -31,8 +33,10 @@ export function FinalQuotationDialog({
   onOpenChange,
   clientName,
   existingQuotationData,
+  existingFinalQuotation,
   onSave,
   isSaving,
+  saveButtonText = 'Lock & Move to Advance Pending',
 }: FinalQuotationDialogProps) {
   const [selectedPackage, setSelectedPackage] = useState<string>('');
   const [finalAmount, setFinalAmount] = useState<string>('');
@@ -41,14 +45,24 @@ export function FinalQuotationDialog({
   // Parse existing quotations
   const existingQuotes = parseQuotationData(existingQuotationData || '');
 
+  // Parse existing final quotation for editing
+  const parsedExistingFinal = existingFinalQuotation ? parseFinalQuotation(existingFinalQuotation) : null;
+
   // Reset state when dialog opens
   useEffect(() => {
     if (open) {
-      setSelectedPackage('');
-      setFinalAmount('');
-      setSelectedExistingQuote('');
+      // If editing existing final quotation, pre-fill
+      if (parsedExistingFinal) {
+        setSelectedPackage(parsedExistingFinal.package);
+        setFinalAmount(String(parsedExistingFinal.amount).replace(/,/g, ''));
+        setSelectedExistingQuote('');
+      } else {
+        setSelectedPackage('');
+        setFinalAmount('');
+        setSelectedExistingQuote('');
+      }
     }
-  }, [open]);
+  }, [open, existingFinalQuotation]);
 
   // Handle selecting an existing quotation
   const handleExistingQuoteSelect = (value: string) => {
@@ -220,7 +234,7 @@ export function FinalQuotationDialog({
             ) : (
               <>
                 <Lock className="h-4 w-4" />
-                Lock & Move to Advance Pending
+                {saveButtonText}
               </>
             )}
           </Button>

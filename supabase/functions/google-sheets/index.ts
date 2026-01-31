@@ -1354,26 +1354,7 @@ async function getSingleClient(accessToken: string, spreadsheetId: string, regis
     _source: source,
   });
 
-  // Search CLIENT TRACKER first
-  const trackerRange = encodeURIComponent("'CLIENT TRACKER'!A2:AI2000");
-  const trackerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}`;
-  
-  const trackerResponse = await fetch(trackerUrl, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-
-  if (trackerResponse.ok) {
-    const trackerData = await trackerResponse.json();
-    if (trackerData.values) {
-      const foundIndex = trackerData.values.findIndex((row: string[]) => row[0] === registeredDateTimeAD);
-      if (foundIndex !== -1) {
-        console.info(`[SINGLE CLIENT] Found in CLIENT TRACKER at row ${foundIndex + 2}`);
-        return mapRowToClient(trackerData.values[foundIndex], foundIndex + 2, 'tracker');
-      }
-    }
-  }
-
-  // Not found in tracker, search BOOKED CLIENTS
+  // PRIORITY: Search BOOKED CLIENTS FIRST (booked wins over tracker duplicates)
   const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:AI2000");
   const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}`;
   
@@ -1392,6 +1373,25 @@ async function getSingleClient(accessToken: string, spreadsheetId: string, regis
     }
   }
 
+  // Not found in BOOKED CLIENTS, search CLIENT TRACKER
+  const trackerRange = encodeURIComponent("'CLIENT TRACKER'!A2:AI2000");
+  const trackerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}`;
+  
+  const trackerResponse = await fetch(trackerUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (trackerResponse.ok) {
+    const trackerData = await trackerResponse.json();
+    if (trackerData.values) {
+      const foundIndex = trackerData.values.findIndex((row: string[]) => row[0] === registeredDateTimeAD);
+      if (foundIndex !== -1) {
+        console.info(`[SINGLE CLIENT] Found in CLIENT TRACKER at row ${foundIndex + 2}`);
+        return mapRowToClient(trackerData.values[foundIndex], foundIndex + 2, 'tracker');
+      }
+    }
+  }
+
   console.info(`[SINGLE CLIENT] Client not found in any sheet`);
   return null;
 }
@@ -1399,6 +1399,7 @@ async function getSingleClient(accessToken: string, spreadsheetId: string, regis
 // ============= GET ALL CLIENTS FROM BOTH SHEETS (UNIFIED) =============
 // Merges data from CLIENT TRACKER (non-BOOKED) and BOOKED CLIENTS
 // This is the primary endpoint for features like Hot Dates, Calendar, Search
+// IMPORTANT: Deduplicates by registeredDateTimeAD, prioritizing BOOKED CLIENTS
 async function getAllClientsFromBothSheets(accessToken: string, spreadsheetId: string, limit = 500) {
   // Fetch from both sheets in parallel
   const [trackerClients, bookedClients] = await Promise.all([
@@ -1416,9 +1417,24 @@ async function getAllClientsFromBothSheets(accessToken: string, spreadsheetId: s
   // Merge both lists
   const merged = [...trackerClients, ...mappedBookedClients];
   
-  console.log(`[UNIFIED FETCH] Tracker: ${trackerClients.length}, Booked: ${bookedClients.length}, Total: ${merged.length}`);
+  // Deduplicate by registeredDateTimeAD - BOOKED CLIENTS always wins
+  const clientMap = new Map();
+  for (const client of merged) {
+    const id = (client as Record<string, unknown>).registeredDateTimeAD as string;
+    if (!id) continue;
+    
+    const existing = clientMap.get(id);
+    // Keep if: no existing OR current is from booked (booked wins)
+    if (!existing || (client as Record<string, unknown>)._source === 'booked') {
+      clientMap.set(id, client);
+    }
+  }
   
-  return merged;
+  const deduplicated = Array.from(clientMap.values());
+  
+  console.log(`[UNIFIED FETCH] Tracker: ${trackerClients.length}, Booked: ${bookedClients.length}, Before dedup: ${merged.length}, After dedup: ${deduplicated.length}`);
+  
+  return deduplicated;
 }
 
 // ============= DELETE ROW FROM CLIENT TRACKER =============
@@ -2291,7 +2307,7 @@ function adToBSSimple(date: Date): string {
 }
 
 // Update final quotation in Column AD
-// Smart sheet routing: searches CLIENT TRACKER first, then BOOKED CLIENTS
+// Smart sheet routing: searches BOOKED CLIENTS first (priority), then CLIENT TRACKER
 async function updateFinalQuotation(
   accessToken: string, 
   spreadsheetId: string, 
@@ -2307,51 +2323,51 @@ async function updateFinalQuotation(
   let actualRowNumber = rowNumber;
 
   if (registeredDateTimeAD) {
-    // Try to find in CLIENT TRACKER first
-    const trackerRange = encodeURIComponent(`'CLIENT TRACKER'!A2:A2000`);
-    const trackerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}`;
+    // PRIORITY: Try to find in BOOKED CLIENTS first (booked wins)
+    const bookedRange = encodeURIComponent(`'BOOKED CLIENTS'!A2:A2000`);
+    const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}`;
     
-    const trackerResponse = await fetch(trackerUrl, {
+    const bookedResponse = await fetch(bookedUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     
-    let foundInTracker = false;
-    if (trackerResponse.ok) {
-      const trackerData = await trackerResponse.json();
-      if (trackerData.values) {
+    let foundInBooked = false;
+    if (bookedResponse.ok) {
+      const bookedData = await bookedResponse.json();
+      if (bookedData.values) {
         const normalizedDateTime = registeredDateTimeAD.trim();
-        for (let i = 0; i < trackerData.values.length; i++) {
-          const cellValue = (trackerData.values[i][0] || '').trim();
+        for (let i = 0; i < bookedData.values.length; i++) {
+          const cellValue = (bookedData.values[i][0] || '').trim();
           if (cellValue === normalizedDateTime) {
-            targetSheet = 'CLIENT TRACKER';
+            targetSheet = 'BOOKED CLIENTS';
             actualRowNumber = i + 2;
-            foundInTracker = true;
-            console.log(`[updateFinalQuotation] Found in CLIENT TRACKER at row ${actualRowNumber}`);
+            foundInBooked = true;
+            console.log(`[updateFinalQuotation] Found in BOOKED CLIENTS at row ${actualRowNumber}`);
             break;
           }
         }
       }
     }
     
-    // If not in Tracker, try BOOKED CLIENTS
-    if (!foundInTracker) {
-      const bookedRange = encodeURIComponent(`'BOOKED CLIENTS'!A2:A2000`);
-      const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}`;
+    // If not in BOOKED CLIENTS, try CLIENT TRACKER
+    if (!foundInBooked) {
+      const trackerRange = encodeURIComponent(`'CLIENT TRACKER'!A2:A2000`);
+      const trackerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}`;
       
-      const bookedResponse = await fetch(bookedUrl, {
+      const trackerResponse = await fetch(trackerUrl, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       
-      if (bookedResponse.ok) {
-        const bookedData = await bookedResponse.json();
-        if (bookedData.values) {
+      if (trackerResponse.ok) {
+        const trackerData = await trackerResponse.json();
+        if (trackerData.values) {
           const normalizedDateTime = registeredDateTimeAD.trim();
-          for (let i = 0; i < bookedData.values.length; i++) {
-            const cellValue = (bookedData.values[i][0] || '').trim();
+          for (let i = 0; i < trackerData.values.length; i++) {
+            const cellValue = (trackerData.values[i][0] || '').trim();
             if (cellValue === normalizedDateTime) {
-              targetSheet = 'BOOKED CLIENTS';
+              targetSheet = 'CLIENT TRACKER';
               actualRowNumber = i + 2;
-              console.log(`[updateFinalQuotation] Found in BOOKED CLIENTS at row ${actualRowNumber}`);
+              console.log(`[updateFinalQuotation] Found in CLIENT TRACKER at row ${actualRowNumber}`);
               break;
             }
           }
