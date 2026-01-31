@@ -37,13 +37,13 @@ export function MobileSuiteLanding() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col overflow-x-hidden w-full">
+    <div className="min-h-screen bg-gray-50 flex flex-col overflow-x-hidden w-full max-w-full">
       {/* Global Mode Toggle */}
       <GlobalModeToggle />
 
       {/* Header */}
-      <div className="flex items-center justify-between px-4 pt-4 pb-2 bg-white border-b border-gray-200 shrink-0">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between px-3 pt-4 pb-2 bg-white border-b border-gray-200 shrink-0 w-full max-w-full">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg shadow-violet-500/30">
             <span className="text-white font-bold text-lg">X</span>
           </div>
@@ -144,17 +144,17 @@ export function MobileSuiteLanding() {
 // Home Tab Content
 function HomeTabContent() {
   return (
-    <ScrollArea className="flex-1 h-full">
-      <div className="px-4 py-4 space-y-4 pb-24 w-full max-w-full overflow-x-hidden">
+    <ScrollArea className="flex-1 h-full w-full">
+      <div className="px-3 py-4 space-y-3 pb-24 w-full max-w-full overflow-x-hidden box-border">
         {/* Quick Actions */}
         <SuiteQuickActionsBar variant="mobile" />
         
         {/* Search and Sync */}
         <div className="grid grid-cols-2 gap-2 w-full max-w-full">
-          <div className="min-w-0">
+          <div className="min-w-0 w-full">
             <MasterSearchButton />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 w-full">
             <MasterSyncButton />
           </div>
         </div>
@@ -168,7 +168,7 @@ function HomeTabContent() {
 
 function EventsHandlerTabs() {
   return (
-    <Tabs defaultValue="events" className="w-full">
+    <Tabs defaultValue="events" className="w-full max-w-full overflow-x-hidden">
       <TabsList className="grid grid-cols-4 w-full mb-3 h-11 bg-gray-100 p-1">
         <TabsTrigger 
           value="events" 
