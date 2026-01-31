@@ -1,98 +1,182 @@
 
-# Plan: Fix Quotation Data Not Saving to Sheets
+# Plan: Fix Final Quotation (Column AD) Saving to Both Sheets
 
-## Problem Analysis
+## Problem Summary
 
-When adding quotation amounts from the client page (e.g., for "Sargat Thapa"), the data is NOT saved to Google Sheets. The quotation was added 3 times but nothing persisted.
+The Final Quotation is NOT saving because:
 
-### Root Cause
+1. **Frontend API Missing ID**: `updateFinalQuotation()` in `sheets-api.ts` does NOT send `registeredDateTimeAD` to the backend
+2. **Backend Hardcoded to Wrong Sheet**: The backend `updateFinalQuotation()` is hardcoded to ONLY write to `'CLIENT TRACKER'!AD` - it never writes to `BOOKED CLIENTS` even when the client is already booked
 
-The `updateClientQuotation` function is missing the critical `registeredDateTimeAD` parameter needed for row verification:
+## Your Flow (as I understand it)
 
-**Current frontend API call (`sheets-api.ts` line 247-254):**
-```typescript
-export async function updateClientQuotation(
-  rowNumber: number,
-  quotationData: string
-): Promise<{ success: boolean }> {
-  return callSheetsFunction<{ success: boolean }>("updateClientQuotation", {
-    data: { rowNumber, quotationData },  // MISSING registeredDateTimeAD!
-  });
-}
-```
+| Column | Purpose | When Set |
+|--------|---------|----------|
+| **V** | Initial Quotation Tiers (BASIC, STANDARD, PREMIUM amounts) | When client is in CLIENT TRACKER, status = QUOTATION SENT |
+| **AD** | Final Fixed Quotation (locked package + amount) | When transitioning to ADVANCE PENDING or for any BOOKED client |
 
-**Backend expects `registeredDateTimeAD` (edge function line 1926-1932):**
-```typescript
-async function updateClientQuotation(accessToken, spreadsheetId, rowNumber, quotationData, registeredDateTimeAD) {
-  // ...
-  const actualRowNumber = await verifyRowNumber(..., registeredDateTimeAD);
-  // Without registeredDateTimeAD, verifyRowNumber just returns the original rowNumber
-  // If rows have shifted, the update goes to the WRONG row (corrupting data)
-}
-```
-
-**What happens:**
-1. User opens client detail page with cached `rowNumber` from earlier
-2. New clients are added to the sheet, rows shift down
-3. User saves quotation with the outdated `rowNumber`
-4. Backend writes to the wrong row (or an empty row if the ID is wrong)
-5. No error is thrown - the API returns success but data is in the wrong place
-
-### The Same Issue Exists in Multiple Locations
-
-| File | Line | Call |
-|------|------|------|
-| `src/pages/ClientDetail.tsx` | ~719 | `updateClientQuotation(client.rowNumber, quotationData)` |
-| `src/components/dashboard/FreshClientCard.tsx` | ~1140 | `updateClientQuotation(client.rowNumber, quotationData)` |
-| `src/components/desktop/DesktopClientRow.tsx` | ~506 | `updateClientQuotation(client.rowNumber, quotationData)` |
+The "Add Final Quotation" action should save to **Column AD** in **whichever sheet the client currently lives** (CLIENT TRACKER or BOOKED CLIENTS).
 
 ---
 
 ## Solution
 
-### Step 1: Update the Frontend API Function
+### 1. Frontend: Pass `registeredDateTimeAD` to `updateFinalQuotation`
 
-Modify `sheets-api.ts` to accept and pass `registeredDateTimeAD`:
+**File: `src/lib/sheets-api.ts`**
 
 ```typescript
-export async function updateClientQuotation(
+// BEFORE:
+export async function updateFinalQuotation(
   rowNumber: number,
-  quotationData: string,
-  registeredDateTimeAD?: string  // Add this parameter
-): Promise<{ success: boolean }> {
-  return callSheetsFunction<{ success: boolean }>("updateClientQuotation", {
-    data: { rowNumber, quotationData, registeredDateTimeAD },  // Pass it to backend
+  finalQuotation: string
+): Promise<{ success: boolean; finalQuotation: string }> {
+  return callSheetsFunction<{ success: boolean; finalQuotation: string }>("updateFinalQuotation", {
+    data: { rowNumber, finalQuotation },
+  });
+}
+
+// AFTER:
+export async function updateFinalQuotation(
+  rowNumber: number,
+  finalQuotation: string,
+  registeredDateTimeAD?: string  // ADD THIS
+): Promise<{ success: boolean; finalQuotation: string }> {
+  return callSheetsFunction<{ success: boolean; finalQuotation: string }>("updateFinalQuotation", {
+    data: { rowNumber, finalQuotation, registeredDateTimeAD },  // PASS IT
   });
 }
 ```
 
-### Step 2: Update All Call Sites to Pass `registeredDateTimeAD`
+---
 
-**File: `src/pages/ClientDetail.tsx` (handleSaveQuotation)**
+### 2. Update All Call Sites to Pass the ID
+
+**File: `src/pages/ClientDetail.tsx` (handleSaveAdvancePendingQuotation ~line 756)**
+
 ```typescript
-// Before:
-await updateClientQuotation(client.rowNumber, quotationData);
+// BEFORE:
+const quotationResult = await updateFinalQuotation(client.rowNumber, finalData);
 
-// After:
-await updateClientQuotation(client.rowNumber, quotationData, client.registeredDateTimeAD);
+// AFTER:
+const quotationResult = await updateFinalQuotation(
+  client.rowNumber, 
+  finalData, 
+  client.registeredDateTimeAD  // ADD THIS
+);
 ```
 
-**File: `src/components/dashboard/FreshClientCard.tsx`**
-```typescript
-// Before:
-await updateClientQuotation(client.rowNumber, quotationData);
+Also update any other call sites in:
+- `src/components/dashboard/FreshClientCard.tsx`
+- `src/components/desktop/DesktopClientRow.tsx`
 
-// After:
-await updateClientQuotation(client.rowNumber, quotationData, client.registeredDateTimeAD);
+---
+
+### 3. Backend: Smart Sheet Routing for `updateFinalQuotation`
+
+**File: `supabase/functions/google-sheets/index.ts`**
+
+The current code (line 2306-2308):
+```typescript
+// CURRENT (BROKEN):
+const actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, registeredDateTimeAD);
+const range = encodeURIComponent(`'CLIENT TRACKER'!AD${actualRowNumber}`);
 ```
 
-**File: `src/components/desktop/DesktopClientRow.tsx`**
+Updated to search BOTH sheets and write to the correct one:
 ```typescript
-// Before:
-await updateClientQuotation(client.rowNumber, quotationData);
+// NEW (FIXED):
+async function updateFinalQuotation(
+  accessToken: string, 
+  spreadsheetId: string, 
+  rowNumber: number, 
+  finalQuotation: string,
+  registeredDateTimeAD?: string
+) {
+  if (!rowNumber || rowNumber < 2) {
+    throw new Error('Valid rowNumber is required for updating final quotation');
+  }
 
-// After:
-await updateClientQuotation(client.rowNumber, quotationData, client.registeredDateTimeAD);
+  let targetSheet = 'CLIENT TRACKER';
+  let actualRowNumber = rowNumber;
+
+  if (registeredDateTimeAD) {
+    // Try to find in CLIENT TRACKER first
+    const trackerRow = await findRowByRegisteredDateTime(accessToken, spreadsheetId, 'CLIENT TRACKER', registeredDateTimeAD);
+    
+    if (trackerRow) {
+      targetSheet = 'CLIENT TRACKER';
+      actualRowNumber = trackerRow;
+    } else {
+      // If not in Tracker, try BOOKED CLIENTS
+      const bookedRow = await findRowByRegisteredDateTime(accessToken, spreadsheetId, 'BOOKED CLIENTS', registeredDateTimeAD);
+      
+      if (bookedRow) {
+        targetSheet = 'BOOKED CLIENTS';
+        actualRowNumber = bookedRow;
+      }
+    }
+  } else {
+    // Fallback: verify row in Tracker if no ID provided
+    actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, undefined);
+  }
+
+  // Write to Column AD in the correct sheet
+  const range = encodeURIComponent(`'${targetSheet}'!AD${actualRowNumber}`);
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  
+  const response = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [[finalQuotation]] }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (updateFinalQuotation):', response.status, errorText);
+    throw new Error(`Failed to update final quotation: ${response.status}`);
+  }
+
+  return { success: true, finalQuotation, actualRowNumber, targetSheet };
+}
+```
+
+---
+
+### 4. Add Helper Function: `findRowByRegisteredDateTime`
+
+Add a reusable helper to find a row in a specific sheet by the unique ID:
+
+```typescript
+async function findRowByRegisteredDateTime(
+  accessToken: string,
+  spreadsheetId: string,
+  sheetName: string,
+  registeredDateTimeAD: string
+): Promise<number | null> {
+  const range = encodeURIComponent(`'${sheetName}'!A2:A2000`);
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  
+  if (!response.ok) return null;
+  
+  const data = await response.json();
+  const values = data.values || [];
+  
+  for (let i = 0; i < values.length; i++) {
+    if (values[i][0] === registeredDateTimeAD) {
+      return i + 2; // +2 because data starts at row 2
+    }
+  }
+  
+  return null;
+}
 ```
 
 ---
@@ -101,50 +185,34 @@ await updateClientQuotation(client.rowNumber, quotationData, client.registeredDa
 
 | File | Changes |
 |------|---------|
-| `src/lib/sheets-api.ts` | Add `registeredDateTimeAD` parameter to `updateClientQuotation` function |
-| `src/pages/ClientDetail.tsx` | Pass `client.registeredDateTimeAD` to `updateClientQuotation` call |
-| `src/components/dashboard/FreshClientCard.tsx` | Pass `client.registeredDateTimeAD` to `updateClientQuotation` call |
-| `src/components/desktop/DesktopClientRow.tsx` | Pass `client.registeredDateTimeAD` to `updateClientQuotation` call |
+| `src/lib/sheets-api.ts` | Add `registeredDateTimeAD` parameter to `updateFinalQuotation` |
+| `src/pages/ClientDetail.tsx` | Pass `client.registeredDateTimeAD` in `handleSaveAdvancePendingQuotation` |
+| `src/components/dashboard/FreshClientCard.tsx` | Pass `registeredDateTimeAD` if calling `updateFinalQuotation` |
+| `src/components/desktop/DesktopClientRow.tsx` | Pass `registeredDateTimeAD` if calling `updateFinalQuotation` |
+| `supabase/functions/google-sheets/index.ts` | 1. Add `findRowByRegisteredDateTime` helper<br>2. Update `updateFinalQuotation` to search both sheets and write to the correct one |
 
 ---
 
-## Why This Fix Works
+## Expected Result After Fix
 
-The `verifyRowNumber` function in the edge function (line 1117-1155):
-1. Takes the `registeredDateTimeAD` (unique timestamp ID from Column A)
-2. Searches Column A (A2:A2000) in the sheet for the exact match
-3. Returns the **correct current row number** even if rows have shifted
-4. If `registeredDateTimeAD` is missing, it falls back to the provided `rowNumber` (which may be outdated)
-
-By passing `registeredDateTimeAD`, we ensure the quotation is written to the correct row even if the sheet structure has changed since the page was loaded.
-
----
-
-## Technical Note: Edge Function Already Handles This
-
-The backend (`supabase/functions/google-sheets/index.ts` lines 4702-4710) already accepts `registeredDateTimeAD`:
-```typescript
-case 'updateClientQuotation':
-  if (!data || !data.rowNumber) throw new Error('...');
-  result = await updateClientQuotation(
-    accessToken, 
-    spreadsheetId, 
-    data.rowNumber as number, 
-    data.quotationData as string || '',
-    data.registeredDateTimeAD as string | undefined  // Already handled!
-  );
-```
-
-No backend changes are needed - the issue is purely that the frontend wasn't sending this parameter.
+1. User opens **Sargat Thapa** (BOOKED client in BOOKED CLIENTS sheet)
+2. Clicks "Add Final Quotation" (via ADVANCE PENDING flow or a new action)
+3. Selects package (e.g., STANDARD) and enters amount (e.g., 85,000)
+4. Clicks Save
+5. **Frontend** sends: `{ rowNumber: X, finalQuotation: "STANDARD: NPR 85,000/-", registeredDateTimeAD: "2026-01-31T02:42:39.340Z" }`
+6. **Backend** searches for the ID:
+   - Not found in CLIENT TRACKER
+   - Found in BOOKED CLIENTS at row Y
+7. **Backend** writes to `'BOOKED CLIENTS'!AD{Y}`
+8. Data is correctly saved to Column AD in BOOKED CLIENTS sheet
 
 ---
 
-## Expected Behavior After Fix
+## Bonus: UI Clarity
 
-1. User opens client detail for "Sargat Thapa"
-2. Adds quotation amounts (e.g., BASIC: 50,000, STANDARD: 60,000)
-3. Clicks "Save & Update Status"
-4. Frontend sends: `{ rowNumber: X, quotationData: "...", registeredDateTimeAD: "2026-01-31T02:42:39.340Z" }`
-5. Backend verifies correct row using the unique ID
-6. Data is written to Column V of the correct row
-7. Success - data persists correctly in sheets
+For BOOKED clients who don't have a Final Quotation (Column AD), the UI currently shows "Add Quotation" which is confusing. After this fix, we could optionally update `QuotationDisplaySection.tsx` to show:
+
+- **"Lock Final Quotation"** instead of "Add Quotation"
+- Make it clear that this saves to Column AD (Final Fixed), not Column V (Initial Tiers)
+
+This UX improvement can be done in a follow-up if needed.
