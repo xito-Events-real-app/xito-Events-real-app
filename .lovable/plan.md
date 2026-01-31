@@ -1,73 +1,124 @@
 
-
-# Plan: Fix Activity Log Timestamp Parsing for Breaking News
+# Plan: Differentiate BOOKED from Negative Status Changes (Red Color for Cancellations)
 
 ## Problem
 
-The client "SEEMRON" was added with activity log timestamp `2026/01/31 21:46:00` (YYYY/MM/DD format), but the frontend parser at line 128 of `activity-utils.ts` only matches `MM/DD/YYYY` format:
+Currently the activity feed treats **BOOKED** and **BOOKED SOMEWHERE ELSE** identically (both show as violet 'booking' type). The user wants:
 
-```javascript
-// Current regex - only matches MM/DD/YYYY
-const match = timestampStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})/);
-```
-
-This causes the activity to be silently skipped, so NIKIT's new client doesn't appear in Breaking News or Handler Activity.
+1. **BOOKED** = Positive outcome (keep violet/green)
+2. **BOOKED SOMEWHERE ELSE** = Negative outcome (show RED)
+3. **CANCELLED / CANCELLED BY CLIENT / CANCELLED BY US** = Negative outcomes (show RED)
 
 ---
 
 ## Solution
 
-### 1. Update Frontend Parser with Dual-Format Support
+### 1. Add New Activity Type: `lost`
 
-Modify `parseActivityLogColumn()` in `src/lib/activity-utils.ts` to handle BOTH timestamp formats:
-- `MM/DD/YYYY HH:MM:SS` (new correct format)
-- `YYYY/MM/DD HH:MM:SS` (legacy/old format)
+Add a new activity type called `lost` (or `cancelled`) for negative status changes.
 
-**Implementation:**
+**File: `src/lib/activity-utils.ts`**
 
 ```typescript
-// Try MM/DD/YYYY format first (correct format)
-let match = timestampStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})/);
-let year: number, month: number, day: number;
+// Update ActivityType
+export type ActivityType = 'payment' | 'comment' | 'status' | 'client_added' | 
+                           'call' | 'booking' | 'quotation' | 'handler_change' | 
+                           'mindset' | 'lost';
 
-if (match) {
-  // MM/DD/YYYY format
-  month = parseInt(match[1], 10);
-  day = parseInt(match[2], 10);
-  year = parseInt(match[3], 10);
-} else {
-  // Try YYYY/MM/DD format (legacy fallback)
-  match = timestampStr.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})/);
-  if (!match) return; // Skip if neither format matches
-  
-  year = parseInt(match[1], 10);
-  month = parseInt(match[2], 10);
-  day = parseInt(match[3], 10);
-}
-
-const hours = parseInt(match[4], 10);
-const mins = parseInt(match[5], 10);
-const secs = parseInt(match[6], 10);
+// Add color for 'lost' type
+case 'lost':
+  return { bg: 'bg-red-500/20', text: 'text-red-500', border: 'border-red-500/30' };
 ```
 
-### 2. Redeploy Edge Function
+### 2. Update Parsing Logic to Detect Negative Outcomes
 
-Ensure the edge function with the correct timestamp format is deployed so new clients use `MM/DD/YYYY` going forward.
+Modify `parseActivityLogColumn()` and `parseStatusActivities()` to detect:
+- BOOKED SOMEWHERE ELSE
+- CANCELLED BY CLIENT
+- CANCELLED BY US  
+- CANCELLED
+
+And map them to the `lost` type instead of `status` or `booking`.
+
+**Current Logic (problematic):**
+```typescript
+const isBooking = activityType.toUpperCase() === 'STATUS_CHANGE' && 
+                  details.toUpperCase().includes('BOOKED') && 
+                  !details.toUpperCase().includes('SOMEWHERE ELSE');
+```
+
+**Updated Logic:**
+```typescript
+const upperDetails = details.toUpperCase();
+
+// Check for negative outcomes FIRST
+const isLost = upperDetails.includes('BOOKED SOMEWHERE ELSE') ||
+               upperDetails.includes('CANCELLED BY CLIENT') ||
+               upperDetails.includes('CANCELLED BY US') ||
+               upperDetails.includes('CANCELLED');
+
+// Then check for positive booking
+const isBooking = !isLost && 
+                  activityType.toUpperCase() === 'STATUS_CHANGE' && 
+                  upperDetails.includes('BOOKED');
+
+// Use appropriate type
+type: isLost ? 'lost' : (isBooking ? 'booking' : type)
+```
+
+### 3. Add `lost` Icon and Styling
+
+**Files to update:**
+- `src/components/suite/ActivityCard.tsx` - Add red card style for `lost`
+- `src/components/suite/HandlerActivitySection.tsx` - Add red background for `lost` type
+
+**ActivityCard.tsx:**
+```typescript
+// Add XCircle icon import
+import { XCircle } from "lucide-react";
+
+// Add to iconMap
+const iconMap: Record<ActivityType, LucideIcon> = {
+  // ... existing
+  lost: XCircle,
+};
+
+// Add card style
+case 'lost':
+  return "bg-red-100 border-2 border-red-400 ring-2 ring-red-200";
+```
+
+**HandlerActivitySection.tsx:**
+```typescript
+// Add XCircle import
+import { XCircle } from "lucide-react";
+
+// getActivityIconComponent
+case 'lost': return XCircle;
+
+// getTypeBg
+case 'lost': return 'bg-red-50 border-red-300';
+```
 
 ---
 
-## Files to Modify
+## Summary of Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/lib/activity-utils.ts` | Add dual-format parsing in `parseActivityLogColumn()` |
+| `src/lib/activity-utils.ts` | Add `lost` type, color, parsing logic |
+| `src/components/suite/ActivityCard.tsx` | Add `lost` icon mapping and red card style |
+| `src/components/suite/HandlerActivitySection.tsx` | Add `lost` icon and red background |
 
 ---
 
-## Expected Result
+## Visual Result
 
-After this fix:
-1. SEEMRON (and other clients with YYYY/MM/DD timestamps) will immediately appear in Breaking News and Handler Activity for NIKIT
-2. New clients will continue to work correctly with MM/DD/YYYY format
-3. Both old and new timestamp formats are supported for backwards compatibility
-
+| Status | Type | Color |
+|--------|------|-------|
+| BOOKED | `booking` | Violet |
+| BOOKED SOMEWHERE ELSE | `lost` | Red |
+| CANCELLED BY CLIENT | `lost` | Red |
+| CANCELLED BY US | `lost` | Red |
+| CANCELLED | `lost` | Red |
+| Other status changes | `status` | Blue |
