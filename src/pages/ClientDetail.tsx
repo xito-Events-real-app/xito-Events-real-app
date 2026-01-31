@@ -209,6 +209,7 @@ const ClientDetail = () => {
   const [isSyncingClient, setIsSyncingClient] = useState(false);
   const fromState = location.state as { 
     from?: string; 
+    searchContext?: string;  // Flag for search sequential navigation
     filters?: any; 
     scrollPosition?: number;
     searchQuery?: string;
@@ -218,8 +219,8 @@ const ClientDetail = () => {
 
   // Compute previous/next client IDs for navigation
   const { prevClientId, nextClientId, currentPosition, totalCount, isFromSearch } = useMemo(() => {
-    // If coming from search with result context
-    if (fromState?.from === 'search' && fromState.resultIds && fromState.currentIndex !== undefined) {
+    // If coming from search with result context (use searchContext flag, not from)
+    if (fromState?.searchContext === 'search' && fromState.resultIds && fromState.currentIndex !== undefined) {
       const ids = fromState.resultIds;
       const idx = fromState.currentIndex;
       return {

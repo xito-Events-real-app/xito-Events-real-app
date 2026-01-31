@@ -21,7 +21,7 @@ export function StarClientDetailView({ handlerName, onClose }: StarClientDetailV
   const navigate = useNavigate();
 
   const handleViewDetails = (client: typeof starClients[0]) => {
-    navigate(getClientDetailPath(client));
+    navigate(getClientDetailPath(client), { state: { from: '/' } });  // Suite Landing path for back navigation
   };
 
   const handleCall = (phone: string) => {
