@@ -20,6 +20,7 @@ export function DesktopSuiteLanding() {
   const { todayCount } = useActivityFeed();
   const [showNews, setShowNews] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedStarHandler, setSelectedStarHandler] = useState<string | null>(null);
 
   const handleRefreshNews = async () => {
     setIsRefreshing(true);
@@ -39,10 +40,17 @@ export function DesktopSuiteLanding() {
     navigate('/login', { replace: true });
   };
 
+  const handleSelectStarHandler = (handlerName: string) => {
+    setSelectedStarHandler(handlerName || null);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex w-full">
       {/* Left Sidebar - Module Navigation */}
-      <SuiteLeftSidebar />
+      <SuiteLeftSidebar 
+        onSelectStarHandler={handleSelectStarHandler}
+        selectedStarHandler={selectedStarHandler}
+      />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -111,7 +119,10 @@ export function DesktopSuiteLanding() {
         </div>
 
         {/* Dashboard Content */}
-        <SuiteDashboardContent />
+        <SuiteDashboardContent 
+          selectedStarHandler={selectedStarHandler}
+          onClearStarHandler={() => setSelectedStarHandler(null)}
+        />
       </div>
 
       {/* News Sidebar (right) */}

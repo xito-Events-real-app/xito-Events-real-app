@@ -3,13 +3,65 @@ import { useNavigate } from "react-router-dom";
 import { suiteModules } from "@/lib/suite-modules";
 import { useSuiteStats } from "@/hooks/useSuiteStats";
 import { formatNPR } from "@/lib/client-card-utils";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ChevronRight, Construction } from "lucide-react";
+import { StarRating } from "@/components/ui/star-rating";
+import { useHandlerStarClients } from "@/hooks/useHandlerStarClients";
+import { ChevronRight, Construction, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-export function SuiteLeftSidebar() {
+const HANDLERS = [
+  { name: 'Benzo', colorScheme: 'violet' as const },
+  { name: 'Barun', colorScheme: 'emerald' as const },
+  { name: 'Nikit', colorScheme: 'blue' as const },
+];
+
+interface SuiteLeftSidebarProps {
+  onSelectStarHandler?: (handlerName: string) => void;
+  selectedStarHandler?: string | null;
+}
+
+function HandlerStarItem({ 
+  handler, 
+  isSelected, 
+  onClick 
+}: { 
+  handler: typeof HANDLERS[0]; 
+  isSelected: boolean;
+  onClick: () => void;
+}) {
+  const { starClients } = useHandlerStarClients(handler.name);
+  
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "w-full flex items-center gap-3 p-2.5 rounded-xl transition-all text-left group",
+        isSelected 
+          ? "bg-amber-100 border-amber-300" 
+          : "hover:bg-amber-50 border-transparent",
+        "border"
+      )}
+    >
+      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-sm">
+        <Star className="w-4 h-4 text-white fill-white" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className={cn(
+          "text-sm font-medium truncate",
+          isSelected ? "text-amber-800" : "text-gray-800"
+        )}>
+          {handler.name}
+        </p>
+        <p className="text-xs text-gray-500">{starClients.length} star clients</p>
+      </div>
+      <StarRating value={5} readonly size="sm" />
+    </button>
+  );
+}
+
+export function SuiteLeftSidebar({ onSelectStarHandler, selectedStarHandler }: SuiteLeftSidebarProps) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'active' | 'coming-soon'>('active');
   const stats = useSuiteStats();
@@ -18,6 +70,10 @@ export function SuiteLeftSidebar() {
   const comingSoonModules = suiteModules.filter(m => m.status === 'coming-soon');
 
   const handleModuleClick = (path: string) => {
+    // Clear star handler selection when navigating to a module
+    if (onSelectStarHandler) {
+      onSelectStarHandler('');
+    }
     navigate(path);
   };
 
@@ -25,6 +81,12 @@ export function SuiteLeftSidebar() {
     toast.info(`${moduleName} is coming soon!`, {
       description: "We're working hard to bring you this feature.",
     });
+  };
+
+  const handleStarHandlerClick = (handlerName: string) => {
+    if (onSelectStarHandler) {
+      onSelectStarHandler(handlerName);
+    }
   };
 
   // Get module-specific stats
@@ -151,6 +213,27 @@ export function SuiteLeftSidebar() {
           </div>
         )}
       </ScrollArea>
+
+      {/* Star Clients Section */}
+      <div className="border-t border-gray-200 p-2">
+        <div className="px-2 py-2 mb-1">
+          <p className="text-xs font-bold text-amber-600 uppercase tracking-wide flex items-center gap-1.5">
+            <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+            Star Clients
+          </p>
+        </div>
+        
+        <div className="space-y-1">
+          {HANDLERS.map((handler) => (
+            <HandlerStarItem
+              key={handler.name}
+              handler={handler}
+              isSelected={selectedStarHandler === handler.name}
+              onClick={() => handleStarHandlerClick(handler.name)}
+            />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
