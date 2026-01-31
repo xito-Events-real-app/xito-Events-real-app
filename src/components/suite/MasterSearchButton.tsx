@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useMemo } from "react";
-import { Search, X, Clock, ChevronRight, User, Calendar, MapPin, Briefcase, Phone, Loader2 } from "lucide-react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { Search, X, Clock, ChevronRight, User, Calendar, MapPin, Briefcase, Phone, Loader2, ChevronLeft } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,6 +14,8 @@ import { supabase } from "@/integrations/supabase/client";
 // Constants
 const MAX_RECENT = 50;
 const MAX_PREVIEW_RESULTS = 5;
+const MAX_DISPLAY_RECENT = 10;
+const SCROLL_AMOUNT = 150;
 
 // Types
 interface RecentSearch {
@@ -65,12 +67,28 @@ export function MasterSearchButton() {
   const [query, setQuery] = useState("");
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
   
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const recentRowRef = useRef<HTMLDivElement>(null);
+  
+  // Drag-to-scroll refs (avoid re-renders)
+  const isDragging = useRef(false);
+  const startX = useRef(0);
+  const startScrollLeft = useRef(0);
   
   const navigate = useNavigate();
   const { clients, isLoading: isClientsLoading } = useCachedData();
+  
+  // Check scroll position for chevron visibility
+  const updateScrollButtons = useCallback(() => {
+    const el = recentRowRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 0);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 1);
+  }, []);
   
   // Load recent searches from Google Sheets on mount
   useEffect(() => {
@@ -99,6 +117,11 @@ export function MasterSearchButton() {
     loadHistory();
   }, []);
   
+  // Update scroll buttons when recent searches change or after render
+  useEffect(() => {
+    updateScrollButtons();
+  }, [recentSearches, isExpanded, updateScrollButtons]);
+  
   // Auto-focus input when expanded
   useEffect(() => {
     if (isExpanded && inputRef.current) {
@@ -121,6 +144,61 @@ export function MasterSearchButton() {
     
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isExpanded]);
+  
+  // Drag-to-scroll handlers
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const el = recentRowRef.current;
+    if (!el) return;
+    isDragging.current = true;
+    startX.current = e.clientX;
+    startScrollLeft.current = el.scrollLeft;
+    el.setPointerCapture(e.pointerId);
+    el.style.cursor = 'grabbing';
+  }, []);
+  
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging.current) return;
+    const el = recentRowRef.current;
+    if (!el) return;
+    const dx = e.clientX - startX.current;
+    el.scrollLeft = startScrollLeft.current - dx;
+    updateScrollButtons();
+  }, [updateScrollButtons]);
+  
+  const handlePointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    isDragging.current = false;
+    const el = recentRowRef.current;
+    if (!el) return;
+    el.releasePointerCapture(e.pointerId);
+    el.style.cursor = 'grab';
+  }, []);
+  
+  // Mouse wheel → horizontal scroll
+  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    const el = recentRowRef.current;
+    if (!el) return;
+    // Only hijack vertical scroll if the row overflows
+    if (el.scrollWidth > el.clientWidth) {
+      e.preventDefault();
+      el.scrollLeft += e.deltaY;
+      updateScrollButtons();
+    }
+  }, [updateScrollButtons]);
+  
+  // Chevron scroll handlers
+  const scrollLeft = useCallback(() => {
+    const el = recentRowRef.current;
+    if (!el) return;
+    el.scrollBy({ left: -SCROLL_AMOUNT, behavior: 'smooth' });
+    setTimeout(updateScrollButtons, 200);
+  }, [updateScrollButtons]);
+  
+  const scrollRight = useCallback(() => {
+    const el = recentRowRef.current;
+    if (!el) return;
+    el.scrollBy({ left: SCROLL_AMOUNT, behavior: 'smooth' });
+    setTimeout(updateScrollButtons, 200);
+  }, [updateScrollButtons]);
   
   // Universal search - search ALL client fields
   // Wait for clients to load before searching
@@ -216,6 +294,10 @@ export function MasterSearchButton() {
     setQuery(searchQuery);
   };
   
+  // Only show top 10 recent searches
+  const recentToShow = recentSearches.slice(0, MAX_DISPLAY_RECENT);
+  const showScrollbar = recentToShow.length >= 8;
+  
   // Render collapsed button
   if (!isExpanded) {
     return (
@@ -266,31 +348,51 @@ export function MasterSearchButton() {
         </button>
       </div>
       
-      {/* Horizontal Recent Searches - ALWAYS visible when expanded & no query */}
-      {query.trim().length < 2 && (
-        <div className="mt-3">
+      {/* Horizontal Recent Searches - ALWAYS visible when expanded */}
+      <div className="mt-3">
+        {/* Label - hide when actively searching */}
+        {query.trim().length < 2 && (
           <p className="text-xs text-gray-500 mb-2 flex items-center gap-1 px-1">
             <Clock className="w-3 h-3" /> Recent Searches
           </p>
-          
-          {isLoadingHistory ? (
-            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-              {[1, 2, 3, 4, 5].map(i => (
-                <Skeleton key={i} className="h-8 w-20 rounded-full shrink-0" />
-              ))}
-            </div>
-          ) : recentSearches.length > 0 ? (
+        )}
+        
+        {isLoadingHistory ? (
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+            {[1, 2, 3, 4, 5].map(i => (
+              <Skeleton key={i} className="h-8 w-20 rounded-full shrink-0" />
+            ))}
+          </div>
+        ) : recentToShow.length > 0 ? (
+          <div className="relative flex items-center gap-1">
+            {/* Left chevron */}
+            {canScrollLeft && (
+              <button
+                onClick={scrollLeft}
+                className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-violet-100 hover:bg-violet-200 text-violet-600 transition-colors z-10"
+                aria-label="Scroll left"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            )}
+            
+            {/* Chips container */}
             <div 
+              ref={recentRowRef}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
+              onWheel={handleWheel}
+              onScroll={updateScrollButtons}
               className={cn(
-                "flex gap-2 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing",
-                // Show scrollbar when 8+ searches, otherwise hide
-                recentSearches.length > 8 
-                  ? "scrollbar-thin scrollbar-thumb-violet-300 scrollbar-track-transparent hover:scrollbar-thumb-violet-400" 
+                "flex gap-2 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing flex-1 select-none",
+                showScrollbar 
+                  ? "scrollbar-thin scrollbar-thumb-violet-300 scrollbar-track-transparent hover-thumb-violet-400" 
                   : "scrollbar-hide"
               )}
-              style={{ scrollBehavior: 'smooth' }}
             >
-              {recentSearches.map((item, i) => (
+              {recentToShow.map((item, i) => (
                 <button
                   key={i}
                   onClick={() => handleRecentClick(item.query)}
@@ -308,11 +410,24 @@ export function MasterSearchButton() {
                 </button>
               ))}
             </div>
-          ) : (
+            
+            {/* Right chevron */}
+            {canScrollRight && (
+              <button
+                onClick={scrollRight}
+                className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-violet-100 hover:bg-violet-200 text-violet-600 transition-colors z-10"
+                aria-label="Scroll right"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        ) : (
+          query.trim().length < 2 && (
             <p className="text-xs text-gray-400 italic px-1">No recent searches</p>
-          )}
-        </div>
-      )}
+          )
+        )}
+      </div>
       
       {/* Loading State - when searching but clients not loaded yet */}
       {query.trim().length >= 2 && isClientsLoading && clients.length === 0 && (
