@@ -3,3 +3,6 @@ export { DesktopSuiteLanding } from './DesktopSuiteLanding';
 export { SuiteQuickAdd } from './SuiteQuickAdd';
 export { TodayEventsHero } from './TodayEventsHero';
 export { ModuleCard } from './ModuleCard';
+export { SuiteHomeContent } from './SuiteHomeContent';
+export { SuiteNewsFeed } from './SuiteNewsFeed';
+export { ActivityCard } from './ActivityCard';
