@@ -246,10 +246,11 @@ export async function logCallAttempt(
 
 export async function updateClientQuotation(
   rowNumber: number,
-  quotationData: string
+  quotationData: string,
+  registeredDateTimeAD?: string
 ): Promise<{ success: boolean }> {
   return callSheetsFunction<{ success: boolean }>("updateClientQuotation", {
-    data: { rowNumber, quotationData },
+    data: { rowNumber, quotationData, registeredDateTimeAD },
   });
 }
 
