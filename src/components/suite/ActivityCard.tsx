@@ -6,29 +6,37 @@ import {
   UserPlus, 
   Phone, 
   CalendarCheck,
-  ChevronRight 
+  ChevronRight,
+  FileText,
+  UserCog,
+  Brain,
+  Bell,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ActivityItem, getActivityColor } from "@/lib/activity-utils";
+import { ActivityItem, ActivityType, getActivityColor } from "@/lib/activity-utils";
 import { getClientDetailPath } from "@/lib/client-navigation";
 
 interface ActivityCardProps {
   activity: ActivityItem;
 }
 
-const iconMap = {
+const iconMap: Record<ActivityType, LucideIcon> = {
   payment: CreditCard,
   comment: MessageSquare,
   status: Activity,
   client_added: UserPlus,
   call: Phone,
   booking: CalendarCheck,
+  quotation: FileText,
+  handler_change: UserCog,
+  mindset: Brain,
 };
 
 export function ActivityCard({ activity }: ActivityCardProps) {
   const navigate = useNavigate();
   const colors = getActivityColor(activity.type);
-  const Icon = iconMap[activity.type];
+  const Icon = iconMap[activity.type] ?? Bell;
   
   const handleClick = () => {
     if (activity.clientId) {
