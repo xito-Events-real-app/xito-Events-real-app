@@ -1,349 +1,289 @@
 
-# Plan: Fix Final Quotation Display & Saving for Booked Clients
+# Plan: Breaking News Section with Tab Navigation on Xito Business Suite
 
-## Problem Summary
+## Overview
 
-You have **Sargat Thapa**, a client who is already BOOKED and exists in the **BOOKED CLIENTS** sheet. The issues are:
+Add a new **"Breaking News"** section to the Xito Business Suite homepage that shows recent activity across the entire system. The page will have a tab-based navigation at the bottom with two sections:
+- **HOME** - Current content (modules, quick add, today's events)
+- **NEWS** - Activity feed showing all recent actions day-wise
 
-1. **Wrong UI flow for adding quotation**: When you click "Add Quotation" on the client page, it opens the **initial quotation dialog** (Column V) with "Save & Update Status" - but you need to add the **Final Fixed Quotation** (Column AD) without changing status
-2. **Duplicates causing stale data**: The same client may exist in both CLIENT TRACKER and BOOKED CLIENTS sheets, causing the cache to show incorrect/stale data
+## Activity Types to Track
 
-## Solution Overview
+The news feed will aggregate and display these activities from client data:
 
-### Part 1: Auto-Clean Duplicates When Accessing Client Data
+| Activity Type | Source Field | How to Detect |
+|--------------|--------------|---------------|
+| New Client Added | `registeredDateTimeAD` | Parse timestamp from Column A |
+| Status Change | `statusLog` | Parse each line with timestamp |
+| Comment Added | `comments` | Split by `\|\|\|`, parse timestamps |
+| Payment Recorded | `paymentsMade` | Parse payment entries with dates |
+| Call Logged | `callLog` | Parse call entries with timestamps |
+| Quotation Sent | `quotationData` | When status changes to QUOTATION SENT |
+| Client Booked | `statusLog` | When status contains "BOOKED" |
+| Form Filled | Client contact form submissions (future enhancement) |
 
-When `getSingleClient` is called, search **BOOKED CLIENTS first** (priority). This ensures the correct status is always shown for booked clients.
+## UI Design
 
-Additionally, modify `getAllClientsFromBothSheets` to deduplicate by `registeredDateTimeAD`, keeping only the **BOOKED CLIENTS** version when duplicates exist.
+### Bottom Tab Navigation (Mobile)
+```text
++------------------------------------------+
+|                                          |
+|          [ Current Content ]             |
+|                                          |
++------------------------------------------+
+|   [  HOME  ]         [  NEWS  ]          |   <-- Fixed bottom tabs
++------------------------------------------+
+```
 
-### Part 2: Add Dedicated "Add Final Quotation" Action for BOOKED Clients
+### News Tab Content Structure
+```text
++------------------------------------------+
+|  Breaking News                           |
+|  Real-time updates from your business    |
++------------------------------------------+
+|  TODAY - Magh 17, 2082                   |
+|  ├─ Payment received from Sargat Thapa   |
+|  │  NPR 50,000/- as ADVANCE • 2:30 PM    |
+|  ├─ New comment on Ram Thapa             |
+|  │  "Called, will confirm tomorrow"      |
+|  └─ Status changed: Hari Sharma          |
+|     QUOTATION SENT → BOOKED • 11:15 AM   |
++------------------------------------------+
+|  YESTERDAY - Magh 16, 2082               |
+|  ├─ New client added: Shyam Bahadur      |
+|  │  Source: Instagram • 5:45 PM          |
+|  └─ Call logged: Gopal Thapa             |
+|     2nd DIRECT CALL • 3:20 PM            |
++------------------------------------------+
+|  Magh 15, 2082                           |
+|  └─ ...more activities...                |
++------------------------------------------+
+```
 
-For clients who are already BOOKED but missing Column AD (Final Quotation):
-- Show "Add Final Quotation" button (not "Add Quotation")
-- When clicked, open the `FinalQuotationDialog` in **save-only mode** (no status change)
-- After saving, show "Edit Final Quotation" button to allow updates
+### Activity Card Designs
 
-### Part 3: Cache Updates by Unique ID Instead of Row Number
+Each activity will be a compact card with:
+- **Icon** - Colored by activity type (payment=green, comment=blue, status=purple, etc.)
+- **Client name** - Clickable link to client detail page
+- **Activity details** - What happened
+- **Timestamp** - Relative time (2 hours ago) or absolute if older
 
-Update the cache system to match clients by `registeredDateTimeAD` (not `rowNumber`), preventing stale data when row numbers shift after client moves between sheets.
-
----
+### Color Scheme by Activity Type
+- **Payment**: Emerald/Green gradient
+- **Comment**: Blue
+- **Status Change**: Purple
+- **New Client**: Violet
+- **Call Logged**: Amber
+- **Booking**: Teal
 
 ## Technical Implementation
 
-### 1. Backend: Prioritize BOOKED CLIENTS in `getSingleClient`
+### 1. Create Activity Parsing Utility
 
-**File:** `supabase/functions/google-sheets/index.ts`
-
-**Current behavior (lines 1357-1396):** Searches CLIENT TRACKER first, then BOOKED CLIENTS
-
-**New behavior:** Search BOOKED CLIENTS first, then CLIENT TRACKER
+**New file:** `src/lib/activity-utils.ts`
 
 ```typescript
-// BEFORE: Search CLIENT TRACKER first
-const trackerResponse = await fetch(trackerUrl, ...);
-// ... if found, return tracker result
-// ... else search BOOKED CLIENTS
+export interface ActivityItem {
+  id: string;
+  type: 'payment' | 'comment' | 'status' | 'client_added' | 'call' | 'booking';
+  clientName: string;
+  clientId: string;  // registeredDateTimeAD for navigation
+  description: string;
+  details?: string;
+  timestamp: Date;
+  dateBS?: string;
+  icon: string;
+  color: string;
+}
 
-// AFTER: Search BOOKED CLIENTS first (booked wins)
-const bookedResponse = await fetch(bookedUrl, ...);
-// ... if found, return booked result
-// ... else search CLIENT TRACKER
+// Parse all activities from client data
+export function parseActivities(
+  clients: ClientData[], 
+  bookedClients: BookedClientData[]
+): ActivityItem[];
+
+// Group activities by day
+export function groupActivitiesByDay(
+  activities: ActivityItem[]
+): Map<string, ActivityItem[]>;
 ```
 
-This ensures that when a client has been moved to BOOKED CLIENTS, the app always gets the correct data.
+### 2. Create News Tab Component
 
-### 2. Backend: Deduplicate in `getAllClientsFromBothSheets`
+**New file:** `src/components/suite/SuiteNewsFeed.tsx`
 
-**File:** `supabase/functions/google-sheets/index.ts` (around line 1402)
+- Displays activities grouped by day
+- Scrollable list with pull-to-refresh
+- Each activity card links to client detail page
+- Uses existing parsing utilities from `client-card-utils.ts`
 
-After merging tracker + booked clients, deduplicate by `registeredDateTimeAD`:
+### 3. Create Activity Card Component
+
+**New file:** `src/components/suite/ActivityCard.tsx`
+
+- Compact card design matching existing UI
+- Icon + client name + description + timestamp
+- Click navigates to client detail
+
+### 4. Update MobileSuiteLanding with Tabs
+
+**File:** `src/components/suite/MobileSuiteLanding.tsx`
+
+Replace the current full-page layout with a tabbed interface:
 
 ```typescript
-// After merging both lists
-const merged = [...trackerClients, ...mappedBookedClients];
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-// Deduplicate: prefer BOOKED over TRACKER when same ID exists
-const clientMap = new Map();
-for (const client of merged) {
-  const id = client.registeredDateTimeAD;
-  if (!id) continue;
+export function MobileSuiteLanding() {
+  const [activeTab, setActiveTab] = useState<'home' | 'news'>('home');
   
-  const existing = clientMap.get(id);
-  if (!existing || client._source === 'booked') {
-    clientMap.set(id, client);
-  }
-}
-
-return Array.from(clientMap.values());
-```
-
-### 3. Frontend Cache: Update by `registeredDateTimeAD` Instead of `rowNumber`
-
-**File:** `src/lib/cache-manager.ts`
-
-Update `updateClientInCache` to match by unique ID when available:
-
-```typescript
-export async function updateClientInCache(
-  rowNumber: number, 
-  updates: Partial<ClientData>
-): Promise<void> {
-  const cached = await getCachedData();
-  if (!cached?.clients) return;
-
-  const updatedClients = cached.clients.map(client => {
-    // Match by registeredDateTimeAD if provided (preferred), else rowNumber
-    if (updates.registeredDateTimeAD && client.registeredDateTimeAD === updates.registeredDateTimeAD) {
-      return { ...client, ...updates };
-    }
-    if (client.rowNumber === rowNumber) {
-      return { ...client, ...updates };
-    }
-    return client;
-  });
-
-  await setCachedData({
-    ...cached,
-    clients: updatedClients
-  });
-}
-```
-
-**File:** `src/hooks/useCachedData.ts`
-
-Update `updateClient` function similarly to match by ID first.
-
-### 4. Frontend: Smart "Add Final Quotation" for BOOKED Clients
-
-**File:** `src/components/client-detail/QuotationDisplaySection.tsx`
-
-For BOOKED clients without a final quotation, show "Add Final Quotation" button instead of the generic "Add Quotation":
-
-```typescript
-// In the isBooked section (around line 251)
-{!parsedFinal && (
-  <div className="bg-amber-500/20 rounded-lg border border-amber-500/30 p-3">
-    <div className="flex items-center gap-2">
-      <AlertTriangle className="h-4 w-4 text-amber-400" />
-      <div>
-        <div className="font-medium text-amber-200 text-sm">Final Quotation Not Set</div>
-        <div className="text-[10px] text-amber-300/70">Lock final quotation for records</div>
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* Header - stays fixed */}
+      <Header />
+      
+      {/* Tab Content - scrollable */}
+      <div className="flex-1 overflow-hidden">
+        {activeTab === 'home' && <HomeContent />}
+        {activeTab === 'news' && <SuiteNewsFeed />}
+      </div>
+      
+      {/* Bottom Tab Navigation - fixed */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 safe-bottom z-50">
+        <div className="flex items-center justify-center gap-4 py-2">
+          <TabButton 
+            icon={Home} 
+            label="Home" 
+            active={activeTab === 'home'}
+            onClick={() => setActiveTab('home')}
+          />
+          <TabButton 
+            icon={Newspaper} 
+            label="News" 
+            active={activeTab === 'news'}
+            onClick={() => setActiveTab('news')}
+            badge={newActivitiesCount}  // Optional: unread count
+          />
+        </div>
       </div>
     </div>
-    <Button 
-      size="sm" 
-      onClick={onAddFinalQuotation}  // New prop
-      className="mt-2 bg-amber-500 hover:bg-amber-600 text-black h-7 text-xs"
-    >
-      <Lock className="h-3 w-3 mr-1" />
-      Add Final Quotation
-    </Button>
-  </div>
-)}
-
-// Also show "Edit" button when final quotation exists
-{parsedFinal && (
-  <Button 
-    variant="ghost" 
-    size="sm"
-    onClick={onAddFinalQuotation}
-    className="text-xs text-emerald-400 hover:text-emerald-300"
-  >
-    <Pencil className="h-3 w-3 mr-1" />
-    Edit
-  </Button>
-)}
-```
-
-Add new prop to the component interface:
-```typescript
-interface QuotationDisplaySectionProps {
-  // ... existing props
-  onAddFinalQuotation?: () => void;  // New prop for BOOKED clients
+  );
 }
 ```
 
-### 5. Frontend: Separate Handler for Final Quotation Save (No Status Change)
+### 5. Create Custom Hook for Activities
 
-**File:** `src/pages/ClientDetail.tsx`
-
-Add new state and handler for "save-only" final quotation (no status change):
+**New file:** `src/hooks/useActivityFeed.ts`
 
 ```typescript
-// New state for direct final quotation save
-const [showFinalQuotationDialog, setShowFinalQuotationDialog] = useState(false);
-
-// New handler that saves ONLY the final quotation without changing status
-const handleSaveFinalQuotationOnly = async (packageName: string, amount: string) => {
-  if (!client?.rowNumber) return;
+export function useActivityFeed() {
+  const { clients } = useCachedData();
+  const { clients: bookedClients } = useBookedCachedData();
   
-  const finalData = `${packageName}: NPR ${formatNPR(amount)}/-`;
+  const activities = useMemo(() => {
+    return parseActivities(clients, bookedClients);
+  }, [clients, bookedClients]);
   
-  setIsSavingAdvancePending(true);  // Reuse existing saving state
-  try {
-    // Save final quotation ONLY - no status change
-    const quotationResult = await updateFinalQuotation(
-      client.rowNumber, 
-      finalData, 
-      client.registeredDateTimeAD
-    );
-    
-    setCurrentFinalQuotation(quotationResult.finalQuotation);
-    
-    // Immediately refetch to get fresh data
-    const freshClient = await getSingleClient(client.registeredDateTimeAD!);
-    if (freshClient && updateClientCache) {
-      updateClientCache(freshClient);
-    }
-    
-    toast({ title: "Final quotation saved" });
-    setShowFinalQuotationDialog(false);
-  } catch (err) {
-    console.error('Failed to save final quotation:', err);
-    toast({ title: "Failed to save final quotation", variant: "destructive" });
-  } finally {
-    setIsSavingAdvancePending(false);
-  }
-};
-```
-
-### 6. Frontend: Wire Up the New Dialog
-
-**File:** `src/pages/ClientDetail.tsx`
-
-Pass the new callback to `ClientHeroSection` and `QuotationDisplaySection`:
-
-```typescript
-// In ClientHeroSection props
-onAddFinalQuotation={() => {
-  // For BOOKED clients: open save-only dialog
-  if (currentStatus.toUpperCase().includes('BOOKED') && 
-      !currentStatus.toUpperCase().includes('SOMEWHERE ELSE')) {
-    setShowFinalQuotationDialog(true);
-  } else {
-    // For non-booked clients: use existing flow (goes to ADVANCE PENDING)
-    setPendingStatus('ADVANCE PENDING');
-    setShowAdvancePendingDialog(true);
-  }
-}}
-```
-
-Add a new dialog instance for save-only mode:
-
-```typescript
-{/* BOOKED - Save Final Quotation Only (no status change) */}
-<FinalQuotationDialog
-  open={showFinalQuotationDialog}
-  onOpenChange={(open) => {
-    if (!open) setShowFinalQuotationDialog(false);
-  }}
-  clientName={client?.clientName || ''}
-  existingQuotationData={currentQuotationData || client?.quotationData || ''}
-  existingFinalQuotation={currentFinalQuotation || client?.finalQuotation || ''}  // Pre-fill for editing
-  onSave={handleSaveFinalQuotationOnly}
-  isSaving={isSavingAdvancePending}
-  saveButtonText="Save Final Quotation"  // Different button text
-/>
-```
-
-### 7. Update `FinalQuotationDialog` to Support Editing
-
-**File:** `src/components/status-dialogs/FinalQuotationDialog.tsx`
-
-Add props for editing existing final quotation and customizable button text:
-
-```typescript
-interface FinalQuotationDialogProps {
-  // ... existing props
-  existingFinalQuotation?: string;  // For pre-filling when editing
-  saveButtonText?: string;           // Customizable button text
+  const groupedByDay = useMemo(() => {
+    return groupActivitiesByDay(activities);
+  }, [activities]);
+  
+  return { activities, groupedByDay, isLoading };
 }
 ```
 
-Pre-fill form when editing:
-```typescript
-useEffect(() => {
-  if (open) {
-    // If editing existing final quotation, pre-fill
-    if (existingFinalQuotation) {
-      const parsed = parseFinalQuotation(existingFinalQuotation);
-      if (parsed) {
-        setSelectedPackage(parsed.package);
-        setFinalAmount(String(parsed.amount).replace(/,/g, ''));
-      }
-    } else {
-      setSelectedPackage('');
-      setFinalAmount('');
-    }
-    setSelectedExistingQuote('');
-  }
-}, [open, existingFinalQuotation]);
+### 6. Update Desktop Suite Landing
+
+**File:** `src/components/suite/DesktopSuiteLanding.tsx`
+
+Add a sidebar panel or dedicated section for news feed on desktop view.
+
+## File Structure
+
+```text
+src/
+├── lib/
+│   └── activity-utils.ts          # NEW - Activity parsing logic
+├── hooks/
+│   └── useActivityFeed.ts         # NEW - Hook for activity data
+├── components/
+│   └── suite/
+│       ├── MobileSuiteLanding.tsx # MODIFY - Add tabs
+│       ├── DesktopSuiteLanding.tsx# MODIFY - Add news panel
+│       ├── SuiteNewsFeed.tsx      # NEW - News feed component
+│       ├── ActivityCard.tsx       # NEW - Individual activity card
+│       ├── SuiteHomeContent.tsx   # NEW - Extracted home content
+│       └── index.ts               # MODIFY - Export new components
 ```
 
-### 8. Update `ClientHeroSection` to Pass New Callback
+## Files to Create
 
-**File:** `src/components/client-detail/ClientHeroSection.tsx`
-
-Add new prop and pass it to `QuotationDisplaySection`:
-
-```typescript
-interface ClientHeroSectionProps {
-  // ... existing props
-  onAddFinalQuotation?: () => void;  // New prop
-}
-
-// In the component
-<QuotationDisplaySection
-  // ... existing props
-  onAddFinalQuotation={onAddFinalQuotation}
-/>
-```
-
----
+| File | Purpose |
+|------|---------|
+| `src/lib/activity-utils.ts` | Parse activities from client data, group by day |
+| `src/hooks/useActivityFeed.ts` | Custom hook to fetch and process activities |
+| `src/components/suite/SuiteNewsFeed.tsx` | Main news feed component with day groupings |
+| `src/components/suite/ActivityCard.tsx` | Individual activity card component |
+| `src/components/suite/SuiteHomeContent.tsx` | Extracted current home content for tab |
 
 ## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `supabase/functions/google-sheets/index.ts` | 1. `getSingleClient`: search BOOKED CLIENTS first<br>2. `getAllClientsFromBothSheets`: deduplicate by registeredDateTimeAD, prefer booked |
-| `src/lib/cache-manager.ts` | `updateClientInCache`: match by registeredDateTimeAD when available |
-| `src/hooks/useCachedData.ts` | `updateClient`: match by registeredDateTimeAD first |
-| `src/components/client-detail/QuotationDisplaySection.tsx` | 1. Add `onAddFinalQuotation` prop<br>2. Show "Add Final Quotation" for BOOKED without AD<br>3. Show "Edit" button when AD exists |
-| `src/components/client-detail/ClientHeroSection.tsx` | Pass `onAddFinalQuotation` prop |
-| `src/pages/ClientDetail.tsx` | 1. Add `showFinalQuotationDialog` state<br>2. Add `handleSaveFinalQuotationOnly` handler<br>3. Add second `FinalQuotationDialog` for save-only mode<br>4. Pass correct callback based on status |
-| `src/components/status-dialogs/FinalQuotationDialog.tsx` | 1. Add `existingFinalQuotation` prop for editing<br>2. Add `saveButtonText` prop for customizable button<br>3. Pre-fill form when editing |
+| `src/components/suite/MobileSuiteLanding.tsx` | Add bottom tab navigation, refactor to use tabs |
+| `src/components/suite/DesktopSuiteLanding.tsx` | Add news panel/sidebar |
+| `src/components/suite/index.ts` | Export new components |
 
----
+## Activity Parsing Logic
 
-## Expected Result After Fix
+### From StatusLog (Column W)
+```text
+"JUST ENQUIRED - 01/30/2026, 10:15:00
+QUOTATION SENT : REVIEW PENDING - 01/30/2026, 14:30:00
+BOOKED - 01/31/2026, 09:00:00"
+```
+Each line = 1 status change activity
 
-1. Open **Sargat Thapa** client page
-   - Status shows **BOOKED** (not QUOTATION SENT)
-   - Because backend now searches BOOKED CLIENTS first
+### From Comments (Column AC)
+```text
+"Called back, interested|||[01/30/2026 15:30]Will send quotation tomorrow|||[01/31/2026 10:00]"
+```
+Each `|||` segment = 1 comment activity
 
-2. See "Add Final Quotation" button (not "Add Quotation")
-   - Because status is BOOKED and Column AD is empty
+### From PaymentsMade (Column AE)
+```text
+"NPR 50,000/- AS ADVANCE ON SAT 2082-10-16 IN ESEWA
+NPR 25,000/- AS PARTIAL ON SUN 2082-10-17 IN CASH"
+```
+Each line = 1 payment activity
 
-3. Click "Add Final Quotation"
-   - Opens dialog with just "Save Final Quotation" button
-   - No status change will occur
+### From CallLog (Column Y)
+```text
+"1ST DIRECT CALL AT 3:45 PM ON 2025-01-18
+2ND WHATSAPP CALL AT 10:30 AM ON 2025-01-19"
+```
+Each line = 1 call logged activity
 
-4. Select package and enter amount, click save
-   - Saves to **BOOKED CLIENTS!AD** (correct sheet)
-   - Shows toast: "Final quotation saved"
-   - UI updates immediately
+## Expected User Flow
 
-5. After saving, see:
-   - Final quotation displayed with "Edit" button
-   - Can edit if needed later
+1. User opens Xito Business Suite (/)
+2. By default, sees **HOME** tab with current content
+3. Taps **NEWS** tab at bottom
+4. Sees chronological feed of all activities grouped by day
+5. Taps on any activity card → navigates to that client's detail page
+6. Can scroll through historical activities (last 7-14 days)
 
-6. Go to Financials section
-   - Payment button is now enabled (Final Quotation exists)
-   - Can record payments as usual
+## Performance Considerations
 
----
+- Parse activities only when client data changes (memoized)
+- Limit display to last 14 days or 100 activities initially
+- Virtual scrolling for long lists (if needed)
+- Activities are derived from already-cached data (no extra API calls)
 
-## Automatic Duplicate Cleanup
+## Future Enhancements
 
-As a bonus, when clients are resolved by the improved `getAllClientsFromBothSheets` logic, duplicates are effectively hidden from the UI. For actual deletion, the existing "Cleanup Duplicates" tool in the Booked Clients module header can be used to permanently remove stale entries from CLIENT TRACKER.
+- Push notifications for new activities
+- Filter by activity type
+- Search within activities
+- Mark activities as read
+- Real-time updates via Supabase Realtime (if connected)
