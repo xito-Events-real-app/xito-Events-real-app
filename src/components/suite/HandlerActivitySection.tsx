@@ -122,8 +122,13 @@ export function HandlerActivitySection({ handlerName, colorScheme }: HandlerActi
   const handleSync = (e: React.MouseEvent) => {
     e.stopPropagation(); // Don't toggle expand
     setIsRefreshing(true);
+
+    // NOTE: notifyCacheUpdate is debounced globally; firing twice back-to-back cancels
+    // the first dispatch. Stagger them so both caches actually invalidate + refetch.
     notifyCacheUpdate('clients-invalidate');
-    notifyCacheUpdate('booked-clients-invalidate');
+    setTimeout(() => {
+      notifyCacheUpdate('booked-clients-invalidate');
+    }, 150);
     setTimeout(() => setIsRefreshing(false), 2000);
   };
 
