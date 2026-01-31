@@ -241,11 +241,16 @@ export function useCachedData(): UseCachedDataResult {
       if (e.detail.type === 'dropdowns' && e.detail.data) {
         setDropdowns(e.detail.data as DropdownData);
       }
+      // Handle invalidation - trigger refresh (similar to useBookedCachedData)
+      if (e.detail.type === 'clients-invalidate') {
+        fetchState.hasRefreshed = false; // Reset refresh flag to allow refetch
+        refreshData(); // Force a fresh fetch from Google Sheets
+      }
     };
     
     window.addEventListener('cache-updated', handleCacheUpdate as EventListener);
     return () => window.removeEventListener('cache-updated', handleCacheUpdate as EventListener);
-  }, []);
+  }, [refreshData]);
 
   // NOTE: Removed global sync-status listener that was overriding local isSyncing state
   // The sync queue status should not affect the data loading indicator
