@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { ChevronDown, User, MessageSquare, UserPlus, Activity, CreditCard, Phone, CalendarCheck, FileText, UserCog, Brain } from "lucide-react";
+import { ChevronDown, User, MessageSquare, UserPlus, Activity, CreditCard, Phone, CalendarCheck, FileText, UserCog, Brain, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useHandlerActivityFeed, ActivityItem } from "@/hooks/useHandlerActivityFeed";
 import { useNavigate } from "react-router-dom";
 import { getClientDetailPath } from "@/lib/client-navigation";
-
+import { notifyCacheUpdate } from "@/lib/cache-manager";
 // Color schemes for handlers
 const colorSchemes = {
   violet: { 
@@ -113,10 +113,19 @@ function CompactActivityCard({ activity }: { activity: ActivityItem }) {
 
 export function HandlerActivitySection({ handlerName, colorScheme }: HandlerActivitySectionProps) {
   const [isExpanded, setIsExpanded] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const { todayActivities, yesterdayActivities, isLoading } = useHandlerActivityFeed(handlerName);
   
   const colors = colorSchemes[colorScheme];
   const totalCount = todayActivities.length + yesterdayActivities.length;
+
+  const handleSync = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Don't toggle expand
+    setIsRefreshing(true);
+    notifyCacheUpdate('clients-invalidate');
+    notifyCacheUpdate('booked-clients-invalidate');
+    setTimeout(() => setIsRefreshing(false), 2000);
+  };
 
   return (
     <Card className={cn("overflow-hidden border", colors.border)}>
@@ -137,6 +146,14 @@ export function HandlerActivitySection({ handlerName, colorScheme }: HandlerActi
               {totalCount}
             </span>
           )}
+          {/* Sync Button */}
+          <button
+            onClick={handleSync}
+            className="p-1.5 rounded-full hover:bg-white/50 transition-colors"
+            title="Sync Recent Activities"
+          >
+            <RefreshCw className={cn("w-3.5 h-3.5 text-gray-500", isRefreshing && "animate-spin")} />
+          </button>
         </div>
         <ChevronDown 
           className={cn(

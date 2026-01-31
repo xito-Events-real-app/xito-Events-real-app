@@ -200,6 +200,7 @@ export function getStatusTimeAgo(statusLog?: string): { displayText: string; tim
 }
 
 // Get enquiry time info with urgency level
+// Uses Nepal timezone (UTC+5:45) for accurate time calculations
 export function getEnquiryTimeInfo(
   inquiryDateAD?: string,
   inquiryTime?: string
@@ -219,19 +220,29 @@ export function getEnquiryTimeInfo(
     let mins = 0;
     
     if (inquiryTime) {
-      const timeMatch = inquiryTime.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+      // Handle multiple time formats:
+      // 1. "HH:MM AM/PM" (12-hour with period)
+      // 2. "HH:MM" (24-hour without period)
+      // 3. "H:MM AM/PM" (single digit hour)
+      const timeMatch = inquiryTime.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?/i);
       if (timeMatch) {
         hours = parseInt(timeMatch[1]);
         mins = parseInt(timeMatch[2]);
-        if (timeMatch[3]) {
-          const isPM = timeMatch[3].toUpperCase() === 'PM';
+        
+        // If AM/PM is provided, convert from 12-hour to 24-hour
+        if (timeMatch[4]) {
+          const isPM = timeMatch[4].toUpperCase() === 'PM';
           if (isPM && hours !== 12) hours += 12;
           if (!isPM && hours === 12) hours = 0;
         }
+        // If no AM/PM, assume it's already in 24-hour format (no conversion needed)
       }
     }
     
+    // Create the enquiry date in local timezone
     const enquiryDate = new Date(year, month, day, hours, mins);
+    
+    // Get current time
     const now = new Date();
     const diffMs = now.getTime() - enquiryDate.getTime();
     const hoursAgo = diffMs / (1000 * 60 * 60);
