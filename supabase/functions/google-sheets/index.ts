@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority';
+  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'getSearchHistory' | 'saveSearchQuery';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -194,6 +194,68 @@ async function getPublicFormData(accessToken: string, spreadsheetId: string) {
     : ['Mother', 'Father', 'Sister', 'Brother', 'Spouse', 'Friend', 'Other'];
 
   return { relationOptions };
+}
+
+// ============= SEARCH HISTORY FUNCTIONS =============
+// Get search history from CLIENT TRACKER SETUP DATA Column S (rows 2-51)
+async function getSearchHistory(accessToken: string, spreadsheetId: string) {
+  const range = encodeURIComponent("'CLIENT TRACKER SETUP DATA'!S2:S51");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    console.warn('Failed to fetch search history');
+    return [];
+  }
+
+  const data = await response.json();
+  if (!data.values) return [];
+  
+  // Return array of search queries (filter out empty values)
+  return data.values.map((row: string[]) => row[0]).filter(Boolean);
+}
+
+// Save a new search query to Column S with FIFO (50 max)
+async function saveSearchQuery(accessToken: string, spreadsheetId: string, query: string) {
+  if (!query?.trim()) return { success: false };
+  
+  // 1. First, get current search history
+  const currentHistory = await getSearchHistory(accessToken, spreadsheetId);
+  
+  // 2. Remove duplicate if exists (case-insensitive)
+  const filtered = currentHistory.filter(
+    (q: string) => q.toLowerCase() !== query.toLowerCase()
+  );
+  
+  // 3. Add new search at the beginning, limit to 50
+  const newHistory = [query.trim(), ...filtered].slice(0, 50);
+  
+  // 4. Prepare values array (pad with empty strings to always write 50 rows)
+  const values: string[][] = Array(50).fill(null).map(() => ['']);
+  newHistory.forEach((q, i) => { values[i] = [q]; });
+  
+  // 5. Update the range S2:S51 (50 rows)
+  const range = encodeURIComponent("'CLIENT TRACKER SETUP DATA'!S2:S51");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values }),
+  });
+
+  if (!response.ok) {
+    console.error('Failed to save search query');
+    return { success: false };
+  }
+
+  return { success: true, history: newHistory };
 }
 
 // Get parlour types from EVENT DETAILS SETUP DATA sheet (Column C, starting from row 2)
@@ -5317,6 +5379,13 @@ Deno.serve(async (req) => {
           data.priority as string,
           data.registeredDateTimeAD as string | undefined
         );
+        break;
+      case 'getSearchHistory':
+        result = await getSearchHistory(accessToken, spreadsheetId);
+        break;
+      case 'saveSearchQuery':
+        if (!data || !data.query) throw new Error('query is required for saveSearchQuery');
+        result = await saveSearchQuery(accessToken, spreadsheetId, data.query as string);
         break;
       default:
         throw new Error(`Unknown action: ${action}`);

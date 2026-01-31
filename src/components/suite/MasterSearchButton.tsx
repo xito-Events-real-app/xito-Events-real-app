@@ -2,16 +2,17 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { Search, X, Clock, ChevronRight, User, Calendar, MapPin, Briefcase, Phone } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useCachedData } from "@/hooks/useCachedData";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { ClientData, getCurrentStatus } from "@/lib/sheets-api";
 import { getClientDetailPath, getClientNavigationId } from "@/lib/client-navigation";
 import { nepaliMonthsEnglish } from "@/lib/nepali-date";
+import { supabase } from "@/integrations/supabase/client";
 
 // Constants
-const STORAGE_KEY = "xito_recent_searches";
-const MAX_RECENT = 10;
+const MAX_RECENT = 50;
 const MAX_PREVIEW_RESULTS = 5;
 
 // Types
@@ -63,6 +64,7 @@ export function MasterSearchButton() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [query, setQuery] = useState("");
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -70,16 +72,31 @@ export function MasterSearchButton() {
   const navigate = useNavigate();
   const { clients } = useCachedData();
   
-  // Load recent searches from localStorage on mount
+  // Load recent searches from Google Sheets on mount
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
+    const loadHistory = async () => {
+      setIsLoadingHistory(true);
       try {
-        setRecentSearches(JSON.parse(stored));
-      } catch {
-        setRecentSearches([]);
+        const response = await supabase.functions.invoke("google-sheets", {
+          body: { action: "getSearchHistory" },
+        });
+        
+        if (response.data?.success && Array.isArray(response.data?.data)) {
+          setRecentSearches(
+            response.data.data.map((query: string) => ({
+              query,
+              timestamp: Date.now(),
+            }))
+          );
+        }
+      } catch (err) {
+        console.error('Failed to load search history:', err);
+      } finally {
+        setIsLoadingHistory(false);
       }
-    }
+    };
+    
+    loadHistory();
   }, []);
   
   // Auto-focus input when expanded
@@ -157,18 +174,22 @@ export function MasterSearchButton() {
     return filtered.slice(0, MAX_PREVIEW_RESULTS);
   }, [query, clients]);
   
-  // Save search to history
-  const saveSearch = (searchQuery: string) => {
+  // Save search to Google Sheets (fire and forget)
+  const saveSearch = async (searchQuery: string) => {
     if (!searchQuery.trim()) return;
     
+    // Optimistic update in local state
     const newSearch = { query: searchQuery.trim(), timestamp: Date.now() };
     const updated = [
       newSearch,
       ...recentSearches.filter(s => s.query.toLowerCase() !== searchQuery.toLowerCase())
     ].slice(0, MAX_RECENT);
-    
     setRecentSearches(updated);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    
+    // Save to Google Sheets (async, no await - fire and forget)
+    supabase.functions.invoke("google-sheets", {
+      body: { action: "saveSearchQuery", data: { query: searchQuery.trim() } },
+    }).catch(err => console.error('Failed to save search:', err));
   };
   
   // Handle result click
@@ -191,14 +212,6 @@ export function MasterSearchButton() {
     setQuery(searchQuery);
   };
   
-  // Clear a single recent search
-  const clearRecentSearch = (e: React.MouseEvent, searchQuery: string) => {
-    e.stopPropagation();
-    const updated = recentSearches.filter(s => s.query !== searchQuery);
-    setRecentSearches(updated);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-  };
-  
   // Render collapsed button
   if (!isExpanded) {
     return (
@@ -218,10 +231,10 @@ export function MasterSearchButton() {
     );
   }
   
-  // Render expanded input
+  // Render expanded input with horizontal recent searches
   return (
     <div ref={containerRef} className="relative">
-      {/* Inline Input */}
+      {/* Search Input */}
       <div className="relative">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-violet-500" />
         <Input
@@ -249,115 +262,128 @@ export function MasterSearchButton() {
         </button>
       </div>
       
-      {/* Dropdown: Recent Searches or Results */}
-      {(query.trim().length < 2 && recentSearches.length > 0) || (query.trim().length >= 2 && results.length > 0) ? (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-gray-200 z-50 max-h-80 overflow-y-auto">
-          {/* Recent Searches */}
-          {query.trim().length < 2 && recentSearches.length > 0 && (
-            <div className="p-3">
-              <p className="text-xs text-gray-500 mb-2 flex items-center gap-1 px-2">
-                <Clock className="w-3 h-3" /> Recent Searches
-              </p>
-              <div className="space-y-1">
-                {recentSearches.map((item, i) => (
+      {/* Horizontal Recent Searches - ALWAYS visible when expanded & no query */}
+      {query.trim().length < 2 && (
+        <div className="mt-3">
+          <p className="text-xs text-gray-500 mb-2 flex items-center gap-1 px-1">
+            <Clock className="w-3 h-3" /> Recent Searches
+          </p>
+          
+          {isLoadingHistory ? (
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+              {[1, 2, 3, 4, 5].map(i => (
+                <Skeleton key={i} className="h-8 w-20 rounded-full shrink-0" />
+              ))}
+            </div>
+          ) : recentSearches.length > 0 ? (
+            <div 
+              className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide cursor-grab active:cursor-grabbing"
+              style={{ scrollBehavior: 'smooth' }}
+            >
+              {recentSearches.map((item, i) => (
+                <button
+                  key={i}
+                  onClick={() => handleRecentClick(item.query)}
+                  className={cn(
+                    "shrink-0 px-3 py-1.5 rounded-full text-sm font-medium",
+                    "bg-gradient-to-r from-violet-100 to-purple-100",
+                    "text-violet-700 border border-violet-200",
+                    "hover:from-violet-200 hover:to-purple-200",
+                    "transition-all duration-150",
+                    "animate-pop-in"
+                  )}
+                  style={{ animationDelay: `${i * 30}ms` }}
+                >
+                  {item.query}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400 italic px-1">No recent searches</p>
+          )}
+        </div>
+      )}
+      
+      {/* Search Results Dropdown - appears ABOVE the input when typing */}
+      {query.trim().length >= 2 && results.length > 0 && (
+        <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-2xl shadow-xl border border-gray-200 z-50 max-h-80 overflow-y-auto animate-slide-up">
+          <div className="p-2">
+            <p className="text-xs text-gray-500 mb-2 px-2">
+              {results.length} result{results.length !== 1 ? 's' : ''} found
+            </p>
+            <div className="space-y-1">
+              {results.map((client, i) => {
+                const currentStatus = getCurrentStatus(client.statusLog || "");
+                const matchedField = getMatchedField(client, query);
+                const firstEvent = client.events?.split('\n')[0] || '';
+                
+                return (
                   <button
                     key={i}
-                    onClick={() => handleRecentClick(item.query)}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors text-left group"
+                    onClick={() => handleResultClick(client)}
+                    className="w-full flex items-start gap-3 px-3 py-3 rounded-xl hover:bg-gray-50 transition-colors text-left"
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Search className="w-4 h-4 text-gray-400 shrink-0" />
-                      <span className="text-sm text-gray-700 truncate">{item.query}</span>
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shrink-0">
+                      <User className="w-5 h-5 text-white" />
                     </div>
-                    <button
-                      onClick={(e) => clearRecentSearch(e, item.query)}
-                      className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-gray-200 transition-all"
-                    >
-                      <X className="w-3 h-3 text-gray-400" />
-                    </button>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          
-          {/* Search Results */}
-          {query.trim().length >= 2 && results.length > 0 && (
-            <div className="p-2">
-              <p className="text-xs text-gray-500 mb-2 px-2">
-                {results.length} result{results.length !== 1 ? 's' : ''} found
-              </p>
-              <div className="space-y-1">
-                {results.map((client, i) => {
-                  const currentStatus = getCurrentStatus(client.statusLog || "");
-                  const matchedField = getMatchedField(client, query);
-                  const firstEvent = client.events?.split('\n')[0] || '';
-                  
-                  return (
-                    <button
-                      key={i}
-                      onClick={() => handleResultClick(client)}
-                      className="w-full flex items-start gap-3 px-3 py-3 rounded-xl hover:bg-gray-50 transition-colors text-left"
-                    >
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shrink-0">
-                        <User className="w-5 h-5 text-white" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="font-semibold text-gray-900 truncate">
+                          {client.clientName}
+                        </span>
+                        <Badge variant="outline" className="text-[10px] shrink-0 bg-violet-50 text-violet-700 border-violet-200">
+                          {matchedField}
+                        </Badge>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <span className="font-semibold text-gray-900 truncate">
-                            {client.clientName}
+                      
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
+                        {client.contactNo && (
+                          <span className="flex items-center gap-1">
+                            <Phone className="w-3 h-3" />
+                            {client.contactNo}
                           </span>
-                          <Badge variant="outline" className="text-[10px] shrink-0 bg-violet-50 text-violet-700 border-violet-200">
-                            {matchedField}
-                          </Badge>
-                        </div>
-                        
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
-                          {client.contactNo && (
-                            <span className="flex items-center gap-1">
-                              <Phone className="w-3 h-3" />
-                              {client.contactNo}
-                            </span>
-                          )}
-                          {firstEvent && (
-                            <span className="flex items-center gap-1">
-                              <Calendar className="w-3 h-3" />
-                              {firstEvent}
-                            </span>
-                          )}
-                          {client.eventCity && (
-                            <span className="flex items-center gap-1">
-                              <MapPin className="w-3 h-3" />
-                              {client.eventCity}
-                            </span>
-                          )}
-                          {client.clientHandler && (
-                            <span className="flex items-center gap-1">
-                              <Briefcase className="w-3 h-3" />
-                              {client.clientHandler}
-                            </span>
-                          )}
-                        </div>
-                        
-                        {currentStatus && (
-                          <span className="inline-block mt-1 text-[10px] bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full font-medium">
-                            {currentStatus}
+                        )}
+                        {firstEvent && (
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {firstEvent}
+                          </span>
+                        )}
+                        {client.eventCity && (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-3 h-3" />
+                            {client.eventCity}
+                          </span>
+                        )}
+                        {client.clientHandler && (
+                          <span className="flex items-center gap-1">
+                            <Briefcase className="w-3 h-3" />
+                            {client.clientHandler}
                           </span>
                         )}
                       </div>
-                      <ChevronRight className="w-4 h-4 text-gray-400 shrink-0 mt-3" />
-                    </button>
-                  );
-                })}
-              </div>
+                      
+                      {currentStatus && (
+                        <span className="inline-block mt-1 text-[10px] bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full font-medium">
+                          {currentStatus}
+                        </span>
+                      )}
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-400 shrink-0 mt-3" />
+                  </button>
+                );
+              })}
             </div>
-          )}
+          </div>
         </div>
-      ) : query.trim().length >= 2 && results.length === 0 ? (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-gray-200 z-50 p-6 text-center">
+      )}
+      
+      {/* No Results Message */}
+      {query.trim().length >= 2 && results.length === 0 && (
+        <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-2xl shadow-xl border border-gray-200 z-50 p-6 text-center animate-slide-up">
           <p className="text-sm text-gray-500">No results found for "{query}"</p>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
