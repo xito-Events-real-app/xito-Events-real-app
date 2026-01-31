@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Receipt, Banknote, Calendar, Plus, Edit, Loader2 } from "lucide-react";
+import { Receipt, Banknote, Calendar, Plus, Edit, Loader2, AlertTriangle } from "lucide-react";
 import { getDropdowns } from "@/lib/sheets-api";
 import {
   Sheet,
@@ -219,6 +219,12 @@ const PaymentHistorySheet = ({
   const handleEditPaymentSubmit = async () => {
     if (editingPaymentIndex === null) return;
     
+    // Safety check: block if no final quotation
+    if (!hasFinalQuotation) {
+      toast.error("Final quotation not fixed. Cannot update payment.");
+      return;
+    }
+    
     try {
       setIsUpdating(true);
       
@@ -262,6 +268,9 @@ const PaymentHistorySheet = ({
   
   const quotationAmount = useMemo(() => parseQuotationAmount(finalQuotation), [finalQuotation]);
   const remaining = useMemo(() => parseQuotationAmount(remainingPayment), [remainingPayment]);
+  
+  // Check if final quotation is set for gating payments
+  const hasFinalQuotation = quotationAmount > 0;
   
   const progressPercentage = quotationAmount > 0 
     ? Math.min(100, Math.round((totalPaid / quotationAmount) * 100)) 
@@ -420,10 +429,23 @@ const PaymentHistorySheet = ({
           </ScrollArea>
 
           {/* Add Payment Button */}
-          <SheetFooter className="pt-4 mt-auto">
+          <SheetFooter className="pt-4 mt-auto flex flex-col gap-2">
+            {!hasFinalQuotation && (
+              <div className="w-full bg-destructive/10 border border-destructive rounded-lg p-2 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-destructive flex-shrink-0" />
+                <p className="text-xs text-destructive">Final quotation not fixed. Set ADVANCE PENDING status first.</p>
+              </div>
+            )}
             <Button 
-              onClick={() => setIsPaymentDrawerOpen(true)}
-              className="w-full bg-emerald-600 hover:bg-emerald-700"
+              onClick={() => {
+                if (!hasFinalQuotation) {
+                  toast.error("Final quotation not fixed. Set ADVANCE PENDING status first.");
+                  return;
+                }
+                setIsPaymentDrawerOpen(true);
+              }}
+              disabled={!hasFinalQuotation}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
             >
               <Plus className="h-4 w-4 mr-2" />
               Add Payment

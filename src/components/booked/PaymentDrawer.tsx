@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { DollarSign } from "lucide-react";
+import { DollarSign, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -78,6 +78,9 @@ const PaymentDrawer = ({
   };
 
   const remainingBalance = calculateRemainingBalance();
+  
+  // Check if final quotation is set
+  const hasFinalQuotation = finalQuotationAmount > 0;
 
   // Validate payment amount
   const handleAmountChange = (value: string) => {
@@ -131,6 +134,12 @@ const PaymentDrawer = ({
   };
 
   const handleSubmit = async () => {
+    // Safety check: block if no final quotation
+    if (!hasFinalQuotation) {
+      toast.error("Final quotation not fixed. Please set final quotation first.");
+      return;
+    }
+    
     if (!paymentAmount || !paymentType || !bank || !selectedDate || !selectedBSDate) {
       toast.error("Please fill all fields");
       return;
@@ -190,6 +199,19 @@ const PaymentDrawer = ({
         </DrawerHeader>
 
         <div className="px-4 space-y-4 max-h-[60vh] overflow-y-auto">
+          {/* Final Quotation Missing Warning */}
+          {!hasFinalQuotation && (
+            <div className="bg-destructive/10 border border-destructive rounded-lg p-3 flex items-start gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-destructive">Final quotation not fixed</p>
+                <p className="text-xs text-destructive/80 mt-0.5">
+                  Please lock the final quotation first (ADVANCE PENDING) before recording payment.
+                </p>
+              </div>
+            </div>
+          )}
+          
           {/* Remaining Balance Info */}
           <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
             <p className="text-xs text-slate-400">Remaining Balance</p>
@@ -258,7 +280,7 @@ const PaymentDrawer = ({
         <DrawerFooter className="pt-4">
           <Button
             onClick={handleSubmit}
-            disabled={isSubmitting || !isAmountValid() || !paymentType || !bank || !selectedDate}
+            disabled={isSubmitting || !hasFinalQuotation || !isAmountValid() || !paymentType || !bank || !selectedDate}
             className="bg-emerald-600 hover:bg-emerald-700 text-white"
           >
             {isSubmitting ? "Adding..." : "Add Payment"}
