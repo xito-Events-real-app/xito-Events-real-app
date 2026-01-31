@@ -37,7 +37,7 @@ export function MobileSuiteLanding() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-gray-50 flex flex-col overflow-x-hidden w-full">
       {/* Global Mode Toggle */}
       <GlobalModeToggle />
 
@@ -145,7 +145,7 @@ export function MobileSuiteLanding() {
 function HomeTabContent() {
   return (
     <ScrollArea className="flex-1 h-full">
-      <div className="px-4 py-4 space-y-4 pb-24">
+      <div className="px-4 py-4 space-y-4 pb-24 w-full max-w-full overflow-x-hidden">
         {/* Quick Actions */}
         <SuiteQuickActionsBar variant="mobile" />
         
