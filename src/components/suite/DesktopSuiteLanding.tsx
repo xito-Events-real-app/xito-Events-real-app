@@ -238,10 +238,10 @@ export function DesktopSuiteLanding() {
         </div>
       </div>
 
-      {/* News Sidebar (right) */}
+      {/* News Sidebar (right) - Fixed height with independent scroll */}
       {showNews && (
-        <div className="w-96 border-l border-gray-200 bg-gray-50 flex flex-col shrink-0">
-          <div className="p-4 border-b border-gray-200 bg-white">
+        <div className="w-96 border-l border-gray-200 bg-gray-50 flex flex-col shrink-0 h-screen sticky top-0">
+          <div className="p-4 border-b border-gray-200 bg-white shrink-0">
             <div className="flex items-center justify-between">
               <h2 className="font-bold text-gray-900 flex items-center gap-2">
                 <Newspaper className="w-5 h-5 text-violet-500" />
@@ -260,9 +260,9 @@ export function DesktopSuiteLanding() {
               Real-time updates from your business
             </p>
           </div>
-          <ScrollArea className="flex-1">
+          <div className="flex-1 overflow-y-auto">
             <SuiteNewsFeed />
-          </ScrollArea>
+          </div>
         </div>
       )}
     </div>
