@@ -7,6 +7,7 @@ import { TodayEventsHero } from "./TodayEventsHero";
 import { ModuleCard } from "./ModuleCard";
 import { MasterSyncButton } from "./MasterSyncButton";
 import { MasterSearchButton } from "./MasterSearchButton";
+import { HandlerActivityGrid } from "./HandlerActivityGrid";
 import { useSuiteStats } from "@/hooks/useSuiteStats";
 import { formatNPR } from "@/lib/client-card-utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -96,6 +97,9 @@ export function SuiteHomeContent() {
             />
           ))}
         </div>
+
+        {/* Handler Activity Section */}
+        <HandlerActivityGrid />
 
         {/* Spacer to push Coming Soon below fold */}
         <div className="min-h-[60px]" />

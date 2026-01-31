@@ -7,3 +7,5 @@ export { SuiteHomeContent } from './SuiteHomeContent';
 export { SuiteNewsFeed } from './SuiteNewsFeed';
 export { ActivityCard } from './ActivityCard';
 export { MasterSearchButton } from './MasterSearchButton';
+export { HandlerActivitySection } from './HandlerActivitySection';
+export { HandlerActivityGrid } from './HandlerActivityGrid';

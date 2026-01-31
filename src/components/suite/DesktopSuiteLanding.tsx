@@ -11,6 +11,7 @@ import { TodayEventsHero } from "./TodayEventsHero";
 import { ModuleCard } from "./ModuleCard";
 import { MasterSyncButton } from "./MasterSyncButton";
 import { MasterSearchButton } from "./MasterSearchButton";
+import { HandlerActivityGrid } from "./HandlerActivityGrid";
 import { useSuiteStats } from "@/hooks/useSuiteStats";
 import { formatNPR } from "@/lib/client-card-utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -202,6 +203,9 @@ export function DesktopSuiteLanding() {
               ))}
             </div>
           </div>
+
+          {/* Handler Activity Section */}
+          <HandlerActivityGrid />
 
           {/* Spacer */}
           <div className="min-h-[100px]" />
