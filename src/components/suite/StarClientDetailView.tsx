@@ -8,6 +8,7 @@ import { useHandlerStarClients } from "@/hooks/useHandlerStarClients";
 import { getCurrentStatus } from "@/lib/sheets-api";
 import { getClientDetailPath } from "@/lib/client-navigation";
 import { Star, X, Phone, MessageCircle, Mail, MapPin, Calendar, ChevronRight, Loader2 } from "lucide-react";
+import { parseEventDetails } from "@/lib/nepali-months";
 import { cn } from "@/lib/utils";
 
 interface StarClientDetailViewProps {
@@ -73,7 +74,12 @@ export function StarClientDetailView({ handlerName, onClose }: StarClientDetailV
           {starClients.map((client) => {
             const currentStatus = getCurrentStatus(client.statusLog || '');
             const priority = parseInt(client.priority || '0');
-            const firstEvent = client.events?.split('\n')[0] || 'No event';
+            const parsedEvents = parseEventDetails(
+              client.events || '',
+              client.eventYear || '',
+              client.eventMonth || '',
+              client.eventDay || ''
+            );
 
             return (
               <Card 
@@ -140,16 +146,19 @@ export function StarClientDetailView({ handlerName, onClose }: StarClientDetailV
                         )}
                       </div>
 
-                      {/* Event Details */}
-                      <div className="bg-gray-100/80 rounded-lg p-3">
-                        <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                          <Calendar className="w-4 h-4 text-amber-600" />
-                          {firstEvent}
-                        </div>
-                        {(client.eventMonth || client.eventYear) && (
-                          <p className="text-xs text-gray-500 mt-1 ml-6">
-                            {client.eventMonth} {client.eventYear}
-                          </p>
+                      {/* Event Details - Display all events in "MAGH 14 MEHNDI" format */}
+                      <div className="bg-gray-100/80 rounded-lg p-3 space-y-1.5">
+                        {parsedEvents.length === 0 ? (
+                          <p className="text-sm text-gray-500 italic">No events scheduled</p>
+                        ) : (
+                          parsedEvents.map((event, idx) => (
+                            <div key={idx} className="flex items-center gap-2">
+                              <Calendar className="w-4 h-4 text-amber-600 shrink-0" />
+                              <span className="text-sm font-bold text-gray-800 uppercase">
+                                {event.monthName} {event.day} {event.eventName}
+                              </span>
+                            </div>
+                          ))
                         )}
                       </div>
 
