@@ -81,7 +81,7 @@ export function SuiteDashboardContent({ selectedStarHandler, onClearStarHandler 
       </ScrollArea>
 
       {/* Master Search - Bottom Left Fixed */}
-      <div className="absolute bottom-6 left-6 w-80 z-10">
+      <div className="absolute bottom-6 left-6 w-[750px] max-w-[calc(100%-3rem)] z-10">
         <MasterSearchButton />
       </div>
     </div>
