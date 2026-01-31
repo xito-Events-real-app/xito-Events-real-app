@@ -148,7 +148,7 @@ export function HandlerActivitySection({ handlerName, colorScheme }: HandlerActi
       
       {/* Content */}
       {isExpanded && (
-        <CardContent className="p-3 space-y-3 max-h-80 overflow-y-auto bg-white">
+        <CardContent className="p-3 space-y-3 max-h-[500px] overflow-y-auto bg-white">
           {isLoading ? (
             <div className="flex items-center justify-center py-4">
               <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
@@ -160,16 +160,11 @@ export function HandlerActivitySection({ handlerName, colorScheme }: HandlerActi
                 <div className="space-y-2">
                   <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    Today
+                    Today ({todayActivities.length})
                   </h4>
-                  {todayActivities.slice(0, 5).map(activity => (
+                  {todayActivities.slice(0, 100).map(activity => (
                     <CompactActivityCard key={activity.id} activity={activity} />
                   ))}
-                  {todayActivities.length > 5 && (
-                    <p className="text-[10px] text-gray-400 text-center">
-                      +{todayActivities.length - 5} more today
-                    </p>
-                  )}
                 </div>
               )}
               
@@ -178,16 +173,11 @@ export function HandlerActivitySection({ handlerName, colorScheme }: HandlerActi
                 <div className="space-y-2">
                   <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                    Yesterday
+                    Yesterday ({yesterdayActivities.length})
                   </h4>
-                  {yesterdayActivities.slice(0, 5).map(activity => (
+                  {yesterdayActivities.slice(0, 100).map(activity => (
                     <CompactActivityCard key={activity.id} activity={activity} />
                   ))}
-                  {yesterdayActivities.length > 5 && (
-                    <p className="text-[10px] text-gray-400 text-center">
-                      +{yesterdayActivities.length - 5} more yesterday
-                    </p>
-                  )}
                 </div>
               )}
               
