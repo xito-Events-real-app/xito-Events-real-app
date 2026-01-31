@@ -107,6 +107,18 @@ export default {
           "0%": { backgroundColor: "hsl(142 76% 36% / 0.4)" },
           "100%": { backgroundColor: "transparent" },
         },
+        "glow-pulse": {
+          "0%, 100%": { 
+            boxShadow: "0 0 5px rgba(139, 92, 246, 0.5), 0 0 20px rgba(139, 92, 246, 0.3)" 
+          },
+          "50%": { 
+            boxShadow: "0 0 20px rgba(139, 92, 246, 0.8), 0 0 40px rgba(139, 92, 246, 0.5)" 
+          },
+        },
+        "border-glow": {
+          "0%, 100%": { borderColor: "rgba(139, 92, 246, 0.5)" },
+          "50%": { borderColor: "rgba(139, 92, 246, 1)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -115,6 +127,8 @@ export default {
         "slide-up": "slide-up 0.3s ease-out",
         "pulse-soft": "pulse-soft 2s ease-in-out infinite",
         "success-flash": "success-flash 1s ease-out forwards",
+        "glow-pulse": "glow-pulse 2s ease-in-out infinite",
+        "border-glow": "border-glow 2s ease-in-out infinite",
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],
