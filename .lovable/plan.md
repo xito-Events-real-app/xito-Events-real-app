@@ -1,186 +1,105 @@
 
-# Plan: Fix 404 Error on Back Navigation from Client Detail
+Goal
+- On Desktop Mode, make “Recent Searches” in Master Search:
+  1) never “disappear” while you’re searching
+  2) stay in a single horizontal row
+  3) become scrollable horizontally
+  4) show a visible scrollbar once the list reaches 8+ items (and still be scrollable even before that)
 
-## Problem Summary
+What’s happening now (why the last fix didn’t work)
+1) The Recent Searches row is only rendered when `query.trim().length < 2`.
+   - When you click a recent chip (or type 2+ characters), `query` becomes length ≥ 2, so the entire recent-searches row is removed from the UI.
+   - This matches your report: “hidden after third search” (after you start searching again, the row vanishes).
+2) Even when the row is visible, on desktop many users can’t easily horizontal-scroll a chips row unless:
+   - there is a trackpad, or
+   - the OS/browser is configured to always show scrollbars, or
+   - the UI implements drag-to-scroll / scroll buttons.
+   Right now we only changed CSS classes; we did not add actual “grab/drag” scrolling logic, so with a mouse it can still feel “stuck/hidden”.
+3) The scrollbar threshold logic is `recentSearches.length > 8` (shows at 9+). You asked for “once 8 crosses” which most likely means 8+.
 
-When navigating back from a client's detail page, the app shows a 404 error. The current URL in the error is:
-```
-/client-tracker/client/2026-01-18T19:25:45.624Z/search
-```
+Plan (implementation approach)
+A) Keep Recent Searches visible while searching (Desktop-first)
+- Update `src/components/suite/MasterSearchButton.tsx` so the Recent Searches section is shown whenever Master Search is expanded (not only when query is empty).
+- The search results dropdown already appears above the input (`bottom-full`), so keeping recent chips below the input will not overlap results.
 
-This happens because the Master Search passes `from: 'search'` (a plain string flag) as the navigation state. When `handleBack()` in ClientDetail.tsx calls `navigate(fromState.from)`, React Router interprets `'search'` as a **relative path** and appends it to the current URL, creating an invalid route.
+Implementation detail:
+- Replace this condition:
+  - `query.trim().length < 2 && (...)`
+- With:
+  - `isExpanded && (...)` (or simply render it unconditionally in the expanded UI)
+- Optional “clean UI” tweak:
+  - If query ≥ 2, hide the “Recent Searches” label text but keep the chips row visible.
 
-## Root Cause Analysis
+B) Make the chips row truly scrollable on Desktop (mouse-friendly)
+- Add real desktop interactions on the chips container:
+  1) Drag-to-scroll (click + drag horizontally)
+  2) Mouse-wheel-to-horizontal-scroll when hovering the chips row (so normal mouse wheels work)
+  3) Optional left/right chevron buttons to scroll by a fixed amount (reliable even if OS hides scrollbars)
 
-| Source | Value of `from` | Result |
-|--------|-----------------|--------|
-| Master Search | `'search'` | `navigate('search')` appends `/search` to URL - **BROKEN** |
-| Dashboard | `'/client-tracker'` | Works correctly - absolute path |
-| Booked Clients | `'/booked-clients'` | Works correctly - absolute path |
-| ActivityCard | `undefined` (no state) | Falls through to `navigate(-1)` - may work |
-| StarClientDetailView | `undefined` (no state) | Falls through to `navigate(-1)` - may work |
+Implementation detail in `MasterSearchButton.tsx`:
+- Add `recentRowRef = useRef<HTMLDivElement>(null)`
+- Add pointer drag handlers using refs (no re-renders needed):
+  - onPointerDown: store startX + startScrollLeft, set “dragging” ref true, setPointerCapture
+  - onPointerMove: if dragging, compute delta and set `scrollLeft`
+  - onPointerUp / onPointerCancel: stop dragging and releasePointerCapture
+- Add wheel handler:
+  - If user scrolls wheel over the row and it overflows horizontally, map `deltaY` into `scrollLeft` and `preventDefault()`
+  - This makes a normal mouse wheel reveal hidden chips horizontally.
 
-The issue is that `'search'` is NOT a valid path. It's being used as a **flag** for the sequential navigation feature, but `handleBack()` tries to navigate to it as if it were a route.
+C) Show scrollbar after 8+ recent searches (and still allow scrolling before that)
+- Fix threshold: `recentSearches.length >= 8` (not `> 8`).
+- Keep your CSS utilities, but adjust usage:
+  - For < 8: keep scrollbar hidden (but still scrollable via drag/wheel/buttons)
+  - For ≥ 8: apply `scrollbar-thin` + thumb/track classes so a scrollbar is available.
 
-## Solution
+Important note:
+- Some operating systems (and Chrome on Mac) hide scrollbars until scrolling. We cannot fully override OS behavior everywhere.
+- That’s why we’ll also add drag + wheel + buttons so it works reliably regardless of scrollbar visibility.
 
-### Strategy: Separate "from path" from "search context flag"
+D) Tighten “how many chips we show” (matches your earlier spec)
+- The memory/spec says “show 10 most recent searches”.
+- Currently the UI renders all (up to 50).
+- Update display to:
+  - `const recentToShow = recentSearches.slice(0, 10);`
+- Scrollbar logic should be based on `recentToShow.length`.
 
-1. **Fix MasterSearchButton**: Pass actual path (`'/'` for Suite Landing) as `from`, and use a separate `searchContext` property for the flag
-2. **Fix ClientDetail.tsx**: Check `searchContext` for search-specific features, use `from` only for valid path navigation
-3. **Fix ActivityCard & StarClientDetailView**: Pass proper `from` state with `location.pathname`
+E) CSS adjustments (small, but important)
+File: `src/index.css`
+- Add a hover variant that actually works for our custom scrollbar classes.
+  - The current `hover:scrollbar-thumb-violet-400` (Tailwind-style) does not apply to our custom CSS pseudo-elements.
+- Add CSS like:
+  - `.scrollbar-thumb-violet-300.hover-thumb-violet-400:hover::-webkit-scrollbar-thumb { background-color: rgb(167 139 250); }`
+- Then in TSX use a plain class `hover-thumb-violet-400` (no Tailwind `hover:` prefix).
 
----
+Files to change
+1) `src/components/suite/MasterSearchButton.tsx`
+- Render recent chips section even while query is active (expanded state)
+- Implement drag-to-scroll + wheel-to-horizontal-scroll
+- Add optional left/right scroll buttons (recommended for desktop reliability)
+- Change scrollbar threshold to `>= 8`
+- Render only top 10 recent searches
 
-## Files to Modify
+2) `src/index.css`
+- Add a working hover-style helper for the scrollbar thumb (optional polish)
+- Keep existing `scrollbar-thin` / `scrollbar-hide` utilities
 
-| File | Change |
-|------|--------|
-| `src/components/suite/MasterSearchButton.tsx` | Change `from: 'search'` to `from: '/'` and add `searchContext: 'search'` |
-| `src/pages/ClientDetail.tsx` | Check `searchContext` instead of `from === 'search'` for sequential nav |
-| `src/components/suite/ActivityCard.tsx` | Add `from` state with `location.pathname` |
-| `src/components/suite/StarClientDetailView.tsx` | Add `from` state with `location.pathname` |
+Testing checklist (Desktop)
+1) Open Suite (Desktop Mode) → open Master Search.
+2) Do 3+ searches (click results) so you have multiple recent searches.
+3) Expand Master Search again:
+   - Recent searches must still be visible even while you type 2+ characters.
+4) Add 9–10 recent searches:
+   - Row stays one line horizontally.
+   - You can access hidden chips by:
+     - mouse wheel while hovering the chips row, and/or
+     - click-drag the chips row, and/or
+     - chevron buttons (if added)
+   - At 8+ chips, scrollbar style switches to the thin scrollbar theme.
+5) Confirm nothing breaks on Mobile view:
+   - Chips still usable with swipe (mobile native scroll).
+   - UI doesn’t overflow awkwardly.
 
----
-
-## Implementation Details
-
-### 1. MasterSearchButton.tsx (Line 201-208)
-
-**Current:**
-```typescript
-navigate(getClientDetailPath(client), {
-  state: {
-    from: 'search',  // BUG: Not a valid path
-    searchQuery: query,
-    resultIds: results.map(r => getClientNavigationId(r)),
-    currentIndex: results.indexOf(client)
-  }
-});
-```
-
-**Fixed:**
-```typescript
-navigate(getClientDetailPath(client), {
-  state: {
-    from: '/',  // Suite Landing - actual path for back navigation
-    searchContext: 'search',  // Flag for sequential navigation feature
-    searchQuery: query,
-    resultIds: results.map(r => getClientNavigationId(r)),
-    currentIndex: results.indexOf(client)
-  }
-});
-```
-
-### 2. ClientDetail.tsx (Line 220-232)
-
-**Current:**
-```typescript
-if (fromState?.from === 'search' && fromState.resultIds && fromState.currentIndex !== undefined) {
-```
-
-**Fixed:**
-```typescript
-if (fromState?.searchContext === 'search' && fromState.resultIds && fromState.currentIndex !== undefined) {
-```
-
-Also update the `fromState` type definition (Line 210-217):
-```typescript
-const fromState = location.state as { 
-  from?: string; 
-  searchContext?: string;  // ADD THIS
-  filters?: any; 
-  scrollPosition?: number;
-  searchQuery?: string;
-  resultIds?: (number | string)[];
-  currentIndex?: number;
-} | null;
-```
-
-### 3. ActivityCard.tsx (Line 43-47)
-
-**Current:**
-```typescript
-const handleClick = () => {
-  if (activity.clientId) {
-    const path = getClientDetailPath({ registeredDateTimeAD: activity.clientId });
-    navigate(path);
-  }
-};
-```
-
-**Fixed:**
-```typescript
-const handleClick = () => {
-  if (activity.clientId) {
-    const path = getClientDetailPath({ registeredDateTimeAD: activity.clientId });
-    navigate(path, { state: { from: '/' } });  // Suite Landing path
-  }
-};
-```
-
-### 4. StarClientDetailView.tsx (Line 23-25)
-
-**Current:**
-```typescript
-const handleViewDetails = (client: typeof starClients[0]) => {
-  navigate(getClientDetailPath(client));
-};
-```
-
-**Fixed:**
-```typescript
-const handleViewDetails = (client: typeof starClients[0]) => {
-  navigate(getClientDetailPath(client), { state: { from: '/' } });  // Suite Landing path
-};
-```
-
----
-
-## Data Flow After Fix
-
-```text
-User clicks client in Master Search
-         ↓
-navigate('/client-tracker/client/XXX', {
-  state: {
-    from: '/',                  // Valid absolute path
-    searchContext: 'search',    // Flag for prev/next navigation
-    searchQuery: 'BARUN',
-    resultIds: [...],
-    currentIndex: 2
-  }
-})
-         ↓
-Client Detail page loads
-- Sequential navigation uses searchContext === 'search'
-- Prev/Next buttons work using resultIds
-         ↓
-User clicks Back button
-         ↓
-handleBack() reads fromState.from = '/'
-         ↓
-navigate('/')  // Absolute path - goes to Suite Landing correctly!
-```
-
----
-
-## Why This Works
-
-- **Absolute vs Relative paths**: Paths starting with `/` are absolute (navigate to exact route). Paths without `/` are relative (appended to current path)
-- `from: '/'` → `navigate('/')` → Goes to Suite Landing
-- `from: '/client-tracker'` → `navigate('/client-tracker')` → Goes to Dashboard
-- `from: 'search'` → `navigate('search')` → Appends `/search` to current URL → **404 ERROR**
-
----
-
-## Testing Checklist
-
-After implementation, verify these scenarios:
-
-1. **From Master Search**: Search for client → Click result → Click Back → Should return to Suite Landing (/)
-2. **From Dashboard**: Click client → Click Back → Should return to Dashboard (/client-tracker)
-3. **From Booked Clients**: Click client → Click Back → Should return to Booked (/booked-clients)
-4. **From Activity Card**: Click activity → Click Back → Should return to Suite Landing (/)
-5. **From Star Clients**: Click star client → Click Back → Should return to Suite Landing (/)
-6. **Prev/Next Navigation**: From Master Search results, verify Prev/Next buttons still work correctly
+Edge cases handled
+- If history is still loading: keep skeleton chips row (also horizontally scrollable container).
+- If there are fewer than 8 searches: no visible scrollbar, but row remains scrollable (mouse-friendly).
+- If OS hides scrollbars: drag/wheel/buttons still guarantee access to all chips.
