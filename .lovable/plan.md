@@ -1,123 +1,150 @@
 
-Goal
-- In Finance Manager, prevent adding (and editing) any payment if the client’s “Final Fixed Quotation” (Column AD) is not locked/saved.
-- Ensure this rule is enforced both in the UI and in the backend function so it cannot be bypassed from any screen.
+# Plan: Fix Quotation Data Not Saving to Sheets
 
-What’s happening now (why it “isn’t fixed”)
-- The earlier fix only enforced “final quotation required” in the BOOKED status flow dialog (AdvancePaymentDialog).
-- Finance Manager uses a different payment UI (finance/PaymentDrawer + PaymentHistorySheet) which currently does not check whether final quotation exists; it just calls addPayment(), and the backend accepts it even when finalQuotationAmount is 0.
+## Problem Analysis
 
-Implementation changes (high level)
-1) Frontend (Finance Manager)
-- Block opening/saving payments when final quotation is missing.
-- Show a clear “Final quotation not fixed” message so it’s obvious why the button is disabled.
+When adding quotation amounts from the client page (e.g., for "Sargat Thapa"), the data is NOT saved to Google Sheets. The quotation was added 3 times but nothing persisted.
 
-2) Frontend (Booked Clients payment drawer)
-- Align messaging/guarding so the user gets the same clear message (even though the booked drawer already effectively blocks by remainingBalance=0).
+### Root Cause
 
-3) Backend (google-sheets function)
-- Add hard validation in addPayment and updatePayment so payment writes are rejected if final quotation is missing in the BOOKED CLIENTS sheet.
-- Prefer reading the final quotation directly from the sheet row (Column AD) so the backend never trusts a possibly-stale/incorrect finalQuotationAmount sent from the UI.
+The `updateClientQuotation` function is missing the critical `registeredDateTimeAD` parameter needed for row verification:
 
-Files we will update
-Frontend
-- src/components/finance/PaymentDrawer.tsx
-- src/components/finance/PaymentHistorySheet.tsx
-- src/components/finance/FinanceClientCard.tsx
-- src/components/booked/PaymentDrawer.tsx (consistency / better error message)
+**Current frontend API call (`sheets-api.ts` line 247-254):**
+```typescript
+export async function updateClientQuotation(
+  rowNumber: number,
+  quotationData: string
+): Promise<{ success: boolean }> {
+  return callSheetsFunction<{ success: boolean }>("updateClientQuotation", {
+    data: { rowNumber, quotationData },  // MISSING registeredDateTimeAD!
+  });
+}
+```
 
-Backend
-- supabase/functions/google-sheets/index.ts (addPayment + updatePaymentEntry validation)
+**Backend expects `registeredDateTimeAD` (edge function line 1926-1932):**
+```typescript
+async function updateClientQuotation(accessToken, spreadsheetId, rowNumber, quotationData, registeredDateTimeAD) {
+  // ...
+  const actualRowNumber = await verifyRowNumber(..., registeredDateTimeAD);
+  // Without registeredDateTimeAD, verifyRowNumber just returns the original rowNumber
+  // If rows have shifted, the update goes to the WRONG row (corrupting data)
+}
+```
 
-Detailed steps
+**What happens:**
+1. User opens client detail page with cached `rowNumber` from earlier
+2. New clients are added to the sheet, rows shift down
+3. User saves quotation with the outdated `rowNumber`
+4. Backend writes to the wrong row (or an empty row if the ID is wrong)
+5. No error is thrown - the API returns success but data is in the wrong place
 
-A) Finance: PaymentDrawer must require final quotation
-Changes in src/components/finance/PaymentDrawer.tsx
-- Add a boolean:
-  - hasFinalQuotation = finalQuotationAmount > 0
-- UI:
-  - If !hasFinalQuotation, show a visible warning panel at the top of the drawer explaining:
-    - “Final quotation is not fixed. Please lock the final quotation first (ADVANCE PENDING) before recording payment.”
-  - Disable the “Add Payment” button when !hasFinalQuotation.
-- Safety check in handleSubmit:
-  - Before calling addPayment(), if !hasFinalQuotation:
-    - toast.error("Final quotation not fixed. Please set final quotation first.")
-    - return
-This ensures even if the button state is bypassed, the function still won’t proceed.
+### The Same Issue Exists in Multiple Locations
 
-B) Finance: PaymentHistorySheet must block “Add Payment” and “Save Changes” when quote is missing
-Changes in src/components/finance/PaymentHistorySheet.tsx
-- Compute quotationAmount already exists.
-- Add:
-  - hasFinalQuotation = quotationAmount > 0
-- Disable “Add Payment” button:
-  - disabled={!hasFinalQuotation}
-  - If disabled, show a small explanatory text under the button or a banner near the top.
-- Editing protection:
-  - Disable opening edit mode (Edit icon button) OR allow opening but disable “Save Changes” with an explanatory message.
-  - Also add a guard inside handleEditPaymentSubmit:
-    - if (!hasFinalQuotation) { toast.error(...); return; }
+| File | Line | Call |
+|------|------|------|
+| `src/pages/ClientDetail.tsx` | ~719 | `updateClientQuotation(client.rowNumber, quotationData)` |
+| `src/components/dashboard/FreshClientCard.tsx` | ~1140 | `updateClientQuotation(client.rowNumber, quotationData)` |
+| `src/components/desktop/DesktopClientRow.tsx` | ~506 | `updateClientQuotation(client.rowNumber, quotationData)` |
 
-C) Finance: FinanceClientCard should not open the drawer if quotation is missing
-Changes in src/components/finance/FinanceClientCard.tsx
-- It currently calculates quotationAmount from client.finalQuotation (0 when missing).
-- Update the “Add Payment” (+) button:
-  - If quotationAmount <= 0:
-    - visually disabled (opacity/cursor-not-allowed)
-    - onClick shows a toast explaining final quotation must be fixed first
-    - do not open the drawer
-This prevents the user from even getting into the payment form for invalid clients.
+---
 
-D) Booked Clients: make the “missing quotation” message explicit
-Changes in src/components/booked/PaymentDrawer.tsx
-- This drawer already blocks payment if remainingBalance is 0, but it produces confusing validation (“exceeds remaining balance of NPR 0”).
-- Add:
-  - hasFinalQuotation = finalQuotationAmount > 0
-- If !hasFinalQuotation:
-  - show a clear banner message
-  - disable the submit button immediately (and skip amount validation messaging)
+## Solution
 
-E) Backend: hard reject payment writes when final quotation is missing
-Changes in supabase/functions/google-sheets/index.ts
+### Step 1: Update the Frontend API Function
 
-E1) addPayment()
-- After the code determines actualRowNumber in BOOKED CLIENTS:
-  - Read Column AD from BOOKED CLIENTS for that row:
-    - range: 'BOOKED CLIENTS'!AD{actualRowNumber}
-  - Parse final quotation amount from that cell using a robust regex:
-    - Prefer matching “NPR <digits,commas>”
-  - If parsedAmount <= 0:
-    - throw new Error("Final quotation not fixed for this client. Please lock final quotation before recording payment.")
-- Use parsedAmount as the finalQuotationAmount for remaining calculation (instead of trusting the client-sent finalQuotationAmount).
+Modify `sheets-api.ts` to accept and pass `registeredDateTimeAD`:
 
-E2) updatePaymentEntry()
-- Similarly, before recalculating remaining:
-  - Verify final quotation exists on the BOOKED CLIENTS row (Column AD)
-  - If missing => throw an error and do not update payments
+```typescript
+export async function updateClientQuotation(
+  rowNumber: number,
+  quotationData: string,
+  registeredDateTimeAD?: string  // Add this parameter
+): Promise<{ success: boolean }> {
+  return callSheetsFunction<{ success: boolean }>("updateClientQuotation", {
+    data: { rowNumber, quotationData, registeredDateTimeAD },  // Pass it to backend
+  });
+}
+```
 
-Why backend validation is required
-- Without this, any screen (current or future) that calls addPayment/updatePayment can still write invalid data.
-- This also prevents edge cases where UI state is stale or a user bypasses disabled buttons.
+### Step 2: Update All Call Sites to Pass `registeredDateTimeAD`
 
-Testing checklist (end-to-end)
-1) Finance Manager: client with missing final quotation
-- Attempt to add payment from:
-  - FinanceClientCard (+) button
-  - PaymentHistorySheet “Add Payment”
-  - PaymentHistorySheet edit “Save Changes”
-- Expected: all blocked with clear message; no sheet updates occur.
+**File: `src/pages/ClientDetail.tsx` (handleSaveQuotation)**
+```typescript
+// Before:
+await updateClientQuotation(client.rowNumber, quotationData);
 
-2) Finance Manager: client with valid final quotation
-- Add payment normally
-- Expected: payment is recorded and remaining payment is correct.
+// After:
+await updateClientQuotation(client.rowNumber, quotationData, client.registeredDateTimeAD);
+```
 
-3) Regression: Booking flow (Client Detail / Dashboard / Desktop row)
-- Ensure booking + payment still works when final quotation exists.
-- Ensure “final quotation missing” still blocks booking payment as intended.
+**File: `src/components/dashboard/FreshClientCard.tsx`**
+```typescript
+// Before:
+await updateClientQuotation(client.rowNumber, quotationData);
 
-Notes / edge cases handled
-- If final quotation exists in the sheet but the Finance list is stale, the UI may still block because it only knows what it loaded. In that case the user can hit the existing Finance “Refresh/Resync” buttons to pull the latest data before adding payment. The backend will also be correct once UI refreshes.
-- Backend parsing will accept both “PREMIUM: NPR 75,000/-” and similar common variations as long as “NPR <amount>” is present.
+// After:
+await updateClientQuotation(client.rowNumber, quotationData, client.registeredDateTimeAD);
+```
 
-Scope control
-- This plan focuses on Finance Manager + payment editing and backend enforcement. If you want, we can add a follow-up improvement: a small “Fix Final Quotation” action for already-booked clients that were moved without a final quotation, so you can lock the quotation without leaving Finance.
+**File: `src/components/desktop/DesktopClientRow.tsx`**
+```typescript
+// Before:
+await updateClientQuotation(client.rowNumber, quotationData);
+
+// After:
+await updateClientQuotation(client.rowNumber, quotationData, client.registeredDateTimeAD);
+```
+
+---
+
+## Files to Modify
+
+| File | Changes |
+|------|---------|
+| `src/lib/sheets-api.ts` | Add `registeredDateTimeAD` parameter to `updateClientQuotation` function |
+| `src/pages/ClientDetail.tsx` | Pass `client.registeredDateTimeAD` to `updateClientQuotation` call |
+| `src/components/dashboard/FreshClientCard.tsx` | Pass `client.registeredDateTimeAD` to `updateClientQuotation` call |
+| `src/components/desktop/DesktopClientRow.tsx` | Pass `client.registeredDateTimeAD` to `updateClientQuotation` call |
+
+---
+
+## Why This Fix Works
+
+The `verifyRowNumber` function in the edge function (line 1117-1155):
+1. Takes the `registeredDateTimeAD` (unique timestamp ID from Column A)
+2. Searches Column A (A2:A2000) in the sheet for the exact match
+3. Returns the **correct current row number** even if rows have shifted
+4. If `registeredDateTimeAD` is missing, it falls back to the provided `rowNumber` (which may be outdated)
+
+By passing `registeredDateTimeAD`, we ensure the quotation is written to the correct row even if the sheet structure has changed since the page was loaded.
+
+---
+
+## Technical Note: Edge Function Already Handles This
+
+The backend (`supabase/functions/google-sheets/index.ts` lines 4702-4710) already accepts `registeredDateTimeAD`:
+```typescript
+case 'updateClientQuotation':
+  if (!data || !data.rowNumber) throw new Error('...');
+  result = await updateClientQuotation(
+    accessToken, 
+    spreadsheetId, 
+    data.rowNumber as number, 
+    data.quotationData as string || '',
+    data.registeredDateTimeAD as string | undefined  // Already handled!
+  );
+```
+
+No backend changes are needed - the issue is purely that the frontend wasn't sending this parameter.
+
+---
+
+## Expected Behavior After Fix
+
+1. User opens client detail for "Sargat Thapa"
+2. Adds quotation amounts (e.g., BASIC: 50,000, STANDARD: 60,000)
+3. Clicks "Save & Update Status"
+4. Frontend sends: `{ rowNumber: X, quotationData: "...", registeredDateTimeAD: "2026-01-31T02:42:39.340Z" }`
+5. Backend verifies correct row using the unique ID
+6. Data is written to Column V of the correct row
+7. Success - data persists correctly in sheets
