@@ -1,299 +1,170 @@
 
-# Plan: Add Last Activity Timestamp Log (Column AJ) for Accurate Activity Ordering
+# Plan: Fix Breaking News Not Showing New Comments
 
 ## Problem
 
-The "Breaking News" section is not showing activities in proper chronological order because:
-1. Timestamps are scattered across different columns (W, Y, AC, AE) with inconsistent formats
-2. Some activities have no reliable timestamp at all
-3. Parsing timestamps from existing columns is error-prone
+When a new comment is added and the user clicks "Refresh" on the Breaking News sidebar, the new comment does not appear because:
+
+1. The `useCachedData` hook does NOT listen for a `clients-invalidate` event to trigger a fresh refetch
+2. The `handleRefreshNews` function dispatches events but the hooks don't respond properly
+3. Both data sources (CLIENT TRACKER and BOOKED CLIENTS) need to refetch, but only BOOKED CLIENTS has proper invalidation handling
+
+## Root Cause Analysis
+
+### Current Refresh Flow (Broken)
+```text
+1. User clicks "Refresh" button
+2. handleRefreshNews() calls:
+   - notifyCacheUpdate('clients')              -> No data passed, useCachedData ignores it
+   - notifyCacheUpdate('booked-clients-invalidate') -> Works! Triggers refreshData()
+   - window.dispatchEvent('clients-invalidate')    -> Nobody listens for this!
+   - window.dispatchEvent('booked-clients-invalidate') -> Works via cache-updated event
+3. Result: Only BOOKED CLIENTS data refreshes, not CLIENT TRACKER data
+```
+
+### Why Comments Don't Appear
+- Comments added to CLIENT TRACKER clients are parsed from `useCachedData().clients`
+- `useCachedData` never refetches when "Refresh" is clicked
+- Old cached data is displayed instead of fetching new data from Google Sheets
+
+---
 
 ## Solution
 
-Add a new **Column AJ: Last Activity Timestamp** to both sheets:
-- `CLIENT TRACKER!AJ`
-- `BOOKED CLIENTS!AJ`
-
-This column will be the **single source of truth** for activity ordering in the Breaking News feed.
-
-### Log Format
-```text
-01/31/2026 10:15:45 | STATUS_CHANGE | BOOKED
-01/31/2026 09:30:12 | COMMENT | Called back for follow-up
-01/30/2026 15:45:00 | PAYMENT | NPR 50,000 received
-01/30/2026 14:20:30 | CALL | 2ND DIRECT CALL
-01/29/2026 11:00:00 | CLIENT_ADDED | New registration
-```
-
-Each line contains:
-- **Timestamp**: `MM/DD/YYYY HH:MM:SS` (Nepal timezone)
-- **Activity Type**: `STATUS_CHANGE`, `COMMENT`, `PAYMENT`, `CALL`, `QUOTATION`, `CLIENT_ADDED`, `FINAL_QUOTATION`, `HANDLER_CHANGE`, etc.
-- **Details**: Brief description of the activity
+Add invalidation handling to `useCachedData` hook so it properly triggers `refreshData()` when a `clients-invalidate` event is received.
 
 ---
 
 ## Technical Changes
 
-### 1. Backend: Update Data Interfaces
+### File 1: `src/hooks/useCachedData.ts`
 
-**File:** `supabase/functions/google-sheets/index.ts`
+**Change**: Add listener for `clients-invalidate` event type in the `cache-updated` handler
 
-Add `lastActivityLog` (Column AJ, index 35) to all data mapping functions:
-
+**Current Code** (lines 235-248):
 ```typescript
-// In mapRowToClient and getClients functions
-lastActivityLog: row[35] || '',  // Column AJ - Activity timestamp log
+useEffect(() => {
+  const handleCacheUpdate = (e: CustomEvent<{ type: string; data: unknown }>) => {
+    if (e.detail.type === 'clients' && Array.isArray(e.detail.data)) {
+      setClients(e.detail.data as ClientData[]);
+    }
+    if (e.detail.type === 'dropdowns' && e.detail.data) {
+      setDropdowns(e.detail.data as DropdownData);
+    }
+  };
+  
+  window.addEventListener('cache-updated', handleCacheUpdate as EventListener);
+  return () => window.removeEventListener('cache-updated', handleCacheUpdate as EventListener);
+}, []);
 ```
 
-### 2. Backend: Create Helper Function for Activity Logging
-
-**File:** `supabase/functions/google-sheets/index.ts`
-
-Create a reusable function to append activity entries:
-
+**Updated Code**:
 ```typescript
-async function appendActivityLog(
-  accessToken: string,
-  spreadsheetId: string,
-  sheetName: 'CLIENT TRACKER' | 'BOOKED CLIENTS',
-  rowNumber: number,
-  activityType: string,
-  details: string,
-  existingLog: string
-): Promise<string> {
-  // Generate Nepal timezone timestamp
-  const now = new Date();
-  const nepalOffset = 5 * 60 + 45; // 5:45 in minutes
-  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-  const nepalTime = new Date(utcTime + (nepalOffset * 60000));
+useEffect(() => {
+  const handleCacheUpdate = (e: CustomEvent<{ type: string; data: unknown }>) => {
+    if (e.detail.type === 'clients' && Array.isArray(e.detail.data)) {
+      setClients(e.detail.data as ClientData[]);
+    }
+    if (e.detail.type === 'dropdowns' && e.detail.data) {
+      setDropdowns(e.detail.data as DropdownData);
+    }
+    // Handle invalidation - trigger refresh (similar to useBookedCachedData)
+    if (e.detail.type === 'clients-invalidate') {
+      fetchState.hasRefreshed = false; // Reset refresh flag to allow refetch
+      refreshData(); // Force a fresh fetch from Google Sheets
+    }
+  };
   
-  const timestamp = `${String(nepalTime.getMonth() + 1).padStart(2, '0')}/${String(nepalTime.getDate()).padStart(2, '0')}/${nepalTime.getFullYear()} ${String(nepalTime.getHours()).padStart(2, '0')}:${String(nepalTime.getMinutes()).padStart(2, '0')}:${String(nepalTime.getSeconds()).padStart(2, '0')}`;
-  
-  const newEntry = `${timestamp} | ${activityType} | ${details}`;
-  const updatedLog = existingLog ? `${newEntry}\n${existingLog}` : newEntry;
-  
-  // Write to Column AJ
-  const range = encodeURIComponent(`'${sheetName}'!AJ${rowNumber}`);
-  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
-  
-  await fetch(updateUrl, {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ values: [[updatedLog]] }),
-  });
-  
-  return updatedLog;
-}
+  window.addEventListener('cache-updated', handleCacheUpdate as EventListener);
+  return () => window.removeEventListener('cache-updated', handleCacheUpdate as EventListener);
+}, [refreshData]);
 ```
 
-### 3. Backend: Update All Activity-Generating Functions
+**Note**: The dependency array now includes `refreshData` since we're using it inside the effect.
 
-Add activity logging to each function that modifies client data:
+---
 
-| Function | Activity Type | Details Format |
-|----------|--------------|----------------|
-| `updateClientStatus` | `STATUS_CHANGE` | Status name (e.g., "BOOKED") |
-| `addClientComment` / `addBookedClientComment` | `COMMENT` | First 50 chars of comment |
-| `addPayment` | `PAYMENT` | "NPR X,XXX received via BANK" |
-| `logCallAttempt` | `CALL` | "1ST DIRECT CALL" |
-| `updateClientQuotation` | `QUOTATION` | Package name and amount |
-| `updateFinalQuotation` | `FINAL_QUOTATION` | Package name and amount |
-| `addClient` | `CLIENT_ADDED` | "New registration" |
-| `updateClientHandler` | `HANDLER_CHANGE` | "Assigned to HandlerName" |
-| `updateClientMindset` | `MINDSET` | Mindset value |
+### File 2: `src/lib/cache-manager.ts`
 
-Example for `updateClientStatus`:
+**Change**: Add `clients-invalidate` to the valid type union
+
+**Current Code** (line 269):
 ```typescript
-async function updateClientStatus(...) {
-  // ... existing status update logic ...
-  
-  // Append to activity log (Column AJ)
-  await appendActivityLog(
-    accessToken,
-    spreadsheetId,
-    'CLIENT TRACKER',
-    actualRowNumber,
-    'STATUS_CHANGE',
-    newStatus,
-    existingActivityLog // Need to fetch this first
-  );
-  
-  return { success: true, ... };
-}
+export function notifyCacheUpdate(type: 'clients' | 'dropdowns' | 'all' | 'booked-clients' | 'booked-clients-invalidate', data?: unknown): void {
 ```
 
-### 4. Backend: Update `addClient` to Initialize Activity Log
-
-**File:** `supabase/functions/google-sheets/index.ts`
-
-When a new client is added, initialize Column AJ with the first entry:
-
+**Updated Code**:
 ```typescript
-// In addClient function, after creating row data
-const activityLog = `${timestamp} | CLIENT_ADDED | New registration from ${source}`;
-
-// Add to row values at index 35 (Column AJ)
-rowValues[35] = activityLog;
+export function notifyCacheUpdate(type: 'clients' | 'clients-invalidate' | 'dropdowns' | 'all' | 'booked-clients' | 'booked-clients-invalidate', data?: unknown): void {
 ```
 
-### 5. Frontend: Update Data Types
+---
 
-**File:** `src/lib/sheets-api.ts`
+### File 3: `src/components/suite/DesktopSuiteLanding.tsx`
 
-Add `lastActivityLog` to `ClientData` interface:
+**Change**: Update `handleRefreshNews` to use the correct invalidation event type
 
+**Current Code** (lines 32-48):
 ```typescript
-export interface ClientData {
-  // ... existing fields ...
-  serviceTypes?: string;           // Column AI
-  lastActivityLog?: string;        // Column AJ - Activity timestamp log
-  _source?: 'tracker' | 'booked';
-}
-```
-
-### 6. Frontend: Update Activity Parser to Use Column AJ
-
-**File:** `src/lib/activity-utils.ts`
-
-Rewrite `parseActivities` to use the new structured log:
-
-```typescript
-// Parse structured activity log from Column AJ
-function parseActivityLogColumn(client: ClientData | BookedClientData): ActivityItem[] {
-  const activities: ActivityItem[] = [];
-  const log = client.lastActivityLog;
-  const handlerName = client.clientHandler;
-  
-  if (!log) return activities;
-  
-  const lines = log.split('\n').filter(Boolean);
-  
-  lines.forEach((line, index) => {
-    // Format: "MM/DD/YYYY HH:MM:SS | TYPE | Details"
-    const parts = line.split(' | ');
-    if (parts.length < 3) return;
+const handleRefreshNews = async () => {
+  setIsRefreshing(true);
+  try {
+    // Trigger cache invalidation events to force fresh fetch
+    notifyCacheUpdate('clients');
+    notifyCacheUpdate('booked-clients-invalidate');
     
-    const [timestampStr, activityType, ...detailParts] = parts;
-    const details = detailParts.join(' | '); // Rejoin in case details contain |
+    // Dispatch events to trigger refetch in hooks
+    window.dispatchEvent(new CustomEvent('clients-invalidate'));
+    window.dispatchEvent(new CustomEvent('booked-clients-invalidate'));
     
-    // Parse timestamp
-    const match = timestampStr.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/);
-    if (!match) return;
-    
-    const [, month, day, year, hours, mins, secs] = match.map(Number);
-    const timestamp = new Date(year, month - 1, day, hours, mins, secs);
-    
-    if (isNaN(timestamp.getTime())) return;
-    
-    // Map activity type
-    const type = mapActivityType(activityType);
-    
-    activities.push({
-      id: `log-${client.registeredDateTimeAD}-${index}`,
-      type,
-      clientName: client.clientName || 'Unknown',
-      clientId: client.registeredDateTimeAD || '',
-      handlerName,
-      description: getActivityDescription(activityType, details),
-      details,
-      timestamp,
-      relativeTime: getRelativeTime(timestamp),
-    });
-  });
-  
-  return activities;
-}
-
-function mapActivityType(typeStr: string): ActivityType {
-  switch (typeStr.toUpperCase()) {
-    case 'STATUS_CHANGE': return 'status';
-    case 'COMMENT': return 'comment';
-    case 'PAYMENT': return 'payment';
-    case 'CALL': return 'call';
-    case 'CLIENT_ADDED': return 'client_added';
-    case 'QUOTATION':
-    case 'FINAL_QUOTATION': return 'status';
-    default: 
-      if (typeStr.includes('BOOKED')) return 'booking';
-      return 'status';
+    toast.success("News refreshed!");
+  } catch (error) {
+    toast.error("Failed to refresh news");
+  } finally {
+    setTimeout(() => setIsRefreshing(false), 1000);
   }
-}
+};
 ```
 
-### 7. Backend: Fetch Activity Log Before Updates
-
-Each update function needs to first fetch the current value of Column AJ before appending:
-
+**Updated Code**:
 ```typescript
-// Helper to get current activity log
-async function getCurrentActivityLog(
-  accessToken: string,
-  spreadsheetId: string,
-  sheetName: string,
-  rowNumber: number
-): Promise<string> {
-  const range = encodeURIComponent(`'${sheetName}'!AJ${rowNumber}`);
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
-  
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  
-  if (!response.ok) return '';
-  
-  const data = await response.json();
-  return data.values?.[0]?.[0] || '';
-}
+const handleRefreshNews = async () => {
+  setIsRefreshing(true);
+  try {
+    // Trigger cache invalidation events to force fresh fetch from Google Sheets
+    notifyCacheUpdate('clients-invalidate');
+    notifyCacheUpdate('booked-clients-invalidate');
+    
+    toast.success("News refreshed!");
+  } catch (error) {
+    toast.error("Failed to refresh news");
+  } finally {
+    // Wait a bit longer for the actual data refresh to complete
+    setTimeout(() => setIsRefreshing(false), 2000);
+  }
+};
 ```
 
----
-
-## Files to Modify
-
-| File | Changes |
-|------|---------|
-| `supabase/functions/google-sheets/index.ts` | 1. Add `lastActivityLog` (index 35) to all mapRow functions<br>2. Create `appendActivityLog` helper<br>3. Create `getCurrentActivityLog` helper<br>4. Update `updateClientStatus` to log activity<br>5. Update `addClientComment` to log activity<br>6. Update `addBookedClientComment` to log activity<br>7. Update `addPayment` to log activity<br>8. Update `logCallAttempt` to log activity<br>9. Update `updateClientQuotation` to log activity<br>10. Update `updateFinalQuotation` to log activity<br>11. Update `addClient` to initialize activity log<br>12. Update `updateClientHandler` to log activity |
-| `src/lib/sheets-api.ts` | Add `lastActivityLog?: string` to `ClientData` interface |
-| `src/lib/activity-utils.ts` | 1. Add `parseActivityLogColumn` function<br>2. Update `parseActivities` to prioritize Column AJ data<br>3. Keep existing parsers as fallback for old data |
+**Why simplified**: The `notifyCacheUpdate` function already dispatches `cache-updated` CustomEvents - no need to dispatch additional raw events. Using the proper `clients-invalidate` type ensures the hook's handler picks it up.
 
 ---
 
-## Expected Activity Log Format
+## Summary of Changes
 
-```text
-Column AJ Example:
-01/31/2026 10:15:45 | STATUS_CHANGE | BOOKED
-01/31/2026 09:30:12 | COMMENT | Called back for follow-up discussion
-01/30/2026 15:45:00 | PAYMENT | NPR 50,000 received via ESEWA
-01/30/2026 14:20:30 | CALL | 2ND DIRECT CALL
-01/29/2026 11:00:00 | CLIENT_ADDED | New registration from Instagram
-```
-
-**Benefits:**
-- Single column for all activities = easy filtering
-- Consistent timestamp format = accurate sorting
-- Newest entry on TOP = instant latest activity lookup
-- Type included = filtering by activity type
+| File | Change |
+|------|--------|
+| `src/hooks/useCachedData.ts` | Add handler for `clients-invalidate` event type to trigger `refreshData()` |
+| `src/lib/cache-manager.ts` | Add `clients-invalidate` to the valid type union for TypeScript |
+| `src/components/suite/DesktopSuiteLanding.tsx` | Use `clients-invalidate` instead of plain `clients` in refresh handler |
 
 ---
 
-## Migration Strategy
+## Expected Result After Fix
 
-1. **New clients**: Column AJ initialized on registration
-2. **Existing clients**: Column AJ starts empty, gets populated as activities happen
-3. **Fallback**: If Column AJ is empty, the system falls back to parsing old columns (W, Y, AC, AE)
-
-This ensures backward compatibility while building the new activity log over time.
-
----
-
-## Expected Result
-
-1. Every action (status change, comment, payment, call, etc.) writes to Column AJ
-2. Breaking News reads from Column AJ first (accurate timestamps)
-3. Falls back to parsing other columns if AJ is empty
-4. Activities are now guaranteed to be in chronological order
-5. Can filter activities by type in the future using the log data
+1. User adds a comment to a client
+2. Backend writes to Column AC (comments) AND Column AJ (activity log)
+3. User clicks "Refresh" in Breaking News
+4. Both `useCachedData` and `useBookedCachedData` trigger `refreshData()`
+5. Fresh data is fetched from Google Sheets (including new comments)
+6. Activity parser finds the new comment in Column AJ (or fallback to Column AC)
+7. New comment appears in Breaking News feed with correct timestamp and relative time
