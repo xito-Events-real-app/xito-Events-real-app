@@ -1,289 +1,299 @@
 
-# Plan: Breaking News Section with Tab Navigation on Xito Business Suite
+# Plan: Add Last Activity Timestamp Log (Column AJ) for Accurate Activity Ordering
 
-## Overview
+## Problem
 
-Add a new **"Breaking News"** section to the Xito Business Suite homepage that shows recent activity across the entire system. The page will have a tab-based navigation at the bottom with two sections:
-- **HOME** - Current content (modules, quick add, today's events)
-- **NEWS** - Activity feed showing all recent actions day-wise
+The "Breaking News" section is not showing activities in proper chronological order because:
+1. Timestamps are scattered across different columns (W, Y, AC, AE) with inconsistent formats
+2. Some activities have no reliable timestamp at all
+3. Parsing timestamps from existing columns is error-prone
 
-## Activity Types to Track
+## Solution
 
-The news feed will aggregate and display these activities from client data:
+Add a new **Column AJ: Last Activity Timestamp** to both sheets:
+- `CLIENT TRACKER!AJ`
+- `BOOKED CLIENTS!AJ`
 
-| Activity Type | Source Field | How to Detect |
-|--------------|--------------|---------------|
-| New Client Added | `registeredDateTimeAD` | Parse timestamp from Column A |
-| Status Change | `statusLog` | Parse each line with timestamp |
-| Comment Added | `comments` | Split by `\|\|\|`, parse timestamps |
-| Payment Recorded | `paymentsMade` | Parse payment entries with dates |
-| Call Logged | `callLog` | Parse call entries with timestamps |
-| Quotation Sent | `quotationData` | When status changes to QUOTATION SENT |
-| Client Booked | `statusLog` | When status contains "BOOKED" |
-| Form Filled | Client contact form submissions (future enhancement) |
+This column will be the **single source of truth** for activity ordering in the Breaking News feed.
 
-## UI Design
-
-### Bottom Tab Navigation (Mobile)
+### Log Format
 ```text
-+------------------------------------------+
-|                                          |
-|          [ Current Content ]             |
-|                                          |
-+------------------------------------------+
-|   [  HOME  ]         [  NEWS  ]          |   <-- Fixed bottom tabs
-+------------------------------------------+
+01/31/2026 10:15:45 | STATUS_CHANGE | BOOKED
+01/31/2026 09:30:12 | COMMENT | Called back for follow-up
+01/30/2026 15:45:00 | PAYMENT | NPR 50,000 received
+01/30/2026 14:20:30 | CALL | 2ND DIRECT CALL
+01/29/2026 11:00:00 | CLIENT_ADDED | New registration
 ```
 
-### News Tab Content Structure
-```text
-+------------------------------------------+
-|  Breaking News                           |
-|  Real-time updates from your business    |
-+------------------------------------------+
-|  TODAY - Magh 17, 2082                   |
-|  ├─ Payment received from Sargat Thapa   |
-|  │  NPR 50,000/- as ADVANCE • 2:30 PM    |
-|  ├─ New comment on Ram Thapa             |
-|  │  "Called, will confirm tomorrow"      |
-|  └─ Status changed: Hari Sharma          |
-|     QUOTATION SENT → BOOKED • 11:15 AM   |
-+------------------------------------------+
-|  YESTERDAY - Magh 16, 2082               |
-|  ├─ New client added: Shyam Bahadur      |
-|  │  Source: Instagram • 5:45 PM          |
-|  └─ Call logged: Gopal Thapa             |
-|     2nd DIRECT CALL • 3:20 PM            |
-+------------------------------------------+
-|  Magh 15, 2082                           |
-|  └─ ...more activities...                |
-+------------------------------------------+
-```
+Each line contains:
+- **Timestamp**: `MM/DD/YYYY HH:MM:SS` (Nepal timezone)
+- **Activity Type**: `STATUS_CHANGE`, `COMMENT`, `PAYMENT`, `CALL`, `QUOTATION`, `CLIENT_ADDED`, `FINAL_QUOTATION`, `HANDLER_CHANGE`, etc.
+- **Details**: Brief description of the activity
 
-### Activity Card Designs
+---
 
-Each activity will be a compact card with:
-- **Icon** - Colored by activity type (payment=green, comment=blue, status=purple, etc.)
-- **Client name** - Clickable link to client detail page
-- **Activity details** - What happened
-- **Timestamp** - Relative time (2 hours ago) or absolute if older
+## Technical Changes
 
-### Color Scheme by Activity Type
-- **Payment**: Emerald/Green gradient
-- **Comment**: Blue
-- **Status Change**: Purple
-- **New Client**: Violet
-- **Call Logged**: Amber
-- **Booking**: Teal
+### 1. Backend: Update Data Interfaces
 
-## Technical Implementation
+**File:** `supabase/functions/google-sheets/index.ts`
 
-### 1. Create Activity Parsing Utility
-
-**New file:** `src/lib/activity-utils.ts`
+Add `lastActivityLog` (Column AJ, index 35) to all data mapping functions:
 
 ```typescript
-export interface ActivityItem {
-  id: string;
-  type: 'payment' | 'comment' | 'status' | 'client_added' | 'call' | 'booking';
-  clientName: string;
-  clientId: string;  // registeredDateTimeAD for navigation
-  description: string;
-  details?: string;
-  timestamp: Date;
-  dateBS?: string;
-  icon: string;
-  color: string;
-}
-
-// Parse all activities from client data
-export function parseActivities(
-  clients: ClientData[], 
-  bookedClients: BookedClientData[]
-): ActivityItem[];
-
-// Group activities by day
-export function groupActivitiesByDay(
-  activities: ActivityItem[]
-): Map<string, ActivityItem[]>;
+// In mapRowToClient and getClients functions
+lastActivityLog: row[35] || '',  // Column AJ - Activity timestamp log
 ```
 
-### 2. Create News Tab Component
+### 2. Backend: Create Helper Function for Activity Logging
 
-**New file:** `src/components/suite/SuiteNewsFeed.tsx`
+**File:** `supabase/functions/google-sheets/index.ts`
 
-- Displays activities grouped by day
-- Scrollable list with pull-to-refresh
-- Each activity card links to client detail page
-- Uses existing parsing utilities from `client-card-utils.ts`
-
-### 3. Create Activity Card Component
-
-**New file:** `src/components/suite/ActivityCard.tsx`
-
-- Compact card design matching existing UI
-- Icon + client name + description + timestamp
-- Click navigates to client detail
-
-### 4. Update MobileSuiteLanding with Tabs
-
-**File:** `src/components/suite/MobileSuiteLanding.tsx`
-
-Replace the current full-page layout with a tabbed interface:
+Create a reusable function to append activity entries:
 
 ```typescript
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-export function MobileSuiteLanding() {
-  const [activeTab, setActiveTab] = useState<'home' | 'news'>('home');
+async function appendActivityLog(
+  accessToken: string,
+  spreadsheetId: string,
+  sheetName: 'CLIENT TRACKER' | 'BOOKED CLIENTS',
+  rowNumber: number,
+  activityType: string,
+  details: string,
+  existingLog: string
+): Promise<string> {
+  // Generate Nepal timezone timestamp
+  const now = new Date();
+  const nepalOffset = 5 * 60 + 45; // 5:45 in minutes
+  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const nepalTime = new Date(utcTime + (nepalOffset * 60000));
   
-  return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Header - stays fixed */}
-      <Header />
-      
-      {/* Tab Content - scrollable */}
-      <div className="flex-1 overflow-hidden">
-        {activeTab === 'home' && <HomeContent />}
-        {activeTab === 'news' && <SuiteNewsFeed />}
-      </div>
-      
-      {/* Bottom Tab Navigation - fixed */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 safe-bottom z-50">
-        <div className="flex items-center justify-center gap-4 py-2">
-          <TabButton 
-            icon={Home} 
-            label="Home" 
-            active={activeTab === 'home'}
-            onClick={() => setActiveTab('home')}
-          />
-          <TabButton 
-            icon={Newspaper} 
-            label="News" 
-            active={activeTab === 'news'}
-            onClick={() => setActiveTab('news')}
-            badge={newActivitiesCount}  // Optional: unread count
-          />
-        </div>
-      </div>
-    </div>
+  const timestamp = `${String(nepalTime.getMonth() + 1).padStart(2, '0')}/${String(nepalTime.getDate()).padStart(2, '0')}/${nepalTime.getFullYear()} ${String(nepalTime.getHours()).padStart(2, '0')}:${String(nepalTime.getMinutes()).padStart(2, '0')}:${String(nepalTime.getSeconds()).padStart(2, '0')}`;
+  
+  const newEntry = `${timestamp} | ${activityType} | ${details}`;
+  const updatedLog = existingLog ? `${newEntry}\n${existingLog}` : newEntry;
+  
+  // Write to Column AJ
+  const range = encodeURIComponent(`'${sheetName}'!AJ${rowNumber}`);
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  
+  await fetch(updateUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [[updatedLog]] }),
+  });
+  
+  return updatedLog;
+}
+```
+
+### 3. Backend: Update All Activity-Generating Functions
+
+Add activity logging to each function that modifies client data:
+
+| Function | Activity Type | Details Format |
+|----------|--------------|----------------|
+| `updateClientStatus` | `STATUS_CHANGE` | Status name (e.g., "BOOKED") |
+| `addClientComment` / `addBookedClientComment` | `COMMENT` | First 50 chars of comment |
+| `addPayment` | `PAYMENT` | "NPR X,XXX received via BANK" |
+| `logCallAttempt` | `CALL` | "1ST DIRECT CALL" |
+| `updateClientQuotation` | `QUOTATION` | Package name and amount |
+| `updateFinalQuotation` | `FINAL_QUOTATION` | Package name and amount |
+| `addClient` | `CLIENT_ADDED` | "New registration" |
+| `updateClientHandler` | `HANDLER_CHANGE` | "Assigned to HandlerName" |
+| `updateClientMindset` | `MINDSET` | Mindset value |
+
+Example for `updateClientStatus`:
+```typescript
+async function updateClientStatus(...) {
+  // ... existing status update logic ...
+  
+  // Append to activity log (Column AJ)
+  await appendActivityLog(
+    accessToken,
+    spreadsheetId,
+    'CLIENT TRACKER',
+    actualRowNumber,
+    'STATUS_CHANGE',
+    newStatus,
+    existingActivityLog // Need to fetch this first
   );
+  
+  return { success: true, ... };
 }
 ```
 
-### 5. Create Custom Hook for Activities
+### 4. Backend: Update `addClient` to Initialize Activity Log
 
-**New file:** `src/hooks/useActivityFeed.ts`
+**File:** `supabase/functions/google-sheets/index.ts`
+
+When a new client is added, initialize Column AJ with the first entry:
 
 ```typescript
-export function useActivityFeed() {
-  const { clients } = useCachedData();
-  const { clients: bookedClients } = useBookedCachedData();
-  
-  const activities = useMemo(() => {
-    return parseActivities(clients, bookedClients);
-  }, [clients, bookedClients]);
-  
-  const groupedByDay = useMemo(() => {
-    return groupActivitiesByDay(activities);
-  }, [activities]);
-  
-  return { activities, groupedByDay, isLoading };
+// In addClient function, after creating row data
+const activityLog = `${timestamp} | CLIENT_ADDED | New registration from ${source}`;
+
+// Add to row values at index 35 (Column AJ)
+rowValues[35] = activityLog;
+```
+
+### 5. Frontend: Update Data Types
+
+**File:** `src/lib/sheets-api.ts`
+
+Add `lastActivityLog` to `ClientData` interface:
+
+```typescript
+export interface ClientData {
+  // ... existing fields ...
+  serviceTypes?: string;           // Column AI
+  lastActivityLog?: string;        // Column AJ - Activity timestamp log
+  _source?: 'tracker' | 'booked';
 }
 ```
 
-### 6. Update Desktop Suite Landing
+### 6. Frontend: Update Activity Parser to Use Column AJ
 
-**File:** `src/components/suite/DesktopSuiteLanding.tsx`
+**File:** `src/lib/activity-utils.ts`
 
-Add a sidebar panel or dedicated section for news feed on desktop view.
+Rewrite `parseActivities` to use the new structured log:
 
-## File Structure
+```typescript
+// Parse structured activity log from Column AJ
+function parseActivityLogColumn(client: ClientData | BookedClientData): ActivityItem[] {
+  const activities: ActivityItem[] = [];
+  const log = client.lastActivityLog;
+  const handlerName = client.clientHandler;
+  
+  if (!log) return activities;
+  
+  const lines = log.split('\n').filter(Boolean);
+  
+  lines.forEach((line, index) => {
+    // Format: "MM/DD/YYYY HH:MM:SS | TYPE | Details"
+    const parts = line.split(' | ');
+    if (parts.length < 3) return;
+    
+    const [timestampStr, activityType, ...detailParts] = parts;
+    const details = detailParts.join(' | '); // Rejoin in case details contain |
+    
+    // Parse timestamp
+    const match = timestampStr.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/);
+    if (!match) return;
+    
+    const [, month, day, year, hours, mins, secs] = match.map(Number);
+    const timestamp = new Date(year, month - 1, day, hours, mins, secs);
+    
+    if (isNaN(timestamp.getTime())) return;
+    
+    // Map activity type
+    const type = mapActivityType(activityType);
+    
+    activities.push({
+      id: `log-${client.registeredDateTimeAD}-${index}`,
+      type,
+      clientName: client.clientName || 'Unknown',
+      clientId: client.registeredDateTimeAD || '',
+      handlerName,
+      description: getActivityDescription(activityType, details),
+      details,
+      timestamp,
+      relativeTime: getRelativeTime(timestamp),
+    });
+  });
+  
+  return activities;
+}
 
-```text
-src/
-├── lib/
-│   └── activity-utils.ts          # NEW - Activity parsing logic
-├── hooks/
-│   └── useActivityFeed.ts         # NEW - Hook for activity data
-├── components/
-│   └── suite/
-│       ├── MobileSuiteLanding.tsx # MODIFY - Add tabs
-│       ├── DesktopSuiteLanding.tsx# MODIFY - Add news panel
-│       ├── SuiteNewsFeed.tsx      # NEW - News feed component
-│       ├── ActivityCard.tsx       # NEW - Individual activity card
-│       ├── SuiteHomeContent.tsx   # NEW - Extracted home content
-│       └── index.ts               # MODIFY - Export new components
+function mapActivityType(typeStr: string): ActivityType {
+  switch (typeStr.toUpperCase()) {
+    case 'STATUS_CHANGE': return 'status';
+    case 'COMMENT': return 'comment';
+    case 'PAYMENT': return 'payment';
+    case 'CALL': return 'call';
+    case 'CLIENT_ADDED': return 'client_added';
+    case 'QUOTATION':
+    case 'FINAL_QUOTATION': return 'status';
+    default: 
+      if (typeStr.includes('BOOKED')) return 'booking';
+      return 'status';
+  }
+}
 ```
 
-## Files to Create
+### 7. Backend: Fetch Activity Log Before Updates
 
-| File | Purpose |
-|------|---------|
-| `src/lib/activity-utils.ts` | Parse activities from client data, group by day |
-| `src/hooks/useActivityFeed.ts` | Custom hook to fetch and process activities |
-| `src/components/suite/SuiteNewsFeed.tsx` | Main news feed component with day groupings |
-| `src/components/suite/ActivityCard.tsx` | Individual activity card component |
-| `src/components/suite/SuiteHomeContent.tsx` | Extracted current home content for tab |
+Each update function needs to first fetch the current value of Column AJ before appending:
+
+```typescript
+// Helper to get current activity log
+async function getCurrentActivityLog(
+  accessToken: string,
+  spreadsheetId: string,
+  sheetName: string,
+  rowNumber: number
+): Promise<string> {
+  const range = encodeURIComponent(`'${sheetName}'!AJ${rowNumber}`);
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  
+  if (!response.ok) return '';
+  
+  const data = await response.json();
+  return data.values?.[0]?.[0] || '';
+}
+```
+
+---
 
 ## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/components/suite/MobileSuiteLanding.tsx` | Add bottom tab navigation, refactor to use tabs |
-| `src/components/suite/DesktopSuiteLanding.tsx` | Add news panel/sidebar |
-| `src/components/suite/index.ts` | Export new components |
+| `supabase/functions/google-sheets/index.ts` | 1. Add `lastActivityLog` (index 35) to all mapRow functions<br>2. Create `appendActivityLog` helper<br>3. Create `getCurrentActivityLog` helper<br>4. Update `updateClientStatus` to log activity<br>5. Update `addClientComment` to log activity<br>6. Update `addBookedClientComment` to log activity<br>7. Update `addPayment` to log activity<br>8. Update `logCallAttempt` to log activity<br>9. Update `updateClientQuotation` to log activity<br>10. Update `updateFinalQuotation` to log activity<br>11. Update `addClient` to initialize activity log<br>12. Update `updateClientHandler` to log activity |
+| `src/lib/sheets-api.ts` | Add `lastActivityLog?: string` to `ClientData` interface |
+| `src/lib/activity-utils.ts` | 1. Add `parseActivityLogColumn` function<br>2. Update `parseActivities` to prioritize Column AJ data<br>3. Keep existing parsers as fallback for old data |
 
-## Activity Parsing Logic
+---
 
-### From StatusLog (Column W)
+## Expected Activity Log Format
+
 ```text
-"JUST ENQUIRED - 01/30/2026, 10:15:00
-QUOTATION SENT : REVIEW PENDING - 01/30/2026, 14:30:00
-BOOKED - 01/31/2026, 09:00:00"
+Column AJ Example:
+01/31/2026 10:15:45 | STATUS_CHANGE | BOOKED
+01/31/2026 09:30:12 | COMMENT | Called back for follow-up discussion
+01/30/2026 15:45:00 | PAYMENT | NPR 50,000 received via ESEWA
+01/30/2026 14:20:30 | CALL | 2ND DIRECT CALL
+01/29/2026 11:00:00 | CLIENT_ADDED | New registration from Instagram
 ```
-Each line = 1 status change activity
 
-### From Comments (Column AC)
-```text
-"Called back, interested|||[01/30/2026 15:30]Will send quotation tomorrow|||[01/31/2026 10:00]"
-```
-Each `|||` segment = 1 comment activity
+**Benefits:**
+- Single column for all activities = easy filtering
+- Consistent timestamp format = accurate sorting
+- Newest entry on TOP = instant latest activity lookup
+- Type included = filtering by activity type
 
-### From PaymentsMade (Column AE)
-```text
-"NPR 50,000/- AS ADVANCE ON SAT 2082-10-16 IN ESEWA
-NPR 25,000/- AS PARTIAL ON SUN 2082-10-17 IN CASH"
-```
-Each line = 1 payment activity
+---
 
-### From CallLog (Column Y)
-```text
-"1ST DIRECT CALL AT 3:45 PM ON 2025-01-18
-2ND WHATSAPP CALL AT 10:30 AM ON 2025-01-19"
-```
-Each line = 1 call logged activity
+## Migration Strategy
 
-## Expected User Flow
+1. **New clients**: Column AJ initialized on registration
+2. **Existing clients**: Column AJ starts empty, gets populated as activities happen
+3. **Fallback**: If Column AJ is empty, the system falls back to parsing old columns (W, Y, AC, AE)
 
-1. User opens Xito Business Suite (/)
-2. By default, sees **HOME** tab with current content
-3. Taps **NEWS** tab at bottom
-4. Sees chronological feed of all activities grouped by day
-5. Taps on any activity card → navigates to that client's detail page
-6. Can scroll through historical activities (last 7-14 days)
+This ensures backward compatibility while building the new activity log over time.
 
-## Performance Considerations
+---
 
-- Parse activities only when client data changes (memoized)
-- Limit display to last 14 days or 100 activities initially
-- Virtual scrolling for long lists (if needed)
-- Activities are derived from already-cached data (no extra API calls)
+## Expected Result
 
-## Future Enhancements
-
-- Push notifications for new activities
-- Filter by activity type
-- Search within activities
-- Mark activities as read
-- Real-time updates via Supabase Realtime (if connected)
+1. Every action (status change, comment, payment, call, etc.) writes to Column AJ
+2. Breaking News reads from Column AJ first (accurate timestamps)
+3. Falls back to parsing other columns if AJ is empty
+4. Activities are now guaranteed to be in chronological order
+5. Can filter activities by type in the future using the log data
