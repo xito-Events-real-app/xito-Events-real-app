@@ -200,7 +200,8 @@ export function MasterSearchButton() {
     saveSearch(query);
     navigate(getClientDetailPath(client), {
       state: {
-        from: 'search',
+        from: '/',  // Suite Landing - actual path for back navigation
+        searchContext: 'search',  // Flag for sequential navigation feature
         searchQuery: query,
         resultIds: results.map(r => getClientNavigationId(r)),
         currentIndex: results.indexOf(client)

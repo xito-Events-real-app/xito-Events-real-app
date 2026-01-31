@@ -43,7 +43,7 @@ export function ActivityCard({ activity }: ActivityCardProps) {
   const handleClick = () => {
     if (activity.clientId) {
       const path = getClientDetailPath({ registeredDateTimeAD: activity.clientId });
-      navigate(path);
+      navigate(path, { state: { from: '/' } });  // Suite Landing path for back navigation
     }
   };
   
