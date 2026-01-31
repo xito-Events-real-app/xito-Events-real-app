@@ -1137,7 +1137,7 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
       const quotationData = lines.join('\n');
       
       // Save to Column V
-      await updateClientQuotation(client.rowNumber, quotationData);
+      await updateClientQuotation(client.rowNumber, quotationData, client.registeredDateTimeAD);
       
       // Update local state
       setCurrentQuotationData(quotationData);

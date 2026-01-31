@@ -716,7 +716,7 @@ const ClientDetail = () => {
     setIsSavingQuotation(true);
     try {
       // Save quotation data
-      await updateClientQuotation(client.rowNumber, quotationData);
+      await updateClientQuotation(client.rowNumber, quotationData, client.registeredDateTimeAD);
       setCurrentQuotationData(quotationData);
       
       // Update status to QUOTATION SENT
