@@ -1724,6 +1724,10 @@ async function addClient(accessToken: string, spreadsheetId: string, clientData:
   const nepalTime = new Date(now.getTime() + nepalOffset);
   const nepalTimeStr = nepalTime.toISOString().replace('T', ' ').substring(0, 19);
   const selectedStatus = (clientData.initialStatus as string) || 'JUST ENQUIRED';
+  
+  // Generate Nepal timezone timestamp in correct format (MM/DD/YYYY HH:MM:SS) for activity log
+  // Frontend parser expects this format, NOT YYYY/MM/DD
+  const activityLogTimestamp = `${String(nepalTime.getMonth() + 1).padStart(2, '0')}/${String(nepalTime.getDate()).padStart(2, '0')}/${nepalTime.getFullYear()} ${String(nepalTime.getHours()).padStart(2, '0')}:${String(nepalTime.getMinutes()).padStart(2, '0')}:${String(nepalTime.getSeconds()).padStart(2, '0')}`;
   const initialStatusLog = `${selectedStatus.toUpperCase()} [${nepalTimeStr}]`;
   
   const values = [[
@@ -1762,7 +1766,7 @@ async function addClient(accessToken: string, spreadsheetId: string, clientData:
     '',                                      // AG: remaining_payment (empty for new)
     clientData.companyName || '',            // AH: company_name
     clientData.serviceTypes || '',           // AI: service_types (multi, "/" separated)
-    `${nepalTimeStr.replace('T', ' ').substring(0, 19).replace(/-/g, '/')} | CLIENT_ADDED | New registration from ${clientData.source || 'Unknown'}`, // AJ: Initial activity log
+    `${activityLogTimestamp} | CLIENT_ADDED | New registration from ${clientData.source || 'Unknown'}`, // AJ: Initial activity log
   ]];
 
   const range = encodeURIComponent("'CLIENT TRACKER'!A2:AJ2");
