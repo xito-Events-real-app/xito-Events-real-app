@@ -1,5 +1,6 @@
 import { Users } from "lucide-react";
 import { HandlerActivitySection } from "./HandlerActivitySection";
+import { HandlerStarClients } from "./HandlerStarClients";
 
 // Hardcoded handlers with their color schemes
 const HANDLERS = [
@@ -22,11 +23,16 @@ export function HandlerActivityGrid() {
       {/* Handler Cards Grid - 3 columns on desktop, 1 on mobile */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {HANDLERS.map(handler => (
-          <HandlerActivitySection
-            key={handler.name}
-            handlerName={handler.name}
-            colorScheme={handler.colorScheme}
-          />
+          <div key={handler.name} className="space-y-0">
+            <HandlerActivitySection
+              handlerName={handler.name}
+              colorScheme={handler.colorScheme}
+            />
+            <HandlerStarClients 
+              handlerName={handler.name}
+              colorScheme={handler.colorScheme}
+            />
+          </div>
         ))}
       </div>
     </div>

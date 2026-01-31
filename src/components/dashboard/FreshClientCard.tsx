@@ -5,6 +5,7 @@ import { ClientData, updateClientStatus, updateClientHandler, logCallAttempt, ge
 import { getHandlerInitials, parseEventDetails, formatLocationDisplay } from "@/lib/nepali-months";
 import { getClientDetailPath } from "@/lib/client-navigation";
 import { cn } from "@/lib/utils";
+import { StarRating } from "@/components/ui/star-rating";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1698,13 +1699,18 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
 
         {/* Client Details */}
         <div className="flex-1 min-w-0">
-          {/* Client Name - Clickable to navigate to detail */}
-          <button 
-            onClick={() => navigate(getClientDetailPath(client), { state: { from: routerLocation.pathname } })}
-            className="text-sm font-semibold text-foreground truncate hover:text-primary transition-colors text-left w-full"
-          >
-            {client.clientName}
-          </button>
+          {/* Client Name - Clickable to navigate to detail + Star Rating */}
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => navigate(getClientDetailPath(client), { state: { from: routerLocation.pathname } })}
+              className="text-sm font-semibold text-foreground truncate hover:text-primary transition-colors text-left"
+            >
+              {client.clientName}
+            </button>
+            {parseInt(client.priority || '0') > 0 && (
+              <StarRating value={parseInt(client.priority || '0')} readonly size="sm" />
+            )}
+          </div>
 
           {/* Event Details */}
           {events.length > 0 && (

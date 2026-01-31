@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData';
+  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -1348,7 +1348,7 @@ async function updateClientStatus(accessToken: string, spreadsheetId: string, ro
 // NOTE: This returns ONLY clients from CLIENT TRACKER (which now excludes BOOKED clients after migration)
 // For unified data including BOOKED clients, use getAllClientsFromBothSheets
 async function getClients(accessToken: string, spreadsheetId: string, limit = 50) {
-  const range = encodeURIComponent("'CLIENT TRACKER'!A2:AJ" + (limit + 1));
+  const range = encodeURIComponent("'CLIENT TRACKER'!A2:AK" + (limit + 1));
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   const response = await fetch(url, {
@@ -1402,6 +1402,7 @@ async function getClients(accessToken: string, spreadsheetId: string, limit = 50
     companyName: row[33] || '',           // Column AH - Company name
     serviceTypes: row[34] || '',          // Column AI - Service types (multi, "/" separated)
     lastActivityLog: row[35] || '',       // Column AJ - Last activity timestamp log
+    priority: row[36] || '',              // Column AK - Star rating (1-5)
     _source: 'tracker' as const,          // Source indicator for unified queries
   }));
 }
@@ -1454,11 +1455,12 @@ async function getSingleClient(accessToken: string, spreadsheetId: string, regis
     companyName: row[33] || '',
     serviceTypes: row[34] || '',
     lastActivityLog: row[35] || '',       // Column AJ - Last activity timestamp log
+    priority: row[36] || '',              // Column AK - Star rating (1-5)
     _source: source,
   });
 
   // PRIORITY: Search BOOKED CLIENTS FIRST (booked wins over tracker duplicates)
-  const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:AJ2000");
+  const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:AK2000");
   const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}`;
   
   const bookedResponse = await fetch(bookedUrl, {
@@ -1477,7 +1479,7 @@ async function getSingleClient(accessToken: string, spreadsheetId: string, regis
   }
 
   // Not found in BOOKED CLIENTS, search CLIENT TRACKER
-  const trackerRange = encodeURIComponent("'CLIENT TRACKER'!A2:AJ2000");
+  const trackerRange = encodeURIComponent("'CLIENT TRACKER'!A2:AK2000");
   const trackerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}`;
   
   const trackerResponse = await fetch(trackerUrl, {
@@ -2536,6 +2538,90 @@ async function updateFinalQuotation(
   await appendActivityLog(accessToken, spreadsheetId, targetSheet as 'CLIENT TRACKER' | 'BOOKED CLIENTS', actualRowNumber, 'FINAL_QUOTATION', amountSummary);
 
   return { success: true, finalQuotation, actualRowNumber, targetSheet };
+}
+
+// ============= UPDATE CLIENT PRIORITY =============
+// Update priority rating (Column AK) - Star rating 1-5
+// Uses intelligent sheet routing to find client in either CLIENT TRACKER or BOOKED CLIENTS
+async function updateClientPriority(
+  accessToken: string,
+  spreadsheetId: string,
+  rowNumber: number,
+  priority: string,
+  registeredDateTimeAD?: string
+) {
+  if (!rowNumber || rowNumber < 2) {
+    throw new Error('Valid rowNumber is required for updating priority');
+  }
+
+  // Determine which sheet the client is in and find the correct row
+  let targetSheet: 'CLIENT TRACKER' | 'BOOKED CLIENTS' = 'CLIENT TRACKER';
+  let actualRowNumber = rowNumber;
+
+  if (registeredDateTimeAD) {
+    // Search BOOKED CLIENTS first (it's the source of truth for booked clients)
+    const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:A2000");
+    const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}`;
+
+    const bookedResponse = await fetch(bookedUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (bookedResponse.ok) {
+      const bookedData = await bookedResponse.json();
+      if (bookedData.values) {
+        const foundIndex = bookedData.values.findIndex((row: string[]) => row[0]?.trim() === registeredDateTimeAD.trim());
+        if (foundIndex !== -1) {
+          targetSheet = 'BOOKED CLIENTS';
+          actualRowNumber = foundIndex + 2;
+          console.log(`[PRIORITY] Found in BOOKED CLIENTS at row ${actualRowNumber}`);
+        }
+      }
+    }
+
+    // If not found in BOOKED CLIENTS, search CLIENT TRACKER
+    if (targetSheet === 'CLIENT TRACKER') {
+      const trackerRange = encodeURIComponent("'CLIENT TRACKER'!A2:A2000");
+      const trackerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}`;
+
+      const trackerResponse = await fetch(trackerUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (trackerResponse.ok) {
+        const trackerData = await trackerResponse.json();
+        if (trackerData.values) {
+          const foundIndex = trackerData.values.findIndex((row: string[]) => row[0]?.trim() === registeredDateTimeAD.trim());
+          if (foundIndex !== -1) {
+            actualRowNumber = foundIndex + 2;
+            console.log(`[PRIORITY] Found in CLIENT TRACKER at row ${actualRowNumber}`);
+          }
+        }
+      }
+    }
+  }
+
+  // Update Column AK (priority) - Column index 36
+  const range = encodeURIComponent(`'${targetSheet}'!AK${actualRowNumber}`);
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [[priority]] }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (updateClientPriority):', response.status, errorText);
+    throw new Error(`Failed to update priority: ${response.status}`);
+  }
+
+  console.log(`[PRIORITY] Updated ${targetSheet} row ${actualRowNumber} to ${priority} stars`);
+  return { success: true };
 }
 
 // Add payment entry to Columns AE, AF, AG
@@ -3906,6 +3992,7 @@ async function getBookedClients(accessToken: string, spreadsheetId: string, limi
       companyName: row[33] || '',           // Column AH
       serviceTypes: row[34] || '',          // Column AI
       lastActivityLog: row[35] || '',       // Column AJ - Activity timestamp log
+      priority: row[36] || '',              // Column AK - Star rating (1-5)
       bookedDateTime: '',                   // Not stored separately
     };
   });
@@ -5220,6 +5307,16 @@ Deno.serve(async (req) => {
         break;
       case 'getPublicFormData':
         result = await getPublicFormData(accessToken, spreadsheetId);
+        break;
+      case 'updateClientPriority':
+        if (!data) throw new Error('data is required for updateClientPriority');
+        result = await updateClientPriority(
+          accessToken,
+          spreadsheetId,
+          data.rowNumber as number,
+          data.priority as string,
+          data.registeredDateTimeAD as string | undefined
+        );
         break;
       default:
         throw new Error(`Unknown action: ${action}`);
