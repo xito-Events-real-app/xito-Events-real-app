@@ -1181,7 +1181,7 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
     setIsSavingAdvancePending(true);
     try {
       // Save final quotation
-      const quotationResult = await updateFinalQuotation(client.rowNumber, finalData);
+      const quotationResult = await updateFinalQuotation(client.rowNumber, finalData, client.registeredDateTimeAD);
       setCurrentFinalQuotation(quotationResult.finalQuotation);
       
       // Update status to ADVANCE PENDING
@@ -1364,7 +1364,7 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
       const formattedAmount = `${selectedFinalPackage}: NPR ${formatNPR(newFinalQuotation)}/-`;
       
       // Save to Column AD
-      await updateFinalQuotation(client.rowNumber, formattedAmount);
+      await updateFinalQuotation(client.rowNumber, formattedAmount, client.registeredDateTimeAD);
       
       // Update local state
       setCurrentFinalQuotation(formattedAmount);

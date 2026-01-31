@@ -753,7 +753,7 @@ const ClientDetail = () => {
     setIsSavingAdvancePending(true);
     try {
       // Save final quotation
-      const quotationResult = await updateFinalQuotation(client.rowNumber, finalData);
+      const quotationResult = await updateFinalQuotation(client.rowNumber, finalData, client.registeredDateTimeAD);
       setCurrentFinalQuotation(quotationResult.finalQuotation);
       
       // Update status to ADVANCE PENDING

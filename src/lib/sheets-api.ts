@@ -345,10 +345,11 @@ export async function addBookedClientComment(
 
 export async function updateFinalQuotation(
   rowNumber: number,
-  finalQuotation: string
+  finalQuotation: string,
+  registeredDateTimeAD?: string
 ): Promise<{ success: boolean; finalQuotation: string }> {
   return callSheetsFunction<{ success: boolean; finalQuotation: string }>("updateFinalQuotation", {
-    data: { rowNumber, finalQuotation },
+    data: { rowNumber, finalQuotation, registeredDateTimeAD },
   });
 }
 
