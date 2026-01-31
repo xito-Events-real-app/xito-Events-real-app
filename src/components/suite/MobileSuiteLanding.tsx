@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LogOut, Home, Newspaper, LayoutGrid, Construction } from "lucide-react";
+import { LogOut, Home, Newspaper, LayoutGrid, Construction, Calendar, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -9,11 +9,19 @@ import { useActivityFeed } from "@/hooks/useActivityFeed";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TodayEventsHero } from "./TodayEventsHero";
-import { HandlerActivityGrid } from "./HandlerActivityGrid";
+import { HandlerActivitySection } from "./HandlerActivitySection";
+import { HandlerStarClients } from "./HandlerStarClients";
 import { SuiteQuickActionsBar } from "./SuiteQuickActionsBar";
 import { SuiteModuleGrid } from "./SuiteModuleGrid";
 import { MasterSearchButton } from "./MasterSearchButton";
 import { MasterSyncButton } from "./MasterSyncButton";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+
+const HANDLERS = [
+  { name: 'Benzo', colorScheme: 'violet' as const },
+  { name: 'Barun', colorScheme: 'emerald' as const },
+  { name: 'Nikit', colorScheme: 'blue' as const },
+];
 
 type TabType = 'home' | 'news' | 'modules' | 'coming-soon';
 
@@ -147,13 +155,53 @@ function HomeTabContent() {
           <MasterSyncButton />
         </div>
         
-        {/* Upcoming Events */}
-        <TodayEventsHero />
-        
-        {/* Handler Activity */}
-        <HandlerActivityGrid />
+        {/* Tabbed Interface for Events + Handler Activity */}
+        <EventsHandlerTabs />
       </div>
     </ScrollArea>
+  );
+}
+
+function EventsHandlerTabs() {
+  return (
+    <Tabs defaultValue="events" className="w-full">
+      <TabsList className="grid grid-cols-4 w-full mb-3 h-11 bg-gray-100 p-1">
+        <TabsTrigger 
+          value="events" 
+          className="gap-1 text-xs data-[state=active]:bg-emerald-500 data-[state=active]:text-white"
+        >
+          <Calendar className="w-3.5 h-3.5" />
+          <span className="hidden xs:inline">Events</span>
+        </TabsTrigger>
+        {HANDLERS.map(h => (
+          <TabsTrigger 
+            key={h.name} 
+            value={h.name.toLowerCase()} 
+            className={`gap-1 text-xs ${
+              h.colorScheme === 'violet' 
+                ? 'data-[state=active]:bg-violet-500 data-[state=active]:text-white' 
+                : h.colorScheme === 'emerald'
+                ? 'data-[state=active]:bg-emerald-500 data-[state=active]:text-white'
+                : 'data-[state=active]:bg-blue-500 data-[state=active]:text-white'
+            }`}
+          >
+            <User className="w-3.5 h-3.5" />
+            {h.name}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+      
+      <TabsContent value="events" className="mt-0">
+        <TodayEventsHero />
+      </TabsContent>
+      
+      {HANDLERS.map(h => (
+        <TabsContent key={h.name} value={h.name.toLowerCase()} className="mt-0 space-y-3">
+          <HandlerActivitySection handlerName={h.name} colorScheme={h.colorScheme} />
+          <HandlerStarClients handlerName={h.name} colorScheme={h.colorScheme} />
+        </TabsContent>
+      ))}
+    </Tabs>
   );
 }
 
