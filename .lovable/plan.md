@@ -1,117 +1,254 @@
 
+# Plan: Fix BOOKED Status Data Saving & Add Client Sync Button
 
-# Plan: Fix WhatsApp ERR_BLOCKED_BY_RESPONSE on Desktop
+## Problems Identified
 
-## Problem
+### Problem 1: Payment & Final Quotation Not Saved When Setting BOOKED Status
 
-When clicking "Send to WhatsApp" on desktop, the browser shows:
-```
-api.whatsapp.com refused to connect.
-ERR_BLOCKED_BY_RESPONSE
-```
+**Root Cause Analysis:**
 
-The URL format `https://wa.me/977XXXXXXXXX` is correct, but `window.open()` can be blocked by browsers in certain contexts (especially preview iframes).
-
----
-
-## Root Cause
-
-The current code uses:
-```typescript
-window.open(whatsappUrl, '_blank');
-```
-
-This can be blocked because:
-1. Preview environments (iframes) have popup restrictions
-2. Some browsers block programmatic popups without direct user gesture context
-3. WhatsApp's response headers may conflict with cross-origin requests
-
----
-
-## Solution
-
-Use a more robust method that bypasses popup blockers by creating a temporary anchor element and triggering a click on it:
+In `handleSaveBookedPayment` (lines 782-841 in `ClientDetail.tsx`), the execution order is WRONG:
 
 ```typescript
-// Instead of window.open()
-const link = document.createElement('a');
-link.href = whatsappUrl;
-link.target = '_blank';
-link.rel = 'noopener noreferrer';
-document.body.appendChild(link);
-link.click();
-document.body.removeChild(link);
+// CURRENT (BROKEN) ORDER:
+// Step 1: addPayment() - tries to write to BOOKED CLIENTS sheet
+const paymentResult = await addPayment(..., client.registeredDateTimeAD, ...);
+
+// Step 2: updateClientStatus() - THIS is when client gets MOVED to BOOKED CLIENTS
+const statusResult = await updateClientStatus(...);
 ```
 
-This approach:
-- Works in all browser contexts including iframes
-- Is recognized as a user-initiated action
-- Bypasses most popup blockers
-- Is more reliable than `window.open()`
+The `addPayment()` function (line 2317-2347 in edge function) searches for the client in the BOOKED CLIENTS sheet using `registeredDateTimeAD`. But at this point, **the client hasn't been moved to BOOKED CLIENTS yet** (that happens in `updateClientStatus()`). So the payment lookup fails and data is lost.
+
+### Problem 2: Final Quotation Not Validated Before Payment
+
+The `AdvancePaymentDialog` only shows a warning if no final quotation is set (lines 140-146) but still allows the user to proceed. Without a valid final quotation:
+- The remaining payment calculation is wrong (divides by 0 or uses 0)
+- Data integrity is compromised
+
+### Problem 3: No Sync Button for Individual Client
+
+Currently there's no way to refresh a single client's data from Google Sheets.
 
 ---
 
-## File to Modify
+## Solution Overview
 
-| File | Change |
-|------|--------|
-| `src/components/client-detail/ClientDetailsCard.tsx` | Replace `window.open()` with anchor element click method |
+### Fix 1: Correct Execution Order in handleSaveBookedPayment
+
+Swap the order of operations:
+1. **First**: Call `updateClientStatus()` to move the client to BOOKED CLIENTS sheet
+2. **Second**: Call `addPayment()` to record payment in the now-existing BOOKED CLIENTS row
+
+### Fix 2: Block Payment Without Final Quotation
+
+Update `AdvancePaymentDialog` to:
+- Disable the save button when no final quotation is set
+- Show a clear error message instead of a warning
+- Guide user to set final quotation via ADVANCE PENDING status first
+
+### Fix 3: Add Client Sync Button
+
+Add a sync button to the Client Detail page that:
+- Fetches fresh data for this specific client from Google Sheets
+- Updates the local cache and UI
+- Shows loading state and feedback
 
 ---
 
-## Code Change
+## Detailed Changes
 
-**Before (line 260):**
+### File 1: `src/pages/ClientDetail.tsx`
+
+**Change 1A: Fix execution order in handleSaveBookedPayment (lines 782-841)**
+
 ```typescript
-// Open WhatsApp
-window.open(whatsappUrl, '_blank');
+// CORRECTED ORDER:
+const handleSaveBookedPayment = async (data: {...}) => {
+  if (!client?.rowNumber) return;
+  
+  const parsedFinal = parseFinalQuotation(currentFinalQuotation || client.finalQuotation || '');
+  const finalAmount = parsedFinal ? parseInt(parsedFinal.amount.replace(/[^0-9]/g, '')) : 0;
+  
+  setIsSavingBookedPayment(true);
+  try {
+    // Step 1: Update status FIRST (moves client to BOOKED CLIENTS)
+    const statusResult = await updateClientStatus(
+      client.rowNumber, 
+      pendingStatus, 
+      currentStatusLog || client.statusLog || ''
+    );
+    setCurrentStatusLog(statusResult.statusLog);
+    
+    // Step 2: NOW add payment (client exists in BOOKED CLIENTS)
+    const paymentResult = await addPayment(
+      client.rowNumber,
+      data.amount,
+      data.paymentType,
+      data.nepaliDate,
+      data.adDate,
+      data.bank,
+      currentPaymentsMade || client.paymentsMade || '',
+      client.paymentDatesAD || '',
+      finalAmount,
+      client.registeredDateTimeAD,
+      client.clientName
+    );
+    
+    // Update local state...
+  }
+};
 ```
 
-**After:**
+**Change 1B: Add sync button and handler**
+
+Add new state:
 ```typescript
-// Open WhatsApp using anchor element (bypasses popup blockers)
-const link = document.createElement('a');
-link.href = whatsappUrl;
-link.target = '_blank';
-link.rel = 'noopener noreferrer';
-document.body.appendChild(link);
-link.click();
-document.body.removeChild(link);
+const [isSyncingClient, setIsSyncingClient] = useState(false);
+```
+
+Add handler:
+```typescript
+const handleSyncClient = async () => {
+  if (!client?.registeredDateTimeAD) return;
+  
+  setIsSyncingClient(true);
+  try {
+    const freshClient = await getSingleClient(client.registeredDateTimeAD);
+    if (freshClient && updateClientCache) {
+      updateClientCache(freshClient);
+      // Update local state to reflect fresh data
+      setCurrentStatusLog(freshClient.statusLog || '');
+      setCurrentPaymentsMade(freshClient.paymentsMade || '');
+      // ... other fields
+    }
+    toast({ title: "Client data synced from sheets" });
+  } catch (err) {
+    toast({ title: "Failed to sync client", variant: "destructive" });
+  } finally {
+    setIsSyncingClient(false);
+  }
+};
+```
+
+Add sync button to the UI (in the header/hero area).
+
+---
+
+### File 2: `src/components/status-dialogs/AdvancePaymentDialog.tsx`
+
+**Change: Block save without final quotation**
+
+Update the validation logic:
+```typescript
+// Add validation for final quotation requirement
+const hasFinalQuotation = parsedFinal !== null;
+
+// Update isValid check (line 102)
+const isValid = hasFinalQuotation && 
+                paymentAmount.trim() && 
+                selectedPaymentType && 
+                selectedBank && 
+                selectedDate && 
+                selectedBSDate;
+```
+
+Update the warning to be an error/blocker:
+```typescript
+{!hasFinalQuotation && (
+  <div className="p-3 rounded-lg bg-destructive/10 border border-destructive">
+    <p className="text-sm text-destructive font-medium">
+      ⛔ Final quotation is required before recording payment.
+    </p>
+    <p className="text-xs text-destructive/80 mt-1">
+      Please set the status to "ADVANCE PENDING" first to lock the final quotation.
+    </p>
+  </div>
+)}
 ```
 
 ---
 
-## Expected Behavior After Fix
+### File 3: `src/lib/sheets-api.ts`
 
-| Before | After |
-|--------|-------|
-| ERR_BLOCKED_BY_RESPONSE error on desktop | WhatsApp opens directly in new tab with pre-filled message |
-| Blocked by browser/iframe restrictions | Works consistently across all environments |
-
----
-
-## Alternative Fallback (if needed)
-
-If the anchor method still has issues in certain browsers, we can add a fallback:
+**Add new function for single client fetch:**
 
 ```typescript
-try {
-  const link = document.createElement('a');
-  link.href = whatsappUrl;
-  link.target = '_blank';
-  link.rel = 'noopener noreferrer';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-} catch (e) {
-  // Fallback to window.location for same-tab navigation
-  window.location.href = whatsappUrl;
+export async function getSingleClient(registeredDateTimeAD: string): Promise<ClientData | null> {
+  return callSheetsFunction<ClientData | null>("getSingleClient", {
+    data: { registeredDateTimeAD },
+  });
 }
 ```
 
 ---
 
-## Note on Global Consistency
+### File 4: `supabase/functions/google-sheets/index.ts`
 
-This same fix should ideally be applied to other WhatsApp buttons throughout the app for consistency, but the current issue is specifically about the "Send to WhatsApp" button in ClientDetailsCard. Other components may work fine if they're not inside restricted iframe contexts.
+**Add new action handler for getSingleClient:**
 
+```typescript
+async function getSingleClient(
+  accessToken: string, 
+  spreadsheetId: string, 
+  registeredDateTimeAD: string
+): Promise<Record<string, unknown> | null> {
+  // Search in CLIENT TRACKER first
+  const trackerClients = await searchInSheet(
+    accessToken, spreadsheetId, 'CLIENT TRACKER', registeredDateTimeAD
+  );
+  if (trackerClients) return { ...trackerClients, _source: 'tracker' };
+  
+  // If not found, search in BOOKED CLIENTS
+  const bookedClients = await searchInSheet(
+    accessToken, spreadsheetId, 'BOOKED CLIENTS', registeredDateTimeAD
+  );
+  if (bookedClients) return { ...bookedClients, _source: 'booked' };
+  
+  return null;
+}
+```
+
+Add to action handler and SheetRequest type.
+
+---
+
+## Files to Modify
+
+| File | Changes |
+|------|---------|
+| `src/pages/ClientDetail.tsx` | 1. Swap order in `handleSaveBookedPayment` (status first, then payment) 2. Add `isSyncingClient` state 3. Add `handleSyncClient` function 4. Add Sync button to UI |
+| `src/components/status-dialogs/AdvancePaymentDialog.tsx` | Block save button when no final quotation is set |
+| `src/lib/sheets-api.ts` | Add `getSingleClient()` function |
+| `supabase/functions/google-sheets/index.ts` | Add `getSingleClient` action to fetch single client by ID |
+
+---
+
+## Expected Behavior After Fix
+
+### BOOKED Status Flow:
+1. User clicks "BOOKED" status
+2. `AdvancePaymentDialog` opens
+3. If no final quotation: **Save button disabled**, error message shown
+4. If final quotation exists: User enters payment, clicks Save
+5. Status updates FIRST → client MOVES to BOOKED CLIENTS sheet
+6. Payment recorded SECOND → data writes to correct row
+7. Success!
+
+### Sync Button:
+1. User is on Client Detail page
+2. Clicks "Sync" button in header
+3. Loading spinner appears
+4. Fresh data fetched from Google Sheets for this client
+5. UI updates with latest data
+6. Toast confirms sync complete
+
+---
+
+## Technical Notes
+
+- The `addPayment` function uses `registeredDateTimeAD` to find the correct row in BOOKED CLIENTS (line 2317-2347 in edge function)
+- After `updateClientStatus()` is called with "BOOKED", the client is:
+  1. Copied to BOOKED CLIENTS sheet (line 1232)
+  2. Deleted from CLIENT TRACKER (line 1236)
+- The `getSingleClient` function needs to search both sheets since the client may be in either one depending on their status
