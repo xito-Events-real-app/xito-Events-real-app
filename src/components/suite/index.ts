@@ -13,3 +13,4 @@ export { SuiteLeftSidebar } from './SuiteLeftSidebar';
 export { SuiteQuickActionsBar } from './SuiteQuickActionsBar';
 export { SuiteDashboardContent } from './SuiteDashboardContent';
 export { SuiteModuleGrid } from './SuiteModuleGrid';
+export { StarClientDetailView } from './StarClientDetailView';

@@ -192,13 +192,13 @@ export function SuiteQuickActionsBar({ variant = 'desktop' }: SuiteQuickActionsB
     );
   }
 
-  // Desktop variant - horizontal bar
+  // Desktop variant - horizontal bar with equal-sized buttons
   return (
     <>
       <div className="flex items-center gap-3">
         <Button
           onClick={handleAddClient}
-          className="h-10 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md rounded-full font-semibold gap-2 px-5"
+          className="h-10 min-w-[140px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md rounded-full font-semibold gap-2 px-6"
         >
           <UserPlus className="w-4 h-4" />
           Add Client
@@ -206,19 +206,13 @@ export function SuiteQuickActionsBar({ variant = 'desktop' }: SuiteQuickActionsB
         
         <Button
           onClick={handleAddPayment}
-          className="h-10 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md rounded-full font-semibold gap-2 px-5"
+          className="h-10 min-w-[140px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md rounded-full font-semibold gap-2 px-6"
         >
           <DollarSign className="w-4 h-4" />
           Add Payment
         </Button>
         
-        <div className="w-64">
-          <MasterSearchButton />
-        </div>
-        
-        <div className="w-40">
-          <MasterSyncButton />
-        </div>
+        <MasterSyncButton />
       </div>
 
       {/* Client Selection Drawer */}
