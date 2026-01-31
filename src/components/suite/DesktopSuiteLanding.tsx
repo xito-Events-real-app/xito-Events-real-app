@@ -10,6 +10,7 @@ import { SuiteQuickAdd } from "./SuiteQuickAdd";
 import { TodayEventsHero } from "./TodayEventsHero";
 import { ModuleCard } from "./ModuleCard";
 import { MasterSyncButton } from "./MasterSyncButton";
+import { MasterSearchButton } from "./MasterSearchButton";
 import { useSuiteStats } from "@/hooks/useSuiteStats";
 import { formatNPR } from "@/lib/client-card-utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -168,6 +169,7 @@ export function DesktopSuiteLanding() {
               </h3>
               <SuiteQuickAdd />
               <MasterSyncButton />
+              <MasterSearchButton />
             </div>
             
             {/* Today's Events Hero */}

@@ -6,6 +6,7 @@ import { SuiteQuickAdd } from "./SuiteQuickAdd";
 import { TodayEventsHero } from "./TodayEventsHero";
 import { ModuleCard } from "./ModuleCard";
 import { MasterSyncButton } from "./MasterSyncButton";
+import { MasterSearchButton } from "./MasterSearchButton";
 import { useSuiteStats } from "@/hooks/useSuiteStats";
 import { formatNPR } from "@/lib/client-card-utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -72,6 +73,9 @@ export function SuiteHomeContent() {
 
         {/* Master Sync Button */}
         <MasterSyncButton />
+
+        {/* Master Search Button */}
+        <MasterSearchButton />
 
         {/* Today's Events Hero */}
         <TodayEventsHero />
