@@ -23,7 +23,7 @@ export function MobileSuiteLanding() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col w-full max-w-full overflow-x-hidden">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Global Mode Toggle */}
       <GlobalModeToggle />
 
@@ -56,7 +56,7 @@ export function MobileSuiteLanding() {
 
       {/* Bottom Tab Navigation */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 safe-area-bottom">
-        <div className="flex items-center justify-start gap-4 py-2 px-4">
+        <div className="flex items-center justify-center gap-8 py-2 px-4 max-w-lg mx-auto">
           {/* Home Tab */}
           <button
             onClick={() => setActiveTab('home')}

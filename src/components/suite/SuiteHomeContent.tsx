@@ -66,7 +66,7 @@ export function SuiteHomeContent() {
 
   return (
     <ScrollArea className="flex-1">
-      <div className="px-4 py-4 space-y-5 animate-fade-in w-full pb-24">
+      <div className="px-4 py-4 space-y-5 animate-fade-in max-w-lg mx-auto pb-24">
         {/* Quick Add Buttons */}
         <SuiteQuickAdd />
 

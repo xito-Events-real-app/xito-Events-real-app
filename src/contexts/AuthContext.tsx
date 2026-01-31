@@ -19,46 +19,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    let isMounted = true;
-    
-    // Timeout fallback - ensure loading state doesn't hang indefinitely
-    const timeout = setTimeout(() => {
-      if (isMounted && isLoading) {
-        console.warn('Auth loading timeout reached - forcing isLoading to false');
-        setIsLoading(false);
-      }
-    }, 5000); // 5 second max for auth check
-
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        if (isMounted) {
-          setSession(session);
-          setUser(session?.user ?? null);
-          setIsLoading(false);
-        }
+        setSession(session);
+        setUser(session?.user ?? null);
+        setIsLoading(false);
       }
     );
 
     // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (isMounted) {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setIsLoading(false);
-      }
-    }).catch((error) => {
-      console.error('Failed to get session:', error);
-      if (isMounted) {
-        setIsLoading(false);
-      }
+      setSession(session);
+      setUser(session?.user ?? null);
+      setIsLoading(false);
     });
 
-    return () => {
-      isMounted = false;
-      clearTimeout(timeout);
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   const signIn = async (email: string, password: string) => {

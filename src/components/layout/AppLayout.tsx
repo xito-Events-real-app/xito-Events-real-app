@@ -1,5 +1,6 @@
-import { ReactNode, useEffect } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { BottomNav } from "./BottomNav";
+import { getDesktopMode } from "@/hooks/useDesktopMode";
 import { cn } from "@/lib/utils";
 import { Monitor } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,12 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
-  const { isDesktopMode, toggleDesktopMode } = useDesktopMode();
+  const [isDesktopMode, setIsDesktopMode] = useState(false);
+  const { toggleDesktopMode } = useDesktopMode();
+
+  useEffect(() => {
+    setIsDesktopMode(getDesktopMode());
+  }, []);
 
   // Apply viewport meta tag for desktop mode
   useEffect(() => {

@@ -1,13 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const DESKTOP_MODE_KEY = "wtn_desktop_mode";
 
 export function useDesktopMode() {
-  // Initialize synchronously from localStorage to prevent race condition
-  const [isDesktopMode, setIsDesktopMode] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem(DESKTOP_MODE_KEY) === "true";
-  });
+  const [isDesktopMode, setIsDesktopMode] = useState(false);
+
+  // Initialize from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem(DESKTOP_MODE_KEY);
+    if (saved === "true") {
+      setIsDesktopMode(true);
+    }
+  }, []);
 
   const toggleDesktopMode = () => {
     const newValue = !isDesktopMode;

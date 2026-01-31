@@ -31,7 +31,7 @@ export function SuiteNewsFeed() {
   const dayGroups = Array.from(groupedByDay.entries());
   
   return (
-    <div className="px-4 py-4 pb-24 space-y-6 w-full">
+    <div className="px-4 py-4 pb-24 space-y-6 max-w-lg mx-auto">
       {/* Day Groups */}
       {dayGroups.map(([dayKey, dayActivities]) => (
         <div key={dayKey} className="space-y-2">
