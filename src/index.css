@@ -462,3 +462,8 @@
 .scrollbar-track-transparent::-webkit-scrollbar-track {
   background-color: transparent;
 }
+
+/* Hover variant for scrollbar thumb (works with custom CSS, not Tailwind hover:) */
+.hover-thumb-violet-400:hover::-webkit-scrollbar-thumb {
+  background-color: rgb(167 139 250);
+}
