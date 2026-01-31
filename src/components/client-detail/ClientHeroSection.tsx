@@ -2,6 +2,7 @@ import { MessageCircle, Mail, MapPin, RefreshCw, Pencil, Clock } from "lucide-re
 import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { StarRating } from "@/components/ui/star-rating";
 import { ClientData } from "@/lib/sheets-api";
 import { getMonthColorClasses, parseInquiryMonth } from "@/lib/client-card-utils";
 import QuotationDisplaySection from "./QuotationDisplaySection";
@@ -18,10 +19,12 @@ interface ClientHeroSectionProps {
   onAddComment: (comment: string) => Promise<void>;
   onAddQuotation: () => void;
   onAddFinalQuotation?: () => void; // New: for BOOKED clients to add/edit final quotation
+  onPriorityChange?: (priority: number) => Promise<void>;
   isLoggingCall?: boolean;
   isChangingStatus?: boolean;
   isAddingComment?: boolean;
   isSyncing?: boolean;
+  isUpdatingPriority?: boolean;
   eventDetailsData?: EventDetailsData | null;
   eventDetailsLoading?: boolean;
 }
@@ -64,10 +67,12 @@ const ClientHeroSection = ({
   onAddComment,
   onAddQuotation,
   onAddFinalQuotation,
+  onPriorityChange,
   isLoggingCall = false,
   isChangingStatus = false,
   isAddingComment = false,
   isSyncing = false,
+  isUpdatingPriority = false,
   eventDetailsData,
   eventDetailsLoading = false,
 }: ClientHeroSectionProps) => {
@@ -104,12 +109,21 @@ const ClientHeroSection = ({
       }} />
 
       <div className="relative p-4 md:p-6">
-        {/* Row 1: Client Name + Days Remaining + Status Badge */}
+        {/* Row 1: Client Name + Star Rating + Days Remaining + Status Badge */}
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className={`text-xl md:text-2xl font-bold text-white inline-block px-3 py-1 rounded-lg ${monthColorClasses || 'bg-emerald-900/30'}`}>
               {client.clientName}
             </h1>
+            {/* Interactive Star Rating */}
+            <div className="flex items-center gap-1 bg-white/10 rounded-full px-2 py-1">
+              <StarRating 
+                value={parseInt(client.priority || '0')} 
+                onChange={onPriorityChange}
+                readonly={isUpdatingPriority || !onPriorityChange}
+                size="md"
+              />
+            </div>
             {firstEventDaysRemaining !== null && firstEventDaysRemaining !== undefined && (
               <Badge className="bg-amber-500/30 text-amber-200 border-0 gap-1">
                 <Clock className="h-3 w-3" />

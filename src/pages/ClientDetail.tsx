@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useCachedData } from "@/hooks/useCachedData";
 import { useDropdownData } from "@/hooks/useDropdownData";
-import { updateClient, ClientData, updateClientStatus, logCallAttempt, addPayment, updateClientQuotation, addClientComment, updateFinalQuotation, getSingleClient } from "@/lib/sheets-api";
+import { updateClient, ClientData, updateClientStatus, logCallAttempt, addPayment, updateClientQuotation, addClientComment, updateFinalQuotation, getSingleClient, updateClientPriority } from "@/lib/sheets-api";
 import { forceResetDatabase, notifyCacheUpdate } from "@/lib/cache-manager";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -201,6 +201,9 @@ const ClientDetail = () => {
 
   // Event details editing state
   const [editingEventIndex, setEditingEventIndex] = useState<number | null>(null);
+
+  // Priority (star rating) state
+  const [isUpdatingPriority, setIsUpdatingPriority] = useState(false);
 
   // Client sync state
   const [isSyncingClient, setIsSyncingClient] = useState(false);
@@ -909,6 +912,34 @@ const ClientDetail = () => {
     }
   };
 
+  // Handle updating client priority (star rating)
+  const handlePriorityChange = async (priority: number) => {
+    if (!client?.rowNumber) return;
+    
+    setIsUpdatingPriority(true);
+    try {
+      await updateClientPriority(
+        client.rowNumber, 
+        priority.toString(),
+        client.registeredDateTimeAD
+      );
+      
+      // Update global cache
+      if (updateClientCache) {
+        updateClientCache({ ...client, priority: priority.toString() });
+      }
+      
+      toast({ 
+        title: priority > 0 ? `Priority set to ${priority} star${priority !== 1 ? 's' : ''}` : "Priority cleared"
+      });
+    } catch (err) {
+      console.error('Failed to update priority:', err);
+      toast({ title: "Failed to update priority", variant: "destructive" });
+    } finally {
+      setIsUpdatingPriority(false);
+    }
+  };
+
   // Handle adding a comment (from Comments tab)
   const handleAddComment = async () => {
     if (!client?.rowNumber || !newComment.trim()) return;
@@ -1388,10 +1419,12 @@ const ClientDetail = () => {
                 // For BOOKED clients: open save-only dialog (no status change)
                 setShowFinalQuotationSaveDialog(true);
               }}
+              onPriorityChange={handlePriorityChange}
               isLoggingCall={isLoggingCall}
               isChangingStatus={isChangingStatus}
               isAddingComment={isAddingComment}
               isSyncing={isSyncingClient}
+              isUpdatingPriority={isUpdatingPriority}
               eventDetailsData={eventDetailsData}
               eventDetailsLoading={eventDetailsLoading}
             />

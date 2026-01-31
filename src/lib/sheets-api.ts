@@ -60,6 +60,7 @@ export interface ClientData {
   companyName?: string;            // Column AH - company name
   serviceTypes?: string;           // Column AI - service types (multi, "/" separated)
   lastActivityLog?: string;        // Column AJ - Last activity timestamp log
+  priority?: string;               // Column AK - Star rating (1-5)
   _source?: 'tracker' | 'booked'; // Source sheet indicator for unified queries
 }
 
@@ -301,6 +302,17 @@ export async function updateOurCounterRates(
 ): Promise<{ success: boolean; ourBargainedRates: string }> {
   return callSheetsFunction<{ success: boolean; ourBargainedRates: string }>("updateOurCounterRates", {
     data: { rowNumber, ourRates },
+  });
+}
+
+// Update client priority (Column AK) - Star rating 1-5
+export async function updateClientPriority(
+  rowNumber: number,
+  priority: string,
+  registeredDateTimeAD?: string
+): Promise<{ success: boolean }> {
+  return callSheetsFunction<{ success: boolean }>("updateClientPriority", {
+    data: { rowNumber, priority, registeredDateTimeAD },
   });
 }
 
