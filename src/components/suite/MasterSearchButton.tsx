@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { Search, X, Clock, ChevronRight, User, Calendar, MapPin, Briefcase, Phone } from "lucide-react";
+import { Search, X, Clock, ChevronRight, User, Calendar, MapPin, Briefcase, Phone, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -70,7 +70,7 @@ export function MasterSearchButton() {
   const containerRef = useRef<HTMLDivElement>(null);
   
   const navigate = useNavigate();
-  const { clients } = useCachedData();
+  const { clients, isLoading: isClientsLoading } = useCachedData();
   
   // Load recent searches from Google Sheets on mount
   useEffect(() => {
@@ -123,7 +123,10 @@ export function MasterSearchButton() {
   }, [isExpanded]);
   
   // Universal search - search ALL client fields
+  // Wait for clients to load before searching
   const results = useMemo(() => {
+    // Don't search if still loading clients
+    if (isClientsLoading && clients.length === 0) return [];
     if (query.trim().length < 2) return [];
     
     const searchLower = query.toLowerCase();
@@ -172,7 +175,7 @@ export function MasterSearchButton() {
     });
     
     return filtered.slice(0, MAX_PREVIEW_RESULTS);
-  }, [query, clients]);
+  }, [query, clients, isClientsLoading]);
   
   // Save search to Google Sheets (fire and forget)
   const saveSearch = async (searchQuery: string) => {
@@ -304,6 +307,14 @@ export function MasterSearchButton() {
         </div>
       )}
       
+      {/* Loading State - when searching but clients not loaded yet */}
+      {query.trim().length >= 2 && isClientsLoading && clients.length === 0 && (
+        <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-2xl shadow-xl border border-gray-200 z-50 p-6 text-center animate-slide-up">
+          <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-violet-500" />
+          <p className="text-sm text-gray-500">Loading clients...</p>
+        </div>
+      )}
+      
       {/* Search Results Dropdown - appears ABOVE the input when typing */}
       {query.trim().length >= 2 && results.length > 0 && (
         <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-2xl shadow-xl border border-gray-200 z-50 max-h-80 overflow-y-auto animate-slide-up">
@@ -378,8 +389,8 @@ export function MasterSearchButton() {
         </div>
       )}
       
-      {/* No Results Message */}
-      {query.trim().length >= 2 && results.length === 0 && (
+      {/* No Results Message - only show when clients are loaded */}
+      {query.trim().length >= 2 && results.length === 0 && !isClientsLoading && clients.length > 0 && (
         <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-2xl shadow-xl border border-gray-200 z-50 p-6 text-center animate-slide-up">
           <p className="text-sm text-gray-500">No results found for "{query}"</p>
         </div>
