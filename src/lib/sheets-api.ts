@@ -157,6 +157,14 @@ export async function getAllClients(limit = 500): Promise<ClientData[]> {
   return callSheetsFunction<ClientData[]>("getAllClients", { limit });
 }
 
+// Get a single client by their unique registeredDateTimeAD identifier
+// Searches both CLIENT TRACKER and BOOKED CLIENTS sheets
+export async function getSingleClient(registeredDateTimeAD: string): Promise<ClientData | null> {
+  return callSheetsFunction<ClientData | null>("getSingleClient", {
+    data: { registeredDateTimeAD },
+  });
+}
+
 export async function addClient(clientData: ClientData): Promise<void> {
   await callSheetsFunction("addClient", { data: clientData });
 }

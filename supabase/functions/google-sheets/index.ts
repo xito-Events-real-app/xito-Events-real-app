@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData';
+  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -1302,6 +1302,98 @@ async function getClients(accessToken: string, spreadsheetId: string, limit = 50
     serviceTypes: row[34] || '',          // Column AI - Service types (multi, "/" separated)
     _source: 'tracker' as const,          // Source indicator for unified queries
   }));
+}
+
+// ============= GET SINGLE CLIENT BY UNIQUE ID =============
+// Searches both CLIENT TRACKER and BOOKED CLIENTS for a specific client by registeredDateTimeAD
+async function getSingleClient(accessToken: string, spreadsheetId: string, registeredDateTimeAD: string) {
+  if (!registeredDateTimeAD) {
+    throw new Error('registeredDateTimeAD is required for getSingleClient');
+  }
+
+  console.info(`[SINGLE CLIENT] Fetching client: ${registeredDateTimeAD}`);
+
+  // Helper to map row to client data format
+  const mapRowToClient = (row: string[], rowNumber: number, source: 'tracker' | 'booked') => ({
+    rowNumber,
+    registeredDateTimeAD: row[0] || '',
+    registeredDateBS: row[1] || '',
+    clientName: row[2] || '',
+    source: row[3] || '',
+    clientLocation: row[4] || '',
+    currentCountry: row[5] || '',
+    contactNo: row[6] || '',
+    whatsappNo: row[7] || '',
+    email: row[8] || '',
+    eventLocation: row[9] || '',
+    eventCity: row[10] || '',
+    events: row[11] || '',
+    eventYear: row[12] || '',
+    eventMonth: row[13] || '',
+    eventDay: row[14] || '',
+    eventDateAD: row[15] || '',
+    whoAdded: row[16] || '',
+    inquiryDateAD: row[17] || '',
+    inquiryDateBS: row[18] || '',
+    inquiryTime: row[19] || '',
+    description: row[20] || '',
+    quotationData: row[21] || '',
+    statusLog: row[22] || '',
+    clientHandler: row[23] || '',
+    callLog: row[24] || '',
+    mindset: row[25] || '',
+    ourBargainedRates: row[26] || '',
+    clientBargainedRates: row[27] || '',
+    comments: row[28] || '',
+    finalQuotation: row[29] || '',
+    paymentsMade: row[30] || '',
+    paymentDatesAD: row[31] || '',
+    remainingPayment: row[32] || '',
+    companyName: row[33] || '',
+    serviceTypes: row[34] || '',
+    _source: source,
+  });
+
+  // Search CLIENT TRACKER first
+  const trackerRange = encodeURIComponent("'CLIENT TRACKER'!A2:AI2000");
+  const trackerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}`;
+  
+  const trackerResponse = await fetch(trackerUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (trackerResponse.ok) {
+    const trackerData = await trackerResponse.json();
+    if (trackerData.values) {
+      const foundIndex = trackerData.values.findIndex((row: string[]) => row[0] === registeredDateTimeAD);
+      if (foundIndex !== -1) {
+        console.info(`[SINGLE CLIENT] Found in CLIENT TRACKER at row ${foundIndex + 2}`);
+        return mapRowToClient(trackerData.values[foundIndex], foundIndex + 2, 'tracker');
+      }
+    }
+  }
+
+  // Not found in tracker, search BOOKED CLIENTS
+  const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:AI2000");
+  const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}`;
+  
+  const bookedResponse = await fetch(bookedUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (bookedResponse.ok) {
+    const bookedData = await bookedResponse.json();
+    if (bookedData.values) {
+      const foundIndex = bookedData.values.findIndex((row: string[]) => row[0] === registeredDateTimeAD);
+      if (foundIndex !== -1) {
+        console.info(`[SINGLE CLIENT] Found in BOOKED CLIENTS at row ${foundIndex + 2}`);
+        return mapRowToClient(bookedData.values[foundIndex], foundIndex + 2, 'booked');
+      }
+    }
+  }
+
+  console.info(`[SINGLE CLIENT] Client not found in any sheet`);
+  return null;
 }
 
 // ============= GET ALL CLIENTS FROM BOTH SHEETS (UNIFIED) =============
@@ -4487,6 +4579,11 @@ Deno.serve(async (req) => {
       case 'getAllClients':
         // Returns unified data from both CLIENT TRACKER and BOOKED CLIENTS
         result = await getAllClientsFromBothSheets(accessToken, spreadsheetId, body.limit);
+        break;
+      case 'getSingleClient':
+        // Returns a single client from either CLIENT TRACKER or BOOKED CLIENTS
+        if (!data || !data.registeredDateTimeAD) throw new Error('registeredDateTimeAD is required for getSingleClient');
+        result = await getSingleClient(accessToken, spreadsheetId, data.registeredDateTimeAD as string);
         break;
       case 'addClient':
         if (!data) throw new Error('data is required for addClient');
