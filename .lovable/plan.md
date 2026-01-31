@@ -1,147 +1,342 @@
 
-# Plan: Update Star Client Detail View - Event Format Like Client Tracker
+
+# Plan: Master Search - Bottom Left + Horizontal Scrollable Recent Searches + Google Sheets Persistence
 
 ## Overview
 
-Update the `StarClientDetailView` component to display event details in the format **"MAGH 14 MEHNDI"** - showing the Nepali month name (uppercase), day number, and event name - matching the style used in the Client Tracker.
+Three major changes to the Master Search feature:
+1. **Move to Bottom LEFT** of the dashboard
+2. **Persist search history to Google Sheets** (Column S of "CLIENT TRACKER SETUP DATA", rows 2-51, up to 50 searches with FIFO replacement)
+3. **Horizontal scrollable recent searches** - Show 10 recent searches in a clean horizontal row with drag-to-scroll for all 50
 
 ---
 
-## Current Issue
+## Visual Layout
 
-The current `StarClientDetailView` displays events like this:
+### Bottom Left Master Search with Horizontal Recent Searches
+```text
++----------+------------------------------------------+
+|  LEFT    |                                          |
+|  SIDEBAR |  MAIN CONTENT AREA                       |
+|          |                                          |
+|          |  [Events] [Benzo] [Barun] [Nikit]        |
+|          |  ┌────────────────────────────────────┐  |
+|          |  │  Tab Content                       │  |
+|          |  └────────────────────────────────────┘  |
+|          |                                          |
++----------+------------------------------------------+
+|                                                     |
+|  ┌─────────────────────────────────────────────────┐|
+|  │ [🔍 Master Search Input]                        │|
+|  └─────────────────────────────────────────────────┘|
+|                                                     |
+|  Recent: [Benzo] [Wedding] [Kathmandu] [Mehndi] ➜  |
+|          ↑ Horizontal scroll for more              |
++----------------------------------------------------|
 ```
-Calendar Icon | "BRIDES MEHNDI"
-             "10 2082" (month number + year)
-```
-
-This shows:
-- Raw event name only
-- Month as a number, not the name
-- Year separately
 
 ---
 
-## Desired Format
-
-Change the display to show events like the Client Tracker:
-```
-MAGH 14 MEHNDI
-```
-
-Where:
-- **MAGH** = Nepali month name (uppercase, converted from month number)
-- **14** = Day number
-- **MEHNDI** = Event name (uppercase)
-
----
-
-## File to Modify
+## Changes Summary
 
 | File | Action | Description |
 |------|--------|-------------|
-| `src/components/suite/StarClientDetailView.tsx` | UPDATE | Change event display format to "MONTH DAY EVENT" |
+| `src/components/suite/SuiteDashboardContent.tsx` | UPDATE | Move Master Search from `right-6` to `left-6` |
+| `src/components/suite/MasterSearchButton.tsx` | UPDATE | Horizontal scrollable recent searches + Google Sheets integration |
+| `supabase/functions/google-sheets/index.ts` | UPDATE | Add `getSearchHistory` and `saveSearchQuery` actions |
+| `tailwind.config.ts` | UPDATE | Add new animations for fast slide-in effects |
 
 ---
 
 ## Implementation Details
 
-### Update the StarClientDetailView Component
+### 1. Move Master Search to Bottom Left
 
-Replace the current event display section:
+Update positioning in `SuiteDashboardContent.tsx`:
 
-**Current Code (lines 143-154):**
+**Line 84 - Change from:**
 ```tsx
-{/* Event Details */}
-<div className="bg-gray-100/80 rounded-lg p-3">
-  <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-    <Calendar className="w-4 h-4 text-amber-600" />
-    {firstEvent}
-  </div>
-  {(client.eventMonth || client.eventYear) && (
-    <p className="text-xs text-gray-500 mt-1 ml-6">
-      {client.eventMonth} {client.eventYear}
-    </p>
-  )}
-</div>
+<div className="absolute bottom-6 right-6 w-80 z-10">
 ```
 
-**New Code:**
+**To:**
 ```tsx
-{/* Event Details - Display all events in "MAGH 14 MEHNDI" format */}
-<div className="bg-gray-100/80 rounded-lg p-3 space-y-1.5">
-  {(() => {
-    // Parse all events using the existing utility
-    const parsedEvents = parseEventDetails(
-      client.events || '',
-      client.eventYear || '',
-      client.eventMonth || '',
-      client.eventDay || ''
-    );
-    
-    if (parsedEvents.length === 0) {
-      return (
-        <p className="text-sm text-gray-500 italic">No events scheduled</p>
-      );
-    }
-    
-    return parsedEvents.map((event, idx) => (
-      <div key={idx} className="flex items-center gap-2">
-        <Calendar className="w-4 h-4 text-amber-600 shrink-0" />
-        <span className="text-sm font-bold text-gray-800 uppercase">
-          {event.monthName} {event.day} {event.eventName}
-        </span>
-      </div>
-    ));
-  })()}
-</div>
-```
-
-### Import the Utility
-
-Add the import for `parseEventDetails`:
-```tsx
-import { parseEventDetails } from "@/lib/nepali-months";
+<div className="absolute bottom-6 left-6 w-80 z-10">
 ```
 
 ---
 
-## Visual Comparison
+### 2. Add Animations to Tailwind Config
 
-### Before
-```
-┌─────────────────────────────────────┐
-│  📅 BRIDES MEHNDI                   │
-│       10 2082                       │
-└─────────────────────────────────────┘
+Add new keyframes for fast, smooth animations:
+
+```typescript
+keyframes: {
+  // ... existing keyframes ...
+  "slide-in-right": {
+    "0%": { opacity: "0", transform: "translateX(-20px)" },
+    "100%": { opacity: "1", transform: "translateX(0)" },
+  },
+  "pop-in": {
+    "0%": { opacity: "0", transform: "scale(0.8)" },
+    "100%": { opacity: "1", transform: "scale(1)" },
+  },
+},
+animation: {
+  // ... existing animations ...
+  "slide-in-right": "slide-in-right 0.2s ease-out",
+  "pop-in": "pop-in 0.15s ease-out",
+},
 ```
 
-### After (matching Client Tracker format)
+---
+
+### 3. Add Google Sheets Functions for Search History
+
+Add two new functions to the edge function:
+
+**Get Search History:**
+```typescript
+async function getSearchHistory(accessToken: string, spreadsheetId: string) {
+  const range = encodeURIComponent("'CLIENT TRACKER SETUP DATA'!S2:S51");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) return [];
+
+  const data = await response.json();
+  if (!data.values) return [];
+  
+  return data.values.map((row: string[]) => row[0]).filter(Boolean);
+}
 ```
-┌─────────────────────────────────────┐
-│  📅 MAGH 14 BRIDES MEHNDI           │
-│  📅 MAGH 15 WEDDING                 │
-│  📅 MAGH 16 RECEPTION               │
-└─────────────────────────────────────┘
+
+**Save Search Query (FIFO - 50 max):**
+```typescript
+async function saveSearchQuery(accessToken: string, spreadsheetId: string, query: string) {
+  if (!query?.trim()) return { success: false };
+  
+  // Get current history
+  const currentHistory = await getSearchHistory(accessToken, spreadsheetId);
+  
+  // Remove duplicate (case-insensitive)
+  const filtered = currentHistory.filter(
+    (q: string) => q.toLowerCase() !== query.toLowerCase()
+  );
+  
+  // Add new search at beginning, limit to 50
+  const newHistory = [query.trim(), ...filtered].slice(0, 50);
+  
+  // Pad to 50 rows
+  const values = Array(50).fill(['']);
+  newHistory.forEach((q, i) => { values[i] = [q]; });
+  
+  // Write to S2:S51
+  const range = encodeURIComponent("'CLIENT TRACKER SETUP DATA'!S2:S51");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  
+  await fetch(url, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values }),
+  });
+
+  return { success: true, history: newHistory };
+}
 ```
+
+**Add action cases:**
+```typescript
+case 'getSearchHistory':
+  result = await getSearchHistory(accessToken, spreadsheetId);
+  break;
+case 'saveSearchQuery':
+  if (!data || !data.query) throw new Error('query is required');
+  result = await saveSearchQuery(accessToken, spreadsheetId, data.query as string);
+  break;
+```
+
+---
+
+### 4. Redesign MasterSearchButton with Horizontal Recent Searches
+
+**Key Changes:**
+- Replace localStorage with Google Sheets API calls
+- Increase MAX_RECENT from 10 to 50
+- When collapsed: Show button
+- When expanded: Show input + horizontal scrollable chip row below
+
+**New UI Structure (Expanded State):**
+```tsx
+<div ref={containerRef} className="relative">
+  {/* Search Input */}
+  <div className="relative">
+    <Input ... />
+  </div>
+  
+  {/* Horizontal Recent Searches - ALWAYS visible when expanded & no query */}
+  {query.trim().length < 2 && recentSearches.length > 0 && (
+    <div className="mt-3">
+      <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
+        <Clock className="w-3 h-3" /> Recent
+      </p>
+      
+      {/* Horizontal Scroll Container */}
+      <div 
+        className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide cursor-grab active:cursor-grabbing"
+        style={{ scrollBehavior: 'smooth' }}
+      >
+        {recentSearches.map((item, i) => (
+          <button
+            key={i}
+            onClick={() => handleRecentClick(item.query)}
+            className={cn(
+              "shrink-0 px-3 py-1.5 rounded-full text-sm font-medium",
+              "bg-gradient-to-r from-violet-100 to-purple-100",
+              "text-violet-700 border border-violet-200",
+              "hover:from-violet-200 hover:to-purple-200",
+              "transition-all duration-150",
+              "animate-pop-in",
+              // Staggered animation delay
+              i < 10 ? `animation-delay-${i * 50}` : ''
+            )}
+            style={{ animationDelay: `${i * 30}ms` }}
+          >
+            {item.query}
+          </button>
+        ))}
+      </div>
+    </div>
+  )}
+  
+  {/* Search Results Dropdown - appears ABOVE the chips when typing */}
+  {query.trim().length >= 2 && results.length > 0 && (
+    <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-2xl shadow-xl ...">
+      {/* Results list */}
+    </div>
+  )}
+</div>
+```
+
+**Loading State:**
+Show skeleton chips while fetching from Google Sheets:
+```tsx
+{isLoadingHistory && (
+  <div className="flex gap-2 mt-3">
+    {[1, 2, 3, 4, 5].map(i => (
+      <div key={i} className="h-8 w-20 rounded-full bg-gray-200 animate-pulse" />
+    ))}
+  </div>
+)}
+```
+
+---
+
+### 5. CSS for Horizontal Scroll
+
+Add to the component or global CSS:
+```css
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+```
+
+Or use Tailwind utility (add to index.css if needed).
+
+---
+
+## Data Flow
+
+```text
+App Loads → MasterSearchButton mounts
+                │
+                ▼
+   API Call: getSearchHistory
+                │
+                ▼
+   Display horizontal chips (50 max, 10 visible initially)
+                │
+   User searches and clicks result
+                │
+                ▼
+   1. Navigate to client detail
+   2. API Call: saveSearchQuery (fire & forget)
+                │
+                ▼
+   Column S in "CLIENT TRACKER SETUP DATA" updated:
+   S2 = Most recent search
+   S51 = 50th (oldest) search
+   
+   If 51st search added → Row 2 gets new search,
+   all shift down, S51 old value dropped (FIFO)
+```
+
+---
+
+## Google Sheets Structure
+
+**Sheet: CLIENT TRACKER SETUP DATA**
+**Column S: Search History (rows 2-51 = 50 slots)**
+
+| Row | Column S Value |
+|-----|----------------|
+| 1   | Header (SEARCH HISTORY) |
+| 2   | Most recent search |
+| 3   | 2nd most recent |
+| ... | ... |
+| 51  | 50th (oldest) search |
+
+---
+
+## UI Specifications
+
+### Recent Search Chips
+- **Style**: Gradient violet-100 to purple-100 background
+- **Border**: Violet-200
+- **Text**: Violet-700, 14px, medium weight
+- **Padding**: px-3 py-1.5
+- **Shape**: rounded-full (pill)
+- **Animation**: Pop-in with staggered delays (30ms per chip)
+- **Scroll**: Horizontal drag-to-scroll, hide scrollbar
+
+### Search Results
+- Appear ABOVE the input (bottom-full) when typing
+- No overlap with recent search chips
+- Same design as current
+
+### Collapsed Button
+- Bottom LEFT corner (was right)
+- Same gradient and glow animation
 
 ---
 
 ## Benefits
 
-1. **Consistent with Client Tracker** - Same format used across the application
-2. **Human-Readable Dates** - Shows "MAGH" instead of "10"
-3. **All Events Visible** - Shows all events, not just the first one
-4. **Memorable Format** - "MAGH 14 MEHNDI" is easy to remember and reference
-5. **Compact Display** - Single line per event, efficient use of space
+1. **Team-Wide History**: All users share the same 50 recent searches from Google Sheets
+2. **Fast Visual Feedback**: Chips appear with quick pop-in animations
+3. **Clean UI**: No overlapping - results above input, chips below
+4. **Easy Discovery**: See 10 chips immediately, scroll for 40 more
+5. **Persistent**: Survives browser clears, device switches, app reinstalls
 
 ---
 
 ## Expected Result
 
-When viewing star clients in the Suite dashboard, each client card will show their events in the format:
-- **MAGH 14 BRIDES MEHNDI**
-- **MAGH 15 WEDDING**
-- **FALGUN 3 RECEPTION**
+1. Master Search button appears at **bottom-left** corner
+2. When expanded, shows input field with horizontal scrollable recent search chips below
+3. Chips animate in quickly with staggered pop-in effect
+4. User can drag-scroll to see all 50 recent searches
+5. Clicking a chip fills the search input
+6. Search results appear ABOVE the input without covering chips
+7. All searches are saved to Column S in Google Sheets with FIFO replacement at 50
 
-This matches exactly how events appear in the Client Tracker module.
