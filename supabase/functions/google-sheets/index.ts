@@ -2348,6 +2348,75 @@ async function addPayment(
   if (!rowNumber || rowNumber < 2) {
     throw new Error('Valid rowNumber is required for adding payment');
   }
+  
+  // SINGLE SOURCE OF TRUTH: Always write to BOOKED CLIENTS only
+  const targetSheet = 'BOOKED CLIENTS';
+  
+  // Find the correct row in BOOKED CLIENTS using registeredDateTimeAD lookup
+  let actualRowNumber = rowNumber;
+  
+  if (registeredDateTimeAD) {
+    try {
+      const verifyRange = encodeURIComponent(`'${targetSheet}'!A2:A2000`);
+      const verifyUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${verifyRange}`;
+      
+      const verifyResponse = await fetch(verifyUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      
+      if (verifyResponse.ok) {
+        const verifyData = await verifyResponse.json();
+        if (verifyData.values) {
+          const normalizedDateTime = registeredDateTimeAD.trim();
+          
+          for (let i = 0; i < verifyData.values.length; i++) {
+            const rowDateTime = (verifyData.values[i][0] || '').trim();
+            if (rowDateTime === normalizedDateTime) {
+              const foundRow = i + 2; // Row 2 is index 0
+              if (foundRow !== rowNumber) {
+                console.log(`[PAYMENT] Row correction: ${rowNumber} -> ${foundRow} for ${registeredDateTimeAD}`);
+              }
+              actualRowNumber = foundRow;
+              break;
+            }
+          }
+        }
+      }
+    } catch (lookupError) {
+      console.error('Error looking up row, falling back to provided rowNumber:', lookupError);
+    }
+  }
+  
+  // BACKEND VALIDATION: Read Column AD (Final Quotation) from BOOKED CLIENTS to validate
+  // This is the single source of truth - do NOT trust client-sent finalQuotationAmount
+  const finalQuoteRange = encodeURIComponent(`'${targetSheet}'!AD${actualRowNumber}`);
+  const finalQuoteUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${finalQuoteRange}`;
+  
+  const finalQuoteResponse = await fetch(finalQuoteUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  
+  if (!finalQuoteResponse.ok) {
+    throw new Error('Failed to verify final quotation for this client');
+  }
+  
+  const finalQuoteData = await finalQuoteResponse.json();
+  const finalQuotationCell = finalQuoteData.values?.[0]?.[0] || '';
+  
+  // Parse the final quotation amount from the cell (format: "PREMIUM: NPR 75,000/-" or similar)
+  const finalQuoteMatch = finalQuotationCell.match(/NPR\s*([\d,]+)/i);
+  const serverFinalQuotationAmount = finalQuoteMatch 
+    ? parseInt(finalQuoteMatch[1].replace(/,/g, ''), 10) 
+    : 0;
+  
+  if (serverFinalQuotationAmount <= 0) {
+    throw new Error('Final quotation not fixed for this client. Please lock final quotation (ADVANCE PENDING status) before recording payment.');
+  }
+  
+  console.log(`[PAYMENT] Verified final quotation: NPR ${serverFinalQuotationAmount.toLocaleString('en-IN')}`);
+  
+  // Use the server-verified amount for all calculations (not client-sent value)
+  const verifiedFinalQuotationAmount = serverFinalQuotationAmount;
 
   // Use the AD date that corresponds to the selected Nepali date
   const adDate = nepaliDateAD;
@@ -2395,48 +2464,11 @@ async function addPayment(
     }
   }
   
-  const remaining = finalQuotationAmount - totalPaid;
+  // Use server-verified final quotation amount for remaining calculation
+  const remaining = verifiedFinalQuotationAmount - totalPaid;
   const remainingFormatted = `NPR ${remaining.toLocaleString('en-IN')}/-`;
   
   const paymentValues = [[updatedPaymentsMade, updatedPaymentDatesAD, remainingFormatted]];
-  
-  // SINGLE SOURCE OF TRUTH: Always write to BOOKED CLIENTS only
-  const targetSheet = 'BOOKED CLIENTS';
-  
-  // Find the correct row in BOOKED CLIENTS using registeredDateTimeAD lookup
-  let actualRowNumber = rowNumber;
-  
-  if (registeredDateTimeAD) {
-    try {
-      const verifyRange = encodeURIComponent(`'${targetSheet}'!A2:A2000`);
-      const verifyUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${verifyRange}`;
-      
-      const verifyResponse = await fetch(verifyUrl, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      
-      if (verifyResponse.ok) {
-        const verifyData = await verifyResponse.json();
-        if (verifyData.values) {
-          const normalizedDateTime = registeredDateTimeAD.trim();
-          
-          for (let i = 0; i < verifyData.values.length; i++) {
-            const rowDateTime = (verifyData.values[i][0] || '').trim();
-            if (rowDateTime === normalizedDateTime) {
-              const foundRow = i + 2; // Row 2 is index 0
-              if (foundRow !== rowNumber) {
-                console.log(`[PAYMENT] Row correction: ${rowNumber} -> ${foundRow} for ${registeredDateTimeAD}`);
-              }
-              actualRowNumber = foundRow;
-              break;
-            }
-          }
-        }
-      }
-    } catch (lookupError) {
-      console.error('Error looking up row, falling back to provided rowNumber:', lookupError);
-    }
-  }
   
   // Update BOOKED CLIENTS sheet (single source of truth for payments)
   const paymentRange = encodeURIComponent(`'${targetSheet}'!AE${actualRowNumber}:AG${actualRowNumber}`);
@@ -2539,6 +2571,38 @@ async function updatePaymentEntry(
   if (!rowNumber || rowNumber < 2) {
     throw new Error('Valid rowNumber is required for updating payment');
   }
+  
+  // SINGLE SOURCE OF TRUTH: Only update BOOKED CLIENTS sheet
+  // First verify the row number
+  const actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'BOOKED CLIENTS', rowNumber, registeredDateTimeAD);
+  
+  // BACKEND VALIDATION: Read Column AD (Final Quotation) from BOOKED CLIENTS to validate
+  // This is the single source of truth - do NOT trust client-sent finalQuotationAmount
+  const finalQuoteRange = encodeURIComponent(`'BOOKED CLIENTS'!AD${actualRowNumber}`);
+  const finalQuoteUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${finalQuoteRange}`;
+  
+  const finalQuoteResponse = await fetch(finalQuoteUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  
+  if (!finalQuoteResponse.ok) {
+    throw new Error('Failed to verify final quotation for this client');
+  }
+  
+  const finalQuoteData = await finalQuoteResponse.json();
+  const finalQuotationCell = finalQuoteData.values?.[0]?.[0] || '';
+  
+  // Parse the final quotation amount from the cell
+  const finalQuoteMatch = finalQuotationCell.match(/NPR\s*([\d,]+)/i);
+  const serverFinalQuotationAmount = finalQuoteMatch 
+    ? parseInt(finalQuoteMatch[1].replace(/,/g, ''), 10) 
+    : 0;
+  
+  if (serverFinalQuotationAmount <= 0) {
+    throw new Error('Final quotation not fixed for this client. Please lock final quotation (ADVANCE PENDING status) before editing payment.');
+  }
+  
+  console.log(`[PAYMENT UPDATE] Verified final quotation: NPR ${serverFinalQuotationAmount.toLocaleString('en-IN')}`);
 
   // Parse existing payments into array
   const paymentLines = existingPaymentsMade.split('\n').filter(line => line.trim());
@@ -2584,17 +2648,15 @@ async function updatePaymentEntry(
     }
   });
   
-  // Calculate remaining
-  const remaining = Math.max(0, finalQuotationAmount - totalPaid);
+  // Calculate remaining using server-verified final quotation amount
+  const remaining = Math.max(0, serverFinalQuotationAmount - totalPaid);
   const remainingFormatted = `NPR ${remaining.toLocaleString('en-IN')}/-`;
 
   // Create payment values array [paymentsMade, '', remainingPayment] 
   // Note: We're not updating paymentDatesAD (column AF) for simplicity
   const paymentValues = [[updatedPaymentsMade, '', remainingFormatted]];
 
-  // SINGLE SOURCE OF TRUTH: Only update BOOKED CLIENTS sheet
-  const actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'BOOKED CLIENTS', rowNumber, registeredDateTimeAD);
-  
+  // actualRowNumber was already verified above when checking final quotation
   const bookedRange = encodeURIComponent(`'BOOKED CLIENTS'!AE${actualRowNumber}:AG${actualRowNumber}`);
   const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}?valueInputOption=USER_ENTERED`;
   

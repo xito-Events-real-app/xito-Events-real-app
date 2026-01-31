@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Phone, MessageCircle, Lock, Plus, Calendar, History } from "lucide-react";
+import { toast } from "sonner";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -45,6 +46,9 @@ const FinanceClientCard = ({ client, onRefresh }: FinanceClientCardProps) => {
 
   const paymentProgress = quotationAmount > 0 ? (paidAmount / quotationAmount) * 100 : 0;
   const remainingAmount = quotationAmount - paidAmount;
+  
+  // Check if final quotation is set for gating payments
+  const hasFinalQuotation = quotationAmount > 0;
 
   // Get package name from final quotation
   const packageMatch = client.finalQuotation?.match(/PACKAGE:\s*(.+?)(?:\s*NPR|$)/i);
@@ -182,9 +186,15 @@ const FinanceClientCard = ({ client, onRefresh }: FinanceClientCardProps) => {
             <Button
               variant="outline"
               size="sm"
-              className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
-              onClick={() => setShowPaymentDrawer(true)}
-              title="Add New Payment"
+              className={`border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 ${!hasFinalQuotation ? 'opacity-50 cursor-not-allowed' : ''}`}
+              onClick={() => {
+                if (!hasFinalQuotation) {
+                  toast.error("Final quotation not fixed. Set ADVANCE PENDING status first to lock quotation.");
+                  return;
+                }
+                setShowPaymentDrawer(true);
+              }}
+              title={hasFinalQuotation ? "Add New Payment" : "Final quotation required"}
             >
               <Plus className="h-4 w-4" />
             </Button>
