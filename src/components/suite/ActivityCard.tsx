@@ -37,14 +37,28 @@ export function ActivityCard({ activity }: ActivityCardProps) {
     }
   };
   
+  // Get card background based on activity type
+  const getCardStyle = () => {
+    switch (activity.type) {
+      case 'status':
+        return "bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 shadow-blue-100/50";
+      case 'payment':
+        return "bg-gradient-to-r from-emerald-50 to-green-50 border-emerald-200 shadow-emerald-100/50";
+      case 'booking':
+        return "bg-gradient-to-r from-violet-50 to-purple-50 border-violet-200 shadow-violet-100/50";
+      default:
+        return "bg-white border-gray-100";
+    }
+  };
+
   return (
     <div 
       onClick={handleClick}
       className={cn(
         "flex items-start gap-3 p-3 rounded-lg cursor-pointer",
-        "bg-white border border-gray-100 shadow-sm",
-        "hover:shadow-md hover:border-gray-200 transition-all",
-        "active:scale-[0.98]"
+        "shadow-sm hover:shadow-md transition-all",
+        "active:scale-[0.98]",
+        getCardStyle()
       )}
     >
       {/* Icon */}
