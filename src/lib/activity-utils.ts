@@ -3,7 +3,7 @@ import { ClientData, BookedClientData } from "@/lib/sheets-api";
 import { parseStatusTimestamp, parseCallLog, parseComments, getRelativeTime } from "@/lib/client-card-utils";
 import NepaliDate from "nepali-date-converter";
 
-export type ActivityType = 'payment' | 'comment' | 'status' | 'client_added' | 'call' | 'booking';
+export type ActivityType = 'payment' | 'comment' | 'status' | 'client_added' | 'call' | 'booking' | 'quotation' | 'handler_change' | 'mindset';
 
 export interface ActivityItem {
   id: string;
@@ -27,6 +27,9 @@ export function getActivityIcon(type: ActivityType): string {
     case 'client_added': return 'UserPlus';
     case 'call': return 'Phone';
     case 'booking': return 'CalendarCheck';
+    case 'quotation': return 'FileText';
+    case 'handler_change': return 'UserCog';
+    case 'mindset': return 'Brain';
     default: return 'Bell';
   }
 }
@@ -46,9 +49,119 @@ export function getActivityColor(type: ActivityType): { bg: string; text: string
       return { bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500/30' };
     case 'booking':
       return { bg: 'bg-teal-500/20', text: 'text-teal-400', border: 'border-teal-500/30' };
+    case 'quotation':
+      return { bg: 'bg-indigo-500/20', text: 'text-indigo-400', border: 'border-indigo-500/30' };
+    case 'handler_change':
+      return { bg: 'bg-pink-500/20', text: 'text-pink-400', border: 'border-pink-500/30' };
+    case 'mindset':
+      return { bg: 'bg-cyan-500/20', text: 'text-cyan-400', border: 'border-cyan-500/30' };
     default:
       return { bg: 'bg-gray-500/20', text: 'text-gray-400', border: 'border-gray-500/30' };
   }
+}
+
+// Map activity type string from Column AJ to ActivityType
+function mapActivityType(typeStr: string): ActivityType {
+  switch (typeStr.toUpperCase().trim()) {
+    case 'STATUS_CHANGE': return 'status';
+    case 'COMMENT': return 'comment';
+    case 'PAYMENT': return 'payment';
+    case 'CALL': return 'call';
+    case 'CLIENT_ADDED': return 'client_added';
+    case 'QUOTATION': return 'quotation';
+    case 'FINAL_QUOTATION': return 'quotation';
+    case 'HANDLER_CHANGE': return 'handler_change';
+    case 'MINDSET': return 'mindset';
+    default:
+      if (typeStr.toUpperCase().includes('BOOKED')) return 'booking';
+      return 'status';
+  }
+}
+
+// Get description based on activity type and details
+function getActivityDescription(activityType: string, details: string): string {
+  const type = activityType.toUpperCase().trim();
+  switch (type) {
+    case 'STATUS_CHANGE':
+      return details.toUpperCase().includes('BOOKED') ? 'Confirmed booking' : `Status → ${details}`;
+    case 'COMMENT':
+      return 'New comment added';
+    case 'PAYMENT':
+      return details;
+    case 'CALL':
+      return 'Call logged';
+    case 'CLIENT_ADDED':
+      return 'New client registered';
+    case 'QUOTATION':
+      return 'Quotation sent';
+    case 'FINAL_QUOTATION':
+      return 'Final quotation locked';
+    case 'HANDLER_CHANGE':
+      return details;
+    case 'MINDSET':
+      return `Mindset: ${details}`;
+    default:
+      return details || 'Activity recorded';
+  }
+}
+
+// Parse structured activity log from Column AJ (PRIMARY SOURCE)
+// Format: "MM/DD/YYYY HH:MM:SS | ACTIVITY_TYPE | Details"
+function parseActivityLogColumn(client: ClientData | BookedClientData): ActivityItem[] {
+  const activities: ActivityItem[] = [];
+  const log = client.lastActivityLog;
+  const handlerName = 'clientHandler' in client ? client.clientHandler : undefined;
+  
+  if (!log) return activities;
+  
+  const lines = log.split('\n').filter(Boolean);
+  
+  lines.forEach((line, index) => {
+    // Format: "MM/DD/YYYY HH:MM:SS | TYPE | Details"
+    const parts = line.split(' | ');
+    if (parts.length < 3) return;
+    
+    const [timestampStr, activityType, ...detailParts] = parts;
+    const details = detailParts.join(' | '); // Rejoin in case details contain |
+    
+    // Parse timestamp: "MM/DD/YYYY HH:MM:SS"
+    const match = timestampStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})/);
+    if (!match) return;
+    
+    const [, monthStr, dayStr, yearStr, hoursStr, minsStr, secsStr] = match;
+    const month = parseInt(monthStr, 10);
+    const day = parseInt(dayStr, 10);
+    const year = parseInt(yearStr, 10);
+    const hours = parseInt(hoursStr, 10);
+    const mins = parseInt(minsStr, 10);
+    const secs = parseInt(secsStr, 10);
+    
+    const timestamp = new Date(year, month - 1, day, hours, mins, secs);
+    
+    if (isNaN(timestamp.getTime())) return;
+    
+    // Map activity type
+    const type = mapActivityType(activityType);
+    
+    // Check if this is a booking
+    const isBooking = activityType.toUpperCase() === 'STATUS_CHANGE' && 
+                      details.toUpperCase().includes('BOOKED') && 
+                      !details.toUpperCase().includes('SOMEWHERE ELSE');
+    
+    activities.push({
+      id: `log-${client.registeredDateTimeAD}-${index}`,
+      type: isBooking ? 'booking' : type,
+      clientName: client.clientName || 'Unknown',
+      clientId: client.registeredDateTimeAD || '',
+      handlerName: handlerName || undefined,
+      description: getActivityDescription(activityType, details),
+      details: type === 'comment' ? `"${details}"` : undefined,
+      timestamp,
+      relativeTime: getRelativeTime(timestamp),
+    });
+  });
+  
+  return activities;
 }
 
 // Parse status log entries into activities
@@ -271,6 +384,7 @@ function parseClientAddedActivity(client: ClientData | BookedClientData): Activi
 }
 
 // Parse all activities from clients
+// PRIORITY: Use Column AJ (lastActivityLog) if available, fallback to legacy parsing
 export function parseActivities(
   clients: ClientData[],
   bookedClients: BookedClientData[]
@@ -280,78 +394,67 @@ export function parseActivities(
   
   // Process regular clients
   clients.forEach(client => {
-    // Client added
-    const addedActivity = parseClientAddedActivity(client);
-    if (addedActivity && !seenIds.has(addedActivity.id)) {
-      activities.push(addedActivity);
-      seenIds.add(addedActivity.id);
+    // PRIMARY: Try Column AJ first
+    const ajActivities = parseActivityLogColumn(client);
+    if (ajActivities.length > 0) {
+      ajActivities.forEach(a => {
+        if (!seenIds.has(a.id)) {
+          activities.push(a);
+          seenIds.add(a.id);
+        }
+      });
+    } else {
+      // FALLBACK: Parse from legacy columns
+      const addedActivity = parseClientAddedActivity(client);
+      if (addedActivity && !seenIds.has(addedActivity.id)) {
+        activities.push(addedActivity);
+        seenIds.add(addedActivity.id);
+      }
+      
+      parseStatusActivities(client).forEach(a => {
+        if (!seenIds.has(a.id)) { activities.push(a); seenIds.add(a.id); }
+      });
+      parseCommentActivities(client).forEach(a => {
+        if (!seenIds.has(a.id)) { activities.push(a); seenIds.add(a.id); }
+      });
+      parseCallActivities(client).forEach(a => {
+        if (!seenIds.has(a.id)) { activities.push(a); seenIds.add(a.id); }
+      });
     }
-    
-    // Status changes
-    parseStatusActivities(client).forEach(a => {
-      if (!seenIds.has(a.id)) {
-        activities.push(a);
-        seenIds.add(a.id);
-      }
-    });
-    
-    // Comments
-    parseCommentActivities(client).forEach(a => {
-      if (!seenIds.has(a.id)) {
-        activities.push(a);
-        seenIds.add(a.id);
-      }
-    });
-    
-    // Calls
-    parseCallActivities(client).forEach(a => {
-      if (!seenIds.has(a.id)) {
-        activities.push(a);
-        seenIds.add(a.id);
-      }
-    });
   });
   
   // Process booked clients
   bookedClients.forEach(client => {
-    // Client added
-    const addedActivity = parseClientAddedActivity(client);
-    if (addedActivity && !seenIds.has(addedActivity.id)) {
-      activities.push(addedActivity);
-      seenIds.add(addedActivity.id);
+    // PRIMARY: Try Column AJ first
+    const ajActivities = parseActivityLogColumn(client);
+    if (ajActivities.length > 0) {
+      ajActivities.forEach(a => {
+        if (!seenIds.has(a.id)) {
+          activities.push(a);
+          seenIds.add(a.id);
+        }
+      });
+    } else {
+      // FALLBACK: Parse from legacy columns
+      const addedActivity = parseClientAddedActivity(client);
+      if (addedActivity && !seenIds.has(addedActivity.id)) {
+        activities.push(addedActivity);
+        seenIds.add(addedActivity.id);
+      }
+      
+      parseStatusActivities(client).forEach(a => {
+        if (!seenIds.has(a.id)) { activities.push(a); seenIds.add(a.id); }
+      });
+      parseCommentActivities(client).forEach(a => {
+        if (!seenIds.has(a.id)) { activities.push(a); seenIds.add(a.id); }
+      });
+      parseCallActivities(client).forEach(a => {
+        if (!seenIds.has(a.id)) { activities.push(a); seenIds.add(a.id); }
+      });
+      parsePaymentActivities(client).forEach(a => {
+        if (!seenIds.has(a.id)) { activities.push(a); seenIds.add(a.id); }
+      });
     }
-    
-    // Status changes
-    parseStatusActivities(client).forEach(a => {
-      if (!seenIds.has(a.id)) {
-        activities.push(a);
-        seenIds.add(a.id);
-      }
-    });
-    
-    // Comments
-    parseCommentActivities(client).forEach(a => {
-      if (!seenIds.has(a.id)) {
-        activities.push(a);
-        seenIds.add(a.id);
-      }
-    });
-    
-    // Calls
-    parseCallActivities(client).forEach(a => {
-      if (!seenIds.has(a.id)) {
-        activities.push(a);
-        seenIds.add(a.id);
-      }
-    });
-    
-    // Payments (booked only)
-    parsePaymentActivities(client).forEach(a => {
-      if (!seenIds.has(a.id)) {
-        activities.push(a);
-        seenIds.add(a.id);
-      }
-    });
   });
   
   // Sort by timestamp (most recent first)
