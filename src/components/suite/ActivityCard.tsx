@@ -41,13 +41,13 @@ export function ActivityCard({ activity }: ActivityCardProps) {
   const getCardStyle = () => {
     switch (activity.type) {
       case 'status':
-        return "bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 shadow-blue-100/50";
+        return "bg-blue-100 border-2 border-blue-400 ring-2 ring-blue-200";
       case 'payment':
-        return "bg-gradient-to-r from-emerald-50 to-green-50 border-emerald-200 shadow-emerald-100/50";
+        return "bg-emerald-100 border-2 border-emerald-400 ring-2 ring-emerald-200";
       case 'booking':
-        return "bg-gradient-to-r from-violet-50 to-purple-50 border-violet-200 shadow-violet-100/50";
+        return "bg-violet-100 border-2 border-violet-400 ring-2 ring-violet-200";
       default:
-        return "bg-white border-gray-100";
+        return "bg-white border border-gray-100";
     }
   };
 
@@ -55,7 +55,7 @@ export function ActivityCard({ activity }: ActivityCardProps) {
     <div 
       onClick={handleClick}
       className={cn(
-        "flex items-start gap-3 p-3 rounded-lg cursor-pointer",
+        "flex items-start gap-3 p-3 rounded-xl cursor-pointer",
         "shadow-sm hover:shadow-md transition-all",
         "active:scale-[0.98]",
         getCardStyle()
