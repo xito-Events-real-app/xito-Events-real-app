@@ -1,10 +1,58 @@
 
 
-# Plan: Master Search Feature for Xito Business Suite
+# Plan: Handler Activity Sections for Xito Business Suite
 
 ## Overview
 
-Add a powerful inline search feature below the "Master Sync" button on the Suite landing page. The search will feature an animated button with a glowing "24 hrs" effect, show the last 10 recent searches, and allow direct inline typing without popups.
+Add a new "Handler Activity" section above the "Coming Soon" section that displays three individual handler feeds for **Benzo**, **Barun**, and **Nikit**. Each handler section will show their recent client interactions (comments, new clients, status changes, etc.) grouped by TODAY and YESTERDAY, sourced from the same Column AJ data used by Breaking News.
+
+---
+
+## UI Preview
+
+```text
+┌─────────────────────────────────────────────────┐
+│  Quick Add Buttons                               │
+│  Master Sync                                     │
+│  Master Search                                   │
+│  Today's Events                                  │
+├─────────────────────────────────────────────────┤
+│  ACTIVE MODULES                                  │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐         │
+│  │ Clients  │ │  Booked  │ │ Finance  │         │
+│  └──────────┘ └──────────┘ └──────────┘         │
+├─────────────────────────────────────────────────┤
+│  HANDLER ACTIVITY              [NEW SECTION]     │
+│                                                  │
+│  ┌───────────────────────────────────────────┐  │
+│  │  🟣 BENZO                                 │  │
+│  │  ───────────────────────────────────────  │  │
+│  │  TODAY                                    │  │
+│  │  • New client: John Doe        10m ago   │  │
+│  │  • Comment added: Jane Smith   2h ago    │  │
+│  │  ───────────────────────────────────────  │  │
+│  │  YESTERDAY                                │  │
+│  │  • Status → Quotation Sent     1d ago    │  │
+│  └───────────────────────────────────────────┘  │
+│                                                  │
+│  ┌───────────────────────────────────────────┐  │
+│  │  🟢 BARUN                                 │  │
+│  │  ───────────────────────────────────────  │  │
+│  │  TODAY                                    │  │
+│  │  • Payment received: ...        1h ago   │  │
+│  └───────────────────────────────────────────┘  │
+│                                                  │
+│  ┌───────────────────────────────────────────┐  │
+│  │  🔵 NIKIT                                 │  │
+│  │  ───────────────────────────────────────  │  │
+│  │  No recent activity                       │  │
+│  └───────────────────────────────────────────┘  │
+│                                                  │
+├─────────────────────────────────────────────────┤
+│  🚧 COMING SOON                                  │
+│  ...                                             │
+└─────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -12,319 +60,72 @@ Add a powerful inline search feature below the "Master Sync" button on the Suite
 
 | Requirement | Implementation |
 |-------------|----------------|
-| Location | Below Master Sync button |
-| Animation | Glowing/pulsing gradient effect like "24 hrs" |
-| Recent searches | Show last 10 searches (persisted in localStorage) |
-| Input behavior | Direct inline typing - no modal/popup |
-| Search scope | Universal search across all client data |
-
----
-
-## Component Architecture
-
-```text
-SuiteHomeContent / DesktopSuiteLanding
-    |
-    +-- SuiteQuickAdd (Add Client / Add Payment buttons)
-    +-- MasterSyncButton (existing)
-    +-- MasterSearchButton (NEW)
-            |
-            +-- Collapsed: Gradient button with search icon + animation
-            +-- Expanded: Inline input + recent searches dropdown
-```
+| Location | Below Active Modules, Above Coming Soon |
+| Handlers | Benzo, Barun, Nikit (hardcoded for now) |
+| Data Source | Column AJ (lastActivityLog) - same as Breaking News |
+| Grouping | TODAY and YESTERDAY sections per handler |
+| Activity Types | New client, comments, status changes, payments, calls |
+| Click Action | Navigate to client detail page |
 
 ---
 
 ## Technical Implementation
 
-### File 1: NEW - `src/components/suite/MasterSearchButton.tsx`
+### File 1: NEW - `src/components/suite/HandlerActivitySection.tsx`
 
-Create a new component with the following features:
+A collapsible section for a single handler showing their activities grouped by day.
 
-**State Management:**
-- `isExpanded` - toggle between button and input mode
-- `query` - current search input
-- `recentSearches` - array of last 10 searches from localStorage
+**Props:**
+- `handlerName: string` - The handler's name (e.g., "Benzo")
+- `activities: ActivityItem[]` - Pre-filtered activities for this handler
+- `color: { bg: string; text: string; border: string }` - Handler's accent color
 
-**UI Modes:**
-
-1. **Collapsed Mode (Button)**
-   - Gradient button matching Master Sync aesthetic
-   - Search icon with glowing pulse animation
-   - "Master Search" label
-   - Click expands to input mode
-
-2. **Expanded Mode (Inline Input)**
-   - Input field with auto-focus
-   - Recent searches dropdown (if query is empty)
-   - Search results preview (when typing)
-   - Clear/close button
-   - Click outside or ESC collapses
-
-**Recent Searches:**
-- Store in localStorage key: `xito_recent_searches`
-- Max 10 items, newest first
-- Each item: `{ query: string, timestamp: number }`
-- Add to history when user presses Enter or clicks a result
-
-**Search Logic:**
-- Reuse existing universal search logic from `src/pages/Search.tsx`
-- Use `useCachedData()` to access client data
-- Show top 5 results as preview
-- Navigate to client detail on result click
-
-**Animation:**
-- Use a glowing border animation similar to the provided context
-- Pulse effect on the search icon
-- Smooth expand/collapse transitions
+**Features:**
+- Collapsible card (default expanded)
+- TODAY / YESTERDAY sticky headers
+- Empty state: "No recent activity"
+- Activity cards matching Breaking News style
+- Click-through to client detail
 
 ---
 
-### File 2: Update `src/components/suite/SuiteHomeContent.tsx`
+### File 2: NEW - `src/components/suite/HandlerActivityGrid.tsx`
 
-Add the new MasterSearchButton below MasterSyncButton:
+Container component that renders three handler sections in a grid.
 
-```text
-<SuiteQuickAdd />
-<MasterSyncButton />
-<MasterSearchButton />  <- NEW
-<TodayEventsHero />
-```
+**Structure:**
+```tsx
+const HANDLERS = [
+  { name: 'Benzo', color: 'violet' },
+  { name: 'Barun', color: 'emerald' },
+  { name: 'Nikit', color: 'blue' },
+];
 
----
-
-### File 3: Update `src/components/suite/DesktopSuiteLanding.tsx`
-
-Add the MasterSearchButton in the Quick Actions column:
-
-```text
-<h3>Quick Actions</h3>
-<SuiteQuickAdd />
-<MasterSyncButton />
-<MasterSearchButton />  <- NEW
-```
-
----
-
-### File 4: Update `tailwind.config.ts`
-
-Add new keyframes for the glowing effect:
-
-```typescript
-keyframes: {
-  // ... existing keyframes
-  "glow-pulse": {
-    "0%, 100%": { 
-      boxShadow: "0 0 5px rgba(139, 92, 246, 0.5), 0 0 20px rgba(139, 92, 246, 0.3)" 
-    },
-    "50%": { 
-      boxShadow: "0 0 20px rgba(139, 92, 246, 0.8), 0 0 40px rgba(139, 92, 246, 0.5)" 
-    },
-  },
-  "border-glow": {
-    "0%, 100%": { borderColor: "rgba(139, 92, 246, 0.5)" },
-    "50%": { borderColor: "rgba(139, 92, 246, 1)" },
-  },
-},
-animation: {
-  // ... existing animations
-  "glow-pulse": "glow-pulse 2s ease-in-out infinite",
-  "border-glow": "border-glow 2s ease-in-out infinite",
-},
-```
-
----
-
-### File 5: Update `src/components/suite/index.ts`
-
-Export the new component:
-
-```typescript
-export { MasterSearchButton } from './MasterSearchButton';
-```
-
----
-
-## Detailed Component Code Structure
-
-### MasterSearchButton.tsx
-
-```typescript
-// Imports
-import { useState, useRef, useEffect, useMemo } from "react";
-import { Search, X, Clock, ChevronRight } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { useCachedData } from "@/hooks/useCachedData";
-import { useNavigate } from "react-router-dom";
-import { cn } from "@/lib/utils";
-import { ClientData, getCurrentStatus } from "@/lib/sheets-api";
-import { getClientDetailPath } from "@/lib/client-navigation";
-
-// Constants
-const STORAGE_KEY = "xito_recent_searches";
-const MAX_RECENT = 10;
-const MAX_PREVIEW_RESULTS = 5;
-
-// Types
-interface RecentSearch {
-  query: string;
-  timestamp: number;
-}
-
-// Component
-export function MasterSearchButton() {
-  // State
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [query, setQuery] = useState("");
-  const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
+function HandlerActivityGrid() {
+  const { activities } = useActivityFeed();
   
-  // Refs
-  const inputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  
-  // Hooks
-  const navigate = useNavigate();
-  const { clients } = useCachedData();
-  
-  // Load recent searches from localStorage on mount
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      setRecentSearches(JSON.parse(stored));
-    }
-  }, []);
-  
-  // Auto-focus input when expanded
-  useEffect(() => {
-    if (isExpanded && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [isExpanded]);
-  
-  // Click outside handler
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsExpanded(false);
-        setQuery("");
-      }
-    };
-    
-    if (isExpanded) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isExpanded]);
-  
-  // Search results (reuse logic from Search.tsx)
-  const results = useMemo(() => {
-    if (query.trim().length < 2) return [];
-    // ... universal search logic
-    return filteredResults.slice(0, MAX_PREVIEW_RESULTS);
-  }, [query, clients]);
-  
-  // Save search to history
-  const saveSearch = (searchQuery: string) => {
-    const newSearch = { query: searchQuery, timestamp: Date.now() };
-    const updated = [
-      newSearch,
-      ...recentSearches.filter(s => s.query !== searchQuery)
-    ].slice(0, MAX_RECENT);
-    
-    setRecentSearches(updated);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-  };
-  
-  // Handle result click
-  const handleResultClick = (client: ClientData) => {
-    saveSearch(query);
-    navigate(getClientDetailPath(client));
-    setIsExpanded(false);
-    setQuery("");
-  };
-  
-  // Handle recent search click
-  const handleRecentClick = (searchQuery: string) => {
-    setQuery(searchQuery);
-    saveSearch(searchQuery);
-  };
-  
-  // Render collapsed button or expanded input
-  if (!isExpanded) {
-    return (
-      <button
-        onClick={() => setIsExpanded(true)}
-        className={cn(
-          "w-full h-14 rounded-full font-semibold flex items-center justify-center gap-3",
-          "bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600",
-          "text-white shadow-lg transition-all",
-          "hover:scale-[1.02] active:scale-[0.98]",
-          "animate-glow-pulse"
-        )}
-      >
-        <Search className="w-5 h-5 animate-pulse" />
-        Master Search
-      </button>
-    );
-  }
+  // Filter activities by handler for each section
+  const handlerActivities = useMemo(() => {
+    return HANDLERS.map(handler => ({
+      ...handler,
+      activities: activities.filter(a => 
+        a.handlerName?.toLowerCase() === handler.name.toLowerCase()
+      ),
+    }));
+  }, [activities]);
   
   return (
-    <div ref={containerRef} className="relative">
-      {/* Inline Input */}
-      <div className="relative">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-violet-500" />
-        <Input
-          ref={inputRef}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search clients, events, handlers..."
-          className={cn(
-            "h-14 pl-12 pr-12 rounded-full text-base",
-            "border-2 border-violet-400 focus:border-violet-500",
-            "animate-border-glow"
-          )}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              setIsExpanded(false);
-              setQuery("");
-            }
-          }}
-        />
-        <button
-          onClick={() => { setIsExpanded(false); setQuery(""); }}
-          className="absolute right-4 top-1/2 -translate-y-1/2"
-        >
-          <X className="w-5 h-5 text-gray-400 hover:text-gray-600" />
-        </button>
-      </div>
-      
-      {/* Dropdown: Recent Searches or Results */}
-      <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border z-50 max-h-80 overflow-y-auto">
-        {query.trim().length < 2 && recentSearches.length > 0 && (
-          // Show recent searches
-          <div className="p-3">
-            <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
-              <Clock className="w-3 h-3" /> Recent Searches
-            </p>
-            {recentSearches.map((item, i) => (
-              <button key={i} onClick={() => handleRecentClick(item.query)}>
-                {item.query}
-              </button>
-            ))}
-          </div>
-        )}
-        
-        {query.trim().length >= 2 && results.length > 0 && (
-          // Show search results
-          <div className="p-2">
-            {results.map((client, i) => (
-              <button key={i} onClick={() => handleResultClick(client)}>
-                {client.clientName}
-              </button>
-            ))}
-          </div>
-        )}
+    <div className="space-y-4">
+      <h3>Handler Activity</h3>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {handlerActivities.map(handler => (
+          <HandlerActivitySection
+            key={handler.name}
+            handlerName={handler.name}
+            activities={handler.activities}
+            color={handler.color}
+          />
+        ))}
       </div>
     </div>
   );
@@ -333,28 +134,234 @@ export function MasterSearchButton() {
 
 ---
 
-## User Flow
+### File 3: NEW - `src/hooks/useHandlerActivityFeed.ts`
+
+A specialized hook that filters and groups activities by handler.
+
+**Features:**
+- Accepts `handlerName` parameter
+- Filters activities where `activity.handlerName === handlerName`
+- Groups filtered activities into TODAY and YESTERDAY
+- Returns: `{ todayActivities, yesterdayActivities, totalCount }`
+
+**Implementation:**
+```typescript
+export function useHandlerActivityFeed(handlerName: string) {
+  const { activities, isLoading } = useActivityFeed();
+  
+  const handlerActivities = useMemo(() => {
+    return activities.filter(a => 
+      a.handlerName?.toLowerCase().trim() === handlerName.toLowerCase().trim()
+    );
+  }, [activities, handlerName]);
+  
+  const grouped = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const todayActivities = handlerActivities.filter(a => a.timestamp >= today);
+    const yesterdayActivities = handlerActivities.filter(a => 
+      a.timestamp >= yesterday && a.timestamp < today
+    );
+    
+    return { todayActivities, yesterdayActivities };
+  }, [handlerActivities]);
+  
+  return {
+    todayActivities: grouped.todayActivities,
+    yesterdayActivities: grouped.yesterdayActivities,
+    totalCount: handlerActivities.length,
+    isLoading,
+  };
+}
+```
+
+---
+
+### File 4: UPDATE - `src/components/suite/SuiteHomeContent.tsx`
+
+Add the HandlerActivityGrid between Active Modules and Coming Soon.
+
+**Changes:**
+```tsx
+{/* Active Modules */}
+<div className="space-y-3">
+  {activeModules.map((module) => (
+    <ModuleCard ... />
+  ))}
+</div>
+
+{/* NEW: Handler Activity Section */}
+<HandlerActivityGrid />
+
+{/* Spacer to push Coming Soon below fold */}
+<div className="min-h-[60px]" />
+
+{/* Coming Soon Section */}
+...
+```
+
+---
+
+### File 5: UPDATE - `src/components/suite/DesktopSuiteLanding.tsx`
+
+Add HandlerActivityGrid in the desktop layout between Active Modules and Coming Soon.
+
+**Changes:**
+```tsx
+{/* Active Modules */}
+<div className="space-y-4">
+  <h3>Active Modules</h3>
+  <div className="grid grid-cols-3 gap-4">
+    {activeModules.map(...)}
+  </div>
+</div>
+
+{/* NEW: Handler Activity Section */}
+<HandlerActivityGrid />
+
+{/* Spacer */}
+<div className="min-h-[100px]" />
+
+{/* Coming Soon Modules */}
+...
+```
+
+---
+
+### File 6: UPDATE - `src/components/suite/index.ts`
+
+Export the new components:
+```typescript
+export { HandlerActivitySection } from './HandlerActivitySection';
+export { HandlerActivityGrid } from './HandlerActivityGrid';
+```
+
+---
+
+## Handler Color Scheme
+
+| Handler | Primary Color | Badge BG | Badge Text |
+|---------|---------------|----------|------------|
+| Benzo | Violet | bg-violet-100 | text-violet-700 |
+| Barun | Emerald | bg-emerald-100 | text-emerald-700 |
+| Nikit | Blue | bg-blue-100 | text-blue-700 |
+
+---
+
+## Component Detail: HandlerActivitySection
+
+```tsx
+function HandlerActivitySection({ handlerName, activities, colorScheme }: Props) {
+  const [isExpanded, setIsExpanded] = useState(true);
+  const { todayActivities, yesterdayActivities } = useHandlerActivityFeed(handlerName);
+  
+  const colors = {
+    violet: { bg: 'bg-violet-500', light: 'bg-violet-100', text: 'text-violet-700' },
+    emerald: { bg: 'bg-emerald-500', light: 'bg-emerald-100', text: 'text-emerald-700' },
+    blue: { bg: 'bg-blue-500', light: 'bg-blue-100', text: 'text-blue-700' },
+  }[colorScheme];
+
+  return (
+    <Card className="overflow-hidden">
+      {/* Header */}
+      <div 
+        className={cn("p-3 flex items-center justify-between cursor-pointer", colors.light)}
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex items-center gap-2">
+          <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", colors.bg)}>
+            <User className="w-4 h-4 text-white" />
+          </div>
+          <span className={cn("font-bold", colors.text)}>{handlerName}</span>
+          {(todayActivities.length > 0 || yesterdayActivities.length > 0) && (
+            <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
+              {todayActivities.length + yesterdayActivities.length}
+            </span>
+          )}
+        </div>
+        <ChevronDown className={cn("w-4 h-4 transition-transform", !isExpanded && "-rotate-90")} />
+      </div>
+      
+      {/* Content */}
+      {isExpanded && (
+        <CardContent className="p-3 space-y-3 max-h-80 overflow-y-auto">
+          {/* TODAY Section */}
+          {todayActivities.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold text-gray-500 uppercase">Today</h4>
+              {todayActivities.slice(0, 5).map(activity => (
+                <CompactActivityCard key={activity.id} activity={activity} />
+              ))}
+            </div>
+          )}
+          
+          {/* YESTERDAY Section */}
+          {yesterdayActivities.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold text-gray-500 uppercase">Yesterday</h4>
+              {yesterdayActivities.slice(0, 5).map(activity => (
+                <CompactActivityCard key={activity.id} activity={activity} />
+              ))}
+            </div>
+          )}
+          
+          {/* Empty State */}
+          {todayActivities.length === 0 && yesterdayActivities.length === 0 && (
+            <p className="text-center text-gray-400 text-sm py-4">
+              No recent activity
+            </p>
+          )}
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+```
+
+---
+
+## Data Flow Diagram
 
 ```text
-1. User sees "Master Search" button below Master Sync
-   |
-   v
-2. User clicks button
-   |
-   v
-3. Button transforms into inline input (auto-focused)
-   |
-   +-- If empty: Shows last 10 recent searches
-   |
-   +-- If typing: Shows top 5 matching results
-   |
-   v
-4a. User clicks a result -> Navigates to client detail
-    (search saved to history)
-   |
-4b. User clicks recent search -> Populates input, shows results
-   |
-4c. User clicks outside or presses ESC -> Collapses back to button
+┌─────────────────────────────────────────────────────────────┐
+│  Column AJ (lastActivityLog) in Google Sheets               │
+│  Format: "MM/DD/YYYY HH:MM:SS | ACTIVITY_TYPE | Details"    │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│  parseActivityLogColumn() in activity-utils.ts               │
+│  - Extracts handler from client.clientHandler (Column X)    │
+│  - Returns ActivityItem[] with handlerName field            │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│  useActivityFeed() hook                                      │
+│  - Merges CLIENT TRACKER + BOOKED CLIENTS                    │
+│  - Returns all activities with handler names                 │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+           ┌────────────────┼────────────────┐
+           │                │                │
+           ▼                ▼                ▼
+    ┌───────────┐    ┌───────────┐    ┌───────────┐
+    │  Benzo    │    │  Barun    │    │  Nikit    │
+    │ Filter:   │    │ Filter:   │    │ Filter:   │
+    │ handler   │    │ handler   │    │ handler   │
+    │ === name  │    │ === name  │    │ === name  │
+    └─────┬─────┘    └─────┬─────┘    └─────┬─────┘
+          │                │                │
+          ▼                ▼                ▼
+    ┌───────────┐    ┌───────────┐    ┌───────────┐
+    │ Handler   │    │ Handler   │    │ Handler   │
+    │ Activity  │    │ Activity  │    │ Activity  │
+    │ Section   │    │ Section   │    │ Section   │
+    └───────────┘    └───────────┘    └───────────┘
 ```
 
 ---
@@ -363,23 +370,31 @@ export function MasterSearchButton() {
 
 | File | Action |
 |------|--------|
-| `src/components/suite/MasterSearchButton.tsx` | CREATE - New search component |
-| `src/components/suite/SuiteHomeContent.tsx` | UPDATE - Add MasterSearchButton |
-| `src/components/suite/DesktopSuiteLanding.tsx` | UPDATE - Add MasterSearchButton |
-| `src/components/suite/index.ts` | UPDATE - Export new component |
-| `tailwind.config.ts` | UPDATE - Add glow animations |
+| `src/hooks/useHandlerActivityFeed.ts` | CREATE - Hook for handler-specific activities |
+| `src/components/suite/HandlerActivitySection.tsx` | CREATE - Single handler activity card |
+| `src/components/suite/HandlerActivityGrid.tsx` | CREATE - Grid of 3 handler sections |
+| `src/components/suite/SuiteHomeContent.tsx` | UPDATE - Add HandlerActivityGrid |
+| `src/components/suite/DesktopSuiteLanding.tsx` | UPDATE - Add HandlerActivityGrid |
+| `src/components/suite/index.ts` | UPDATE - Export new components |
 
 ---
 
-## Animation Preview
+## Mobile vs Desktop Layout
 
-The button will have a glowing purple effect that pulses continuously, similar to:
+| Layout | Handler Grid |
+|--------|--------------|
+| Mobile | Single column, stacked vertically |
+| Desktop | 3 columns side by side |
 
-```css
-/* Glow effect */
-box-shadow: 0 0 20px rgba(139, 92, 246, 0.6);
-animation: glow-pulse 2s ease-in-out infinite;
-```
+---
 
-When expanded, the input border will have a subtle animated glow to indicate active state.
+## Expected Result
+
+1. Below Active Modules, three collapsible handler cards appear
+2. Each card shows the handler's name with a colored avatar
+3. Activities are grouped into TODAY and YESTERDAY sections
+4. Up to 5 activities shown per section (most recent first)
+5. Clicking an activity navigates to the client detail page
+6. Empty handlers show "No recent activity" message
+7. Cards are collapsible to save space
 
