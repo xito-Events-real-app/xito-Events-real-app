@@ -1,86 +1,34 @@
-import { suiteModules } from "@/lib/suite-modules";
-import { Construction, LogOut } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { toast } from "sonner";
-import { GlobalModeToggle } from "@/components/layout/GlobalModeToggle";
-import { SuiteQuickAdd } from "./SuiteQuickAdd";
-import { TodayEventsHero } from "./TodayEventsHero";
-import { ModuleCard } from "./ModuleCard";
-import { MasterSyncButton } from "./MasterSyncButton";
-import { useSuiteStats } from "@/hooks/useSuiteStats";
-import { formatNPR } from "@/lib/client-card-utils";
-import { Card, CardContent } from "@/components/ui/card";
+import { useState } from "react";
+import { LogOut, Home, Newspaper } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
+import { GlobalModeToggle } from "@/components/layout/GlobalModeToggle";
+import { SuiteHomeContent } from "./SuiteHomeContent";
+import { SuiteNewsFeed } from "./SuiteNewsFeed";
+import { useActivityFeed } from "@/hooks/useActivityFeed";
+import { cn } from "@/lib/utils";
+
+type TabType = 'home' | 'news';
 
 export function MobileSuiteLanding() {
   const navigate = useNavigate();
   const { signOut } = useAuth();
-  const activeModules = suiteModules.filter(m => m.status === 'active');
-  const comingSoonModules = suiteModules.filter(m => m.status === 'coming-soon');
-  const stats = useSuiteStats();
+  const [activeTab, setActiveTab] = useState<TabType>('home');
+  const { todayCount } = useActivityFeed();
 
   const handleLogout = async () => {
     await signOut();
     navigate('/login', { replace: true });
   };
 
-  const handleComingSoonClick = (moduleName: string) => {
-    toast.info(`${moduleName} is coming soon!`, {
-      description: "We're working hard to bring you this feature.",
-    });
-  };
-
-  // Get module-specific stats
-  const getModuleStats = (statsKey?: string) => {
-    if (!statsKey || stats.isLoading) return undefined;
-    
-    switch (statsKey) {
-      case 'clients':
-        return {
-          primary: `${stats.clients.activeLeads} active leads`,
-          activity: stats.clients.lastClient 
-            ? `Last: ${stats.clients.lastClient} ${stats.clients.lastAddedTime || ''}`
-            : undefined,
-        };
-      case 'booked':
-        return {
-          primary: `${stats.booked.upcomingEvents} upcoming events`,
-          activity: stats.booked.nextEvent 
-            ? `Next: ${stats.booked.nextEvent.clientName} in ${stats.booked.nextEvent.daysUntil} days`
-            : undefined,
-        };
-      case 'finance':
-        return {
-          primary: `NPR ${formatNPR(stats.finance.collected)} collected`,
-          secondary: stats.finance.pending > 0 
-            ? `NPR ${formatNPR(stats.finance.pending)} pending`
-            : undefined,
-          activity: stats.finance.lastPayment 
-            ? `Last: NPR ${formatNPR(stats.finance.lastPayment.amount)} from ${stats.finance.lastPayment.clientName}`
-            : undefined,
-        };
-      case 'vendors':
-        return {
-          primary: `${stats.vendors.total} vendors`,
-        };
-      case 'accounts':
-        return {
-          primary: `${stats.accounts.total} accounts`,
-        };
-      default:
-        return undefined;
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Global Mode Toggle */}
       <GlobalModeToggle />
 
       {/* Header */}
-      <div className="flex items-center justify-between px-4 pt-4 pb-2 bg-white border-b border-gray-200">
+      <div className="flex items-center justify-between px-4 pt-4 pb-2 bg-white border-b border-gray-200 shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg shadow-violet-500/30">
             <span className="text-white font-bold text-lg">X</span>
@@ -100,83 +48,49 @@ export function MobileSuiteLanding() {
         </Button>
       </div>
 
-      <div className="px-4 py-4 space-y-5 animate-fade-in max-w-lg mx-auto">
-        {/* Quick Add Buttons */}
-        <SuiteQuickAdd />
+      {/* Tab Content */}
+      <div className="flex-1 overflow-hidden animate-fade-in">
+        {activeTab === 'home' && <SuiteHomeContent />}
+        {activeTab === 'news' && <SuiteNewsFeed />}
+      </div>
 
-        {/* Master Sync Button */}
-        <MasterSyncButton />
-
-        {/* Today's Events Hero */}
-        <TodayEventsHero />
-
-        {/* Active Modules */}
-        <div className="space-y-3">
-          {activeModules.map((module) => (
-            <ModuleCard
-              key={module.id}
-              id={module.id}
-              name={module.name}
-              description={module.description}
-              icon={module.icon}
-              path={module.path}
-              gradient={module.gradient}
-              stats={getModuleStats(module.statsKey)}
-              isCompact
-            />
-          ))}
-        </div>
-
-        {/* Spacer to push Coming Soon below fold */}
-        <div className="min-h-[60px]" />
-
-        {/* Coming Soon Section */}
-        <div className="space-y-3 pt-6 border-t border-gray-200">
-          <div className="flex items-center gap-2 px-1">
-            <Construction className="w-4 h-4 text-amber-500" />
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
-              Coming Soon
-            </h3>
-          </div>
+      {/* Bottom Tab Navigation */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 safe-area-bottom">
+        <div className="flex items-center justify-center gap-8 py-2 px-4 max-w-lg mx-auto">
+          {/* Home Tab */}
+          <button
+            onClick={() => setActiveTab('home')}
+            className={cn(
+              "flex flex-col items-center gap-1 py-2 px-6 rounded-xl transition-all",
+              activeTab === 'home' 
+                ? "bg-violet-100 text-violet-700" 
+                : "text-gray-500 hover:text-gray-700"
+            )}
+          >
+            <Home className="w-5 h-5" />
+            <span className="text-xs font-medium">Home</span>
+          </button>
           
-          <div className="grid grid-cols-2 gap-2">
-            {comingSoonModules.map((module) => {
-              const Icon = module.icon;
-              return (
-                <Card 
-                  key={module.id}
-                  className="bg-white border-gray-200 shadow-sm cursor-pointer hover:shadow-md hover:border-gray-300 transition-all active:scale-[0.98] opacity-70"
-                  onClick={() => handleComingSoonClick(module.name)}
-                >
-                  <CardContent className="p-3">
-                    <div className="flex items-center gap-2">
-                      <div className={cn(
-                        "w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-gradient-to-br grayscale",
-                        module.gradient
-                      )}>
-                        <Icon className="w-4 h-4 text-white" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm text-gray-700 truncate">
-                          {module.name}
-                        </p>
-                        <p className="text-[10px] text-gray-400 truncate">
-                          Coming Soon
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="text-center pt-4 pb-8">
-          <p className="text-xs text-gray-400">
-            Xito Business Suite v1.0
-          </p>
+          {/* News Tab */}
+          <button
+            onClick={() => setActiveTab('news')}
+            className={cn(
+              "flex flex-col items-center gap-1 py-2 px-6 rounded-xl transition-all relative",
+              activeTab === 'news' 
+                ? "bg-violet-100 text-violet-700" 
+                : "text-gray-500 hover:text-gray-700"
+            )}
+          >
+            <div className="relative">
+              <Newspaper className="w-5 h-5" />
+              {todayCount > 0 && activeTab !== 'news' && (
+                <span className="absolute -top-1.5 -right-2 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                  {todayCount > 9 ? '9+' : todayCount}
+                </span>
+              )}
+            </div>
+            <span className="text-xs font-medium">News</span>
+          </button>
         </div>
       </div>
     </div>
