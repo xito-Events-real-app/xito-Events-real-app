@@ -1,235 +1,163 @@
 
 
-# Plan: Redesign Xito Business Suite Landing Page - Professional Dashboard Layout
+# Plan: Tabbed View for Upcoming Events and Handler Activity
 
 ## Overview
 
-Transform the current scattered landing page into a professional dashboard-style interface with:
-- **Left Sidebar Navigation** - Active modules + Coming Soon in separate tabs
-- **Top Quick Actions Bar** - Properly aligned quick actions
-- **Main Content Area** - Clean dashboard content
-- **Right News Panel** (Desktop) - Breaking News sidebar
+Transform the current stacked layout of Upcoming Events + Handler Activity Grid into a **tabbed interface** with 4 tabs:
+1. **Upcoming Events** - Shows the existing TodayEventsHero content
+2. **Benzo** - Shows Benzo's handler activity + star clients
+3. **Barun** - Shows Barun's handler activity + star clients  
+4. **Nikit** - Shows Nikit's handler activity + star clients
+
+This makes it easier to focus on one section at a time and navigate between handlers quickly.
 
 ---
 
-## Current Problems
-
-1. **Mobile View**: Everything is stacked vertically in one long scrollable list - Quick Add, Sync, Search, Events, Modules, Handler Activity, Coming Soon
-2. **Desktop View**: Similar layout but wider - still feels cluttered
-3. **No clear navigation structure** - modules are mixed with actions
-4. **Coming Soon clutters the main view** - should be separated
-
----
-
-## New Layout Architecture
-
-### Mobile View
+## Visual Layout
 
 ```text
-+------------------------------------------+
-|  HEADER (Logo + Title + Logout)          |
-+------------------------------------------+
-|                                          |
-|  QUICK ACTIONS BAR (Horizontal)          |
-|  [Add Client] [Add Payment] [Search]     |
-|                                          |
-+------------------------------------------+
-|                                          |
-|  MAIN CONTENT (Scrollable)               |
-|  - Upcoming Events Hero                  |
-|  - Active Module Cards (Grid 2-col)      |
-|  - Handler Activity Grid                 |
-|                                          |
-+------------------------------------------+
-|  BOTTOM NAV: [Modules] [Coming Soon]     |
-+------------------------------------------+
++--------------------------------------------------+
+|  [ Upcoming Events ]  [ Benzo ]  [ Barun ]  [ Nikit ]  |  ← Tab Bar
++--------------------------------------------------+
+|                                                  |
+|  TAB CONTENT AREA                                |
+|                                                  |
+|  (Shows content based on selected tab)           |
+|                                                  |
++--------------------------------------------------+
 ```
 
-### Desktop View
+### Tab Design
+- **Upcoming Events Tab**: Emerald/teal color with Calendar icon
+- **Benzo Tab**: Violet color with User icon
+- **Barun Tab**: Emerald color with User icon
+- **Nikit Tab**: Blue color with User icon
 
-```text
-+----------+----------------------------------+------------+
-|          |  HEADER BAR                       | Actions   |
-|          |  Logo | Quick Actions Bar         | [Sync]    |
-+----------+----------------------------------+------------+
-|          |                                   |           |
-|  LEFT    |  MAIN DASHBOARD CONTENT          |  NEWS     |
-|  SIDEBAR |                                   |  SIDEBAR  |
-|          |  - Upcoming Events Hero Card      |           |
-|  Active  |  - Stats Summary Row              |  Breaking |
-|  Modules |  - Handler Activity Grid (3-col)  |  News     |
-|          |                                   |  Feed     |
-|  ----    |                                   |           |
-|          |                                   |           |
-|  Coming  |                                   |           |
-|  Soon    |                                   |           |
-|          |                                   |           |
-+----------+----------------------------------+------------+
-```
+Each handler tab shows:
+- Handler Activity Section (Today + Yesterday activities)
+- Handler Star Clients section below
 
 ---
 
-## Files to Create/Modify
+## Files to Modify
 
 | File | Action | Description |
 |------|--------|-------------|
-| `src/components/suite/MobileSuiteLanding.tsx` | UPDATE | New mobile layout with bottom tab for modules vs coming soon |
-| `src/components/suite/DesktopSuiteLanding.tsx` | UPDATE | Add left sidebar with tabbed navigation |
-| `src/components/suite/SuiteLeftSidebar.tsx` | CREATE | Left sidebar with Active Modules + Coming Soon tabs |
-| `src/components/suite/SuiteQuickActionsBar.tsx` | CREATE | Horizontal quick actions bar for top |
-| `src/components/suite/SuiteDashboardContent.tsx` | CREATE | Main dashboard content area |
-| `src/components/suite/SuiteModuleGrid.tsx` | CREATE | Grid of module cards for sidebar |
+| `src/components/suite/SuiteDashboardContent.tsx` | UPDATE | Replace stacked layout with tabbed interface |
+| `src/components/suite/MobileSuiteLanding.tsx` | UPDATE | Update HomeTabContent to use new tabbed component |
 
 ---
 
 ## Implementation Details
 
-### 1. Create SuiteLeftSidebar Component
+### 1. Update SuiteDashboardContent
 
-A collapsible left sidebar with two sections controlled by tabs:
-- **Active Modules Tab** - Shows all active module navigation links
-- **Coming Soon Tab** - Shows greyed-out coming soon modules
-
+Replace the current layout:
 ```tsx
-// Vertical list of modules with icons
-// Active state highlight for current module
-// Collapsible on desktop for more space
-// Uses Tabs component for switching between Active/Coming Soon
+<TodayEventsHero />
+<HandlerActivityGrid />
 ```
 
-Key features:
-- Icon + Text for each module
-- Gradient icon backgrounds matching each module
-- Active indicator for current route
-- Stats badge showing counts (e.g., "12 leads")
-- Smooth transitions between tabs
-
-### 2. Create SuiteQuickActionsBar Component
-
-Horizontal bar with properly aligned quick action buttons:
-- Add Client (blue gradient)
-- Add Payment (green gradient)  
-- Master Search (violet gradient)
-- Master Sync (orange gradient)
-
-Desktop: All 4 buttons in a row
-Mobile: 2x2 grid or horizontal scroll
-
-### 3. Update Mobile Layout
-
-New structure:
-1. **Header** - Same logo/title
-2. **Quick Actions Bar** - New horizontal component at top
-3. **Main Content** - Scrollable area with:
-   - Upcoming Events Hero
-   - Handler Activity Grid (if viewing "Modules" tab)
-4. **Bottom Navigation** - Two tabs:
-   - "Modules" - Shows active modules grid + handler activity
-   - "Coming Soon" - Shows coming soon modules
-
-### 4. Update Desktop Layout
-
-New structure using SidebarProvider:
-1. **Left Sidebar** (240px) - Module navigation with tabs
-2. **Main Content** (flex-1):
-   - Top bar with Quick Actions
-   - Dashboard content area
-   - Upcoming Events + Handler Activity
-3. **Right Sidebar** (384px) - Breaking News (existing)
-
-### 5. Create SuiteDashboardContent Component
-
-Main content area showing:
-- Stats summary cards at top
-- Upcoming Events Hero
-- Handler Activity Grid in 3 columns
-
----
-
-## Visual Design Improvements
-
-### Professional Theme
-- Consistent white cards with subtle shadows
-- Gray-50 background
-- Proper spacing and padding
-- Clear visual hierarchy
-
-### Sidebar Design
-- Width: 240px expanded, 72px collapsed (icons only)
-- White background with gray-100 hover states
-- Active item: violet-100 background + violet border
-- Section headers: uppercase, gray-500, small font
-
-### Quick Actions Bar
-- Pill-shaped buttons with gradients
-- Consistent sizing (h-10)
-- Proper gap spacing (gap-3)
-- Icons + Text on desktop, icons only on mobile
-
-### Module Cards in Sidebar
-- Compact horizontal layout: Icon | Name | Stats
-- Icon: 40x40 rounded gradient
-- Name: bold, gray-900
-- Stats: small text below name
-- ChevronRight on hover
-
----
-
-## Technical Implementation
-
-### Mobile - Bottom Tab Navigation
+With a new tabbed interface using shadcn Tabs:
 
 ```tsx
-type MobileTab = 'modules' | 'coming-soon';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Calendar, User } from "lucide-react";
 
-// Bottom nav switches between:
-// - modules: Shows active modules grid + quick actions
-// - coming-soon: Shows coming soon modules grid
-```
+const HANDLERS = [
+  { name: 'Benzo', colorScheme: 'violet' as const },
+  { name: 'Barun', colorScheme: 'emerald' as const },
+  { name: 'Nikit', colorScheme: 'blue' as const },
+];
 
-### Desktop - Left Sidebar with Tabs
-
-```tsx
-// Using shadcn Tabs inside the sidebar
-<Tabs defaultValue="active">
-  <TabsList>
-    <TabsTrigger value="active">Active</TabsTrigger>
-    <TabsTrigger value="coming-soon">Coming Soon</TabsTrigger>
+<Tabs defaultValue="events" className="w-full">
+  <TabsList className="grid grid-cols-4 w-full mb-4">
+    <TabsTrigger value="events" className="gap-1">
+      <Calendar className="w-4 h-4" />
+      <span className="hidden sm:inline">Events</span>
+    </TabsTrigger>
+    {HANDLERS.map(h => (
+      <TabsTrigger key={h.name} value={h.name.toLowerCase()} className="gap-1">
+        <User className="w-4 h-4" />
+        {h.name}
+      </TabsTrigger>
+    ))}
   </TabsList>
-  <TabsContent value="active">
-    {/* Active modules list */}
+  
+  <TabsContent value="events">
+    <TodayEventsHero />
   </TabsContent>
-  <TabsContent value="coming-soon">
-    {/* Coming soon modules list */}
-  </TabsContent>
+  
+  {HANDLERS.map(h => (
+    <TabsContent key={h.name} value={h.name.toLowerCase()}>
+      <HandlerActivitySection handlerName={h.name} colorScheme={h.colorScheme} />
+      <HandlerStarClients handlerName={h.name} colorScheme={h.colorScheme} />
+    </TabsContent>
+  ))}
 </Tabs>
 ```
+
+### 2. Tab Styling
+
+Each tab will have:
+- Active state with colored background
+- Icon + text (text hidden on very small screens)
+- Smooth transitions
+- Handler-specific colors when active:
+  - Events: Emerald
+  - Benzo: Violet
+  - Barun: Emerald
+  - Nikit: Blue
+
+### 3. Update Mobile HomeTabContent
+
+The mobile view will also use this new tabbed component for consistency.
+
+---
+
+## Component Structure
+
+```text
+SuiteDashboardContent / HomeTabContent
+└── Tabs
+    ├── TabsList (4 tabs horizontally)
+    │   ├── "Upcoming Events" (emerald)
+    │   ├── "Benzo" (violet)
+    │   ├── "Barun" (emerald)
+    │   └── "Nikit" (blue)
+    │
+    └── TabsContent
+        ├── [events] → TodayEventsHero
+        ├── [benzo] → HandlerActivitySection + HandlerStarClients
+        ├── [barun] → HandlerActivitySection + HandlerStarClients
+        └── [nikit] → HandlerActivitySection + HandlerStarClients
+```
+
+---
+
+## Benefits
+
+1. **Cleaner View**: Only one section visible at a time
+2. **Quick Navigation**: Easy to switch between handlers
+3. **Focused Content**: Each handler's activity gets full screen space
+4. **Consistent Experience**: Same behavior on mobile and desktop
+5. **Better UX**: Clicking on a tab immediately shows relevant content
 
 ---
 
 ## Expected Result
 
-### Mobile
-- Clean top quick actions bar
-- Focused main content area
-- Clear separation between active modules and coming soon via bottom tabs
-- Less scrolling, more organized
+### Before
+- Upcoming Events stacked above
+- All 3 handlers shown in a grid (cramped on mobile)
+- Need to scroll to see all handlers
 
-### Desktop
-- Professional sidebar-based navigation
-- Quick actions easily accessible at top
-- Dashboard content takes center stage
-- News sidebar provides real-time updates
-- Clear module organization with Active/Coming Soon tabs
-
----
-
-## Migration Notes
-
-- Preserve all existing functionality (sync, search, payments)
-- Keep handler activity grid
-- Keep upcoming events hero
-- Keep breaking news feed
-- Keep all module paths and navigation
-- Maintain responsive behavior between mobile/desktop modes
+### After
+- Clean tab bar at the top
+- Click "Upcoming Events" to see scheduled events
+- Click "Benzo" to see only Benzo's activity + star clients
+- Click "Barun" to see only Barun's activity + star clients
+- Click "Nikit" to see only Nikit's activity + star clients
+- Full width content for each tab
 
