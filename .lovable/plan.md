@@ -1,254 +1,123 @@
 
-# Plan: Fix BOOKED Status Data Saving & Add Client Sync Button
+Goal
+- In Finance Manager, prevent adding (and editing) any payment if the client’s “Final Fixed Quotation” (Column AD) is not locked/saved.
+- Ensure this rule is enforced both in the UI and in the backend function so it cannot be bypassed from any screen.
 
-## Problems Identified
+What’s happening now (why it “isn’t fixed”)
+- The earlier fix only enforced “final quotation required” in the BOOKED status flow dialog (AdvancePaymentDialog).
+- Finance Manager uses a different payment UI (finance/PaymentDrawer + PaymentHistorySheet) which currently does not check whether final quotation exists; it just calls addPayment(), and the backend accepts it even when finalQuotationAmount is 0.
 
-### Problem 1: Payment & Final Quotation Not Saved When Setting BOOKED Status
+Implementation changes (high level)
+1) Frontend (Finance Manager)
+- Block opening/saving payments when final quotation is missing.
+- Show a clear “Final quotation not fixed” message so it’s obvious why the button is disabled.
 
-**Root Cause Analysis:**
+2) Frontend (Booked Clients payment drawer)
+- Align messaging/guarding so the user gets the same clear message (even though the booked drawer already effectively blocks by remainingBalance=0).
 
-In `handleSaveBookedPayment` (lines 782-841 in `ClientDetail.tsx`), the execution order is WRONG:
+3) Backend (google-sheets function)
+- Add hard validation in addPayment and updatePayment so payment writes are rejected if final quotation is missing in the BOOKED CLIENTS sheet.
+- Prefer reading the final quotation directly from the sheet row (Column AD) so the backend never trusts a possibly-stale/incorrect finalQuotationAmount sent from the UI.
 
-```typescript
-// CURRENT (BROKEN) ORDER:
-// Step 1: addPayment() - tries to write to BOOKED CLIENTS sheet
-const paymentResult = await addPayment(..., client.registeredDateTimeAD, ...);
+Files we will update
+Frontend
+- src/components/finance/PaymentDrawer.tsx
+- src/components/finance/PaymentHistorySheet.tsx
+- src/components/finance/FinanceClientCard.tsx
+- src/components/booked/PaymentDrawer.tsx (consistency / better error message)
 
-// Step 2: updateClientStatus() - THIS is when client gets MOVED to BOOKED CLIENTS
-const statusResult = await updateClientStatus(...);
-```
+Backend
+- supabase/functions/google-sheets/index.ts (addPayment + updatePaymentEntry validation)
 
-The `addPayment()` function (line 2317-2347 in edge function) searches for the client in the BOOKED CLIENTS sheet using `registeredDateTimeAD`. But at this point, **the client hasn't been moved to BOOKED CLIENTS yet** (that happens in `updateClientStatus()`). So the payment lookup fails and data is lost.
+Detailed steps
 
-### Problem 2: Final Quotation Not Validated Before Payment
+A) Finance: PaymentDrawer must require final quotation
+Changes in src/components/finance/PaymentDrawer.tsx
+- Add a boolean:
+  - hasFinalQuotation = finalQuotationAmount > 0
+- UI:
+  - If !hasFinalQuotation, show a visible warning panel at the top of the drawer explaining:
+    - “Final quotation is not fixed. Please lock the final quotation first (ADVANCE PENDING) before recording payment.”
+  - Disable the “Add Payment” button when !hasFinalQuotation.
+- Safety check in handleSubmit:
+  - Before calling addPayment(), if !hasFinalQuotation:
+    - toast.error("Final quotation not fixed. Please set final quotation first.")
+    - return
+This ensures even if the button state is bypassed, the function still won’t proceed.
 
-The `AdvancePaymentDialog` only shows a warning if no final quotation is set (lines 140-146) but still allows the user to proceed. Without a valid final quotation:
-- The remaining payment calculation is wrong (divides by 0 or uses 0)
-- Data integrity is compromised
+B) Finance: PaymentHistorySheet must block “Add Payment” and “Save Changes” when quote is missing
+Changes in src/components/finance/PaymentHistorySheet.tsx
+- Compute quotationAmount already exists.
+- Add:
+  - hasFinalQuotation = quotationAmount > 0
+- Disable “Add Payment” button:
+  - disabled={!hasFinalQuotation}
+  - If disabled, show a small explanatory text under the button or a banner near the top.
+- Editing protection:
+  - Disable opening edit mode (Edit icon button) OR allow opening but disable “Save Changes” with an explanatory message.
+  - Also add a guard inside handleEditPaymentSubmit:
+    - if (!hasFinalQuotation) { toast.error(...); return; }
 
-### Problem 3: No Sync Button for Individual Client
+C) Finance: FinanceClientCard should not open the drawer if quotation is missing
+Changes in src/components/finance/FinanceClientCard.tsx
+- It currently calculates quotationAmount from client.finalQuotation (0 when missing).
+- Update the “Add Payment” (+) button:
+  - If quotationAmount <= 0:
+    - visually disabled (opacity/cursor-not-allowed)
+    - onClick shows a toast explaining final quotation must be fixed first
+    - do not open the drawer
+This prevents the user from even getting into the payment form for invalid clients.
 
-Currently there's no way to refresh a single client's data from Google Sheets.
+D) Booked Clients: make the “missing quotation” message explicit
+Changes in src/components/booked/PaymentDrawer.tsx
+- This drawer already blocks payment if remainingBalance is 0, but it produces confusing validation (“exceeds remaining balance of NPR 0”).
+- Add:
+  - hasFinalQuotation = finalQuotationAmount > 0
+- If !hasFinalQuotation:
+  - show a clear banner message
+  - disable the submit button immediately (and skip amount validation messaging)
 
----
+E) Backend: hard reject payment writes when final quotation is missing
+Changes in supabase/functions/google-sheets/index.ts
 
-## Solution Overview
+E1) addPayment()
+- After the code determines actualRowNumber in BOOKED CLIENTS:
+  - Read Column AD from BOOKED CLIENTS for that row:
+    - range: 'BOOKED CLIENTS'!AD{actualRowNumber}
+  - Parse final quotation amount from that cell using a robust regex:
+    - Prefer matching “NPR <digits,commas>”
+  - If parsedAmount <= 0:
+    - throw new Error("Final quotation not fixed for this client. Please lock final quotation before recording payment.")
+- Use parsedAmount as the finalQuotationAmount for remaining calculation (instead of trusting the client-sent finalQuotationAmount).
 
-### Fix 1: Correct Execution Order in handleSaveBookedPayment
+E2) updatePaymentEntry()
+- Similarly, before recalculating remaining:
+  - Verify final quotation exists on the BOOKED CLIENTS row (Column AD)
+  - If missing => throw an error and do not update payments
 
-Swap the order of operations:
-1. **First**: Call `updateClientStatus()` to move the client to BOOKED CLIENTS sheet
-2. **Second**: Call `addPayment()` to record payment in the now-existing BOOKED CLIENTS row
+Why backend validation is required
+- Without this, any screen (current or future) that calls addPayment/updatePayment can still write invalid data.
+- This also prevents edge cases where UI state is stale or a user bypasses disabled buttons.
 
-### Fix 2: Block Payment Without Final Quotation
+Testing checklist (end-to-end)
+1) Finance Manager: client with missing final quotation
+- Attempt to add payment from:
+  - FinanceClientCard (+) button
+  - PaymentHistorySheet “Add Payment”
+  - PaymentHistorySheet edit “Save Changes”
+- Expected: all blocked with clear message; no sheet updates occur.
 
-Update `AdvancePaymentDialog` to:
-- Disable the save button when no final quotation is set
-- Show a clear error message instead of a warning
-- Guide user to set final quotation via ADVANCE PENDING status first
+2) Finance Manager: client with valid final quotation
+- Add payment normally
+- Expected: payment is recorded and remaining payment is correct.
 
-### Fix 3: Add Client Sync Button
+3) Regression: Booking flow (Client Detail / Dashboard / Desktop row)
+- Ensure booking + payment still works when final quotation exists.
+- Ensure “final quotation missing” still blocks booking payment as intended.
 
-Add a sync button to the Client Detail page that:
-- Fetches fresh data for this specific client from Google Sheets
-- Updates the local cache and UI
-- Shows loading state and feedback
+Notes / edge cases handled
+- If final quotation exists in the sheet but the Finance list is stale, the UI may still block because it only knows what it loaded. In that case the user can hit the existing Finance “Refresh/Resync” buttons to pull the latest data before adding payment. The backend will also be correct once UI refreshes.
+- Backend parsing will accept both “PREMIUM: NPR 75,000/-” and similar common variations as long as “NPR <amount>” is present.
 
----
-
-## Detailed Changes
-
-### File 1: `src/pages/ClientDetail.tsx`
-
-**Change 1A: Fix execution order in handleSaveBookedPayment (lines 782-841)**
-
-```typescript
-// CORRECTED ORDER:
-const handleSaveBookedPayment = async (data: {...}) => {
-  if (!client?.rowNumber) return;
-  
-  const parsedFinal = parseFinalQuotation(currentFinalQuotation || client.finalQuotation || '');
-  const finalAmount = parsedFinal ? parseInt(parsedFinal.amount.replace(/[^0-9]/g, '')) : 0;
-  
-  setIsSavingBookedPayment(true);
-  try {
-    // Step 1: Update status FIRST (moves client to BOOKED CLIENTS)
-    const statusResult = await updateClientStatus(
-      client.rowNumber, 
-      pendingStatus, 
-      currentStatusLog || client.statusLog || ''
-    );
-    setCurrentStatusLog(statusResult.statusLog);
-    
-    // Step 2: NOW add payment (client exists in BOOKED CLIENTS)
-    const paymentResult = await addPayment(
-      client.rowNumber,
-      data.amount,
-      data.paymentType,
-      data.nepaliDate,
-      data.adDate,
-      data.bank,
-      currentPaymentsMade || client.paymentsMade || '',
-      client.paymentDatesAD || '',
-      finalAmount,
-      client.registeredDateTimeAD,
-      client.clientName
-    );
-    
-    // Update local state...
-  }
-};
-```
-
-**Change 1B: Add sync button and handler**
-
-Add new state:
-```typescript
-const [isSyncingClient, setIsSyncingClient] = useState(false);
-```
-
-Add handler:
-```typescript
-const handleSyncClient = async () => {
-  if (!client?.registeredDateTimeAD) return;
-  
-  setIsSyncingClient(true);
-  try {
-    const freshClient = await getSingleClient(client.registeredDateTimeAD);
-    if (freshClient && updateClientCache) {
-      updateClientCache(freshClient);
-      // Update local state to reflect fresh data
-      setCurrentStatusLog(freshClient.statusLog || '');
-      setCurrentPaymentsMade(freshClient.paymentsMade || '');
-      // ... other fields
-    }
-    toast({ title: "Client data synced from sheets" });
-  } catch (err) {
-    toast({ title: "Failed to sync client", variant: "destructive" });
-  } finally {
-    setIsSyncingClient(false);
-  }
-};
-```
-
-Add sync button to the UI (in the header/hero area).
-
----
-
-### File 2: `src/components/status-dialogs/AdvancePaymentDialog.tsx`
-
-**Change: Block save without final quotation**
-
-Update the validation logic:
-```typescript
-// Add validation for final quotation requirement
-const hasFinalQuotation = parsedFinal !== null;
-
-// Update isValid check (line 102)
-const isValid = hasFinalQuotation && 
-                paymentAmount.trim() && 
-                selectedPaymentType && 
-                selectedBank && 
-                selectedDate && 
-                selectedBSDate;
-```
-
-Update the warning to be an error/blocker:
-```typescript
-{!hasFinalQuotation && (
-  <div className="p-3 rounded-lg bg-destructive/10 border border-destructive">
-    <p className="text-sm text-destructive font-medium">
-      ⛔ Final quotation is required before recording payment.
-    </p>
-    <p className="text-xs text-destructive/80 mt-1">
-      Please set the status to "ADVANCE PENDING" first to lock the final quotation.
-    </p>
-  </div>
-)}
-```
-
----
-
-### File 3: `src/lib/sheets-api.ts`
-
-**Add new function for single client fetch:**
-
-```typescript
-export async function getSingleClient(registeredDateTimeAD: string): Promise<ClientData | null> {
-  return callSheetsFunction<ClientData | null>("getSingleClient", {
-    data: { registeredDateTimeAD },
-  });
-}
-```
-
----
-
-### File 4: `supabase/functions/google-sheets/index.ts`
-
-**Add new action handler for getSingleClient:**
-
-```typescript
-async function getSingleClient(
-  accessToken: string, 
-  spreadsheetId: string, 
-  registeredDateTimeAD: string
-): Promise<Record<string, unknown> | null> {
-  // Search in CLIENT TRACKER first
-  const trackerClients = await searchInSheet(
-    accessToken, spreadsheetId, 'CLIENT TRACKER', registeredDateTimeAD
-  );
-  if (trackerClients) return { ...trackerClients, _source: 'tracker' };
-  
-  // If not found, search in BOOKED CLIENTS
-  const bookedClients = await searchInSheet(
-    accessToken, spreadsheetId, 'BOOKED CLIENTS', registeredDateTimeAD
-  );
-  if (bookedClients) return { ...bookedClients, _source: 'booked' };
-  
-  return null;
-}
-```
-
-Add to action handler and SheetRequest type.
-
----
-
-## Files to Modify
-
-| File | Changes |
-|------|---------|
-| `src/pages/ClientDetail.tsx` | 1. Swap order in `handleSaveBookedPayment` (status first, then payment) 2. Add `isSyncingClient` state 3. Add `handleSyncClient` function 4. Add Sync button to UI |
-| `src/components/status-dialogs/AdvancePaymentDialog.tsx` | Block save button when no final quotation is set |
-| `src/lib/sheets-api.ts` | Add `getSingleClient()` function |
-| `supabase/functions/google-sheets/index.ts` | Add `getSingleClient` action to fetch single client by ID |
-
----
-
-## Expected Behavior After Fix
-
-### BOOKED Status Flow:
-1. User clicks "BOOKED" status
-2. `AdvancePaymentDialog` opens
-3. If no final quotation: **Save button disabled**, error message shown
-4. If final quotation exists: User enters payment, clicks Save
-5. Status updates FIRST → client MOVES to BOOKED CLIENTS sheet
-6. Payment recorded SECOND → data writes to correct row
-7. Success!
-
-### Sync Button:
-1. User is on Client Detail page
-2. Clicks "Sync" button in header
-3. Loading spinner appears
-4. Fresh data fetched from Google Sheets for this client
-5. UI updates with latest data
-6. Toast confirms sync complete
-
----
-
-## Technical Notes
-
-- The `addPayment` function uses `registeredDateTimeAD` to find the correct row in BOOKED CLIENTS (line 2317-2347 in edge function)
-- After `updateClientStatus()` is called with "BOOKED", the client is:
-  1. Copied to BOOKED CLIENTS sheet (line 1232)
-  2. Deleted from CLIENT TRACKER (line 1236)
-- The `getSingleClient` function needs to search both sheets since the client may be in either one depending on their status
+Scope control
+- This plan focuses on Finance Manager + payment editing and backend enforcement. If you want, we can add a follow-up improvement: a small “Fix Final Quotation” action for already-booked clients that were moved without a final quotation, so you can lock the quotation without leaving Finance.
