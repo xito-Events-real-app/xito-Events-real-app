@@ -61,6 +61,7 @@ export interface ClientData {
   serviceTypes?: string;           // Column AI - service types (multi, "/" separated)
   lastActivityLog?: string;        // Column AJ - Last activity timestamp log
   priority?: string;               // Column AK - Star rating (1-5)
+  benzoKeepNotes?: string;         // Column AL - Benzo Keep notes (JSON format)
   _source?: 'tracker' | 'booked'; // Source sheet indicator for unified queries
 }
 
@@ -313,6 +314,17 @@ export async function updateClientPriority(
 ): Promise<{ success: boolean }> {
   return callSheetsFunction<{ success: boolean }>("updateClientPriority", {
     data: { rowNumber, priority, registeredDateTimeAD },
+  });
+}
+
+// Update Benzo Keep Notes (Column AL) - JSON formatted notes
+export async function updateBenzoKeepNotes(
+  rowNumber: number,
+  notesData: string,
+  registeredDateTimeAD?: string
+): Promise<{ success: boolean; benzoKeepNotes: string }> {
+  return callSheetsFunction<{ success: boolean; benzoKeepNotes: string }>("updateBenzoKeepNotes", {
+    data: { rowNumber, notesData, registeredDateTimeAD },
   });
 }
 

@@ -1,4 +1,4 @@
-import { MessageCircle, Mail, MapPin, RefreshCw, Pencil, Clock } from "lucide-react";
+import { MessageCircle, Mail, MapPin, RefreshCw, Pencil, Clock, StickyNote } from "lucide-react";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,7 @@ interface ClientHeroSectionProps {
   onAddQuotation: () => void;
   onAddFinalQuotation?: () => void; // New: for BOOKED clients to add/edit final quotation
   onPriorityChange?: (priority: number) => Promise<void>;
+  onBenzoKeepClick?: () => void; // New: open Benzo Keep dialog
   isLoggingCall?: boolean;
   isChangingStatus?: boolean;
   isAddingComment?: boolean;
@@ -68,6 +69,7 @@ const ClientHeroSection = ({
   onAddQuotation,
   onAddFinalQuotation,
   onPriorityChange,
+  onBenzoKeepClick,
   isLoggingCall = false,
   isChangingStatus = false,
   isAddingComment = false,
@@ -153,6 +155,17 @@ const ClientHeroSection = ({
             >
               <Pencil className="h-3.5 w-3.5" />
             </Button>
+            {onBenzoKeepClick && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onBenzoKeepClick}
+                className="rounded-full text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 h-8 px-3 gap-1.5"
+              >
+                <StickyNote className="h-3.5 w-3.5" />
+                <span className="hidden md:inline text-xs font-medium">Keep</span>
+              </Button>
+            )}
           </div>
         </div>
 
