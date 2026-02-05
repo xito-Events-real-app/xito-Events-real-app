@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useCachedData } from "@/hooks/useCachedData";
 import { useDropdownData } from "@/hooks/useDropdownData";
-import { updateClient, ClientData, updateClientStatus, logCallAttempt, addPayment, updateClientQuotation, addClientComment, updateFinalQuotation, getSingleClient, updateClientPriority, updateBargainingRates } from "@/lib/sheets-api";
+import { updateClient, ClientData, updateClientStatus, logCallAttempt, addPayment, updateClientQuotation, addClientComment, updateFinalQuotation, getSingleClient, updateClientPriority, updateBargainingRates, updateBenzoKeepNotes } from "@/lib/sheets-api";
 import { Checkbox } from "@/components/ui/checkbox";
 import { forceResetDatabase, notifyCacheUpdate } from "@/lib/cache-manager";
 import { toast } from "@/hooks/use-toast";
@@ -54,7 +54,7 @@ import { EventSelector } from "@/components/form/EventSelector";
 import { getCountryCodeFromName } from "@/components/form/CountrySelector";
 import { valleyCities, nepalCitiesOutsideValley, clientLocationOptions } from "@/lib/form-data";
 import PaymentDrawer from "@/components/finance/PaymentDrawer";
-import { ClientDetailSidebar, ClientHeroSection, SectionType, EventDetailsSummaryCard, FullScreenEventCard, ClientDetailsCard } from "@/components/client-detail";
+import { ClientDetailSidebar, ClientHeroSection, SectionType, EventDetailsSummaryCard, FullScreenEventCard, ClientDetailsCard, BenzoKeepDialog, BenzoKeepViewer } from "@/components/client-detail";
 import { EventDetailCard } from "@/components/client-detail/EventDetailCard";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useEventDetails } from "@/hooks/useEventDetails";
@@ -212,6 +212,11 @@ const ClientDetail = () => {
   const [clientBargainRates, setClientBargainRates] = useState<Record<string, string>>({});
   const [ourBargainRates, setOurBargainRates] = useState<Record<string, string>>({});
   const [isSavingBargain, setIsSavingBargain] = useState(false);
+
+  // Benzo Keep Notes state
+  const [showBenzoKeepDialog, setShowBenzoKeepDialog] = useState(false);
+  const [isSavingKeepNotes, setIsSavingKeepNotes] = useState(false);
+  const [currentKeepNotes, setCurrentKeepNotes] = useState("");
 
   // Client sync state
   const [isSyncingClient, setIsSyncingClient] = useState(false);
@@ -1116,8 +1121,37 @@ const ClientDetail = () => {
       setCurrentPaymentsMade(client.paymentsMade || '');
       setCurrentRemainingPayment(client.remainingPayment || '');
       setCurrentFinalQuotation(client.finalQuotation || '');
+      setCurrentKeepNotes(client.benzoKeepNotes || '');
     }
-  }, [client?.rowNumber, client?.registeredDateTimeAD, client?.statusLog, client?.comments, client?.quotationData, client?.paymentsMade, client?.remainingPayment, client?.finalQuotation]);
+  }, [client?.rowNumber, client?.registeredDateTimeAD, client?.statusLog, client?.comments, client?.quotationData, client?.paymentsMade, client?.remainingPayment, client?.finalQuotation, client?.benzoKeepNotes]);
+
+  // Handle saving Benzo Keep notes
+  const handleSaveKeepNotes = async (notesData: string) => {
+    if (!client?.rowNumber) return;
+    
+    setIsSavingKeepNotes(true);
+    try {
+      const result = await updateBenzoKeepNotes(
+        client.rowNumber, 
+        notesData, 
+        client.registeredDateTimeAD
+      );
+      setCurrentKeepNotes(result.benzoKeepNotes);
+      
+      // Update global cache
+      if (updateClientCache) {
+        updateClientCache({ ...client, benzoKeepNotes: result.benzoKeepNotes });
+      }
+      
+      toast({ title: "Note saved" });
+      setShowBenzoKeepDialog(false);
+    } catch (err) {
+      console.error('Failed to save Benzo Keep notes:', err);
+      toast({ title: "Failed to save note", variant: "destructive" });
+    } finally {
+      setIsSavingKeepNotes(false);
+    }
+  };
 
   // Only show loading if we have no clients AND still loading
   if (isLoading && clients.length === 0) {
@@ -1493,6 +1527,7 @@ const ClientDetail = () => {
                 setShowFinalQuotationSaveDialog(true);
               }}
               onPriorityChange={handlePriorityChange}
+              onBenzoKeepClick={() => setShowBenzoKeepDialog(true)}
               isLoggingCall={isLoggingCall}
               isChangingStatus={isChangingStatus}
               isAddingComment={isAddingComment}
@@ -1993,6 +2028,14 @@ const ClientDetail = () => {
               )}
             </div>
           )}
+
+          {/* Keep Notes Section */}
+          {activeSection === 'keepNotes' && (
+            <BenzoKeepViewer 
+              notesData={currentKeepNotes || client.benzoKeepNotes}
+              onEdit={() => setShowBenzoKeepDialog(true)}
+            />
+          )}
         </div>
       </div>
 
@@ -2268,6 +2311,16 @@ const ClientDetail = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Benzo Keep Dialog */}
+      <BenzoKeepDialog
+        open={showBenzoKeepDialog}
+        onOpenChange={setShowBenzoKeepDialog}
+        clientName={client?.clientName || ''}
+        existingNotes={currentKeepNotes || client?.benzoKeepNotes}
+        onSave={handleSaveKeepNotes}
+        isSaving={isSavingKeepNotes}
+      />
     </div>
   );
 };

@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'getSearchHistory' | 'saveSearchQuery';
+  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -2684,6 +2684,90 @@ async function updateClientPriority(
 
   console.log(`[PRIORITY] Updated ${targetSheet} row ${actualRowNumber} to ${priority} stars`);
   return { success: true };
+}
+
+// ============= UPDATE BENZO KEEP NOTES =============
+// Update Benzo Keep notes (Column AL - index 37) - JSON formatted notes
+// Uses intelligent sheet routing to find client in either CLIENT TRACKER or BOOKED CLIENTS
+async function updateBenzoKeepNotes(
+  accessToken: string,
+  spreadsheetId: string,
+  rowNumber: number,
+  notesData: string,
+  registeredDateTimeAD?: string
+): Promise<{ success: boolean; benzoKeepNotes: string }> {
+  if (!rowNumber || rowNumber < 2) {
+    throw new Error('Valid rowNumber is required for updating Benzo Keep notes');
+  }
+
+  // Determine which sheet the client is in and find the correct row
+  let targetSheet: 'CLIENT TRACKER' | 'BOOKED CLIENTS' = 'CLIENT TRACKER';
+  let actualRowNumber = rowNumber;
+
+  if (registeredDateTimeAD) {
+    // Search BOOKED CLIENTS first (it's the source of truth for booked clients)
+    const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:A2000");
+    const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}`;
+
+    const bookedResponse = await fetch(bookedUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (bookedResponse.ok) {
+      const bookedData = await bookedResponse.json();
+      if (bookedData.values) {
+        const foundIndex = bookedData.values.findIndex((row: string[]) => row[0]?.trim() === registeredDateTimeAD.trim());
+        if (foundIndex !== -1) {
+          targetSheet = 'BOOKED CLIENTS';
+          actualRowNumber = foundIndex + 2;
+          console.log(`[BENZO KEEP] Found in BOOKED CLIENTS at row ${actualRowNumber}`);
+        }
+      }
+    }
+
+    // If not found in BOOKED CLIENTS, search CLIENT TRACKER
+    if (targetSheet === 'CLIENT TRACKER') {
+      const trackerRange = encodeURIComponent("'CLIENT TRACKER'!A2:A2000");
+      const trackerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}`;
+
+      const trackerResponse = await fetch(trackerUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (trackerResponse.ok) {
+        const trackerData = await trackerResponse.json();
+        if (trackerData.values) {
+          const foundIndex = trackerData.values.findIndex((row: string[]) => row[0]?.trim() === registeredDateTimeAD.trim());
+          if (foundIndex !== -1) {
+            actualRowNumber = foundIndex + 2;
+            console.log(`[BENZO KEEP] Found in CLIENT TRACKER at row ${actualRowNumber}`);
+          }
+        }
+      }
+    }
+  }
+
+  // Update Column AL (Benzo Keep notes) - Column index 37
+  const range = encodeURIComponent(`'${targetSheet}'!AL${actualRowNumber}`);
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [[notesData]] }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Google Sheets API error (updateBenzoKeepNotes):', response.status, errorText);
+    throw new Error(`Failed to update Benzo Keep notes: ${response.status}`);
+  }
+
+  console.log(`[BENZO KEEP] Updated ${targetSheet} row ${actualRowNumber} notes saved`);
+  return { success: true, benzoKeepNotes: notesData };
 }
 
 // Add payment entry to Columns AE, AF, AG
@@ -5377,6 +5461,16 @@ Deno.serve(async (req) => {
           spreadsheetId,
           data.rowNumber as number,
           data.priority as string,
+          data.registeredDateTimeAD as string | undefined
+        );
+        break;
+      case 'updateBenzoKeepNotes':
+        if (!data) throw new Error('data is required for updateBenzoKeepNotes');
+        result = await updateBenzoKeepNotes(
+          accessToken,
+          spreadsheetId,
+          data.rowNumber as number,
+          data.notesData as string || '',
           data.registeredDateTimeAD as string | undefined
         );
         break;
