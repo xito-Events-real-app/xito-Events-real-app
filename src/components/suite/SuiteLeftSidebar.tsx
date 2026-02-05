@@ -10,6 +10,7 @@ import { useHandlerStarClients } from "@/hooks/useHandlerStarClients";
 import { ChevronRight, Construction, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { SuiteBenzoKeepSection } from "./SuiteBenzoKeepSection";
 
 const HANDLERS = [
   { name: 'Benzo', colorScheme: 'violet' as const },
@@ -234,6 +235,9 @@ export function SuiteLeftSidebar({ onSelectStarHandler, selectedStarHandler }: S
           ))}
         </div>
       </div>
+
+      {/* Benzo Keep Section */}
+      <SuiteBenzoKeepSection />
     </div>
   );
 }

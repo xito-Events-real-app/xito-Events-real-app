@@ -768,3 +768,47 @@ export async function resyncClientContactDetails(registeredDateTimeAD: string): 
     data: { registeredDateTimeAD },
   });
 }
+
+// ============= UNASSIGNED BENZO KEEP NOTES =============
+
+export interface UnassignedBenzoNote {
+  id: string;
+  content: string;
+  markerColor: 'yellow' | 'green' | 'pink' | 'blue' | 'orange';
+  createdAt: string;
+  lastUpdated: string;
+}
+
+// Get all unassigned Benzo Keep notes from Column AM
+export async function getUnassignedBenzoKeepNotes(): Promise<UnassignedBenzoNote[]> {
+  return callSheetsFunction<UnassignedBenzoNote[]>("getUnassignedBenzoKeepNotes");
+}
+
+// Save/update an unassigned Benzo Keep note
+export async function saveUnassignedBenzoKeepNote(note: UnassignedBenzoNote): Promise<{ success: boolean }> {
+  return callSheetsFunction<{ success: boolean }>("saveUnassignedBenzoKeepNote", {
+    data: { note },
+  });
+}
+
+// Delete an unassigned Benzo Keep note
+export async function deleteUnassignedBenzoKeepNote(noteId: string): Promise<{ success: boolean }> {
+  return callSheetsFunction<{ success: boolean }>("deleteUnassignedBenzoKeepNote", {
+    data: { noteId },
+  });
+}
+
+// Transfer an unassigned note to a client's Benzo Keep (Column AL)
+export async function transferBenzoKeepNote(
+  noteId: string,
+  targetClientRegisteredDateTimeAD: string
+): Promise<{ success: boolean }> {
+  return callSheetsFunction<{ success: boolean }>("transferBenzoKeepNote", {
+    data: { noteId, targetClientRegisteredDateTimeAD },
+  });
+}
+
+// Get clients for note assignment (CLIENT TRACKER only, sorted by most recent)
+export async function getClientsForNoteAssignment(): Promise<ClientData[]> {
+  return callSheetsFunction<ClientData[]>("getClientsForNoteAssignment");
+}

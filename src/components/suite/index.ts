@@ -14,3 +14,6 @@ export { SuiteQuickActionsBar } from './SuiteQuickActionsBar';
 export { SuiteDashboardContent } from './SuiteDashboardContent';
 export { SuiteModuleGrid } from './SuiteModuleGrid';
 export { StarClientDetailView } from './StarClientDetailView';
+export { SuiteBenzoKeepSection } from './SuiteBenzoKeepSection';
+export { UnassignedBenzoKeepDialog } from './UnassignedBenzoKeepDialog';
+export { AssignNoteDialog } from './AssignNoteDialog';
