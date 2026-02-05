@@ -17,3 +17,4 @@ export { StarClientDetailView } from './StarClientDetailView';
 export { SuiteBenzoKeepSection } from './SuiteBenzoKeepSection';
 export { UnassignedBenzoKeepDialog } from './UnassignedBenzoKeepDialog';
 export { AssignNoteDialog } from './AssignNoteDialog';
+export { BenzoKeepNotepadDialog } from './BenzoKeepNotepadDialog';

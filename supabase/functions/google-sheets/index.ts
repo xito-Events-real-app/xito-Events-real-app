@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment';
+  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -499,6 +499,113 @@ async function getClientsForNoteAssignment(accessToken: string, spreadsheetId: s
       eventMonth: row[13] || '',
     }))
     .filter((client: { clientName: string }) => client.clientName); // Filter out empty rows
+}
+
+// Assign a new Benzo Keep note directly to a client's Column AL (without going through unassigned pool)
+async function assignBenzoKeepNoteToClient(
+  accessToken: string,
+  spreadsheetId: string,
+  registeredDateTimeAD: string,
+  notesData: string
+): Promise<{ success: boolean }> {
+  console.log(`[ASSIGN NOTE] Assigning note to client: ${registeredDateTimeAD}`);
+  
+  // Find the client row by registeredDateTimeAD
+  const searchRange = encodeURIComponent("'CLIENT TRACKER'!A2:A1000");
+  const searchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${searchRange}`;
+  
+  const searchResponse = await fetch(searchUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  
+  if (!searchResponse.ok) {
+    console.error('[ASSIGN NOTE] Failed to search for client');
+    return { success: false };
+  }
+  
+  const searchData = await searchResponse.json();
+  if (!searchData.values) {
+    console.error('[ASSIGN NOTE] No data in tracker');
+    return { success: false };
+  }
+  
+  // Find the row with matching registeredDateTimeAD
+  let targetRow = -1;
+  for (let i = 0; i < searchData.values.length; i++) {
+    if (searchData.values[i][0] === registeredDateTimeAD) {
+      targetRow = i + 2; // +2 because of 0-index and header row
+      break;
+    }
+  }
+  
+  if (targetRow === -1) {
+    console.error(`[ASSIGN NOTE] Client not found: ${registeredDateTimeAD}`);
+    return { success: false };
+  }
+  
+  // Get existing notes from Column AL
+  const alRange = encodeURIComponent(`'CLIENT TRACKER'!AL${targetRow}`);
+  const alUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${alRange}`;
+  
+  const alResponse = await fetch(alUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  
+  let existingContent = '';
+  if (alResponse.ok) {
+    const alData = await alResponse.json();
+    if (alData.values && alData.values[0] && alData.values[0][0]) {
+      try {
+        const parsed = JSON.parse(alData.values[0][0]);
+        existingContent = parsed.content || '';
+      } catch {
+        // Plain text
+        existingContent = alData.values[0][0];
+      }
+    }
+  }
+  
+  // Parse the new note data
+  let newNoteData: { content: string; markerColor: string; lastUpdated: string };
+  try {
+    newNoteData = JSON.parse(notesData);
+  } catch {
+    console.error('[ASSIGN NOTE] Invalid note data format');
+    return { success: false };
+  }
+  
+  // Merge content
+  const now = new Date().toISOString();
+  const mergedContent = existingContent 
+    ? `${existingContent}\n\n--- New Note (${new Date().toLocaleDateString()}) ---\n${newNoteData.content}`
+    : newNoteData.content;
+  
+  const finalNotes = {
+    content: mergedContent,
+    markerColor: newNoteData.markerColor,
+    lastUpdated: now,
+  };
+  
+  // Write to Column AL
+  const updateRange = encodeURIComponent(`'CLIENT TRACKER'!AL${targetRow}`);
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`;
+  
+  const updateResponse = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [[JSON.stringify(finalNotes)]] }),
+  });
+  
+  if (!updateResponse.ok) {
+    console.error('[ASSIGN NOTE] Failed to write to client column');
+    return { success: false };
+  }
+  
+  console.log(`[ASSIGN NOTE] Successfully assigned note to row ${targetRow}`);
+  return { success: true };
 }
 
 // Get parlour types from EVENT DETAILS SETUP DATA sheet (Column C, starting from row 2)
@@ -5751,6 +5858,17 @@ Deno.serve(async (req) => {
         break;
       case 'getClientsForNoteAssignment':
         result = await getClientsForNoteAssignment(accessToken, spreadsheetId);
+        break;
+      case 'assignBenzoKeepNoteToClient':
+        if (!data || !data.registeredDateTimeAD || !data.notesData) {
+          throw new Error('registeredDateTimeAD and notesData are required for assignBenzoKeepNoteToClient');
+        }
+        result = await assignBenzoKeepNoteToClient(
+          accessToken, 
+          spreadsheetId, 
+          data.registeredDateTimeAD as string, 
+          data.notesData as string
+        );
         break;
       default:
         throw new Error(`Unknown action: ${action}`);

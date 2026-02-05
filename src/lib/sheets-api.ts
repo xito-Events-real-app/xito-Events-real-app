@@ -812,3 +812,13 @@ export async function transferBenzoKeepNote(
 export async function getClientsForNoteAssignment(): Promise<ClientData[]> {
   return callSheetsFunction<ClientData[]>("getClientsForNoteAssignment");
 }
+
+// Assign a new Benzo Keep note directly to a client's Column AL
+export async function assignBenzoKeepNoteToClient(
+  registeredDateTimeAD: string,
+  notesData: string
+): Promise<{ success: boolean }> {
+  return callSheetsFunction<{ success: boolean }>("assignBenzoKeepNoteToClient", {
+    data: { registeredDateTimeAD, notesData },
+  });
+}

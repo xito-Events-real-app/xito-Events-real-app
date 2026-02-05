@@ -3,12 +3,10 @@ import { StickyNote, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import benzoAvatar from "@/assets/benzo-avatar.jpeg";
 import { UnassignedBenzoKeepDialog } from "./UnassignedBenzoKeepDialog";
+import { BenzoKeepNotepadDialog } from "./BenzoKeepNotepadDialog";
 
-interface SuiteBenzoKeepSectionProps {
-  onOpenBenzoKeep?: () => void;
-}
-
-export function SuiteBenzoKeepSection({ onOpenBenzoKeep }: SuiteBenzoKeepSectionProps) {
+export function SuiteBenzoKeepSection() {
+  const [notepadOpen, setNotepadOpen] = useState(false);
   const [unassignedOpen, setUnassignedOpen] = useState(false);
 
   return (
@@ -22,9 +20,9 @@ export function SuiteBenzoKeepSection({ onOpenBenzoKeep }: SuiteBenzoKeepSection
         </div>
         
         <div className="space-y-1">
-          {/* Benzo Keep - Shows clients with notes */}
+          {/* Benzo Keep - Opens notepad to write new note */}
           <button
-            onClick={onOpenBenzoKeep}
+            onClick={() => setNotepadOpen(true)}
             className={cn(
               "w-full flex items-center gap-3 p-2.5 rounded-xl transition-all text-left group",
               "hover:bg-violet-50 border border-transparent hover:border-violet-200"
@@ -39,11 +37,11 @@ export function SuiteBenzoKeepSection({ onOpenBenzoKeep }: SuiteBenzoKeepSection
               <p className="text-sm font-medium text-gray-800 group-hover:text-violet-700">
                 Benzo Keep
               </p>
-              <p className="text-xs text-gray-500">Assigned notes</p>
+              <p className="text-xs text-gray-500">Write new note</p>
             </div>
           </button>
 
-          {/* Unassigned Benzo Keep */}
+          {/* Unassigned Benzo Keep - View saved unassigned notes */}
           <button
             onClick={() => setUnassignedOpen(true)}
             className={cn(
@@ -58,11 +56,16 @@ export function SuiteBenzoKeepSection({ onOpenBenzoKeep }: SuiteBenzoKeepSection
               <p className="text-sm font-medium text-gray-800 group-hover:text-amber-700">
                 Unassigned
               </p>
-              <p className="text-xs text-gray-500">Quick notes</p>
+              <p className="text-xs text-gray-500">View saved notes</p>
             </div>
           </button>
         </div>
       </div>
+
+      <BenzoKeepNotepadDialog
+        open={notepadOpen}
+        onOpenChange={setNotepadOpen}
+      />
 
       <UnassignedBenzoKeepDialog
         open={unassignedOpen}
