@@ -1,4 +1,5 @@
-import { MessageCircle, Mail, MapPin, RefreshCw, Pencil, Clock, StickyNote } from "lucide-react";
+import { MessageCircle, Mail, MapPin, RefreshCw, Pencil, Clock } from "lucide-react";
+import benzoAvatar from "@/assets/benzo-avatar.jpeg";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -162,8 +163,8 @@ const ClientHeroSection = ({
                 onClick={onBenzoKeepClick}
                 className="rounded-full text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 h-8 px-3 gap-1.5"
               >
-                <StickyNote className="h-3.5 w-3.5" />
-                <span className="hidden md:inline text-xs font-medium">Keep</span>
+                <img src={benzoAvatar} alt="Benzo" className="h-5 w-5 rounded-full object-cover" />
+                <span className="hidden md:inline text-xs font-medium">Benzo Keep</span>
               </Button>
             )}
           </div>

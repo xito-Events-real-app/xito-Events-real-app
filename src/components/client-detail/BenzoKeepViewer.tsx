@@ -25,7 +25,7 @@ const BenzoKeepViewer = ({ notesData, onEdit }: BenzoKeepViewerProps) => {
       <div className="space-y-4">
         <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
           <StickyNote className="h-5 w-5 text-amber-500" />
-          Benzo Keep Notes
+          Benzo Keep
         </h2>
         <div className="text-center py-12 bg-white/5 rounded-xl border border-dashed border-white/20">
           <StickyNote className="h-12 w-12 mx-auto mb-3 text-white/30" />
@@ -47,7 +47,7 @@ const BenzoKeepViewer = ({ notesData, onEdit }: BenzoKeepViewerProps) => {
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-white flex items-center gap-2">
           <StickyNote className="h-5 w-5 text-amber-500" />
-          Benzo Keep Notes
+          Benzo Keep
         </h2>
         <Button 
           onClick={onEdit} 
