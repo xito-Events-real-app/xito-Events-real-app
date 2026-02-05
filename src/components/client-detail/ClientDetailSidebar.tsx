@@ -31,7 +31,7 @@ const sidebarItems: { id: SectionType; label: string; icon: React.ElementType }[
   { id: 'activity', label: 'Activity', icon: Activity },
   { id: 'comments', label: 'Comments', icon: MessageSquare },
   { id: 'financials', label: 'Financials', icon: CreditCard },
-  { id: 'keepNotes', label: 'Keep Notes', icon: StickyNote },
+  { id: 'keepNotes', label: 'Benzo Keep', icon: StickyNote },
 ];
 
 const ClientDetailSidebar = ({

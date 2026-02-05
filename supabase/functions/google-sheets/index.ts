@@ -1410,7 +1410,7 @@ async function updateClientStatus(accessToken: string, spreadsheetId: string, ro
 // NOTE: This returns ONLY clients from CLIENT TRACKER (which now excludes BOOKED clients after migration)
 // For unified data including BOOKED clients, use getAllClientsFromBothSheets
 async function getClients(accessToken: string, spreadsheetId: string, limit = 50) {
-  const range = encodeURIComponent("'CLIENT TRACKER'!A2:AK" + (limit + 1));
+  const range = encodeURIComponent("'CLIENT TRACKER'!A2:AL" + (limit + 1));
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   const response = await fetch(url, {
@@ -1465,6 +1465,7 @@ async function getClients(accessToken: string, spreadsheetId: string, limit = 50
     serviceTypes: row[34] || '',          // Column AI - Service types (multi, "/" separated)
     lastActivityLog: row[35] || '',       // Column AJ - Last activity timestamp log
     priority: row[36] || '',              // Column AK - Star rating (1-5)
+    benzoKeepNotes: row[37] || '',        // Column AL - Benzo Keep notes (JSON)
     _source: 'tracker' as const,          // Source indicator for unified queries
   }));
 }
@@ -1518,11 +1519,12 @@ async function getSingleClient(accessToken: string, spreadsheetId: string, regis
     serviceTypes: row[34] || '',
     lastActivityLog: row[35] || '',       // Column AJ - Last activity timestamp log
     priority: row[36] || '',              // Column AK - Star rating (1-5)
+    benzoKeepNotes: row[37] || '',        // Column AL - Benzo Keep notes (JSON)
     _source: source,
   });
 
   // PRIORITY: Search BOOKED CLIENTS FIRST (booked wins over tracker duplicates)
-  const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:AK2000");
+  const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:AL2000");
   const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}`;
   
   const bookedResponse = await fetch(bookedUrl, {
@@ -1541,7 +1543,7 @@ async function getSingleClient(accessToken: string, spreadsheetId: string, regis
   }
 
   // Not found in BOOKED CLIENTS, search CLIENT TRACKER
-  const trackerRange = encodeURIComponent("'CLIENT TRACKER'!A2:AK2000");
+  const trackerRange = encodeURIComponent("'CLIENT TRACKER'!A2:AL2000");
   const trackerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}`;
   
   const trackerResponse = await fetch(trackerUrl, {
@@ -4058,8 +4060,8 @@ async function updateClientEventDetails(
 // Get all clients from BOOKED CLIENTS sheet (same structure as CLIENT TRACKER: A-AJ)
 // Now includes a lookup to resolve originalRowNumber from CLIENT TRACKER
 async function getBookedClients(accessToken: string, spreadsheetId: string, limit = 100) {
-  // 1. Fetch booked clients data (now including Column AJ)
-  const range = encodeURIComponent("'BOOKED CLIENTS'!A2:AJ" + (limit + 1));
+  // 1. Fetch booked clients data (including Column AL for Benzo Keep notes)
+  const range = encodeURIComponent("'BOOKED CLIENTS'!A2:AL" + (limit + 1));
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   const response = await fetch(url, {
@@ -4139,6 +4141,7 @@ async function getBookedClients(accessToken: string, spreadsheetId: string, limi
       serviceTypes: row[34] || '',          // Column AI
       lastActivityLog: row[35] || '',       // Column AJ - Activity timestamp log
       priority: row[36] || '',              // Column AK - Star rating (1-5)
+      benzoKeepNotes: row[37] || '',        // Column AL - Benzo Keep notes (JSON)
       bookedDateTime: '',                   // Not stored separately
     };
   });
