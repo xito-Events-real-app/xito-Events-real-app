@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery';
+  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -256,6 +256,249 @@ async function saveSearchQuery(accessToken: string, spreadsheetId: string, query
   }
 
   return { success: true, history: newHistory };
+}
+
+// ============= UNASSIGNED BENZO KEEP NOTES =============
+// Stored in Column AM (index 38) of CLIENT TRACKER, Row 2, as a JSON array
+
+interface UnassignedBenzoNote {
+  id: string;
+  content: string;
+  markerColor: 'yellow' | 'green' | 'pink' | 'blue' | 'orange';
+  createdAt: string;
+  lastUpdated: string;
+}
+
+// Get all unassigned Benzo Keep notes from Column AM, Row 2
+async function getUnassignedBenzoKeepNotes(accessToken: string, spreadsheetId: string): Promise<UnassignedBenzoNote[]> {
+  const range = encodeURIComponent("'CLIENT TRACKER'!AM2");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    console.error('Failed to fetch unassigned notes');
+    return [];
+  }
+
+  const data = await response.json();
+  if (!data.values || !data.values[0] || !data.values[0][0]) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(data.values[0][0]);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+// Save an unassigned Benzo Keep note (add or update)
+async function saveUnassignedBenzoKeepNote(
+  accessToken: string, 
+  spreadsheetId: string, 
+  note: UnassignedBenzoNote
+): Promise<{ success: boolean }> {
+  // First get existing notes
+  const existingNotes = await getUnassignedBenzoKeepNotes(accessToken, spreadsheetId);
+  
+  // Check if note exists (update) or is new (add)
+  const existingIndex = existingNotes.findIndex(n => n.id === note.id);
+  
+  let updatedNotes: UnassignedBenzoNote[];
+  if (existingIndex >= 0) {
+    // Update existing
+    updatedNotes = existingNotes.map(n => n.id === note.id ? note : n);
+  } else {
+    // Add new at beginning
+    updatedNotes = [note, ...existingNotes];
+  }
+  
+  // Write back to sheet
+  const range = encodeURIComponent("'CLIENT TRACKER'!AM2");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [[JSON.stringify(updatedNotes)]] }),
+  });
+
+  if (!response.ok) {
+    console.error('Failed to save unassigned note');
+    return { success: false };
+  }
+
+  return { success: true };
+}
+
+// Delete an unassigned Benzo Keep note
+async function deleteUnassignedBenzoKeepNote(
+  accessToken: string, 
+  spreadsheetId: string, 
+  noteId: string
+): Promise<{ success: boolean }> {
+  // Get existing notes
+  const existingNotes = await getUnassignedBenzoKeepNotes(accessToken, spreadsheetId);
+  
+  // Filter out the note to delete
+  const updatedNotes = existingNotes.filter(n => n.id !== noteId);
+  
+  // Write back to sheet
+  const range = encodeURIComponent("'CLIENT TRACKER'!AM2");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+  
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [[JSON.stringify(updatedNotes)]] }),
+  });
+
+  if (!response.ok) {
+    console.error('Failed to delete unassigned note');
+    return { success: false };
+  }
+
+  return { success: true };
+}
+
+// Transfer an unassigned note to a client's Benzo Keep (Column AL)
+async function transferBenzoKeepNote(
+  accessToken: string,
+  spreadsheetId: string,
+  noteId: string,
+  targetClientRegisteredDateTimeAD: string
+): Promise<{ success: boolean }> {
+  console.log(`[TRANSFER NOTE] Starting transfer for noteId: ${noteId} to client: ${targetClientRegisteredDateTimeAD}`);
+  
+  // 1. Get the unassigned notes and find the one to transfer
+  const unassignedNotes = await getUnassignedBenzoKeepNotes(accessToken, spreadsheetId);
+  const noteToTransfer = unassignedNotes.find(n => n.id === noteId);
+  
+  if (!noteToTransfer) {
+    console.error('[TRANSFER NOTE] Note not found');
+    return { success: false };
+  }
+  
+  // 2. Find the client row in CLIENT TRACKER
+  const range = encodeURIComponent("'CLIENT TRACKER'!A2:AL2000");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!response.ok) {
+    console.error('[TRANSFER NOTE] Failed to fetch client data');
+    return { success: false };
+  }
+  
+  const data = await response.json();
+  if (!data.values) return { success: false };
+  
+  // Find the row with matching registeredDateTimeAD
+  let targetRow = -1;
+  for (let i = 0; i < data.values.length; i++) {
+    if (data.values[i][0] === targetClientRegisteredDateTimeAD) {
+      targetRow = i + 2; // +2 because we start from row 2
+      break;
+    }
+  }
+  
+  if (targetRow === -1) {
+    console.error('[TRANSFER NOTE] Client not found in tracker');
+    return { success: false };
+  }
+  
+  // 3. Get existing client notes (Column AL, index 37)
+  const clientRowIndex = targetRow - 2;
+  const existingNotesStr = data.values[clientRowIndex]?.[37] || '';
+  
+  // Parse existing notes or create new structure
+  let clientNotes: { content: string; markerColor: string; lastUpdated: string } | null = null;
+  try {
+    if (existingNotesStr) {
+      clientNotes = JSON.parse(existingNotesStr);
+    }
+  } catch {
+    // If parsing fails, treat as no existing notes
+  }
+  
+  // 4. Merge the transferred note into client's notes
+  const now = new Date().toISOString();
+  let newContent = noteToTransfer.content;
+  
+  if (clientNotes?.content) {
+    // Append to existing content with separator
+    newContent = `${clientNotes.content}\n\n--- Transferred Note (${new Date().toLocaleDateString()}) ---\n${noteToTransfer.content}`;
+  }
+  
+  const mergedNotes = {
+    content: newContent,
+    markerColor: noteToTransfer.markerColor,
+    lastUpdated: now,
+  };
+  
+  // 5. Write to client's Column AL
+  const updateRange = encodeURIComponent(`'CLIENT TRACKER'!AL${targetRow}`);
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`;
+  
+  const updateResponse = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [[JSON.stringify(mergedNotes)]] }),
+  });
+  
+  if (!updateResponse.ok) {
+    console.error('[TRANSFER NOTE] Failed to write to client column');
+    return { success: false };
+  }
+  
+  // 6. Remove the note from unassigned notes
+  await deleteUnassignedBenzoKeepNote(accessToken, spreadsheetId, noteId);
+  
+  console.log(`[TRANSFER NOTE] Successfully transferred note to row ${targetRow}`);
+  return { success: true };
+}
+
+// Get clients for note assignment (CLIENT TRACKER only, basic info, sorted by most recent)
+async function getClientsForNoteAssignment(accessToken: string, spreadsheetId: string) {
+  const range = encodeURIComponent("'CLIENT TRACKER'!A2:P500"); // A to P covers basic client info
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    console.error('Failed to fetch clients for assignment');
+    return [];
+  }
+
+  const data = await response.json();
+  if (!data.values) return [];
+
+  return data.values
+    .map((row: string[], index: number) => ({
+      rowNumber: index + 2,
+      registeredDateTimeAD: row[0] || '',
+      clientName: row[2] || '',
+      contactNo: row[6] || '',
+      whatsappNo: row[7] || '',
+      events: row[11] || '',
+      eventYear: row[12] || '',
+      eventMonth: row[13] || '',
+    }))
+    .filter((client: { clientName: string }) => client.clientName); // Filter out empty rows
 }
 
 // Get parlour types from EVENT DETAILS SETUP DATA sheet (Column C, starting from row 2)
@@ -5483,6 +5726,31 @@ Deno.serve(async (req) => {
       case 'saveSearchQuery':
         if (!data || !data.query) throw new Error('query is required for saveSearchQuery');
         result = await saveSearchQuery(accessToken, spreadsheetId, data.query as string);
+        break;
+      case 'getUnassignedBenzoKeepNotes':
+        result = await getUnassignedBenzoKeepNotes(accessToken, spreadsheetId);
+        break;
+      case 'saveUnassignedBenzoKeepNote':
+        if (!data || !data.note) throw new Error('note is required for saveUnassignedBenzoKeepNote');
+        result = await saveUnassignedBenzoKeepNote(accessToken, spreadsheetId, data.note as UnassignedBenzoNote);
+        break;
+      case 'deleteUnassignedBenzoKeepNote':
+        if (!data || !data.noteId) throw new Error('noteId is required for deleteUnassignedBenzoKeepNote');
+        result = await deleteUnassignedBenzoKeepNote(accessToken, spreadsheetId, data.noteId as string);
+        break;
+      case 'transferBenzoKeepNote':
+        if (!data || !data.noteId || !data.targetClientRegisteredDateTimeAD) {
+          throw new Error('noteId and targetClientRegisteredDateTimeAD are required for transferBenzoKeepNote');
+        }
+        result = await transferBenzoKeepNote(
+          accessToken, 
+          spreadsheetId, 
+          data.noteId as string, 
+          data.targetClientRegisteredDateTimeAD as string
+        );
+        break;
+      case 'getClientsForNoteAssignment':
+        result = await getClientsForNoteAssignment(accessToken, spreadsheetId);
         break;
       default:
         throw new Error(`Unknown action: ${action}`);
