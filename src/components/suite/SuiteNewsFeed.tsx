@@ -31,13 +31,13 @@ export function SuiteNewsFeed() {
   const dayGroups = Array.from(groupedByDay.entries());
   
   return (
-    <div className="px-4 py-4 pb-24 space-y-6 w-full max-w-3xl mx-auto">
+    <div className="px-4 py-4 pb-24 space-y-6 w-full">
       {/* Day Groups */}
       {dayGroups.map(([dayKey, dayActivities]) => (
         <div key={dayKey} className="space-y-2">
           {/* Day Header */}
           <div className="sticky top-0 z-10 py-2 bg-gray-50/95 backdrop-blur-sm -mx-4 px-4">
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
               {dayKey}
             </h3>
           </div>
