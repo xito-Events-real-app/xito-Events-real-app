@@ -176,36 +176,36 @@ function EventsHandlerTabs() {
   return (
     <Tabs defaultValue="events" className="w-full max-w-full overflow-x-hidden">
       <TabsList className="grid grid-cols-4 w-full mb-2 h-10 bg-gray-100 p-0.5">
-        <TabsTrigger 
-          value="events" 
-          className="gap-1 text-xs data-[state=active]:bg-emerald-500 data-[state=active]:text-white"
+        <TabsTrigger
+          value="events"
+          className="min-w-0 overflow-hidden gap-1 text-[11px] !px-1 !py-1 data-[state=active]:bg-emerald-500 data-[state=active]:text-white"
         >
-          <Calendar className="w-3.5 h-3.5" />
-          <span className="hidden xs:inline">Events</span>
+          <Calendar className="w-3.5 h-3.5 shrink-0" />
+          <span className="hidden sm:inline truncate">Events</span>
         </TabsTrigger>
-        {HANDLERS.map(h => (
-          <TabsTrigger 
-            key={h.name} 
-            value={h.name.toLowerCase()} 
-            className={`gap-1 text-xs ${
-              h.colorScheme === 'violet' 
-                ? 'data-[state=active]:bg-violet-500 data-[state=active]:text-white' 
+        {HANDLERS.map((h) => (
+          <TabsTrigger
+            key={h.name}
+            value={h.name.toLowerCase()}
+            className={`min-w-0 overflow-hidden gap-1 text-[11px] !px-1 !py-1 ${
+              h.colorScheme === 'violet'
+                ? 'data-[state=active]:bg-violet-500 data-[state=active]:text-white'
                 : h.colorScheme === 'emerald'
                 ? 'data-[state=active]:bg-emerald-500 data-[state=active]:text-white'
                 : 'data-[state=active]:bg-blue-500 data-[state=active]:text-white'
             }`}
           >
-            <User className="w-3.5 h-3.5" />
-            {h.name}
+            <User className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">{h.name}</span>
           </TabsTrigger>
         ))}
       </TabsList>
-      
+
       <TabsContent value="events" className="mt-0">
         <TodayEventsHero />
       </TabsContent>
-      
-      {HANDLERS.map(h => (
+
+      {HANDLERS.map((h) => (
         <TabsContent key={h.name} value={h.name.toLowerCase()} className="mt-0 space-y-3">
           <HandlerActivitySection handlerName={h.name} colorScheme={h.colorScheme} />
           <HandlerStarClients handlerName={h.name} colorScheme={h.colorScheme} />

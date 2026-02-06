@@ -178,7 +178,7 @@ export function MasterSyncButton() {
         onClick={handleMasterSync}
         disabled={isSyncing}
         className={cn(
-          "h-10 w-full rounded-full font-semibold gap-1 px-3 transition-all text-xs",
+          "h-9 w-full rounded-full font-semibold gap-1 px-2 transition-all text-[11px]",
           "bg-gradient-to-r from-orange-500 via-red-500 to-purple-600",
           "hover:from-orange-600 hover:via-red-600 hover:to-purple-700",
           "shadow-md shadow-orange-500/25",
@@ -187,7 +187,7 @@ export function MasterSyncButton() {
           "text-white border-0"
         )}
       >
-        <Rocket className="w-4 h-4 shrink-0" />
+        <Rocket className="w-3.5 h-3.5 shrink-0" />
         <span className="truncate">Sync</span>
       </Button>
 
