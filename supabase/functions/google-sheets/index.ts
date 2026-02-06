@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient';
+  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient' | 'getDailyTasks' | 'addDailyTask' | 'updateDailyTaskStatus' | 'getDailyTaskSetupData';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -468,6 +468,138 @@ async function transferBenzoKeepNote(
   
   console.log(`[TRANSFER NOTE] Successfully transferred note to row ${targetRow}`);
   return { success: true };
+}
+
+// ============= WTN DAILY TASK FUNCTIONS =============
+
+// Get all daily tasks from "WTN TASK" sheet
+async function getDailyTasks(accessToken: string, taskSpreadsheetId: string) {
+  const range = encodeURIComponent("'WTN TASK'!A2:K5000");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${taskSpreadsheetId}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Failed to fetch daily tasks:', response.status, errorText);
+    throw new Error(`Failed to fetch daily tasks: ${response.status}`);
+  }
+
+  const data = await response.json();
+  if (!data.values) return [];
+
+  return data.values
+    .map((row: string[], index: number) => ({
+      rowNumber: index + 2,
+      dateAD: row[0] || '',
+      dateBS: row[1] || '',
+      taskName: row[2] || '',
+      description: row[3] || '',
+      deadline: row[4] || '',
+      handler: row[5] || '',
+      backupHandler: row[6] || '',
+      contactNo: row[7] || '',
+      whatsappNo: row[8] || '',
+      urgency: parseInt(row[9] || '1', 10) || 1,
+      status: row[10] || 'Pending',
+    }))
+    .filter((task: { taskName: string }) => task.taskName);
+}
+
+// Add a new daily task to "WTN TASK" sheet
+async function addDailyTask(accessToken: string, taskSpreadsheetId: string, taskData: Record<string, unknown>) {
+  const range = encodeURIComponent("'WTN TASK'!A:K");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${taskSpreadsheetId}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+
+  const values = [[
+    taskData.dateAD || '',
+    taskData.dateBS || '',
+    taskData.taskName || '',
+    taskData.description || '',
+    taskData.deadline || '',
+    taskData.handler || '',
+    taskData.backupHandler || '',
+    taskData.contactNo || '',
+    taskData.whatsappNo || '',
+    String(taskData.urgency || '1'),
+    taskData.status || 'Pending',
+  ]];
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Failed to add daily task:', errorText);
+    throw new Error(`Failed to add daily task: ${response.status}`);
+  }
+
+  return { success: true };
+}
+
+// Update daily task status by row number
+async function updateDailyTaskStatus(accessToken: string, taskSpreadsheetId: string, rowNumber: number, newStatus: string) {
+  const range = encodeURIComponent(`'WTN TASK'!K${rowNumber}`);
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${taskSpreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [[newStatus]] }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Failed to update task status:', errorText);
+    throw new Error(`Failed to update task status: ${response.status}`);
+  }
+
+  return { success: true };
+}
+
+// Get handler setup data from "WTN DAILY TASK SETUP DATA" sheet
+async function getDailyTaskSetupData(accessToken: string, taskSpreadsheetId: string) {
+  const range = encodeURIComponent("'WTN DAILY TASK SETUP DATA'!A2:B100");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${taskSpreadsheetId}/values/${range}`;
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Failed to fetch daily task setup data:', errorText);
+    throw new Error(`Failed to fetch daily task setup data: ${response.status}`);
+  }
+
+  const data = await response.json();
+  if (!data.values) return { handlers: [], handlerWhatsApp: {} };
+
+  const handlers: string[] = [];
+  const handlerWhatsApp: Record<string, string> = {};
+
+  for (const row of data.values) {
+    const name = row[0]?.trim();
+    if (name) {
+      handlers.push(name);
+      if (row[1]) {
+        handlerWhatsApp[name] = row[1].trim();
+      }
+    }
+  }
+
+  return { handlers, handlerWhatsApp };
 }
 
 // Get clients for note assignment (CLIENT TRACKER only, basic info, sorted by most recent)
@@ -5870,6 +6002,29 @@ Deno.serve(async (req) => {
           data.notesData as string
         );
         break;
+      // ============= WTN DAILY TASK ACTIONS =============
+      case 'getDailyTasks': {
+        const taskSpreadsheetId = Deno.env.get('WTN_DAILY_TASK_SPREADSHEET_ID') || spreadsheetId;
+        result = await getDailyTasks(accessToken, taskSpreadsheetId);
+        break;
+      }
+      case 'addDailyTask': {
+        if (!data) throw new Error('data is required for addDailyTask');
+        const taskSpreadsheetId = Deno.env.get('WTN_DAILY_TASK_SPREADSHEET_ID') || spreadsheetId;
+        result = await addDailyTask(accessToken, taskSpreadsheetId, data);
+        break;
+      }
+      case 'updateDailyTaskStatus': {
+        if (!data || !data.rowNumber || !data.newStatus) throw new Error('rowNumber and newStatus are required for updateDailyTaskStatus');
+        const taskSpreadsheetId = Deno.env.get('WTN_DAILY_TASK_SPREADSHEET_ID') || spreadsheetId;
+        result = await updateDailyTaskStatus(accessToken, taskSpreadsheetId, data.rowNumber as number, data.newStatus as string);
+        break;
+      }
+      case 'getDailyTaskSetupData': {
+        const taskSpreadsheetId = Deno.env.get('WTN_DAILY_TASK_SPREADSHEET_ID') || spreadsheetId;
+        result = await getDailyTaskSetupData(accessToken, taskSpreadsheetId);
+        break;
+      }
       default:
         throw new Error(`Unknown action: ${action}`);
     }

@@ -11,6 +11,7 @@ import { ChevronRight, Construction, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { SuiteBenzoKeepSection } from "./SuiteBenzoKeepSection";
+import { CheckSquare } from "lucide-react";
 
 const HANDLERS = [
   { name: 'Benzo', colorScheme: 'violet' as const },
@@ -238,6 +239,23 @@ export function SuiteLeftSidebar({ onSelectStarHandler, selectedStarHandler }: S
 
       {/* Benzo Keep Section */}
       <SuiteBenzoKeepSection />
+
+      {/* WTN Daily Task Section */}
+      <div className="border-t border-gray-200 p-2">
+        <button
+          onClick={() => navigate('/tasks')}
+          className="w-full flex items-center gap-3 p-2.5 rounded-xl transition-all text-left group hover:bg-purple-50 border border-transparent hover:border-purple-200"
+        >
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-violet-600 flex items-center justify-center shadow-sm">
+            <CheckSquare className="w-4 h-4 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-800 group-hover:text-purple-700">WTN Daily Task</p>
+            <p className="text-xs text-gray-500">Manage daily tasks</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-all shrink-0" />
+        </button>
+      </div>
     </div>
   );
 }
