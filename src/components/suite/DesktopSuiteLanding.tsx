@@ -127,7 +127,7 @@ export function DesktopSuiteLanding() {
 
       {/* News Sidebar (right) */}
       {showNews && (
-        <div className="w-80 border-l border-gray-200 bg-gray-50 flex flex-col shrink-0 h-screen sticky top-0">
+        <div className="w-[30vw] min-w-[320px] max-w-[600px] border-l border-gray-200 bg-gray-50 flex flex-col shrink-0 h-screen sticky top-0">
           <div className="p-4 border-b border-gray-200 bg-white shrink-0">
             <div className="flex items-center justify-between">
               <h2 className="font-bold text-gray-900 flex items-center gap-2">
