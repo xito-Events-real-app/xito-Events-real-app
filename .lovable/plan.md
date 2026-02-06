@@ -1,124 +1,114 @@
 
+## Fix: Mobile Suite Landing Page - Right Side Cutoff and Text Size
 
-## Add Benzo Keep Section to Mobile Suite Landing Page
+### Issues Identified
 
-### Overview
-Add the existing `SuiteBenzoKeepSection` component to the mobile home tab, positioned just below the Events/Handler tabs section.
-
----
-
-### Current Mobile Home Tab Layout
-
-```text
-┌─────────────────────────────────┐
-│  Quick Actions Bar              │
-├─────────────────────────────────┤
-│  [Search]      [Sync]           │
-├─────────────────────────────────┤
-│  [Events] [Benzo] [Barun] [Nikit]│
-│  ─────────────────────────────  │
-│  TodayEventsHero / Handler tabs │
-└─────────────────────────────────┘
-```
-
-### New Layout (After Change)
-
-```text
-┌─────────────────────────────────┐
-│  Quick Actions Bar              │
-├─────────────────────────────────┤
-│  [Search]      [Sync]           │
-├─────────────────────────────────┤
-│  [Events] [Benzo] [Barun] [Nikit]│
-│  ─────────────────────────────  │
-│  TodayEventsHero / Handler tabs │
-├─────────────────────────────────┤
-│  📒 Benzo Keep                  │
-│  ┌───────────────────────────┐  │
-│  │ 👤 Benzo Keep             │  │
-│  │    Write new note         │  │
-│  ├───────────────────────────┤  │
-│  │ 📋 Unassigned             │  │
-│  │    View saved notes       │  │
-│  └───────────────────────────┘  │
-└─────────────────────────────────┘
-```
+From the screenshot:
+1. **Right side cutoff**: "Add Payment" button, "Sync" button, and "Nikit" tab are being clipped
+2. **Large text**: "Upcoming Events" header and content take too much space, pushing Benzo Keep section down
 
 ---
 
-### Technical Changes
+### Root Causes
 
-#### File: `src/components/suite/MobileSuiteLanding.tsx`
-
-1. **Import** the `SuiteBenzoKeepSection` component
-2. **Add** the component inside `HomeTabContent()` after the `EventsHandlerTabs` component
-
-**Changes:**
-
-| Location | Change |
-|----------|--------|
-| Line 1-18 (imports) | Add `import { SuiteBenzoKeepSection } from "./SuiteBenzoKeepSection";` |
-| Line 163 (inside HomeTabContent) | Add `<SuiteBenzoKeepSection />` after `<EventsHandlerTabs />` |
+| Component | Issue |
+|-----------|-------|
+| `SuiteQuickActionsBar` | Button text may overflow on narrow screens |
+| `TodayEventsHero` | Header text too large (`text-xl md:text-2xl`), icon size too big |
+| `MobileSuiteLanding` | Container padding may not account for all screen widths |
+| `EventsHandlerTabs` | Tab labels may overflow on narrow screens |
 
 ---
 
-### Code Changes
+### Technical Fixes
 
-**Add import at line 18:**
-```typescript
-import { SuiteBenzoKeepSection } from "./SuiteBenzoKeepSection";
-```
+#### 1. MobileSuiteLanding.tsx - Reduce Container Padding
 
-**Update HomeTabContent (around line 145-166):**
+**Change**: Reduce horizontal padding from `px-3` to `px-2` to give more room
+
 ```tsx
-function HomeTabContent() {
-  return (
-    <ScrollArea className="flex-1 h-full w-full">
-      <div className="px-3 py-4 space-y-3 pb-24 w-full max-w-full overflow-x-hidden box-border">
-        {/* Quick Actions */}
-        <SuiteQuickActionsBar variant="mobile" />
-        
-        {/* Search and Sync */}
-        <div className="grid grid-cols-2 gap-2 w-full max-w-full">
-          <div className="min-w-0 w-full">
-            <MasterSearchButton />
-          </div>
-          <div className="min-w-0 w-full">
-            <MasterSyncButton />
-          </div>
-        </div>
-        
-        {/* Tabbed Interface for Events + Handler Activity */}
-        <EventsHandlerTabs />
-        
-        {/* Benzo Keep Section - NEW */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <SuiteBenzoKeepSection />
-        </div>
-      </div>
-    </ScrollArea>
-  );
-}
+// HomeTabContent - line 149
+<div className="px-2 py-3 space-y-2.5 pb-24 w-full max-w-full overflow-x-hidden box-border">
+```
+
+#### 2. SuiteQuickActionsBar.tsx - Compact Mobile Buttons
+
+**Changes**:
+- Reduce button height from `h-12` to `h-10`
+- Reduce font size and padding
+- Ensure text truncation works properly
+
+```tsx
+// Lines 73-87 - mobile variant buttons
+<Button className="h-10 w-full ... text-[11px] px-1.5">
+```
+
+#### 3. TodayEventsHero.tsx - Smaller Mobile Layout
+
+**Changes**:
+- Reduce header text from `text-xl` to `text-base` on mobile
+- Reduce icon container from `w-12 h-12` to `w-10 h-10`
+- Reduce subtitle text
+- Reduce event card padding
+- Reduce max-height of scrollable area
+
+```tsx
+// Header - line 300
+<h2 className="text-base md:text-xl font-bold text-gray-900">
+
+// Icon container - line 291
+<div className="w-10 h-10 md:w-12 md:h-12 rounded-xl ...">
+
+// Scrollable area - line 314
+<div className="max-h-[240px] md:max-h-[400px] overflow-y-auto ...">
+```
+
+#### 4. EventsHandlerTabs - Ensure Tab Labels Fit
+
+**Changes**:
+- Reduce tab height from `h-11` to `h-10`
+- Use smaller icons and hide text on very narrow screens
+
+```tsx
+// TabsList - line 178
+<TabsList className="grid grid-cols-4 w-full mb-2 h-10 bg-gray-100 p-0.5">
 ```
 
 ---
 
-### Mobile-Optimized Styling
+### Summary of Changes
 
-The `SuiteBenzoKeepSection` component already has responsive styling that works on mobile:
-- Full-width buttons with proper padding
-- Touch-friendly tap targets (`p-2.5`)
-- Clean rounded corners and hover states
-
-Wrapping it in a card container (`bg-white rounded-xl border...`) will make it visually consistent with other mobile sections.
+| File | Changes |
+|------|---------|
+| `MobileSuiteLanding.tsx` | Reduce padding (`px-2`), reduce spacing (`space-y-2.5`), smaller tab margins |
+| `SuiteQuickActionsBar.tsx` | Smaller buttons (`h-10`), smaller text (`text-[11px]`), reduced padding |
+| `TodayEventsHero.tsx` | Smaller header (`text-base`), smaller icon (`w-10 h-10`), reduced scroll height (`max-h-[240px]`) |
 
 ---
 
-### Summary
+### Visual Result After Fix
 
-| File | Change |
-|------|--------|
-| `src/components/suite/MobileSuiteLanding.tsx` | Add import + add `<SuiteBenzoKeepSection />` wrapped in a card below Events/Handler tabs |
+```text
+┌─────────────────────────────────┐
+│  [X] Xito Business Suite    [☐]│
+├─────────────────────────────────┤
+│ [Add Client]  [Add Payment]     │  <- Both buttons visible
+├─────────────────────────────────┤
+│ [Search]        [Sync]          │  <- Both buttons visible
+├─────────────────────────────────┤
+│ [📅] [Benzo] [Barun] [Nikit]    │  <- All tabs visible
+├─────────────────────────────────┤
+│ 📅 Upcoming Events              │  <- Smaller header
+│    62 events scheduled          │
+│ ┌─────────────────────────────┐ │
+│ │ TODAY Amrita Didi  📞 💬 → │ │
+│ │ PASNI                       │ │
+│ └─────────────────────────────┘ │
+│ (more compact event cards)      │
+├─────────────────────────────────┤
+│ 📒 BENZO KEEP                   │  <- Now visible
+│ [Benzo Keep] [Unassigned]       │
+└─────────────────────────────────┘
+```
 
-This is a simple one-file change that reuses the existing desktop component.
-
+These changes will ensure all UI elements fit within the mobile viewport while maintaining readability and functionality.
