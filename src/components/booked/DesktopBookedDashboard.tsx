@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import NepaliDate from "nepali-date-converter";
 import { BookedClientData, ClientData } from "@/lib/sheets-api";
+import { CalendarDayPopup, CalendarClientInfo } from "@/components/shared/CalendarDayPopup";
 
 interface AdvancePendingClient {
   events?: string;
@@ -367,7 +368,7 @@ export function DesktopBookedDashboard({
   const calendarData = useMemo(() => {
     const bookedMap = new Map<string, number>();
     const advancePendingMap = new Map<string, number>();
-    const clientDetailsMap = new Map<string, { clientName: string; eventName: string; registeredDateTimeAD?: string; originalRowNumber?: number }[]>();
+    const clientDetailsMap = new Map<string, CalendarClientInfo[]>();
     
     // Count booked events and store client details
     clients.forEach(client => {
@@ -389,6 +390,10 @@ export function DesktopBookedDashboard({
             eventName: event.eventName || 'Event',
             registeredDateTimeAD: client.registeredDateTimeAD,
             originalRowNumber: client.originalRowNumber,
+            contactNo: client.contactNo,
+            whatsappNo: client.whatsappNo,
+            eventLocation: client.eventLocation,
+            eventCity: client.eventCity,
           });
         }
       });
@@ -423,7 +428,7 @@ export function DesktopBookedDashboard({
       month: number; 
       year: number; 
       monthName: string; 
-      days: { day: number; isBooked: boolean; eventCount: number; advancePendingCount: number; clients: { clientName: string; eventName: string; registeredDateTimeAD?: string; originalRowNumber?: number }[] }[];
+      days: { day: number; isBooked: boolean; eventCount: number; advancePendingCount: number; clients: CalendarClientInfo[] }[];
       bookedCount: number;
     }[] = [];
     
@@ -433,7 +438,7 @@ export function DesktopBookedDashboard({
       const monthName = NEPALI_MONTHS[monthNum];
       const daysInMonth = daysPerMonth[monthNum] || 30;
       
-      const days: { day: number; isBooked: boolean; eventCount: number; advancePendingCount: number; clients: { clientName: string; eventName: string; registeredDateTimeAD?: string; originalRowNumber?: number }[] }[] = [];
+      const days: { day: number; isBooked: boolean; eventCount: number; advancePendingCount: number; clients: CalendarClientInfo[] }[] = [];
       let bookedCount = 0;
       
       for (let day = 1; day <= daysInMonth; day++) {
@@ -784,31 +789,12 @@ export function DesktopBookedDashboard({
                             
                             {/* Floating Bubble Popup */}
                             {hoveredCalDay === calDayKey && dayClients.length > 0 && (
-                              <div className="calendar-bubble absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-max max-w-[220px]">
-                                <div className="bg-card border border-border rounded-lg shadow-lg p-2 space-y-1">
-                                  <p className="text-[10px] font-semibold text-muted-foreground border-b border-border pb-1">
-                                    {monthData.monthName} {day}, {monthData.year}
-                                  </p>
-                                  {dayClients.map((client, idx) => (
-                                    <button
-                                      key={`${client.clientName}-${idx}`}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        navigate(getClientDetailPath(client), { state: { from: location.pathname } });
-                                      }}
-                                      className="flex items-center gap-1.5 w-full text-left text-[10px] px-1.5 py-1 rounded hover:bg-primary/10 transition-colors"
-                                    >
-                                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
-                                      <span className="font-medium truncate">{client.eventName}</span>
-                                      <span className="text-muted-foreground truncate">• {client.clientName}</span>
-                                    </button>
-                                  ))}
-                                </div>
-                                {/* Arrow pointing down */}
-                                <div className="flex justify-center">
-                                  <div className="w-2 h-2 bg-card border-r border-b border-border rotate-45 -mt-1" />
-                                </div>
-                              </div>
+                              <CalendarDayPopup
+                                monthName={monthData.monthName}
+                                day={day}
+                                year={monthData.year}
+                                clients={dayClients}
+                              />
                             )}
                           </div>
                         );
