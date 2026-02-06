@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import { getCurrentStatus, DropdownData } from "@/lib/sheets-api";
 import { CalendarDayPopup, CalendarClientInfo } from "@/components/shared/CalendarDayPopup";
+import { useBulkEventDetails } from "@/hooks/useBulkEventDetails";
 import { parseEventDetails, getMonthName, NEPALI_MONTHS } from "@/lib/nepali-months";
 import { DesktopClientRow } from "./DesktopClientRow";
 import { ClientDetailSheet } from "@/components/dashboard/ClientDetailSheet";
@@ -112,11 +113,9 @@ export function DesktopDashboard({
       const statusA = getCurrentStatus(a.statusLog || '').toUpperCase();
       const statusB = getCurrentStatus(b.statusLog || '').toUpperCase();
       
-      // Check if status is BOOKED (but not BOOKED SOMEWHERE ELSE)
       const isBookedA = statusA.includes('BOOKED') && !statusA.includes('BOOKED SOMEWHERE ELSE');
       const isBookedB = statusB.includes('BOOKED') && !statusB.includes('BOOKED SOMEWHERE ELSE');
       
-      // BOOKED clients come first
       if (isBookedA && !isBookedB) return -1;
       if (!isBookedA && isBookedB) return 1;
       return 0;
@@ -125,6 +124,19 @@ export function DesktopDashboard({
 
   // Use allClients for stats if available, otherwise use filtered clients
   const statsClients = allClients || clients;
+
+  // Fetch bulk event details for venue data (booked clients only)
+  const bookedClientIds = useMemo(
+    () => statsClients
+      .filter(c => {
+        const status = getCurrentStatus(c.statusLog || '').toUpperCase();
+        return status.includes('BOOKED') && !status.includes('BOOKED SOMEWHERE ELSE');
+      })
+      .map(c => c.registeredDateTimeAD)
+      .filter(Boolean) as string[],
+    [statsClients]
+  );
+  const { eventDetailsMap } = useBulkEventDetails(bookedClientIds);
 
   // Calculate stats from ALL clients (not filtered)
   const totalClients = statsClients.length;
@@ -393,6 +405,11 @@ export function DesktopDashboard({
             bookedMap.set(dateKey, (bookedMap.get(dateKey) || 0) + 1);
             
             if (!clientDetailsMap.has(dateKey)) clientDetailsMap.set(dateKey, []);
+            
+            // Try to get venue data from bulk event details
+            const clientEventDetails = client.registeredDateTimeAD ? eventDetailsMap[client.registeredDateTimeAD] : undefined;
+            const matchingDetail = clientEventDetails?.find(d => d.eventName === event.eventName);
+            
             clientDetailsMap.get(dateKey)!.push({
               clientName: client.clientName || 'Unknown',
               eventName: event.eventName || 'Event',
@@ -402,6 +419,8 @@ export function DesktopDashboard({
               whatsappNo: client.whatsappNo,
               eventLocation: client.eventLocation,
               eventCity: client.eventCity,
+              venueName: matchingDetail?.venueName || '',
+              venueArea: matchingDetail?.venueArea || '',
             });
           } else if (status.includes('ADVANCE PENDING')) {
             advancePendingMap.set(dateKey, (advancePendingMap.get(dateKey) || 0) + 1);
@@ -449,7 +468,7 @@ export function DesktopDashboard({
     }
     
     return result;
-  }, [statsClients]);
+  }, [statsClients, eventDetailsMap]);
 
   return (
     <div className="p-6 space-y-6">

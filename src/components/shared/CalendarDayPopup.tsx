@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from "react-router-dom";
+import { useRef, useState, useEffect } from "react";
 import { getClientDetailPath } from "@/lib/client-navigation";
-import { Phone, MessageCircle, MapPin, Building2, Navigation } from "lucide-react";
+import { Phone, MessageCircle, MapPin, Building2 } from "lucide-react";
 
 export interface CalendarClientInfo {
   clientName: string;
@@ -25,12 +26,48 @@ interface CalendarDayPopupProps {
 export function CalendarDayPopup({ monthName, day, year, clients }: CalendarDayPopupProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const popupRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<{ top?: boolean; left?: boolean; right?: boolean }>({});
+
+  // Dynamically reposition to avoid clipping
+  useEffect(() => {
+    const el = popupRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const newPos: typeof position = {};
+    // If popup goes above viewport, show below instead
+    if (rect.top < 8) newPos.top = true;
+    // If popup goes off left edge
+    if (rect.left < 8) newPos.left = true;
+    // If popup goes off right edge
+    if (rect.right > window.innerWidth - 8) newPos.right = true;
+    setPosition(newPos);
+  }, []);
 
   if (clients.length === 0) return null;
 
+  // Build position classes
+  const posClasses = position.top
+    ? "top-full mt-3" // show below
+    : "bottom-full mb-3"; // default: show above
+  const hClasses = position.right
+    ? "right-0"
+    : position.left
+      ? "left-0"
+      : "left-1/2 -translate-x-1/2";
+
   return (
-    <div className="calendar-bubble absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-50 min-w-[340px] max-w-[420px]">
-      <div className="bg-card border border-border rounded-xl shadow-2xl p-4 space-y-2.5">
+    <div
+      ref={popupRef}
+      className={`calendar-bubble absolute z-50 min-w-[380px] max-w-[480px] ${posClasses} ${hClasses}`}
+    >
+      {/* Arrow pointing down (or up if flipped) */}
+      {position.top && (
+        <div className="flex justify-center">
+          <div className="w-3 h-3 bg-card border-l border-t border-border rotate-45 -mb-1.5 relative z-10" />
+        </div>
+      )}
+      <div className="bg-card border border-border rounded-xl shadow-2xl p-4 space-y-3">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border pb-2">
           <p className="text-sm font-bold text-foreground flex items-center gap-2">
@@ -68,8 +105,8 @@ export function CalendarDayPopup({ monthName, day, year, clients }: CalendarDayP
               {/* Venue */}
               {client.venueName && (
                 <div className="flex items-center gap-1.5 text-xs">
-                  <Building2 className="w-3 h-3 text-amber-500 shrink-0" />
-                  <span className="font-medium">{client.venueName}</span>
+                  <Building2 className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <span className="font-semibold">{client.venueName}</span>
                   {client.venueArea && (
                     <span className="text-muted-foreground">• {client.venueArea}</span>
                   )}
@@ -79,7 +116,7 @@ export function CalendarDayPopup({ monthName, day, year, clients }: CalendarDayP
               {/* Location */}
               {(client.eventCity || client.eventLocation) && (
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <MapPin className="w-3 h-3 shrink-0" />
+                  <MapPin className="w-3.5 h-3.5 shrink-0" />
                   <span>{client.eventCity}{client.eventCity && client.eventLocation ? ` (${client.eventLocation})` : client.eventLocation}</span>
                 </div>
               )}
@@ -92,7 +129,7 @@ export function CalendarDayPopup({ monthName, day, year, clients }: CalendarDayP
                     onClick={(e) => e.stopPropagation()}
                     className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-600 transition-colors"
                   >
-                    <Phone className="w-3 h-3 shrink-0" />
+                    <Phone className="w-3.5 h-3.5 shrink-0" />
                     <span>{client.contactNo}</span>
                   </a>
                 )}
@@ -105,7 +142,7 @@ export function CalendarDayPopup({ monthName, day, year, clients }: CalendarDayP
                     onClick={(e) => e.stopPropagation()}
                     className="flex items-center gap-1 text-xs text-green-600 hover:text-green-700 transition-colors"
                   >
-                    <MessageCircle className="w-3 h-3 shrink-0" />
+                    <MessageCircle className="w-3.5 h-3.5 shrink-0" />
                     <span>{client.whatsappNo}</span>
                   </a>
                 )}
@@ -114,10 +151,12 @@ export function CalendarDayPopup({ monthName, day, year, clients }: CalendarDayP
           </div>
         ))}
       </div>
-      {/* Arrow pointing down */}
-      <div className="flex justify-center">
-        <div className="w-3 h-3 bg-card border-r border-b border-border rotate-45 -mt-1.5" />
-      </div>
+      {/* Arrow pointing down (default position) */}
+      {!position.top && (
+        <div className="flex justify-center">
+          <div className="w-3 h-3 bg-card border-r border-b border-border rotate-45 -mt-1.5" />
+        </div>
+      )}
     </div>
   );
 }
