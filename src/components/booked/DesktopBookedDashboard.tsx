@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +34,7 @@ import {
 import NepaliDate from "nepali-date-converter";
 import { BookedClientData, ClientData } from "@/lib/sheets-api";
 import { CalendarDayPopup, CalendarClientInfo } from "@/components/shared/CalendarDayPopup";
+import { useBulkEventDetails } from "@/hooks/useBulkEventDetails";
 
 interface AdvancePendingClient {
   events?: string;
@@ -85,6 +86,13 @@ export function DesktopBookedDashboard({
   const [showAllOpenDates, setShowAllOpenDates] = useState(false);
   const [viewMode, setViewMode] = useState<'datewise' | 'hotdates' | 'clientwise'>('datewise');
   const [hoveredCalDay, setHoveredCalDay] = useState<string | null>(null);
+
+  // Fetch bulk event details for venue data
+  const bookedClientIds = useMemo(
+    () => clients.map(c => c.registeredDateTimeAD).filter(Boolean) as string[],
+    [clients]
+  );
+  const { eventDetailsMap } = useBulkEventDetails(bookedClientIds);
 
   // Total unique clients
   const uniqueClientCount = useMemo(() => {
@@ -385,6 +393,11 @@ export function DesktopBookedDashboard({
           bookedMap.set(dateKey, (bookedMap.get(dateKey) || 0) + 1);
           
           if (!clientDetailsMap.has(dateKey)) clientDetailsMap.set(dateKey, []);
+          
+          // Try to get venue data from bulk event details
+          const clientEventDetails = client.registeredDateTimeAD ? eventDetailsMap[client.registeredDateTimeAD] : undefined;
+          const matchingDetail = clientEventDetails?.find(d => d.eventName === event.eventName);
+          
           clientDetailsMap.get(dateKey)!.push({
             clientName: client.clientName || 'Unknown',
             eventName: event.eventName || 'Event',
@@ -394,6 +407,8 @@ export function DesktopBookedDashboard({
             whatsappNo: client.whatsappNo,
             eventLocation: client.eventLocation,
             eventCity: client.eventCity,
+            venueName: matchingDetail?.venueName || '',
+            venueArea: matchingDetail?.venueArea || '',
           });
         }
       });
@@ -454,7 +469,7 @@ export function DesktopBookedDashboard({
     }
     
     return result;
-  }, [clients, advancePendingClients]);
+  }, [clients, advancePendingClients, eventDetailsMap]);
 
   // Sort clients by event date
   const sortedClients = useMemo(() => {
