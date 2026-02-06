@@ -25,8 +25,10 @@ export function DesktopSuiteLanding() {
   const handleRefreshNews = async () => {
     setIsRefreshing(true);
     try {
-      notifyCacheUpdate('clients-invalidate');
-      notifyCacheUpdate('booked-clients-invalidate');
+    notifyCacheUpdate('clients-invalidate');
+      setTimeout(() => {
+        notifyCacheUpdate('booked-clients-invalidate');
+      }, 200);
       toast.success("News refreshed!");
     } catch (error) {
       toast.error("Failed to refresh news");
