@@ -258,21 +258,35 @@ export function DesktopBookedDashboard({
       result = result.filter(d => d.year === filterYear && d.month === filterMonth);
     }
     
-    // Apply sort order
+    // Apply sort order - ALWAYS push completed dates to the end
     if (hotDatesSortOrder === 'ascending') {
       result.sort((a, b) => {
+        // Completed dates go last
+        if (a.isCompleted !== b.isCompleted) {
+          return a.isCompleted ? 1 : -1;
+        }
         const dateA = `${a.year}-${a.month.padStart(2, '0')}-${a.day.padStart(2, '0')}`;
         const dateB = `${b.year}-${b.month.padStart(2, '0')}-${b.day.padStart(2, '0')}`;
         return dateA.localeCompare(dateB);
       });
     } else if (hotDatesSortOrder === 'descending') {
       result.sort((a, b) => {
+        // Completed dates go last
+        if (a.isCompleted !== b.isCompleted) {
+          return a.isCompleted ? 1 : -1;
+        }
         const dateA = `${a.year}-${a.month.padStart(2, '0')}-${a.day.padStart(2, '0')}`;
         const dateB = `${b.year}-${b.month.padStart(2, '0')}-${b.day.padStart(2, '0')}`;
         return dateB.localeCompare(dateA);
       });
     } else {
-      result.sort((a, b) => b.events.length - a.events.length);
+      result.sort((a, b) => {
+        // Completed dates go last
+        if (a.isCompleted !== b.isCompleted) {
+          return a.isCompleted ? 1 : -1;
+        }
+        return b.events.length - a.events.length;
+      });
     }
     
     return result;
@@ -768,8 +782,45 @@ export function DesktopBookedDashboard({
               {showClientWise ? (
                 // CLIENT WISE View - Show individual client cards
                 (() => {
+                  // Helper to get earliest event date for a client
+                  const getEarliestEventDate = (clientName: string): { date: Date | null; isCompleted: boolean } => {
+                    const clientData = clients.find(c => c.clientName === clientName);
+                    if (!clientData) return { date: null, isCompleted: true };
+                    
+                    const events = parseEventDetails(
+                      clientData.events || '',
+                      clientData.eventYear || '',
+                      clientData.eventMonth || '',
+                      clientData.eventDay || ''
+                    );
+                    
+                    let earliestDate: Date | null = null;
+                    let hasUpcoming = false;
+                    
+                    events.forEach(event => {
+                      if (!event.year || !event.month || !event.day || event.day.includes('*')) return;
+                      try {
+                        const bsYear = parseInt(event.year);
+                        const bsMonth = parseInt(event.month);
+                        const bsDay = parseInt(event.day);
+                        const nepaliDate = new NepaliDate(bsYear, bsMonth - 1, bsDay);
+                        const eventDate = nepaliDate.toJsDate();
+                        
+                        if (!isBSDatePast(event.year, event.month, event.day)) {
+                          hasUpcoming = true;
+                        }
+                        
+                        if (!earliestDate || eventDate < earliestDate) {
+                          earliestDate = eventDate;
+                        }
+                      } catch {}
+                    });
+                    
+                    return { date: earliestDate, isCompleted: !hasUpcoming };
+                  };
+                  
                   // Filter clients by selected month
-                  const filteredClientList = selectedMonth 
+                  let filteredClientList = selectedMonth 
                     ? allClients.filter(client => {
                         const clientData = clients.find(c => c.clientName === client.name);
                         if (!clientData) return false;
@@ -787,6 +838,23 @@ export function DesktopBookedDashboard({
                         );
                       })
                     : allClients;
+                  
+                  // Sort by earliest event date, completed clients at end
+                  filteredClientList = [...filteredClientList].sort((a, b) => {
+                    const aInfo = getEarliestEventDate(a.name);
+                    const bInfo = getEarliestEventDate(b.name);
+                    
+                    // Completed clients go last
+                    if (aInfo.isCompleted !== bInfo.isCompleted) {
+                      return aInfo.isCompleted ? 1 : -1;
+                    }
+                    
+                    // Sort by date ascending
+                    if (!aInfo.date && !bInfo.date) return 0;
+                    if (!aInfo.date) return 1;
+                    if (!bInfo.date) return -1;
+                    return aInfo.date.getTime() - bInfo.date.getTime();
+                  });
                   
                   return filteredClientList.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-4">
