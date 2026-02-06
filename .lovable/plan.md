@@ -1,219 +1,100 @@
 
-## Add "DATE WISE" View to Booked Clients Dashboard
+
+## Booking Calendar Hover Popup with Floating Bubble Effect
 
 ### Overview
-Add a new "DATE WISE" view as the default section in the Booked Clients module. This view displays events sorted by date in ascending order (earliest first), with completed events at the end.
+Add an interactive hover popup to the Booking Calendar in the Booked Clients dashboard. When hovering over a booked date (green circle), a floating popup appears with client names and event details. Clicking a client navigates to their detail page. The popup has a bubble/floating animation effect.
 
 ---
 
-### Current Structure
-The dashboard currently has a toggle between:
-- **Hot Dates** - Date cards grouped by date (popularity sorted by default)
-- **CLIENT WISE** - Client cards with their events
-
-### New Structure
-Three view modes with tabs:
-1. **DATE WISE** (default) - Events listed chronologically, ascending order, completed last
-2. **HOT DATES** - Date cards grouped by date
-3. **CLIENT WISE** - Client cards with their events
-
----
-
-### Changes
+### Changes Required
 
 #### File 1: `src/components/booked/DesktopBookedDashboard.tsx`
 
-**Change 1: Replace `showClientWise` boolean with a view mode state**
+**Change 1: Enrich calendar data with client details per day**
 
-| Line | Current | New |
-|------|---------|-----|
-| 85 | `const [showClientWise, setShowClientWise] = useState(false);` | `const [viewMode, setViewMode] = useState<'datewise' \| 'hotdates' \| 'clientwise'>('datewise');` |
+Currently, the `calendarData` useMemo only stores `eventCount` per day. We need to also store an array of `{ clientName, eventName, registeredDateTimeAD, originalRowNumber }` for each day so the hover popup knows which clients/events are on that date.
 
-**Change 2: Update the view toggle buttons in the Hot Dates header (lines 759-778)**
-
-Replace the single CLIENT WISE toggle button with three toggle buttons:
-```tsx
-<div className="flex items-center gap-2">
-  {/* View Mode Toggle Buttons */}
-  <div className="flex rounded-lg border overflow-hidden">
-    <Button
-      variant={viewMode === 'datewise' ? "default" : "ghost"}
-      size="sm"
-      onClick={() => setViewMode('datewise')}
-      className={cn(
-        "text-xs h-7 rounded-none",
-        viewMode === 'datewise' && "bg-orange-600 hover:bg-orange-700"
-      )}
-    >
-      <CalendarDays className="w-3 h-3 mr-1" />
-      DATE WISE
-    </Button>
-    <Button
-      variant={viewMode === 'hotdates' ? "default" : "ghost"}
-      size="sm"
-      onClick={() => setViewMode('hotdates')}
-      className={cn(
-        "text-xs h-7 rounded-none border-l",
-        viewMode === 'hotdates' && "bg-green-600 hover:bg-green-700"
-      )}
-    >
-      <Flame className="w-3 h-3 mr-1" />
-      HOT DATES
-    </Button>
-    <Button
-      variant={viewMode === 'clientwise' ? "default" : "ghost"}
-      size="sm"
-      onClick={() => setViewMode('clientwise')}
-      className={cn(
-        "text-xs h-7 rounded-none border-l",
-        viewMode === 'clientwise' && "bg-blue-600 hover:bg-blue-700"
-      )}
-    >
-      <Users className="w-3 h-3 mr-1" />
-      CLIENT WISE
-    </Button>
-  </div>
-  <Badge variant="outline" className="text-xs">
-    {viewMode === 'clientwise' 
-      ? `${allClients.length} clients` 
-      : viewMode === 'datewise'
-        ? `${hotDates.length} dates`
-        : `Top ${hotDates.length} dates`}
-  </Badge>
-</div>
+Update the data structure from:
+```
+days: { day, isBooked, eventCount, advancePendingCount }[]
+```
+to:
+```
+days: { day, isBooked, eventCount, advancePendingCount, clients: { clientName, eventName, registeredDateTimeAD, originalRowNumber }[] }[]
 ```
 
-**Change 3: Add DATE WISE view in CardContent (lines 781-984)**
+Build a `clientDetailsMap` alongside the existing `bookedMap` that stores client info per date key.
 
-Update the conditional rendering:
+**Change 2: Add hover state management**
+
+Add state for tracking which calendar day is being hovered:
 ```tsx
-{viewMode === 'datewise' ? (
-  // DATE WISE View - Ascending date order, completed last
-  <div className="space-y-2">
-    {hotDates.length === 0 ? (
-      <p className="text-sm text-muted-foreground text-center py-4">
-        No event dates found
-      </p>
-    ) : (
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[140px]">Date</TableHead>
-            <TableHead>Events</TableHead>
-            <TableHead className="w-[100px] text-right">Status</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {hotDates.map((dateInfo) => (
-            <TableRow 
-              key={dateInfo.dateKey}
-              className={cn(
-                dateInfo.isCompleted && "opacity-50"
-              )}
-            >
-              <TableCell>
-                <button
-                  onClick={() => onHotDateFilter?.(dateInfo.dateKey)}
-                  className="flex items-center gap-2 hover:text-primary transition-colors"
-                >
-                  <Badge className={cn(
-                    "text-white text-xs",
-                    dateInfo.isCompleted 
-                      ? "bg-muted-foreground" 
-                      : "bg-gradient-to-r from-green-500 to-emerald-500"
-                  )}>
-                    {dateInfo.year} {dateInfo.monthName} {dateInfo.day}
-                  </Badge>
-                </button>
-              </TableCell>
-              <TableCell>
-                <div className="flex flex-wrap gap-1">
-                  {dateInfo.events.map((event, i) => (
-                    <button
-                      key={`${event.clientName}-${i}`}
-                      onClick={() => navigate(getClientDetailPath(event), { state: { from: location.pathname } })}
-                      className="text-xs border rounded px-2 py-0.5 hover:bg-primary/10 hover:border-primary transition-colors"
-                    >
-                      <span className="font-medium">{event.eventName}</span>
-                      <span className="text-muted-foreground"> • {event.clientName}</span>
-                    </button>
-                  ))}
-                </div>
-              </TableCell>
-              <TableCell className="text-right">
-                {dateInfo.isCompleted ? (
-                  <Badge variant="outline" className="text-muted-foreground">
-                    <CheckCircle className="w-3 h-3 mr-1" />
-                    Done
-                  </Badge>
-                ) : (
-                  <Badge className="bg-green-500 text-white">
-                    {dateInfo.events.length} events
-                  </Badge>
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    )}
-  </div>
-) : viewMode === 'clientwise' ? (
-  // CLIENT WISE View - existing code
-  ...
-) : (
-  // HOT DATES View - existing code
-  ...
-)}
+const [hoveredCalDay, setHoveredCalDay] = useState<string | null>(null);
 ```
 
-**Change 4: Ensure ascending sort is applied for DATE WISE view**
+**Change 3: Add floating popup on each booked day button**
 
-Since `hotDates` already respects `hotDatesSortOrder` from the sidebar, and the default is 'popularity', we need to ensure DATE WISE always shows ascending order. Add logic to force ascending sort when in 'datewise' mode:
+Wrap each booked day button with a relative container and add an absolutely positioned popup that appears on hover. The popup will:
+- Show on mouseEnter, hide on mouseLeave
+- Display each client name and event name as clickable items
+- Navigate to client detail page on click
+- Have a floating bubble animation with subtle bounce
 
-In the `hotDates` useMemo (around line 262), add a check:
-```tsx
-// Apply sort order - DATE WISE always uses ascending
-const effectiveSortOrder = viewMode === 'datewise' ? 'ascending' : hotDatesSortOrder;
+**Change 4: Add bubble/floating animation to the popup**
+
+The popup will use a CSS animation for a floating/bubble effect - a gentle up-down float with a scale-in entrance.
+
+#### File 2: `src/index.css`
+
+**Add new keyframes and classes for the floating bubble effect:**
+
+```css
+@keyframes calendar-bubble-float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes calendar-bubble-enter {
+  0% { opacity: 0; transform: scale(0.8) translateY(8px); }
+  60% { transform: scale(1.05) translateY(-2px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.calendar-bubble {
+  animation: calendar-bubble-enter 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
+             calendar-bubble-float 2s ease-in-out 0.3s infinite;
+}
 ```
-
-However, since `viewMode` would need to be available in the useMemo, we'll create a separate sorted list for DATE WISE:
-
-```tsx
-// DATE WISE sorted data - always ascending with completed last
-const dateWiseSorted = useMemo(() => {
-  return [...hotDates].sort((a, b) => {
-    // Completed dates go last
-    if (a.isCompleted !== b.isCompleted) {
-      return a.isCompleted ? 1 : -1;
-    }
-    // Sort by date ascending
-    const dateA = `${a.year}-${a.month.padStart(2, '0')}-${a.day.padStart(2, '0')}`;
-    const dateB = `${b.year}-${b.month.padStart(2, '0')}-${b.day.padStart(2, '0')}`;
-    return dateA.localeCompare(dateB);
-  });
-}, [hotDates]);
-```
-
-Use `dateWiseSorted` in the DATE WISE view instead of `hotDates`.
 
 ---
 
-### Summary
+### Popup Design
 
-| Item | Details |
-|------|---------|
-| New View | DATE WISE - Table format showing dates in ascending order |
-| Default View | DATE WISE (was Hot Dates) |
-| Sorting | Ascending by date, completed events at the end |
-| UI | Three toggle buttons: DATE WISE, HOT DATES, CLIENT WISE |
-| Styling | Orange color for DATE WISE, Green for HOT DATES, Blue for CLIENT WISE |
+The popup will appear above the hovered date circle and look like:
+
+```text
++---------------------------+
+|  2082 Magh 15             |
+|  -------------------------+
+|  > Wedding - Ram Sharma   |
+|  > Mehendi - Sita Thapa   |
++---------------------------+
+        ^  (arrow pointing down to the circle)
+```
+
+- Each client row is clickable (navigates to client detail)
+- Background: card color with border and shadow
+- Arrow/triangle pointing to the circle below
+- Floating bubble animation on the entire popup
+- z-index: 50 to appear above everything
 
 ---
 
 ### Technical Notes
 
-- The existing `hotDates` useMemo already groups events by date and marks completed status
-- Creating a separate `dateWiseSorted` useMemo ensures DATE WISE always shows ascending order regardless of sidebar sort selection
-- The sidebar "Hot Dates Sort" options (Ascending/Descending/Most Events) will only affect the HOT DATES view
-- DATE WISE view uses a table format for better readability of chronological data
+- The `calendarData` useMemo needs to iterate `clients` and store per-day client arrays (minor performance cost, acceptable for typical dataset sizes)
+- Uses `getClientDetailPath` for navigation (already imported)
+- The same enhancement applies to both the Booked Clients calendar; the Client Tracker calendar can be updated separately if needed
+- The popup uses `onMouseEnter`/`onMouseLeave` on the day button - no external tooltip library needed
+- Popup positioning: absolute, bottom-full, centered horizontally with a small arrow
