@@ -478,3 +478,20 @@
 .hover-thumb-violet-400:hover::-webkit-scrollbar-thumb {
   background-color: rgb(167 139 250);
 }
+
+/* Calendar Bubble Popup Animations */
+@keyframes calendar-bubble-float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes calendar-bubble-enter {
+  0% { opacity: 0; transform: scale(0.8) translateY(8px); }
+  60% { transform: scale(1.05) translateY(-2px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.calendar-bubble {
+  animation: calendar-bubble-enter 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
+             calendar-bubble-float 2s ease-in-out 0.3s infinite;
+}
