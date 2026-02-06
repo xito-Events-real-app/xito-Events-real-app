@@ -1,46 +1,77 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { format, subDays, addDays, isAfter, parseISO } from "date-fns";
-import { CheckSquare, Plus, ArrowLeft, Send, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { format, addDays, subDays, isAfter, parseISO, differenceInMinutes } from "date-fns";
+import NepaliDate from "nepali-date-converter";
+import { CheckSquare, Plus, ArrowLeft, Send, ChevronLeft, ChevronRight, Clock, User, Phone, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { getDailyTasks, getDailyTaskSetupData, updateDailyTaskStatus } from "@/lib/daily-task-api";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
-import { AddTaskDrawer } from "./AddTaskDrawer";
+import { AddTaskDialog } from "./AddTaskDialog";
 import { cn } from "@/lib/utils";
 import type { DailyTask, DailyTaskSetupData } from "@/lib/daily-task-api";
 
 const STATUSES = ["Pending", "In Progress", "Completed", "Cancelled"];
 
-const urgencyColors: Record<number, string> = {
-  5: "bg-red-100 border-red-300",
-  4: "bg-orange-100 border-orange-300",
-  3: "bg-yellow-50 border-yellow-300",
-  2: "bg-green-50 border-green-300",
-  1: "bg-gray-50 border-gray-200",
+const NEPALI_MONTHS = ["Baisakh", "Jestha", "Ashadh", "Shrawan", "Bhadra", "Ashwin", "Kartik", "Mangsir", "Poush", "Magh", "Falgun", "Chaitra"];
+
+const urgencyCardStyles: Record<number, { bg: string; border: string; accent: string }> = {
+  5: { bg: "bg-red-50", border: "border-l-red-500", accent: "bg-red-500" },
+  4: { bg: "bg-orange-50", border: "border-l-orange-500", accent: "bg-orange-500" },
+  3: { bg: "bg-yellow-50", border: "border-l-yellow-400", accent: "bg-yellow-500" },
+  2: { bg: "bg-green-50", border: "border-l-green-400", accent: "bg-green-500" },
+  1: { bg: "bg-gray-50", border: "border-l-gray-300", accent: "bg-gray-400" },
 };
 
-const urgencyBadgeColors: Record<number, string> = {
-  5: "bg-red-500 text-white",
-  4: "bg-orange-500 text-white",
-  3: "bg-yellow-500 text-white",
-  2: "bg-green-500 text-white",
-  1: "bg-gray-400 text-white",
-};
+function getDeadlineText(deadline: string): { text: string; isOverdue: boolean } {
+  if (!deadline) return { text: "", isOverdue: false };
+  try {
+    const deadlineDate = new Date(deadline);
+    const now = new Date();
+    const diffMins = differenceInMinutes(deadlineDate, now);
+    const isOverdue = diffMins < 0;
+    const absMins = Math.abs(diffMins);
+    const days = Math.floor(absMins / 1440);
+    const hrs = Math.floor((absMins % 1440) / 60);
+    const mins = absMins % 60;
 
-type DateFilter = "yesterday" | "today" | "tomorrow" | "all";
+    const parts: string[] = [];
+    if (days > 0) parts.push(`${days}d`);
+    if (hrs > 0) parts.push(`${hrs}h`);
+    parts.push(`${mins}m`);
+
+    const timeStr = parts.join(" ");
+    return {
+      text: isOverdue ? `OVERDUE by ${timeStr}` : `${timeStr} remaining`,
+      isOverdue,
+    };
+  } catch {
+    return { text: deadline, isOverdue: false };
+  }
+}
+
+function adToNepaliLabel(dateAD: Date): string {
+  try {
+    const np = new NepaliDate(dateAD);
+    const month = NEPALI_MONTHS[np.getMonth()];
+    const day = np.getDate();
+    return `${month} ${day}`;
+  } catch {
+    return format(dateAD, "MMM d");
+  }
+}
 
 export function DesktopDailyTasks() {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<DailyTask[]>([]);
   const [setupData, setSetupData] = useState<DailyTaskSetupData>({ handlers: [], handlerWhatsApp: {} });
   const [loading, setLoading] = useState(true);
-  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [centerDate, setCenterDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<string | null>(format(new Date(), "yyyy-MM-dd"));
   const [handlerFilter, setHandlerFilter] = useState<string | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -58,41 +89,48 @@ export function DesktopDailyTasks() {
 
   useEffect(() => { fetchData(); }, []);
 
-  const today = new Date();
-  const getDateForFilter = (filter: DateFilter): string | null => {
-    if (filter === "all") return null;
-    const d = filter === "yesterday" ? subDays(today, 1) : filter === "tomorrow" ? addDays(today, 1) : today;
-    return format(d, "yyyy-MM-dd");
-  };
+  // Generate 12 dates centered on centerDate
+  const dateStrip = useMemo(() => {
+    const dates: { ad: string; label: string; isToday: boolean }[] = [];
+    const todayStr = format(new Date(), "yyyy-MM-dd");
+    for (let i = -5; i <= 6; i++) {
+      const d = addDays(centerDate, i);
+      const ad = format(d, "yyyy-MM-dd");
+      dates.push({ ad, label: adToNepaliLabel(d), isToday: ad === todayStr });
+    }
+    return dates;
+  }, [centerDate]);
+
+  // Task counts per date
+  const taskCountByDate = useMemo(() => {
+    const map: Record<string, number> = {};
+    tasks.forEach(t => { map[t.dateAD] = (map[t.dateAD] || 0) + 1; });
+    return map;
+  }, [tasks]);
 
   const filteredTasks = useMemo(() => {
     let result = [...tasks];
-    const targetDate = getDateForFilter(dateFilter);
-    if (targetDate) {
-      result = result.filter(t => t.dateAD === targetDate);
+    if (selectedDate) {
+      result = result.filter(t => t.dateAD === selectedDate);
     }
     if (handlerFilter) {
       result = result.filter(t => t.handler === handlerFilter);
     }
-    // Sort: urgency desc, then deadline asc
     result.sort((a, b) => {
       if (b.urgency !== a.urgency) return b.urgency - a.urgency;
       return (a.deadline || "").localeCompare(b.deadline || "");
     });
     return result;
-  }, [tasks, dateFilter, handlerFilter]);
+  }, [tasks, selectedDate, handlerFilter]);
 
   const activeHandlers = useMemo(() => {
-    const targetDate = getDateForFilter(dateFilter);
-    const relevant = targetDate ? tasks.filter(t => t.dateAD === targetDate) : tasks;
+    const relevant = selectedDate ? tasks.filter(t => t.dateAD === selectedDate) : tasks;
     return [...new Set(relevant.map(t => t.handler).filter(Boolean))];
-  }, [tasks, dateFilter]);
+  }, [tasks, selectedDate]);
 
-  const isOverdue = (task: DailyTask) => {
+  const isTaskOverdue = (task: DailyTask) => {
     if (task.status === "Completed" || task.status === "Cancelled" || !task.deadline) return false;
-    try {
-      return isAfter(new Date(), parseISO(task.deadline));
-    } catch { return false; }
+    try { return isAfter(new Date(), new Date(task.deadline)); } catch { return false; }
   };
 
   const handleStatusChange = async (task: DailyTask, newStatus: string) => {
@@ -100,24 +138,14 @@ export function DesktopDailyTasks() {
       await updateDailyTaskStatus(task.rowNumber, newStatus);
       setTasks(prev => prev.map(t => t.rowNumber === task.rowNumber ? { ...t, status: newStatus } : t));
       toast.success(`Status updated to ${newStatus}`);
-    } catch {
-      toast.error("Failed to update status");
-    }
+    } catch { toast.error("Failed to update status"); }
   };
 
   const handleSendToHandler = (task: DailyTask) => {
     const whatsapp = setupData.handlerWhatsApp[task.handler];
-    if (!whatsapp) {
-      toast.error(`No WhatsApp number found for ${task.handler}`);
-      return;
-    }
+    if (!whatsapp) { toast.error(`No WhatsApp number found for ${task.handler}`); return; }
     const message = `Hello ${task.handler},\n\nYou have been assigned the following task:\n\nTask: ${task.taskName}\nDescription: ${task.description}\nDeadline: ${task.deadline}\nUrgency: ${task.urgency}/5\n\nPlease confirm once received.`;
     openWhatsApp(whatsapp, message);
-  };
-
-  const handleTaskAdded = () => {
-    setDrawerOpen(false);
-    fetchData();
   };
 
   return (
@@ -137,36 +165,62 @@ export function DesktopDailyTasks() {
               <p className="text-xs text-gray-500">{tasks.length} total tasks</p>
             </div>
           </div>
-          <Button onClick={() => setDrawerOpen(true)} className="bg-purple-600 hover:bg-purple-700">
+          <Button onClick={() => setDialogOpen(true)} className="bg-purple-600 hover:bg-purple-700">
             <Plus className="w-4 h-4 mr-2" /> Add Task
           </Button>
         </div>
       </div>
 
-      {/* Date Navigation */}
-      <div className="px-6 py-3 bg-white border-b border-gray-100">
-        <div className="flex items-center gap-2">
-          {(["yesterday", "today", "tomorrow", "all"] as DateFilter[]).map(f => (
-            <Button
-              key={f}
-              variant={dateFilter === f ? "default" : "outline"}
-              size="sm"
-              onClick={() => { setDateFilter(f); setHandlerFilter(null); }}
+      {/* 12-Date Nepali Navigation Strip */}
+      <div className="px-4 py-3 bg-white border-b border-gray-100">
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setCenterDate(prev => subDays(prev, 6))}>
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+
+          <div className="flex items-center gap-1 overflow-x-auto flex-1 scrollbar-hide">
+            {dateStrip.map(d => {
+              const count = taskCountByDate[d.ad] || 0;
+              const isSelected = selectedDate === d.ad;
+              return (
+                <button
+                  key={d.ad}
+                  onClick={() => { setSelectedDate(isSelected ? null : d.ad); setHandlerFilter(null); }}
+                  className={cn(
+                    "relative flex flex-col items-center px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap shrink-0",
+                    isSelected ? "bg-purple-600 text-white shadow-md" :
+                    d.isToday ? "bg-purple-100 text-purple-800 ring-2 ring-purple-400" :
+                    "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  )}
+                >
+                  <span className={cn("text-[11px]", d.isToday && !isSelected && "font-bold")}>{d.label}</span>
+                  {count > 0 && (
+                    <span className={cn(
+                      "absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center",
+                      isSelected ? "bg-white text-purple-600" : "bg-red-500 text-white"
+                    )}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+
+            {/* All button */}
+            <button
+              onClick={() => { setSelectedDate(null); setHandlerFilter(null); }}
               className={cn(
-                dateFilter === f && "bg-purple-600 hover:bg-purple-700"
+                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0",
+                selectedDate === null ? "bg-purple-600 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               )}
             >
-              {f === "yesterday" && <ChevronLeft className="w-3 h-3 mr-1" />}
-              {f === "today" && <Calendar className="w-3 h-3 mr-1" />}
-              {f.charAt(0).toUpperCase() + f.slice(1)}
-              {f === "tomorrow" && <ChevronRight className="w-3 h-3 ml-1" />}
-            </Button>
-          ))}
-          {dateFilter !== "all" && (
-            <span className="ml-3 text-sm text-gray-500">
-              {getDateForFilter(dateFilter)}
-            </span>
-          )}
+              All
+            </button>
+          </div>
+
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setCenterDate(prev => addDays(prev, 6))}>
+            <ChevronRight className="w-4 h-4" />
+          </Button>
         </div>
       </div>
 
@@ -174,29 +228,14 @@ export function DesktopDailyTasks() {
       {activeHandlers.length > 0 && (
         <div className="px-6 py-2 bg-white border-b border-gray-100 flex items-center gap-2 flex-wrap">
           <span className="text-xs font-medium text-gray-500 mr-1">Handler:</span>
-          <Button
-            size="sm"
-            variant={handlerFilter === null ? "default" : "outline"}
-            className={cn("h-7 text-xs", handlerFilter === null && "bg-violet-600")}
-            onClick={() => setHandlerFilter(null)}
-          >
-            All
-          </Button>
+          <Button size="sm" variant={handlerFilter === null ? "default" : "outline"} className={cn("h-7 text-xs", handlerFilter === null && "bg-violet-600")} onClick={() => setHandlerFilter(null)}>All</Button>
           {activeHandlers.map(h => (
-            <Button
-              key={h}
-              size="sm"
-              variant={handlerFilter === h ? "default" : "outline"}
-              className={cn("h-7 text-xs", handlerFilter === h && "bg-violet-600")}
-              onClick={() => setHandlerFilter(h)}
-            >
-              {h}
-            </Button>
+            <Button key={h} size="sm" variant={handlerFilter === h ? "default" : "outline"} className={cn("h-7 text-xs", handlerFilter === h && "bg-violet-600")} onClick={() => setHandlerFilter(h)}>{h}</Button>
           ))}
         </div>
       )}
 
-      {/* Task Table */}
+      {/* Task Cards Grid */}
       <div className="px-6 py-4">
         {loading ? (
           <div className="text-center py-20 text-gray-500">Loading tasks...</div>
@@ -207,95 +246,91 @@ export function DesktopDailyTasks() {
             <p className="text-gray-400 text-sm mt-1">Try changing the date or handler filter</p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50">
-                  <TableHead className="font-semibold text-xs">Task Name</TableHead>
-                  <TableHead className="font-semibold text-xs">Description</TableHead>
-                  <TableHead className="font-semibold text-xs">Date</TableHead>
-                  <TableHead className="font-semibold text-xs">Deadline</TableHead>
-                  <TableHead className="font-semibold text-xs">Handler</TableHead>
-                  <TableHead className="font-semibold text-xs">Backup</TableHead>
-                  <TableHead className="font-semibold text-xs">Contact</TableHead>
-                  <TableHead className="font-semibold text-xs text-center">Urgency</TableHead>
-                  <TableHead className="font-semibold text-xs">Status</TableHead>
-                  <TableHead className="font-semibold text-xs text-center">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredTasks.map(task => {
-                  const overdue = isOverdue(task);
-                  return (
-                    <TableRow
-                      key={task.rowNumber}
-                      className={cn(
-                        "border-l-4 transition-colors",
-                        overdue ? "bg-red-50 border-l-red-500" : urgencyColors[task.urgency] || "border-l-gray-200"
-                      )}
-                    >
-                      <TableCell className="font-medium text-sm max-w-[180px]">
-                        <div className="flex items-center gap-2">
-                          {task.taskName}
-                          {overdue && <Badge className="bg-red-600 text-white text-[10px] px-1.5 py-0">OVERDUE</Badge>}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-xs text-gray-600 max-w-[200px] truncate">{task.description}</TableCell>
-                      <TableCell className="text-xs text-gray-500 whitespace-nowrap">
-                        <div>{task.dateAD}</div>
-                        <div className="text-[10px] text-gray-400">{task.dateBS}</div>
-                      </TableCell>
-                      <TableCell className="text-xs text-gray-600 whitespace-nowrap">{task.deadline}</TableCell>
-                      <TableCell className="text-xs font-medium">{task.handler}</TableCell>
-                      <TableCell className="text-xs text-gray-500">{task.backupHandler}</TableCell>
-                      <TableCell className="text-xs">
-                        {task.contactNo && <div>{task.contactNo}</div>}
-                        {task.whatsappNo && <div className="text-green-600">{task.whatsappNo}</div>}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge className={cn("text-xs", urgencyBadgeColors[task.urgency])}>
-                          {task.urgency}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Select
-                          value={task.status}
-                          onValueChange={(v) => handleStatusChange(task, v)}
-                        >
-                          <SelectTrigger className="h-7 text-xs w-[120px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {STATUSES.map(s => (
-                              <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs gap-1"
-                          onClick={() => handleSendToHandler(task)}
-                        >
-                          <Send className="w-3 h-3" /> Send
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {filteredTasks.map(task => {
+              const overdue = isTaskOverdue(task);
+              const deadlineInfo = getDeadlineText(task.deadline);
+              const style = urgencyCardStyles[task.urgency] || urgencyCardStyles[1];
+
+              return (
+                <div
+                  key={task.rowNumber}
+                  className={cn(
+                    "rounded-xl border-l-4 shadow-sm hover:shadow-md transition-shadow p-4 flex flex-col gap-3",
+                    style.bg, style.border,
+                    overdue && "ring-2 ring-red-400"
+                  )}
+                >
+                  {/* Top: Urgency + Status badges */}
+                  <div className="flex items-center justify-between">
+                    <Badge className={cn("text-[10px] px-2 py-0.5", style.accent, "text-white border-0")}>
+                      Urgency {task.urgency}
+                    </Badge>
+                    <div className="flex items-center gap-1">
+                      {overdue && <Badge className="bg-red-600 text-white text-[10px] px-1.5 py-0 border-0">OVERDUE</Badge>}
+                      <Badge variant="outline" className="text-[10px] px-2 py-0.5">{task.status}</Badge>
+                    </div>
+                  </div>
+
+                  {/* Task Name */}
+                  <h3 className="font-bold text-sm text-gray-900 leading-tight">{task.taskName}</h3>
+
+                  {/* Description */}
+                  {task.description && (
+                    <p className="text-xs text-gray-600 line-clamp-3">{task.description}</p>
+                  )}
+
+                  {/* Details */}
+                  <div className="space-y-1.5 text-xs text-gray-500">
+                    <div className="flex items-center gap-1.5">
+                      <User className="w-3 h-3" />
+                      <span className="font-medium text-gray-700">{task.handler}</span>
+                      {task.backupHandler && <span className="text-gray-400">/ {task.backupHandler}</span>}
+                    </div>
+
+                    {deadlineInfo.text && (
+                      <div className={cn("flex items-center gap-1.5", deadlineInfo.isOverdue ? "text-red-600 font-semibold" : "text-gray-500")}>
+                        <Clock className="w-3 h-3" />
+                        <span>{deadlineInfo.text}</span>
+                      </div>
+                    )}
+
+                    {(task.contactNo || task.whatsappNo) && (
+                      <div className="flex items-center gap-1.5">
+                        <Phone className="w-3 h-3" />
+                        <span>{task.contactNo || task.whatsappNo}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 mt-auto pt-2 border-t border-gray-200/50">
+                    <Select value={task.status} onValueChange={(v) => handleStatusChange(task, v)}>
+                      <SelectTrigger className="h-7 text-[11px] flex-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STATUSES.map(s => (
+                          <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1 shrink-0" onClick={() => handleSendToHandler(task)}>
+                      <Send className="w-3 h-3" /> WA
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
 
-      <AddTaskDrawer
-        open={drawerOpen}
-        onOpenChange={setDrawerOpen}
+      <AddTaskDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
         setupData={setupData}
-        onTaskAdded={handleTaskAdded}
+        onTaskAdded={() => { setDialogOpen(false); fetchData(); }}
       />
     </div>
   );
