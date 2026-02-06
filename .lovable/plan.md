@@ -1,114 +1,128 @@
 
-## Fix: Mobile Suite Landing Page - Right Side Cutoff and Text Size
+## Fix: Mobile Home Tab Width Overflow
 
-### Issues Identified
+### Problem
+The Home tab has horizontal overflow causing content to be cut off on the right side, while other tabs (Handlers, Modules, News) display correctly. The issue is specifically in the Home tab content.
 
-From the screenshot:
-1. **Right side cutoff**: "Add Payment" button, "Sync" button, and "Nikit" tab are being clipped
-2. **Large text**: "Upcoming Events" header and content take too much space, pushing Benzo Keep section down
+### Root Cause Analysis
+After analyzing the code:
 
----
+1. **SuiteQuickActionsBar**: The buttons use `w-full` but the container grid doesn't prevent content from expanding
+2. **MasterSearchButton / MasterSyncButton**: These buttons may have internal content that forces minimum widths
+3. **TodayEventsHero**: The event cards have complex content that may overflow
+4. **Missing overflow constraints**: The grids and containers need explicit `overflow-hidden` to prevent child content from breaking out
 
-### Root Causes
+### Solution
 
-| Component | Issue |
-|-----------|-------|
-| `SuiteQuickActionsBar` | Button text may overflow on narrow screens |
-| `TodayEventsHero` | Header text too large (`text-xl md:text-2xl`), icon size too big |
-| `MobileSuiteLanding` | Container padding may not account for all screen widths |
-| `EventsHandlerTabs` | Tab labels may overflow on narrow screens |
+**File 1: `src/components/suite/MobileSuiteLanding.tsx`**
 
----
+Add `overflow-hidden` to all grid containers in `HomeTabContent`:
 
-### Technical Fixes
-
-#### 1. MobileSuiteLanding.tsx - Reduce Container Padding
-
-**Change**: Reduce horizontal padding from `px-3` to `px-2` to give more room
+| Line | Change |
+|------|--------|
+| 149 | Add `overflow-hidden` to main container |
+| 154 | Add `overflow-hidden` to Search/Sync grid |
 
 ```tsx
-// HomeTabContent - line 149
-<div className="px-2 py-3 space-y-2.5 pb-24 w-full max-w-full overflow-x-hidden box-border">
+// Line 149 - Main container
+<div className="px-2 py-3 space-y-2.5 pb-24 w-full max-w-full overflow-hidden box-border">
+
+// Line 154 - Search/Sync grid  
+<div className="grid grid-cols-2 gap-2 w-full max-w-full overflow-hidden">
 ```
 
-#### 2. SuiteQuickActionsBar.tsx - Compact Mobile Buttons
+**File 2: `src/components/suite/SuiteQuickActionsBar.tsx`**
 
-**Changes**:
-- Reduce button height from `h-12` to `h-10`
-- Reduce font size and padding
-- Ensure text truncation works properly
+Add `overflow-hidden` to the mobile buttons grid and ensure buttons shrink properly:
+
+| Line | Change |
+|------|--------|
+| 72 | Add `overflow-hidden` to grid container |
+| 73-87 | Add `min-w-0` and `overflow-hidden` to buttons |
 
 ```tsx
-// Lines 73-87 - mobile variant buttons
-<Button className="h-10 w-full ... text-[11px] px-1.5">
+// Line 72
+<div className="grid grid-cols-2 gap-1.5 w-full max-w-full overflow-hidden">
+  <Button className="h-9 w-full min-w-0 overflow-hidden ...">
 ```
 
-#### 3. TodayEventsHero.tsx - Smaller Mobile Layout
+**File 3: `src/components/suite/MasterSearchButton.tsx`**
 
-**Changes**:
-- Reduce header text from `text-xl` to `text-base` on mobile
-- Reduce icon container from `w-12 h-12` to `w-10 h-10`
-- Reduce subtitle text
-- Reduce event card padding
-- Reduce max-height of scrollable area
+Ensure collapsed button doesn't force minimum width:
+
+| Line | Change |
+|------|--------|
+| 304-317 | Remove any min-width constraints, add `overflow-hidden` |
 
 ```tsx
-// Header - line 300
-<h2 className="text-base md:text-xl font-bold text-gray-900">
-
-// Icon container - line 291
-<div className="w-10 h-10 md:w-12 md:h-12 rounded-xl ...">
-
-// Scrollable area - line 314
-<div className="max-h-[240px] md:max-h-[400px] overflow-y-auto ...">
+// Line 304-317 - Collapsed button
+<button
+  onClick={() => setIsExpanded(true)}
+  className={cn(
+    "w-full min-w-0 h-9 rounded-full font-semibold flex items-center justify-center gap-1.5 px-2 overflow-hidden",
+    ...
+  )}
+>
 ```
 
-#### 4. EventsHandlerTabs - Ensure Tab Labels Fit
+**File 4: `src/components/suite/MasterSyncButton.tsx`**
 
-**Changes**:
-- Reduce tab height from `h-11` to `h-10`
-- Use smaller icons and hide text on very narrow screens
+Same fix - ensure button doesn't force minimum width:
+
+| Line | Change |
+|------|--------|
+| 180-192 | Add `min-w-0 overflow-hidden` to button |
 
 ```tsx
-// TabsList - line 178
-<TabsList className="grid grid-cols-4 w-full mb-2 h-10 bg-gray-100 p-0.5">
+// Line 177-192
+<Button
+  onClick={handleMasterSync}
+  disabled={isSyncing}
+  className={cn(
+    "h-9 w-full min-w-0 overflow-hidden rounded-full font-semibold gap-1 px-2 transition-all text-[11px]",
+    ...
+  )}
+>
 ```
 
----
+**File 5: `src/components/suite/TodayEventsHero.tsx`**
+
+Add `overflow-hidden` to prevent event cards from overflowing:
+
+| Line | Change |
+|------|--------|
+| 280 | Add `overflow-hidden` to main container |
+| 288 | Add `overflow-hidden` to content wrapper |
+| 314 | Add `overflow-hidden` to scrollable container |
+
+```tsx
+// Line ~280 - Main container wrapper
+<div className={cn(
+  "relative bg-white rounded-xl border shadow-sm overflow-hidden", // Add overflow-hidden
+  ...
+)}>
+
+// Line ~314 - Events list container
+<div className="max-h-[180px] md:max-h-[400px] overflow-y-auto overflow-x-hidden pr-1 ...">
+```
 
 ### Summary of Changes
 
-| File | Changes |
+| File | Key Fix |
 |------|---------|
-| `MobileSuiteLanding.tsx` | Reduce padding (`px-2`), reduce spacing (`space-y-2.5`), smaller tab margins |
-| `SuiteQuickActionsBar.tsx` | Smaller buttons (`h-10`), smaller text (`text-[11px]`), reduced padding |
-| `TodayEventsHero.tsx` | Smaller header (`text-base`), smaller icon (`w-10 h-10`), reduced scroll height (`max-h-[240px]`) |
+| `MobileSuiteLanding.tsx` | Add `overflow-hidden` to container and grids |
+| `SuiteQuickActionsBar.tsx` | Add `overflow-hidden` to grid, `min-w-0` to buttons |
+| `MasterSearchButton.tsx` | Add `min-w-0 overflow-hidden` to collapsed button |
+| `MasterSyncButton.tsx` | Add `min-w-0 overflow-hidden` to button |
+| `TodayEventsHero.tsx` | Add `overflow-hidden` and `overflow-x-hidden` to containers |
 
----
+### Why This Works
 
-### Visual Result After Fix
+The key issue is CSS flexbox/grid behavior:
+- `w-full` makes an element try to fill 100% of parent width
+- But if child content (text, icons) has inherent minimum width, it can push the element beyond its container
+- `min-w-0` tells the element it can shrink below its content's natural size
+- `overflow-hidden` clips any content that still overflows
+- `truncate` on text ensures long text gets cut off with ellipsis
 
-```text
-┌─────────────────────────────────┐
-│  [X] Xito Business Suite    [☐]│
-├─────────────────────────────────┤
-│ [Add Client]  [Add Payment]     │  <- Both buttons visible
-├─────────────────────────────────┤
-│ [Search]        [Sync]          │  <- Both buttons visible
-├─────────────────────────────────┤
-│ [📅] [Benzo] [Barun] [Nikit]    │  <- All tabs visible
-├─────────────────────────────────┤
-│ 📅 Upcoming Events              │  <- Smaller header
-│    62 events scheduled          │
-│ ┌─────────────────────────────┐ │
-│ │ TODAY Amrita Didi  📞 💬 → │ │
-│ │ PASNI                       │ │
-│ └─────────────────────────────┘ │
-│ (more compact event cards)      │
-├─────────────────────────────────┤
-│ 📒 BENZO KEEP                   │  <- Now visible
-│ [Benzo Keep] [Unassigned]       │
-└─────────────────────────────────┘
-```
-
-These changes will ensure all UI elements fit within the mobile viewport while maintaining readability and functionality.
+By adding these constraints at every level (container → grid → button → text), we ensure nothing can overflow the viewport.
