@@ -26,25 +26,45 @@ import ClientDetail from "./pages/ClientDetail";
 import ClientContactForm from "./pages/ClientContactForm";
 import HotDates from "./pages/HotDates";
 
-import { fullResyncAllBookedClients } from "./lib/sheets-api";
-
 const queryClient = new QueryClient();
 
-// Hourly auto-sync component for booked clients
-function BookedClientsAutoSync() {
+// Global auto-sync component for all data sources
+function GlobalAutoSync() {
   useEffect(() => {
-    // Auto-sync booked clients every hour
-    const syncInterval = setInterval(async () => {
+    // Compulsory refresh on app open
+    const triggerInitialRefresh = () => {
       if (navigator.onLine) {
-        console.log('[AUTO-SYNC] Hourly booked clients sync triggered');
-        try {
-          const result = await fullResyncAllBookedClients();
-          console.log('[AUTO-SYNC] Complete:', result);
-        } catch (error) {
-          console.error('[AUTO-SYNC] Failed:', error);
-        }
+        console.log('[GLOBAL-SYNC] App opened - triggering compulsory refresh');
+        // Staggered invalidation to prevent debounce cancellation
+        window.dispatchEvent(new CustomEvent('cache-updated', { 
+          detail: { type: 'clients-invalidate' } 
+        }));
+        
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('cache-updated', { 
+            detail: { type: 'booked-clients-invalidate' } 
+          }));
+        }, 200);
       }
-    }, 60 * 60 * 1000); // 1 hour in milliseconds
+    };
+    
+    triggerInitialRefresh();
+    
+    // Hourly auto-refresh
+    const syncInterval = setInterval(() => {
+      if (navigator.onLine) {
+        console.log('[GLOBAL-SYNC] Hourly refresh triggered');
+        window.dispatchEvent(new CustomEvent('cache-updated', { 
+          detail: { type: 'clients-invalidate' } 
+        }));
+        
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('cache-updated', { 
+            detail: { type: 'booked-clients-invalidate' } 
+          }));
+        }, 200);
+      }
+    }, 60 * 60 * 1000); // 1 hour
     
     return () => clearInterval(syncInterval);
   }, []);
@@ -67,7 +87,7 @@ const App = () => (
             {/* Protected routes */}
             <Route path="/" element={
               <ProtectedRoute>
-                <BookedClientsAutoSync />
+                <GlobalAutoSync />
                 <SuiteLanding />
               </ProtectedRoute>
             } />
