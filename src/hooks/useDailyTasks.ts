@@ -122,7 +122,18 @@ export function useDailyTasks() {
   const handleSendToHandler = useCallback((task: DailyTask) => {
     const whatsapp = setupData.handlerWhatsApp[task.handler];
     if (!whatsapp) { toast.error(`No WhatsApp number found for ${task.handler}`); return; }
-    const message = `Hello ${task.handler},\n\nYou have been assigned the following task:\n\nTask: ${task.taskName}\nDescription: ${task.description}\nDeadline: ${task.deadline}\nUrgency: ${task.urgency}/5\n\nPlease confirm once received.`;
+
+    const deadlineInfo = task.deadline ? getDeadlineText(task.deadline) : null;
+    const deadlineLine = deadlineInfo?.text ? `Deadline: ${deadlineInfo.text}` : "";
+
+    const actionVerbs = ["call", "send", "check", "follow", "prepare", "visit", "collect", "deliver", "update", "review", "book", "arrange", "confirm", "contact", "meet", "email", "message", "create", "write", "submit", "complete", "finish", "schedule", "organize", "coordinate", "handle", "manage", "set up", "pick up", "drop off"];
+    const taskNameLower = (task.taskName || "").toLowerCase().trim();
+    const startsWithVerb = actionVerbs.some(v => taskNameLower.startsWith(v));
+    const closingLine = startsWithVerb
+      ? `Please ${taskNameLower} and confirm once done.`
+      : `Please complete: ${task.taskName} and confirm once done.`;
+
+    const message = `Hello ${task.handler},\n\nYou have been assigned the following task:\n\nTask: ${task.taskName}\nDescription: ${task.description}\n${deadlineLine}\nUrgency: ${task.urgency}/5\n\n${closingLine}`;
     openWhatsApp(whatsapp, message);
   }, [setupData.handlerWhatsApp]);
 
