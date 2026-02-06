@@ -146,7 +146,7 @@ export function MobileSuiteLanding() {
 function HomeTabContent() {
   return (
     <ScrollArea className="flex-1 h-full w-full">
-      <div className="px-3 py-4 space-y-3 pb-24 w-full max-w-full overflow-x-hidden box-border">
+      <div className="px-2 py-3 space-y-2.5 pb-24 w-full max-w-full overflow-x-hidden box-border">
         {/* Quick Actions */}
         <SuiteQuickActionsBar variant="mobile" />
         
@@ -175,7 +175,7 @@ function HomeTabContent() {
 function EventsHandlerTabs() {
   return (
     <Tabs defaultValue="events" className="w-full max-w-full overflow-x-hidden">
-      <TabsList className="grid grid-cols-4 w-full mb-3 h-11 bg-gray-100 p-1">
+      <TabsList className="grid grid-cols-4 w-full mb-2 h-10 bg-gray-100 p-0.5">
         <TabsTrigger 
           value="events" 
           className="gap-1 text-xs data-[state=active]:bg-emerald-500 data-[state=active]:text-white"

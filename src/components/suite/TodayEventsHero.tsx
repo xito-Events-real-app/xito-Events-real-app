@@ -285,22 +285,22 @@ export function TodayEventsHero() {
       )} />
 
       {/* Content */}
-      <div className="relative z-10 p-6 md:p-8 pl-5 md:pl-7">
+      <div className="relative z-10 p-4 md:p-8 pl-4 md:pl-7">
         {/* Header */}
-        <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
           <div className={cn(
-            "w-12 h-12 rounded-xl flex items-center justify-center shadow-md",
+            "w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center shadow-md",
             hasEvents 
               ? "bg-gradient-to-br from-emerald-500 to-teal-600" 
               : "bg-gradient-to-br from-gray-400 to-gray-500"
           )}>
-            <Calendar className="w-6 h-6 text-white" />
+            <Calendar className="w-5 h-5 md:w-6 md:h-6 text-white" />
           </div>
           <div>
-            <h2 className="text-xl md:text-2xl font-bold text-gray-900">
+            <h2 className="text-base md:text-2xl font-bold text-gray-900">
               Upcoming Events
             </h2>
-            <p className="text-sm text-gray-500">
+            <p className="text-xs md:text-sm text-gray-500">
               {hasEvents 
                 ? `${upcomingEvents.length} event${upcomingEvents.length > 1 ? 's' : ''} scheduled`
                 : "No upcoming events"
@@ -311,7 +311,7 @@ export function TodayEventsHero() {
 
         {/* Events List - Scrollable with fixed height container */}
         {hasEvents ? (
-          <div className="max-h-[300px] md:max-h-[400px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+          <div className="max-h-[220px] md:max-h-[400px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
             <div className="space-y-3">
               {upcomingEvents.slice(0, 30).map((event, idx) => {
                   const clientId = event.client.registeredDateTimeAD || event.client.originalRowNumber;
