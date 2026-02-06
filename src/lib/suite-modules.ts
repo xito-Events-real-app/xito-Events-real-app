@@ -57,12 +57,13 @@ export const suiteModules: SuiteModule[] = [
   },
   {
     id: 'daily-task-manager',
-    name: 'Daily Task Manager',
-    description: 'Organize daily tasks and todos',
+    name: 'WTN Daily Task',
+    description: 'Manage daily tasks and todos',
     icon: CheckSquare,
     path: '/tasks',
-    status: 'coming-soon',
+    status: 'active',
     gradient: 'from-purple-500 to-violet-600',
+    statsKey: 'tasks' as any,
   },
   {
     id: 'video-edit-tracker',
