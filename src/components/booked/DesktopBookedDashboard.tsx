@@ -83,6 +83,7 @@ export function DesktopBookedDashboard({
   const location = useLocation();
   const [showAllOpenDates, setShowAllOpenDates] = useState(false);
   const [viewMode, setViewMode] = useState<'datewise' | 'hotdates' | 'clientwise'>('datewise');
+  const [hoveredCalDay, setHoveredCalDay] = useState<string | null>(null);
 
   // Total unique clients
   const uniqueClientCount = useMemo(() => {
@@ -366,8 +367,9 @@ export function DesktopBookedDashboard({
   const calendarData = useMemo(() => {
     const bookedMap = new Map<string, number>();
     const advancePendingMap = new Map<string, number>();
+    const clientDetailsMap = new Map<string, { clientName: string; eventName: string; registeredDateTimeAD?: string; originalRowNumber?: number }[]>();
     
-    // Count booked events
+    // Count booked events and store client details
     clients.forEach(client => {
       const events = parseEventDetails(
         client.events || '',
@@ -380,6 +382,14 @@ export function DesktopBookedDashboard({
         if (event.year && event.month && event.day && event.day !== '**') {
           const dateKey = `${event.year}-${event.month}-${event.day}`;
           bookedMap.set(dateKey, (bookedMap.get(dateKey) || 0) + 1);
+          
+          if (!clientDetailsMap.has(dateKey)) clientDetailsMap.set(dateKey, []);
+          clientDetailsMap.get(dateKey)!.push({
+            clientName: client.clientName || 'Unknown',
+            eventName: event.eventName || 'Event',
+            registeredDateTimeAD: client.registeredDateTimeAD,
+            originalRowNumber: client.originalRowNumber,
+          });
         }
       });
     });
@@ -413,7 +423,7 @@ export function DesktopBookedDashboard({
       month: number; 
       year: number; 
       monthName: string; 
-      days: { day: number; isBooked: boolean; eventCount: number; advancePendingCount: number }[];
+      days: { day: number; isBooked: boolean; eventCount: number; advancePendingCount: number; clients: { clientName: string; eventName: string; registeredDateTimeAD?: string; originalRowNumber?: number }[] }[];
       bookedCount: number;
     }[] = [];
     
@@ -423,7 +433,7 @@ export function DesktopBookedDashboard({
       const monthName = NEPALI_MONTHS[monthNum];
       const daysInMonth = daysPerMonth[monthNum] || 30;
       
-      const days: { day: number; isBooked: boolean; eventCount: number; advancePendingCount: number }[] = [];
+      const days: { day: number; isBooked: boolean; eventCount: number; advancePendingCount: number; clients: { clientName: string; eventName: string; registeredDateTimeAD?: string; originalRowNumber?: number }[] }[] = [];
       let bookedCount = 0;
       
       for (let day = 1; day <= daysInMonth; day++) {
@@ -432,7 +442,7 @@ export function DesktopBookedDashboard({
         const advancePendingCount = advancePendingMap.get(dateKey) || 0;
         const isBooked = eventCount > 0;
         if (isBooked) bookedCount++;
-        days.push({ day, isBooked, eventCount, advancePendingCount });
+        days.push({ day, isBooked, eventCount, advancePendingCount, clients: clientDetailsMap.get(dateKey) || [] });
       }
       
       result.push({ month: monthNum, year: yearNum, monthName, days, bookedCount });
@@ -708,75 +718,111 @@ export function DesktopBookedDashboard({
                   <span className="text-muted-foreground font-medium">:</span>
                   
                   <div className="flex-1 flex flex-wrap gap-x-1 gap-y-1.5 min-w-0 items-center">
-                    {monthData.days.map(({ day, isBooked, eventCount, advancePendingCount }) => {
+                    {monthData.days.map(({ day, isBooked, eventCount, advancePendingCount, clients: dayClients }) => {
                       const isPast = isBSDatePast(monthData.year, monthData.month, day);
                       const hasAdvancePending = advancePendingCount > 0;
+                      const calDayKey = `${monthData.year}-${monthData.month}-${day}`;
                       
                       if (isBooked) {
                         // BOOKED: Concentric circles + optional yellow outer ring for advance pending
                         const totalRingSize = 20 + (eventCount - 1) * 8 + (hasAdvancePending ? 8 : 0);
                         return (
-                          <button 
+                          <div
                             key={day}
-                            onClick={() => onHotDateFilter?.(`${monthData.year}-${monthData.month}-${day}`)}
-                            className={cn(
-                              "relative inline-flex items-center justify-center cursor-pointer transition-all hover:scale-110",
-                              isPast && "opacity-40",
-                              selectedHotDate === `${monthData.year}-${monthData.month}-${day}` 
-                                ? "ring-2 ring-offset-2 ring-green-500 rounded-full"
-                                : ""
-                            )}
-                            style={{ 
-                              width: `${totalRingSize}px`,
-                              height: `${totalRingSize}px`
-                            }}
-                            title={`${eventCount} booked${hasAdvancePending ? ` + ${advancePendingCount} advance pending` : ''}${isPast ? ' (Completed)' : ''} on day ${day}`}
+                            className="relative"
+                            onMouseEnter={() => setHoveredCalDay(calDayKey)}
+                            onMouseLeave={() => setHoveredCalDay(null)}
                           >
-                            {/* Yellow outer ring for advance pending */}
-                            {hasAdvancePending && (
-                              <span 
-                                className={cn(
-                                  "absolute rounded-full border-2",
-                                  isPast ? "border-muted-foreground" : "border-amber-500"
-                                )}
-                                style={{ width: `${totalRingSize}px`, height: `${totalRingSize}px` }}
-                              />
-                            )}
-                            {/* Green outer rings for booked events */}
-                            {Array.from({ length: eventCount - 1 }, (_, i) => {
-                              const ringIndex = eventCount - 1 - i;
-                              const size = 20 + ringIndex * 8;
-                              return (
+                            <button 
+                              onClick={() => onHotDateFilter?.(calDayKey)}
+                              className={cn(
+                                "relative inline-flex items-center justify-center cursor-pointer transition-all hover:scale-110",
+                                isPast && "opacity-40",
+                                selectedHotDate === calDayKey
+                                  ? "ring-2 ring-offset-2 ring-green-500 rounded-full"
+                                  : ""
+                              )}
+                              style={{ 
+                                width: `${totalRingSize}px`,
+                                height: `${totalRingSize}px`
+                              }}
+                              title={`${eventCount} booked${hasAdvancePending ? ` + ${advancePendingCount} advance pending` : ''}${isPast ? ' (Completed)' : ''} on day ${day}`}
+                            >
+                              {/* Yellow outer ring for advance pending */}
+                              {hasAdvancePending && (
                                 <span 
-                                  key={ringIndex}
                                   className={cn(
                                     "absolute rounded-full border-2",
-                                    isPast ? "border-muted-foreground" : "border-green-500"
+                                    isPast ? "border-muted-foreground" : "border-amber-500"
                                   )}
-                                  style={{ width: `${size}px`, height: `${size}px` }}
+                                  style={{ width: `${totalRingSize}px`, height: `${totalRingSize}px` }}
                                 />
-                              );
-                            })}
-                            {/* Inner filled circle with day number or checkmark */}
-                            <span className={cn(
-                              "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold z-10 text-white",
-                              isPast ? "bg-muted-foreground" : "bg-green-500"
-                            )}>
-                              {isPast ? <CheckCircle className="w-3 h-3" /> : day}
-                            </span>
-                          </button>
+                              )}
+                              {/* Green outer rings for booked events */}
+                              {Array.from({ length: eventCount - 1 }, (_, i) => {
+                                const ringIndex = eventCount - 1 - i;
+                                const size = 20 + ringIndex * 8;
+                                return (
+                                  <span 
+                                    key={ringIndex}
+                                    className={cn(
+                                      "absolute rounded-full border-2",
+                                      isPast ? "border-muted-foreground" : "border-green-500"
+                                    )}
+                                    style={{ width: `${size}px`, height: `${size}px` }}
+                                  />
+                                );
+                              })}
+                              {/* Inner filled circle with day number or checkmark */}
+                              <span className={cn(
+                                "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold z-10 text-white",
+                                isPast ? "bg-muted-foreground" : "bg-green-500"
+                              )}>
+                                {isPast ? <CheckCircle className="w-3 h-3" /> : day}
+                              </span>
+                            </button>
+                            
+                            {/* Floating Bubble Popup */}
+                            {hoveredCalDay === calDayKey && dayClients.length > 0 && (
+                              <div className="calendar-bubble absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-max max-w-[220px]">
+                                <div className="bg-card border border-border rounded-lg shadow-lg p-2 space-y-1">
+                                  <p className="text-[10px] font-semibold text-muted-foreground border-b border-border pb-1">
+                                    {monthData.monthName} {day}, {monthData.year}
+                                  </p>
+                                  {dayClients.map((client, idx) => (
+                                    <button
+                                      key={`${client.clientName}-${idx}`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigate(getClientDetailPath(client), { state: { from: location.pathname } });
+                                      }}
+                                      className="flex items-center gap-1.5 w-full text-left text-[10px] px-1.5 py-1 rounded hover:bg-primary/10 transition-colors"
+                                    >
+                                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+                                      <span className="font-medium truncate">{client.eventName}</span>
+                                      <span className="text-muted-foreground truncate">• {client.clientName}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                                {/* Arrow pointing down */}
+                                <div className="flex justify-center">
+                                  <div className="w-2 h-2 bg-card border-r border-b border-border rotate-45 -mt-1" />
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         );
                       } else if (hasAdvancePending) {
                         // ADVANCE PENDING ONLY: Yellow text/circle
                         return (
                           <button 
                             key={day}
-                            onClick={() => onHotDateFilter?.(`${monthData.year}-${monthData.month}-${day}`)}
+                            onClick={() => onHotDateFilter?.(calDayKey)}
                             className={cn(
                               "w-5 h-5 flex items-center justify-center font-mono text-[10px] font-bold",
                               "cursor-pointer rounded-full transition-all",
                               isPast ? "text-muted-foreground bg-muted" : "text-amber-600 bg-amber-500/20 hover:bg-amber-500/30",
-                              selectedHotDate === `${monthData.year}-${monthData.month}-${day}` 
+                              selectedHotDate === calDayKey
                                 ? "ring-2 ring-amber-500 bg-amber-500/30"
                                 : ""
                             )}
