@@ -82,7 +82,7 @@ export function DesktopBookedDashboard({
   const navigate = useNavigate();
   const location = useLocation();
   const [showAllOpenDates, setShowAllOpenDates] = useState(false);
-  const [showClientWise, setShowClientWise] = useState(false);
+  const [viewMode, setViewMode] = useState<'datewise' | 'hotdates' | 'clientwise'>('datewise');
 
   // Total unique clients
   const uniqueClientCount = useMemo(() => {
@@ -291,6 +291,76 @@ export function DesktopBookedDashboard({
     
     return result;
   }, [clients, hotDatesSortOrder, selectedMonth]);
+
+  // DATE WISE sorted data - always ascending with completed last (independent of sidebar sort)
+  const dateWiseSorted = useMemo(() => {
+    // Build date groups fresh (without month filter for date wise view)
+    const dateGroups: Record<string, {
+      dateKey: string;
+      year: string;
+      month: string;
+      monthName: string;
+      day: string;
+      events: { clientName: string; eventName: string; originalRowNumber?: number; registeredDateTimeAD?: string }[];
+      isCompleted: boolean;
+    }> = {};
+
+    clients.forEach(client => {
+      const events = parseEventDetails(
+        client.events || '',
+        client.eventYear || '',
+        client.eventMonth || '',
+        client.eventDay || ''
+      );
+
+      events.forEach(event => {
+        if (!event.year || !event.month || !event.day) return;
+        
+        const dateKey = `${event.year}-${event.month.padStart(2, '0')}-${String(event.day).padStart(2, '0')}`;
+        
+        if (!dateGroups[dateKey]) {
+          dateGroups[dateKey] = {
+            dateKey,
+            year: event.year,
+            month: event.month,
+            monthName: event.monthName,
+            day: event.day,
+            events: [],
+            isCompleted: isBSDatePast(event.year, event.month, event.day)
+          };
+        }
+
+        dateGroups[dateKey].events.push({ 
+          clientName: client.clientName || 'Unknown', 
+          eventName: event.eventName || 'Event',
+          originalRowNumber: client.originalRowNumber,
+          registeredDateTimeAD: client.registeredDateTimeAD
+        });
+      });
+    });
+
+    let result = Object.values(dateGroups).filter(d => d.events.length > 0);
+    
+    // Apply month filter if selected
+    if (selectedMonth) {
+      const [filterYear, filterMonth] = selectedMonth.split('-');
+      result = result.filter(d => d.year === filterYear && d.month === filterMonth);
+    }
+    
+    // Always sort ascending with completed dates last
+    result.sort((a, b) => {
+      // Completed dates go last
+      if (a.isCompleted !== b.isCompleted) {
+        return a.isCompleted ? 1 : -1;
+      }
+      // Sort by date ascending
+      const dateA = `${a.year}-${a.month.padStart(2, '0')}-${a.day.padStart(2, '0')}`;
+      const dateB = `${b.year}-${b.month.padStart(2, '0')}-${b.day.padStart(2, '0')}`;
+      return dateA.localeCompare(dateB);
+    });
+    
+    return result;
+  }, [clients, selectedMonth]);
 
   // Calendar Data - booked clients + advance pending from tracker
   const calendarData = useMemo(() => {
@@ -751,35 +821,134 @@ export function DesktopBookedDashboard({
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base font-semibold flex items-center gap-2">
                   <Flame className="w-5 h-5 text-orange-500" />
-                  Hot Dates
+                  {viewMode === 'datewise' ? 'Date Wise' : viewMode === 'clientwise' ? 'Client Wise' : 'Hot Dates'}
                   <Badge variant="outline" className="text-xs ml-2 text-green-600 border-green-500">
                     Booked Events Only
                   </Badge>
                 </CardTitle>
                 <div className="flex items-center gap-2">
-                  {/* CLIENT WISE Toggle Button */}
-                  <Button
-                    variant={showClientWise ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setShowClientWise(!showClientWise)}
-                    className={cn(
-                      "text-xs h-7",
-                      showClientWise 
-                        ? "bg-blue-600 hover:bg-blue-700 text-white" 
-                        : "border-blue-500 text-blue-600 hover:bg-blue-500/10"
-                    )}
-                  >
-                    <Users className="w-3 h-3 mr-1" />
-                    CLIENT WISE
-                  </Button>
+                  {/* View Mode Toggle Buttons */}
+                  <div className="flex rounded-lg border overflow-hidden">
+                    <Button
+                      variant={viewMode === 'datewise' ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setViewMode('datewise')}
+                      className={cn(
+                        "text-xs h-7 rounded-none",
+                        viewMode === 'datewise' && "bg-orange-600 hover:bg-orange-700"
+                      )}
+                    >
+                      <CalendarDays className="w-3 h-3 mr-1" />
+                      DATE WISE
+                    </Button>
+                    <Button
+                      variant={viewMode === 'hotdates' ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setViewMode('hotdates')}
+                      className={cn(
+                        "text-xs h-7 rounded-none border-l",
+                        viewMode === 'hotdates' && "bg-green-600 hover:bg-green-700"
+                      )}
+                    >
+                      <Flame className="w-3 h-3 mr-1" />
+                      HOT DATES
+                    </Button>
+                    <Button
+                      variant={viewMode === 'clientwise' ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setViewMode('clientwise')}
+                      className={cn(
+                        "text-xs h-7 rounded-none border-l",
+                        viewMode === 'clientwise' && "bg-blue-600 hover:bg-blue-700"
+                      )}
+                    >
+                      <Users className="w-3 h-3 mr-1" />
+                      CLIENT WISE
+                    </Button>
+                  </div>
                   <Badge variant="outline" className="text-xs">
-                    {showClientWise ? `${allClients.length} clients` : `Top ${hotDates.length} dates`}
+                    {viewMode === 'clientwise' 
+                      ? `${allClients.length} clients` 
+                      : viewMode === 'datewise'
+                        ? `${dateWiseSorted.length} dates`
+                        : `Top ${hotDates.length} dates`}
                   </Badge>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
-              {showClientWise ? (
+              {viewMode === 'datewise' ? (
+                // DATE WISE View - Ascending date order, completed last
+                <div className="space-y-2">
+                  {dateWiseSorted.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No event dates found
+                    </p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[140px]">Date</TableHead>
+                          <TableHead>Events</TableHead>
+                          <TableHead className="w-[100px] text-right">Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {dateWiseSorted.map((dateInfo) => (
+                          <TableRow 
+                            key={dateInfo.dateKey}
+                            className={cn(
+                              dateInfo.isCompleted && "opacity-50"
+                            )}
+                          >
+                            <TableCell>
+                              <button
+                                onClick={() => onHotDateFilter?.(dateInfo.dateKey)}
+                                className="flex items-center gap-2 hover:text-primary transition-colors"
+                              >
+                                <Badge className={cn(
+                                  "text-white text-xs",
+                                  dateInfo.isCompleted 
+                                    ? "bg-muted-foreground" 
+                                    : "bg-gradient-to-r from-green-500 to-emerald-500"
+                                )}>
+                                  {dateInfo.year} {dateInfo.monthName} {dateInfo.day}
+                                </Badge>
+                              </button>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap gap-1">
+                                {dateInfo.events.map((event, i) => (
+                                  <button
+                                    key={`${event.clientName}-${i}`}
+                                    onClick={() => navigate(getClientDetailPath(event), { state: { from: location.pathname } })}
+                                    className="text-xs border rounded px-2 py-0.5 hover:bg-primary/10 hover:border-primary transition-colors"
+                                  >
+                                    <span className="font-medium">{event.eventName}</span>
+                                    <span className="text-muted-foreground"> • {event.clientName}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {dateInfo.isCompleted ? (
+                                <Badge variant="outline" className="text-muted-foreground">
+                                  <CheckCircle className="w-3 h-3 mr-1" />
+                                  Done
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-green-500 text-white">
+                                  {dateInfo.events.length} events
+                                </Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
+              ) : viewMode === 'clientwise' ? (
                 // CLIENT WISE View - Show individual client cards
                 (() => {
                   // Helper to get earliest event date for a client
