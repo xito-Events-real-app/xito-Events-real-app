@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient' | 'getDailyTasks' | 'addDailyTask' | 'updateDailyTaskStatus' | 'getDailyTaskSetupData';
+  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient' | 'getDailyTasks' | 'addDailyTask' | 'updateDailyTask' | 'updateDailyTaskStatus' | 'getDailyTaskSetupData';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -563,6 +563,44 @@ async function updateDailyTaskStatus(accessToken: string, taskSpreadsheetId: str
     const errorText = await response.text();
     console.error('Failed to update task status:', errorText);
     throw new Error(`Failed to update task status: ${response.status}`);
+  }
+
+  return { success: true };
+}
+
+// Update full daily task row (columns A-K) by row number
+async function updateDailyTask(accessToken: string, taskSpreadsheetId: string, taskData: Record<string, unknown>) {
+  const rowNumber = taskData.rowNumber as number;
+  const range = encodeURIComponent(`'WTN TASK'!A${rowNumber}:K${rowNumber}`);
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${taskSpreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+
+  const values = [[
+    taskData.dateAD || '',
+    taskData.dateBS || '',
+    taskData.taskName || '',
+    taskData.description || '',
+    taskData.deadline || '',
+    taskData.handler || '',
+    taskData.backupHandler || '',
+    taskData.contactNo || '',
+    taskData.whatsappNo || '',
+    taskData.urgency || 3,
+    taskData.status || 'Pending',
+  ]];
+
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Failed to update task:', errorText);
+    throw new Error(`Failed to update task: ${response.status}`);
   }
 
   return { success: true };
@@ -6012,6 +6050,12 @@ Deno.serve(async (req) => {
         if (!data) throw new Error('data is required for addDailyTask');
         const taskSpreadsheetId = Deno.env.get('WTN_DAILY_TASK_SPREADSHEET_ID') || spreadsheetId;
         result = await addDailyTask(accessToken, taskSpreadsheetId, data);
+        break;
+      }
+      case 'updateDailyTask': {
+        if (!data || !data.rowNumber) throw new Error('rowNumber and task data are required for updateDailyTask');
+        const taskSpreadsheetId = Deno.env.get('WTN_DAILY_TASK_SPREADSHEET_ID') || spreadsheetId;
+        result = await updateDailyTask(accessToken, taskSpreadsheetId, data);
         break;
       }
       case 'updateDailyTaskStatus': {

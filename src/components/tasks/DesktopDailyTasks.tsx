@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, addDays, subDays, isAfter, parseISO, differenceInMinutes } from "date-fns";
 import NepaliDate from "nepali-date-converter";
-import { CheckSquare, Plus, ArrowLeft, Send, ChevronLeft, ChevronRight, Clock, User, Phone, AlertTriangle } from "lucide-react";
+import { CheckSquare, Plus, ArrowLeft, Send, ChevronLeft, ChevronRight, Clock, User, Phone, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -69,6 +69,7 @@ export function DesktopDailyTasks() {
   const [setupData, setSetupData] = useState<DailyTaskSetupData>({ handlers: [], handlerWhatsApp: {} });
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<DailyTask | null>(null);
   const [centerDate, setCenterDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(format(new Date(), "yyyy-MM-dd"));
   const [handlerFilter, setHandlerFilter] = useState<string | null>(null);
@@ -315,6 +316,9 @@ export function DesktopDailyTasks() {
                         ))}
                       </SelectContent>
                     </Select>
+                    <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1 shrink-0" onClick={() => { setEditingTask(task); setDialogOpen(true); }}>
+                      <Pencil className="w-3 h-3" /> Edit
+                    </Button>
                     <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1 shrink-0" onClick={() => handleSendToHandler(task)}>
                       <Send className="w-3 h-3" /> WA
                     </Button>
@@ -328,9 +332,10 @@ export function DesktopDailyTasks() {
 
       <AddTaskDialog
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        onOpenChange={(open) => { setDialogOpen(open); if (!open) setEditingTask(null); }}
         setupData={setupData}
-        onTaskAdded={() => { setDialogOpen(false); fetchData(); }}
+        onTaskAdded={() => { setDialogOpen(false); setEditingTask(null); fetchData(); }}
+        editTask={editingTask}
       />
     </div>
   );

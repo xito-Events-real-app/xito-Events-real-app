@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { suiteModules } from "@/lib/suite-modules";
 import { useSuiteStats } from "@/hooks/useSuiteStats";
@@ -7,11 +7,12 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { StarRating } from "@/components/ui/star-rating";
 import { useHandlerStarClients } from "@/hooks/useHandlerStarClients";
-import { ChevronRight, Construction, Star } from "lucide-react";
+import { ChevronRight, Construction, Star, CheckSquare, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { SuiteBenzoKeepSection } from "./SuiteBenzoKeepSection";
-import { CheckSquare } from "lucide-react";
+import { getDailyTasks } from "@/lib/daily-task-api";
+import type { DailyTask } from "@/lib/daily-task-api";
 
 const HANDLERS = [
   { name: 'Benzo', colorScheme: 'violet' as const },
@@ -67,6 +68,19 @@ export function SuiteLeftSidebar({ onSelectStarHandler, selectedStarHandler }: S
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'active' | 'coming-soon'>('active');
   const stats = useSuiteStats();
+  const [taskStats, setTaskStats] = useState<{ total: number; pending: number; overdue: number }>({ total: 0, pending: 0, overdue: 0 });
+
+  useEffect(() => {
+    getDailyTasks().then(tasks => {
+      const now = new Date();
+      const pending = tasks.filter(t => t.status === "Pending" || t.status === "In Progress").length;
+      const overdue = tasks.filter(t => {
+        if (t.status === "Completed" || t.status === "Cancelled" || !t.deadline) return false;
+        try { return now > new Date(t.deadline); } catch { return false; }
+      }).length;
+      setTaskStats({ total: tasks.length, pending, overdue });
+    }).catch(() => {});
+  }, []);
   
   const activeModules = suiteModules.filter(m => m.status === 'active');
   const comingSoonModules = suiteModules.filter(m => m.status === 'coming-soon');
@@ -251,8 +265,18 @@ export function SuiteLeftSidebar({ onSelectStarHandler, selectedStarHandler }: S
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-gray-800 group-hover:text-purple-700">WTN Daily Task</p>
-            <p className="text-xs text-gray-500">Manage daily tasks</p>
+            <p className="text-xs text-gray-500">
+              {taskStats.pending > 0 ? `${taskStats.pending} pending` : "No pending tasks"}
+              {taskStats.overdue > 0 && (
+                <span className="text-red-500 ml-1">• {taskStats.overdue} overdue</span>
+              )}
+            </p>
           </div>
+          {taskStats.overdue > 0 && (
+            <span className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+              {taskStats.overdue}
+            </span>
+          )}
           <ChevronRight className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-all shrink-0" />
         </button>
       </div>
