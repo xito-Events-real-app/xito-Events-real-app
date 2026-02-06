@@ -1,128 +1,135 @@
 
-## Fix: Mobile Home Tab Width Overflow
 
-### Problem
-The Home tab has horizontal overflow causing content to be cut off on the right side, while other tabs (Handlers, Modules, News) display correctly. The issue is specifically in the Home tab content.
+## Breaking News Section Improvements
 
-### Root Cause Analysis
-After analyzing the code:
+### Overview
+This plan addresses three requirements for the Breaking News (News) section:
+1. **Increase width by 70%** - Remove the current `max-w-lg` constraint
+2. **Increase text size** - Make news content more readable
+3. **Auto-refresh system** - Refresh on app open + hourly auto-refresh for all activity feeds
 
-1. **SuiteQuickActionsBar**: The buttons use `w-full` but the container grid doesn't prevent content from expanding
-2. **MasterSearchButton / MasterSyncButton**: These buttons may have internal content that forces minimum widths
-3. **TodayEventsHero**: The event cards have complex content that may overflow
-4. **Missing overflow constraints**: The grids and containers need explicit `overflow-hidden` to prevent child content from breaking out
+---
 
-### Solution
+### Changes
 
-**File 1: `src/components/suite/MobileSuiteLanding.tsx`**
+#### File 1: `src/components/suite/SuiteNewsFeed.tsx`
 
-Add `overflow-hidden` to all grid containers in `HomeTabContent`:
+**Width increase (remove max-width constraint)**
 
-| Line | Change |
-|------|--------|
-| 149 | Add `overflow-hidden` to main container |
-| 154 | Add `overflow-hidden` to Search/Sync grid |
+| Line | Current | New |
+|------|---------|-----|
+| 34 | `max-w-lg mx-auto` | Remove constraint or use `max-w-3xl` |
 
 ```tsx
-// Line 149 - Main container
-<div className="px-2 py-3 space-y-2.5 pb-24 w-full max-w-full overflow-hidden box-border">
+// Line 34 - Change from:
+<div className="px-4 py-4 pb-24 space-y-6 max-w-lg mx-auto">
 
-// Line 154 - Search/Sync grid  
-<div className="grid grid-cols-2 gap-2 w-full max-w-full overflow-hidden">
+// To:
+<div className="px-4 py-4 pb-24 space-y-6 w-full max-w-3xl mx-auto">
 ```
 
-**File 2: `src/components/suite/SuiteQuickActionsBar.tsx`**
+**Day header text size increase**
 
-Add `overflow-hidden` to the mobile buttons grid and ensure buttons shrink properly:
+| Line | Current | New |
+|------|---------|-----|
+| 40 | `text-xs` | `text-sm` |
 
-| Line | Change |
-|------|--------|
-| 72 | Add `overflow-hidden` to grid container |
-| 73-87 | Add `min-w-0` and `overflow-hidden` to buttons |
+---
+
+#### File 2: `src/components/suite/ActivityCard.tsx`
+
+**Increase all text sizes for better readability**
+
+| Line | Current | New |
+|------|---------|-----|
+| 88 | `text-sm` (client name) | `text-base` |
+| 92 | `text-[10px]` (handler badge) | `text-xs` |
+| 99 | `text-xs` (description) | `text-sm` |
+| 105 | `text-xs` (details) | `text-sm` |
+| 113 | `text-[10px]` (time) | `text-xs` |
+
+**Increase padding for larger cards**
+
+| Line | Current | New |
+|------|---------|-----|
+| 70 | `p-3` | `p-4` |
+
+---
+
+#### File 3: `src/App.tsx`
+
+**Rename `BookedClientsAutoSync` to `GlobalAutoSync` and add full refresh logic**
+
+Current hourly sync only refreshes booked clients. Need to:
+1. Add initial refresh on app load (compulsory)
+2. Refresh all data sources hourly:
+   - Client Tracker (clients-invalidate)
+   - Booked Clients (booked-clients-invalidate)
 
 ```tsx
-// Line 72
-<div className="grid grid-cols-2 gap-1.5 w-full max-w-full overflow-hidden">
-  <Button className="h-9 w-full min-w-0 overflow-hidden ...">
+// Replace BookedClientsAutoSync with GlobalAutoSync
+function GlobalAutoSync() {
+  useEffect(() => {
+    // Compulsory refresh on app open
+    const triggerInitialRefresh = async () => {
+      if (navigator.onLine) {
+        console.log('[GLOBAL-SYNC] App opened - triggering compulsory refresh');
+        // Staggered invalidation to prevent debounce cancellation
+        window.dispatchEvent(new CustomEvent('cache-updated', { 
+          detail: { type: 'clients-invalidate' } 
+        }));
+        
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('cache-updated', { 
+            detail: { type: 'booked-clients-invalidate' } 
+          }));
+        }, 200);
+      }
+    };
+    
+    triggerInitialRefresh();
+    
+    // Hourly auto-refresh
+    const syncInterval = setInterval(async () => {
+      if (navigator.onLine) {
+        console.log('[GLOBAL-SYNC] Hourly refresh triggered');
+        window.dispatchEvent(new CustomEvent('cache-updated', { 
+          detail: { type: 'clients-invalidate' } 
+        }));
+        
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('cache-updated', { 
+            detail: { type: 'booked-clients-invalidate' } 
+          }));
+        }, 200);
+      }
+    }, 60 * 60 * 1000); // 1 hour
+    
+    return () => clearInterval(syncInterval);
+  }, []);
+  
+  return null;
+}
 ```
 
-**File 3: `src/components/suite/MasterSearchButton.tsx`**
+---
 
-Ensure collapsed button doesn't force minimum width:
+### Summary
 
-| Line | Change |
-|------|--------|
-| 304-317 | Remove any min-width constraints, add `overflow-hidden` |
+| Component | Change |
+|-----------|--------|
+| `SuiteNewsFeed.tsx` | Width from `max-w-lg` to `max-w-3xl` (~70% wider), larger day headers |
+| `ActivityCard.tsx` | All text sizes increased by 1 step, padding from `p-3` to `p-4` |
+| `App.tsx` | Compulsory refresh on app open + hourly refresh for both tracker and booked clients |
 
-```tsx
-// Line 304-317 - Collapsed button
-<button
-  onClick={() => setIsExpanded(true)}
-  className={cn(
-    "w-full min-w-0 h-9 rounded-full font-semibold flex items-center justify-center gap-1.5 px-2 overflow-hidden",
-    ...
-  )}
->
-```
+### How the refresh works
 
-**File 4: `src/components/suite/MasterSyncButton.tsx`**
+The refresh system uses cache invalidation events:
+- `clients-invalidate` - Triggers `useCachedData` to fetch fresh data from Google Sheets
+- `booked-clients-invalidate` - Triggers `useBookedCachedData` to fetch fresh data
 
-Same fix - ensure button doesn't force minimum width:
+Since `useActivityFeed` uses both `useCachedData` and `useBookedCachedData`, refreshing both caches automatically refreshes:
+- Breaking News feed
+- Handler Activity sections (Benzo, Barun, Nikit)
+- Star Clients sections
 
-| Line | Change |
-|------|--------|
-| 180-192 | Add `min-w-0 overflow-hidden` to button |
-
-```tsx
-// Line 177-192
-<Button
-  onClick={handleMasterSync}
-  disabled={isSyncing}
-  className={cn(
-    "h-9 w-full min-w-0 overflow-hidden rounded-full font-semibold gap-1 px-2 transition-all text-[11px]",
-    ...
-  )}
->
-```
-
-**File 5: `src/components/suite/TodayEventsHero.tsx`**
-
-Add `overflow-hidden` to prevent event cards from overflowing:
-
-| Line | Change |
-|------|--------|
-| 280 | Add `overflow-hidden` to main container |
-| 288 | Add `overflow-hidden` to content wrapper |
-| 314 | Add `overflow-hidden` to scrollable container |
-
-```tsx
-// Line ~280 - Main container wrapper
-<div className={cn(
-  "relative bg-white rounded-xl border shadow-sm overflow-hidden", // Add overflow-hidden
-  ...
-)}>
-
-// Line ~314 - Events list container
-<div className="max-h-[180px] md:max-h-[400px] overflow-y-auto overflow-x-hidden pr-1 ...">
-```
-
-### Summary of Changes
-
-| File | Key Fix |
-|------|---------|
-| `MobileSuiteLanding.tsx` | Add `overflow-hidden` to container and grids |
-| `SuiteQuickActionsBar.tsx` | Add `overflow-hidden` to grid, `min-w-0` to buttons |
-| `MasterSearchButton.tsx` | Add `min-w-0 overflow-hidden` to collapsed button |
-| `MasterSyncButton.tsx` | Add `min-w-0 overflow-hidden` to button |
-| `TodayEventsHero.tsx` | Add `overflow-hidden` and `overflow-x-hidden` to containers |
-
-### Why This Works
-
-The key issue is CSS flexbox/grid behavior:
-- `w-full` makes an element try to fill 100% of parent width
-- But if child content (text, icons) has inherent minimum width, it can push the element beyond its container
-- `min-w-0` tells the element it can shrink below its content's natural size
-- `overflow-hidden` clips any content that still overflows
-- `truncate` on text ensures long text gets cut off with ellipsis
-
-By adding these constraints at every level (container → grid → button → text), we ensure nothing can overflow the viewport.
