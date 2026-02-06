@@ -42,6 +42,10 @@ export async function updateDailyTaskStatus(rowNumber: number, newStatus: string
   return callEdgeFunction('updateDailyTaskStatus', { rowNumber, newStatus });
 }
 
+export async function updateDailyTask(task: DailyTask): Promise<{ success: boolean }> {
+  return callEdgeFunction('updateDailyTask', task as unknown as Record<string, unknown>);
+}
+
 export async function getDailyTaskSetupData(): Promise<DailyTaskSetupData> {
   return callEdgeFunction('getDailyTaskSetupData');
 }

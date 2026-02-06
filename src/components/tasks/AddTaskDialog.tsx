@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import NepaliDate from "nepali-date-converter";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -9,14 +9,15 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
-import { addDailyTask } from "@/lib/daily-task-api";
-import type { DailyTaskSetupData } from "@/lib/daily-task-api";
+import { addDailyTask, updateDailyTask } from "@/lib/daily-task-api";
+import type { DailyTask, DailyTaskSetupData } from "@/lib/daily-task-api";
 
 interface AddTaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   setupData: DailyTaskSetupData;
   onTaskAdded: () => void;
+  editTask?: DailyTask | null;
 }
 
 function convertToBS(dateAD: string): string {
@@ -27,16 +28,36 @@ function convertToBS(dateAD: string): string {
   } catch { return ""; }
 }
 
-export function AddTaskDialog({ open, onOpenChange, setupData, onTaskAdded }: AddTaskDialogProps) {
+const emptyForm = (todayStr: string) => ({
+  dateAD: todayStr, dateBS: convertToBS(todayStr),
+  taskName: "", description: "", deadline: "",
+  handler: "", backupHandler: "",
+  contactNo: "", whatsappNo: "",
+  urgency: 3, status: "Pending",
+});
+
+export function AddTaskDialog({ open, onOpenChange, setupData, onTaskAdded, editTask }: AddTaskDialogProps) {
   const todayStr = format(new Date(), "yyyy-MM-dd");
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    dateAD: todayStr, dateBS: convertToBS(todayStr),
-    taskName: "", description: "", deadline: "",
-    handler: "", backupHandler: "",
-    contactNo: "", whatsappNo: "",
-    urgency: 3, status: "Pending",
-  });
+  const [form, setForm] = useState(emptyForm(todayStr));
+
+  const isEditing = !!editTask;
+
+  // Populate form when editing
+  useEffect(() => {
+    if (editTask) {
+      setForm({
+        dateAD: editTask.dateAD, dateBS: editTask.dateBS,
+        taskName: editTask.taskName, description: editTask.description,
+        deadline: editTask.deadline, handler: editTask.handler,
+        backupHandler: editTask.backupHandler, contactNo: editTask.contactNo,
+        whatsappNo: editTask.whatsappNo, urgency: editTask.urgency,
+        status: editTask.status,
+      });
+    } else {
+      setForm(emptyForm(todayStr));
+    }
+  }, [editTask, todayStr]);
 
   const updateField = (field: string, value: string | number) => {
     setForm(prev => {
@@ -51,19 +72,18 @@ export function AddTaskDialog({ open, onOpenChange, setupData, onTaskAdded }: Ad
     if (!form.handler) { toast.error("Handler is required"); return; }
     setSaving(true);
     try {
-      await addDailyTask(form);
-      toast.success("Task added successfully");
-      setForm({
-        dateAD: todayStr, dateBS: convertToBS(todayStr),
-        taskName: "", description: "", deadline: "",
-        handler: "", backupHandler: "",
-        contactNo: "", whatsappNo: "",
-        urgency: 3, status: "Pending",
-      });
+      if (isEditing && editTask) {
+        await updateDailyTask({ ...form, rowNumber: editTask.rowNumber });
+        toast.success("Task updated successfully");
+      } else {
+        await addDailyTask(form);
+        toast.success("Task added successfully");
+      }
+      setForm(emptyForm(todayStr));
       onTaskAdded();
     } catch (err) {
-      console.error("Failed to add task:", err);
-      toast.error("Failed to add task");
+      console.error("Failed to save task:", err);
+      toast.error(isEditing ? "Failed to update task" : "Failed to add task");
     } finally { setSaving(false); }
   };
 
@@ -71,7 +91,7 @@ export function AddTaskDialog({ open, onOpenChange, setupData, onTaskAdded }: Ad
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-lg font-bold">Add New Task</DialogTitle>
+          <DialogTitle className="text-lg font-bold">{isEditing ? "Edit Task" : "Add New Task"}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 mt-2">
@@ -133,6 +153,21 @@ export function AddTaskDialog({ open, onOpenChange, setupData, onTaskAdded }: Ad
             </div>
           </div>
 
+          {/* Status selector (only in edit mode) */}
+          {isEditing && (
+            <div>
+              <Label className="text-xs">Status</Label>
+              <Select value={form.status} onValueChange={v => updateField("status", v)}>
+                <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {["Pending", "In Progress", "Completed", "Cancelled"].map(s => (
+                    <SelectItem key={s} value={s} className="text-sm">{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div>
             <Label className="text-xs">Urgency: {form.urgency}/5</Label>
             <div className="mt-2 px-1">
@@ -144,7 +179,7 @@ export function AddTaskDialog({ open, onOpenChange, setupData, onTaskAdded }: Ad
           </div>
 
           <Button onClick={handleSubmit} disabled={saving} className="w-full bg-purple-600 hover:bg-purple-700 mt-2">
-            {saving ? "Adding..." : "Add Task"}
+            {saving ? "Saving..." : isEditing ? "Update Task" : "Add Task"}
           </Button>
         </div>
       </DialogContent>
