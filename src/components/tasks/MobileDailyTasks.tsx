@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckSquare, Plus, ArrowLeft, Send, ChevronLeft, ChevronRight, Clock, User, Phone, Pencil } from "lucide-react";
+import { CheckSquare, Plus, ArrowLeft, Send, ChevronLeft, ChevronRight, Clock, User, Phone, Pencil, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AddTaskDialog } from "./AddTaskDialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useDailyTasks, STATUSES, urgencyCardStyles, getDeadlineText, isTaskOverdue } from "@/hooks/useDailyTasks";
 import type { DailyTask } from "@/lib/daily-task-api";
@@ -16,7 +17,7 @@ export function MobileDailyTasks() {
     shiftDates, selectedDate, setSelectedDate,
     handlerFilter, setHandlerFilter,
     dateStrip, taskCountByDate, filteredTasks, activeHandlers,
-    handleStatusChange, handleSendToHandler,
+    handleStatusChange, handleSendToHandler, handleSendToBackupHandler, handleSendToBothHandlers,
   } = useDailyTasks();
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -144,6 +145,7 @@ export function MobileDailyTasks() {
                 <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-500">
                   <span className="flex items-center gap-1">
                     <User className="w-3 h-3" /> {task.handler}
+                    {task.backupHandler && <span className="text-gray-400">/ {task.backupHandler}</span>}
                   </span>
                   {deadlineInfo.text && (
                     <span className={cn("flex items-center gap-1", deadlineInfo.isOverdue && "text-red-600 font-semibold")}>
@@ -172,9 +174,28 @@ export function MobileDailyTasks() {
                   <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" onClick={() => { setEditingTask(task); setDialogOpen(true); }}>
                     <Pencil className="w-3 h-3" />
                   </Button>
-                  <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" onClick={() => handleSendToHandler(task)}>
-                    <Send className="w-3 h-3" />
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" variant="outline" className="h-7 text-[10px] px-2">
+                        <Send className="w-3 h-3" /> <ChevronDown className="w-3 h-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="bg-white">
+                      <DropdownMenuItem onClick={() => handleSendToHandler(task)}>
+                        Send to {task.handler}
+                      </DropdownMenuItem>
+                      {task.backupHandler && (
+                        <>
+                          <DropdownMenuItem onClick={() => handleSendToBackupHandler(task)}>
+                            Send to {task.backupHandler}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleSendToBothHandlers(task)}>
+                            Send to Both
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
             );

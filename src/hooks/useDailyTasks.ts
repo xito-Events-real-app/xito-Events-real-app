@@ -98,7 +98,7 @@ export function useDailyTasks() {
   const filteredTasks = useMemo(() => {
     let result = [...tasks];
     if (selectedDate) result = result.filter(t => t.dateAD === selectedDate);
-    if (handlerFilter) result = result.filter(t => t.handler === handlerFilter);
+    if (handlerFilter) result = result.filter(t => t.handler === handlerFilter || t.backupHandler === handlerFilter);
     result.sort((a, b) => {
       if (b.urgency !== a.urgency) return b.urgency - a.urgency;
       return (a.deadline || "").localeCompare(b.deadline || "");
@@ -108,7 +108,7 @@ export function useDailyTasks() {
 
   const activeHandlers = useMemo(() => {
     const relevant = selectedDate ? tasks.filter(t => t.dateAD === selectedDate) : tasks;
-    return [...new Set(relevant.map(t => t.handler).filter(Boolean))];
+    return [...new Set(relevant.flatMap(t => [t.handler, t.backupHandler].filter(Boolean)))];
   }, [tasks, selectedDate]);
 
   const handleStatusChange = useCallback(async (task: DailyTask, newStatus: string) => {
@@ -130,6 +130,25 @@ export function useDailyTasks() {
     openWhatsApp(whatsapp, message);
   }, [setupData.handlerWhatsApp]);
 
+  const handleSendToBackupHandler = useCallback((task: DailyTask) => {
+    if (!task.backupHandler) { toast.error("No backup handler assigned"); return; }
+    const whatsapp = setupData.handlerWhatsApp[task.backupHandler];
+    if (!whatsapp) { toast.error(`No WhatsApp number found for ${task.backupHandler}`); return; }
+
+    const deadlineInfo = task.deadline ? getDeadlineText(task.deadline) : null;
+    const deadlineLine = deadlineInfo?.text ? `Deadline: ${deadlineInfo.text}` : "";
+
+    const message = `Hello ${task.backupHandler},\n\nYou have been assigned as BACKUP for the following task:\n\nTask: ${task.taskName}\nDescription: ${task.description}\n${deadlineLine}\nUrgency: ${task.urgency}/5\n\nPlease confirm once received.`;
+    openWhatsApp(whatsapp, message);
+  }, [setupData.handlerWhatsApp]);
+
+  const handleSendToBothHandlers = useCallback((task: DailyTask) => {
+    handleSendToHandler(task);
+    if (task.backupHandler) {
+      setTimeout(() => handleSendToBackupHandler(task), 500);
+    }
+  }, [handleSendToHandler, handleSendToBackupHandler]);
+
   const shiftDates = useCallback((direction: number) => {
     setCenterDate(prev => addDays(prev, direction * 6));
   }, []);
@@ -140,6 +159,6 @@ export function useDailyTasks() {
     selectedDate, setSelectedDate,
     handlerFilter, setHandlerFilter,
     dateStrip, taskCountByDate, filteredTasks, activeHandlers,
-    handleStatusChange, handleSendToHandler,
+    handleStatusChange, handleSendToHandler, handleSendToBackupHandler, handleSendToBothHandlers,
   };
 }

@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckSquare, Plus, ArrowLeft, Send, ChevronLeft, ChevronRight, Clock, User, Phone, Pencil } from "lucide-react";
+import { CheckSquare, Plus, ArrowLeft, Send, ChevronLeft, ChevronRight, Clock, User, Phone, Pencil, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AddTaskDialog } from "./AddTaskDialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useDailyTasks, STATUSES, urgencyCardStyles, getDeadlineText, isTaskOverdue } from "@/hooks/useDailyTasks";
 import type { DailyTask } from "@/lib/daily-task-api";
@@ -16,7 +17,7 @@ export function DesktopDailyTasks() {
     shiftDates, selectedDate, setSelectedDate,
     handlerFilter, setHandlerFilter,
     dateStrip, taskCountByDate, filteredTasks, activeHandlers,
-    handleStatusChange, handleSendToHandler,
+    handleStatusChange, handleSendToHandler, handleSendToBackupHandler, handleSendToBothHandlers,
   } = useDailyTasks();
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -177,9 +178,28 @@ export function DesktopDailyTasks() {
                     <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1 shrink-0" onClick={() => { setEditingTask(task); setDialogOpen(true); }}>
                       <Pencil className="w-3 h-3" /> Edit
                     </Button>
-                    <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1 shrink-0" onClick={() => handleSendToHandler(task)}>
-                      <Send className="w-3 h-3" /> WA
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1 shrink-0">
+                          <Send className="w-3 h-3" /> WA <ChevronDown className="w-3 h-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="bg-white">
+                        <DropdownMenuItem onClick={() => handleSendToHandler(task)}>
+                          Send to {task.handler}
+                        </DropdownMenuItem>
+                        {task.backupHandler && (
+                          <>
+                            <DropdownMenuItem onClick={() => handleSendToBackupHandler(task)}>
+                              Send to {task.backupHandler}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleSendToBothHandlers(task)}>
+                              Send to Both
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
               );
