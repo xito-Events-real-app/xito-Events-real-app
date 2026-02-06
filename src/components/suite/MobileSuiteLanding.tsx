@@ -16,6 +16,7 @@ import { SuiteModuleGrid } from "./SuiteModuleGrid";
 import { MasterSearchButton } from "./MasterSearchButton";
 import { MasterSyncButton } from "./MasterSyncButton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { SuiteBenzoKeepSection } from "./SuiteBenzoKeepSection";
 
 const HANDLERS = [
   { name: 'Benzo', colorScheme: 'violet' as const },
@@ -161,6 +162,11 @@ function HomeTabContent() {
         
         {/* Tabbed Interface for Events + Handler Activity */}
         <EventsHandlerTabs />
+        
+        {/* Benzo Keep Section */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <SuiteBenzoKeepSection />
+        </div>
       </div>
     </ScrollArea>
   );
