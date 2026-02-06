@@ -1,192 +1,90 @@
 
 
-## WTN Daily Task Module
+## WTN Daily Task -- Complete Redesign
 
 ### Overview
-Build a complete "WTN Daily Task" module inside the Xito Business Suite. This module reads/writes tasks from a dedicated Google Sheet ("WTN DAILY TASK"), displays them in a desktop table with date navigation, handler filters, urgency color coding, overdue detection, and WhatsApp integration for sending task details to handlers.
+Redesign the WTN Daily Task module to match the Benzo Keep / Google Keep card-based style, replace the table with task cards, add a centered dialog for adding tasks, implement a scrollable 12-date Nepali date navigation bar with task count badges, fix WhatsApp by using `wa.me` URL properly, and show human-readable deadline countdowns.
 
 ---
 
-### Prerequisites
+### Changes Summary
 
-**New Secret Required:**
-- `WTN_DAILY_TASK_SPREADSHEET_ID` -- The Google Spreadsheet ID for the "WTN DAILY TASK" workbook. The user will be prompted to provide this value before implementation proceeds.
+#### 1. Redesign Task Display: Cards Instead of Table
+Replace the current `<Table>` in `DesktopDailyTasks.tsx` with a responsive grid of Google Keep-style cards:
+- Each task = a colored card (urgency-based background, like Benzo Keep marker colors)
+- Card shows: Task Name (bold title), Description, Handler, Deadline countdown, Status badge, Urgency badge
+- Overdue cards get a red border + "OVERDUE" badge
+- Cards have action buttons: Status dropdown, Send to Handler
+- Grid layout: `grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4`
 
-**Google Sheet Setup (Manual by User):**
-- Spreadsheet: "WTN DAILY TASK"
-- Sheet 1: "WTN TASK" with columns A-K (Date AD, Date BS, Task Name, Description, Deadline, Handler, Backup Handler, Contact, WhatsApp, Urgency, Status)
-- Sheet 2: "WTN DAILY TASK SETUP DATA" with Column A = Handler Names (A2+), Column B = Handler WhatsApp Numbers
+#### 2. Centered Dialog for Adding Tasks
+Replace `AddTaskDrawer` (side Sheet) with a centered `Dialog` component (like BenzoKeepNotepadDialog):
+- Use `<Dialog>` + `<DialogContent className="max-w-xl">` for centered popup
+- Same form fields, just in a centered modal instead of a side drawer
+- Rename component to `AddTaskDialog`
 
----
+#### 3. Scrollable Nepali Date Navigation Bar (12 dates)
+Replace the Yesterday/Today/Tomorrow/All buttons with a horizontal scrollable date strip:
+- Show 12 dates centered on today's date (6 before, today, 5 after)
+- Each date displayed in Nepali format: "Magh 20", "Magh 21", etc.
+- Today's date prominently displayed at the center, highlighted with a larger/bold style
+- Left/Right arrow buttons to shift the entire 12-date window backward/forward
+- Each date pill shows a red notification badge with task count (e.g., "2") if tasks exist on that day
+- An "All" button at the end to show all tasks
+- Clicking a date filters tasks to that AD date
 
-### Implementation Plan
+#### 4. Human-Readable Deadline Countdown
+Instead of showing raw deadline datetime, compute and display:
+- "1 day 2 hrs 35 mins remaining" (if in the future)
+- "OVERDUE by 3 hrs 20 mins" (if past deadline)
+- Update: use a helper function that calculates days/hours/minutes difference from `now` to the deadline
 
-#### 1. Backend: Edge Function Updates (`supabase/functions/google-sheets/index.ts`)
-
-Add 4 new actions to the existing edge function:
-
-| Action | Purpose |
-|--------|---------|
-| `getDailyTasks` | Fetch all tasks from "WTN TASK" sheet |
-| `addDailyTask` | Add a new task row to "WTN TASK" |
-| `updateDailyTaskStatus` | Update Column K (Status) for a task |
-| `getDailyTaskSetupData` | Fetch handler names + WhatsApp numbers from "WTN DAILY TASK SETUP DATA" |
-
-Key details:
-- Uses `WTN_DAILY_TASK_SPREADSHEET_ID` secret (separate spreadsheet from the main client tracker)
-- `getDailyTasks` reads columns A-K, returns all rows with row numbers
-- `addDailyTask` appends a new row with all 11 columns
-- `updateDailyTaskStatus` finds the row by matching Column A (Date AD) + Column C (Task Name) as a composite key, updates Column K
-- `getDailyTaskSetupData` reads columns A-B from "WTN DAILY TASK SETUP DATA" to get handler names and their WhatsApp numbers
-
-#### 2. API Layer (`src/lib/daily-task-api.ts`) -- New File
-
-```typescript
-interface DailyTask {
-  rowNumber: number;
-  dateAD: string;       // A
-  dateBS: string;       // B
-  taskName: string;     // C
-  description: string;  // D
-  deadline: string;     // E
-  handler: string;      // F
-  backupHandler: string;// G
-  contactNo: string;    // H
-  whatsappNo: string;   // I
-  urgency: number;      // J (1-5)
-  status: string;       // K
-}
-
-interface DailyTaskSetupData {
-  handlers: string[];
-  handlerWhatsApp: Record<string, string>;
-}
-```
-
-Functions: `getDailyTasks()`, `addDailyTask(task)`, `updateDailyTaskStatus(rowNumber, newStatus)`, `getDailyTaskSetupData()`
-
-#### 3. Suite Module Registration (`src/lib/suite-modules.ts`)
-
-Update the `daily-task-manager` entry from `coming-soon` to `active`:
-- Change `status` to `'active'`
-- Update `path` to `'/tasks'`
-- Add `statsKey: 'tasks'` (optional, for future sidebar stats)
-
-#### 4. Suite Left Sidebar (`src/components/suite/SuiteLeftSidebar.tsx`)
-
-Add a "WTN Daily Task" section below "Benzo Keep" as a dedicated sidebar section (similar to how Benzo Keep is structured):
-- Icon: CheckSquare with purple gradient
-- Label: "WTN Daily Task"
-- Subtitle: "Manage daily tasks"
-- Click navigates to `/tasks`
-
-#### 5. Main Page (`src/pages/DailyTasks.tsx`) -- New File
-
-Replace the existing `ComingSoon` route for `/tasks` with this new page. Uses `useDesktopMode` to show desktop layout.
-
-#### 6. Desktop Task Manager Component (`src/components/tasks/DesktopDailyTasks.tsx`) -- New File
-
-This is the main component with the following sections:
-
-**A. Top Bar:**
-- Title: "WTN Daily Task" with CheckSquare icon
-- "Add Task" button (top right) -- opens AddTaskDrawer
-- Back to Suite button
-
-**B. Date Navigation Bar:**
-- 4 buttons: Yesterday, Today (default highlighted), Tomorrow, All Days
-- "All Days" is the default view showing all tasks
-- Selecting a date filters tasks to that AD date
-
-**C. Handler Filter Pills:**
-- Dynamic pills showing only handlers that have tasks on the selected date
-- Clicking a handler filters the table further
-- If no tasks exist for a handler, that pill is hidden
-
-**D. Task Table:**
-- Columns: Task Name, Description, Deadline, Handler, Backup, Contact, Urgency, Status, Actions
-- Sorting: Urgency descending (5 first), then Deadline ascending
-- Each row colored by urgency level:
-  - 5 = Red background
-  - 4 = Dark Orange background
-  - 3 = Yellow background
-  - 2 = Light Green background
-  - 1 = Grey background
-- Overdue Logic: If deadline has passed AND status is not "Completed", row gets a red highlight and "OVERDUE" badge
-- Status badge is clickable (dropdown to change: Pending, In Progress, Completed, Cancelled)
-- "Send to Handler" button on each row
-
-**E. Empty State:**
-- When no tasks exist for selected filters, show a friendly message
-
-#### 7. Add Task Drawer (`src/components/tasks/AddTaskDrawer.tsx`) -- New File
-
-A slide-up drawer/sheet with form fields:
-- Date AD (auto-filled with today, editable)
-- Date BS (auto-converted using nepali-date-converter)
-- Task Name (text input)
-- Task Description (textarea)
-- Deadline (date + time picker)
-- Handler (dropdown from setup data)
-- Backup Handler (dropdown from setup data)
-- Contact Number (text input)
-- WhatsApp Number (text input)
-- Urgency (1-5 slider or radio buttons)
-- Status (defaults to "Pending")
-
-#### 8. WhatsApp "Send to Handler" Feature
-
-On clicking "Send to Handler":
-1. Look up the handler's WhatsApp number from `DailyTaskSetupData.handlerWhatsApp` mapping
-2. Compose a pre-filled message:
-```
-Hello [Handler Name],
-
-You have been assigned the following task:
-
-Task: [Task Name]
-Description: [Task Description]
-Deadline: [Deadline]
-Urgency: [Urgency]
-
-Please confirm once received.
-```
-3. Open WhatsApp via the existing `openWhatsApp()` utility
-
-**Note on PDF:** WhatsApp Web links (wa.me) do not support file attachments. The formatted text message above will contain all task details cleanly. If PDF generation is needed in the future, it would require a separate download button.
-
-#### 9. Route Update (`src/App.tsx`)
-
-Change the `/tasks` route from `<ComingSoon moduleId="daily-task-manager" />` to the new `<DailyTasks />` page component.
+#### 5. Fix WhatsApp Integration
+The current `openWhatsApp` utility already uses `wa.me` URLs (not `api.whatsapp.com`). The `ERR_BLOCKED_BY_RESPONSE` error is likely caused by the iframe preview environment. The fix:
+- The `wa.me` URL approach should work in production (outside iframe)
+- For the preview environment, we can add `window.open()` as a fallback after the anchor click method
+- No edge function proxy is needed since we're just opening a URL, not making an API call
 
 ---
 
-### New Files Summary
+### Technical Details
 
-| File | Purpose |
-|------|---------|
-| `src/lib/daily-task-api.ts` | API layer for task CRUD |
-| `src/pages/DailyTasks.tsx` | Page component (mobile/desktop switch) |
-| `src/components/tasks/DesktopDailyTasks.tsx` | Desktop task manager UI |
-| `src/components/tasks/AddTaskDrawer.tsx` | Add task form drawer |
-
-### Modified Files Summary
+**Files to modify:**
 
 | File | Change |
 |------|--------|
-| `supabase/functions/google-sheets/index.ts` | Add 4 new actions + helper functions |
-| `src/lib/suite-modules.ts` | Change daily-task-manager to active |
-| `src/components/suite/SuiteLeftSidebar.tsx` | Add WTN Daily Task section below Benzo Keep |
-| `src/App.tsx` | Update `/tasks` route to new DailyTasks page |
+| `src/components/tasks/DesktopDailyTasks.tsx` | Complete rewrite: cards grid, 12-date nav bar, deadline countdown, centered dialog |
+| `src/components/tasks/AddTaskDrawer.tsx` | Convert from Sheet to Dialog, rename to AddTaskDialog |
+| `src/lib/whatsapp-utils.ts` | Add `window.open` fallback for iframe environments |
 
----
+**Date Navigation Logic:**
+- State: `centerDate` (defaults to today's AD date)
+- Compute 12 dates: `centerDate - 5` to `centerDate + 6`
+- Convert each AD date to BS using `nepali-date-converter` for display (e.g., "Magh 23")
+- For each date, count tasks matching that `dateAD` to show badge count
+- Left arrow: shift `centerDate` by -6 days; Right arrow: shift by +6 days
 
-### Technical Notes
+**Deadline Countdown Helper:**
+```text
+function getDeadlineText(deadline: string): { text: string, isOverdue: boolean }
+- Parse deadline as Date
+- Calculate diff from now in days, hours, minutes
+- Return formatted string like "1d 2h 35m remaining" or "Overdue by 3h 20m"
+```
 
-- The edge function will use `WTN_DAILY_TASK_SPREADSHEET_ID` env var (separate from `GOOGLE_SPREADSHEET_ID` used for client tracker)
-- Row identification uses rowNumber (sheet row index) for status updates
-- Handler WhatsApp mapping is fetched on page load and cached in component state
-- Date filtering compares the task's Column A (Date AD) against the selected date
-- Urgency colors are applied via Tailwind background classes on table rows
-- Overdue detection compares Column E (Deadline) against `new Date()` on the client side
+**Task Card Structure:**
+```text
++----------------------------------+
+| [Urgency Badge]    [Status Badge]|
+| Task Name (bold, full width)     |
+| Description (2-3 lines)         |
+|                                  |
+| Handler: Benzo                   |
+| Deadline: 1d 2h 35m remaining   |
+| Contact: 98XXXXXXXX             |
+|                                  |
+| [Change Status v]  [Send WA]    |
++----------------------------------+
+```
+Card background color matches urgency (5=red-100, 4=orange-100, 3=yellow-50, 2=green-50, 1=gray-50), with a colored left border like Benzo Keep cards.
 
