@@ -182,17 +182,12 @@ export function MobileDailyTasks() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="bg-white">
                       <DropdownMenuItem onClick={() => handleSendToHandler(task)}>
-                        Send to {task.handler}
+                        {task.handler}
                       </DropdownMenuItem>
                       {task.backupHandler && (
-                        <>
-                          <DropdownMenuItem onClick={() => handleSendToBackupHandler(task)}>
-                            Send to {task.backupHandler}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleSendToBothHandlers(task)}>
-                            Send to Both
-                          </DropdownMenuItem>
-                        </>
+                        <DropdownMenuItem onClick={() => handleSendToBackupHandler(task)}>
+                          {task.backupHandler}
+                        </DropdownMenuItem>
                       )}
                     </DropdownMenuContent>
                   </DropdownMenu>
