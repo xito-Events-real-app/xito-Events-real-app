@@ -69,20 +69,20 @@ export function SuiteQuickActionsBar({ variant = 'desktop' }: SuiteQuickActionsB
   if (variant === 'mobile') {
     return (
       <>
-        <div className="grid grid-cols-2 gap-2 w-full max-w-full">
+        <div className="grid grid-cols-2 gap-1.5 w-full max-w-full">
           <Button
             onClick={handleAddClient}
-            className="h-10 w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md rounded-xl font-semibold gap-1 text-[11px] px-1.5"
+            className="h-9 w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md rounded-xl font-semibold gap-1 text-[10px] px-1"
           >
-            <UserPlus className="w-3.5 h-3.5 shrink-0" />
+            <UserPlus className="w-3 h-3 shrink-0" />
             <span className="truncate">Add Client</span>
           </Button>
           
           <Button
             onClick={handleAddPayment}
-            className="h-10 w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md rounded-xl font-semibold gap-1 text-[11px] px-1.5"
+            className="h-9 w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md rounded-xl font-semibold gap-1 text-[10px] px-1"
           >
-            <DollarSign className="w-3.5 h-3.5 shrink-0" />
+            <DollarSign className="w-3 h-3 shrink-0" />
             <span className="truncate">Add Payment</span>
           </Button>
         </div>

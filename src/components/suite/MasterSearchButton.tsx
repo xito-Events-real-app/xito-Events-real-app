@@ -304,14 +304,14 @@ export function MasterSearchButton() {
       <button
         onClick={() => setIsExpanded(true)}
         className={cn(
-          "w-full min-w-0 h-10 rounded-full font-semibold flex items-center justify-center gap-2 px-3",
+          "w-full min-w-0 h-9 rounded-full font-semibold flex items-center justify-center gap-1.5 px-2",
           "bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600",
-          "text-white shadow-lg transition-all text-xs",
+          "text-white shadow-lg transition-all text-[11px]",
           "hover:scale-[1.02] active:scale-[0.98]",
           "animate-glow-pulse"
         )}
       >
-        <Search className="w-4 h-4 shrink-0" />
+        <Search className="w-3.5 h-3.5 shrink-0" />
         <span className="truncate">Search</span>
       </button>
     );
