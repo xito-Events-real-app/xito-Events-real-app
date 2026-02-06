@@ -69,7 +69,7 @@ export function ActivityCard({ activity }: ActivityCardProps) {
       className={cn(
         "flex items-start gap-3 p-3 rounded-xl cursor-pointer",
         "shadow-sm hover:shadow-md transition-all",
-        "flex items-start gap-3 p-4 rounded-xl cursor-pointer",
+        "flex items-start gap-3 p-3 rounded-xl cursor-pointer",
         "shadow-sm hover:shadow-md transition-all",
         "active:scale-[0.98]",
         getCardStyle()
@@ -87,24 +87,24 @@ export function ActivityCard({ activity }: ActivityCardProps) {
       <div className="flex-1 min-w-0">
         {/* Client name + Handler */}
         <div className="flex items-center gap-2">
-          <p className="text-base font-semibold text-gray-900 truncate">
+          <p className="text-sm font-semibold text-gray-900 truncate">
             {activity.clientName}
           </p>
           {activity.handlerName && (
-            <span className="text-xs bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full shrink-0">
+            <span className="text-[10px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full shrink-0">
               {activity.handlerName}
             </span>
           )}
         </div>
         
         {/* Description */}
-        <p className="text-sm text-gray-600">
+        <p className="text-xs text-gray-600">
           {activity.description}
         </p>
         
         {/* Details */}
         {activity.details && (
-          <p className="text-sm text-gray-400 truncate mt-0.5">
+          <p className="text-xs text-gray-400 truncate mt-0.5">
             {activity.details}
           </p>
         )}
@@ -112,7 +112,7 @@ export function ActivityCard({ activity }: ActivityCardProps) {
       
       {/* Time & Arrow */}
       <div className="flex items-center gap-1 shrink-0">
-        <span className="text-xs text-gray-400">
+        <span className="text-[10px] text-gray-400">
           {activity.relativeTime}
         </span>
         <ChevronRight className="w-3.5 h-3.5 text-gray-300" />
