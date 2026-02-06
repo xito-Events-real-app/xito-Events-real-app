@@ -178,7 +178,7 @@ export function MasterSyncButton() {
         onClick={handleMasterSync}
         disabled={isSyncing}
         className={cn(
-          "h-9 w-full rounded-full font-semibold gap-1 px-2 transition-all text-[11px]",
+          "h-9 w-full min-w-0 overflow-hidden rounded-full font-semibold gap-1 px-2 transition-all text-[11px]",
           "bg-gradient-to-r from-orange-500 via-red-500 to-purple-600",
           "hover:from-orange-600 hover:via-red-600 hover:to-purple-700",
           "shadow-md shadow-orange-500/25",

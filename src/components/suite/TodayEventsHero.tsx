@@ -275,7 +275,7 @@ export function TodayEventsHero() {
   const hasEvents = upcomingEvents.length > 0;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-white border border-gray-200 shadow-sm">
+    <div className="relative overflow-hidden rounded-2xl bg-white border border-gray-200 shadow-sm w-full max-w-full">
       {/* Left accent bar */}
       <div className={cn(
         "absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b",
@@ -311,7 +311,7 @@ export function TodayEventsHero() {
 
         {/* Events List - Scrollable with fixed height container */}
         {hasEvents ? (
-          <div className="max-h-[180px] md:max-h-[400px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+          <div className="max-h-[180px] md:max-h-[400px] overflow-y-auto overflow-x-hidden pr-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
             <div className="space-y-2">
               {upcomingEvents.slice(0, 30).map((event, idx) => {
                   const clientId = event.client.registeredDateTimeAD || event.client.originalRowNumber;

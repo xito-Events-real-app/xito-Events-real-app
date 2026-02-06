@@ -146,16 +146,16 @@ export function MobileSuiteLanding() {
 function HomeTabContent() {
   return (
     <ScrollArea className="flex-1 h-full w-full">
-      <div className="px-2 py-3 space-y-2.5 pb-24 w-full max-w-full overflow-x-hidden box-border">
+      <div className="px-2 py-3 space-y-2.5 pb-24 w-full max-w-full overflow-hidden box-border">
         {/* Quick Actions */}
         <SuiteQuickActionsBar variant="mobile" />
         
         {/* Search and Sync */}
-        <div className="grid grid-cols-2 gap-2 w-full max-w-full">
-          <div className="min-w-0 w-full">
+        <div className="grid grid-cols-2 gap-2 w-full max-w-full overflow-hidden">
+          <div className="min-w-0 w-full overflow-hidden">
             <MasterSearchButton />
           </div>
-          <div className="min-w-0 w-full">
+          <div className="min-w-0 w-full overflow-hidden">
             <MasterSyncButton />
           </div>
         </div>
