@@ -151,7 +151,7 @@ function HomeTabContent() {
         <SuiteQuickActionsBar variant="mobile" />
         
         {/* Search and Sync */}
-        <div className="grid grid-cols-2 gap-2 w-full max-w-full overflow-hidden">
+        <div className="grid grid-cols-2 gap-2 w-[90%] max-w-full mx-auto overflow-hidden">
           <div className="min-w-0 w-full overflow-hidden">
             <MasterSearchButton />
           </div>

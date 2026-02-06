@@ -69,7 +69,7 @@ export function SuiteQuickActionsBar({ variant = 'desktop' }: SuiteQuickActionsB
   if (variant === 'mobile') {
     return (
       <>
-        <div className="grid grid-cols-2 gap-1.5 w-full max-w-full overflow-hidden">
+        <div className="grid grid-cols-2 gap-1.5 w-[90%] max-w-full mx-auto overflow-hidden">
           <Button
             onClick={handleAddClient}
             className="h-9 w-full min-w-0 overflow-hidden bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md rounded-xl font-semibold gap-1 text-[10px] px-1"

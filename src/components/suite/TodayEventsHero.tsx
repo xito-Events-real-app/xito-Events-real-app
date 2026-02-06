@@ -275,7 +275,7 @@ export function TodayEventsHero() {
   const hasEvents = upcomingEvents.length > 0;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-white border border-gray-200 shadow-sm w-full max-w-full">
+    <div className="relative overflow-hidden rounded-2xl bg-white border border-gray-200 shadow-sm w-[90%] md:w-full max-w-full mx-auto md:mx-0">
       {/* Left accent bar */}
       <div className={cn(
         "absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b",
