@@ -1,12 +1,10 @@
-import { useDesktopMode } from "@/hooks/useDesktopMode";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { DesktopDailyTasks } from "@/components/tasks/DesktopDailyTasks";
+import { MobileDailyTasks } from "@/components/tasks/MobileDailyTasks";
 
 const DailyTasks = () => {
-  const { isDesktopMode } = useDesktopMode();
-
-  // For now, both views use the desktop component
-  // A mobile-specific view can be added later
-  return <DesktopDailyTasks />;
+  const isMobile = useIsMobile();
+  return isMobile ? <MobileDailyTasks /> : <DesktopDailyTasks />;
 };
 
 export default DailyTasks;
