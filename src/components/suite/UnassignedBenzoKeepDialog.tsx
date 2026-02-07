@@ -1,15 +1,38 @@
 import { useState } from "react";
-import { Plus, Trash2, UserPlus, Pencil, StickyNote, Clock, X } from "lucide-react";
+import { Plus, Trash2, UserPlus, Pencil, StickyNote, Clock, X, ChevronDown, ChevronUp, Search } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { useUnassignedBenzoKeepNotes, UnassignedBenzoNote } from "@/hooks/useUnassignedBenzoKeepNotes";
 import { AssignNoteDialog } from "./AssignNoteDialog";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { highlightDatesAndMonths } from "@/components/client-detail/BenzoKeepDialog";
 import { XitoSearchPanel } from "@/components/shared/XitoSearchPanel";
+
+// Compact collapsible Xito Search for inline use in note cards
+function XitoSearchCompact({ noteContent }: { noteContent: string }) {
+  const [open, setOpen] = useState(false);
+  
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="mb-2">
+      <CollapsibleTrigger className="flex items-center justify-between w-full px-2.5 py-1.5 bg-white/70 rounded-lg border border-gray-200 text-xs font-medium text-violet-700 hover:bg-violet-50 transition-colors">
+        <span className="flex items-center gap-1.5">
+          <Search className="w-3 h-3" />
+          Xito Search
+        </span>
+        {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="mt-1.5 p-2 bg-white/60 rounded-lg border border-gray-200 max-h-[200px] overflow-y-auto">
+          <XitoSearchPanel noteContent={noteContent} />
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
 
 const MARKER_COLORS = {
   yellow: { bg: 'bg-yellow-100', border: 'border-yellow-300', ring: 'ring-yellow-400' },
@@ -235,10 +258,8 @@ export function UnassignedBenzoKeepDialog({ open, onOpenChange }: UnassignedBenz
                           {highlightDatesAndMonths(note.content)}
                         </div>
 
-                        {/* Xito Search for this note */}
-                        <div className="mb-3 p-2 bg-white/60 rounded-lg border border-gray-200">
-                          <XitoSearchPanel noteContent={note.content} />
-                        </div>
+                        {/* Xito Search for this note - compact collapsible */}
+                        <XitoSearchCompact noteContent={note.content} />
 
                         {/* Timestamp */}
                         <div className="flex items-center gap-1 text-xs text-gray-500 mb-3">
