@@ -9,6 +9,7 @@ import { AssignNoteDialog } from "./AssignNoteDialog";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { highlightDatesAndMonths } from "@/components/client-detail/BenzoKeepDialog";
+import { XitoSearchPanel } from "@/components/shared/XitoSearchPanel";
 
 const MARKER_COLORS = {
   yellow: { bg: 'bg-yellow-100', border: 'border-yellow-300', ring: 'ring-yellow-400' },
@@ -230,8 +231,13 @@ export function UnassignedBenzoKeepDialog({ open, onOpenChange }: UnassignedBenz
                         )}
                       >
                         {/* Note Content */}
-                        <div className="text-gray-800 whitespace-pre-wrap text-sm leading-relaxed mb-3">
+                        <div className="text-gray-800 whitespace-pre-wrap text-sm leading-relaxed mb-2">
                           {highlightDatesAndMonths(note.content)}
+                        </div>
+
+                        {/* Xito Search for this note */}
+                        <div className="mb-3 p-2 bg-white/60 rounded-lg border border-gray-200">
+                          <XitoSearchPanel noteContent={note.content} />
                         </div>
 
                         {/* Timestamp */}
