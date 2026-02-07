@@ -9,6 +9,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { saveUnassignedBenzoKeepNote, assignBenzoKeepNoteToClient, getClientsForNoteAssignment, ClientData } from "@/lib/sheets-api";
 import { toast } from "sonner";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { XitoSearchPanel } from "@/components/shared/XitoSearchPanel";
+import { BookingCalendarMini } from "@/components/shared/BookingCalendarMini";
 
 const MARKER_COLORS = [
   { id: 'yellow', name: 'Yellow', bg: 'bg-yellow-200', border: 'border-yellow-400', ring: 'ring-yellow-500' },
@@ -27,6 +30,7 @@ interface BenzoKeepNotepadDialogProps {
 }
 
 export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: BenzoKeepNotepadDialogProps) {
+  const isMobile = useIsMobile();
   const [content, setContent] = useState('');
   const [markerColor, setMarkerColor] = useState<MarkerColor>('yellow');
   const [isSaving, setIsSaving] = useState(false);
@@ -240,7 +244,7 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
   // Main Notepad View
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl bg-white text-gray-900">
+      <DialogContent className={cn("bg-white text-gray-900", isMobile ? "max-w-xl" : "max-w-[90vw] w-full max-h-[85vh]")}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <StickyNote className="w-5 h-5 text-amber-500" />
@@ -251,48 +255,99 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
           </DialogDescription>
         </DialogHeader>
 
-        <div className="py-2 space-y-4">
-          {/* Color Picker */}
-          <div>
-            <Label className="text-sm font-medium text-gray-700 mb-2 block">Marker Color</Label>
-            <div className="flex gap-2">
-              {MARKER_COLORS.map((color) => (
-                <button
-                  key={color.id}
-                  type="button"
-                  onClick={() => setMarkerColor(color.id as MarkerColor)}
-                  className={cn(
-                    "w-8 h-8 rounded-full transition-all border-2",
-                    color.bg,
-                    color.border,
-                    markerColor === color.id ? `ring-2 ${color.ring} ring-offset-2` : ''
-                  )}
-                  title={color.name}
-                />
-              ))}
+        {isMobile ? (
+          /* Mobile: single column */
+          <div className="py-2 space-y-4">
+            {/* Color Picker */}
+            <div>
+              <Label className="text-sm font-medium text-gray-700 mb-2 block">Marker Color</Label>
+              <div className="flex gap-2">
+                {MARKER_COLORS.map((color) => (
+                  <button
+                    key={color.id}
+                    type="button"
+                    onClick={() => setMarkerColor(color.id as MarkerColor)}
+                    className={cn(
+                      "w-8 h-8 rounded-full transition-all border-2",
+                      color.bg,
+                      color.border,
+                      markerColor === color.id ? `ring-2 ${color.ring} ring-offset-2` : ''
+                    )}
+                    title={color.name}
+                  />
+                ))}
+              </div>
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-gray-700 mb-2 block">Note</Label>
+              <Textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="Write your notes here... Dates like 'Magh 25' will show matching events in Xito Search."
+                className={cn(
+                  "min-h-[250px] resize-none text-gray-900 placeholder:text-gray-400 border-2",
+                  selectedColorConfig.bg,
+                  selectedColorConfig.border
+                )}
+              />
+            </div>
+            <div className="text-xs text-gray-500">
+              💡 Save unassigned or assign to a client directly
             </div>
           </div>
+        ) : (
+          /* Desktop: 3-column layout */
+          <div className="grid grid-cols-4 gap-4 py-2 min-h-[400px] max-h-[60vh]">
+            {/* Left: Xito Search */}
+            <div className="col-span-1 border rounded-lg p-3 bg-gray-50 overflow-hidden">
+              <XitoSearchPanel noteContent={content} />
+            </div>
 
-          {/* Note Content */}
-          <div>
-            <Label className="text-sm font-medium text-gray-700 mb-2 block">Note</Label>
-            <Textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Write your notes here... Dates like 'January 15', 'Magh 25', or '2082/01/15' will be auto-highlighted when viewing."
-              className={cn(
-                "min-h-[250px] resize-none text-gray-900 placeholder:text-gray-400 border-2",
-                selectedColorConfig.bg,
-                selectedColorConfig.border
-              )}
-            />
-          </div>
+            {/* Center: Note Editor */}
+            <div className="col-span-2 space-y-4">
+              <div>
+                <Label className="text-sm font-medium text-gray-700 mb-2 block">Marker Color</Label>
+                <div className="flex gap-2">
+                  {MARKER_COLORS.map((color) => (
+                    <button
+                      key={color.id}
+                      type="button"
+                      onClick={() => setMarkerColor(color.id as MarkerColor)}
+                      className={cn(
+                        "w-8 h-8 rounded-full transition-all border-2",
+                        color.bg,
+                        color.border,
+                        markerColor === color.id ? `ring-2 ${color.ring} ring-offset-2` : ''
+                      )}
+                      title={color.name}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <Label className="text-sm font-medium text-gray-700 mb-2 block">Note</Label>
+                <Textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="Write your notes here... Dates like 'Magh 25' will show matching events in Xito Search."
+                  className={cn(
+                    "min-h-[300px] resize-none text-gray-900 placeholder:text-gray-400 border-2",
+                    selectedColorConfig.bg,
+                    selectedColorConfig.border
+                  )}
+                />
+              </div>
+              <div className="text-xs text-gray-500">
+                💡 Save unassigned or assign to a client directly
+              </div>
+            </div>
 
-          {/* Hint */}
-          <div className="text-xs text-gray-500">
-            💡 Save unassigned or assign to a client directly
+            {/* Right: Booking Calendar */}
+            <div className="col-span-1 border rounded-lg p-3 bg-gray-50 overflow-hidden">
+              <BookingCalendarMini />
+            </div>
           </div>
-        </div>
+        )}
 
         <DialogFooter className="gap-2 sm:gap-0 flex-col sm:flex-row">
           <Button

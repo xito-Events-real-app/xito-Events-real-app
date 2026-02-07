@@ -1,12 +1,16 @@
 import { useState, useEffect, useMemo } from "react";
-import { StickyNote, Loader2, X } from "lucide-react";
+import { StickyNote, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { XitoSearchPanel } from "@/components/shared/XitoSearchPanel";
+import { BookingCalendarMini } from "@/components/shared/BookingCalendarMini";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 export interface BenzoKeepData {
   content: string;
@@ -54,7 +58,6 @@ export function parseBenzoKeepNotes(notesStr: string | undefined): BenzoKeepData
       lastUpdated: parsed.lastUpdated || '',
     };
   } catch {
-    // Fallback: treat as plain text content
     return {
       content: notesStr,
       markerColor: 'yellow',
@@ -67,20 +70,13 @@ export function parseBenzoKeepNotes(notesStr: string | undefined): BenzoKeepData
 export function highlightDatesAndMonths(text: string): React.ReactNode[] {
   if (!text) return [];
   
-  // Build regex pattern for all months and date patterns
   const monthPattern = [...NEPALI_MONTHS, ...ENGLISH_MONTHS].join('|');
   const datePatterns = [
-    // "January 15", "Feb 20th"
     `(${monthPattern})\\s+\\d{1,2}(?:st|nd|rd|th)?`,
-    // "15 January", "20th Feb"
     `\\d{1,2}(?:st|nd|rd|th)?\\s+(${monthPattern})`,
-    // "2082/01/25", "2026-01-15"
     `\\d{4}[/-]\\d{1,2}[/-]\\d{1,2}`,
-    // "15/01/2026"
     `\\d{1,2}[/-]\\d{1,2}[/-]\\d{4}`,
-    // Just month names
     `\\b(${monthPattern})\\b`,
-    // "next week", "tomorrow"
     `\\b(tomorrow|next week|next month|yesterday)\\b`,
   ];
   
@@ -113,8 +109,8 @@ const BenzoKeepDialog = ({
   
   const [content, setContent] = useState(existingData?.content || '');
   const [markerColor, setMarkerColor] = useState<BenzoKeepData['markerColor']>(existingData?.markerColor || 'yellow');
+  const [xitoOpen, setXitoOpen] = useState(false);
 
-  // Reset form when dialog opens with new data
   useEffect(() => {
     if (open) {
       const parsed = parseBenzoKeepNotes(existingNotes);
@@ -134,7 +130,7 @@ const BenzoKeepDialog = ({
 
   const selectedColorConfig = MARKER_COLORS.find(c => c.id === markerColor) || MARKER_COLORS[0];
 
-  const dialogContent = (
+  const noteEditor = (
     <div className="flex flex-col h-full">
       {/* Color Picker */}
       <div className="mb-4">
@@ -163,7 +159,7 @@ const BenzoKeepDialog = ({
         <Textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          placeholder="Write your notes here... Dates like 'January 15', 'Magh 25', or '2082/01/15' will be auto-highlighted."
+          placeholder="Write your notes here... Dates like 'Magh 15' or 'Falgun 3' will show matching events in Xito Search."
           className={cn(
             "min-h-[200px] h-full resize-none text-gray-900 placeholder:text-gray-400 border-2",
             selectedColorConfig.bg,
@@ -172,7 +168,6 @@ const BenzoKeepDialog = ({
         />
       </div>
 
-      {/* Preview hint */}
       <div className="mt-2 text-xs text-gray-500">
         💡 Dates and months will be auto-highlighted when viewing
       </div>
@@ -181,11 +176,7 @@ const BenzoKeepDialog = ({
 
   const footerButtons = (
     <>
-      <Button
-        variant="outline"
-        onClick={() => onOpenChange(false)}
-        disabled={isSaving}
-      >
+      <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
         Cancel
       </Button>
       <Button
@@ -208,7 +199,7 @@ const BenzoKeepDialog = ({
     </>
   );
 
-  // Use Sheet on mobile, Dialog on desktop
+  // Mobile: Sheet with collapsible Xito Search
   if (isMobile) {
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
@@ -222,8 +213,21 @@ const BenzoKeepDialog = ({
               Notes for {clientName}
             </SheetDescription>
           </SheetHeader>
-          <div className="py-4 flex-1 overflow-y-auto">
-            {dialogContent}
+          <div className="py-4 flex-1 overflow-y-auto space-y-4">
+            {/* Collapsible Xito Search */}
+            <Collapsible open={xitoOpen} onOpenChange={setXitoOpen}>
+              <CollapsibleTrigger className="flex items-center justify-between w-full px-3 py-2 bg-violet-50 rounded-lg border border-violet-200 text-sm font-medium text-violet-700">
+                <span>Xito Search</span>
+                {xitoOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="mt-2 p-3 bg-gray-50 rounded-lg border max-h-[200px] overflow-y-auto">
+                  <XitoSearchPanel noteContent={content} />
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
+            {noteEditor}
           </div>
           <SheetFooter className="gap-2 pt-4 border-t">
             {footerButtons}
@@ -233,9 +237,10 @@ const BenzoKeepDialog = ({
     );
   }
 
+  // Desktop: 3-column layout
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg bg-white text-gray-900">
+      <DialogContent className="max-w-[90vw] w-full bg-white text-gray-900 max-h-[85vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <StickyNote className="w-5 h-5 text-amber-500" />
@@ -245,9 +250,24 @@ const BenzoKeepDialog = ({
             Notes for {clientName}
           </DialogDescription>
         </DialogHeader>
-        <div className="py-2">
-          {dialogContent}
+
+        <div className="grid grid-cols-4 gap-4 py-2 min-h-[400px] max-h-[60vh]">
+          {/* Left: Xito Search */}
+          <div className="col-span-1 border rounded-lg p-3 bg-gray-50 overflow-hidden">
+            <XitoSearchPanel noteContent={content} />
+          </div>
+
+          {/* Center: Note Editor */}
+          <div className="col-span-2 overflow-hidden">
+            {noteEditor}
+          </div>
+
+          {/* Right: Booking Calendar */}
+          <div className="col-span-1 border rounded-lg p-3 bg-gray-50 overflow-hidden">
+            <BookingCalendarMini />
+          </div>
         </div>
+
         <DialogFooter className="gap-2 sm:gap-0">
           {footerButtons}
         </DialogFooter>

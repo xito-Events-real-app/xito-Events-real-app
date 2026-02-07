@@ -1,6 +1,7 @@
 import { StickyNote, Pencil, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { parseBenzoKeepNotes, highlightDatesAndMonths } from "./BenzoKeepDialog";
+import { XitoSearchPanel } from "@/components/shared/XitoSearchPanel";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 
@@ -60,7 +61,7 @@ const BenzoKeepViewer = ({ notesData, onEdit }: BenzoKeepViewerProps) => {
         </Button>
       </div>
 
-      {/* Note Card - Google Keep style */}
+      {/* Note Card */}
       <div 
         className={cn(
           "rounded-xl border-2 p-4 shadow-lg cursor-pointer transition-all hover:shadow-xl",
@@ -68,12 +69,10 @@ const BenzoKeepViewer = ({ notesData, onEdit }: BenzoKeepViewerProps) => {
         )}
         onClick={onEdit}
       >
-        {/* Note Content with highlighted dates */}
         <div className="text-gray-800 whitespace-pre-wrap leading-relaxed text-sm min-h-[100px]">
           {highlightDatesAndMonths(parsed.content)}
         </div>
 
-        {/* Last Updated */}
         {lastUpdated && (
           <div className="mt-4 pt-3 border-t border-gray-300/50 flex items-center gap-1.5 text-xs text-gray-500">
             <Clock className="h-3 w-3" />
@@ -82,7 +81,11 @@ const BenzoKeepViewer = ({ notesData, onEdit }: BenzoKeepViewerProps) => {
         )}
       </div>
 
-      {/* Click hint */}
+      {/* Xito Search Results */}
+      <div className="bg-white/5 rounded-xl border border-white/10 p-4">
+        <XitoSearchPanel noteContent={parsed.content} />
+      </div>
+
       <p className="text-xs text-white/40 text-center">
         Click the note to edit
       </p>
