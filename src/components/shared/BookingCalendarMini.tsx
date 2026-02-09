@@ -35,6 +35,8 @@ export function BookingCalendarMini({ className }: BookingCalendarMiniProps) {
     const bookedMap = new Map<string, number>();
     const advancePendingMap = new Map<string, number>();
     const clientDetailsMap = new Map<string, CalendarClientInfo[]>();
+    // Track unknown day (**) events per year-month
+    const unknownDayMap = new Map<string, CalendarClientInfo[]>();
 
     clients.forEach(client => {
       const status = getCurrentStatus(client.statusLog || '').toUpperCase();
@@ -46,10 +48,35 @@ export function BookingCalendarMini({ className }: BookingCalendarMiniProps) {
       );
 
       events.forEach(event => {
-        if (event.year && event.month && event.day && event.day !== '**') {
+        if (!event.year || !event.month) return;
+        const isUnknownDay = !event.day || event.day === '**' || String(event.day).startsWith('**');
+        const isBooked = status.includes('BOOKED') && !status.includes('BOOKED SOMEWHERE ELSE');
+        const isAdvancePending = status.includes('ADVANCE PENDING');
+
+        if (isUnknownDay) {
+          // Track unknown-day events per month
+          if (isBooked || isAdvancePending) {
+            const monthKey = `${event.year}-${event.month}`;
+            if (!unknownDayMap.has(monthKey)) unknownDayMap.set(monthKey, []);
+            const clientEventDetails = client.registeredDateTimeAD ? eventDetailsMap[client.registeredDateTimeAD] : undefined;
+            const matchingDetail = clientEventDetails?.find(d => d.eventName === event.eventName);
+            unknownDayMap.get(monthKey)!.push({
+              clientName: client.clientName || 'Unknown',
+              eventName: event.eventName || 'Event',
+              registeredDateTimeAD: client.registeredDateTimeAD,
+              originalRowNumber: client.rowNumber,
+              contactNo: client.contactNo,
+              whatsappNo: client.whatsappNo,
+              eventLocation: client.eventLocation,
+              eventCity: client.eventCity,
+              venueName: matchingDetail?.venueName || '',
+              venueArea: matchingDetail?.venueArea || '',
+            });
+          }
+        } else {
           const dateKey = `${event.year}-${event.month}-${event.day}`;
 
-          if (status.includes('BOOKED') && !status.includes('BOOKED SOMEWHERE ELSE')) {
+          if (isBooked) {
             bookedMap.set(dateKey, (bookedMap.get(dateKey) || 0) + 1);
 
             if (!clientDetailsMap.has(dateKey)) clientDetailsMap.set(dateKey, []);
@@ -68,7 +95,7 @@ export function BookingCalendarMini({ className }: BookingCalendarMiniProps) {
               venueName: matchingDetail?.venueName || '',
               venueArea: matchingDetail?.venueArea || '',
             });
-          } else if (status.includes('ADVANCE PENDING')) {
+          } else if (isAdvancePending) {
             advancePendingMap.set(dateKey, (advancePendingMap.get(dateKey) || 0) + 1);
           }
         }
@@ -89,6 +116,7 @@ export function BookingCalendarMini({ className }: BookingCalendarMiniProps) {
       monthName: string;
       days: { day: number; isBooked: boolean; eventCount: number; advancePendingCount: number; clients: CalendarClientInfo[] }[];
       bookedCount: number;
+      unknownDayClients: CalendarClientInfo[];
     }[] = [];
 
     for (let i = 0; i < 12; i++) {
@@ -108,7 +136,10 @@ export function BookingCalendarMini({ className }: BookingCalendarMiniProps) {
         days.push({ day, isBooked, eventCount, advancePendingCount, clients: clientDetailsMap.get(dateKey) || [] });
       }
 
-      result.push({ month: monthNum, year: yearNum, monthName: NEPALI_MONTHS[monthNum], days, bookedCount });
+      const monthKey = `${yearNum}-${monthNum}`;
+      const unknownDayClients = unknownDayMap.get(monthKey) || [];
+
+      result.push({ month: monthNum, year: yearNum, monthName: NEPALI_MONTHS[monthNum], days, bookedCount, unknownDayClients });
     }
 
     return result;
@@ -181,10 +212,21 @@ export function BookingCalendarMini({ className }: BookingCalendarMiniProps) {
                   );
                 })}
               </div>
+
+              {/* Unknown day (**) events */}
+              {month.unknownDayClients.length > 0 && (
+                <div className="flex items-center gap-1 mt-1 px-1">
+                  <span className="text-[9px] font-medium text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded">
+                    ** × {month.unknownDayClients.length}
+                  </span>
+                  <span className="text-[9px] text-gray-500 truncate">
+                    {month.unknownDayClients.map(c => c.clientName).join(', ')}
+                  </span>
+                </div>
+              )}
             </div>
           ))}
         </div>
-
         {/* Toggle */}
         <Button
           variant="ghost"
