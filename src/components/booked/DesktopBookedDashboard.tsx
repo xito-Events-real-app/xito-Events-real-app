@@ -377,6 +377,7 @@ export function DesktopBookedDashboard({
     const bookedMap = new Map<string, number>();
     const advancePendingMap = new Map<string, number>();
     const clientDetailsMap = new Map<string, CalendarClientInfo[]>();
+    const unknownDayMap = new Map<string, CalendarClientInfo[]>();
     
     // Count booked events and store client details
     clients.forEach(client => {
@@ -388,13 +389,31 @@ export function DesktopBookedDashboard({
       );
       
       events.forEach(event => {
-        if (event.year && event.month && event.day && event.day !== '**') {
+        if (!event.year || !event.month) return;
+        const isUnknownDay = !event.day || event.day === '**' || String(event.day).startsWith('**');
+
+        if (isUnknownDay) {
+          const monthKey = `${event.year}-${event.month}`;
+          if (!unknownDayMap.has(monthKey)) unknownDayMap.set(monthKey, []);
+          const clientEventDetails = client.registeredDateTimeAD ? eventDetailsMap[client.registeredDateTimeAD] : undefined;
+          const matchingDetail = clientEventDetails?.find(d => d.eventName === event.eventName);
+          unknownDayMap.get(monthKey)!.push({
+            clientName: client.clientName || 'Unknown',
+            eventName: event.eventName || 'Event',
+            registeredDateTimeAD: client.registeredDateTimeAD,
+            originalRowNumber: client.originalRowNumber,
+            contactNo: client.contactNo,
+            whatsappNo: client.whatsappNo,
+            eventLocation: client.eventLocation,
+            eventCity: client.eventCity,
+            venueName: matchingDetail?.venueName || '',
+            venueArea: matchingDetail?.venueArea || '',
+          });
+        } else {
           const dateKey = `${event.year}-${event.month}-${event.day}`;
           bookedMap.set(dateKey, (bookedMap.get(dateKey) || 0) + 1);
           
           if (!clientDetailsMap.has(dateKey)) clientDetailsMap.set(dateKey, []);
-          
-          // Try to get venue data from bulk event details
           const clientEventDetails = client.registeredDateTimeAD ? eventDetailsMap[client.registeredDateTimeAD] : undefined;
           const matchingDetail = clientEventDetails?.find(d => d.eventName === event.eventName);
           
@@ -424,7 +443,7 @@ export function DesktopBookedDashboard({
       );
       
       events.forEach(event => {
-        if (event.year && event.month && event.day && event.day !== '**') {
+        if (event.year && event.month && event.day && event.day !== '**' && !String(event.day).startsWith('**')) {
           const dateKey = `${event.year}-${event.month}-${event.day}`;
           advancePendingMap.set(dateKey, (advancePendingMap.get(dateKey) || 0) + 1);
         }
@@ -445,6 +464,7 @@ export function DesktopBookedDashboard({
       monthName: string; 
       days: { day: number; isBooked: boolean; eventCount: number; advancePendingCount: number; clients: CalendarClientInfo[] }[];
       bookedCount: number;
+      unknownDayClients: CalendarClientInfo[];
     }[] = [];
     
     for (let i = 0; i < 12; i++) {
@@ -465,7 +485,8 @@ export function DesktopBookedDashboard({
         days.push({ day, isBooked, eventCount, advancePendingCount, clients: clientDetailsMap.get(dateKey) || [] });
       }
       
-      result.push({ month: monthNum, year: yearNum, monthName, days, bookedCount });
+      const monthKey = `${yearNum}-${monthNum}`;
+      result.push({ month: monthNum, year: yearNum, monthName, days, bookedCount, unknownDayClients: unknownDayMap.get(monthKey) || [] });
     }
     
     return result;
@@ -844,6 +865,18 @@ export function DesktopBookedDashboard({
                         );
                       }
                     })}
+                    
+                    {/* Unknown day (**) events */}
+                    {monthData.unknownDayClients.length > 0 && (
+                      <div className="relative ml-1">
+                        <span 
+                          className="w-5 h-5 rounded-full bg-orange-500 text-white flex items-center justify-center text-[8px] font-bold cursor-default"
+                          title={`${monthData.unknownDayClients.length} events with unknown date: ${monthData.unknownDayClients.map(c => c.clientName).join(', ')}`}
+                        >
+                          **
+                        </span>
+                      </div>
+                    )}
                   </div>
                   
                   <Badge 
