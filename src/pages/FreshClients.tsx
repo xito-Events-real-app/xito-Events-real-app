@@ -7,12 +7,13 @@ import { Loader2, AlertTriangle, RefreshCw, ChevronLeft, ChevronRight } from "lu
 
 import { ClientData, getCurrentStatus } from "@/lib/sheets-api";
 import { normalizeStatus } from "@/lib/status-config";
-import { isBSDatePast } from "@/lib/nepali-date";
+import { EARLY_PIPELINE, hasAnyPastEventDate, isAlmostLost, getColdDatesClients } from "@/lib/fresh-client-utils";
 import { FreshClientCard } from "@/components/dashboard/FreshClientCard";
 import { ClientDetailSheet } from "@/components/dashboard/ClientDetailSheet";
 import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
 import { useCachedData } from "@/hooks/useCachedData";
 import { updateClientInCache } from "@/lib/cache-manager";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 export default function FreshClients() {
@@ -63,30 +64,7 @@ export default function FreshClients() {
   const paymentTypes = dropdowns?.paymentTypes || [];
   const banks = dropdowns?.banks || [];
 
-  // Early pipeline statuses eligible for LOST classification
-  const EARLY_PIPELINE = [
-    'JUST ENQUIRED', 'NUMBER PROVIDED', 'TEXTED : NOT CALLED',
-    'CALL NOT RECEIVED', 'CALLED : QUOTATION PENDING',
-    'QUOTATION SENT : REVIEW PENDING', 'BARGAINING IS ON', 'ADVANCE PENDING'
-  ];
-
-  // Check if a client has at least one past event date
-  const hasAnyPastEventDate = (client: ClientData): boolean => {
-    const years = (client.eventYear || '').split('\n');
-    const months = (client.eventMonth || '').split('\n');
-    const days = (client.eventDay || '').split('\n');
-    const maxLen = Math.max(years.length, months.length, days.length);
-    for (let i = 0; i < maxLen; i++) {
-      const y = (years[i] || '').trim();
-      const m = (months[i] || '').trim();
-      const d = (days[i] || '').trim();
-      if (!y || !m || !d || d.includes('*')) continue;
-      if (isBSDatePast(y, m, d)) return true;
-    }
-    return false;
-  };
-
-  // Group clients by their current status (normalized), with LOST override
+  // Group clients by their current status (normalized), with special overrides
   const clientsByStatus = useMemo(() => {
     const grouped: Record<string, ClientData[]> = {};
     
@@ -95,14 +73,25 @@ export default function FreshClients() {
       const status = normalizeStatus(rawStatus);
       if (status === 'UNTOUCHED') return;
 
-      // Check if client qualifies as LOST
-      const assignedStatus = EARLY_PIPELINE.includes(status) && hasAnyPastEventDate(client)
-        ? 'LOST'
-        : status;
+      // Check LOST first (past dates), then ALMOST LOST (< 30 days)
+      let assignedStatus = status;
+      if (EARLY_PIPELINE.includes(status)) {
+        if (hasAnyPastEventDate(client)) {
+          assignedStatus = 'LOST';
+        } else if (isAlmostLost(client)) {
+          assignedStatus = 'ALMOST LOST';
+        }
+      }
 
       if (!grouped[assignedStatus]) grouped[assignedStatus] = [];
       grouped[assignedStatus].push(client);
     });
+
+    // Add COLD DATES group
+    const coldClients = getColdDatesClients(localClients);
+    if (coldClients.length > 0) {
+      grouped['COLD DATES'] = coldClients;
+    }
 
     return grouped;
   }, [localClients]);
@@ -127,20 +116,18 @@ export default function FreshClients() {
       }
     });
     
-    // Add any remaining statuses not in options (excluding UNTOUCHED, JUST ENQUIRED, LOST)
+    // Add any remaining statuses not in options (excluding special categories)
+    const SPECIAL_CATEGORIES = ['UNTOUCHED', 'JUST ENQUIRED', 'LOST', 'ALMOST LOST', 'COLD DATES'];
     statusesWithClients.forEach(status => {
-      if (!orderedStatuses.includes(status) && 
-          status.toUpperCase() !== 'UNTOUCHED' && 
-          status.toUpperCase() !== 'JUST ENQUIRED' &&
-          status !== 'LOST') {
+      if (!orderedStatuses.includes(status) && !SPECIAL_CATEGORIES.includes(status.toUpperCase())) {
         orderedStatuses.push(status);
       }
     });
 
-    // LOST always comes last
-    if (statusesWithClients.includes('LOST')) {
-      orderedStatuses.push('LOST');
-    }
+    // Special categories after separator: ALMOST LOST, COLD DATES, LOST
+    if (statusesWithClients.includes('ALMOST LOST')) orderedStatuses.push('ALMOST LOST');
+    if (statusesWithClients.includes('COLD DATES')) orderedStatuses.push('COLD DATES');
+    if (statusesWithClients.includes('LOST')) orderedStatuses.push('LOST');
 
     return orderedStatuses;
   }, [clientsByStatus, statusOptions]);
@@ -176,6 +163,8 @@ export default function FreshClients() {
     if (s.includes('CANCELLED')) return 'bg-red-500 text-white';
     if (s.includes('POSTPONED')) return 'bg-slate-500 text-white';
     if (s === 'LOST') return 'bg-rose-700 text-white';
+    if (s === 'ALMOST LOST') return 'bg-amber-600 text-white';
+    if (s === 'COLD DATES') return 'bg-cyan-600 text-white';
     return 'bg-muted text-foreground';
   };
 
@@ -308,21 +297,34 @@ export default function FreshClients() {
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
                 
-                {/* Page Indicator Dots */}
+                {/* Page Indicator Dots with separator before special categories */}
                 <div className="flex items-center gap-1.5 flex-wrap justify-center">
-                  {activeStatuses.map((status, idx) => (
-                    <button
-                      key={status}
-                      onClick={() => setCurrentPageIndex(idx)}
-                      className={cn(
-                        "w-1.5 h-1.5 rounded-full transition-all",
-                        idx === currentPageIndex 
-                          ? "bg-primary w-3" 
-                          : "bg-muted-foreground/30"
-                      )}
-                      aria-label={`Go to ${status}`}
-                    />
-                  ))}
+                  {activeStatuses.map((status, idx) => {
+                    const SPECIAL = ['ALMOST LOST', 'COLD DATES', 'LOST'];
+                    const isSpecial = SPECIAL.includes(status);
+                    const prevIsSpecial = idx > 0 && SPECIAL.includes(activeStatuses[idx - 1]);
+                    const showSeparator = isSpecial && !prevIsSpecial;
+                    
+                    return (
+                      <span key={status} className="flex items-center gap-1.5">
+                        {showSeparator && (
+                          <span className="w-px h-3 bg-muted-foreground/40 mx-0.5" />
+                        )}
+                        <button
+                          onClick={() => setCurrentPageIndex(idx)}
+                          className={cn(
+                            "w-1.5 h-1.5 rounded-full transition-all",
+                            idx === currentPageIndex 
+                              ? "bg-primary w-3" 
+                              : isSpecial
+                              ? "bg-amber-400/60"
+                              : "bg-muted-foreground/30"
+                          )}
+                          aria-label={`Go to ${status}`}
+                        />
+                      </span>
+                    );
+                  })}
                 </div>
 
                 <span className="text-xs text-muted-foreground min-w-[32px] text-center">
@@ -350,6 +352,8 @@ export default function FreshClients() {
                 </h2>
                 <p className="text-xs opacity-80">
                   {currentClients.length} client{currentClients.length !== 1 ? 's' : ''}
+                  {currentStatus === 'ALMOST LOST' && ' • Events in less than 1 month'}
+                  {currentStatus === 'COLD DATES' && ' • Dates with enquiries but no bookings'}
                 </p>
               </div>
 

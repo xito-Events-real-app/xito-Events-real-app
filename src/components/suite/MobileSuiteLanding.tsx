@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { LogOut, Home, Newspaper, LayoutGrid, Construction, Calendar, User } from "lucide-react";
+import { useState, useMemo } from "react";
+import { LogOut, Home, Newspaper, LayoutGrid, Construction, Calendar, User, AlertTriangle, Snowflake } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -17,6 +17,9 @@ import { MasterSearchButton } from "./MasterSearchButton";
 import { MasterSyncButton } from "./MasterSyncButton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { SuiteBenzoKeepSection } from "./SuiteBenzoKeepSection";
+import { useCachedData } from "@/hooks/useCachedData";
+import { isAlmostLost, getColdDatesClients } from "@/lib/fresh-client-utils";
+import { AlmostLostColdDatesDialog } from "./AlmostLostColdDatesDialog";
 
 const HANDLERS = [
   { name: 'Benzo', colorScheme: 'violet' as const },
@@ -144,12 +147,45 @@ export function MobileSuiteLanding() {
 
 // Home Tab Content
 function HomeTabContent() {
+  const { clients, dropdowns } = useCachedData();
+  const [dialogType, setDialogType] = useState<'almost-lost' | 'cold-dates' | null>(null);
+
+  const almostLostClients = useMemo(() => clients.filter(isAlmostLost), [clients]);
+  const coldDatesClients = useMemo(() => getColdDatesClients(clients), [clients]);
+
   return (
     <ScrollArea className="flex-1 h-full w-full">
       <div className="px-2 py-3 space-y-2.5 pb-24 w-full max-w-full overflow-hidden box-border">
         {/* Quick Actions */}
         <SuiteQuickActionsBar variant="mobile" />
         
+        {/* Tabbed Interface for Events + Handler Activity */}
+        <EventsHandlerTabs />
+
+        {/* Almost Lost & Cold Dates Cards */}
+        <div className="grid grid-cols-2 gap-2 w-[90%] max-w-full mx-auto">
+          <button
+            onClick={() => setDialogType('almost-lost')}
+            className="flex items-center gap-2 px-3 py-3 rounded-xl bg-amber-50 border border-amber-200 text-left transition-all active:scale-95"
+          >
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-amber-800 truncate">Almost Lost</p>
+              <p className="text-lg font-bold text-amber-600 leading-tight">{almostLostClients.length}</p>
+            </div>
+          </button>
+          <button
+            onClick={() => setDialogType('cold-dates')}
+            className="flex items-center gap-2 px-3 py-3 rounded-xl bg-cyan-50 border border-cyan-200 text-left transition-all active:scale-95"
+          >
+            <Snowflake className="w-5 h-5 text-cyan-600 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-cyan-800 truncate">Cold Dates</p>
+              <p className="text-lg font-bold text-cyan-600 leading-tight">{coldDatesClients.length}</p>
+            </div>
+          </button>
+        </div>
+
         {/* Search and Sync */}
         <div className="grid grid-cols-2 gap-2 w-[90%] max-w-full mx-auto overflow-hidden">
           <div className="min-w-0 w-full overflow-hidden">
@@ -160,14 +196,24 @@ function HomeTabContent() {
           </div>
         </div>
         
-        {/* Tabbed Interface for Events + Handler Activity */}
-        <EventsHandlerTabs />
-        
         {/* Benzo Keep Section */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <SuiteBenzoKeepSection />
         </div>
       </div>
+
+      {/* Full-screen dialog for Almost Lost / Cold Dates */}
+      <AlmostLostColdDatesDialog
+        type={dialogType || 'almost-lost'}
+        clients={dialogType === 'cold-dates' ? coldDatesClients : almostLostClients}
+        statusOptions={dropdowns?.clientStatuses || []}
+        handlerOptions={dropdowns?.whatsappOwners || []}
+        mindsetOptions={dropdowns?.mindsetOptions || []}
+        paymentTypes={dropdowns?.paymentTypes || []}
+        banks={dropdowns?.banks || []}
+        open={!!dialogType}
+        onOpenChange={(open) => !open && setDialogType(null)}
+      />
     </ScrollArea>
   );
 }
