@@ -1,6 +1,6 @@
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, Calendar, User, Clock, DollarSign, FileText, Activity, MessageSquare, Briefcase, Pencil, X, Check, Loader2, Plus, CreditCard, RefreshCw, RotateCcw, Send } from "lucide-react";
+import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, Calendar, User, Clock, DollarSign, FileText, Activity, MessageSquare, Briefcase, Pencil, Loader2, Plus, CreditCard, RefreshCw, RotateCcw, Send } from "lucide-react";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,10 +49,6 @@ import {
 import { nepaliMonthsEnglish, NepaliDateObject, bsToAD, isUnknownDay, getDayForStorage, getCurrentBSDate } from "@/lib/nepali-date";
 import { getMonthName } from "@/lib/nepali-months";
 import NepaliDate from "nepali-date-converter";
-import { FormSection, FormInput, FormSelect, CountrySelector, PhoneInputField, NepaliCalendar } from "@/components/form";
-import { EventSelector } from "@/components/form/EventSelector";
-import { getCountryCodeFromName } from "@/components/form/CountrySelector";
-import { valleyCities, nepalCitiesOutsideValley, clientLocationOptions } from "@/lib/form-data";
 import PaymentDrawer from "@/components/finance/PaymentDrawer";
 import { ClientDetailSidebar, ClientHeroSection, SectionType, EventDetailsSummaryCard, FullScreenEventCard, ClientDetailsCard, BenzoKeepDialog, BenzoKeepViewer } from "@/components/client-detail";
 import { EventDetailCard } from "@/components/client-detail/EventDetailCard";
@@ -138,34 +134,6 @@ const ClientDetail = () => {
   // Netflix-style sidebar section state
   const [activeSection, setActiveSection] = useState<SectionType>('dashboard');
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
-
-  // Edit mode state
-  const [isEditing, setIsEditing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [editedClient, setEditedClient] = useState<ClientData | null>(null);
-  
-  // Extended edit state for form fields
-  const [clientLocation, setClientLocation] = useState("");
-  const [currentCountry, setCurrentCountry] = useState("");
-  const [currentCountryCode, setCurrentCountryCode] = useState("NP");
-  const [contactNo, setContactNo] = useState("");
-  const [whatsappNo, setWhatsappNo] = useState("");
-  const [eventLocation, setEventLocation] = useState("");
-  const [eventCity, setEventCity] = useState("");
-  const [eventFromCity, setEventFromCity] = useState("");
-  const [eventToCity, setEventToCity] = useState("");
-  const [selectedDates, setSelectedDates] = useState<NepaliDateObject[]>([]);
-  const [eventsByDate, setEventsByDate] = useState<Record<string, string>>({});
-  const [source, setSource] = useState("");
-  const [whoseWhatsapp, setWhoseWhatsapp] = useState("");
-  const [oldClientName, setOldClientName] = useState("");
-  const [whoAdded, setWhoAdded] = useState("");
-  const [clientHandler, setClientHandler] = useState("");
-  const [inquiryDate, setInquiryDate] = useState<Date | undefined>(undefined);
-  const [inquiryTimeInput, setInquiryTimeInput] = useState("");
-  const [descriptionInput, setDescriptionInput] = useState("");
-  const [emailInput, setEmailInput] = useState("");
-  const [clientNameInput, setClientNameInput] = useState("");
 
   // FAB state
   const [showFab, setShowFab] = useState(false);
@@ -284,8 +252,7 @@ const ClientDetail = () => {
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't navigate if editing or if focus is on an input
-      if (isEditing || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
       
@@ -298,7 +265,7 @@ const ClientDetail = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isEditing, prevClientId, nextClientId, handleNavigatePrev, handleNavigateNext]);
+  }, [prevClientId, nextClientId, handleNavigatePrev, handleNavigateNext]);
 
   const client = useMemo(() => {
     if (!rowNumber || !clients.length) return null;
@@ -333,285 +300,15 @@ const ClientDetail = () => {
     markFormAsSent,
   } = useClientContactDetails(client?.registeredDateTimeAD);
 
-  // All event options for the event selector
-  const allEventOptions = useMemo(() => {
-    const eventsList: string[] = [];
-    if (dropdowns?.preweddingEvents) eventsList.push(...dropdowns.preweddingEvents);
-    if (dropdowns?.weddingEvents) eventsList.push(...dropdowns.weddingEvents);
-    if (dropdowns?.postweddingEvents) eventsList.push(...dropdowns.postweddingEvents);
-    return [...new Set(eventsList)];
-  }, [dropdowns]);
-
-  const sortedDates = useMemo(() => {
-    return [...selectedDates].sort((a, b) => {
-      if (a.year !== b.year) return a.year - b.year;
-      if (a.month !== b.month) return a.month - b.month;
-      const dayA: number = isUnknownDay(a.day) ? 99 : (a.day as number);
-      const dayB: number = isUnknownDay(b.day) ? 99 : (b.day as number);
-      return dayA - dayB;
-    });
-  }, [selectedDates]);
-
-  const getDateKey = (date: NepaliDateObject) => `${date.year}-${date.month}-${date.day}`;
-
-  const handleEventChange = (date: NepaliDateObject, event: string) => {
-    const key = getDateKey(date);
-    setEventsByDate(prev => ({ ...prev, [key]: event }));
-  };
-
-  const handleRemoveDate = (date: NepaliDateObject) => {
-    const key = getDateKey(date);
-    setSelectedDates(prev => prev.filter(d => getDateKey(d) !== key));
-    setEventsByDate(prev => {
-      const updated = { ...prev };
-      delete updated[key];
-      return updated;
-    });
-  };
-
-  // Parse existing dates from client data
-  const parseExistingDates = (clientData: ClientData): NepaliDateObject[] => {
-    if (!clientData.eventYear || !clientData.eventMonth || !clientData.eventDay) return [];
-    
-    const years = clientData.eventYear.split('\n');
-    const months = clientData.eventMonth.split('\n');
-    const days = clientData.eventDay.split('\n');
-    
-    const dates: NepaliDateObject[] = [];
-    for (let i = 0; i < years.length; i++) {
-      if (years[i] && months[i] && days[i]) {
-        const dayValue = days[i].trim();
-        dates.push({
-          year: parseInt(years[i]),
-          month: parseInt(months[i]),
-          day: dayValue === "**" ? "**" : parseInt(dayValue)
-        });
-      }
-    }
-    return dates;
-  };
-
-  // Parse source into base and sub-value
-  const parseSource = (sourceStr: string): { base: string; sub: string } => {
-    if (sourceStr.startsWith('WHATSAPP - ')) {
-      return { base: 'WHATSAPP', sub: sourceStr.replace('WHATSAPP - ', '') };
-    }
-    if (sourceStr.startsWith('OLD CLIENT - ')) {
-      return { base: 'OLD CLIENT', sub: sourceStr.replace('OLD CLIENT - ', '') };
-    }
-    return { base: sourceStr, sub: '' };
-  };
-
-  // Parse event city
-  const parseEventCity = (eventLoc: string, cityStr: string): { city: string; from: string; to: string } => {
-    if (eventLoc === 'MIXED' || eventLoc === 'ABROAD') {
-      const parts = cityStr.split(' - ');
-      return { city: '', from: parts[0] || '', to: parts[1] || '' };
-    }
-    return { city: cityStr, from: '', to: '' };
-  };
 
   const handleEdit = () => {
     if (!client) return;
-    setEditedClient({ ...client });
-    
-    setClientNameInput(client.clientName || '');
-    setClientLocation(client.clientLocation || '');
-    setCurrentCountry(client.currentCountry || '');
-    setCurrentCountryCode(getCountryCodeFromName(client.currentCountry || 'Nepal'));
-    setContactNo(client.contactNo || '');
-    setWhatsappNo(client.whatsappNo || '');
-    setEventLocation(client.eventLocation || '');
-    setEmailInput(client.email || '');
-    setDescriptionInput(client.description || '');
-    
-    const cityParsed = parseEventCity(client.eventLocation || '', client.eventCity || '');
-    setEventCity(cityParsed.city);
-    setEventFromCity(cityParsed.from);
-    setEventToCity(cityParsed.to);
-    
-    const dates = parseExistingDates(client);
-    setSelectedDates(dates);
-    
-    if (client.events && client.eventYear && client.eventMonth && client.eventDay) {
-      const eventNames = client.events.split('\n');
-      const years = client.eventYear.split('\n');
-      const months = client.eventMonth.split('\n');
-      const days = client.eventDay.split('\n');
-      const eventsMap: Record<string, string> = {};
-      
-      for (let i = 0; i < years.length; i++) {
-        if (years[i] && months[i] && days[i]) {
-          const key = `${years[i]}-${months[i]}-${days[i]}`;
-          eventsMap[key] = eventNames[i] || '';
-        }
+    navigate(`/client-tracker/quick-add?edit=true`, {
+      state: {
+        clientData: client,
+        returnState: fromState
       }
-      setEventsByDate(eventsMap);
-    }
-    
-    const { base, sub } = parseSource(client.source || '');
-    setSource(base);
-    if (base === 'WHATSAPP') setWhoseWhatsapp(sub);
-    else if (base === 'OLD CLIENT') setOldClientName(sub);
-    
-    setWhoAdded(client.whoAdded || '');
-    setClientHandler(client.clientHandler || '');
-    
-    if (client.inquiryDateAD) {
-      setInquiryDate(new Date(client.inquiryDateAD));
-    }
-    setInquiryTimeInput(client.inquiryTime || '');
-    
-    setIsEditing(true);
-  };
-
-  const handleCancel = () => {
-    setEditedClient(null);
-    setIsEditing(false);
-    resetFormState();
-  };
-
-  const resetFormState = () => {
-    setClientLocation("");
-    setCurrentCountry("");
-    setCurrentCountryCode("NP");
-    setContactNo("");
-    setWhatsappNo("");
-    setEventLocation("");
-    setEventCity("");
-    setEventFromCity("");
-    setEventToCity("");
-    setSelectedDates([]);
-    setEventsByDate({});
-    setSource("");
-    setWhoseWhatsapp("");
-    setOldClientName("");
-    setWhoAdded("");
-    setClientHandler("");
-    setInquiryDate(undefined);
-    setInquiryTimeInput("");
-    setDescriptionInput("");
-    setEmailInput("");
-    setClientNameInput("");
-  };
-
-  const handleClientLocationChange = (loc: string) => {
-    setClientLocation(loc);
-    if (loc === "INSIDE NEPAL") {
-      setCurrentCountry("Nepal");
-      setCurrentCountryCode("NP");
-    }
-  };
-
-  const handleCountryChange = (countryName: string, countryCode?: string) => {
-    setCurrentCountry(countryName);
-    setCurrentCountryCode(countryCode || getCountryCodeFromName(countryName));
-  };
-
-  const getCityOptions = () => {
-    if (eventLocation === "INSIDE VALLEY") return valleyCities;
-    if (eventLocation === "OUTSIDE VALLEY") return nepalCitiesOutsideValley;
-    return [];
-  };
-
-  const getEventCityValue = () => {
-    if (eventLocation === "INSIDE VALLEY" || eventLocation === "OUTSIDE VALLEY") {
-      return eventCity;
-    }
-    if (eventLocation === "MIXED" || eventLocation === "ABROAD") {
-      if (eventFromCity && eventToCity) {
-        return `${eventFromCity} - ${eventToCity}`;
-      }
-      return eventFromCity || eventToCity || "";
-    }
-    return "";
-  };
-
-  const getSourceValue = () => {
-    if (source === "WHATSAPP" && whoseWhatsapp) return `WHATSAPP - ${whoseWhatsapp}`;
-    if (source === "OLD CLIENT" && oldClientName) return `OLD CLIENT - ${oldClientName}`;
-    return source;
-  };
-
-  const handleSave = async () => {
-    if (!editedClient || !client) return;
-    
-    setIsSaving(true);
-    
-    try {
-      const sortedForSave = [...selectedDates].sort((a, b) => {
-        if (a.year !== b.year) return a.year - b.year;
-        if (a.month !== b.month) return a.month - b.month;
-        const dayA = a.day === "**" ? 99 : a.day;
-        const dayB = b.day === "**" ? 99 : b.day;
-        return (dayA as number) - (dayB as number);
-      });
-
-      const eventYears = sortedForSave.map(d => d.year).join("\n");
-      const eventMonths = sortedForSave.map(d => d.month).join("\n");
-      const eventDays = sortedForSave.map(d => getDayForStorage(d.day)).join("\n");
-      const eventADDates = sortedForSave.map(d => {
-        const adResult = bsToAD(d.year, d.month, d.day);
-        if (isUnknownDay(d.day)) {
-          return adResult as string;
-        }
-        return format(adResult as Date, "yyyy-MM-dd");
-      }).join("\n");
-      const eventsFormatted = sortedForSave
-        .map(d => eventsByDate[getDateKey(d)] || "")
-        .filter(Boolean)
-        .join("\n");
-
-      const countryForSheet = clientLocation === "INSIDE NEPAL" ? "Nepal" : currentCountry;
-
-      const updatedClient: ClientData = {
-        ...editedClient,
-        clientName: clientNameInput,
-        source: getSourceValue(),
-        clientLocation,
-        currentCountry: countryForSheet,
-        contactNo,
-        whatsappNo,
-        email: emailInput,
-        eventLocation,
-        eventCity: getEventCityValue(),
-        events: eventsFormatted,
-        eventYear: eventYears,
-        eventMonth: eventMonths,
-        eventDay: eventDays,
-        eventDateAD: eventADDates,
-        whoAdded,
-        clientHandler,
-        description: descriptionInput,
-        inquiryDateAD: inquiryDate ? format(inquiryDate, "yyyy-MM-dd") : editedClient.inquiryDateAD,
-        inquiryTime: inquiryTimeInput,
-      };
-
-      await updateClient(updatedClient);
-      
-      // Update cache
-      if (updateClientCache) {
-        updateClientCache(updatedClient);
-      }
-      
-      // Refetch event details so DashboardEventDetails shows updated dates
-      refetchEventDetails();
-      
-      toast({ title: "Success!", description: "Client updated successfully" });
-      
-      setIsEditing(false);
-      resetFormState();
-      
-    } catch (error) {
-      console.error("Update error:", error);
-      toast({ 
-        title: "Error", 
-        description: error instanceof Error ? error.message : "Failed to update client", 
-        variant: "destructive" 
-      });
-    } finally {
-      setIsSaving(false);
-    }
+    });
   };
 
   const handleBack = () => {
@@ -1201,216 +898,6 @@ const ClientDetail = () => {
     );
   }
 
-  // Edit Mode - Keep similar to before but with dark theme
-  if (isEditing) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-        {/* Edit Header */}
-        <div className="sticky top-0 z-50 bg-[hsl(220,25%,8%)]/90 backdrop-blur-xl border-b border-white/10 shadow-lg">
-          <div className="container mx-auto px-4 py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  onClick={handleCancel} 
-                  disabled={isSaving}
-                  className="rounded-full text-white/70 hover:text-white hover:bg-white/10"
-                >
-                  <X className="h-5 w-5" />
-                </Button>
-                <h1 className="text-lg font-bold text-white">Edit Client</h1>
-              </div>
-              <Button 
-                size="icon" 
-                onClick={handleSave} 
-                disabled={isSaving}
-                className="rounded-full bg-emerald-500 hover:bg-emerald-600 shadow-lg"
-              >
-                {isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* Edit Form */}
-        <div className="container mx-auto px-4 py-6 space-y-4 pb-20">
-          {/* Client Basic Details */}
-          <FormSection title="Client Basic Details">
-            <FormInput 
-              label="Client Name" 
-              value={clientNameInput} 
-              onChange={setClientNameInput} 
-              placeholder="Enter client name" 
-            />
-            <FormSelect 
-              label="Source" 
-              value={source} 
-              onChange={setSource} 
-              options={dropdowns?.sources || []} 
-              placeholder="How did they find us?" 
-            />
-            {source === "WHATSAPP" && (
-              <FormSelect 
-                label="Whose WhatsApp?" 
-                value={whoseWhatsapp} 
-                onChange={setWhoseWhatsapp} 
-                options={dropdowns?.whatsappOwners || []} 
-              />
-            )}
-            {source === "OLD CLIENT" && (
-              <FormInput 
-                label="Old Client Name" 
-                value={oldClientName} 
-                onChange={setOldClientName} 
-                placeholder="Enter old client name" 
-              />
-            )}
-            <FormSelect 
-              label="Added By" 
-              value={whoAdded} 
-              onChange={setWhoAdded} 
-              options={dropdowns?.whatsappOwners || []} 
-              placeholder="Who added this client?" 
-            />
-            <FormSelect 
-              label="Handler" 
-              value={clientHandler} 
-              onChange={setClientHandler} 
-              options={dropdowns?.whatsappOwners || []} 
-              placeholder="Who is handling this client?" 
-            />
-          </FormSection>
-
-          {/* Location & Contact */}
-          <FormSection title="Location & Contact">
-            <FormSelect 
-              label="Client Current Location" 
-              value={clientLocation} 
-              onChange={handleClientLocationChange} 
-              options={clientLocationOptions}
-              placeholder="Where is the client currently?"
-            />
-            {clientLocation === "OUTSIDE NEPAL" && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Client Current Country</label>
-                <CountrySelector 
-                  value={currentCountry} 
-                  onChange={handleCountryChange}
-                  showAllCountries={true}
-                  placeholder="Select country..."
-                />
-              </div>
-            )}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Contact Number</label>
-              <PhoneInputField value={contactNo} onChange={setContactNo} defaultCountry="NP" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">WhatsApp Number</label>
-              <PhoneInputField 
-                value={whatsappNo} 
-                onChange={setWhatsappNo} 
-                defaultCountry={clientLocation === "OUTSIDE NEPAL" ? currentCountryCode : "NP"} 
-              />
-            </div>
-            <FormInput 
-              label="Email" 
-              value={emailInput} 
-              onChange={setEmailInput} 
-              placeholder="client@email.com" 
-            />
-          </FormSection>
-
-          {/* Event Location */}
-          <FormSection title="Event Location">
-            <FormSelect 
-              label="Event Location" 
-              value={eventLocation} 
-              onChange={(val) => {
-                setEventLocation(val);
-                setEventCity("");
-                setEventFromCity("");
-                setEventToCity("");
-              }} 
-              options={dropdowns?.eventLocations || []}
-              placeholder="Select location type"
-            />
-            {(eventLocation === "INSIDE VALLEY" || eventLocation === "OUTSIDE VALLEY") && (
-              <FormSelect 
-                label="Event City" 
-                value={eventCity} 
-                onChange={setEventCity} 
-                options={getCityOptions()}
-                placeholder="Select city"
-              />
-            )}
-            {(eventLocation === "MIXED" || eventLocation === "ABROAD") && (
-              <div className="grid grid-cols-2 gap-3">
-                <FormInput 
-                  label="From City" 
-                  value={eventFromCity} 
-                  onChange={setEventFromCity} 
-                  placeholder="e.g. Kathmandu" 
-                />
-                <FormInput 
-                  label="To City" 
-                  value={eventToCity} 
-                  onChange={setEventToCity} 
-                  placeholder="e.g. Pokhara" 
-                />
-              </div>
-            )}
-          </FormSection>
-
-          {/* Events & Dates */}
-          <FormSection title="Events & Dates">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Select Event Dates (BS Calendar)</label>
-              <NepaliCalendar
-                selectedDates={selectedDates}
-                onDateSelect={setSelectedDates}
-              />
-            </div>
-            
-            {sortedDates.length > 0 && (
-              <div className="space-y-3 mt-4">
-                {sortedDates.map((date) => {
-                  const key = getDateKey(date);
-                  return (
-                    <EventSelector
-                      key={key}
-                      date={date}
-                      selectedEvent={eventsByDate[key] || ""}
-                      onEventChange={(event) => handleEventChange(date, event)}
-                      eventOptions={allEventOptions}
-                      onRemoveDate={() => handleRemoveDate(date)}
-                    />
-                  );
-                })}
-              </div>
-            )}
-          </FormSection>
-
-          {/* Inquiry Details */}
-          <FormSection title="Inquiry Details">
-            <FormInput 
-              label="Description" 
-              value={descriptionInput} 
-              onChange={setDescriptionInput} 
-              placeholder="Any details about the inquiry..." 
-            />
-            <FormInput 
-              label="Inquiry Time" 
-              value={inquiryTimeInput} 
-              onChange={setInquiryTimeInput} 
-              placeholder="e.g. 10:30 AM" 
-            />
-          </FormSection>
-        </div>
-      </div>
-    );
-  }
 
   // View Mode - Netflix Style Layout
   return (
