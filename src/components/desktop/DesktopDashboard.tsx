@@ -382,10 +382,10 @@ export function DesktopDashboard({
 
   // Unified Calendar Data - All days with open/booked status, event counts, and ADVANCE PENDING counts
   const calendarData = useMemo(() => {
-    // Build TWO maps: one for booked, one for advance pending + client details
     const bookedMap = new Map<string, number>();
     const advancePendingMap = new Map<string, number>();
     const clientDetailsMap = new Map<string, CalendarClientInfo[]>();
+    const unknownDayMap = new Map<string, CalendarClientInfo[]>();
     
     statsClients.forEach(client => {
       const status = getCurrentStatus(client.statusLog || '').toUpperCase();
@@ -398,15 +398,37 @@ export function DesktopDashboard({
       );
       
       events.forEach(event => {
-        if (event.year && event.month && event.day && event.day !== '**') {
+        if (!event.year || !event.month) return;
+        const isUnknownDay = !event.day || event.day === '**' || String(event.day).startsWith('**');
+        const isBooked = status.includes('BOOKED') && !status.includes('BOOKED SOMEWHERE ELSE');
+        const isAdvancePending = status.includes('ADVANCE PENDING');
+
+        if (isUnknownDay) {
+          if (isBooked || isAdvancePending) {
+            const monthKey = `${event.year}-${event.month}`;
+            if (!unknownDayMap.has(monthKey)) unknownDayMap.set(monthKey, []);
+            const clientEventDetails = client.registeredDateTimeAD ? eventDetailsMap[client.registeredDateTimeAD] : undefined;
+            const matchingDetail = clientEventDetails?.find(d => d.eventName === event.eventName);
+            unknownDayMap.get(monthKey)!.push({
+              clientName: client.clientName || 'Unknown',
+              eventName: event.eventName || 'Event',
+              registeredDateTimeAD: client.registeredDateTimeAD,
+              originalRowNumber: client.rowNumber,
+              contactNo: client.contactNo,
+              whatsappNo: client.whatsappNo,
+              eventLocation: client.eventLocation,
+              eventCity: client.eventCity,
+              venueName: matchingDetail?.venueName || '',
+              venueArea: matchingDetail?.venueArea || '',
+            });
+          }
+        } else {
           const dateKey = `${event.year}-${event.month}-${event.day}`;
           
-          if (status.includes('BOOKED') && !status.includes('BOOKED SOMEWHERE ELSE')) {
+          if (isBooked) {
             bookedMap.set(dateKey, (bookedMap.get(dateKey) || 0) + 1);
             
             if (!clientDetailsMap.has(dateKey)) clientDetailsMap.set(dateKey, []);
-            
-            // Try to get venue data from bulk event details
             const clientEventDetails = client.registeredDateTimeAD ? eventDetailsMap[client.registeredDateTimeAD] : undefined;
             const matchingDetail = clientEventDetails?.find(d => d.eventName === event.eventName);
             
@@ -422,7 +444,7 @@ export function DesktopDashboard({
               venueName: matchingDetail?.venueName || '',
               venueArea: matchingDetail?.venueArea || '',
             });
-          } else if (status.includes('ADVANCE PENDING')) {
+          } else if (isAdvancePending) {
             advancePendingMap.set(dateKey, (advancePendingMap.get(dateKey) || 0) + 1);
           }
         }
@@ -444,6 +466,7 @@ export function DesktopDashboard({
       monthName: string; 
       days: { day: number; isBooked: boolean; eventCount: number; advancePendingCount: number; clients: CalendarClientInfo[] }[];
       bookedCount: number;
+      unknownDayClients: CalendarClientInfo[];
     }[] = [];
     
     for (let i = 0; i < 12; i++) {
@@ -464,7 +487,8 @@ export function DesktopDashboard({
         days.push({ day, isBooked, eventCount, advancePendingCount, clients: clientDetailsMap.get(dateKey) || [] });
       }
       
-      result.push({ month: monthNum, year: yearNum, monthName, days, bookedCount });
+      const monthKey = `${yearNum}-${monthNum}`;
+      result.push({ month: monthNum, year: yearNum, monthName, days, bookedCount, unknownDayClients: unknownDayMap.get(monthKey) || [] });
     }
     
     return result;
@@ -756,6 +780,18 @@ export function DesktopDashboard({
                           );
                         }
                       })}
+                      
+                      {/* Unknown day (**) events */}
+                      {monthData.unknownDayClients.length > 0 && (
+                        <div className="relative ml-1">
+                          <span 
+                            className="w-5 h-5 rounded-full bg-orange-500 text-white flex items-center justify-center text-[8px] font-bold cursor-default"
+                            title={`${monthData.unknownDayClients.length} events with unknown date: ${monthData.unknownDayClients.map(c => c.clientName).join(', ')}`}
+                          >
+                            **
+                          </span>
+                        </div>
+                      )}
                     </div>
                     
                     {/* Booked Count Badge */}
