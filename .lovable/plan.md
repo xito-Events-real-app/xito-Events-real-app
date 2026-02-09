@@ -1,46 +1,53 @@
 
 
-## Remove Old Edit Form from Client Detail Page
+## Add "LOST" Category to Fresh Clients
 
-### What Changes
+### What It Does
 
-When you tap the "Edit" (pencil) button on a client's detail page, instead of opening the old inline form, it will navigate to the **Quick Add** page pre-filled with the client's existing data. This makes Quick Add the single universal form for both adding new clients and editing existing ones.
+A new automatic "LOST" category will appear at the end of the status swipe pages. It captures clients who are still in early pipeline stages (JUST ENQUIRED through ADVANCE PENDING) but have at least one event date that has already passed -- meaning they were likely forgotten and the opportunity is gone.
 
-### How It Works
+### Logic
 
-```text
-Current Flow:
-  Client Detail -> Click Edit -> Old inline form opens (duplicate code)
+A client is considered "LOST" when:
+- Their current status is one of: JUST ENQUIRED, NUMBER PROVIDED, TEXTED : NOT CALLED, CALL NOT RECEIVED, CALLED : QUOTATION PENDING, QUOTATION SENT : REVIEW PENDING, BARGAINING IS ON, or ADVANCE PENDING
+- At least one of their event dates (Year/Month/Day from Columns M/N/O) has passed compared to today's Nepali date
+- Dates with unknown day ("**") are skipped (not counted as past)
 
-New Flow:
-  Client Detail -> Click Edit -> Navigates to /client-tracker/quick-add?edit=true
-                                 with client data passed via navigation state
-                                 -> Same QuickAdd form, pre-filled with existing data
-                                 -> On save, updates client and navigates back
+Clients in BOOKED, POSTPONED, CANCELLED, or BOOKED SOMEWHERE ELSE are never classified as LOST.
+
+### Technical Changes
+
+**File: `src/pages/FreshClients.tsx`**
+
+1. Import `isBSDatePast` from `@/lib/nepali-date.ts`
+
+2. Update the `clientsByStatus` grouping logic (lines 66-81):
+   - Before assigning a client to their normal status group, check if they qualify as "LOST"
+   - If their normalized status is between JUST ENQUIRED and ADVANCE PENDING, parse `eventYear`, `eventMonth`, `eventDay` (split by newline) and check each date with `isBSDatePast()`
+   - If at least one known date has passed, place them in a "LOST" group instead of their normal status group
+
+3. Update `activeStatuses` ordering (lines 84-113):
+   - Add "LOST" as the last category in the ordered list (after all standard statuses)
+
+4. Update `getStatusColor` (lines 132-146):
+   - Add a color for LOST: `bg-rose-700 text-white` (a dark red to signal urgency/loss)
+
+**No other files need to change.** The existing `FreshClientCard` component will render these clients normally within the LOST category page.
+
+### Example
+
+```
+RAMESH PATHAK
+  Status: JUST ENQUIRED
+  Events: Magh 21, Magh 22, Magh 29
+  Today: Falgun 5
+
+  --> Magh 21, 22, 29 are ALL past --> Goes to LOST
 ```
 
-### Technical Details
-
-**1. QuickAdd.tsx - Add Edit Mode Support**
-- Detect edit mode via URL search param (`?edit=true`) and navigation state containing the client data
-- Pre-fill all form fields from the passed client data (same logic currently in `handleEdit` in ClientDetail.tsx)
-- Change the submit handler: if editing, call `updateClient()` instead of `addClient()`
-- Change page title to "Edit Client" when in edit mode
-- After successful save, navigate back to the client detail page
-- Trigger `refetchEventDetails` via cache invalidation events after save
-
-**2. ClientDetail.tsx - Remove Inline Edit Form**
-- Remove ~25 edit-related state variables (lines 142-168): `isEditing`, `isSaving`, `editedClient`, `clientLocation`, `currentCountry`, `contactNo`, `whatsappNo`, `eventLocation`, `eventCity`, `selectedDates`, `eventsByDate`, `source`, `whoAdded`, `clientHandler`, `inquiryDate`, `descriptionInput`, `emailInput`, `clientNameInput`, etc.
-- Remove helper functions: `handleEdit`, `handleCancel`, `handleSave`, `resetFormState`, `parseSource`, `parseEventCity`, `getEventCityValue`, `getSourceValue`, `parseExistingDates`, `getDateKey`, `handleClientLocationChange`, `handleCountryChange`, `getCityOptions`
-- Remove the entire inline edit form render block (lines 1204-1413)
-- Replace `handleEdit` with a simple navigation: navigate to `/client-tracker/quick-add?edit=true` passing the client data in state
-- Remove unused imports that were only needed for the edit form (FormSection, FormInput, FormSelect, CountrySelector, NepaliCalendar, EventSelector, PhoneInputField, etc.)
-
-**3. Files Changed**
+### Files Summary
 
 | File | Change |
 |------|--------|
-| `src/pages/QuickAdd.tsx` | Add edit mode: detect edit state, pre-fill form, call updateClient on save, navigate back |
-| `src/pages/ClientDetail.tsx` | Remove inline edit form, edit state variables, and helper functions. Replace edit button with navigation to QuickAdd |
+| `src/pages/FreshClients.tsx` | Add LOST grouping logic, color, and category ordering |
 
-This removes hundreds of lines of duplicated code from ClientDetail.tsx and establishes QuickAdd as the single source of truth for client form editing.
