@@ -68,6 +68,8 @@ const getStatusConfig = (status: string) => {
   if (s.includes('CANCELLED')) return { icon: XCircle, color: 'bg-red-500', textColor: 'text-red-500', label: 'Cancelled' };
   if (s.includes('POSTPONED')) return { icon: CalendarX, color: 'bg-slate-500', textColor: 'text-slate-500', label: 'Postponed' };
   if (s === 'LOST') return { icon: XCircle, color: 'bg-rose-700', textColor: 'text-rose-700', label: 'Lost' };
+  if (s === 'ALMOST LOST') return { icon: Clock, color: 'bg-amber-600', textColor: 'text-amber-600', label: 'Almost Lost' };
+  if (s === 'COLD DATES') return { icon: Eye, color: 'bg-cyan-600', textColor: 'text-cyan-600', label: 'Cold Dates' };
   return { icon: Users, color: 'bg-gray-500', textColor: 'text-gray-500', label: status };
 };
 
