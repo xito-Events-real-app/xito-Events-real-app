@@ -7,6 +7,7 @@ import { Loader2, AlertTriangle, RefreshCw, ChevronLeft, ChevronRight } from "lu
 
 import { ClientData, getCurrentStatus } from "@/lib/sheets-api";
 import { normalizeStatus } from "@/lib/status-config";
+import { isBSDatePast } from "@/lib/nepali-date";
 import { FreshClientCard } from "@/components/dashboard/FreshClientCard";
 import { ClientDetailSheet } from "@/components/dashboard/ClientDetailSheet";
 import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
@@ -62,19 +63,45 @@ export default function FreshClients() {
   const paymentTypes = dropdowns?.paymentTypes || [];
   const banks = dropdowns?.banks || [];
 
-  // Group clients by their current status (normalized)
+  // Early pipeline statuses eligible for LOST classification
+  const EARLY_PIPELINE = [
+    'JUST ENQUIRED', 'NUMBER PROVIDED', 'TEXTED : NOT CALLED',
+    'CALL NOT RECEIVED', 'CALLED : QUOTATION PENDING',
+    'QUOTATION SENT : REVIEW PENDING', 'BARGAINING IS ON', 'ADVANCE PENDING'
+  ];
+
+  // Check if a client has at least one past event date
+  const hasAnyPastEventDate = (client: ClientData): boolean => {
+    const years = (client.eventYear || '').split('\n');
+    const months = (client.eventMonth || '').split('\n');
+    const days = (client.eventDay || '').split('\n');
+    const maxLen = Math.max(years.length, months.length, days.length);
+    for (let i = 0; i < maxLen; i++) {
+      const y = (years[i] || '').trim();
+      const m = (months[i] || '').trim();
+      const d = (days[i] || '').trim();
+      if (!y || !m || !d || d.includes('*')) continue;
+      if (isBSDatePast(y, m, d)) return true;
+    }
+    return false;
+  };
+
+  // Group clients by their current status (normalized), with LOST override
   const clientsByStatus = useMemo(() => {
     const grouped: Record<string, ClientData[]> = {};
     
     localClients.forEach(client => {
       const rawStatus = getCurrentStatus(client.statusLog || '');
       const status = normalizeStatus(rawStatus);
-      if (status !== 'UNTOUCHED') {
-        if (!grouped[status]) {
-          grouped[status] = [];
-        }
-        grouped[status].push(client);
-      }
+      if (status === 'UNTOUCHED') return;
+
+      // Check if client qualifies as LOST
+      const assignedStatus = EARLY_PIPELINE.includes(status) && hasAnyPastEventDate(client)
+        ? 'LOST'
+        : status;
+
+      if (!grouped[assignedStatus]) grouped[assignedStatus] = [];
+      grouped[assignedStatus].push(client);
     });
 
     return grouped;
@@ -100,14 +127,20 @@ export default function FreshClients() {
       }
     });
     
-    // Add any remaining statuses not in options (excluding UNTOUCHED and JUST ENQUIRED)
+    // Add any remaining statuses not in options (excluding UNTOUCHED, JUST ENQUIRED, LOST)
     statusesWithClients.forEach(status => {
       if (!orderedStatuses.includes(status) && 
           status.toUpperCase() !== 'UNTOUCHED' && 
-          status.toUpperCase() !== 'JUST ENQUIRED') {
+          status.toUpperCase() !== 'JUST ENQUIRED' &&
+          status !== 'LOST') {
         orderedStatuses.push(status);
       }
     });
+
+    // LOST always comes last
+    if (statusesWithClients.includes('LOST')) {
+      orderedStatuses.push('LOST');
+    }
 
     return orderedStatuses;
   }, [clientsByStatus, statusOptions]);
@@ -142,6 +175,7 @@ export default function FreshClients() {
     if (s.includes('BOOKED')) return 'bg-green-500 text-white';
     if (s.includes('CANCELLED')) return 'bg-red-500 text-white';
     if (s.includes('POSTPONED')) return 'bg-slate-500 text-white';
+    if (s === 'LOST') return 'bg-rose-700 text-white';
     return 'bg-muted text-foreground';
   };
 
