@@ -1,62 +1,46 @@
 
 
-## Fix: Event Date Changes Not Reflecting on Client Detail Page
+## Remove Old Edit Form from Client Detail Page
 
-### Root Cause
+### What Changes
 
-When you edit event dates for a booked client, the save updates the CLIENT TRACKER / BOOKED CLIENTS sheet and the local cache. However, the Client Detail dashboard uses **two data sources**:
+When you tap the "Edit" (pencil) button on a client's detail page, instead of opening the old inline form, it will navigate to the **Quick Add** page pre-filled with the client's existing data. This makes Quick Add the single universal form for both adding new clients and editing existing ones.
 
-1. **BOOKED CLIENTS EVENT DETAILS sheet** (via `useEventDetails` hook) -- contains event dates + logistics
-2. **Client cache** (via `useCachedData`) -- fallback only
+### How It Works
 
-The `DashboardEventDetails` component **always prioritizes** the Event Details sheet data when available. After editing dates, the Event Details sheet still has the OLD dates because it was never updated or re-fetched with the new values.
+```text
+Current Flow:
+  Client Detail -> Click Edit -> Old inline form opens (duplicate code)
 
-### The Fix
-
-After saving edited event dates in `ClientDetail.tsx` `handleSave`, we need to:
-
-1. **Refetch event details** from the BOOKED CLIENTS EVENT DETAILS sheet so `DashboardEventDetails` picks up the updated dates
-2. **Dispatch cache invalidation events** so other modules (booking calendar, booked clients) also refresh
-
-### Technical Changes
-
-**File: `src/pages/ClientDetail.tsx`**
-
-In the `handleSave` function (around line 589-599), after `updateClient(updatedClient)` succeeds and `updateClientCache` is called:
-
-- Add a call to the `useEventDetails` hook's `refetch` function to re-fetch event details from the sheet
-- The `refetch` is already available as the hook returns it (line 162 of useEventDetails.ts), but it's not destructured in ClientDetail.tsx -- we need to add it
-
-Current code (line 319-323):
-```
-const { 
-    data: eventDetailsData, 
-    isLoading: eventDetailsLoading, 
-    updateEventDetail 
-} = useEventDetails(client?.registeredDateTimeAD);
+New Flow:
+  Client Detail -> Click Edit -> Navigates to /client-tracker/quick-add?edit=true
+                                 with client data passed via navigation state
+                                 -> Same QuickAdd form, pre-filled with existing data
+                                 -> On save, updates client and navigates back
 ```
 
-Change to also destructure `refetch`:
-```
-const { 
-    data: eventDetailsData, 
-    isLoading: eventDetailsLoading, 
-    updateEventDetail,
-    refetch: refetchEventDetails
-} = useEventDetails(client?.registeredDateTimeAD);
-```
+### Technical Details
 
-Then in `handleSave`, after the cache update (after line 594), add:
-```
-// Refetch event details so DashboardEventDetails shows updated dates
-refetchEventDetails();
-```
+**1. QuickAdd.tsx - Add Edit Mode Support**
+- Detect edit mode via URL search param (`?edit=true`) and navigation state containing the client data
+- Pre-fill all form fields from the passed client data (same logic currently in `handleEdit` in ClientDetail.tsx)
+- Change the submit handler: if editing, call `updateClient()` instead of `addClient()`
+- Change page title to "Edit Client" when in edit mode
+- After successful save, navigate back to the client detail page
+- Trigger `refetchEventDetails` via cache invalidation events after save
 
-This single change ensures that after saving edited dates, the Event Details sheet data is re-fetched and the dashboard displays the correct dates immediately.
+**2. ClientDetail.tsx - Remove Inline Edit Form**
+- Remove ~25 edit-related state variables (lines 142-168): `isEditing`, `isSaving`, `editedClient`, `clientLocation`, `currentCountry`, `contactNo`, `whatsappNo`, `eventLocation`, `eventCity`, `selectedDates`, `eventsByDate`, `source`, `whoAdded`, `clientHandler`, `inquiryDate`, `descriptionInput`, `emailInput`, `clientNameInput`, etc.
+- Remove helper functions: `handleEdit`, `handleCancel`, `handleSave`, `resetFormState`, `parseSource`, `parseEventCity`, `getEventCityValue`, `getSourceValue`, `parseExistingDates`, `getDateKey`, `handleClientLocationChange`, `handleCountryChange`, `getCityOptions`
+- Remove the entire inline edit form render block (lines 1204-1413)
+- Replace `handleEdit` with a simple navigation: navigate to `/client-tracker/quick-add?edit=true` passing the client data in state
+- Remove unused imports that were only needed for the edit form (FormSection, FormInput, FormSelect, CountrySelector, NepaliCalendar, EventSelector, PhoneInputField, etc.)
 
-### Files Summary
+**3. Files Changed**
 
 | File | Change |
 |------|--------|
-| `src/pages/ClientDetail.tsx` | Destructure `refetch` from `useEventDetails`, call it after save completes |
+| `src/pages/QuickAdd.tsx` | Add edit mode: detect edit state, pre-fill form, call updateClient on save, navigate back |
+| `src/pages/ClientDetail.tsx` | Remove inline edit form, edit state variables, and helper functions. Replace edit button with navigation to QuickAdd |
 
+This removes hundreds of lines of duplicated code from ClientDetail.tsx and establishes QuickAdd as the single source of truth for client form editing.
