@@ -11,6 +11,8 @@ import {
   XCircle,
   CalendarX,
   UserX,
+  AlertTriangle,
+  Snowflake,
 } from "lucide-react";
 
 export interface StatusConfig {
@@ -59,6 +61,10 @@ export const getStatusConfig = (status: string): StatusConfig => {
   if (s.includes('CANCELLED BY CLIENT')) return { icon: XCircle, color: 'bg-red-500', textColor: 'text-red-500', label: 'Cancelled by Client' };
   if (s.includes('CANCELLED BY US')) return { icon: XCircle, color: 'bg-red-700', textColor: 'text-red-700', label: 'Cancelled by Us' };
   if (s.includes('CANCELLED')) return { icon: XCircle, color: 'bg-red-500', textColor: 'text-red-500', label: 'Cancelled' };
+  
+  if (s === 'LOST') return { icon: XCircle, color: 'bg-rose-700', textColor: 'text-rose-700', label: 'Lost' };
+  if (s === 'ALMOST LOST') return { icon: AlertTriangle, color: 'bg-amber-600', textColor: 'text-amber-600', label: 'Almost Lost' };
+  if (s === 'COLD DATES') return { icon: Snowflake, color: 'bg-cyan-600', textColor: 'text-cyan-600', label: 'Cold Dates' };
   
   return { icon: Users, color: 'bg-gray-500', textColor: 'text-gray-500', label: status };
 };

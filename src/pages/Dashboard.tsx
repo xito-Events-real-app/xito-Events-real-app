@@ -27,10 +27,12 @@ import { getDeviceHandler, saveDeviceHandler, isDeviceHandlerValid } from "@/lib
 import { toast } from "sonner";
 import { getDesktopMode } from "@/hooks/useDesktopMode";
 import { DesktopAppLayout, DesktopDashboard } from "@/components/desktop";
-import { getStatusConfig, sortCategoriesByOrder } from "@/lib/status-config";
+import { getStatusConfig, sortCategoriesByOrder, normalizeStatus } from "@/lib/status-config";
 import { parseEventDetails } from "@/lib/nepali-months";
 import { isBSDatePast } from "@/lib/nepali-date";
 import { getClientDetailPath } from "@/lib/client-navigation";
+import { isAlmostLost, getColdDatesClients, EARLY_PIPELINE, hasAnyPastEventDate } from "@/lib/fresh-client-utils";
+import { Separator } from "@/components/ui/separator";
 
 // Handler avatar colors
 const handlerColors = [
@@ -178,6 +180,34 @@ export default function Dashboard() {
     // Sort by canonical order
     return sortCategoriesByOrder(stats);
   }, [statusOptions, statusCounts]);
+
+  // Special categories: ALMOST LOST, COLD DATES, LOST
+  const specialCategories = useMemo(() => {
+    const specials: { status: string; count: number; config: ReturnType<typeof getStatusConfig> }[] = [];
+    
+    // ALMOST LOST
+    const almostLostClients = clients.filter(c => isAlmostLost(c));
+    if (almostLostClients.length > 0) {
+      specials.push({ status: 'ALMOST LOST', count: almostLostClients.length, config: getStatusConfig('ALMOST LOST') });
+    }
+
+    // COLD DATES
+    const coldClients = getColdDatesClients(clients);
+    if (coldClients.length > 0) {
+      specials.push({ status: 'COLD DATES', count: coldClients.length, config: getStatusConfig('COLD DATES') });
+    }
+
+    // LOST
+    const lostClients = clients.filter(c => {
+      const status = normalizeStatus(getCurrentStatus(c.statusLog || ''));
+      return EARLY_PIPELINE.includes(status) && hasAnyPastEventDate(c);
+    });
+    if (lostClients.length > 0) {
+      specials.push({ status: 'LOST', count: lostClients.length, config: getStatusConfig('LOST') });
+    }
+
+    return specials;
+  }, [clients]);
 
   const basicStats = [
     { label: "Total", value: totalClients, icon: Users, color: "gradient-primary" },
@@ -1278,6 +1308,60 @@ export default function Dashboard() {
                   );
                 })}
               </div>
+
+              {/* Special Categories: Almost Lost, Cold Dates, Lost */}
+              {specialCategories.length > 0 && (
+                <>
+                  <Separator className="my-3" />
+                  <div className={cn(
+                    "grid gap-2",
+                    isDesktopMode ? "grid-cols-4" : "grid-cols-2"
+                  )}>
+                    {specialCategories.map(({ status, count, config }) => {
+                      const Icon = config.icon;
+                      return (
+                        <Card 
+                          key={status} 
+                          className="shadow-soft border-0 cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
+                          onClick={() => handleCategoryClick(status)}
+                        >
+                          <CardContent className={cn(
+                            isDesktopMode ? "p-4" : "p-3"
+                          )}>
+                            <div className="flex items-center gap-2">
+                              <div className={cn(
+                                "rounded-lg flex items-center justify-center shrink-0",
+                                config.color,
+                                isDesktopMode ? "w-12 h-12" : "w-9 h-9"
+                              )}>
+                                <Icon className={cn(
+                                  "text-white",
+                                  isDesktopMode ? "w-6 h-6" : "w-4 h-4"
+                                )} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className={cn(
+                                  "font-bold text-foreground",
+                                  isDesktopMode ? "text-xl" : "text-lg"
+                                )}>
+                                  {isLoading ? "—" : count}
+                                </p>
+                                <p className={cn(
+                                  "text-muted-foreground truncate leading-tight",
+                                  isDesktopMode ? "text-sm" : "text-[10px]"
+                                )}>
+                                  {config.label}
+                                </p>
+                              </div>
+                              <ChevronRight className="w-4 h-4 text-muted-foreground/50" />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           )}
 

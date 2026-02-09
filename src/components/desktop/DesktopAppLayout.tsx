@@ -7,6 +7,7 @@ import { useCachedData } from "@/hooks/useCachedData";
 import { getCurrentStatus } from "@/lib/sheets-api";
 import { cn } from "@/lib/utils";
 import { getStatusConfig, sortCategoriesByOrder, normalizeStatus } from "@/lib/status-config";
+import { isAlmostLost, getColdDatesClients, EARLY_PIPELINE, hasAnyPastEventDate } from "@/lib/fresh-client-utils";
 
 interface DesktopAppLayoutProps {
   children: ReactNode;
@@ -82,18 +83,49 @@ export function DesktopAppLayout({
     return sortCategoriesByOrder(categoryList);
   }, [clients]);
 
+  // Special categories: ALMOST LOST, COLD DATES, LOST
+  const specialCategories = useMemo(() => {
+    const specials: { status: string; count: number; config: ReturnType<typeof getStatusConfig> }[] = [];
+    const almostLost = clients.filter(c => isAlmostLost(c));
+    if (almostLost.length > 0) specials.push({ status: 'ALMOST LOST', count: almostLost.length, config: getStatusConfig('ALMOST LOST') });
+    const cold = getColdDatesClients(clients);
+    if (cold.length > 0) specials.push({ status: 'COLD DATES', count: cold.length, config: getStatusConfig('COLD DATES') });
+    const lost = clients.filter(c => {
+      const s = normalizeStatus(getCurrentStatus(c.statusLog || ''));
+      return EARLY_PIPELINE.includes(s) && hasAnyPastEventDate(c);
+    });
+    if (lost.length > 0) specials.push({ status: 'LOST', count: lost.length, config: getStatusConfig('LOST') });
+    return specials;
+  }, [clients]);
+
   // Filtered clients based on all filters
   const filteredClients = useMemo(() => {
+    // Special handling for COLD DATES - use dedicated function
+    if (selectedCategory === 'COLD DATES') {
+      let result = getColdDatesClients(clients);
+      if (selectedHandler) {
+        result = result.filter(c => (c.clientHandler || c.whoAdded || '') === selectedHandler);
+      }
+      return result;
+    }
+
     return clients.filter(client => {
       // Handler filter
       if (selectedHandler) {
         const handler = client.clientHandler || client.whoAdded || '';
         if (handler !== selectedHandler) return false;
       }
-      // Category filter - normalize both sides for matching
+      // Category filter - handle special categories
       if (selectedCategory) {
-        const status = normalizeStatus(getCurrentStatus(client.statusLog || '').toUpperCase());
-        if (status !== selectedCategory) return false;
+        if (selectedCategory === 'ALMOST LOST') {
+          if (!isAlmostLost(client)) return false;
+        } else if (selectedCategory === 'LOST') {
+          const s = normalizeStatus(getCurrentStatus(client.statusLog || ''));
+          if (!EARLY_PIPELINE.includes(s) || !hasAnyPastEventDate(client)) return false;
+        } else {
+          const status = normalizeStatus(getCurrentStatus(client.statusLog || '').toUpperCase());
+          if (status !== selectedCategory) return false;
+        }
       }
       // Date filters (BS dates from event columns)
       if (selectedYear) {
@@ -108,14 +140,13 @@ export function DesktopAppLayout({
         const days = (client.eventDay || '').split('\n').filter(Boolean);
         if (!days.some(d => parseInt(d) === selectedDay)) return false;
       }
-      // Hot date filter - matches clients with events on specific Year-Month-Day
+      // Hot date filter
       if (selectedHotDate) {
         const [hYear, hMonth, hDay] = selectedHotDate.split('-').map(Number);
         const years = (client.eventYear || '').split('\n').filter(Boolean);
         const months = (client.eventMonth || '').split('\n').filter(Boolean);
         const days = (client.eventDay || '').split('\n').filter(Boolean);
         
-        // Check if any event matches the hot date
         let hasMatch = false;
         for (let i = 0; i < Math.max(years.length, months.length, days.length); i++) {
           const y = parseInt(years[i]) || 0;
@@ -201,6 +232,7 @@ export function DesktopAppLayout({
       {/* Sidebar - Categories Only */}
       <DesktopSidebar
         categories={categories}
+        specialCategories={specialCategories}
         selectedCategory={selectedCategory}
         onCategoryFilter={setSelectedCategory}
         totalClients={totalClients}
