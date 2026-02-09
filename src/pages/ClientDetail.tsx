@@ -319,7 +319,8 @@ const ClientDetail = () => {
   const { 
     data: eventDetailsData, 
     isLoading: eventDetailsLoading, 
-    updateEventDetail 
+    updateEventDetail,
+    refetch: refetchEventDetails
   } = useEventDetails(client?.registeredDateTimeAD);
 
   // Fetch client contact details
@@ -592,6 +593,9 @@ const ClientDetail = () => {
       if (updateClientCache) {
         updateClientCache(updatedClient);
       }
+      
+      // Refetch event details so DashboardEventDetails shows updated dates
+      refetchEventDetails();
       
       toast({ title: "Success!", description: "Client updated successfully" });
       
