@@ -2484,6 +2484,15 @@ async function updateClient(accessToken: string, spreadsheetId: string, clientDa
       
       if (bookedResponse.ok) {
         console.log(`[updateClient] Synced to BOOKED CLIENTS row ${bookedRowNumber}`);
+        
+        // Also sync event dates to BOOKED CLIENTS EVENT DETAILS sheet
+        try {
+          await syncToEventDetails(accessToken, spreadsheetId, registeredDateTimeAD);
+          console.log(`[updateClient] Synced event dates to EVENT DETAILS`);
+        } catch (eventSyncErr) {
+          console.error(`[updateClient] Failed to sync to EVENT DETAILS:`, eventSyncErr);
+          // Non-fatal: don't block the main update
+        }
       } else {
         console.error(`[updateClient] Failed to sync to BOOKED CLIENTS:`, await bookedResponse.text());
       }
