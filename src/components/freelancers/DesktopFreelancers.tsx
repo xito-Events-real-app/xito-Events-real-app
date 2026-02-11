@@ -13,7 +13,7 @@ import { AddFreelancerDrawer } from "./AddFreelancerDrawer";
 import { FreelancerDetailSheet } from "./FreelancerDetailSheet";
 import { useToast } from "@/hooks/use-toast";
 
-const MAIN_JOBS = ['Photographer', 'Videographer', 'Video Editor', 'Photo Editor', 'Drone Operator', 'FPV Operator'];
+const MAIN_JOBS = ['Photographer', 'Videographer', 'Video Editor', 'Photo Editor', 'Hybrid Shooter', 'Hybrid Editor', 'Drone Operator', 'FPV Operator'];
 
 export function DesktopFreelancers() {
   const navigate = useNavigate();
