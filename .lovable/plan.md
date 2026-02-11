@@ -1,85 +1,45 @@
 
-# Fix Freelancer Assignments: Single-Row Storage + Bulk Sync + Sync Button
+# Show Assigned Freelancers on Dashboard Event Details
 
-## Overview
+## What Changes
 
-Three changes:
-1. **Rewrite backend to single-row storage** -- one row per client in "BOOKED CLIENTS FREELANCERS", with newline-separated freelancer values matching each event line (same philosophy as "BOOKED CLIENTS EVENT DETAILS")
-2. **Add `fullSyncFreelancerAssignments` backend action** -- bulk-populates ALL booked clients into the freelancers sheet (same pattern as `fullSyncEventDetails`)
-3. **Add "Sync Freelancers" button** to the Booked Dashboard header
+Add a **third column** to the Event Details section on the Client Dashboard that shows which freelancers are assigned for each event. This will display compact role-name pairs (e.g., "PB: Ram Sharma", "VB: Hari KC") so you can see the crew at a glance.
 
----
-
-## Sheet Philosophy (Single Row)
+## Visual Layout
 
 ```text
-Row for Client "John Doe":
-Col A: 2026-01-18T19:25:45.624Z     (registeredDateTimeAD)
-Col B: 2082-10-04                     (registeredDateBS)
-Col C: John Doe                       (clientName)
-Col D: Wedding\nReception             (events, newline-separated)
-Col E: 2082\n2082                     (years)
-Col F: 10\n10                         (months)
-Col G: 15\n17                         (days)
-Col H: 2026-01-28\n2026-01-30        (dates AD)
-Col I: Ram Sharma\nShyam Thapa       (Photographer Bride per event)
-Col J: Hari KC\n                      (Photographer Groom per event)
-...Col R: \n                          (FPV Operator)
+Current (2 columns):
+| MAGH 15       | Venue: Hotel ABC, Kathmandu  10:00 AM |
+| Wedding       | Parlour: XYZ Beauty, Patan            |
+
+New (3 columns):
+| MAGH 15       | Venue: Hotel ABC, Kathmandu  10:00 AM | PB: Ram Sharma    |
+| Wedding       | Parlour: XYZ Beauty, Patan            | VB: Hari KC       |
+|               |                                       | Asst: Shyam Thapa |
 ```
 
-Each freelancer column (I-R) has the same number of newline entries as events in column D. The frontend splits these and presents them as individual event cards.
+Freelancer roles will be color-coded to match the assignment section (Amber for Photographers, Purple for Videographers, Emerald for Assistants, etc.). Only assigned roles will be shown -- empty slots are hidden to keep it clean.
 
 ---
 
-## Implementation Steps
+## Technical Details
 
-### Step 1: Backend -- Rewrite 3 actions in Edge Function
+### File 1: `src/components/client-detail/DashboardEventDetails.tsx`
 
-**`getClientFreelancerAssignments`** (rewrite):
-- Find the client's SINGLE row in "BOOKED CLIENTS FREELANCERS" by `registeredDateTimeAD`
-- If no row exists, read from "BOOKED CLIENTS EVENT DETAILS" and create ONE row with Cols A-H copied, Cols I-R filled with matching empty newline entries
-- Split the single row's newline-separated values into individual event objects for the frontend
-- Also update Cols A-H from event details if they've changed (sync identity columns)
+- Add `freelancerAssignments` prop (array of `FreelancerAssignment` objects, optional)
+- For each event row, find the matching assignment by event name + date
+- Render a third column showing assigned freelancers as compact colored labels
+- Role abbreviations: PB (Photographer Bride), PG (Photographer Groom), VB, VG, EP, EV, Asst, iPhone, Drone, FPV
 
-**`updateFreelancerAssignment`** (rewrite):
-- Find the client's single row by `registeredDateTimeAD`
-- Determine which event index the update targets (match by event name + date AD within the newline list)
-- Read the current value in the target column, split by newline, replace value at that index, rejoin with newline
-- Write the updated string back to the single cell
+### File 2: `src/components/client-detail/ClientHeroSection.tsx`
 
-**`checkFreelancerAvailability`** (rewrite):
-- Read all rows from "BOOKED CLIENTS FREELANCERS"
-- For each row, split Col H (dates) by newline
-- For each date matching the target, split freelancer columns at that same index
-- If any column at that index matches the freelancer name with a different client, flag conflict
+- Add `freelancerAssignments` prop to the interface
+- Pass it through to `DashboardEventDetails`
 
-### Step 2: Backend -- New `fullSyncFreelancerAssignments` action
+### File 3: `src/pages/ClientDetail.tsx`
 
-Follows the exact same pattern as `fullSyncEventDetails`:
-1. Read all rows from "BOOKED CLIENTS EVENT DETAILS" (source of events)
-2. Read all existing rows from "BOOKED CLIENTS FREELANCERS"
-3. For each event details row NOT in freelancers sheet (by registeredDateTimeAD):
-   - Create a new row with Cols A-H copied, Cols I-R empty (matching newline count)
-4. For each existing row, update Cols A-H from event details (preserve I-R assignments)
-5. Return counts: `{ copiedCount, updatedCount, totalFreelancers }`
+- Import and use `useFreelancerAssignments` hook (already imported)
+- Pass the `assignments` data to `ClientHeroSection` as a new prop
+- The hook is already used elsewhere in this page for the Freelancer Assignment tab, so we just need to also pass its data to the dashboard view
 
-### Step 3: Frontend API -- Add sync function
-
-Add `fullSyncFreelancerAssignments()` to `src/lib/freelancer-assignment-api.ts`.
-
-### Step 4: Booked Dashboard -- Add Sync Button
-
-Add a "Sync Freelancers" button (with UserCog icon, teal color) to the header in `DesktopBookedAppLayout.tsx`, between "Sync Event Details" and "Full Resync". Same pattern as the existing sync buttons with loading state and toast feedback.
-
-### Step 5: Dropdown Visibility Fix
-
-Update `FreelancerAssignmentSection.tsx` PopoverContent and CommandItem styling to ensure solid backgrounds and readable text in the dark theme.
-
----
-
-## Files to Modify
-
-1. **`supabase/functions/google-sheets/index.ts`** -- Rewrite 3 freelancer actions for single-row storage + add `fullSyncFreelancerAssignments` action
-2. **`src/lib/freelancer-assignment-api.ts`** -- Add `fullSyncFreelancerAssignments()` API function
-3. **`src/components/booked/DesktopBookedAppLayout.tsx`** -- Add "Sync Freelancers" button with state/handler
-4. **`src/components/client-detail/FreelancerAssignmentSection.tsx`** -- Fix dropdown visibility styling
+### No backend changes needed -- all data is already fetched by the existing `useFreelancerAssignments` hook.
