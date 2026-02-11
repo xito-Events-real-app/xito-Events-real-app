@@ -13,7 +13,7 @@ import { AddFreelancerDrawer } from "./AddFreelancerDrawer";
 import { FreelancerDetailSheet } from "./FreelancerDetailSheet";
 import { useToast } from "@/hooks/use-toast";
 
-const MAIN_JOBS = ['Photographer', 'Videographer', 'Video Editor', 'Photo Editor', 'Drone/FPV Operator'];
+const MAIN_JOBS = ['Photographer', 'Videographer', 'Video Editor', 'Photo Editor', 'Drone Operator', 'FPV Operator'];
 
 export function DesktopFreelancers() {
   const navigate = useNavigate();
@@ -54,8 +54,8 @@ export function DesktopFreelancers() {
       if (f.videoEditor?.toUpperCase() === 'YES') counts['Video Editor'] = (counts['Video Editor'] || 0) + 1;
       if (f.hybridShooter?.toUpperCase() === 'YES') counts['Hybrid Shooter'] = (counts['Hybrid Shooter'] || 0) + 1;
       if (f.hybridEditor?.toUpperCase() === 'YES') counts['Hybrid Editor'] = (counts['Hybrid Editor'] || 0) + 1;
-      if (f.droneOperator?.toUpperCase() === 'YES' || f.fpvOperator?.toUpperCase() === 'YES')
-        counts['Drone/FPV Operator'] = (counts['Drone/FPV Operator'] || 0) + 1;
+      if (f.droneOperator?.toUpperCase() === 'YES') counts['Drone Operator'] = (counts['Drone Operator'] || 0) + 1;
+      if (f.fpvOperator?.toUpperCase() === 'YES') counts['FPV Operator'] = (counts['FPV Operator'] || 0) + 1;
     });
     return counts;
   }, [freelancers]);
@@ -78,7 +78,8 @@ export function DesktopFreelancers() {
           'Video Editor': (f) => f.videoEditor?.toUpperCase() === 'YES',
           'Hybrid Shooter': (f) => f.hybridShooter?.toUpperCase() === 'YES',
           'Hybrid Editor': (f) => f.hybridEditor?.toUpperCase() === 'YES',
-          'Drone/FPV Operator': (f) => f.droneOperator?.toUpperCase() === 'YES' || f.fpvOperator?.toUpperCase() === 'YES',
+          'Drone Operator': (f) => f.droneOperator?.toUpperCase() === 'YES',
+          'FPV Operator': (f) => f.fpvOperator?.toUpperCase() === 'YES',
         };
         if (roleMap[selectedRole] && !roleMap[selectedRole](f)) return false;
       }
