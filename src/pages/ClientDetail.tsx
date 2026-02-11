@@ -51,6 +51,7 @@ import { getMonthName } from "@/lib/nepali-months";
 import NepaliDate from "nepali-date-converter";
 import PaymentDrawer from "@/components/finance/PaymentDrawer";
 import { ClientDetailSidebar, ClientHeroSection, SectionType, EventDetailsSummaryCard, FullScreenEventCard, ClientDetailsCard, BenzoKeepDialog, BenzoKeepViewer } from "@/components/client-detail";
+import FreelancerAssignmentSection from "@/components/client-detail/FreelancerAssignmentSection";
 import { EventDetailCard } from "@/components/client-detail/EventDetailCard";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useEventDetails } from "@/hooks/useEventDetails";
@@ -1526,6 +1527,11 @@ const ClientDetail = () => {
               notesData={currentKeepNotes || client.benzoKeepNotes}
               onEdit={() => setShowBenzoKeepDialog(true)}
             />
+          )}
+
+          {/* Freelancers Section */}
+          {activeSection === 'freelancers' && client?.registeredDateTimeAD && (
+            <FreelancerAssignmentSection registeredDateTimeAD={client.registeredDateTimeAD} />
           )}
         </div>
       </div>
