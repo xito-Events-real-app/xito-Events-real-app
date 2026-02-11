@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient' | 'getDailyTasks' | 'addDailyTask' | 'updateDailyTask' | 'updateDailyTaskStatus' | 'getDailyTaskSetupData' | 'getFreelancers' | 'addFreelancer' | 'updateFreelancer' | 'deleteFreelancer' | 'syncFreelancerCategories' | 'getClientFreelancerAssignments' | 'updateFreelancerAssignment' | 'checkFreelancerAvailability';
+  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient' | 'getDailyTasks' | 'addDailyTask' | 'updateDailyTask' | 'updateDailyTaskStatus' | 'getDailyTaskSetupData' | 'getFreelancers' | 'addFreelancer' | 'updateFreelancer' | 'deleteFreelancer' | 'syncFreelancerCategories' | 'getClientFreelancerAssignments' | 'updateFreelancerAssignment' | 'checkFreelancerAvailability' | 'fullSyncFreelancerAssignments';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -5876,7 +5876,7 @@ const FIELD_TO_COL_INDEX: Record<string, number> = {
 };
 
 async function getClientFreelancerAssignments(accessToken: string, spreadsheetId: string, registeredDateTimeAD: string) {
-  // 1. Read event details for this client (events are stored as newline-separated values in a single row)
+  // 1. Read event details for this client (single row with newline-separated values)
   const eventRange = encodeURIComponent("'BOOKED CLIENTS EVENT DETAILS'!A2:H1000");
   const eventUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${eventRange}`;
   const eventResp = await fetch(eventUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -5884,36 +5884,23 @@ async function getClientFreelancerAssignments(accessToken: string, spreadsheetId
   const eventData = await eventResp.json();
   const eventRows = eventData.values || [];
 
-  // Find the row for this client by registeredDateTimeAD (Column A)
-  const clientRow = eventRows.find((r: string[]) => (r[0] || '').trim() === registeredDateTimeAD.trim());
-  if (!clientRow) return [];
+  const clientEventRow = eventRows.find((r: string[]) => (r[0] || '').trim() === registeredDateTimeAD.trim());
+  if (!clientEventRow) return [];
 
-  // Parse newline-separated events into individual event objects
-  const eventNames = (clientRow[3] || '').split('\n');
-  const eventYears = (clientRow[4] || '').split('\n');
-  const eventMonths = (clientRow[5] || '').split('\n');
-  const eventDays = (clientRow[6] || '').split('\n');
-  const eventDatesAD = (clientRow[7] || '').split('\n');
-  const clientName = (clientRow[2] || '').trim();
-  const regDateTimeAD = clientRow[0] || '';
-  const regDateBS = clientRow[1] || '';
+  // Parse newline-separated events
+  const eventNames = (clientEventRow[3] || '').split('\n');
+  const eventYears = (clientEventRow[4] || '').split('\n');
+  const eventMonths = (clientEventRow[5] || '').split('\n');
+  const eventDays = (clientEventRow[6] || '').split('\n');
+  const eventDatesAD = (clientEventRow[7] || '').split('\n');
+  const clientName = (clientEventRow[2] || '').trim();
+  const regDateTimeAD = clientEventRow[0] || '';
+  const regDateBS = clientEventRow[1] || '';
 
-  const parsedEvents: { name: string; year: string; month: string; day: string; dateAD: string }[] = [];
-  for (let i = 0; i < eventNames.length; i++) {
-    const name = (eventNames[i] || '').trim();
-    if (!name) continue;
-    parsedEvents.push({
-      name,
-      year: (eventYears[i] || '').trim(),
-      month: (eventMonths[i] || '').trim(),
-      day: (eventDays[i] || '').trim(),
-      dateAD: (eventDatesAD[i] || '').trim(),
-    });
-  }
+  const eventCount = eventNames.filter((n: string) => n.trim()).length;
+  if (eventCount === 0) return [];
 
-  if (parsedEvents.length === 0) return [];
-
-  // 2. Read freelancer assignments sheet
+  // 2. Read freelancers sheet - find SINGLE row for this client
   const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:R1000");
   const flUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${flRange}`;
   const flResp = await fetch(flUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -5923,61 +5910,75 @@ async function getClientFreelancerAssignments(accessToken: string, spreadsheetId
     flRows = flData.values || [];
   }
 
-  // 3. For each parsed event, ensure a row exists in freelancers sheet
-  const newRows: string[][] = [];
+  let clientRowIdx = flRows.findIndex((r: string[]) => (r[0] || '').trim() === registeredDateTimeAD.trim());
 
-  for (const ev of parsedEvents) {
-    // Check if row already exists (unique key: clientName + event + eventDateAD)
-    const exists = flRows.some((fr: string[]) =>
-      (fr[2] || '').trim().toLowerCase() === clientName.toLowerCase() &&
-      (fr[3] || '').trim().toLowerCase() === ev.name.toLowerCase() &&
-      (fr[7] || '').trim() === ev.dateAD
-    );
-    if (!exists) {
-      // Create new row: Cols A-H from event details, I-R empty
-      newRows.push([regDateTimeAD, regDateBS, clientName, ev.name, ev.year, ev.month, ev.day, ev.dateAD, '', '', '', '', '', '', '', '', '', '']);
-    }
-  }
+  // Build the empty newline template matching event count
+  const emptyNewlines = Array(eventCount).fill('').join('\n');
 
-  // 4. Append new rows if any
-  if (newRows.length > 0) {
+  if (clientRowIdx === -1) {
+    // Create a single row with Cols A-H copied and I-R as empty newline-separated
+    const newRow = [
+      regDateTimeAD, regDateBS, clientName,
+      clientEventRow[3] || '', clientEventRow[4] || '', clientEventRow[5] || '', clientEventRow[6] || '', clientEventRow[7] || '',
+      emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines,
+      emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines
+    ];
     const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A:R")}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
     await fetch(appendUrl, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values: newRows }),
+      body: JSON.stringify({ values: [newRow] }),
     });
-    // Add to local array for return
-    flRows.push(...newRows);
+    flRows.push(newRow);
+    clientRowIdx = flRows.length - 1;
+  } else {
+    // Update Cols A-H from event details (keep I-R freelancer data)
+    const sheetRow = clientRowIdx + 2;
+    const updateRange = encodeURIComponent(`'BOOKED CLIENTS FREELANCERS'!A${sheetRow}:H${sheetRow}`);
+    const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`;
+    await fetch(updateUrl, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: [[regDateTimeAD, regDateBS, clientName, clientEventRow[3] || '', clientEventRow[4] || '', clientEventRow[5] || '', clientEventRow[6] || '', clientEventRow[7] || '']] }),
+    });
+    // Update local copy
+    flRows[clientRowIdx][0] = regDateTimeAD;
+    flRows[clientRowIdx][1] = regDateBS;
+    flRows[clientRowIdx][2] = clientName;
+    for (let c = 3; c <= 7; c++) flRows[clientRowIdx][c] = clientEventRow[c] || '';
   }
 
-  // 5. Return all rows for this client
-  const clientAssignments = flRows
-    .map((r: string[], idx: number) => ({ row: r, rowNumber: idx + 2 }))
-    .filter(({ row }) => (row[0] || '').trim() === registeredDateTimeAD.trim())
-    .map(({ row, rowNumber }) => ({
-      rowNumber,
+  const row = flRows[clientRowIdx];
+
+  // 3. Parse single row into individual event objects
+  const assignments = [];
+  for (let i = 0; i < eventCount; i++) {
+    const name = (eventNames[i] || '').trim();
+    if (!name) continue;
+    assignments.push({
+      rowNumber: clientRowIdx + 2,
       registeredDateTimeAD: row[0] || '',
       registeredDateBS: row[1] || '',
       clientName: row[2] || '',
-      event: row[3] || '',
-      eventYear: row[4] || '',
-      eventMonth: row[5] || '',
-      eventDay: row[6] || '',
-      eventDateAD: row[7] || '',
-      photographerBride: row[8] || '',
-      photographerGroom: row[9] || '',
-      videographerBride: row[10] || '',
-      videographerGroom: row[11] || '',
-      extraPhotographer: row[12] || '',
-      extraVideographer: row[13] || '',
-      assistant: row[14] || '',
-      iphoneShooter: row[15] || '',
-      droneOperator: row[16] || '',
-      fpvOperator: row[17] || '',
-    }));
+      event: name,
+      eventYear: (eventYears[i] || '').trim(),
+      eventMonth: (eventMonths[i] || '').trim(),
+      eventDay: (eventDays[i] || '').trim(),
+      eventDateAD: (eventDatesAD[i] || '').trim(),
+      photographerBride: ((row[8] || '').split('\n')[i] || '').trim(),
+      photographerGroom: ((row[9] || '').split('\n')[i] || '').trim(),
+      videographerBride: ((row[10] || '').split('\n')[i] || '').trim(),
+      videographerGroom: ((row[11] || '').split('\n')[i] || '').trim(),
+      extraPhotographer: ((row[12] || '').split('\n')[i] || '').trim(),
+      extraVideographer: ((row[13] || '').split('\n')[i] || '').trim(),
+      assistant: ((row[14] || '').split('\n')[i] || '').trim(),
+      iphoneShooter: ((row[15] || '').split('\n')[i] || '').trim(),
+      droneOperator: ((row[16] || '').split('\n')[i] || '').trim(),
+      fpvOperator: ((row[17] || '').split('\n')[i] || '').trim(),
+    });
+  }
 
-  return clientAssignments;
+  return assignments;
 }
 
 async function updateFreelancerAssignmentAction(accessToken: string, spreadsheetId: string, data: Record<string, unknown>) {
@@ -5990,7 +5991,7 @@ async function updateFreelancerAssignmentAction(accessToken: string, spreadsheet
   const colIndex = FIELD_TO_COL_INDEX[field];
   if (colIndex === undefined) throw new Error(`Invalid field: ${field}`);
 
-  // Find the row
+  // Find the client's single row
   const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:R1000");
   const flUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${flRange}`;
   const flResp = await fetch(flUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -5998,28 +5999,50 @@ async function updateFreelancerAssignmentAction(accessToken: string, spreadsheet
   const flData = await flResp.json();
   const rows = flData.values || [];
 
-  let targetRowIdx = -1;
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i];
-    if ((r[0] || '').trim() === registeredDateTimeAD.trim() &&
-        (r[3] || '').trim() === eventName &&
-        (r[7] || '').trim() === eventDateAD) {
-      targetRowIdx = i;
+  const clientRowIdx = rows.findIndex((r: string[]) => (r[0] || '').trim() === registeredDateTimeAD.trim());
+  if (clientRowIdx === -1) throw new Error('Client row not found in freelancers sheet');
+
+  const row = rows[clientRowIdx];
+
+  // Determine event index by matching event name + date within newline-separated values
+  const eventNames = (row[3] || '').split('\n');
+  const eventDatesInRow = (row[7] || '').split('\n');
+
+  let eventIdx = -1;
+  for (let i = 0; i < eventNames.length; i++) {
+    if ((eventNames[i] || '').trim().toLowerCase() === eventName.toLowerCase() &&
+        (eventDatesInRow[i] || '').trim() === eventDateAD) {
+      eventIdx = i;
       break;
     }
   }
+  // Fallback: match by event name only
+  if (eventIdx === -1) {
+    for (let i = 0; i < eventNames.length; i++) {
+      if ((eventNames[i] || '').trim().toLowerCase() === eventName.toLowerCase()) {
+        eventIdx = i;
+        break;
+      }
+    }
+  }
+  if (eventIdx === -1) throw new Error('Event not found in client row');
 
-  if (targetRowIdx === -1) throw new Error('Assignment row not found');
+  // Read current newline-separated value, update at index, write back
+  const currentValues = (row[colIndex] || '').split('\n');
+  // Ensure array is long enough
+  while (currentValues.length <= eventIdx) currentValues.push('');
+  currentValues[eventIdx] = value;
+  const newCellValue = currentValues.join('\n');
 
-  const sheetRow = targetRowIdx + 2; // +2 for header + 0-index
-  const colLetter = String.fromCharCode(65 + colIndex); // A=65
+  const sheetRow = clientRowIdx + 2;
+  const colLetter = String.fromCharCode(65 + colIndex);
   const cellRange = encodeURIComponent(`'BOOKED CLIENTS FREELANCERS'!${colLetter}${sheetRow}`);
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${cellRange}?valueInputOption=USER_ENTERED`;
 
   const resp = await fetch(updateUrl, {
     method: 'PUT',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ values: [[value]] }),
+    body: JSON.stringify({ values: [[newCellValue]] }),
   });
 
   if (!resp.ok) throw new Error('Failed to update assignment');
@@ -6040,20 +6063,103 @@ async function checkFreelancerAvailability(accessToken: string, spreadsheetId: s
   const roleNames = ['Photographer Bride', 'Photographer Groom', 'Videographer Bride', 'Videographer Groom', 'Extra Photographer', 'Extra Videographer', 'Assistant', 'iPhone Shooter', 'Drone Operator', 'FPV Operator'];
 
   for (const row of rows) {
-    if ((row[7] || '').trim() !== dateTrimmed) continue;
-    // Check columns I-R (indices 8-17)
-    for (let c = 8; c <= 17; c++) {
-      if ((row[c] || '').trim().toLowerCase() === nameLower) {
-        conflicts.push({
-          clientName: row[2] || '',
-          event: row[3] || '',
-          role: roleNames[c - 8] || '',
-        });
+    const dates = (row[7] || '').split('\n');
+    const events = (row[3] || '').split('\n');
+    const clientName = (row[2] || '').trim();
+
+    for (let dateIdx = 0; dateIdx < dates.length; dateIdx++) {
+      if ((dates[dateIdx] || '').trim() !== dateTrimmed) continue;
+      // Check columns I-R at this event index
+      for (let c = 8; c <= 17; c++) {
+        const colValues = (row[c] || '').split('\n');
+        if ((colValues[dateIdx] || '').trim().toLowerCase() === nameLower) {
+          conflicts.push({
+            clientName,
+            event: (events[dateIdx] || '').trim(),
+            role: roleNames[c - 8] || '',
+          });
+        }
       }
     }
   }
 
   return { conflicts };
+}
+
+// Bulk sync all booked clients to freelancers sheet (same pattern as fullSyncEventDetails)
+async function fullSyncFreelancerAssignments(accessToken: string, spreadsheetId: string) {
+  // 1. Read all event details rows (source)
+  const eventRange = encodeURIComponent("'BOOKED CLIENTS EVENT DETAILS'!A2:H1000");
+  const eventUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${eventRange}`;
+  const eventResp = await fetch(eventUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!eventResp.ok) throw new Error('Failed to read event details');
+  const eventData = await eventResp.json();
+  const eventRows = eventData.values || [];
+
+  // 2. Read all freelancer rows
+  const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:R1000");
+  const flUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${flRange}`;
+  const flResp = await fetch(flUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+  let flRows: string[][] = [];
+  if (flResp.ok) {
+    const flData = await flResp.json();
+    flRows = flData.values || [];
+  }
+
+  // Build lookup of existing freelancer rows by registeredDateTimeAD
+  const existingMap = new Map<string, number>();
+  flRows.forEach((r, idx) => {
+    const key = (r[0] || '').trim();
+    if (key) existingMap.set(key, idx);
+  });
+
+  let copiedCount = 0;
+  let updatedCount = 0;
+  const newRows: string[][] = [];
+
+  for (const evRow of eventRows) {
+    const regId = (evRow[0] || '').trim();
+    if (!regId) continue;
+
+    const eventCount = (evRow[3] || '').split('\n').filter((n: string) => n.trim()).length;
+    if (eventCount === 0) continue;
+
+    const emptyNewlines = Array(eventCount).fill('').join('\n');
+
+    if (existingMap.has(regId)) {
+      // Update Cols A-H, preserve I-R
+      const idx = existingMap.get(regId)!;
+      const sheetRow = idx + 2;
+      const updateRange = encodeURIComponent(`'BOOKED CLIENTS FREELANCERS'!A${sheetRow}:H${sheetRow}`);
+      const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`;
+      await fetch(updateUrl, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: [[evRow[0] || '', evRow[1] || '', evRow[2] || '', evRow[3] || '', evRow[4] || '', evRow[5] || '', evRow[6] || '', evRow[7] || '']] }),
+      });
+      updatedCount++;
+    } else {
+      // New row
+      newRows.push([
+        evRow[0] || '', evRow[1] || '', evRow[2] || '', evRow[3] || '', evRow[4] || '', evRow[5] || '', evRow[6] || '', evRow[7] || '',
+        emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines,
+        emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines
+      ]);
+      copiedCount++;
+    }
+  }
+
+  // Append new rows
+  if (newRows.length > 0) {
+    const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A:R")}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+    await fetch(appendUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: newRows }),
+    });
+  }
+
+  return { copiedCount, updatedCount, totalFreelancers: flRows.length + newRows.length };
 }
 
 Deno.serve(async (req) => {
@@ -6640,6 +6746,10 @@ Deno.serve(async (req) => {
       case 'checkFreelancerAvailability': {
         if (!data || !data.freelancerName || !data.eventDateAD) throw new Error('freelancerName and eventDateAD are required');
         result = await checkFreelancerAvailability(accessToken, spreadsheetId, data.freelancerName as string, data.eventDateAD as string);
+        break;
+      }
+      case 'fullSyncFreelancerAssignments': {
+        result = await fullSyncFreelancerAssignments(accessToken, spreadsheetId);
         break;
       }
       default:
