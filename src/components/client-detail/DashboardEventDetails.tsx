@@ -1,4 +1,5 @@
 import { MapPin, ExternalLink } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { EventDetailsData, EventDetail } from "@/hooks/useEventDetails";
 import { getMonthName } from "@/lib/nepali-months";
 import { FreelancerAssignment } from "@/lib/freelancer-assignment-api";
@@ -99,6 +100,7 @@ function findAssignment(assignments: FreelancerAssignment[] | undefined, event: 
 }
 
 const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, freelancerAssignments }: DashboardEventDetailsProps) => {
+  const navigate = useNavigate();
   if (isLoading) {
     return (
       <div className="bg-slate-800/50 rounded-xl p-4 mt-4 animate-pulse">
@@ -240,9 +242,15 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, free
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${role.color}`}>
                         {role.label}
                       </span>
-                      <span className="text-xs text-white/90 truncate">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/freelancer/${encodeURIComponent(String(assignment![role.field]))}`);
+                        }}
+                        className="text-xs text-white/90 truncate hover:text-emerald-400 transition-colors cursor-pointer"
+                      >
                         {String(assignment![role.field])}
-                      </span>
+                      </button>
                     </div>
                   ))}
                 </div>

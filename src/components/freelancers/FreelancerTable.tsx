@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { FreelancerData } from "@/lib/freelancer-api";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -49,6 +50,7 @@ const SocialLink = ({ icon: Icon, value, color, tooltip }: {
 };
 
 export function FreelancerTable({ freelancers, onRowClick }: FreelancerTableProps) {
+  const navigate = useNavigate();
   return (
     <div className="rounded-lg border border-slate-700 overflow-hidden">
       <Table>
@@ -77,7 +79,17 @@ export function FreelancerTable({ freelancers, onRowClick }: FreelancerTableProp
                 className="border-slate-700 hover:bg-slate-800/50 cursor-pointer transition-colors"
                 onClick={() => onRowClick(f)}
               >
-                <TableCell className="font-medium text-white">{f.name}</TableCell>
+                <TableCell className="font-medium text-white">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/freelancer/${encodeURIComponent(f.name)}`);
+                    }}
+                    className="hover:text-emerald-400 transition-colors cursor-pointer"
+                  >
+                    {f.name}
+                  </button>
+                </TableCell>
                 <TableCell>
                   <Badge variant="secondary" className="bg-indigo-600/30 text-indigo-300 border-indigo-500/30">
                     {f.mainJob || '-'}
