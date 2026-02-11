@@ -1,123 +1,161 @@
 
 
-## Activate Freelancers Module in Xito Business Suite
+# Freelancer Assignment Section in Client Detail Page
 
-This is a large feature that mirrors the Vendors module pattern but connects to a **separate Google Spreadsheet** ("WTN FREELANCERS") and includes unique logic for Main Job selection, dynamic secondary role checkboxes, and auto-calculated hybrid fields.
+## Overview
+Add a new "Freelancers" sidebar section to the Client Detail page that allows assigning freelancers (from the WTN FREELANCERS spreadsheet) to specific events. Assignments are stored in a new "BOOKED CLIENTS FREELANCERS" sheet with auto-row creation from event details, double-booking detection, and role-filtered dropdowns.
 
-### Phase 1: Add Secret for Freelancers Spreadsheet
+---
 
-A new secret `WTN_FREELANCERS_SPREADSHEET_ID` needs to be added with value `1iBznJm3E8pM6aVbXX2-VPUso5C4aHCKUG3by197V_-8`.
+## Architecture
 
-### Phase 2: Backend - Edge Function Actions
+### Data Flow
+1. **Event data source**: "BOOKED CLIENTS EVENT DETAILS" sheet provides the events (Client Name, Event, Event Date AD, etc.)
+2. **Assignment storage**: New "BOOKED CLIENTS FREELANCERS" sheet (Columns A-H for identity + additional columns for freelancer roles)
+3. **Dropdown source**: "WTN FREELANCERS" spreadsheet, "FREELANCERS" sheet -- filtered by role YES/NO columns
+4. **Double-booking check**: Search all rows in "BOOKED CLIENTS FREELANCERS" for same freelancer name + same Event Date AD but different client
 
-Add the following actions to `supabase/functions/google-sheets/index.ts`:
+### Sheet Schema: "BOOKED CLIENTS FREELANCERS"
+| Column | Field |
+|--------|-------|
+| A | Registered Date & Time (from Event Details Col A) |
+| B | Registered Date BS (from Event Details Col B) |
+| C | Client Name (from Event Details Col C) |
+| D | Event (from Event Details Col D) |
+| E | Event Year (from Event Details Col E) |
+| F | Event Month (from Event Details Col F) |
+| G | Event Day (from Event Details Col G) |
+| H | Event Date in AD (from Event Details Col H) |
+| I | Photographer Bride |
+| J | Photographer Groom |
+| K | Videographer Bride |
+| L | Videographer Groom |
+| M | Extra Photographer |
+| N | Extra Videographer |
+| O | Assistant |
+| P | iPhone Shooter |
+| Q | Drone Operator |
+| R | FPV Operator |
 
-| Action | Description |
-|--------|-------------|
-| `getFreelancers` | Read `'FREELANCERS'!A2:R500` from the freelancers spreadsheet, map columns A-R to data fields |
-| `addFreelancer` | Insert a new row at row 2 of `'FREELANCERS'` sheet with all 18 columns. Also mirror to category sheets |
-| `updateFreelancer` | Update an existing row by rowNumber. Recalculate hybrid fields and re-mirror to category sheets |
-| `deleteFreelancer` | Delete a row from `'FREELANCERS'` sheet and remove from all category sheets |
+**Unique Key**: Client Name + Event + Event Date in AD (no duplicate rows)
 
-**Column Mapping (A-R):**
-- A: Name, B: Contact No, C: WhatsApp, D: Instagram, E: Facebook, F: City, G: Area, H: Map, I: Pathao Landmark, J: Main Job, K: Photographer, L: Videographer, M: Photo Editor, N: Video Editor, O: Hybrid Shooter, P: Hybrid Editor, Q: Drone Operator, R: FPV Operator
+---
 
-**Save Logic:**
-- Main Job selection auto-sets the corresponding column to "YES"
-- Additional role checkboxes set their columns to "YES" or "NO"
-- Hybrid Shooter (O) = "YES" if K=YES AND L=YES
-- Hybrid Editor (P) = "YES" if M=YES AND N=YES
+## Implementation Steps
 
-**Category Sheet Mirroring:**
-After add/update, mirror the row (A-R) into category sheets based on conditions:
-- `PHOTOGRAPHER` sheet if K=YES
-- `VIDEOGRAPHER` sheet if L=YES
-- `PHOTO EDITOR` sheet if M=YES
-- `VIDEO EDITOR` sheet if N=YES
-- `HYBRID SHOOTER` sheet if K=YES AND L=YES
-- `HYBRID EDITOR` sheet if M=YES AND N=YES
-- `DRONE/FPV OPERATOR` sheet if Q=YES OR R=YES
+### Step 1: Backend -- Edge Function Actions (supabase/functions/google-sheets/index.ts)
 
-Mirroring uses Name (Column A) as the identifier to find/update/add rows in each category sheet.
+Add 3 new actions to the edge function:
 
-### Phase 3: Frontend API Layer
+1. **`getClientFreelancerAssignments`** -- Given `registeredDateTimeAD`, fetch all rows from "BOOKED CLIENTS FREELANCERS" matching that client. If no rows exist, auto-create them by reading from "BOOKED CLIENTS EVENT DETAILS" and mapping Columns A-H.
 
-**New file: `src/lib/freelancer-api.ts`**
+2. **`updateFreelancerAssignment`** -- Given `registeredDateTimeAD`, `eventName`, `eventDateAD`, and a field/value pair (e.g., `photographerBride: "Ram Sharma"`), update the corresponding cell in the correct row.
 
+3. **`checkFreelancerAvailability`** -- Given a freelancer name and an event date (AD), search all rows in "BOOKED CLIENTS FREELANCERS" for any assignment of that name on that date. Return list of conflicts (client name + event).
+
+Also add these to the `SheetRequest` action union type and the main switch/case router.
+
+### Step 2: Frontend API Layer (src/lib/freelancer-assignment-api.ts)
+
+New file with functions:
+- `getClientFreelancerAssignments(registeredDateTimeAD)` -- calls edge function
+- `updateFreelancerAssignment(registeredDateTimeAD, eventName, eventDateAD, field, value)` -- auto-save on selection
+- `checkFreelancerAvailability(name, dateAD)` -- for double-booking warnings
+- `getFilteredFreelancersByRole(role)` -- calls existing `getFreelancers` then filters client-side by role column (e.g., `photographer === 'YES'`)
+
+### Step 3: Custom Hook (src/hooks/useFreelancerAssignments.ts)
+
+Hook that:
+- Fetches assignments for the current client on mount
+- Fetches freelancer list (cached) for dropdowns
+- Provides `updateAssignment(eventIndex, field, value)` with auto-save
+- Provides `checkAvailability(name, dateAD)` returning conflict info
+- Manages loading/error states
+
+### Step 4: Sidebar Update (src/components/client-detail/ClientDetailSidebar.tsx)
+
+- Add `'freelancers'` to the `SectionType` union
+- Add sidebar item: `{ id: 'freelancers', label: 'Freelancers', icon: UserCog }`
+- Place it after 'events' in the list
+
+### Step 5: UI Component (src/components/client-detail/FreelancerAssignmentSection.tsx)
+
+New component rendering per-event freelancer assignments:
+
+**Layout per event card:**
+- Event header (name + date)
+- Two-column grid:
+  - Row 1: Photographer Bride | Photographer Groom
+  - Row 2: Videographer Bride | Videographer Groom
+  - Row 3: Extra Photographer | Extra Videographer
+  - Row 4: Assistant | iPhone Shooter
+- Collapsible "See More" button revealing:
+  - Drone Operator | FPV Operator
+
+**Each field** is a searchable Combobox dropdown:
+- Options filtered by role (Photographer fields show only freelancers where `photographer === 'YES'`, etc.)
+- Role mapping:
+  - Photographer Bride/Groom, Extra Photographer -> `photographer = YES`
+  - Videographer Bride/Groom, Extra Videographer -> `videographer = YES`
+  - Assistant -> `hybridShooter = YES`
+  - iPhone Shooter -> `iphoneShooter = YES`
+  - Drone Operator -> `droneOperator = YES`
+  - FPV Operator -> `fpvOperator = YES`
+- Visual indicators in dropdown:
+  - Green dot = available on that date
+  - Red dot = already booked (with tooltip showing which client)
+- On selection: show warning toast if double-booked but allow override
+- Auto-save immediately on selection
+
+**Styling**: Dark theme consistent with existing Client Detail page (bg-white/5, border-white/10, text-white)
+
+### Step 6: Wire into ClientDetail.tsx
+
+- Import `FreelancerAssignmentSection`
+- Add `{activeSection === 'freelancers' && <FreelancerAssignmentSection ... />}` block after the keepNotes section
+- Pass `registeredDateTimeAD` and event details data
+
+---
+
+## Technical Details
+
+### Auto-Row Creation Logic (Backend)
+When `getClientFreelancerAssignments` is called:
+1. Read "BOOKED CLIENTS FREELANCERS" for rows matching `registeredDateTimeAD`
+2. Read "BOOKED CLIENTS EVENT DETAILS" for the same client's events
+3. For each event in Event Details that does NOT have a corresponding row in Freelancers sheet (matched by Client Name + Event + Event Date AD):
+   - Insert a new row with Columns A-H populated
+   - Leave Columns I-R empty (for user assignment)
+4. Return all assignment rows for this client
+
+### Double-Booking Check Logic (Backend)
+1. Read all rows from "BOOKED CLIENTS FREELANCERS" (Columns C, D, H, I-R)
+2. For each row, check all freelancer columns (I-R)
+3. If the selected name appears in any column where Column H matches the target date AND Column C is a different client, flag as conflict
+4. Return array of `{ clientName, event, role }` conflicts
+
+### Dropdown Filtering (Frontend)
+Use the existing `getFreelancers()` API, then filter in-memory:
 ```text
-FreelancerData interface:
-  rowNumber, name, contactNo, whatsappNo, instagram, facebook,
-  city, area, mapLink, pathaoLandmark, mainJob,
-  photographer, videographer, photoEditor, videoEditor,
-  hybridShooter, hybridEditor, droneOperator, fpvOperator
-
-Functions:
-  getFreelancers() -> FreelancerData[]
-  addFreelancer(data) -> void
-  updateFreelancer(data) -> void
-  deleteFreelancer(rowNumber) -> void
+Role -> Filter Column
+Photographer fields -> photographer = YES
+Videographer fields -> videographer = YES
+Assistant -> hybridShooter = YES
+iPhone Shooter -> iphoneShooter = YES
+Drone Operator -> droneOperator = YES
+FPV Operator -> fpvOperator = YES
 ```
 
-All functions call the edge function with the respective action, following the same pattern as `vendor-api.ts`.
+---
 
-### Phase 4: Frontend Components
+## Files to Create
+- `src/lib/freelancer-assignment-api.ts`
+- `src/hooks/useFreelancerAssignments.ts`
+- `src/components/client-detail/FreelancerAssignmentSection.tsx`
 
-**New directory: `src/components/freelancers/`**
-
-| Component | Description |
-|-----------|-------------|
-| `DesktopFreelancers.tsx` | Main page layout (mirrors `DesktopVendors.tsx`): sidebar + header + table + drawers |
-| `FreelancerTypeSidebar.tsx` | Left sidebar with role categories: All, Photographer, Videographer, Photo Editor, Video Editor, Hybrid Shooter, Hybrid Editor, Drone/FPV Operator -- with counts |
-| `FreelancerTable.tsx` | Table showing Name, Main Job, City, Area, Contact, role badges (YES roles shown as colored badges), and social link icons (Instagram, Facebook, Map) |
-| `AddFreelancerDrawer.tsx` | Form with: Name (required), Contact No, WhatsApp, Instagram, Facebook, City dropdown (priority cities), Area, Map, Pathao Landmark, Main Job dropdown, then dynamic secondary checkboxes |
-| `FreelancerDetailSheet.tsx` | Side panel for viewing/editing a freelancer with all fields, save and delete actions |
-| `index.ts` | Barrel exports |
-
-**Dynamic Form Logic in AddFreelancerDrawer:**
-1. User selects Main Job from dropdown (Photographer, Videographer, Video Editor, Photo Editor, Drone/FPV Operator)
-2. Below it, a section appears: "Apart from your main profession, do you professionally do the following?"
-3. Checkboxes shown for all OTHER roles (excluding the main job selection)
-4. If Main Job = "Drone/FPV Operator", show separate Drone Operator and FPV Operator checkboxes
-5. On save: Main Job column = YES, checked roles = YES, unchecked = NO, then calculate Hybrid Shooter and Hybrid Editor
-
-### Phase 5: Page and Routing
-
-**New file: `src/pages/Freelancers.tsx`**
-- Uses `useDesktopMode()` to show `DesktopFreelancers` or a mobile version (desktop-only for now)
-
-**Update `src/App.tsx`:**
-- Import `Freelancers` page
-- Change `/freelancers` route from `ComingSoon` to `Freelancers`
-
-**Update `src/lib/suite-modules.ts`:**
-- Change freelancers module `status` from `'coming-soon'` to `'active'`
-
-### Phase 6: Filters
-
-The sidebar provides filtering by role type. The header provides:
-- **Search by Name** -- text input filtering
-- **Filter by City** -- dropdown or inline filter
-- **Filter by Main Job** -- dropdown filter
-
-All filtering is done client-side on the fetched data array.
-
-### Files to Create/Modify
-
-| File | Action |
-|------|--------|
-| `supabase/functions/google-sheets/index.ts` | Add `getFreelancers`, `addFreelancer`, `updateFreelancer`, `deleteFreelancer` actions + category sheet mirroring |
-| `src/lib/freelancer-api.ts` | **New** -- API functions |
-| `src/components/freelancers/DesktopFreelancers.tsx` | **New** -- Main desktop layout |
-| `src/components/freelancers/FreelancerTypeSidebar.tsx` | **New** -- Role category sidebar |
-| `src/components/freelancers/FreelancerTable.tsx` | **New** -- Data table |
-| `src/components/freelancers/AddFreelancerDrawer.tsx` | **New** -- Add form with dynamic job logic |
-| `src/components/freelancers/FreelancerDetailSheet.tsx` | **New** -- Detail/edit sheet |
-| `src/components/freelancers/index.ts` | **New** -- Barrel exports |
-| `src/pages/Freelancers.tsx` | **New** -- Page component |
-| `src/App.tsx` | Update route from ComingSoon to Freelancers |
-| `src/lib/suite-modules.ts` | Change freelancers status to `'active'` |
-
-### Secret Required
-
-`WTN_FREELANCERS_SPREADSHEET_ID` = `1iBznJm3E8pM6aVbXX2-VPUso5C4aHCKUG3by197V_-8`
+## Files to Modify
+- `supabase/functions/google-sheets/index.ts` (add 3 actions + functions)
+- `src/components/client-detail/ClientDetailSidebar.tsx` (add freelancers section type + menu item)
+- `src/components/client-detail/index.ts` (export new component)
+- `src/pages/ClientDetail.tsx` (render freelancers section, import hook)
 
