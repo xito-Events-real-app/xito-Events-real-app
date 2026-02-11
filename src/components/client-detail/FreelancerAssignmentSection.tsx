@@ -238,23 +238,23 @@ const FreelancerDropdown = ({ config, value, freelancers, eventDateAD, clientNam
             {isUpdating && <Loader2 className="ml-2 h-3 w-3 animate-spin" />}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[9999] bg-[hsl(220,25%,12%)] border-white/20" align="start">
-          <Command>
+        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[9999] bg-[#1a1f2e] border border-white/20 shadow-lg" align="start">
+          <Command className="bg-[#1a1f2e]">
             <CommandInput
               placeholder="Search freelancer..."
               value={search}
               onValueChange={setSearch}
-              className="text-white"
+              className="bg-[#1a1f2e] text-white placeholder:text-white/40"
             />
-            <CommandList className="max-h-48">
-              <CommandEmpty className="text-white/40 text-sm py-4 text-center">No freelancers found</CommandEmpty>
-              <CommandGroup>
+            <CommandList className="max-h-48 bg-[#1a1f2e]">
+              <CommandEmpty className="text-white/50 text-sm py-4 text-center">No freelancers found</CommandEmpty>
+              <CommandGroup className="bg-[#1a1f2e]">
                 {/* Clear option */}
                 {value && (
                   <CommandItem
                     value="__clear__"
                     onSelect={() => { onChange(''); setOpen(false); setSearch(''); }}
-                    className="text-white/50 hover:text-white"
+                    className="text-white/70 hover:text-white hover:bg-white/10 cursor-pointer"
                   >
                     Clear selection
                   </CommandItem>
@@ -267,7 +267,7 @@ const FreelancerDropdown = ({ config, value, freelancers, eventDateAD, clientNam
                       key={name}
                       value={name}
                       onSelect={() => { onChange(name); setOpen(false); setSearch(''); }}
-                      className="text-white/80 hover:text-white"
+                      className="text-white hover:text-white hover:bg-white/10 cursor-pointer"
                     >
                       <Circle className={cn(
                         "h-2.5 w-2.5 mr-2 fill-current",
