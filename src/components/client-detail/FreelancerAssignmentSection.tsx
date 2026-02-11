@@ -93,8 +93,20 @@ interface EventAssignmentCardProps {
   onCheckAvailability: (name: string, dateAD: string) => Promise<AvailabilityConflict[]>;
 }
 
+const ALL_FIELDS: FieldConfig[] = [...MAIN_FIELDS.flat(), ...MORE_FIELDS.flat()];
+
 const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, onCheckAvailability }: EventAssignmentCardProps) => {
   const [showMore, setShowMore] = useState(false);
+
+  // Collect all currently assigned freelancer names for this event (excluding empty)
+  const assignedByField = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const cfg of ALL_FIELDS) {
+      const val = (assignment[cfg.field] as string || '').trim();
+      if (val) map[cfg.field] = val;
+    }
+    return map;
+  }, [assignment]);
 
   const handleFieldChange = useCallback(async (field: FreelancerField, value: string) => {
     // Check availability first
@@ -112,6 +124,17 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
     }
     await onUpdate(assignment.event, assignment.eventDateAD, field, value);
   }, [assignment, onUpdate, onCheckAvailability]);
+
+  // Get names assigned to OTHER fields (not the current one)
+  const getExcludedNames = useCallback((currentField: FreelancerField) => {
+    const excluded = new Set<string>();
+    for (const [f, name] of Object.entries(assignedByField)) {
+      if (f !== currentField && name) {
+        excluded.add(name.toLowerCase());
+      }
+    }
+    return excluded;
+  }, [assignedByField]);
 
   return (
     <div className="rounded-xl bg-white/5 border border-white/10 overflow-hidden">
@@ -137,6 +160,7 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
                 freelancers={freelancers}
                 eventDateAD={assignment.eventDateAD}
                 clientName={assignment.clientName}
+                excludedNames={getExcludedNames(cfg.field)}
                 isUpdating={isUpdating === cfg.field}
                 onChange={(v) => handleFieldChange(cfg.field, v)}
                 onCheckAvailability={onCheckAvailability}
@@ -164,6 +188,7 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
                     freelancers={freelancers}
                     eventDateAD={assignment.eventDateAD}
                     clientName={assignment.clientName}
+                    excludedNames={getExcludedNames(cfg.field)}
                     isUpdating={isUpdating === cfg.field}
                     onChange={(v) => handleFieldChange(cfg.field, v)}
                     onCheckAvailability={onCheckAvailability}
@@ -184,19 +209,22 @@ interface FreelancerDropdownProps {
   freelancers: ReturnType<typeof useFreelancerAssignments>['freelancers'];
   eventDateAD: string;
   clientName: string;
+  excludedNames: Set<string>;
   isUpdating: boolean;
   onChange: (value: string) => void;
   onCheckAvailability: (name: string, dateAD: string) => Promise<AvailabilityConflict[]>;
 }
 
-const FreelancerDropdown = ({ config, value, freelancers, eventDateAD, clientName, isUpdating, onChange, onCheckAvailability }: FreelancerDropdownProps) => {
+const FreelancerDropdown = ({ config, value, freelancers, eventDateAD, clientName, excludedNames, isUpdating, onChange, onCheckAvailability }: FreelancerDropdownProps) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [availability, setAvailability] = useState<Record<string, AvailabilityConflict[]>>({});
 
   const filteredNames = useMemo(
-    () => getFilteredFreelancersByRole(freelancers, config.field),
-    [freelancers, config.field]
+    () => getFilteredFreelancersByRole(freelancers, config.field).filter(
+      name => !excludedNames.has(name.toLowerCase())
+    ),
+    [freelancers, config.field, excludedNames]
   );
 
   // Check availability when dropdown opens
