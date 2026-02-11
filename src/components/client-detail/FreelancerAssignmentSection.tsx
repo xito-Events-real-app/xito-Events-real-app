@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
-import { Camera, Video, UserCog, Smartphone, Loader2, ChevronDown, ChevronUp, Circle } from "lucide-react";
+import { Camera, Video, UserCog, Smartphone, Loader2, ChevronDown, ChevronUp, Circle, Zap } from "lucide-react";
 import { useFreelancerAssignments } from "@/hooks/useFreelancerAssignments";
 import { getFilteredFreelancersByRole, FreelancerField, AvailabilityConflict } from "@/lib/freelancer-assignment-api";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -17,60 +17,72 @@ interface FieldConfig {
   field: FreelancerField;
   label: string;
   icon: React.ElementType;
-  color: string;
+  /** Tailwind text color for the label icon */
+  iconColor: string;
+  /** Tailwind bg color for the field card accent stripe */
+  accentBg: string;
+  /** Tailwind border color for the trigger button */
+  borderColor: string;
 }
 
 const MAIN_FIELDS: FieldConfig[][] = [
   [
-    { field: 'photographerBride', label: 'Photographer Bride', icon: Camera, color: 'text-amber-400' },
-    { field: 'photographerGroom', label: 'Photographer Groom', icon: Camera, color: 'text-amber-400' },
+    { field: 'photographerBride', label: 'Photographer Bride', icon: Camera, iconColor: 'text-amber-600', accentBg: 'bg-amber-500', borderColor: 'border-amber-200' },
+    { field: 'photographerGroom', label: 'Photographer Groom', icon: Camera, iconColor: 'text-amber-600', accentBg: 'bg-amber-500', borderColor: 'border-amber-200' },
   ],
   [
-    { field: 'videographerBride', label: 'Videographer Bride', icon: Video, color: 'text-purple-400' },
-    { field: 'videographerGroom', label: 'Videographer Groom', icon: Video, color: 'text-purple-400' },
+    { field: 'videographerBride', label: 'Videographer Bride', icon: Video, iconColor: 'text-purple-600', accentBg: 'bg-purple-500', borderColor: 'border-purple-200' },
+    { field: 'videographerGroom', label: 'Videographer Groom', icon: Video, iconColor: 'text-purple-600', accentBg: 'bg-purple-500', borderColor: 'border-purple-200' },
   ],
   [
-    { field: 'extraPhotographer', label: 'Extra Photographer', icon: Camera, color: 'text-amber-300' },
-    { field: 'extraVideographer', label: 'Extra Videographer', icon: Video, color: 'text-purple-300' },
+    { field: 'extraPhotographer', label: 'Extra Photographer', icon: Camera, iconColor: 'text-orange-500', accentBg: 'bg-orange-400', borderColor: 'border-orange-200' },
+    { field: 'extraVideographer', label: 'Extra Videographer', icon: Video, iconColor: 'text-fuchsia-500', accentBg: 'bg-fuchsia-400', borderColor: 'border-fuchsia-200' },
   ],
   [
-    { field: 'assistant', label: 'Assistant', icon: UserCog, color: 'text-emerald-400' },
-    { field: 'iphoneShooter', label: 'iPhone Shooter', icon: Smartphone, color: 'text-lime-400' },
+    { field: 'assistant', label: 'Assistant', icon: UserCog, iconColor: 'text-emerald-600', accentBg: 'bg-emerald-500', borderColor: 'border-emerald-200' },
+    { field: 'iphoneShooter', label: 'iPhone Shooter', icon: Smartphone, iconColor: 'text-lime-600', accentBg: 'bg-lime-500', borderColor: 'border-lime-200' },
   ],
 ];
 
 const MORE_FIELDS: FieldConfig[][] = [
   [
-    { field: 'droneOperator', label: 'Drone Operator', icon: Camera, color: 'text-cyan-400' },
-    { field: 'fpvOperator', label: 'FPV Operator', icon: Camera, color: 'text-sky-400' },
+    { field: 'droneOperator', label: 'Drone Operator', icon: Camera, iconColor: 'text-cyan-600', accentBg: 'bg-cyan-500', borderColor: 'border-cyan-200' },
+    { field: 'fpvOperator', label: 'FPV Operator', icon: Zap, iconColor: 'text-sky-600', accentBg: 'bg-sky-500', borderColor: 'border-sky-200' },
   ],
 ];
+
+const ALL_FIELDS: FieldConfig[] = [...MAIN_FIELDS.flat(), ...MORE_FIELDS.flat()];
 
 const FreelancerAssignmentSection = ({ registeredDateTimeAD }: FreelancerAssignmentSectionProps) => {
   const { assignments, freelancers, isLoading, isUpdating, updateAssignment, checkAvailability } = useFreelancerAssignments(registeredDateTimeAD);
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-white/40" />
-        <span className="ml-3 text-white/40">Loading freelancer assignments...</span>
+      <div className="flex items-center justify-center py-20 bg-white rounded-2xl shadow-sm">
+        <Loader2 className="h-7 w-7 animate-spin text-gray-400" />
+        <span className="ml-3 text-gray-400 text-sm">Loading freelancer assignments...</span>
       </div>
     );
   }
 
   if (assignments.length === 0) {
     return (
-      <div className="text-center text-white/40 py-12 bg-white/5 rounded-xl border border-dashed border-white/20">
-        <UserCog className="h-12 w-12 mx-auto mb-3 opacity-50" />
-        <p>No event details found for freelancer assignments</p>
-        <p className="text-sm mt-1">Event details must exist in the logistics sheet first</p>
+      <div className="text-center py-12 bg-white rounded-2xl border-2 border-dashed border-gray-200">
+        <UserCog className="h-10 w-10 mx-auto mb-3 text-gray-300" />
+        <p className="text-gray-500 font-medium">No event details found</p>
+        <p className="text-xs text-gray-400 mt-1">Event details must exist in the logistics sheet first</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-xl font-bold text-white">Freelancer Assignments</h2>
+    <div className="space-y-5">
+      <div className="flex items-center gap-2.5">
+        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-md">
+          <UserCog className="h-4 w-4 text-white" />
+        </div>
+        <h2 className="text-lg font-bold text-gray-800">Freelancer Assignments</h2>
+      </div>
       {assignments.map((assignment) => (
         <EventAssignmentCard
           key={`${assignment.event}-${assignment.eventDateAD}`}
@@ -93,12 +105,9 @@ interface EventAssignmentCardProps {
   onCheckAvailability: (name: string, dateAD: string) => Promise<AvailabilityConflict[]>;
 }
 
-const ALL_FIELDS: FieldConfig[] = [...MAIN_FIELDS.flat(), ...MORE_FIELDS.flat()];
-
 const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, onCheckAvailability }: EventAssignmentCardProps) => {
   const [showMore, setShowMore] = useState(false);
 
-  // Collect all currently assigned freelancer names for this event (excluding empty)
   const assignedByField = useMemo(() => {
     const map: Record<string, string> = {};
     for (const cfg of ALL_FIELDS) {
@@ -109,10 +118,8 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
   }, [assignment]);
 
   const handleFieldChange = useCallback(async (field: FreelancerField, value: string) => {
-    // Check availability first
     if (value.trim()) {
       const conflicts = await onCheckAvailability(value, assignment.eventDateAD);
-      // Filter out same-client conflicts
       const realConflicts = conflicts.filter(c => c.clientName.trim().toLowerCase() !== assignment.clientName.trim().toLowerCase());
       if (realConflicts.length > 0) {
         toast({
@@ -125,7 +132,6 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
     await onUpdate(assignment.event, assignment.eventDateAD, field, value);
   }, [assignment, onUpdate, onCheckAvailability]);
 
-  // Get names assigned to OTHER fields (not the current one)
   const getExcludedNames = useCallback((currentField: FreelancerField) => {
     const excluded = new Set<string>();
     for (const [f, name] of Object.entries(assignedByField)) {
@@ -136,22 +142,30 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
     return excluded;
   }, [assignedByField]);
 
+  const assignedCount = Object.keys(assignedByField).length;
+  const totalSlots = ALL_FIELDS.length;
+
   return (
-    <div className="rounded-xl bg-white/5 border border-white/10 overflow-hidden">
+    <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
       {/* Event Header */}
-      <div className="px-5 py-3 border-b border-white/10 bg-white/[0.03]">
+      <div className="px-5 py-3.5 bg-gradient-to-r from-slate-50 to-gray-50 border-b border-gray-100">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-white">{assignment.event}</h3>
-          <span className="text-sm text-white/50">
-            {assignment.eventDateAD || `${assignment.eventMonth} ${assignment.eventDay}, ${assignment.eventYear}`}
-          </span>
+          <h3 className="font-semibold text-gray-800 text-sm">{assignment.event}</h3>
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] font-medium text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
+              {assignedCount}/{totalSlots} assigned
+            </span>
+            <span className="text-xs text-gray-500 font-medium">
+              {assignment.eventDateAD || `${assignment.eventMonth} ${assignment.eventDay}, ${assignment.eventYear}`}
+            </span>
+          </div>
         </div>
       </div>
 
       {/* Main Fields */}
-      <div className="p-5 space-y-4">
+      <div className="p-5 space-y-3">
         {MAIN_FIELDS.map((row, ri) => (
-          <div key={ri} className="grid grid-cols-2 gap-4">
+          <div key={ri} className="grid grid-cols-2 gap-3">
             {row.map((cfg) => (
               <FreelancerDropdown
                 key={cfg.field}
@@ -172,14 +186,14 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
         {/* See More */}
         <Collapsible open={showMore} onOpenChange={setShowMore}>
           <CollapsibleTrigger asChild>
-            <Button variant="ghost" className="w-full text-white/50 hover:text-white hover:bg-white/5 gap-2">
-              {showMore ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              {showMore ? 'Show Less' : 'See More'}
+            <Button variant="ghost" className="w-full text-gray-400 hover:text-gray-600 hover:bg-gray-50 gap-2 text-xs h-8 mt-1">
+              {showMore ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              {showMore ? 'Show Less' : 'More Roles'}
             </Button>
           </CollapsibleTrigger>
-          <CollapsibleContent className="space-y-4 pt-2">
+          <CollapsibleContent className="space-y-3 pt-2">
             {MORE_FIELDS.map((row, ri) => (
-              <div key={ri} className="grid grid-cols-2 gap-4">
+              <div key={ri} className="grid grid-cols-2 gap-3">
                 {row.map((cfg) => (
                   <FreelancerDropdown
                     key={cfg.field}
@@ -227,11 +241,9 @@ const FreelancerDropdown = ({ config, value, freelancers, eventDateAD, clientNam
     [freelancers, config.field, excludedNames]
   );
 
-  // Check availability when dropdown opens
   const handleOpenChange = useCallback(async (isOpen: boolean) => {
     setOpen(isOpen);
     if (isOpen && eventDateAD) {
-      // Batch check availability for all options
       const checks: Record<string, AvailabilityConflict[]> = {};
       const promises = filteredNames.map(async (name) => {
         const conflicts = await onCheckAvailability(name, eventDateAD);
@@ -244,78 +256,93 @@ const FreelancerDropdown = ({ config, value, freelancers, eventDateAD, clientNam
   }, [eventDateAD, clientName, filteredNames, onCheckAvailability]);
 
   const Icon = config.icon;
+  const hasValue = !!value?.trim();
 
   return (
-    <div className="space-y-1.5">
-      <label className={cn("text-xs font-medium flex items-center gap-1.5", config.color)}>
-        <Icon className="h-3 w-3" />
-        {config.label}
-      </label>
-      <Popover open={open} onOpenChange={handleOpenChange}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            role="combobox"
-            className={cn(
-              "w-full justify-between h-9 text-sm bg-white/5 border-white/15 text-white hover:bg-white/10",
-              isUpdating && "opacity-60"
-            )}
-            disabled={isUpdating}
-          >
-            <span className="truncate">{value || 'Select...'}</span>
-            {isUpdating && <Loader2 className="ml-2 h-3 w-3 animate-spin" />}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[9999] bg-[#1a1f2e] border border-white/20 shadow-lg" align="start">
-          <Command className="bg-[#1a1f2e]">
-            <CommandInput
-              placeholder="Search freelancer..."
-              value={search}
-              onValueChange={setSearch}
-              className="bg-[#1a1f2e] text-white placeholder:text-white/40"
-            />
-            <CommandList className="max-h-48 bg-[#1a1f2e]">
-              <CommandEmpty className="text-white/50 text-sm py-4 text-center">No freelancers found</CommandEmpty>
-              <CommandGroup className="bg-[#1a1f2e]">
-                {/* Clear option */}
-                {value && (
-                  <CommandItem
-                    value="__clear__"
-                    onSelect={() => { onChange(''); setOpen(false); setSearch(''); }}
-                    className="text-white/70 hover:text-white hover:bg-white/10 cursor-pointer"
-                  >
-                    Clear selection
-                  </CommandItem>
+    <div className="relative">
+      {/* Color accent card */}
+      <div className={cn(
+        "rounded-xl border overflow-hidden transition-all",
+        hasValue ? "border-gray-200 shadow-sm" : "border-gray-100",
+      )}>
+        {/* Top accent stripe */}
+        <div className={cn("h-1", config.accentBg)} />
+
+        <div className="px-3 py-2.5">
+          <label className={cn("text-[11px] font-semibold uppercase tracking-wider flex items-center gap-1.5 mb-2", config.iconColor)}>
+            <Icon className="h-3 w-3" />
+            {config.label}
+          </label>
+
+          <Popover open={open} onOpenChange={handleOpenChange}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                className={cn(
+                  "w-full justify-between h-8 text-xs rounded-lg",
+                  hasValue
+                    ? "bg-gray-50 border-gray-200 text-gray-800 font-medium hover:bg-gray-100"
+                    : "bg-gray-50/50 border-dashed border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-gray-600",
+                  isUpdating && "opacity-50"
                 )}
-                {filteredNames.map((name) => {
-                  const conflicts = availability[name];
-                  const isBooked = !!conflicts;
-                  return (
-                    <CommandItem
-                      key={name}
-                      value={name}
-                      onSelect={() => { onChange(name); setOpen(false); setSearch(''); }}
-                      className="text-white hover:text-white hover:bg-white/10 cursor-pointer"
-                    >
-                      <Circle className={cn(
-                        "h-2.5 w-2.5 mr-2 fill-current",
-                        isBooked ? "text-red-500" : "text-emerald-500"
-                      )} />
-                      <span className="flex-1 truncate">{name}</span>
-                      {name === value && <span className="text-xs text-primary ml-1">✓</span>}
-                      {isBooked && (
-                        <span className="text-[10px] text-red-400 ml-1 truncate max-w-[100px]">
-                          {conflicts[0].clientName}
-                        </span>
-                      )}
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
+                disabled={isUpdating}
+              >
+                <span className="truncate">{value || 'Assign...'}</span>
+                {isUpdating && <Loader2 className="ml-2 h-3 w-3 animate-spin" />}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[9999] bg-white border border-gray-200 shadow-xl rounded-xl" align="start">
+              <Command className="bg-white rounded-xl">
+                <CommandInput
+                  placeholder="Search freelancer..."
+                  value={search}
+                  onValueChange={setSearch}
+                  className="text-gray-800 text-xs placeholder:text-gray-400"
+                />
+                <CommandList className="max-h-48">
+                  <CommandEmpty className="text-gray-400 text-xs py-4 text-center">No freelancers found</CommandEmpty>
+                  <CommandGroup>
+                    {value && (
+                      <CommandItem
+                        value="__clear__"
+                        onSelect={() => { onChange(''); setOpen(false); setSearch(''); }}
+                        className="text-red-400 hover:text-red-500 hover:bg-red-50 cursor-pointer text-xs"
+                      >
+                        ✕ Clear selection
+                      </CommandItem>
+                    )}
+                    {filteredNames.map((name) => {
+                      const conflicts = availability[name];
+                      const isBooked = !!conflicts;
+                      return (
+                        <CommandItem
+                          key={name}
+                          value={name}
+                          onSelect={() => { onChange(name); setOpen(false); setSearch(''); }}
+                          className="text-gray-700 hover:text-gray-900 hover:bg-gray-50 cursor-pointer text-xs"
+                        >
+                          <Circle className={cn(
+                            "h-2 w-2 mr-2 fill-current shrink-0",
+                            isBooked ? "text-red-400" : "text-emerald-400"
+                          )} />
+                          <span className="flex-1 truncate">{name}</span>
+                          {name === value && <span className="text-[10px] text-indigo-500 font-bold ml-1">✓</span>}
+                          {isBooked && (
+                            <span className="text-[10px] text-red-400 ml-1 truncate max-w-[80px]">
+                              {conflicts[0].clientName}
+                            </span>
+                          )}
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
     </div>
   );
 };
