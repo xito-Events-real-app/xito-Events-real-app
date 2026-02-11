@@ -777,6 +777,7 @@ export interface UnassignedBenzoNote {
   markerColor: 'yellow' | 'green' | 'pink' | 'blue' | 'orange';
   createdAt: string;
   lastUpdated: string;
+  isStarred?: boolean;
 }
 
 // Get all unassigned Benzo Keep notes from Column AM

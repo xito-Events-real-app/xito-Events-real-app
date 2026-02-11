@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Plus, Trash2, UserPlus, Pencil, StickyNote, Clock, X, ChevronDown, ChevronUp, Search } from "lucide-react";
+import { Plus, Trash2, UserPlus, Pencil, StickyNote, Clock, Star, Search, ChevronDown, ChevronUp } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { useUnassignedBenzoKeepNotes, UnassignedBenzoNote } from "@/hooks/useUnassignedBenzoKeepNotes";
 import { AssignNoteDialog } from "./AssignNoteDialog";
@@ -44,13 +45,77 @@ const MARKER_COLORS = {
 
 type MarkerColor = keyof typeof MARKER_COLORS;
 
+interface NoteCardProps {
+  note: UnassignedBenzoNote;
+  onEdit: (note: UnassignedBenzoNote) => void;
+  onDelete: (noteId: string) => void;
+  onAssign: (note: UnassignedBenzoNote) => void;
+  onToggleStar: (noteId: string) => void;
+}
+
+function NoteCard({ note, onEdit, onDelete, onAssign, onToggleStar }: NoteCardProps) {
+  const colors = MARKER_COLORS[note.markerColor as MarkerColor] || MARKER_COLORS.yellow;
+
+  return (
+    <div className={cn("rounded-xl border-2 p-4 transition-all hover:shadow-md", colors.bg, colors.border)}>
+      {/* Note Content */}
+      <div className="text-gray-800 whitespace-pre-wrap text-sm leading-relaxed mb-2">
+        {highlightDatesAndMonths(note.content)}
+      </div>
+
+      {/* Xito Search */}
+      <XitoSearchCompact noteContent={note.content} />
+
+      {/* Timestamp */}
+      <div className="flex items-center gap-1 text-xs text-gray-500 mb-3">
+        <Clock className="h-3 w-3" />
+        {format(new Date(note.lastUpdated), 'MMM d, yyyy h:mm a')}
+        {note.createdAt !== note.lastUpdated && (
+          <span className="ml-1 text-gray-400">
+            (created {format(new Date(note.createdAt), 'MMM d, yyyy')})
+          </span>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-2 pt-2 border-t border-gray-300/50">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onAssign(note)}
+          className="flex-1 text-violet-700 border-violet-300 hover:bg-violet-100"
+        >
+          <UserPlus className="h-3.5 w-3.5 mr-1.5" />
+          Assign to Client
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onToggleStar(note.id)}
+          className={cn(
+            note.isStarred ? "text-yellow-500 hover:text-yellow-600" : "text-gray-400 hover:text-yellow-500"
+          )}
+        >
+          <Star className={cn("h-3.5 w-3.5", note.isStarred && "fill-yellow-400")} />
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => onEdit(note)} className="text-gray-600 hover:text-gray-800">
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => onDelete(note.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 interface UnassignedBenzoKeepDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
 export function UnassignedBenzoKeepDialog({ open, onOpenChange }: UnassignedBenzoKeepDialogProps) {
-  const { notes, isLoading, saveNote, deleteNote, refetch } = useUnassignedBenzoKeepNotes();
+  const { notes, isLoading, saveNote, deleteNote, toggleStar, refetch } = useUnassignedBenzoKeepNotes();
   
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -58,17 +123,18 @@ export function UnassignedBenzoKeepDialog({ open, onOpenChange }: UnassignedBenz
   const [selectedColor, setSelectedColor] = useState<MarkerColor>("yellow");
   const [assigningNote, setAssigningNote] = useState<UnassignedBenzoNote | null>(null);
 
+  const starredNotes = notes.filter(n => n.isStarred);
+
   const handleSaveNew = async () => {
     if (!noteContent.trim()) return;
-    
     const newNote: UnassignedBenzoNote = {
       id: Date.now().toString(),
       content: noteContent.trim(),
       markerColor: selectedColor,
       createdAt: new Date().toISOString(),
       lastUpdated: new Date().toISOString(),
+      isStarred: false,
     };
-    
     await saveNote(newNote);
     setNoteContent("");
     setSelectedColor("yellow");
@@ -82,7 +148,6 @@ export function UnassignedBenzoKeepDialog({ open, onOpenChange }: UnassignedBenz
       markerColor: selectedColor,
       lastUpdated: new Date().toISOString(),
     };
-    
     await saveNote(updatedNote);
     setNoteContent("");
     setEditingId(null);
@@ -111,6 +176,66 @@ export function UnassignedBenzoKeepDialog({ open, onOpenChange }: UnassignedBenz
     refetch();
   };
 
+  const renderColorPicker = () => (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-gray-600">Color:</span>
+      {(Object.keys(MARKER_COLORS) as MarkerColor[]).map((color) => (
+        <button
+          key={color}
+          onClick={() => setSelectedColor(color)}
+          className={cn(
+            "w-6 h-6 rounded-full transition-all",
+            MARKER_COLORS[color].bg,
+            "border-2",
+            selectedColor === color
+              ? `ring-2 ${MARKER_COLORS[color].ring} border-gray-600`
+              : "border-gray-300 hover:scale-110"
+          )}
+        />
+      ))}
+    </div>
+  );
+
+  const renderEditForm = (note: UnassignedBenzoNote) => (
+    <div className={cn("rounded-xl border-2 p-4 space-y-3", MARKER_COLORS[selectedColor].bg, MARKER_COLORS[selectedColor].border)}>
+      <Textarea value={noteContent} onChange={(e) => setNoteContent(e.target.value)} className="min-h-[100px] bg-white/80 border-gray-300" autoFocus />
+      {renderColorPicker()}
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={handleCancelEdit}>Cancel</Button>
+        <Button size="sm" onClick={() => handleSaveEdit(note)} disabled={!noteContent.trim()}>Save</Button>
+      </div>
+    </div>
+  );
+
+  const renderNotesList = (notesList: UnassignedBenzoNote[]) => {
+    if (isLoading) return <div className="text-center py-8 text-gray-500">Loading notes...</div>;
+    if (notesList.length === 0) {
+      return (
+        <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+          <StickyNote className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+          <p className="text-gray-400">No notes found</p>
+        </div>
+      );
+    }
+    return (
+      <div className="space-y-3 pr-2">
+        {notesList.map((note) => {
+          if (editingId === note.id) return <div key={note.id}>{renderEditForm(note)}</div>;
+          return (
+            <NoteCard
+              key={note.id}
+              note={note}
+              onEdit={handleStartEdit}
+              onDelete={handleDelete}
+              onAssign={setAssigningNote}
+              onToggleStar={toggleStar}
+            />
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -125,9 +250,9 @@ export function UnassignedBenzoKeepDialog({ open, onOpenChange }: UnassignedBenz
           <div className="flex-1 overflow-hidden flex flex-col gap-4">
             {/* Add New Note Button */}
             {!isAdding && (
-              <Button 
+              <Button
                 onClick={() => setIsAdding(true)}
-                variant="outline" 
+                variant="outline"
                 className="w-full border-dashed border-2 border-amber-300 hover:bg-amber-50 text-amber-700"
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -137,175 +262,40 @@ export function UnassignedBenzoKeepDialog({ open, onOpenChange }: UnassignedBenz
 
             {/* New Note Form */}
             {isAdding && (
-              <div className={cn(
-                "rounded-xl border-2 p-4 space-y-3",
-                MARKER_COLORS[selectedColor].bg,
-                MARKER_COLORS[selectedColor].border
-              )}>
-                <Textarea
-                  value={noteContent}
-                  onChange={(e) => setNoteContent(e.target.value)}
-                  placeholder="Write your note here..."
-                  className="min-h-[100px] bg-white/80 border-gray-300"
-                  autoFocus
-                />
-                
-                {/* Color Picker */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-600">Color:</span>
-                  {(Object.keys(MARKER_COLORS) as MarkerColor[]).map((color) => (
-                    <button
-                      key={color}
-                      onClick={() => setSelectedColor(color)}
-                      className={cn(
-                        "w-6 h-6 rounded-full transition-all",
-                        MARKER_COLORS[color].bg,
-                        "border-2",
-                        selectedColor === color 
-                          ? `ring-2 ${MARKER_COLORS[color].ring} border-gray-600` 
-                          : "border-gray-300 hover:scale-110"
-                      )}
-                    />
-                  ))}
-                </div>
-
+              <div className={cn("rounded-xl border-2 p-4 space-y-3", MARKER_COLORS[selectedColor].bg, MARKER_COLORS[selectedColor].border)}>
+                <Textarea value={noteContent} onChange={(e) => setNoteContent(e.target.value)} placeholder="Write your note here..." className="min-h-[100px] bg-white/80 border-gray-300" autoFocus />
+                {renderColorPicker()}
                 <div className="flex justify-end gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => { setIsAdding(false); setNoteContent(""); }}>
-                    Cancel
-                  </Button>
-                  <Button size="sm" onClick={handleSaveNew} disabled={!noteContent.trim()}>
-                    Save Note
-                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => { setIsAdding(false); setNoteContent(""); }}>Cancel</Button>
+                  <Button size="sm" onClick={handleSaveNew} disabled={!noteContent.trim()}>Save Note</Button>
                 </div>
               </div>
             )}
 
-            {/* Notes List */}
-            <ScrollArea className="flex-1">
-              {isLoading ? (
-                <div className="text-center py-8 text-gray-500">Loading notes...</div>
-              ) : notes.length === 0 ? (
-                <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                  <StickyNote className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                  <p className="text-gray-400">No unassigned notes yet</p>
-                  <p className="text-xs text-gray-400 mt-1">Click "Add New Note" to create one</p>
-                </div>
-              ) : (
-                <div className="space-y-3 pr-2">
-                  {notes.map((note) => {
-                    const colors = MARKER_COLORS[note.markerColor as MarkerColor] || MARKER_COLORS.yellow;
-                    const isEditing = editingId === note.id;
-
-                    if (isEditing) {
-                      return (
-                        <div
-                          key={note.id}
-                          className={cn(
-                            "rounded-xl border-2 p-4 space-y-3",
-                            MARKER_COLORS[selectedColor].bg,
-                            MARKER_COLORS[selectedColor].border
-                          )}
-                        >
-                          <Textarea
-                            value={noteContent}
-                            onChange={(e) => setNoteContent(e.target.value)}
-                            className="min-h-[100px] bg-white/80 border-gray-300"
-                            autoFocus
-                          />
-                          
-                          {/* Color Picker */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-600">Color:</span>
-                            {(Object.keys(MARKER_COLORS) as MarkerColor[]).map((color) => (
-                              <button
-                                key={color}
-                                onClick={() => setSelectedColor(color)}
-                                className={cn(
-                                  "w-6 h-6 rounded-full transition-all",
-                                  MARKER_COLORS[color].bg,
-                                  "border-2",
-                                  selectedColor === color 
-                                    ? `ring-2 ${MARKER_COLORS[color].ring} border-gray-600` 
-                                    : "border-gray-300 hover:scale-110"
-                                )}
-                              />
-                            ))}
-                          </div>
-
-                          <div className="flex justify-end gap-2">
-                            <Button variant="ghost" size="sm" onClick={handleCancelEdit}>
-                              Cancel
-                            </Button>
-                            <Button size="sm" onClick={() => handleSaveEdit(note)} disabled={!noteContent.trim()}>
-                              Save
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div
-                        key={note.id}
-                        className={cn(
-                          "rounded-xl border-2 p-4 transition-all hover:shadow-md",
-                          colors.bg,
-                          colors.border
-                        )}
-                      >
-                        {/* Note Content */}
-                        <div className="text-gray-800 whitespace-pre-wrap text-sm leading-relaxed mb-2">
-                          {highlightDatesAndMonths(note.content)}
-                        </div>
-
-                        {/* Xito Search for this note - compact collapsible */}
-                        <XitoSearchCompact noteContent={note.content} />
-
-                        {/* Timestamp */}
-                        <div className="flex items-center gap-1 text-xs text-gray-500 mb-3">
-                          <Clock className="h-3 w-3" />
-                          {format(new Date(note.lastUpdated), 'MMM d, yyyy h:mm a')}
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex items-center gap-2 pt-2 border-t border-gray-300/50">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setAssigningNote(note)}
-                            className="flex-1 text-violet-700 border-violet-300 hover:bg-violet-100"
-                          >
-                            <UserPlus className="h-3.5 w-3.5 mr-1.5" />
-                            Assign to Client
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleStartEdit(note)}
-                            className="text-gray-600 hover:text-gray-800"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(note.id)}
-                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </ScrollArea>
+            {/* Tabbed Notes View */}
+            <Tabs defaultValue="all" className="flex-1 flex flex-col overflow-hidden">
+              <TabsList className="w-full">
+                <TabsTrigger value="all" className="flex-1">All Notes ({notes.length})</TabsTrigger>
+                <TabsTrigger value="starred" className="flex-1">
+                  <Star className="h-3.5 w-3.5 mr-1 fill-yellow-400 text-yellow-500" />
+                  Starred ({starredNotes.length})
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="all" className="flex-1 overflow-hidden">
+                <ScrollArea className="h-full max-h-[50vh]">
+                  {renderNotesList(notes)}
+                </ScrollArea>
+              </TabsContent>
+              <TabsContent value="starred" className="flex-1 overflow-hidden">
+                <ScrollArea className="h-full max-h-[50vh]">
+                  {renderNotesList(starredNotes)}
+                </ScrollArea>
+              </TabsContent>
+            </Tabs>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Assign Note Dialog */}
       {assigningNote && (
         <AssignNoteDialog
           open={!!assigningNote}

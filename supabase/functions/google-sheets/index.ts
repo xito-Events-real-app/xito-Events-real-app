@@ -267,11 +267,13 @@ interface UnassignedBenzoNote {
   markerColor: 'yellow' | 'green' | 'pink' | 'blue' | 'orange';
   createdAt: string;
   lastUpdated: string;
+  isStarred?: boolean;
 }
 
 // Get all unassigned Benzo Keep notes from Column AM, Row 2
 async function getUnassignedBenzoKeepNotes(accessToken: string, spreadsheetId: string): Promise<UnassignedBenzoNote[]> {
-  const range = encodeURIComponent("'CLIENT TRACKER'!AM2");
+  // Try wider range AM2:AM10 to catch notes that may have shifted rows
+  const range = encodeURIComponent("'CLIENT TRACKER'!AM2:AM10");
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   const response = await fetch(url, {
@@ -279,21 +281,37 @@ async function getUnassignedBenzoKeepNotes(accessToken: string, spreadsheetId: s
   });
 
   if (!response.ok) {
-    console.error('Failed to fetch unassigned notes');
+    console.error('Failed to fetch unassigned notes, status:', response.status);
     return [];
   }
 
   const data = await response.json();
-  if (!data.values || !data.values[0] || !data.values[0][0]) {
+  console.log('[UNASSIGNED NOTES] Raw response:', JSON.stringify(data));
+  
+  if (!data.values) {
+    console.log('[UNASSIGNED NOTES] No values found in range AM2:AM10');
     return [];
   }
 
-  try {
-    const parsed = JSON.parse(data.values[0][0]);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
+  // Check each row in the range for valid JSON
+  for (let i = 0; i < data.values.length; i++) {
+    const cellValue = data.values[i]?.[0];
+    if (cellValue) {
+      console.log(`[UNASSIGNED NOTES] Row ${i + 2} raw value (first 200 chars):`, String(cellValue).substring(0, 200));
+      try {
+        const parsed = JSON.parse(cellValue);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          console.log(`[UNASSIGNED NOTES] Found ${parsed.length} notes in row ${i + 2}`);
+          return parsed;
+        }
+      } catch (e) {
+        console.log(`[UNASSIGNED NOTES] Row ${i + 2} JSON parse failed:`, e);
+      }
+    }
   }
+  
+  console.log('[UNASSIGNED NOTES] No valid notes found in any row');
+  return [];
 }
 
 // Save an unassigned Benzo Keep note (add or update)

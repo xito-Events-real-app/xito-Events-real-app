@@ -12,6 +12,17 @@ export interface UnassignedBenzoNote {
   markerColor: 'yellow' | 'green' | 'pink' | 'blue' | 'orange';
   createdAt: string;
   lastUpdated: string;
+  isStarred?: boolean;
+}
+
+function sortNotes(notes: UnassignedBenzoNote[]): UnassignedBenzoNote[] {
+  return [...notes].sort((a, b) => {
+    // Starred first
+    if (a.isStarred && !b.isStarred) return -1;
+    if (!a.isStarred && b.isStarred) return 1;
+    // Then by lastUpdated descending
+    return new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime();
+  });
 }
 
 export function useUnassignedBenzoKeepNotes() {
@@ -24,11 +35,7 @@ export function useUnassignedBenzoKeepNotes() {
     setError(null);
     try {
       const data = await apiGetNotes();
-      // Sort by lastUpdated descending (most recent first)
-      const sorted = data.sort((a, b) => 
-        new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime()
-      );
-      setNotes(sorted);
+      setNotes(sortNotes(data));
     } catch (err) {
       console.error("Failed to fetch unassigned notes:", err);
       setError(err instanceof Error ? err : new Error("Failed to fetch notes"));
@@ -44,13 +51,12 @@ export function useUnassignedBenzoKeepNotes() {
   const saveNote = async (note: UnassignedBenzoNote) => {
     try {
       await apiSaveNote(note);
-      // Optimistic update
       setNotes((prev) => {
         const existing = prev.find((n) => n.id === note.id);
         if (existing) {
-          return prev.map((n) => (n.id === note.id ? note : n));
+          return sortNotes(prev.map((n) => (n.id === note.id ? note : n)));
         }
-        return [note, ...prev];
+        return sortNotes([note, ...prev]);
       });
       toast.success("Note saved");
     } catch (err) {
@@ -63,7 +69,6 @@ export function useUnassignedBenzoKeepNotes() {
   const deleteNote = async (noteId: string) => {
     try {
       await apiDeleteNote(noteId);
-      // Optimistic update
       setNotes((prev) => prev.filter((n) => n.id !== noteId));
       toast.success("Note deleted");
     } catch (err) {
@@ -73,12 +78,20 @@ export function useUnassignedBenzoKeepNotes() {
     }
   };
 
+  const toggleStar = async (noteId: string) => {
+    const note = notes.find((n) => n.id === noteId);
+    if (!note) return;
+    const updated = { ...note, isStarred: !note.isStarred, lastUpdated: new Date().toISOString() };
+    await saveNote(updated);
+  };
+
   return {
     notes,
     isLoading,
     error,
     saveNote,
     deleteNote,
+    toggleStar,
     refetch: fetchNotes,
   };
 }
