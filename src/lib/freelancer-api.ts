@@ -83,3 +83,20 @@ export async function deleteFreelancer(rowNumber: number): Promise<void> {
     throw new Error(data.error || 'Failed to delete freelancer');
   }
 }
+
+export async function syncFreelancerCategories(): Promise<{ mirrored: number }> {
+  const { data, error } = await supabase.functions.invoke('google-sheets', {
+    body: { action: 'syncFreelancerCategories' }
+  });
+
+  if (error) {
+    console.error('Error syncing freelancer categories:', error);
+    throw new Error('Failed to sync freelancer categories');
+  }
+
+  if (!data.success) {
+    throw new Error(data.error || 'Failed to sync freelancer categories');
+  }
+
+  return data.data;
+}

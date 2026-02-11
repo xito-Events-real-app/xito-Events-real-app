@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient' | 'getDailyTasks' | 'addDailyTask' | 'updateDailyTask' | 'updateDailyTaskStatus' | 'getDailyTaskSetupData' | 'getFreelancers' | 'addFreelancer' | 'updateFreelancer' | 'deleteFreelancer';
+  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient' | 'getDailyTasks' | 'addDailyTask' | 'updateDailyTask' | 'updateDailyTaskStatus' | 'getDailyTaskSetupData' | 'getFreelancers' | 'addFreelancer' | 'updateFreelancer' | 'deleteFreelancer' | 'syncFreelancerCategories';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -5387,14 +5387,14 @@ async function deleteVendor(accessToken: string, spreadsheetId: string, rowNumbe
 // ============= FREELANCERS MODULE =============
 
 const FREELANCER_CATEGORY_SHEETS = [
-  { sheet: 'PHOTOGRAPHER', check: (d: Record<string, unknown>) => d.photographer === 'YES' },
-  { sheet: 'VIDEOGRAPHER', check: (d: Record<string, unknown>) => d.videographer === 'YES' },
-  { sheet: 'PHOTO EDITOR', check: (d: Record<string, unknown>) => d.photoEditor === 'YES' },
-  { sheet: 'VIDEO EDITOR', check: (d: Record<string, unknown>) => d.videoEditor === 'YES' },
-  { sheet: 'HYBRID SHOOTER', check: (d: Record<string, unknown>) => d.photographer === 'YES' && d.videographer === 'YES' },
-  { sheet: 'HYBRID EDITOR', check: (d: Record<string, unknown>) => d.photoEditor === 'YES' && d.videoEditor === 'YES' },
-  { sheet: 'DRONE OPERATOR', check: (d: Record<string, unknown>) => d.droneOperator === 'YES' },
-  { sheet: 'FPV OPERATOR', check: (d: Record<string, unknown>) => d.fpvOperator === 'YES' },
+  { sheet: 'PHOTOGRAPHER', check: (d: Record<string, unknown>) => String(d.photographer || '').toUpperCase() === 'YES' },
+  { sheet: 'VIDEOGRAPHER', check: (d: Record<string, unknown>) => String(d.videographer || '').toUpperCase() === 'YES' },
+  { sheet: 'PHOTO EDITOR', check: (d: Record<string, unknown>) => String(d.photoEditor || '').toUpperCase() === 'YES' },
+  { sheet: 'VIDEO EDITOR', check: (d: Record<string, unknown>) => String(d.videoEditor || '').toUpperCase() === 'YES' },
+  { sheet: 'HYBRID SHOOTER', check: (d: Record<string, unknown>) => String(d.photographer || '').toUpperCase() === 'YES' && String(d.videographer || '').toUpperCase() === 'YES' },
+  { sheet: 'HYBRID EDITOR', check: (d: Record<string, unknown>) => String(d.photoEditor || '').toUpperCase() === 'YES' && String(d.videoEditor || '').toUpperCase() === 'YES' },
+  { sheet: 'DRONE OPERATOR', check: (d: Record<string, unknown>) => String(d.droneOperator || '').toUpperCase() === 'YES' },
+  { sheet: 'FPV OPERATOR', check: (d: Record<string, unknown>) => String(d.fpvOperator || '').toUpperCase() === 'YES' },
 ];
 
 function freelancerRowValues(d: Record<string, unknown>): string[] {
@@ -6406,6 +6406,18 @@ Deno.serve(async (req) => {
         if (!data || !data.rowNumber) throw new Error('rowNumber is required for deleteFreelancer');
         const flSpreadsheetId = Deno.env.get('WTN_FREELANCERS_SPREADSHEET_ID') || spreadsheetId;
         result = await deleteFreelancerData(accessToken, flSpreadsheetId, data.rowNumber as number, data.name as string);
+        break;
+      }
+      case 'syncFreelancerCategories': {
+        const flSpreadsheetId = Deno.env.get('WTN_FREELANCERS_SPREADSHEET_ID') || spreadsheetId;
+        const allFreelancers = await getFreelancersData(accessToken, flSpreadsheetId, 500);
+        let mirrored = 0;
+        for (const f of allFreelancers) {
+          await mirrorToFreelancerCategorySheets(accessToken, flSpreadsheetId, f as unknown as Record<string, unknown>);
+          mirrored++;
+        }
+        console.log(`[FREELANCER SYNC] Mirrored ${mirrored} freelancers to category sheets`);
+        result = { mirrored };
         break;
       }
       default:

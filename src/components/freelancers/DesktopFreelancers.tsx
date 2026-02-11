@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, RefreshCw, Search, UserCog } from "lucide-react";
+import { Plus, RefreshCw, Search, UserCog, Database } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { FreelancerData, getFreelancers } from "@/lib/freelancer-api";
+import { FreelancerData, getFreelancers, syncFreelancerCategories } from "@/lib/freelancer-api";
 import { FreelancerTypeSidebar } from "./FreelancerTypeSidebar";
 import { FreelancerTable } from "./FreelancerTable";
 import { AddFreelancerDrawer } from "./AddFreelancerDrawer";
@@ -22,6 +22,7 @@ export function DesktopFreelancers() {
   const [freelancers, setFreelancers] = useState<FreelancerData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isCategorySyncing, setIsCategorySyncing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
   const [cityFilter, setCityFilter] = useState("");
@@ -104,6 +105,19 @@ export function DesktopFreelancers() {
     setShowDetailSheet(true);
   };
 
+  const handleCategorySync = async () => {
+    setIsCategorySyncing(true);
+    try {
+      const result = await syncFreelancerCategories();
+      toast({ title: "Category Sync ✓", description: `${result.mirrored} freelancers synced to all category sheets` });
+    } catch (error) {
+      console.error('Category sync error:', error);
+      toast({ title: "Error", description: "Failed to sync category sheets", variant: "destructive" });
+    } finally {
+      setIsCategorySyncing(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex">
       <FreelancerTypeSidebar
@@ -161,6 +175,12 @@ export function DesktopFreelancers() {
                   ))}
                 </SelectContent>
               </Select>
+
+              <Button variant="outline" size="sm" onClick={handleCategorySync} disabled={isCategorySyncing}
+                className="border-slate-600 text-slate-300 hover:text-white hover:bg-slate-700">
+                <Database className={`h-4 w-4 mr-2 ${isCategorySyncing ? 'animate-spin' : ''}`} />
+                {isCategorySyncing ? 'Syncing...' : 'Sync Categories'}
+              </Button>
 
               <Button variant="ghost" size="icon" onClick={() => loadData(true)} disabled={isSyncing}
                 className="text-slate-400 hover:text-white">
