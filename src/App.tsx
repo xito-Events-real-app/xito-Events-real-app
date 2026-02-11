@@ -26,6 +26,7 @@ import NotFound from "./pages/NotFound";
 import ClientDetail from "./pages/ClientDetail";
 import ClientContactForm from "./pages/ClientContactForm";
 import HotDates from "./pages/HotDates";
+import BenzoKeepPage from "./pages/BenzoKeepPage";
 
 const queryClient = new QueryClient();
 
@@ -116,6 +117,7 @@ const App = () => (
             <Route path="/media" element={<ProtectedRoute><ComingSoon moduleId="album-media" /></ProtectedRoute>} />
             <Route path="/vendors" element={<ProtectedRoute><Vendors /></ProtectedRoute>} />
             <Route path="/my-accounts" element={<ProtectedRoute><MyAccounts /></ProtectedRoute>} />
+            <Route path="/benzo-keep" element={<ProtectedRoute><BenzoKeepPage /></ProtectedRoute>} />
             <Route path="/freelancers" element={<ProtectedRoute><ComingSoon moduleId="freelancers" /></ProtectedRoute>} />
             
             <Route path="*" element={<NotFound />} />

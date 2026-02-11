@@ -1,13 +1,13 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { StickyNote, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import benzoAvatar from "@/assets/benzo-avatar.jpeg";
-import { UnassignedBenzoKeepDialog } from "./UnassignedBenzoKeepDialog";
 import { BenzoKeepNotepadDialog } from "./BenzoKeepNotepadDialog";
 
 export function SuiteBenzoKeepSection() {
+  const navigate = useNavigate();
   const [notepadOpen, setNotepadOpen] = useState(false);
-  const [unassignedOpen, setUnassignedOpen] = useState(false);
 
   return (
     <>
@@ -41,9 +41,9 @@ export function SuiteBenzoKeepSection() {
             </div>
           </button>
 
-          {/* Unassigned Benzo Keep - View saved unassigned notes */}
+          {/* Unassigned Benzo Keep - Navigate to full page */}
           <button
-            onClick={() => setUnassignedOpen(true)}
+            onClick={() => navigate("/benzo-keep")}
             className={cn(
               "w-full flex items-center gap-3 p-2.5 rounded-xl transition-all text-left group",
               "hover:bg-amber-50 border border-transparent hover:border-amber-200"
@@ -65,11 +65,6 @@ export function SuiteBenzoKeepSection() {
       <BenzoKeepNotepadDialog
         open={notepadOpen}
         onOpenChange={setNotepadOpen}
-      />
-
-      <UnassignedBenzoKeepDialog
-        open={unassignedOpen}
-        onOpenChange={setUnassignedOpen}
       />
     </>
   );
