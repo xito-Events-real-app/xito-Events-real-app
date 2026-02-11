@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient' | 'getDailyTasks' | 'addDailyTask' | 'updateDailyTask' | 'updateDailyTaskStatus' | 'getDailyTaskSetupData';
+  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient' | 'getDailyTasks' | 'addDailyTask' | 'updateDailyTask' | 'updateDailyTaskStatus' | 'getDailyTaskSetupData' | 'getFreelancers' | 'addFreelancer' | 'updateFreelancer' | 'deleteFreelancer';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -5384,6 +5384,264 @@ async function deleteVendor(accessToken: string, spreadsheetId: string, rowNumbe
   return { success: true };
 }
 
+// ============= FREELANCERS MODULE =============
+
+const FREELANCER_CATEGORY_SHEETS = [
+  { sheet: 'PHOTOGRAPHER', check: (d: Record<string, unknown>) => d.photographer === 'YES' },
+  { sheet: 'VIDEOGRAPHER', check: (d: Record<string, unknown>) => d.videographer === 'YES' },
+  { sheet: 'PHOTO EDITOR', check: (d: Record<string, unknown>) => d.photoEditor === 'YES' },
+  { sheet: 'VIDEO EDITOR', check: (d: Record<string, unknown>) => d.videoEditor === 'YES' },
+  { sheet: 'HYBRID SHOOTER', check: (d: Record<string, unknown>) => d.photographer === 'YES' && d.videographer === 'YES' },
+  { sheet: 'HYBRID EDITOR', check: (d: Record<string, unknown>) => d.photoEditor === 'YES' && d.videoEditor === 'YES' },
+  { sheet: 'DRONE/FPV OPERATOR', check: (d: Record<string, unknown>) => d.droneOperator === 'YES' || d.fpvOperator === 'YES' },
+];
+
+function freelancerRowValues(d: Record<string, unknown>): string[] {
+  return [
+    (d.name as string) || '',
+    (d.contactNo as string) || '',
+    (d.whatsappNo as string) || '',
+    (d.instagram as string) || '',
+    (d.facebook as string) || '',
+    (d.city as string) || '',
+    (d.area as string) || '',
+    (d.mapLink as string) || '',
+    (d.pathaoLandmark as string) || '',
+    (d.mainJob as string) || '',
+    (d.photographer as string) || 'NO',
+    (d.videographer as string) || 'NO',
+    (d.photoEditor as string) || 'NO',
+    (d.videoEditor as string) || 'NO',
+    (d.hybridShooter as string) || 'NO',
+    (d.hybridEditor as string) || 'NO',
+    (d.droneOperator as string) || 'NO',
+    (d.fpvOperator as string) || 'NO',
+  ];
+}
+
+async function mirrorToFreelancerCategorySheets(
+  accessToken: string, spreadsheetId: string, d: Record<string, unknown>
+) {
+  const name = (d.name as string) || '';
+  if (!name) return;
+
+  const rowData = freelancerRowValues(d);
+
+  for (const cat of FREELANCER_CATEGORY_SHEETS) {
+    const shouldExist = cat.check(d);
+
+    try {
+      // Read existing rows to find by name
+      const range = encodeURIComponent(`'${cat.sheet}'!A2:R500`);
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+
+      if (!res.ok) {
+        // Sheet might not exist, skip
+        console.log(`[FREELANCER MIRROR] Sheet '${cat.sheet}' not accessible, skipping`);
+        continue;
+      }
+
+      const sheetData = await res.json();
+      const rows = sheetData.values || [];
+      const existingRowIdx = rows.findIndex((r: string[]) => r[0]?.toLowerCase() === name.toLowerCase());
+
+      if (shouldExist) {
+        if (existingRowIdx >= 0) {
+          // Update existing row
+          const updateRow = existingRowIdx + 2;
+          const updateRange = encodeURIComponent(`'${cat.sheet}'!A${updateRow}:R${updateRow}`);
+          const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`;
+          await fetch(updateUrl, {
+            method: 'PUT',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ values: [rowData] }),
+          });
+        } else {
+          // Add new row at row 2
+          const sheetId = await getSheetId(accessToken, spreadsheetId, cat.sheet);
+          const insertUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+          await fetch(insertUrl, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              requests: [{ insertDimension: { range: { sheetId, dimension: 'ROWS', startIndex: 1, endIndex: 2 }, inheritFromBefore: false } }],
+            }),
+          });
+          const writeRange = encodeURIComponent(`'${cat.sheet}'!A2:R2`);
+          const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${writeRange}?valueInputOption=USER_ENTERED`;
+          await fetch(writeUrl, {
+            method: 'PUT',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ values: [rowData] }),
+          });
+        }
+      } else if (existingRowIdx >= 0) {
+        // Remove from sheet
+        const sheetId = await getSheetId(accessToken, spreadsheetId, cat.sheet);
+        const deleteRow = existingRowIdx + 2;
+        const deleteUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+        await fetch(deleteUrl, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            requests: [{ deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: deleteRow - 1, endIndex: deleteRow } } }],
+          }),
+        });
+      }
+    } catch (e) {
+      console.error(`[FREELANCER MIRROR] Error mirroring to ${cat.sheet}:`, e);
+    }
+  }
+}
+
+async function getFreelancersData(accessToken: string, spreadsheetId: string, limit = 500) {
+  const range = encodeURIComponent("'FREELANCERS'!A2:R" + (limit + 1));
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+
+  const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Google Sheets API error: ${response.status} - ${errorText.substring(0, 200)}`);
+  }
+
+  const data = await response.json();
+  if (!data.values) return [];
+
+  return data.values.map((row: string[], index: number) => ({
+    rowNumber: index + 2,
+    name: row[0] || '',
+    contactNo: row[1] || '',
+    whatsappNo: row[2] || '',
+    instagram: row[3] || '',
+    facebook: row[4] || '',
+    city: row[5] || '',
+    area: row[6] || '',
+    mapLink: row[7] || '',
+    pathaoLandmark: row[8] || '',
+    mainJob: row[9] || '',
+    photographer: row[10] || 'NO',
+    videographer: row[11] || 'NO',
+    photoEditor: row[12] || 'NO',
+    videoEditor: row[13] || 'NO',
+    hybridShooter: row[14] || 'NO',
+    hybridEditor: row[15] || 'NO',
+    droneOperator: row[16] || 'NO',
+    fpvOperator: row[17] || 'NO',
+  }));
+}
+
+async function addFreelancerData(accessToken: string, spreadsheetId: string, d: Record<string, unknown>) {
+  const sheetId = await getSheetId(accessToken, spreadsheetId, 'FREELANCERS');
+
+  // Insert row at position 2
+  const insertUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+  await fetch(insertUrl, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      requests: [{ insertDimension: { range: { sheetId, dimension: 'ROWS', startIndex: 1, endIndex: 2 }, inheritFromBefore: false } }],
+    }),
+  });
+
+  const values = [freelancerRowValues(d)];
+  const range = encodeURIComponent("'FREELANCERS'!A2:R2");
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+
+  const response = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ values }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to add freelancer: ${response.status} - ${errorText.substring(0, 200)}`);
+  }
+
+  // Mirror to category sheets
+  await mirrorToFreelancerCategorySheets(accessToken, spreadsheetId, d);
+
+  return { success: true };
+}
+
+async function updateFreelancerData(accessToken: string, spreadsheetId: string, d: Record<string, unknown>) {
+  const rowNumber = d.rowNumber as number;
+  if (!rowNumber || rowNumber < 2) throw new Error('Valid rowNumber is required');
+
+  const values = [freelancerRowValues(d)];
+  const range = encodeURIComponent(`'FREELANCERS'!A${rowNumber}:R${rowNumber}`);
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+
+  const response = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ values }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to update freelancer: ${response.status} - ${errorText.substring(0, 200)}`);
+  }
+
+  // Mirror to category sheets
+  await mirrorToFreelancerCategorySheets(accessToken, spreadsheetId, d);
+
+  return { success: true };
+}
+
+async function deleteFreelancerData(accessToken: string, spreadsheetId: string, rowNumber: number, name?: string) {
+  if (!rowNumber || rowNumber < 2) throw new Error('Valid rowNumber is required');
+
+  const sheetId = await getSheetId(accessToken, spreadsheetId, 'FREELANCERS');
+
+  const deleteUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+  const response = await fetch(deleteUrl, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      requests: [{ deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: rowNumber - 1, endIndex: rowNumber } } }],
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to delete freelancer: ${response.status} - ${errorText.substring(0, 200)}`);
+  }
+
+  // Remove from all category sheets by name
+  if (name) {
+    for (const cat of FREELANCER_CATEGORY_SHEETS) {
+      try {
+        const range = encodeURIComponent(`'${cat.sheet}'!A2:A500`);
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+        if (!res.ok) continue;
+
+        const data = await res.json();
+        const rows = data.values || [];
+        const idx = rows.findIndex((r: string[]) => r[0]?.toLowerCase() === name.toLowerCase());
+
+        if (idx >= 0) {
+          const catSheetId = await getSheetId(accessToken, spreadsheetId, cat.sheet);
+          const delRow = idx + 2;
+          await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              requests: [{ deleteDimension: { range: { sheetId: catSheetId, dimension: 'ROWS', startIndex: delRow - 1, endIndex: delRow } } }],
+            }),
+          });
+        }
+      } catch (e) {
+        console.error(`[FREELANCER DELETE] Error removing from ${cat.sheet}:`, e);
+      }
+    }
+  }
+
+  return { success: true };
+}
+
 // ============= MY ACCOUNTS MODULE =============
 
 // Get setup data for account form dropdowns (from WTN SECRETS SETUP DATA)
@@ -6123,6 +6381,30 @@ Deno.serve(async (req) => {
       case 'getDailyTaskSetupData': {
         const taskSpreadsheetId = Deno.env.get('WTN_DAILY_TASK_SPREADSHEET_ID') || spreadsheetId;
         result = await getDailyTaskSetupData(accessToken, taskSpreadsheetId);
+        break;
+      }
+      // ============= FREELANCERS MODULE =============
+      case 'getFreelancers': {
+        const flSpreadsheetId = Deno.env.get('WTN_FREELANCERS_SPREADSHEET_ID') || spreadsheetId;
+        result = await getFreelancersData(accessToken, flSpreadsheetId, body.limit);
+        break;
+      }
+      case 'addFreelancer': {
+        if (!data) throw new Error('data is required for addFreelancer');
+        const flSpreadsheetId = Deno.env.get('WTN_FREELANCERS_SPREADSHEET_ID') || spreadsheetId;
+        result = await addFreelancerData(accessToken, flSpreadsheetId, data);
+        break;
+      }
+      case 'updateFreelancer': {
+        if (!data || !data.rowNumber) throw new Error('rowNumber is required for updateFreelancer');
+        const flSpreadsheetId = Deno.env.get('WTN_FREELANCERS_SPREADSHEET_ID') || spreadsheetId;
+        result = await updateFreelancerData(accessToken, flSpreadsheetId, data);
+        break;
+      }
+      case 'deleteFreelancer': {
+        if (!data || !data.rowNumber) throw new Error('rowNumber is required for deleteFreelancer');
+        const flSpreadsheetId = Deno.env.get('WTN_FREELANCERS_SPREADSHEET_ID') || spreadsheetId;
+        result = await deleteFreelancerData(accessToken, flSpreadsheetId, data.rowNumber as number, data.name as string);
         break;
       }
       default:

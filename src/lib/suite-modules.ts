@@ -127,7 +127,7 @@ export const suiteModules: SuiteModule[] = [
     description: 'Track freelancer collaborations',
     icon: UserCog,
     path: '/freelancers',
-    status: 'coming-soon',
+    status: 'active',
     gradient: 'from-indigo-500 to-purple-600',
   },
 ];
