@@ -9,6 +9,7 @@ import { getMonthColorClasses, parseInquiryMonth } from "@/lib/client-card-utils
 import QuotationDisplaySection from "./QuotationDisplaySection";
 import DashboardEventDetails from "./DashboardEventDetails";
 import { EventDetailsData } from "@/hooks/useEventDetails";
+import { FreelancerAssignment } from "@/lib/freelancer-assignment-api";
 interface ClientHeroSectionProps {
   client: ClientData;
   currentStatus: string;
@@ -29,6 +30,7 @@ interface ClientHeroSectionProps {
   isUpdatingPriority?: boolean;
   eventDetailsData?: EventDetailsData | null;
   eventDetailsLoading?: boolean;
+  freelancerAssignments?: FreelancerAssignment[];
 }
 
 // Get status color
@@ -78,6 +80,7 @@ const ClientHeroSection = ({
   isUpdatingPriority = false,
   eventDetailsData,
   eventDetailsLoading = false,
+  freelancerAssignments,
 }: ClientHeroSectionProps) => {
   const inquiryMonth = parseInquiryMonth(client.inquiryDateBS);
   const monthColorClasses = inquiryMonth ? getMonthColorClasses(inquiryMonth) : '';
@@ -286,6 +289,7 @@ const ClientHeroSection = ({
             eventMonth: client.eventMonth || '',
             eventDay: client.eventDay || '',
           }}
+          freelancerAssignments={freelancerAssignments}
         />
 
         {/* Description Box - Always visible */}

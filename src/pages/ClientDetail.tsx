@@ -55,6 +55,7 @@ import FreelancerAssignmentSection from "@/components/client-detail/FreelancerAs
 import { EventDetailCard } from "@/components/client-detail/EventDetailCard";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useEventDetails } from "@/hooks/useEventDetails";
+import { useFreelancerAssignments } from "@/hooks/useFreelancerAssignments";
 import { useClientContactDetails } from "@/hooks/useClientContactDetails";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { FinalQuotationDialog, AdvancePaymentDialog } from "@/components/status-dialogs";
@@ -290,6 +291,11 @@ const ClientDetail = () => {
     updateEventDetail,
     refetch: refetchEventDetails
   } = useEventDetails(client?.registeredDateTimeAD);
+
+  // Fetch freelancer assignments for dashboard display
+  const {
+    assignments: freelancerAssignments,
+  } = useFreelancerAssignments(client?.registeredDateTimeAD);
 
   // Fetch client contact details
   const {
@@ -1027,6 +1033,7 @@ const ClientDetail = () => {
               isUpdatingPriority={isUpdatingPriority}
               eventDetailsData={eventDetailsData}
               eventDetailsLoading={eventDetailsLoading}
+              freelancerAssignments={freelancerAssignments}
             />
           )}
 

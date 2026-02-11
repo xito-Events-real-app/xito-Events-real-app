@@ -1,6 +1,7 @@
 import { MapPin, ExternalLink } from "lucide-react";
 import { EventDetailsData, EventDetail } from "@/hooks/useEventDetails";
 import { getMonthName } from "@/lib/nepali-months";
+import { FreelancerAssignment } from "@/lib/freelancer-assignment-api";
 
 interface ClientEventsData {
   events: string;
@@ -13,7 +14,22 @@ interface DashboardEventDetailsProps {
   eventDetailsData: EventDetailsData | null;
   isLoading?: boolean;
   clientEvents?: ClientEventsData;
+  freelancerAssignments?: FreelancerAssignment[];
 }
+
+// Role config for display
+const ROLE_CONFIG: { field: keyof FreelancerAssignment; label: string; color: string }[] = [
+  { field: 'photographerBride', label: 'PB', color: 'text-amber-600 bg-amber-50' },
+  { field: 'photographerGroom', label: 'PG', color: 'text-amber-700 bg-amber-50' },
+  { field: 'videographerBride', label: 'VB', color: 'text-purple-600 bg-purple-50' },
+  { field: 'videographerGroom', label: 'VG', color: 'text-purple-700 bg-purple-50' },
+  { field: 'extraPhotographer', label: 'EP', color: 'text-orange-600 bg-orange-50' },
+  { field: 'extraVideographer', label: 'EV', color: 'text-fuchsia-600 bg-fuchsia-50' },
+  { field: 'assistant', label: 'Asst', color: 'text-emerald-600 bg-emerald-50' },
+  { field: 'iphoneShooter', label: 'iPhone', color: 'text-cyan-600 bg-cyan-50' },
+  { field: 'droneOperator', label: 'Drone', color: 'text-sky-600 bg-sky-50' },
+  { field: 'fpvOperator', label: 'FPV', color: 'text-teal-600 bg-teal-50' },
+];
 
 // Build basic events from client data when no detailed event data exists
 function buildBasicEvents(clientData?: ClientEventsData): EventDetail[] {
@@ -71,7 +87,18 @@ function formatTime(time: string): string {
   return time;
 }
 
-const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents }: DashboardEventDetailsProps) => {
+// Find matching assignment for an event
+function findAssignment(assignments: FreelancerAssignment[] | undefined, event: EventDetail): FreelancerAssignment | undefined {
+  if (!assignments?.length) return undefined;
+  return assignments.find(a => {
+    const nameMatch = a.event?.trim().toLowerCase() === event.eventName?.trim().toLowerCase();
+    const monthMatch = String(a.eventMonth)?.trim() === String(event.eventMonth)?.trim();
+    const dayMatch = String(a.eventDay)?.trim() === String(event.eventDay)?.trim();
+    return nameMatch && monthMatch && dayMatch;
+  });
+}
+
+const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, freelancerAssignments }: DashboardEventDetailsProps) => {
   if (isLoading) {
     return (
       <div className="bg-slate-800/50 rounded-xl p-4 mt-4 animate-pulse">
@@ -117,13 +144,18 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents }: Da
             ? `${formatTime(event.parlourStartTime)} - ${formatTime(event.parlourEndTime)}`
             : event.parlourStartTime ? formatTime(event.parlourStartTime) : '';
 
+          const assignment = findAssignment(freelancerAssignments, event);
+          const assignedRoles = assignment
+            ? ROLE_CONFIG.filter(r => assignment[r.field] && String(assignment[r.field]).trim())
+            : [];
+
           return (
             <div 
               key={event.eventIndex} 
               className="flex gap-4 border-b border-slate-700/30 pb-3 last:border-0 last:pb-0"
             >
               {/* LEFT - Event Name/Date */}
-              <div className="w-1/4 min-w-[100px]">
+              <div className="w-1/5 min-w-[80px]">
                 <div className="text-sm font-bold uppercase text-emerald-400">
                   {monthName} {event.eventDay}
                 </div>
@@ -132,8 +164,8 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents }: Da
                 </div>
               </div>
 
-              {/* RIGHT - Venue & Parlour */}
-              <div className="w-3/4 space-y-1.5">
+              {/* MIDDLE - Venue & Parlour */}
+              <div className={`${assignedRoles.length ? 'w-2/5' : 'w-4/5'} space-y-1.5`}>
                 {/* Venue */}
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <span className="text-xs font-medium text-amber-400">Venue:</span>
@@ -199,6 +231,22 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents }: Da
                   )}
                 </div>
               </div>
+
+              {/* RIGHT - Assigned Freelancers */}
+              {assignedRoles.length > 0 && (
+                <div className="w-2/5 space-y-1">
+                  {assignedRoles.map(role => (
+                    <div key={role.field} className="flex items-center gap-1.5">
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${role.color}`}>
+                        {role.label}
+                      </span>
+                      <span className="text-xs text-white/90 truncate">
+                        {String(assignment![role.field])}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}
