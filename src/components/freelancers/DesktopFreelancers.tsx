@@ -21,6 +21,7 @@ export function DesktopFreelancers() {
 
   const [freelancers, setFreelancers] = useState<FreelancerData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
   const [cityFilter, setCityFilter] = useState("");
@@ -29,16 +30,21 @@ export function DesktopFreelancers() {
   const [selectedFreelancer, setSelectedFreelancer] = useState<FreelancerData | null>(null);
   const [showDetailSheet, setShowDetailSheet] = useState(false);
 
-  const loadData = async () => {
-    setIsLoading(true);
+  const loadData = async (showSyncFeedback = false) => {
+    if (showSyncFeedback) setIsSyncing(true);
+    else setIsLoading(true);
     try {
       const data = await getFreelancers();
       setFreelancers(data);
+      if (showSyncFeedback) {
+        toast({ title: "Synced ✓", description: `${data.length} freelancers loaded from sheet` });
+      }
     } catch (error) {
       console.error('Error loading freelancers:', error);
       toast({ title: "Error", description: "Failed to load freelancers", variant: "destructive" });
     } finally {
       setIsLoading(false);
+      setIsSyncing(false);
     }
   };
 
@@ -156,9 +162,9 @@ export function DesktopFreelancers() {
                 </SelectContent>
               </Select>
 
-              <Button variant="ghost" size="icon" onClick={loadData} disabled={isLoading}
+              <Button variant="ghost" size="icon" onClick={() => loadData(true)} disabled={isSyncing}
                 className="text-slate-400 hover:text-white">
-                <RefreshCw className={`h-5 w-5 ${isLoading ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-5 w-5 ${isSyncing ? 'animate-spin' : ''}`} />
               </Button>
 
               <Button onClick={() => setShowAddDrawer(true)} className="bg-indigo-600 hover:bg-indigo-500 text-white">
