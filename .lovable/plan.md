@@ -1,56 +1,62 @@
 
 
-## Fix Unassigned Benzo Keep Notes Fetch + Add Star Feature and Proper View
+## Fix: Fetch ALL Unassigned Notes from ALL Rows in AM Column
 
-### Problem Found
+### Root Cause
 
-The edge function reads from `'CLIENT TRACKER'!AM2` and returns an empty array. The API call works (returns `{ data: [], success: true }`) but the cell appears empty. This is likely because:
-- The notes may have been saved to a different cell (row mismatch) or the column shifted
-- The cell content may have been cleared or overwritten during a sheet operation
+From the edge function logs, the data in column AM is distributed across multiple rows:
+- **Row 3 (AM3)**: 1 note (SAILESH & ANJALI)
+- **Row 4 (AM4)**: 1 note (MAYA SHRESTHA)
+- **Row 10 (AM10)**: 3 notes (date converter, lagaune wala, Srijana sharma)
 
-### Fix: Add Logging + Resilient Fetch
+But the current code has a `return parsed;` inside the loop -- it **returns immediately** after finding the first valid row, so only 1 note is returned instead of all 5.
 
-**1. Edge Function (`supabase/functions/google-sheets/index.ts`)**
+### Fix
 
-- Add console logging to `getUnassignedBenzoKeepNotes` to show what raw data is returned from the sheet cell, so we can debug whether the cell is truly empty or the JSON is malformed
-- Also try reading a wider range (`AM2:AM3`) in case notes ended up in a different row
-- Add the `isStarred` field to the `UnassignedBenzoNote` interface
+**File: `supabase/functions/google-sheets/index.ts` (lines 296-314)**
 
-**2. Frontend Interface Updates**
+Change the loop to **collect** notes from all rows into a single array, then return the combined result:
 
-Add `isStarred: boolean` to:
-- `UnassignedBenzoNote` interface in `supabase/functions/google-sheets/index.ts` (line 264)
-- `UnassignedBenzoNote` interface in `src/lib/sheets-api.ts` (line 774)
-- `UnassignedBenzoNote` interface in `src/hooks/useUnassignedBenzoKeepNotes.ts` (line 11)
+```typescript
+// Collect notes from ALL rows
+const allNotes: UnassignedBenzoNote[] = [];
 
-### New Features
+for (let i = 0; i < data.values.length; i++) {
+  const cellValue = data.values[i]?.[0];
+  if (cellValue) {
+    try {
+      const parsed = JSON.parse(cellValue);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        console.log(`[UNASSIGNED NOTES] Found ${parsed.length} notes in row ${i + 2}`);
+        allNotes.push(...parsed);
+      }
+    } catch (e) {
+      console.log(`[UNASSIGNED NOTES] Row ${i + 2} JSON parse failed:`, e);
+    }
+  }
+}
 
-**3. Star Notes (`src/components/suite/UnassignedBenzoKeepDialog.tsx`)**
+console.log(`[UNASSIGNED NOTES] Total notes collected: ${allNotes.length}`);
+return allNotes;
+```
 
-- Add a star icon button (Star from lucide-react) on each note card, next to the edit/delete buttons
-- Clicking toggles `isStarred` on the note and saves it back via `saveNote`
-- Starred notes show a filled yellow star icon
-- Sort order: starred notes first, then by `lastUpdated` descending (recent to old)
+This is a one-file, ~10-line change. The hook and UI already have star/sort/tabs support from the previous update -- they just need data.
 
-**4. Proper Date-Sorted View Tab**
+### Save Fix
 
-- Replace the current flat list with a Tabs component having two tabs:
-  - **All Notes** - shows all notes sorted by date (recent to old), starred first
-  - **Starred** - shows only starred notes, sorted by date
-- Each note card shows the creation date prominently
-- The existing note card layout (colored background, actions, Xito Search) stays the same
+The `saveUnassignedBenzoKeepNote` and `deleteUnassignedBenzoKeepNote` functions also call `getUnassignedBenzoKeepNotes` first, then save the updated array back to **AM2 only**. Since notes are spread across multiple rows, saving back to AM2 will consolidate them and the old rows will become stale duplicates.
 
-**5. Sorting Logic in Hook (`src/hooks/useUnassignedBenzoKeepNotes.ts`)**
+To fix this properly:
+1. After collecting all notes, save the consolidated array back to AM2
+2. Clear the other rows (AM3:AM10) so notes don't duplicate on next fetch
 
-- Update the sort in `fetchNotes` to sort starred first, then by `lastUpdated` descending
-- Add a `toggleStar` function that flips `isStarred` and saves
+This means updating `saveUnassignedBenzoKeepNote` to also clear AM3:AM10 after writing to AM2.
 
 ### Files to Change
 
 | File | Change |
 |------|--------|
-| `supabase/functions/google-sheets/index.ts` | Add logging to fetch, add `isStarred` to interface |
-| `src/lib/sheets-api.ts` | Add `isStarred` to `UnassignedBenzoNote` interface |
-| `src/hooks/useUnassignedBenzoKeepNotes.ts` | Add `isStarred`, update sort logic, add `toggleStar` |
-| `src/components/suite/UnassignedBenzoKeepDialog.tsx` | Add star button, tabs for All/Starred, date-sorted view |
+| `supabase/functions/google-sheets/index.ts` | Fix fetch loop to collect ALL notes; consolidate saves to AM2 and clear AM3:AM10 |
+
+No frontend changes needed -- the hook and UI already support star, tabs, and date sorting.
 
