@@ -5876,7 +5876,7 @@ const FIELD_TO_COL_INDEX: Record<string, number> = {
 };
 
 async function getClientFreelancerAssignments(accessToken: string, spreadsheetId: string, registeredDateTimeAD: string) {
-  // 1. Read event details for this client
+  // 1. Read event details for this client (events are stored as newline-separated values in a single row)
   const eventRange = encodeURIComponent("'BOOKED CLIENTS EVENT DETAILS'!A2:H1000");
   const eventUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${eventRange}`;
   const eventResp = await fetch(eventUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -5884,9 +5884,34 @@ async function getClientFreelancerAssignments(accessToken: string, spreadsheetId
   const eventData = await eventResp.json();
   const eventRows = eventData.values || [];
 
-  // Find events for this client by registeredDateTimeAD (Column A)
-  const clientEvents = eventRows.filter((r: string[]) => (r[0] || '').trim() === registeredDateTimeAD.trim());
-  if (clientEvents.length === 0) return [];
+  // Find the row for this client by registeredDateTimeAD (Column A)
+  const clientRow = eventRows.find((r: string[]) => (r[0] || '').trim() === registeredDateTimeAD.trim());
+  if (!clientRow) return [];
+
+  // Parse newline-separated events into individual event objects
+  const eventNames = (clientRow[3] || '').split('\n');
+  const eventYears = (clientRow[4] || '').split('\n');
+  const eventMonths = (clientRow[5] || '').split('\n');
+  const eventDays = (clientRow[6] || '').split('\n');
+  const eventDatesAD = (clientRow[7] || '').split('\n');
+  const clientName = (clientRow[2] || '').trim();
+  const regDateTimeAD = clientRow[0] || '';
+  const regDateBS = clientRow[1] || '';
+
+  const parsedEvents: { name: string; year: string; month: string; day: string; dateAD: string }[] = [];
+  for (let i = 0; i < eventNames.length; i++) {
+    const name = (eventNames[i] || '').trim();
+    if (!name) continue;
+    parsedEvents.push({
+      name,
+      year: (eventYears[i] || '').trim(),
+      month: (eventMonths[i] || '').trim(),
+      day: (eventDays[i] || '').trim(),
+      dateAD: (eventDatesAD[i] || '').trim(),
+    });
+  }
+
+  if (parsedEvents.length === 0) return [];
 
   // 2. Read freelancer assignments sheet
   const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:R1000");
@@ -5898,22 +5923,19 @@ async function getClientFreelancerAssignments(accessToken: string, spreadsheetId
     flRows = flData.values || [];
   }
 
-  // 3. For each client event, ensure a row exists in freelancers sheet
-  const clientName = clientEvents[0]?.[2] || '';
+  // 3. For each parsed event, ensure a row exists in freelancers sheet
   const newRows: string[][] = [];
 
-  for (const ev of clientEvents) {
-    const evName = (ev[3] || '').trim();
-    const evDateAD = (ev[7] || '').trim();
+  for (const ev of parsedEvents) {
     // Check if row already exists (unique key: clientName + event + eventDateAD)
     const exists = flRows.some((fr: string[]) =>
-      (fr[2] || '').trim() === clientName.trim() &&
-      (fr[3] || '').trim() === evName &&
-      (fr[7] || '').trim() === evDateAD
+      (fr[2] || '').trim().toLowerCase() === clientName.toLowerCase() &&
+      (fr[3] || '').trim().toLowerCase() === ev.name.toLowerCase() &&
+      (fr[7] || '').trim() === ev.dateAD
     );
     if (!exists) {
       // Create new row: Cols A-H from event details, I-R empty
-      newRows.push([ev[0]||'', ev[1]||'', ev[2]||'', ev[3]||'', ev[4]||'', ev[5]||'', ev[6]||'', ev[7]||'', '', '', '', '', '', '', '', '', '', '']);
+      newRows.push([regDateTimeAD, regDateBS, clientName, ev.name, ev.year, ev.month, ev.day, ev.dateAD, '', '', '', '', '', '', '', '', '', '']);
     }
   }
 
