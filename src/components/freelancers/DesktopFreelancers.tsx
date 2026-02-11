@@ -93,8 +93,7 @@ export function DesktopFreelancers() {
       // Search by name
       if (searchQuery && !f.name?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
       // City filter
-      if (cityFilter && f.city !== cityFilter) return false;
-      // Main job filter
+      if (cityFilter && f.city?.toLowerCase() !== cityFilter.toLowerCase()) return false;
       if (mainJobFilter && f.mainJob?.toLowerCase() !== mainJobFilter.toLowerCase()) return false;
       return true;
     });
