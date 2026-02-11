@@ -1,80 +1,123 @@
 
 
-## Restore Google Keep-Style Notes with Grid Layout
+## Activate Freelancers Module in Xito Business Suite
 
-### What Went Wrong
-The current page uses dark backgrounds with faint colored left borders instead of the original **bright colored note backgrounds** (yellow, green, pink, blue, orange) like Google Keep. Notes are also displayed in a single vertical list, wasting screen space.
+This is a large feature that mirrors the Vendors module pattern but connects to a **separate Google Spreadsheet** ("WTN FREELANCERS") and includes unique logic for Main Job selection, dynamic secondary role checkboxes, and auto-calculated hybrid fields.
 
-### Changes
+### Phase 1: Add Secret for Freelancers Spreadsheet
 
-**File: `src/pages/BenzoKeepPage.tsx` (rewrite)**
+A new secret `WTN_FREELANCERS_SPREADSHEET_ID` needs to be added with value `1iBznJm3E8pM6aVbXX2-VPUso5C4aHCKUG3by197V_-8`.
 
-1. **Restore Google Keep colored backgrounds**
-   - Use the original color scheme from `UnassignedBenzoKeepDialog.tsx`:
-     - Yellow: `bg-yellow-100 border-yellow-300`
-     - Green: `bg-green-100 border-green-300`
-     - Pink: `bg-pink-100 border-pink-300`
-     - Blue: `bg-blue-100 border-blue-300`
-     - Orange: `bg-orange-100 border-orange-300`
-   - Text stays dark (`text-gray-800`) on these light backgrounds
+### Phase 2: Backend - Edge Function Actions
 
-2. **Grid layout to show 9+ notes at once**
-   - Use a responsive CSS grid: `grid-cols-2 sm:grid-cols-3` (3 columns on tablet/desktop, 2 on mobile)
-   - Each note card is compact: 3-4 lines of content visible with `line-clamp-3`
-   - Small text size and tight padding to maximize density
-   - Star icon, date, and quick action icons on each card
+Add the following actions to `supabase/functions/google-sheets/index.ts`:
 
-3. **Click to expand inline**
-   - Clicking a note card expands it to show full content, Xito Search, and action buttons (Assign, Edit, Delete)
-   - Expanded card stays in-grid but takes full width or shows a modal-like overlay
+| Action | Description |
+|--------|-------------|
+| `getFreelancers` | Read `'FREELANCERS'!A2:R500` from the freelancers spreadsheet, map columns A-R to data fields |
+| `addFreelancer` | Insert a new row at row 2 of `'FREELANCERS'` sheet with all 18 columns. Also mirror to category sheets |
+| `updateFreelancer` | Update an existing row by rowNumber. Recalculate hybrid fields and re-mirror to category sheets |
+| `deleteFreelancer` | Delete a row from `'FREELANCERS'` sheet and remove from all category sheets |
 
-4. **Full Screen view preserved**
-   - "Full Screen" button on expanded cards opens the dedicated full-width detail overlay (keep existing full-screen logic but with light colored backgrounds instead of dark)
+**Column Mapping (A-R):**
+- A: Name, B: Contact No, C: WhatsApp, D: Instagram, E: Facebook, F: City, G: Area, H: Map, I: Pathao Landmark, J: Main Job, K: Photographer, L: Videographer, M: Photo Editor, N: Video Editor, O: Hybrid Shooter, P: Hybrid Editor, Q: Drone Operator, R: FPV Operator
 
-5. **Keep all existing features**
-   - Stats bar (make it more compact -- single row)
-   - Tabs (All / Starred) in header
-   - Add Note form
-   - Star toggle, Edit, Delete, Assign to Client
-   - Color picker when adding/editing
+**Save Logic:**
+- Main Job selection auto-sets the corresponding column to "YES"
+- Additional role checkboxes set their columns to "YES" or "NO"
+- Hybrid Shooter (O) = "YES" if K=YES AND L=YES
+- Hybrid Editor (P) = "YES" if M=YES AND N=YES
 
-### Visual Layout (Desktop - 3 columns)
+**Category Sheet Mirroring:**
+After add/update, mirror the row (A-R) into category sheets based on conditions:
+- `PHOTOGRAPHER` sheet if K=YES
+- `VIDEOGRAPHER` sheet if L=YES
+- `PHOTO EDITOR` sheet if M=YES
+- `VIDEO EDITOR` sheet if N=YES
+- `HYBRID SHOOTER` sheet if K=YES AND L=YES
+- `HYBRID EDITOR` sheet if M=YES AND N=YES
+- `DRONE/FPV OPERATOR` sheet if Q=YES OR R=YES
+
+Mirroring uses Name (Column A) as the identifier to find/update/add rows in each category sheet.
+
+### Phase 3: Frontend API Layer
+
+**New file: `src/lib/freelancer-api.ts`**
 
 ```text
-+--[yellow bg]--------+  +--[pink bg]----------+  +--[blue bg]----------+
-| * Note content...   |  | Note content here... |  | * Another note...   |
-|   truncated to 3    |  |   truncated to 3     |  |   truncated to 3    |
-|   lines max         |  |   lines max          |  |   lines max         |
-| [date]   [star][...] | | [date]   [star][...] |  | [date]   [star][...] |
-+---------------------+  +----------------------+  +----------------------+
-+--[green bg]---------+  +--[orange bg]---------+  +--[yellow bg]---------+
-| Note content...     |  | Note content...      |  | Note content...      |
-|   ...               |  |   ...                |  |   ...                |
-| [date]   [star][...] | | [date]   [star][...] |  | [date]   [star][...] |
-+---------------------+  +----------------------+  +----------------------+
-+--[blue bg]----------+  +--[pink bg]-----------+  +--[green bg]----------+
-| Note content...     |  | Note content...      |  | Note content...      |
-| [date]   [star][...] | | [date]   [star][...] |  | [date]   [star][...] |
-+---------------------+  +----------------------+  +----------------------+
+FreelancerData interface:
+  rowNumber, name, contactNo, whatsappNo, instagram, facebook,
+  city, area, mapLink, pathaoLandmark, mainJob,
+  photographer, videographer, photoEditor, videoEditor,
+  hybridShooter, hybridEditor, droneOperator, fpvOperator
+
+Functions:
+  getFreelancers() -> FreelancerData[]
+  addFreelancer(data) -> void
+  updateFreelancer(data) -> void
+  deleteFreelancer(rowNumber) -> void
 ```
 
-### Technical Details
+All functions call the edge function with the respective action, following the same pattern as `vendor-api.ts`.
 
-| Area | Detail |
+### Phase 4: Frontend Components
+
+**New directory: `src/components/freelancers/`**
+
+| Component | Description |
+|-----------|-------------|
+| `DesktopFreelancers.tsx` | Main page layout (mirrors `DesktopVendors.tsx`): sidebar + header + table + drawers |
+| `FreelancerTypeSidebar.tsx` | Left sidebar with role categories: All, Photographer, Videographer, Photo Editor, Video Editor, Hybrid Shooter, Hybrid Editor, Drone/FPV Operator -- with counts |
+| `FreelancerTable.tsx` | Table showing Name, Main Job, City, Area, Contact, role badges (YES roles shown as colored badges), and social link icons (Instagram, Facebook, Map) |
+| `AddFreelancerDrawer.tsx` | Form with: Name (required), Contact No, WhatsApp, Instagram, Facebook, City dropdown (priority cities), Area, Map, Pathao Landmark, Main Job dropdown, then dynamic secondary checkboxes |
+| `FreelancerDetailSheet.tsx` | Side panel for viewing/editing a freelancer with all fields, save and delete actions |
+| `index.ts` | Barrel exports |
+
+**Dynamic Form Logic in AddFreelancerDrawer:**
+1. User selects Main Job from dropdown (Photographer, Videographer, Video Editor, Photo Editor, Drone/FPV Operator)
+2. Below it, a section appears: "Apart from your main profession, do you professionally do the following?"
+3. Checkboxes shown for all OTHER roles (excluding the main job selection)
+4. If Main Job = "Drone/FPV Operator", show separate Drone Operator and FPV Operator checkboxes
+5. On save: Main Job column = YES, checked roles = YES, unchecked = NO, then calculate Hybrid Shooter and Hybrid Editor
+
+### Phase 5: Page and Routing
+
+**New file: `src/pages/Freelancers.tsx`**
+- Uses `useDesktopMode()` to show `DesktopFreelancers` or a mobile version (desktop-only for now)
+
+**Update `src/App.tsx`:**
+- Import `Freelancers` page
+- Change `/freelancers` route from `ComingSoon` to `Freelancers`
+
+**Update `src/lib/suite-modules.ts`:**
+- Change freelancers module `status` from `'coming-soon'` to `'active'`
+
+### Phase 6: Filters
+
+The sidebar provides filtering by role type. The header provides:
+- **Search by Name** -- text input filtering
+- **Filter by City** -- dropdown or inline filter
+- **Filter by Main Job** -- dropdown filter
+
+All filtering is done client-side on the fetched data array.
+
+### Files to Create/Modify
+
+| File | Action |
 |------|--------|
-| Colors | Restore `bg-yellow-100`, `bg-green-100`, `bg-pink-100`, `bg-blue-100`, `bg-orange-100` with matching borders |
-| Grid | `grid grid-cols-2 sm:grid-cols-3 gap-3` for 9+ notes visible |
-| Card size | `p-3`, `text-sm`, `line-clamp-3` for compact display |
-| Expand | Click card to show full content + actions in an overlay/modal |
-| Full screen | Keep existing full-screen overlay but with light colored background |
-| Page background | Keep the dark gradient (`from-slate-900`) as the page background -- the note cards pop against it with their bright colors |
-| Stats bar | Compress to a single compact row |
-| Header | Keep sticky header with tabs and add button |
+| `supabase/functions/google-sheets/index.ts` | Add `getFreelancers`, `addFreelancer`, `updateFreelancer`, `deleteFreelancer` actions + category sheet mirroring |
+| `src/lib/freelancer-api.ts` | **New** -- API functions |
+| `src/components/freelancers/DesktopFreelancers.tsx` | **New** -- Main desktop layout |
+| `src/components/freelancers/FreelancerTypeSidebar.tsx` | **New** -- Role category sidebar |
+| `src/components/freelancers/FreelancerTable.tsx` | **New** -- Data table |
+| `src/components/freelancers/AddFreelancerDrawer.tsx` | **New** -- Add form with dynamic job logic |
+| `src/components/freelancers/FreelancerDetailSheet.tsx` | **New** -- Detail/edit sheet |
+| `src/components/freelancers/index.ts` | **New** -- Barrel exports |
+| `src/pages/Freelancers.tsx` | **New** -- Page component |
+| `src/App.tsx` | Update route from ComingSoon to Freelancers |
+| `src/lib/suite-modules.ts` | Change freelancers status to `'active'` |
 
-### Files to Change
+### Secret Required
 
-| File | Change |
-|------|--------|
-| `src/pages/BenzoKeepPage.tsx` | Rewrite note cards to use Google Keep colors, grid layout, compact cards, expand/fullscreen |
+`WTN_FREELANCERS_SPREADSHEET_ID` = `1iBznJm3E8pM6aVbXX2-VPUso5C4aHCKUG3by197V_-8`
 
-No other files need changes -- routing and navigation are already set up.
