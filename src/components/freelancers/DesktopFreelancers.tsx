@@ -13,7 +13,7 @@ import { AddFreelancerDrawer } from "./AddFreelancerDrawer";
 import { FreelancerDetailSheet } from "./FreelancerDetailSheet";
 import { useToast } from "@/hooks/use-toast";
 
-const MAIN_JOBS = ['Photographer', 'Videographer', 'Video Editor', 'Photo Editor', 'Hybrid Shooter', 'Hybrid Editor', 'Drone Operator', 'FPV Operator'];
+const MAIN_JOBS = ['Photographer', 'Videographer', 'Video Editor', 'Photo Editor', 'Hybrid Shooter', 'Hybrid Editor', 'Drone Operator', 'FPV Operator', 'iPhone Shooter'];
 
 const norm = (v?: string | null) => String(v ?? '').trim();
 const normLower = (v?: string | null) => norm(v).toLowerCase();
@@ -71,6 +71,7 @@ export function DesktopFreelancers() {
       if (hybridEditor) counts['Hybrid Editor'] = (counts['Hybrid Editor'] || 0) + 1;
       if (isYes(f.droneOperator)) counts['Drone Operator'] = (counts['Drone Operator'] || 0) + 1;
       if (isYes(f.fpvOperator)) counts['FPV Operator'] = (counts['FPV Operator'] || 0) + 1;
+      if (isYes(f.iphoneShooter)) counts['iPhone Shooter'] = (counts['iPhone Shooter'] || 0) + 1;
     });
 
     return counts;
@@ -105,6 +106,7 @@ export function DesktopFreelancers() {
         'Hybrid Editor': hybridEditor,
         'Drone Operator': isYes(f.droneOperator),
         'FPV Operator': isYes(f.fpvOperator),
+        'iPhone Shooter': isYes(f.iphoneShooter),
       };
 
       return roleMap[role] ?? true;
@@ -134,6 +136,8 @@ export function DesktopFreelancers() {
           return isYes(f.droneOperator) || normLower(f.mainJob).includes('drone');
         case 'fpv operator':
           return isYes(f.fpvOperator) || normLower(f.mainJob).includes('fpv');
+        case 'iphone shooter':
+          return isYes(f.iphoneShooter) || normLower(f.mainJob).includes('iphone');
         default:
           return normLower(f.mainJob) === key;
       }

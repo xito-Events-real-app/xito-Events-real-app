@@ -22,6 +22,7 @@ const ROLE_BADGES: { key: keyof FreelancerData; label: string; color: string }[]
   { key: 'hybridEditor', label: 'H.Edit', color: 'bg-pink-600/30 text-pink-300 border-pink-500/30' },
   { key: 'droneOperator', label: 'Drone', color: 'bg-emerald-600/30 text-emerald-300 border-emerald-500/30' },
   { key: 'fpvOperator', label: 'FPV', color: 'bg-amber-600/30 text-amber-300 border-amber-500/30' },
+  { key: 'iphoneShooter', label: 'iPhone', color: 'bg-lime-600/30 text-lime-300 border-lime-500/30' },
 ];
 
 const SocialLink = ({ icon: Icon, value, color, tooltip }: {

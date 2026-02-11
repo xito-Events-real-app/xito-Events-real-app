@@ -5395,6 +5395,7 @@ const FREELANCER_CATEGORY_SHEETS = [
   { sheet: 'HYBRID EDITOR', check: (d: Record<string, unknown>) => String(d.photoEditor || '').toUpperCase() === 'YES' && String(d.videoEditor || '').toUpperCase() === 'YES' },
   { sheet: 'DRONE OPERATOR', check: (d: Record<string, unknown>) => String(d.droneOperator || '').toUpperCase() === 'YES' },
   { sheet: 'FPV OPERATOR', check: (d: Record<string, unknown>) => String(d.fpvOperator || '').toUpperCase() === 'YES' },
+  { sheet: 'IPHONE SHOOTER', check: (d: Record<string, unknown>) => String(d.iphoneShooter || '').toUpperCase() === 'YES' },
 ];
 
 function freelancerRowValues(d: Record<string, unknown>): string[] {
@@ -5417,6 +5418,7 @@ function freelancerRowValues(d: Record<string, unknown>): string[] {
     (d.hybridEditor as string) || 'NO',
     (d.droneOperator as string) || 'NO',
     (d.fpvOperator as string) || 'NO',
+    (d.iphoneShooter as string) || 'NO',
   ];
 }
 
@@ -5433,7 +5435,7 @@ async function mirrorToFreelancerCategorySheets(
 
     try {
       // Read existing rows to find by name
-      const range = encodeURIComponent(`'${cat.sheet}'!A2:R500`);
+      const range = encodeURIComponent(`'${cat.sheet}'!A2:S500`);
       const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
       const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
 
@@ -5451,7 +5453,7 @@ async function mirrorToFreelancerCategorySheets(
         if (existingRowIdx >= 0) {
           // Update existing row
           const updateRow = existingRowIdx + 2;
-          const updateRange = encodeURIComponent(`'${cat.sheet}'!A${updateRow}:R${updateRow}`);
+          const updateRange = encodeURIComponent(`'${cat.sheet}'!A${updateRow}:S${updateRow}`);
           const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`;
           await fetch(updateUrl, {
             method: 'PUT',
@@ -5469,7 +5471,7 @@ async function mirrorToFreelancerCategorySheets(
               requests: [{ insertDimension: { range: { sheetId, dimension: 'ROWS', startIndex: 1, endIndex: 2 }, inheritFromBefore: false } }],
             }),
           });
-          const writeRange = encodeURIComponent(`'${cat.sheet}'!A2:R2`);
+          const writeRange = encodeURIComponent(`'${cat.sheet}'!A2:S2`);
           const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${writeRange}?valueInputOption=USER_ENTERED`;
           await fetch(writeUrl, {
             method: 'PUT',
@@ -5497,7 +5499,7 @@ async function mirrorToFreelancerCategorySheets(
 }
 
 async function getFreelancersData(accessToken: string, spreadsheetId: string, limit = 500) {
-  const range = encodeURIComponent("'FREELANCERS'!A2:R" + (limit + 1));
+  const range = encodeURIComponent("'FREELANCERS'!A2:S" + (limit + 1));
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
 
   const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -5529,6 +5531,7 @@ async function getFreelancersData(accessToken: string, spreadsheetId: string, li
     hybridEditor: row[15] || 'NO',
     droneOperator: row[16] || 'NO',
     fpvOperator: row[17] || 'NO',
+    iphoneShooter: row[18] || 'NO',
   }));
 }
 
@@ -5546,7 +5549,7 @@ async function addFreelancerData(accessToken: string, spreadsheetId: string, d: 
   });
 
   const values = [freelancerRowValues(d)];
-  const range = encodeURIComponent("'FREELANCERS'!A2:R2");
+  const range = encodeURIComponent("'FREELANCERS'!A2:S2");
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
 
   const response = await fetch(updateUrl, {
@@ -5571,7 +5574,7 @@ async function updateFreelancerData(accessToken: string, spreadsheetId: string, 
   if (!rowNumber || rowNumber < 2) throw new Error('Valid rowNumber is required');
 
   const values = [freelancerRowValues(d)];
-  const range = encodeURIComponent(`'FREELANCERS'!A${rowNumber}:R${rowNumber}`);
+  const range = encodeURIComponent(`'FREELANCERS'!A${rowNumber}:S${rowNumber}`);
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
 
   const response = await fetch(updateUrl, {

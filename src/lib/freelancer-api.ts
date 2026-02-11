@@ -20,6 +20,7 @@ export interface FreelancerData {
   hybridEditor: string;
   droneOperator: string;
   fpvOperator: string;
+  iphoneShooter: string;
 }
 
 export async function getFreelancers(limit = 500): Promise<FreelancerData[]> {
