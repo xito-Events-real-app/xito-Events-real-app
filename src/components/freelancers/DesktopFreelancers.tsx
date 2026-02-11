@@ -15,6 +15,10 @@ import { useToast } from "@/hooks/use-toast";
 
 const MAIN_JOBS = ['Photographer', 'Videographer', 'Video Editor', 'Photo Editor', 'Hybrid Shooter', 'Hybrid Editor', 'Drone Operator', 'FPV Operator'];
 
+const norm = (v?: string | null) => String(v ?? '').trim();
+const normLower = (v?: string | null) => norm(v).toLowerCase();
+const isYes = (v?: string | null) => norm(v).toUpperCase() === 'YES';
+
 export function DesktopFreelancers() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -54,47 +58,100 @@ export function DesktopFreelancers() {
   // Role counts for sidebar
   const roleCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    freelancers.forEach(f => {
-      if (f.photographer?.toUpperCase() === 'YES') counts['Photographer'] = (counts['Photographer'] || 0) + 1;
-      if (f.videographer?.toUpperCase() === 'YES') counts['Videographer'] = (counts['Videographer'] || 0) + 1;
-      if (f.photoEditor?.toUpperCase() === 'YES') counts['Photo Editor'] = (counts['Photo Editor'] || 0) + 1;
-      if (f.videoEditor?.toUpperCase() === 'YES') counts['Video Editor'] = (counts['Video Editor'] || 0) + 1;
-      if (f.hybridShooter?.toUpperCase() === 'YES') counts['Hybrid Shooter'] = (counts['Hybrid Shooter'] || 0) + 1;
-      if (f.hybridEditor?.toUpperCase() === 'YES') counts['Hybrid Editor'] = (counts['Hybrid Editor'] || 0) + 1;
-      if (f.droneOperator?.toUpperCase() === 'YES') counts['Drone Operator'] = (counts['Drone Operator'] || 0) + 1;
-      if (f.fpvOperator?.toUpperCase() === 'YES') counts['FPV Operator'] = (counts['FPV Operator'] || 0) + 1;
+
+    freelancers.forEach((f) => {
+      const hybridShooter = isYes(f.hybridShooter) || (isYes(f.photographer) && isYes(f.videographer));
+      const hybridEditor = isYes(f.hybridEditor) || (isYes(f.photoEditor) && isYes(f.videoEditor));
+
+      if (isYes(f.photographer)) counts['Photographer'] = (counts['Photographer'] || 0) + 1;
+      if (isYes(f.videographer)) counts['Videographer'] = (counts['Videographer'] || 0) + 1;
+      if (isYes(f.photoEditor)) counts['Photo Editor'] = (counts['Photo Editor'] || 0) + 1;
+      if (isYes(f.videoEditor)) counts['Video Editor'] = (counts['Video Editor'] || 0) + 1;
+      if (hybridShooter) counts['Hybrid Shooter'] = (counts['Hybrid Shooter'] || 0) + 1;
+      if (hybridEditor) counts['Hybrid Editor'] = (counts['Hybrid Editor'] || 0) + 1;
+      if (isYes(f.droneOperator)) counts['Drone Operator'] = (counts['Drone Operator'] || 0) + 1;
+      if (isYes(f.fpvOperator)) counts['FPV Operator'] = (counts['FPV Operator'] || 0) + 1;
     });
+
     return counts;
   }, [freelancers]);
 
   // Unique cities for filter
   const uniqueCities = useMemo(() => {
-    const cities = new Set(freelancers.map(f => f.city).filter(Boolean));
-    return Array.from(cities).sort();
+    const cityMap = new Map<string, string>();
+
+    freelancers.forEach((f) => {
+      const raw = norm(f.city);
+      if (!raw) return;
+      const key = raw.toLowerCase();
+      if (!cityMap.has(key)) cityMap.set(key, raw);
+    });
+
+    return Array.from(cityMap.values()).sort((a, b) => a.localeCompare(b));
   }, [freelancers]);
 
   // Filter freelancers
   const filteredFreelancers = useMemo(() => {
-    return freelancers.filter(f => {
-      // Role filter from sidebar
-      if (selectedRole) {
-        const roleMap: Record<string, (f: FreelancerData) => boolean> = {
-          'Photographer': (f) => f.photographer?.toUpperCase() === 'YES',
-          'Videographer': (f) => f.videographer?.toUpperCase() === 'YES',
-          'Photo Editor': (f) => f.photoEditor?.toUpperCase() === 'YES',
-          'Video Editor': (f) => f.videoEditor?.toUpperCase() === 'YES',
-          'Hybrid Shooter': (f) => f.hybridShooter?.toUpperCase() === 'YES',
-          'Hybrid Editor': (f) => f.hybridEditor?.toUpperCase() === 'YES',
-          'Drone Operator': (f) => f.droneOperator?.toUpperCase() === 'YES',
-          'FPV Operator': (f) => f.fpvOperator?.toUpperCase() === 'YES',
-        };
-        if (roleMap[selectedRole] && !roleMap[selectedRole](f)) return false;
+    const matchesRole = (f: FreelancerData, role: string) => {
+      const hybridShooter = isYes(f.hybridShooter) || (isYes(f.photographer) && isYes(f.videographer));
+      const hybridEditor = isYes(f.hybridEditor) || (isYes(f.photoEditor) && isYes(f.videoEditor));
+
+      const roleMap: Record<string, boolean> = {
+        'Photographer': isYes(f.photographer),
+        'Videographer': isYes(f.videographer),
+        'Photo Editor': isYes(f.photoEditor),
+        'Video Editor': isYes(f.videoEditor),
+        'Hybrid Shooter': hybridShooter,
+        'Hybrid Editor': hybridEditor,
+        'Drone Operator': isYes(f.droneOperator),
+        'FPV Operator': isYes(f.fpvOperator),
+      };
+
+      return roleMap[role] ?? true;
+    };
+
+    const matchesMainJobFilter = (f: FreelancerData, job: string) => {
+      const key = normLower(job);
+      if (!key) return true;
+
+      const hybridShooter = isYes(f.hybridShooter) || (isYes(f.photographer) && isYes(f.videographer));
+      const hybridEditor = isYes(f.hybridEditor) || (isYes(f.photoEditor) && isYes(f.videoEditor));
+
+      switch (key) {
+        case 'photographer':
+          return isYes(f.photographer) || normLower(f.mainJob) === key;
+        case 'videographer':
+          return isYes(f.videographer) || normLower(f.mainJob) === key;
+        case 'photo editor':
+          return isYes(f.photoEditor) || normLower(f.mainJob) === key;
+        case 'video editor':
+          return isYes(f.videoEditor) || normLower(f.mainJob) === key;
+        case 'hybrid shooter':
+          return hybridShooter || normLower(f.mainJob) === key;
+        case 'hybrid editor':
+          return hybridEditor || normLower(f.mainJob) === key;
+        case 'drone operator':
+          return isYes(f.droneOperator) || normLower(f.mainJob).includes('drone');
+        case 'fpv operator':
+          return isYes(f.fpvOperator) || normLower(f.mainJob).includes('fpv');
+        default:
+          return normLower(f.mainJob) === key;
       }
+    };
+
+    return freelancers.filter((f) => {
+      // Role filter from sidebar
+      if (selectedRole && !matchesRole(f, selectedRole)) return false;
+
       // Search by name
-      if (searchQuery && !f.name?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      if (searchQuery && !normLower(f.name).includes(normLower(searchQuery))) return false;
+
       // City filter
-      if (cityFilter && f.city?.toLowerCase() !== cityFilter.toLowerCase()) return false;
-      if (mainJobFilter && f.mainJob?.toLowerCase() !== mainJobFilter.toLowerCase()) return false;
+      if (cityFilter && normLower(f.city) !== normLower(cityFilter)) return false;
+
+      // Main Job filter (matches role YES columns + mainJob text)
+      if (mainJobFilter && !matchesMainJobFilter(f, mainJobFilter)) return false;
+
       return true;
     });
   }, [freelancers, selectedRole, searchQuery, cityFilter, mainJobFilter]);
