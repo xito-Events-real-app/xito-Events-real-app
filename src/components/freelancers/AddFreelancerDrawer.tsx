@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
-  Drawer, DrawerClose, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle,
-} from "@/components/ui/drawer";
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +10,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { X, UserCog, Phone, MessageCircle } from "lucide-react";
+import { UserCog, Phone, MessageCircle } from "lucide-react";
 import { CitySelector } from "@/components/vendors/CitySelector";
 import { SocialLinkInput } from "@/components/vendors/SocialLinkInput";
 import { addFreelancer } from "@/lib/freelancer-api";
@@ -85,7 +85,6 @@ export function AddFreelancerDrawer({ open, onOpenChange, onFreelancerAdded }: A
 
     setIsSubmitting(true);
     try {
-      // Build role columns
       const mainJobMap: Record<string, string> = {
         'Photographer': 'photographer',
         'Videographer': 'videographer',
@@ -100,17 +99,14 @@ export function AddFreelancerDrawer({ open, onOpenChange, onFreelancerAdded }: A
         droneOperator: 'NO', fpvOperator: 'NO',
       };
 
-      // Set main job
       if (mainJobMap[mainJob]) {
         roles[mainJobMap[mainJob]] = 'YES';
       }
 
-      // Set secondary roles
       Object.entries(secondaryRoles).forEach(([key, checked]) => {
         if (checked) roles[key] = 'YES';
       });
 
-      // Calculate hybrid fields
       const hybridShooter = roles.photographer === 'YES' && roles.videographer === 'YES' ? 'YES' : 'NO';
       const hybridEditor = roles.photoEditor === 'YES' && roles.videoEditor === 'YES' ? 'YES' : 'NO';
 
@@ -134,22 +130,21 @@ export function AddFreelancerDrawer({ open, onOpenChange, onFreelancerAdded }: A
   const availableSecondary = mainJob ? getSecondaryRoles(mainJob) : [];
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="bg-slate-900 border-slate-700 max-h-[90vh]">
-        <DrawerHeader className="border-b border-slate-700">
-          <div className="flex items-center justify-between">
-            <DrawerTitle className="text-white flex items-center gap-2">
-              <UserCog className="h-5 w-5" />
-              Add New Freelancer
-            </DrawerTitle>
-            <DrawerClose asChild>
-              <Button variant="ghost" size="icon" className="text-slate-400"><X className="h-5 w-5" /></Button>
-            </DrawerClose>
-          </div>
-        </DrawerHeader>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="bg-slate-900 border-slate-700 sm:max-w-lg max-h-[85vh] flex flex-col p-0"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-slate-700 flex-shrink-0">
+          <DialogTitle className="text-white flex items-center gap-2">
+            <UserCog className="h-5 w-5" />
+            Add New Freelancer
+          </DialogTitle>
+        </DialogHeader>
 
-        <ScrollArea className="flex-1 px-4 py-4 max-h-[60vh]">
-          <div className="space-y-6">
+        <ScrollArea className="flex-1 overflow-y-auto">
+          <div className="px-6 py-4 space-y-6">
             {/* Basic Info */}
             <div className="space-y-4">
               <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider">Basic Information</h3>
@@ -257,7 +252,7 @@ export function AddFreelancerDrawer({ open, onOpenChange, onFreelancerAdded }: A
           </div>
         </ScrollArea>
 
-        <DrawerFooter className="border-t border-slate-700">
+        <div className="px-6 py-4 border-t border-slate-700 flex-shrink-0">
           <div className="flex gap-2 w-full">
             <Button variant="outline" onClick={() => onOpenChange(false)}
               className="flex-1 border-slate-600 text-slate-300 hover:bg-slate-800">Cancel</Button>
@@ -266,8 +261,8 @@ export function AddFreelancerDrawer({ open, onOpenChange, onFreelancerAdded }: A
               {isSubmitting ? "Adding..." : "Add Freelancer"}
             </Button>
           </div>
-        </DrawerFooter>
-      </DrawerContent>
-    </Drawer>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
