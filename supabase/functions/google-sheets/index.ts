@@ -5393,7 +5393,8 @@ const FREELANCER_CATEGORY_SHEETS = [
   { sheet: 'VIDEO EDITOR', check: (d: Record<string, unknown>) => d.videoEditor === 'YES' },
   { sheet: 'HYBRID SHOOTER', check: (d: Record<string, unknown>) => d.photographer === 'YES' && d.videographer === 'YES' },
   { sheet: 'HYBRID EDITOR', check: (d: Record<string, unknown>) => d.photoEditor === 'YES' && d.videoEditor === 'YES' },
-  { sheet: 'DRONE/FPV OPERATOR', check: (d: Record<string, unknown>) => d.droneOperator === 'YES' || d.fpvOperator === 'YES' },
+  { sheet: 'DRONE OPERATOR', check: (d: Record<string, unknown>) => d.droneOperator === 'YES' },
+  { sheet: 'FPV OPERATOR', check: (d: Record<string, unknown>) => d.fpvOperator === 'YES' },
 ];
 
 function freelancerRowValues(d: Record<string, unknown>): string[] {
