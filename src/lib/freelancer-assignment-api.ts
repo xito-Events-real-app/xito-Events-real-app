@@ -71,6 +71,15 @@ export async function checkFreelancerAvailability(
   return data.data?.conflicts || [];
 }
 
+export async function fullSyncFreelancerAssignments(): Promise<{ copiedCount: number; updatedCount: number; totalFreelancers: number }> {
+  const { data, error } = await supabase.functions.invoke('google-sheets', {
+    body: { action: 'fullSyncFreelancerAssignments' }
+  });
+  if (error) throw new Error('Failed to sync freelancer assignments');
+  if (!data.success) throw new Error(data.error || 'Failed to sync freelancer assignments');
+  return data.data;
+}
+
 // Role-based filtering from WTN FREELANCERS
 const ROLE_FILTER_MAP: Record<string, keyof FreelancerData> = {
   photographerBride: 'photographer',

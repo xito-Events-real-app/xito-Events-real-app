@@ -4,12 +4,13 @@ import { DesktopBookedSidebar, HotDatesSortOrder } from "./DesktopBookedSidebar"
 import { DesktopBookedDashboard } from "./DesktopBookedDashboard";
 import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
 import { fullResyncAllBookedClients, fullSyncEventDetails, cleanupDuplicateBookedFromTracker, BookedClientData, SyncDetail, getCurrentStatus } from "@/lib/sheets-api";
+import { fullSyncFreelancerAssignments } from "@/lib/freelancer-assignment-api";
 import { parseEventDetails, NEPALI_MONTHS } from "@/lib/nepali-months";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { RefreshCw, Database, X, Calendar, CheckCircle, Copy, ArrowUpCircle, Trash2 } from "lucide-react";
+import { RefreshCw, Database, X, Calendar, CheckCircle, Copy, ArrowUpCircle, Trash2, UserCog } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBookedCachedData } from "@/hooks/useBookedCachedData";
 import { useCachedData } from "@/hooks/useCachedData";
@@ -42,6 +43,7 @@ export function DesktopBookedAppLayout() {
   const [isFullResyncing, setIsFullResyncing] = useState(false);
   const [isEventDetailsSyncing, setIsEventDetailsSyncing] = useState(false);
   const [isCleaningUp, setIsCleaningUp] = useState(false);
+  const [isFreelancerSyncing, setIsFreelancerSyncing] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   
   // Sync report state
@@ -124,6 +126,19 @@ export function DesktopBookedAppLayout() {
       toast.error("Failed to sync event details. Make sure the 'BOOKED CLIENTS EVENT DETAILS' sheet exists.");
     } finally {
       setIsEventDetailsSyncing(false);
+    }
+  };
+
+  const handleSyncFreelancers = async () => {
+    try {
+      setIsFreelancerSyncing(true);
+      const result = await fullSyncFreelancerAssignments();
+      toast.success(`Freelancers synced: ${result.copiedCount} new, ${result.updatedCount} updated`);
+    } catch (error) {
+      console.error("Error syncing freelancers:", error);
+      toast.error("Failed to sync freelancer assignments");
+    } finally {
+      setIsFreelancerSyncing(false);
     }
   };
 
@@ -337,6 +352,25 @@ export function DesktopBookedAppLayout() {
                 <>
                   <Calendar className="h-4 w-4 mr-2" />
                   Sync Event Details
+                </>
+              )}
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleSyncFreelancers} 
+              disabled={isFreelancerSyncing}
+              className="border-teal-600 text-teal-600 hover:bg-teal-600/10"
+            >
+              {isFreelancerSyncing ? (
+                <>
+                  <UserCog className="h-4 w-4 mr-2 animate-pulse" />
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <UserCog className="h-4 w-4 mr-2" />
+                  Sync Freelancers
                 </>
               )}
             </Button>
