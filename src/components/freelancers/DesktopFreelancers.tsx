@@ -95,7 +95,7 @@ export function DesktopFreelancers() {
       // City filter
       if (cityFilter && f.city !== cityFilter) return false;
       // Main job filter
-      if (mainJobFilter && f.mainJob !== mainJobFilter) return false;
+      if (mainJobFilter && f.mainJob?.toLowerCase() !== mainJobFilter.toLowerCase()) return false;
       return true;
     });
   }, [freelancers, selectedRole, searchQuery, cityFilter, mainJobFilter]);
