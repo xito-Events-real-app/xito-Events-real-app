@@ -5496,7 +5496,7 @@ async function mirrorToFreelancerCategorySheets(
 }
 
 async function getFreelancersData(accessToken: string, spreadsheetId: string, limit = 500) {
-  const range = encodeURIComponent("'WTN FREELANCERS'!A2:R" + (limit + 1));
+  const range = encodeURIComponent("'FREELANCERS'!A2:R" + (limit + 1));
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
 
   const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -5532,7 +5532,7 @@ async function getFreelancersData(accessToken: string, spreadsheetId: string, li
 }
 
 async function addFreelancerData(accessToken: string, spreadsheetId: string, d: Record<string, unknown>) {
-  const sheetId = await getSheetId(accessToken, spreadsheetId, 'WTN FREELANCERS');
+  const sheetId = await getSheetId(accessToken, spreadsheetId, 'FREELANCERS');
 
   // Insert row at position 2
   const insertUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
@@ -5545,7 +5545,7 @@ async function addFreelancerData(accessToken: string, spreadsheetId: string, d: 
   });
 
   const values = [freelancerRowValues(d)];
-  const range = encodeURIComponent("'WTN FREELANCERS'!A2:R2");
+  const range = encodeURIComponent("'FREELANCERS'!A2:R2");
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
 
   const response = await fetch(updateUrl, {
@@ -5570,7 +5570,7 @@ async function updateFreelancerData(accessToken: string, spreadsheetId: string, 
   if (!rowNumber || rowNumber < 2) throw new Error('Valid rowNumber is required');
 
   const values = [freelancerRowValues(d)];
-  const range = encodeURIComponent(`'WTN FREELANCERS'!A${rowNumber}:R${rowNumber}`);
+  const range = encodeURIComponent(`'FREELANCERS'!A${rowNumber}:R${rowNumber}`);
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
 
   const response = await fetch(updateUrl, {
@@ -5593,7 +5593,7 @@ async function updateFreelancerData(accessToken: string, spreadsheetId: string, 
 async function deleteFreelancerData(accessToken: string, spreadsheetId: string, rowNumber: number, name?: string) {
   if (!rowNumber || rowNumber < 2) throw new Error('Valid rowNumber is required');
 
-  const sheetId = await getSheetId(accessToken, spreadsheetId, 'WTN FREELANCERS');
+  const sheetId = await getSheetId(accessToken, spreadsheetId, 'FREELANCERS');
 
   const deleteUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
   const response = await fetch(deleteUrl, {
