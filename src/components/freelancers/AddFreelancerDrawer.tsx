@@ -16,7 +16,7 @@ import { SocialLinkInput } from "@/components/vendors/SocialLinkInput";
 import { addFreelancer } from "@/lib/freelancer-api";
 import { useToast } from "@/hooks/use-toast";
 
-const MAIN_JOBS = ['Photographer', 'Videographer', 'Video Editor', 'Photo Editor', 'Drone Operator', 'FPV Operator'];
+const MAIN_JOBS = ['Photographer', 'Videographer', 'Video Editor', 'Photo Editor', 'Drone Operator', 'FPV Operator', 'iPhone Shooter'];
 
 const SECONDARY_ROLES: { key: string; label: string }[] = [
   { key: 'photographer', label: 'Photographer' },
@@ -25,6 +25,7 @@ const SECONDARY_ROLES: { key: string; label: string }[] = [
   { key: 'videoEditor', label: 'Video Editor' },
   { key: 'droneOperator', label: 'Drone Operator' },
   { key: 'fpvOperator', label: 'FPV Operator' },
+  { key: 'iphoneShooter', label: 'iPhone Shooter' },
 ];
 
 function getSecondaryRoles(mainJob: string) {
@@ -33,6 +34,9 @@ function getSecondaryRoles(mainJob: string) {
   }
   if (mainJob === 'FPV Operator') {
     return SECONDARY_ROLES.filter(r => r.key !== 'fpvOperator');
+  }
+  if (mainJob === 'iPhone Shooter') {
+    return SECONDARY_ROLES.filter(r => r.key !== 'iphoneShooter');
   }
   const mainJobMap: Record<string, string> = {
     'Photographer': 'photographer',
@@ -92,11 +96,12 @@ export function AddFreelancerDrawer({ open, onOpenChange, onFreelancerAdded }: A
         'Video Editor': 'videoEditor',
         'Drone Operator': 'droneOperator',
         'FPV Operator': 'fpvOperator',
+        'iPhone Shooter': 'iphoneShooter',
       };
 
       const roles: Record<string, string> = {
         photographer: 'NO', videographer: 'NO', photoEditor: 'NO', videoEditor: 'NO',
-        droneOperator: 'NO', fpvOperator: 'NO',
+        droneOperator: 'NO', fpvOperator: 'NO', iphoneShooter: 'NO',
       };
 
       if (mainJobMap[mainJob]) {

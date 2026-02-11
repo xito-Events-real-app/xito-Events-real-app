@@ -20,7 +20,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-const MAIN_JOBS = ['Photographer', 'Videographer', 'Video Editor', 'Photo Editor', 'Drone Operator', 'FPV Operator'];
+const MAIN_JOBS = ['Photographer', 'Videographer', 'Video Editor', 'Photo Editor', 'Drone Operator', 'FPV Operator', 'iPhone Shooter'];
 
 interface FreelancerDetailSheetProps {
   freelancer: FreelancerData | null;
@@ -46,7 +46,7 @@ export function FreelancerDetailSheet({ freelancer, open, onOpenChange, onFreela
   const [mainJob, setMainJob] = useState("");
   const [roles, setRoles] = useState<Record<string, boolean>>({
     photographer: false, videographer: false, photoEditor: false, videoEditor: false,
-    droneOperator: false, fpvOperator: false,
+    droneOperator: false, fpvOperator: false, iphoneShooter: false,
   });
 
   useEffect(() => {
@@ -68,6 +68,7 @@ export function FreelancerDetailSheet({ freelancer, open, onOpenChange, onFreela
         videoEditor: freelancer.videoEditor?.toUpperCase() === 'YES',
         droneOperator: freelancer.droneOperator?.toUpperCase() === 'YES',
         fpvOperator: freelancer.fpvOperator?.toUpperCase() === 'YES',
+        iphoneShooter: freelancer.iphoneShooter?.toUpperCase() === 'YES',
       });
     }
   }, [freelancer]);
@@ -89,6 +90,7 @@ export function FreelancerDetailSheet({ freelancer, open, onOpenChange, onFreela
         hybridShooter, hybridEditor,
         droneOperator: roles.droneOperator ? 'YES' : 'NO',
         fpvOperator: roles.fpvOperator ? 'YES' : 'NO',
+        iphoneShooter: roles.iphoneShooter ? 'YES' : 'NO',
       });
 
       toast({ title: "Success", description: "Freelancer updated successfully" });
@@ -127,6 +129,7 @@ export function FreelancerDetailSheet({ freelancer, open, onOpenChange, onFreela
     { key: 'videoEditor', label: 'Video Editor' },
     { key: 'droneOperator', label: 'Drone Operator' },
     { key: 'fpvOperator', label: 'FPV Operator' },
+    { key: 'iphoneShooter', label: 'iPhone Shooter' },
   ];
 
   return (
