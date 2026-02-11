@@ -293,25 +293,38 @@ async function getUnassignedBenzoKeepNotes(accessToken: string, spreadsheetId: s
     return [];
   }
 
-  // Check each row in the range for valid JSON
+  // Collect notes from ALL rows (not just the first valid one)
+  const allNotes: UnassignedBenzoNote[] = [];
+  const seenIds = new Set<string>();
+
   for (let i = 0; i < data.values.length; i++) {
     const cellValue = data.values[i]?.[0];
     if (cellValue) {
-      console.log(`[UNASSIGNED NOTES] Row ${i + 2} raw value (first 200 chars):`, String(cellValue).substring(0, 200));
       try {
         const parsed = JSON.parse(cellValue);
         if (Array.isArray(parsed) && parsed.length > 0) {
           console.log(`[UNASSIGNED NOTES] Found ${parsed.length} notes in row ${i + 2}`);
-          return parsed;
+          for (const note of parsed) {
+            // Deduplicate by id, keeping the one with latest lastUpdated
+            if (seenIds.has(note.id)) {
+              const existingIdx = allNotes.findIndex(n => n.id === note.id);
+              if (existingIdx >= 0 && new Date(note.lastUpdated) > new Date(allNotes[existingIdx].lastUpdated)) {
+                allNotes[existingIdx] = note;
+              }
+            } else {
+              seenIds.add(note.id);
+              allNotes.push(note);
+            }
+          }
         }
       } catch (e) {
         console.log(`[UNASSIGNED NOTES] Row ${i + 2} JSON parse failed:`, e);
       }
     }
   }
-  
-  console.log('[UNASSIGNED NOTES] No valid notes found in any row');
-  return [];
+
+  console.log(`[UNASSIGNED NOTES] Total unique notes collected: ${allNotes.length}`);
+  return allNotes;
 }
 
 // Save an unassigned Benzo Keep note (add or update)
@@ -335,7 +348,7 @@ async function saveUnassignedBenzoKeepNote(
     updatedNotes = [note, ...existingNotes];
   }
   
-  // Write back to sheet
+  // Write consolidated notes to AM2 and clear AM3:AM10 to prevent duplicates
   const range = encodeURIComponent("'CLIENT TRACKER'!AM2");
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
   
@@ -353,6 +366,14 @@ async function saveUnassignedBenzoKeepNote(
     return { success: false };
   }
 
+  // Clear stale rows AM3:AM10
+  const clearRange = encodeURIComponent("'CLIENT TRACKER'!AM3:AM10");
+  const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${clearRange}:clear`;
+  await fetch(clearUrl, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
   return { success: true };
 }
 
@@ -368,7 +389,7 @@ async function deleteUnassignedBenzoKeepNote(
   // Filter out the note to delete
   const updatedNotes = existingNotes.filter(n => n.id !== noteId);
   
-  // Write back to sheet
+  // Write consolidated notes to AM2 and clear AM3:AM10
   const range = encodeURIComponent("'CLIENT TRACKER'!AM2");
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
   
@@ -385,6 +406,14 @@ async function deleteUnassignedBenzoKeepNote(
     console.error('Failed to delete unassigned note');
     return { success: false };
   }
+
+  // Clear stale rows AM3:AM10
+  const clearRange = encodeURIComponent("'CLIENT TRACKER'!AM3:AM10");
+  const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${clearRange}:clear`;
+  await fetch(clearUrl, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
 
   return { success: true };
 }
