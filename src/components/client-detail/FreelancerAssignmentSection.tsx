@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { Camera, Video, UserCog, Smartphone, Loader2, ChevronDown, ChevronUp, Circle, Zap } from "lucide-react";
 import { useFreelancerAssignments } from "@/hooks/useFreelancerAssignments";
 import { getFilteredFreelancersByRole, FreelancerField, AvailabilityConflict } from "@/lib/freelancer-assignment-api";
@@ -288,7 +289,19 @@ const FreelancerDropdown = ({ config, value, freelancers, eventDateAD, clientNam
                 )}
                 disabled={isUpdating}
               >
-                <span className="truncate">{value || 'Assign...'}</span>
+                <span className="truncate">
+                  {value ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.location.href = `/freelancer/${encodeURIComponent(value)}`;
+                      }}
+                      className="hover:text-emerald-600 transition-colors"
+                    >
+                      {value}
+                    </button>
+                  ) : 'Assign...'}
+                </span>
                 {isUpdating && <Loader2 className="ml-2 h-3 w-3 animate-spin" />}
               </Button>
             </PopoverTrigger>

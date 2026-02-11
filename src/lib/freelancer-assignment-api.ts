@@ -80,6 +80,27 @@ export async function fullSyncFreelancerAssignments(): Promise<{ copiedCount: nu
   return data.data;
 }
 
+export interface FreelancerBooking {
+  clientName: string;
+  event: string;
+  eventYear: string;
+  eventMonth: string;
+  eventDay: string;
+  eventDateAD: string;
+  role: string;
+  roleLabel: string;
+  registeredDateTimeAD: string;
+}
+
+export async function getFreelancerBookings(freelancerName: string): Promise<FreelancerBooking[]> {
+  const { data, error } = await supabase.functions.invoke('google-sheets', {
+    body: { action: 'getFreelancerBookings', data: { freelancerName } }
+  });
+  if (error) throw new Error('Failed to fetch freelancer bookings');
+  if (!data.success) throw new Error(data.error || 'Failed to fetch freelancer bookings');
+  return data.data || [];
+}
+
 // Role-based filtering from WTN FREELANCERS
 const ROLE_FILTER_MAP: Record<string, keyof FreelancerData> = {
   photographerBride: 'photographer',
