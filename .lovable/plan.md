@@ -1,62 +1,77 @@
 
 
-## Fix: Fetch ALL Unassigned Notes from ALL Rows in AM Column
+## Redesign Unassigned Benzo Keep as Full-Screen Page with Finance-Style Graphics
 
-### Root Cause
+### Current Problems
+1. **Scroll is broken** because the Dialog has `max-h-[85vh]` and nested `ScrollArea` with `max-h-[50vh]` -- content overflows but can't be scrolled
+2. Notes are cramped inside a small dialog popup
+3. Visual style is plain white, not matching the dark premium look of the Finance Module
 
-From the edge function logs, the data in column AM is distributed across multiple rows:
-- **Row 3 (AM3)**: 1 note (SAILESH & ANJALI)
-- **Row 4 (AM4)**: 1 note (MAYA SHRESTHA)
-- **Row 10 (AM10)**: 3 notes (date converter, lagaune wala, Srijana sharma)
+### Solution: Full-Screen Page with Dark Theme
 
-But the current code has a `return parsed;` inside the loop -- it **returns immediately** after finding the first valid row, so only 1 note is returned instead of all 5.
+Replace the dialog-based view with a **full-screen dedicated page** (`/benzo-keep`) using the same dark gradient theme as the Finance Manager (`bg-gradient-to-br from-slate-900 via-violet-950/20 to-slate-900`).
 
-### Fix
+### Layout and Features
 
-**File: `supabase/functions/google-sheets/index.ts` (lines 296-314)**
+**Header (sticky)**
+- Title "Benzo Keep" with note count
+- Tabs: "All Notes" | "Starred"
+- "Add Note" button
+- Back navigation
 
-Change the loop to **collect** notes from all rows into a single array, then return the combined result:
+**Stats Bar** (Finance-style gradient cards)
+- Total Notes count (violet theme)
+- Starred Notes count (yellow theme)  
+- Recent (last 7 days) count (emerald theme)
+- Color distribution (amber theme)
 
-```typescript
-// Collect notes from ALL rows
-const allNotes: UnassignedBenzoNote[] = [];
+**Notes Grid**
+- Each note shows as a **collapsed card** with:
+  - First 2 lines of content visible (line-clamp-2)
+  - Marker color as a left border accent
+  - Star icon, date, and action buttons visible
+  - Subtle gradient background matching Finance cards (`bg-slate-800/50 border-slate-700/50`)
+- **Click to expand** the note inline (accordion-style) showing full content + Xito Search
+- **"Open Full Screen" button** on each card opens a full-width detail view of that single note
 
-for (let i = 0; i < data.values.length; i++) {
-  const cellValue = data.values[i]?.[0];
-  if (cellValue) {
-    try {
-      const parsed = JSON.parse(cellValue);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        console.log(`[UNASSIGNED NOTES] Found ${parsed.length} notes in row ${i + 2}`);
-        allNotes.push(...parsed);
-      }
-    } catch (e) {
-      console.log(`[UNASSIGNED NOTES] Row ${i + 2} JSON parse failed:`, e);
-    }
-  }
-}
+**Sorting**: Starred first, then by `lastUpdated` descending (already implemented in hook)
 
-console.log(`[UNASSIGNED NOTES] Total notes collected: ${allNotes.length}`);
-return allNotes;
-```
-
-This is a one-file, ~10-line change. The hook and UI already have star/sort/tabs support from the previous update -- they just need data.
-
-### Save Fix
-
-The `saveUnassignedBenzoKeepNote` and `deleteUnassignedBenzoKeepNote` functions also call `getUnassignedBenzoKeepNotes` first, then save the updated array back to **AM2 only**. Since notes are spread across multiple rows, saving back to AM2 will consolidate them and the old rows will become stale duplicates.
-
-To fix this properly:
-1. After collecting all notes, save the consolidated array back to AM2
-2. Clear the other rows (AM3:AM10) so notes don't duplicate on next fetch
-
-This means updating `saveUnassignedBenzoKeepNote` to also clear AM3:AM10 after writing to AM2.
-
-### Files to Change
+### Technical Changes
 
 | File | Change |
 |------|--------|
-| `supabase/functions/google-sheets/index.ts` | Fix fetch loop to collect ALL notes; consolidate saves to AM2 and clear AM3:AM10 |
+| `src/pages/BenzoKeepPage.tsx` | **New file** -- full-screen page with dark theme, stats bar, collapsible note cards, expand/fullscreen |
+| `src/App.tsx` | Add route `/benzo-keep` pointing to the new page |
+| `src/components/suite/SuiteBenzoKeepSection.tsx` | Change "Unassigned" button to navigate to `/benzo-keep` instead of opening dialog |
+| `src/components/suite/UnassignedBenzoKeepDialog.tsx` | Keep file but it will no longer be the primary view; the page replaces it |
 
-No frontend changes needed -- the hook and UI already support star, tabs, and date sorting.
+### Visual Design (Finance-Module Inspired)
+
+- **Background**: `bg-gradient-to-br from-slate-900 via-violet-950/20 to-slate-900`
+- **Cards**: `bg-slate-800/50 border-slate-700/50` with colored left border for marker color
+- **Stats cards**: Gradient cards like Finance (violet, yellow, emerald, amber accents)
+- **Text**: White headings, slate-400 secondary text, colored accents for dates
+- **Star icon**: Yellow fill when starred, ghost when not
+- **Expanded note**: Shows full content with highlighted dates, Xito Search collapsible, and action buttons
+- **Scrolling**: Native page scroll -- no dialog constraints
+
+### Collapsed Note Card Structure
+```
++--[violet border]--------------------------------------------+
+| [Star icon]  First 2 lines of note content...      [date]   |
+|              ...truncated                          [actions] |
++-------------------------------------------------------------+
+```
+
+### Expanded Note Card Structure
+```
++--[violet border]--------------------------------------------+
+| [Star icon]  Full note content with highlighted dates        |
+|              All text visible, no truncation                 |
+|                                                              |
+|  [Xito Search - collapsible]                                |
+|                                                              |
+|  [Assign to Client]  [Edit]  [Delete]        [Collapse]    |
++-------------------------------------------------------------+
+```
 
