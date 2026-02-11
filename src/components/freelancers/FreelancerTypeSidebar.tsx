@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { UserCog, Users, Camera, Video, Image, Film, Zap, Aperture, Plane } from "lucide-react";
+import { UserCog, Users, Camera, Video, Image, Film, Zap, Aperture, Plane, Navigation } from "lucide-react";
 import { LucideIcon } from "lucide-react";
 
 const ROLE_CATEGORIES: { key: string; label: string; icon: LucideIcon }[] = [
@@ -9,7 +9,8 @@ const ROLE_CATEGORIES: { key: string; label: string; icon: LucideIcon }[] = [
   { key: 'Video Editor', label: 'Video Editor', icon: Film },
   { key: 'Hybrid Shooter', label: 'Hybrid Shooter', icon: Aperture },
   { key: 'Hybrid Editor', label: 'Hybrid Editor', icon: Zap },
-  { key: 'Drone/FPV Operator', label: 'Drone/FPV Operator', icon: Plane },
+  { key: 'Drone Operator', label: 'Drone Operator', icon: Plane },
+  { key: 'FPV Operator', label: 'FPV Operator', icon: Navigation },
 ];
 
 interface FreelancerTypeSidebarProps {

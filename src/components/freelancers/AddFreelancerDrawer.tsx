@@ -16,7 +16,7 @@ import { SocialLinkInput } from "@/components/vendors/SocialLinkInput";
 import { addFreelancer } from "@/lib/freelancer-api";
 import { useToast } from "@/hooks/use-toast";
 
-const MAIN_JOBS = ['Photographer', 'Videographer', 'Video Editor', 'Photo Editor', 'Drone/FPV Operator'];
+const MAIN_JOBS = ['Photographer', 'Videographer', 'Video Editor', 'Photo Editor', 'Drone Operator', 'FPV Operator'];
 
 const SECONDARY_ROLES: { key: string; label: string }[] = [
   { key: 'photographer', label: 'Photographer' },
@@ -28,13 +28,11 @@ const SECONDARY_ROLES: { key: string; label: string }[] = [
 ];
 
 function getSecondaryRoles(mainJob: string) {
-  if (mainJob === 'Drone/FPV Operator') {
-    // Show all non-drone roles + separate drone/fpv checkboxes
-    return SECONDARY_ROLES.filter(r => !['droneOperator', 'fpvOperator'].includes(r.key))
-      .concat([
-        { key: 'droneOperator', label: 'Drone Operator' },
-        { key: 'fpvOperator', label: 'FPV Operator' },
-      ]);
+  if (mainJob === 'Drone Operator') {
+    return SECONDARY_ROLES.filter(r => r.key !== 'droneOperator');
+  }
+  if (mainJob === 'FPV Operator') {
+    return SECONDARY_ROLES.filter(r => r.key !== 'fpvOperator');
   }
   const mainJobMap: Record<string, string> = {
     'Photographer': 'photographer',
@@ -93,6 +91,8 @@ export function AddFreelancerDrawer({ open, onOpenChange, onFreelancerAdded }: A
         'Videographer': 'videographer',
         'Photo Editor': 'photoEditor',
         'Video Editor': 'videoEditor',
+        'Drone Operator': 'droneOperator',
+        'FPV Operator': 'fpvOperator',
       };
 
       const roles: Record<string, string> = {
@@ -101,14 +101,7 @@ export function AddFreelancerDrawer({ open, onOpenChange, onFreelancerAdded }: A
       };
 
       // Set main job
-      if (mainJob === 'Drone/FPV Operator') {
-        // For Drone/FPV, user picks drone/fpv in secondary
-        // But at minimum set both if just main selected
-        if (!secondaryRoles.droneOperator && !secondaryRoles.fpvOperator) {
-          roles.droneOperator = 'YES';
-          roles.fpvOperator = 'YES';
-        }
-      } else if (mainJobMap[mainJob]) {
+      if (mainJobMap[mainJob]) {
         roles[mainJobMap[mainJob]] = 'YES';
       }
 
