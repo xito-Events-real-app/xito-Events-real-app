@@ -59,12 +59,23 @@ const EventClientCard = ({ client }: EventClientCardProps) => {
   // Check if date is missing or unknown
   const hasMissingDate = !client.eventYear || !client.eventMonth || !client.eventDay || client.eventDay.includes('*');
 
-  // Format Nepali event date
+  // Format Nepali event date with AD date
   const formatNepaliEventDate = (): string => {
     if (!client.eventYear || !client.eventMonth || !client.eventDay) return 'Date TBD';
     const monthName = getMonthName(client.eventMonth);
     const dayDisplay = client.eventDay.includes('*') ? '**' : client.eventDay;
-    return `${client.eventYear} ${monthName} ${dayDisplay}`;
+    const bsStr = `${client.eventYear} ${monthName} ${dayDisplay}`;
+    
+    // Try to get AD date
+    if (client.eventDateAD) {
+      const parsed = new Date(client.eventDateAD);
+      if (!isNaN(parsed.getTime())) {
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const adStr = `${months[parsed.getMonth()]} ${parsed.getDate()}`;
+        return `${bsStr} / ${adStr}`;
+      }
+    }
+    return bsStr;
   };
 
   // Parse events into array

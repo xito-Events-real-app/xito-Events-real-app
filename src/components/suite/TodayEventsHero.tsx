@@ -4,6 +4,8 @@ import { useBulkEventDetails } from "@/hooks/useBulkEventDetails";
 import { Calendar, Sparkles, ArrowRight, Clock, MapPin, Scissors, Phone, MessageCircle, MessageSquare, Plus, Loader2, ExternalLink, ChevronDown, ChevronUp, FileText, Image, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemo, useState, useEffect } from "react";
+import { getCurrentBSDate, nepaliMonthsEnglish } from "@/lib/nepali-date";
+import { format } from "date-fns";
 import { parseComments } from "@/lib/client-card-utils";
 import { addBookedClientComment } from "@/lib/sheets-api";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from "@/components/ui/drawer";
@@ -326,9 +328,18 @@ export function TodayEventsHero() {
             <Calendar className="w-4 h-4 md:w-6 md:h-6 text-white" />
           </div>
           <div>
-            <h2 className="text-sm md:text-2xl font-bold text-gray-900">
-              Upcoming Events
-            </h2>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-sm md:text-2xl font-bold text-gray-900">
+                Upcoming Events
+              </h2>
+              <span className="text-[11px] md:text-sm font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                {(() => {
+                  const todayBS = getCurrentBSDate();
+                  const todayAD = format(new Date(), 'MMM d');
+                  return `${nepaliMonthsEnglish[todayBS.month - 1]} ${todayBS.day} / ${todayAD}`;
+                })()}
+              </span>
+            </div>
             <p className="text-[11px] md:text-sm text-gray-500">
               {hasEvents 
                 ? `${upcomingEvents.length} event${upcomingEvents.length > 1 ? 's' : ''} scheduled`
