@@ -72,7 +72,7 @@ export function MobileSuiteLanding() {
       {/* Tab Content */}
       <div className="flex-1 overflow-hidden">
         {activeTab === 'home' && <HomeTabContent />}
-        {activeTab === 'crew' && <AllClientsCrewTable />}
+        {activeTab === 'crew' && <AllClientsCrewTable onClose={() => setActiveTab('home')} />}
         {activeTab === 'modules' && <ModulesTabContent />}
         {activeTab === 'coming-soon' && <ComingSoonTabContent />}
         {activeTab === 'news' && <SuiteNewsFeed />}
