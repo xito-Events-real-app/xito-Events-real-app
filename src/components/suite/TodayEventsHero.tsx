@@ -341,8 +341,9 @@ export function TodayEventsHero() {
           {/* Today's date pill - styled like sync button */}
           <div className={cn(
             "h-9 rounded-full font-semibold px-4 flex items-center gap-1.5 text-[11px] md:text-xs shrink-0",
-            "bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-600",
-            "shadow-md shadow-emerald-500/25",
+            "bg-gradient-to-r from-orange-500 via-red-500 to-purple-600",
+            "shadow-md shadow-orange-500/25",
+            "hover:shadow-lg hover:scale-[1.02] transition-all",
             "text-white"
           )}>
             <Calendar className="w-3.5 h-3.5 shrink-0" />
@@ -461,28 +462,26 @@ export function TodayEventsHero() {
                             to={`/client-tracker/client/${encodeURIComponent(clientId)}`}
                             className="flex-1 min-w-0"
                           >
-                            <p className="text-gray-900 font-semibold truncate group-hover:text-emerald-700 transition-colors">
-                              {event.client.clientName}
-                            </p>
+                            <div className="flex items-center justify-between gap-1.5">
+                              <p className="text-gray-900 font-semibold truncate group-hover:text-emerald-700 transition-colors">
+                                {event.client.clientName}
+                              </p>
+                              <span className="shrink-0 text-[10px] font-bold text-white px-2 py-0.5 rounded-full bg-gradient-to-r from-orange-500 via-red-500 to-purple-600 shadow-sm shadow-orange-500/20">
+                                {(() => {
+                                  const months = event.client.eventMonth?.split('\n') || [];
+                                  const days = event.client.eventDay?.split('\n') || [];
+                                  const m = months[event.eventIndex] || months[0] || '';
+                                  const d = days[event.eventIndex] || days[0] || '';
+                                  const monthName = m ? (nepaliMonthsEnglish[parseInt(m) - 1] || m) : '';
+                                  const bsPart = monthName && d ? `${monthName} ${d}` : '';
+                                  const adDate = event.eventDate;
+                                  const adPart = format(adDate, 'MMM d');
+                                  return bsPart ? `${bsPart} / ${adPart}` : adPart;
+                                })()}
+                              </span>
+                            </div>
                             <p className="text-sm font-medium text-emerald-600 truncate">
                               {displayEventName}
-                            </p>
-                            <p className="text-[11px] text-gray-500">
-                              {(() => {
-                                // BS date
-                                const months = event.client.eventMonth?.split('\n') || [];
-                                const days = event.client.eventDay?.split('\n') || [];
-                                const years = event.client.eventYear?.split('\n') || [];
-                                const m = months[event.eventIndex] || months[0] || '';
-                                const d = days[event.eventIndex] || days[0] || '';
-                                const y = years[event.eventIndex] || years[0] || '';
-                                const monthName = m ? (nepaliMonthsEnglish[parseInt(m) - 1] || m) : '';
-                                const bsPart = monthName && d ? `${monthName} ${d}` : '';
-                                // AD date
-                                const adDate = event.eventDate;
-                                const adPart = format(adDate, 'MMM d, yyyy');
-                                return bsPart ? `${bsPart}, ${y} / ${adPart}` : adPart;
-                              })()}
                             </p>
                           </Link>
                           
