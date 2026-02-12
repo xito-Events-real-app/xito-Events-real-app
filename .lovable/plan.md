@@ -1,33 +1,48 @@
 
 
-# Fix: addClientComment Must Search Both Sheets
+# Full-Screen ALL CLIENTS Celebration Announcement
 
-## Problem
-The backend `addClientComment` function (line 2804) is hardcoded to only search `'CLIENT TRACKER'` when verifying the row number. Since booked clients like Urusha Ghimirey exist **only** in the `'BOOKED CLIENTS'` sheet (they are transferred out of the Tracker), `verifyRowNumber` can't find her, falls back to the raw `rowNumber`, and writes the comment to whoever is at that row in the Tracker (Anuja/Birat Wosti).
+## Two Fixes
 
-## Fix (Single file: Edge Function)
+### 1. Navigation Fix
+The "Yes, show me!" button currently navigates to `/booked-clients` which is wrong. The ALL CLIENTS view is not a separate route -- it's a **state toggle** within the Suite Landing page itself:
+- **Desktop**: Sets `showAllClients` state to `true` in `DesktopSuiteLanding`
+- **Mobile**: Switches to the `crew` tab in `MobileSuiteLanding`
 
-Update `addClientComment` in `supabase/functions/google-sheets/index.ts` (~line 2790-2835):
+The fix requires moving the announcement dialog **inside** both `DesktopSuiteLanding` and `MobileSuiteLanding` so it can directly trigger the correct internal state, rather than navigating to a different page.
 
-1. When `registeredDateTimeAD` is provided, first search `'BOOKED CLIENTS'` Column A
-2. If found there, write the comment to that row in `'BOOKED CLIENTS'` (no cross-sheet sync needed since the client only exists in one sheet)
-3. If NOT found in Booked, search `'CLIENT TRACKER'` as before
-4. If `registeredDateTimeAD` is not provided, fall back to the current behavior (raw `rowNumber` on Tracker)
+### 2. Full-Screen Celebration Redesign
+Replace the small card dialog with an immersive full-screen celebration overlay featuring:
+- Full viewport coverage with dark gradient background
+- Wedding-style celebration with animated silhouettes of photographers and dancing people using CSS/emoji art
+- Confetti particles raining down with staggered animations
+- Camera flash effects pulsing in the background
+- Extra-large text (4xl/5xl headings)
+- Glowing gradient CTA button
+- Custom CSS keyframes for dancing, confetti rain, and camera flash animations
 
-No cross-sheet syncing is needed because clients only exist in one sheet at a time.
+## Technical Changes
 
-## Technical Detail
+### File 1: `src/components/suite/AllClientsAnnouncementDialog.tsx`
+- Replace the small Radix Dialog with a **full-screen fixed overlay** (`fixed inset-0 z-[100]`)
+- Add animated wedding celebration background: dancing people silhouettes using emoji characters with CSS bounce/sway animations, confetti particles with staggered fall animations, camera flash pulse effects
+- Scale up all text: title to `text-4xl`/`text-5xl`, description to `text-lg`
+- Change `onNavigate` callback to just trigger the action (no route navigation)
+- Add new CSS keyframes: `dance-sway`, `confetti-fall`, `camera-flash`, `float-up`
+- The component will accept the same `onNavigate` prop but the parent will now pass the correct handler
 
-```text
-Current flow:
-  verifyRowNumber(... 'CLIENT TRACKER' ...) --> not found --> falls back to raw rowNumber on Tracker --> WRONG CLIENT
+### File 2: `src/pages/SuiteLanding.tsx`
+- Remove the `AllClientsAnnouncementDialog` from this file (it will move into the child components)
+- Remove the `handleGoToAllClients` function and `useNavigate` import
 
-Fixed flow:
-  verifyRowNumber(... 'BOOKED CLIENTS' ...) --> found at row X --> write to BOOKED CLIENTS row X --> CORRECT
-  OR
-  verifyRowNumber(... 'CLIENT TRACKER' ...) --> found at row Y --> write to CLIENT TRACKER row Y --> CORRECT
-```
+### File 3: `src/components/suite/DesktopSuiteLanding.tsx`
+- Import and render `AllClientsAnnouncementDialog`
+- Pass `onNavigate` that calls `setShowAllClients(true)` directly
 
-The activity log call (`appendActivityLog`) will also target the correct sheet instead of being hardcoded to `'CLIENT TRACKER'`.
+### File 4: `src/components/suite/MobileSuiteLanding.tsx`
+- Import and render `AllClientsAnnouncementDialog`
+- Pass `onNavigate` that sets the active tab to `'crew'` directly
 
-No frontend changes needed -- the previous fix already passes `registeredDateTimeAD` from all callers.
+### File 5: `src/index.css`
+- Add new keyframe animations for the celebration effects (dancing silhouettes, confetti rain, camera flash pulses)
+
