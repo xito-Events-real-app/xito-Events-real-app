@@ -2800,8 +2800,25 @@ async function addClientComment(
     throw new Error('Valid rowNumber is required for adding comment');
   }
 
-  // Verify and correct row number using registeredDateTimeAD
-  const actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, registeredDateTimeAD);
+  // Intelligent sheet routing: search BOOKED CLIENTS first, then CLIENT TRACKER
+  let targetSheet = 'CLIENT TRACKER';
+  let actualRowNumber = rowNumber;
+
+  if (registeredDateTimeAD) {
+    // Search BOOKED CLIENTS first (clients only exist in one sheet at a time)
+    const bookedRow = await verifyRowNumber(accessToken, spreadsheetId, 'BOOKED CLIENTS', -1, registeredDateTimeAD);
+    if (bookedRow !== -1) {
+      targetSheet = 'BOOKED CLIENTS';
+      actualRowNumber = bookedRow;
+      console.log(`addClientComment: Found client in BOOKED CLIENTS at row ${bookedRow}`);
+    } else {
+      // Not in Booked, search CLIENT TRACKER
+      actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, registeredDateTimeAD);
+      console.log(`addClientComment: Found client in CLIENT TRACKER at row ${actualRowNumber}`);
+    }
+  } else {
+    console.log(`addClientComment: No registeredDateTimeAD provided, using raw rowNumber ${rowNumber} on CLIENT TRACKER`);
+  }
 
   // Format: "[MM/DD/YYYY HH:MM] Comment text" - using ||| delimiter for multi-line support
   const newCommentEntry = `[${clientTimestamp}] ${comment}`;
@@ -2809,7 +2826,7 @@ async function addClientComment(
     ? `${existingComments}|||${newCommentEntry}` 
     : newCommentEntry;
 
-  const range = encodeURIComponent(`'CLIENT TRACKER'!AC${actualRowNumber}`);
+  const range = encodeURIComponent(`'${targetSheet}'!AC${actualRowNumber}`);
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
   
   const response = await fetch(updateUrl, {
@@ -2827,9 +2844,9 @@ async function addClientComment(
     throw new Error(`Failed to add comment: ${response.status}`);
   }
 
-  // Log activity to Column AJ
+  // Log activity to the correct sheet
   const truncatedComment = comment.length > 50 ? comment.substring(0, 50) + '...' : comment;
-  await appendActivityLog(accessToken, spreadsheetId, 'CLIENT TRACKER', actualRowNumber, 'COMMENT', truncatedComment);
+  await appendActivityLog(accessToken, spreadsheetId, targetSheet, actualRowNumber, 'COMMENT', truncatedComment);
 
   return { success: true, comments: updatedComments, actualRowNumber };
 }
