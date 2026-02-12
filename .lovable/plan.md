@@ -1,63 +1,97 @@
 
+# Fix Dropdowns + Unique Day Colors in ALL CLIENTS View
 
-# Fix ALL CLIENTS: Instant Load + Filter Fix
+## Root Cause Analysis
 
-## Problems Found
+### 1. **Dropdowns Not Appearing** (Year/Month Filters + Plus Button)
+The main `AllClientsCrewTable` component renders as `fixed inset-0 z-[100]` (full-screen overlay). However:
+- **SelectContent** defaults to `z-50` (from Radix UI)
+- **PopoverContent** also defaults to `z-50` (defined in `src/components/ui/popover.tsx` line 20)
 
-### 1. Filter Broken -- Month format mismatch
-The actual sheet data stores `eventMonth` as a **number string** (e.g., `"10"`, `"11"`), NOT as a name like `"MAGH"`. The current filter converts the selected month to `"MAGH"` and compares it to `"10"` -- they never match, so 0 results always show.
+Since `z-50 < z-[100]`, all dropdowns render **behind** the overlay and are invisible. The user clicks but nothing appears.
 
-```text
-Current (broken):
-  selectedMonth = "10"
-  NEPALI_MONTHS[10] = "MAGH"
-  a.eventMonth = "10"
-  "10" === "MAGH"  -->  FALSE (never matches!)
+### 2. **Same-Day Events Only Have 2 Colors**
+Currently at line 312 of `AllClientsCrewTable.tsx`:
+```typescript
+const dayBg = groupIdx % 2 === 0 ? "bg-white" : "bg-blue-50/40";
 ```
 
-**Fix**: Compare `eventMonth` directly to `selectedMonth` as strings, since both are number strings.
+This alternates between only white and light blue. The user wants **unique distinct colors for each date** so days are visually separated.
 
-### 2. Slow Load -- Syncs on every open
-Every time the view opens, it calls `fullSyncFreelancerAssignments()` which is a heavy write operation (copies booked clients into the freelancers sheet), THEN reads the data. This causes a long wait.
+---
 
-**Fix**: Load data from the sheet immediately first (instant read), show it, then sync in the background. Cache the last-loaded assignments in `sessionStorage` so reopening the view is instant.
+## Solution
+
+### Fix 1: Add `z-[200]` to All Dropdowns
+Add `className="z-[200]"` to ensure dropdowns appear above the `z-[100]` overlay:
+- Line 211: `SelectContent` for year filter
+- Line 219: `SelectContent` for month filter  
+- Line 448: `PopoverContent` for assigned freelancer cell dropdown
+- Line 500: `PopoverContent` for empty cell "+" button dropdown
+
+### Fix 2: Implement 8-Color Palette for Day Grouping
+Replace the 2-color alternation with a unique color palette:
+
+```typescript
+const DAY_COLORS = [
+  "bg-white",
+  "bg-blue-50/60",
+  "bg-amber-50/50",
+  "bg-emerald-50/50",
+  "bg-purple-50/50",
+  "bg-rose-50/50",
+  "bg-cyan-50/50",
+  "bg-orange-50/50",
+];
+```
+
+Then at line 312, change:
+```typescript
+const dayBg = DAY_COLORS[groupIdx % DAY_COLORS.length];
+```
+
+This cycles through 8 soft pastel colors, so each unique date gets a distinct background. The same date will always show the same color.
+
+---
+
+## Changes Summary
+
+| File | Changes |
+|------|---------|
+| `src/components/suite/AllClientsCrewTable.tsx` | (1) Add `DAY_COLORS` palette at top; (2) Add `z-[200]` to both `SelectContent` elements (lines 211, 219); (3) Add `z-[200]` to both `PopoverContent` elements (lines 448, 500); (4) Update day background logic at line 312 to use color palette |
 
 ---
 
 ## Technical Details
 
-### File: `src/components/suite/AllClientsCrewTable.tsx`
+**File: `src/components/suite/AllClientsCrewTable.tsx`**
 
-**Filter fix (line 107-111):**
-Change the month comparison from name-based to direct number comparison:
-```typescript
-// Before (broken):
-const monthName = NEPALI_MONTHS[parseInt(selectedMonth)] || "";
-const monthMatch = a.eventMonth?.toUpperCase() === monthName;
+1. **Define color palette** (after `SYNC_INTERVAL` definition, around line 44):
+   ```typescript
+   const DAY_COLORS = [
+     "bg-white",
+     "bg-blue-50/60",
+     "bg-amber-50/50",
+     "bg-emerald-50/50",
+     "bg-purple-50/50",
+     "bg-rose-50/50",
+     "bg-cyan-50/50",
+     "bg-orange-50/50",
+   ];
+   ```
 
-// After (fixed):
-const monthMatch = a.eventMonth === selectedMonth;
-```
-Also compare year directly: `a.eventYear === selectedYear` (this already works).
+2. **Fix SelectContent z-index** (lines 211 and 219):
+   ```typescript
+   <SelectContent className="z-[200]">
+   ```
 
-**Instant load with cache:**
-1. On mount, immediately load from `sessionStorage` cache key `crew_assignments_cache` if available -- this renders the table instantly
-2. Then call `loadData()` (read-only fetch from sheet) to get fresh data and update cache
-3. Sync (`fullSyncFreelancerAssignments`) runs in the background AFTER data is displayed -- it no longer blocks the UI
-4. The 30-minute auto-sync continues in the background
-5. Manual "Sync Clients" button still triggers a full sync + reload
+3. **Fix PopoverContent z-index** (lines 448 and 500):
+   ```typescript
+   <PopoverContent className="z-[200] w-56 p-0" align="start">
+   ```
 
-Flow:
-```text
-Open ALL CLIENTS
-  -> Show cached data instantly (if available)
-  -> Fetch fresh data from sheet (non-blocking)
-  -> Background sync every 30 min (non-blocking)
-```
-
-### Changes Summary
-
-| File | Change |
-|------|--------|
-| `src/components/suite/AllClientsCrewTable.tsx` | Fix month filter comparison; add sessionStorage cache for instant load; make sync non-blocking |
+4. **Update day background logic** (line 312):
+   ```typescript
+   const dayBg = DAY_COLORS[groupIdx % DAY_COLORS.length];
+   ```
 
