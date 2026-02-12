@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { getFreelancers, FreelancerData } from "./freelancer-api";
+import { getFreelancers, addFreelancer, FreelancerData } from "./freelancer-api";
 
 export interface FreelancerAssignment {
   rowNumber: number;
@@ -122,4 +122,34 @@ export function getFilteredFreelancersByRole(freelancers: FreelancerData[], fiel
     .filter(f => (f[filterKey] as string || '').toUpperCase() === 'YES')
     .map(f => f.name)
     .filter(Boolean);
+}
+
+export async function getAllFreelancerAssignments(): Promise<FreelancerAssignment[]> {
+  const { data, error } = await supabase.functions.invoke('google-sheets', {
+    body: { action: 'getAllFreelancerAssignments' }
+  });
+  if (error) throw new Error('Failed to fetch all freelancer assignments');
+  if (!data.success) throw new Error(data.error || 'Failed to fetch all freelancer assignments');
+  return data.data || [];
+}
+
+export async function quickAddFreelancer(
+  name: string,
+  contactNo: string,
+  roleField: FreelancerField
+): Promise<void> {
+  const roleMap: Record<string, Partial<FreelancerData>> = {
+    photographerBride: { photographer: 'YES', mainJob: 'PHOTOGRAPHER' },
+    photographerGroom: { photographer: 'YES', mainJob: 'PHOTOGRAPHER' },
+    extraPhotographer: { photographer: 'YES', mainJob: 'PHOTOGRAPHER' },
+    videographerBride: { videographer: 'YES', mainJob: 'VIDEOGRAPHER' },
+    videographerGroom: { videographer: 'YES', mainJob: 'VIDEOGRAPHER' },
+    extraVideographer: { videographer: 'YES', mainJob: 'VIDEOGRAPHER' },
+    assistant: { hybridShooter: 'YES', mainJob: 'HYBRID SHOOTER' },
+    iphoneShooter: { iphoneShooter: 'YES', mainJob: 'IPHONE SHOOTER' },
+    droneOperator: { droneOperator: 'YES', mainJob: 'DRONE OPERATOR' },
+    fpvOperator: { fpvOperator: 'YES', mainJob: 'FPV OPERATOR' },
+  };
+  const roleData = roleMap[roleField] || {};
+  await addFreelancer({ name, contactNo, ...roleData });
 }

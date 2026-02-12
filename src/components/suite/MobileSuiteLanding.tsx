@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { LogOut, Home, Newspaper, LayoutGrid, Construction, Calendar, User, AlertTriangle, Snowflake } from "lucide-react";
+import { LogOut, Home, Newspaper, LayoutGrid, Construction, Calendar, User, AlertTriangle, Snowflake, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -20,6 +20,7 @@ import { SuiteBenzoKeepSection } from "./SuiteBenzoKeepSection";
 import { useCachedData } from "@/hooks/useCachedData";
 import { isAlmostLost, getColdDatesClients } from "@/lib/fresh-client-utils";
 import { AlmostLostColdDatesDialog } from "./AlmostLostColdDatesDialog";
+import { AllClientsCrewTable } from "./AllClientsCrewTable";
 
 const HANDLERS = [
   { name: 'Benzo', colorScheme: 'violet' as const },
@@ -27,7 +28,7 @@ const HANDLERS = [
   { name: 'Nikit', colorScheme: 'blue' as const },
 ];
 
-type TabType = 'home' | 'news' | 'modules' | 'coming-soon';
+type TabType = 'home' | 'news' | 'modules' | 'coming-soon' | 'crew';
 
 export function MobileSuiteLanding() {
   const navigate = useNavigate();
@@ -69,6 +70,7 @@ export function MobileSuiteLanding() {
       {/* Tab Content */}
       <div className="flex-1 overflow-hidden">
         {activeTab === 'home' && <HomeTabContent />}
+        {activeTab === 'crew' && <AllClientsCrewTable />}
         {activeTab === 'modules' && <ModulesTabContent />}
         {activeTab === 'coming-soon' && <ComingSoonTabContent />}
         {activeTab === 'news' && <SuiteNewsFeed />}
@@ -89,6 +91,20 @@ export function MobileSuiteLanding() {
           >
             <Home className="w-5 h-5" />
             <span className="text-[10px] font-medium">Home</span>
+          </button>
+          
+          {/* Crew Tab */}
+          <button
+            onClick={() => setActiveTab('crew')}
+            className={cn(
+              "flex flex-col items-center gap-0.5 py-2 px-1 rounded-xl transition-all flex-1 min-w-0",
+              activeTab === 'crew' 
+                ? "bg-violet-100 text-violet-700" 
+                : "text-gray-500 hover:text-gray-700"
+            )}
+          >
+            <Users className="w-5 h-5" />
+            <span className="text-[10px] font-medium">Crew</span>
           </button>
           
           {/* Modules Tab */}
