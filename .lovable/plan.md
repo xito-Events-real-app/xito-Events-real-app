@@ -1,62 +1,57 @@
 
+# Fix Crew Table: Dynamic Columns, Client Navigation & Freelancer Hover
 
-# Crew Display & Remove Freelancer Improvements
+## 3 Bugs Found + 1 Enhancement
 
-## 4 Changes Requested
+### Bug 1: Client Page Not Opening (CRITICAL)
+The navigation uses `/client/...` but the actual route is `/client-tracker/client/...`. This causes a 404 error (confirmed in console logs: `404 Error: User attempted to access non-existent route: /client/2026-01-25T13%3A03%3A16.732Z`).
 
-### 1. Show Crew Names in Mobile Upcoming Events (TodayEventsHero)
-Currently, the `TodayEventsHero` component shows venue, parlour, timing, demands, and references but does NOT show assigned crew. We need to fetch freelancer assignments and display them on each event card.
+**Fix**: Change all `navigate('/client/...')` to `navigate('/client-tracker/client/...')` in AllClientsCrewTable.tsx (appears on lines 308, 418 for desktop and mobile).
 
-- Import `getAllFreelancerAssignments` and fetch assignments alongside event details
-- Match assignments to events using the same logic as `DashboardEventDetails` (event name + month + day matching)
-- Display assigned crew as compact color-coded role-name pills below the venue/parlour section (e.g., "PB: Ram", "VB: Hari")
+### Bug 2: Freelancer Hover Not Working (CRITICAL)
+The `HoverCardTrigger asChild` wraps a `Popover` component, but `Popover` is a Radix compound component that does NOT forward refs. This causes the React warning: "Function components cannot be given refs." The HoverCard never displays because it can't attach to its trigger.
 
-### 2. Reorder Crew Columns: PB, VB, PG, VG First
-In `AllClientsCrewTable.tsx`, the current order is PB, PG, VB, VG. Change to **PB, VB, PG, VG** so bride-side roles come together followed by groom-side.
+**Fix**: Restructure so the HoverCard wraps a simple `<div>` or `<span>` element instead of nesting inside the Popover. Separate the hover card from the popover -- use a `<div>` wrapper with the HoverCard around just the name display, and keep the Popover separate for the dropdown.
 
-Similarly update `DashboardEventDetails.tsx` ROLE_CONFIG order, and the new mobile crew display.
+### Bug 3: Font size shrinking prematurely
+Currently using hardcoded character thresholds (18/20 chars) to shrink text. User wants text to only shrink if it doesn't fit, not based on arbitrary lengths.
 
-### 3. Mobile-Friendly Card Layout for ALL CLIENTS Crew Table
-The `AllClientsCrewTable` currently renders as a horizontal table which is hard to use on mobile. When viewed on mobile (the "Crew" tab in `MobileSuiteLanding`), transform the layout from a wide table to a **vertical card structure**:
+**Fix**: Use CSS `text-overflow: ellipsis` with `overflow: hidden` by default, and only reduce font if ALL columns are already expanded and still overflowing.
 
-Each card will show:
-- Event date (day badge) and client name at top
-- Event name below
-- Crew assignments as a 2-column grid of role-name pairs
-- Color-coded by role group (amber for photo, purple for video, emerald for assist, cyan for tech)
+### Enhancement: Dynamic Column Widths
+Currently all "wide" columns are fixed at `min-w-[120px]`. User wants columns sized to fit the maximum first name length of assigned freelancers, expanding where needed and only shrinking text as a last resort.
 
-This will be done by detecting mobile width and rendering cards instead of the table rows.
-
-### 4. Remove Freelancer Option in Both Versions
-- **AllClientsCrewTable (Desktop)**: Add a "Clear" option in the `CrewCell` popover command list (similar to how `FreelancerAssignmentSection` already has "Clear selection"). When clicked, call `handleAssign(row, field, '')` to clear the value.
-- **AllClientsCrewTable (Mobile cards)**: Each assigned crew member will have a small X button to remove the assignment.
-- **FreelancerAssignmentSection**: Already has "Clear selection" -- no changes needed.
+**Fix**: Compute the max first-name length per column from the filtered data, then set column widths proportionally. Use a `useMemo` to calculate optimal widths based on actual content.
 
 ## Technical Details
 
-### File: `src/components/suite/TodayEventsHero.tsx`
-- Import `getAllFreelancerAssignments` and `FreelancerAssignment` from freelancer-assignment-api
-- Add a `useEffect` or integrate into useMemo to load assignments (using sessionStorage cache `crew_assignments_cache` for instant load)
-- In each event card, after the venue/parlour section, render matched crew as inline pills
-- Use the same ROLE_CONFIG pattern from DashboardEventDetails with reordered roles (PB, VB, PG, VG first)
-
 ### File: `src/components/suite/AllClientsCrewTable.tsx`
-- Reorder `CREW_COLUMNS` array: PB, VB, PG, VG, EP, EV, Asst, iPhone, Drone, FPV
-- Add mobile detection using `useIsMobile()` hook
-- When mobile, render a card-based layout instead of the table:
-  - Each card: date badge + client name header, event name, then a grid of assigned roles
-  - Each role shows label + name with an X button to remove
-  - Empty roles show a "+" button to assign via the same popover
-- In desktop `CrewCell`: Add a "Clear" CommandItem at the top of the list when a value exists, calling `onAssign('')`
 
-### File: `src/components/client-detail/DashboardEventDetails.tsx`
-- Reorder `ROLE_CONFIG` to: PB, VB, PG, VG, EP, EV, Asst, iPhone, Drone, FPV
+**1. Fix client navigation (lines 308, 418)**
+Change `navigate('/client/...')` to `navigate('/client-tracker/client/...')` in both mobile and desktop views.
 
-### Files Summary
+**2. Fix freelancer hover (lines 570-639)**
+Restructure `CrewCell` to separate HoverCard from Popover:
+- Wrap the cell content in a `<div>` with `position: relative`
+- The name button triggers the Popover on click
+- The HoverCard wraps just the visible name text, separate from the Popover structure
+- This avoids the ref-forwarding issue that breaks the hover
 
-| File | Changes |
-|------|---------|
-| `TodayEventsHero.tsx` | Add crew display on mobile upcoming events |
-| `AllClientsCrewTable.tsx` | Reorder columns (PB,VB,PG,VG first); add mobile card layout; add remove/clear option in desktop cells |
-| `DashboardEventDetails.tsx` | Reorder ROLE_CONFIG to PB,VB,PG,VG first |
+**3. Dynamic column widths**
+Add a `useMemo` that:
+- For each CREW_COLUMN, finds the maximum first-name length among all filtered rows
+- Converts character count to approximate pixel width (roughly 8px per character + 16px padding)
+- Sets a minimum of 55px (for empty columns) and maximum of 130px
+- Passes the computed width to each column header `<th>` and `CrewCell` `<td>`
 
+**4. Smart text sizing**
+- Remove the hardcoded character-count font size logic
+- Use CSS `truncate` (already applied in most places) as the primary overflow strategy
+- Only apply smaller font when the computed column width is at minimum and the name still overflows
+
+| Change | Description |
+|--------|-------------|
+| Client nav fix | `/client/` to `/client-tracker/client/` (2 locations) |
+| Hover fix | Restructure HoverCard/Popover nesting to avoid ref conflict |
+| Dynamic widths | Compute column widths from max first-name length per column |
+| Smart text | Remove hardcoded font shrinking, rely on truncation first |
