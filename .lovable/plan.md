@@ -1,52 +1,85 @@
 
 
-# Fix ALL CLIENTS: Instant Load + Quick Add Freelancer
+# Quick Add Freelancer: Always Ask All Skill Columns
 
-## Problem 1: Syncing blocks the UI
+## What Changes
 
-Even though the sync runs "in the background," it sets `setSyncing(true)` which triggers a full-screen spinner ("Syncing booked clients...") that replaces the entire table. The user sees nothing until the sync completes.
+Instead of only showing skill checkboxes for the "Assistant" role, the Quick Add Freelancer dialog will **always** show checkboxes for all professional skills regardless of which role column triggered it. The role that triggered the dialog will be **pre-checked** automatically.
 
-**Fix**: Make the background sync truly non-blocking by NOT setting `syncing` state during silent syncs. Only show the syncing spinner when the user explicitly clicks "Sync Clients."
+## How It Works
 
-Changes in `handleSync`:
-- Add a parameter to control whether to show the syncing UI
-- Silent syncs skip `setSyncing(true)` entirely so the table stays visible
+### Dialog Layout
 
-Also, the loading state check currently shows a spinner even during sync. Change the render logic so the table is shown whenever we have data (from cache or fetch), regardless of background sync status.
+```
+Name: [_______________] *
+Contact: [_______________] *
 
-## Problem 2: "Add New Freelancer" dialog doesn't appear
+What can this freelancer do? (check all that apply)
+[x] Photographer    [ ] Videographer
+[ ] Photo Editor    [ ] Video Editor
+[ ] Drone Operator  [ ] FPV Operator
+[ ] iPhone Shooter
+```
 
-The `QuickAddFreelancerDialog` uses a Radix `Dialog` which renders its content via a portal. Since the ALL CLIENTS overlay is `z-[100]`, the dialog (default z-index ~50) renders behind it and is invisible.
+- The checkbox matching the triggering role is **pre-checked and visually highlighted**
+- User can check additional skills before saving
 
-**Fix**: Add `className="z-[200]"` to the `DialogContent` in `QuickAddFreelancerDialog.tsx`.
+### Pre-check Rules
 
----
+| Triggered From | Pre-checked Skill |
+|---|---|
+| Photographer Bride/Groom/Extra | Photographer |
+| Videographer Bride/Groom/Extra | Videographer |
+| Assistant | None (user picks) |
+| iPhone Shooter | iPhone Shooter |
+| Drone Operator | Drone Operator |
+| FPV Operator | FPV Operator |
+
+### Hybrid Auto-Computation (unchanged logic)
+
+- **Hybrid Shooter** = YES only if BOTH Photographer AND Videographer are checked
+- **Hybrid Editor** = YES only if BOTH Photo Editor AND Video Editor are checked
+- These are computed automatically, not shown as checkboxes
+
+### Main Job Derivation
+
+Set from the first checked skill using priority order:
+1. Photographer
+2. Videographer
+3. Photo Editor
+4. Video Editor
+5. Drone Operator
+6. FPV Operator
+7. iPhone Shooter
+
+### Validation
+
+At least one skill must be checked before saving.
+
+## Files to Change
+
+| File | Change |
+|---|---|
+| `src/components/suite/QuickAddFreelancerDialog.tsx` | Add skills checkboxes (always visible), pre-check based on triggering role, pass skills to API |
+| `src/lib/freelancer-assignment-api.ts` | Update `quickAddFreelancer` to accept skills map, compute hybrid flags, derive mainJob from checked skills |
 
 ## Technical Details
 
-### File 1: `src/components/suite/AllClientsCrewTable.tsx`
+### QuickAddFreelancerDialog.tsx
 
-**Make background sync non-blocking (lines 93-106):**
-- Change `handleSync` to accept a `showUI` flag (default `true`)
-- Only call `setSyncing(true/false)` when `showUI` is true
-- The silent background sync on mount and the 30-min interval pass `showUI=false`
+- Add `skills` state initialized with the triggering role pre-checked using `ROLE_TO_SKILL_MAP`
+- Render a 2-column grid of `Checkbox` + `Label` pairs for all 7 skills
+- On save, pass skills to `quickAddFreelancer(name, contact, roleField, skills)`
+- Reset skills on close/success
 
-**Fix render logic (around line 269):**
-- Currently: if `syncing` is true, show full-screen spinner (hides table)
-- Change: only show syncing spinner if `syncing && assignments.length === 0` (no cached data)
-- If we have data, show the table with a small non-blocking sync indicator in the header instead
+### freelancer-assignment-api.ts
 
-### File 2: `src/components/suite/QuickAddFreelancerDialog.tsx`
-
-**Fix dialog z-index (line 43):**
-- Change `<DialogContent className="sm:max-w-sm">` to `<DialogContent className="sm:max-w-sm z-[200]">`
-
----
-
-## Changes Summary
-
-| File | Change |
-|------|--------|
-| `AllClientsCrewTable.tsx` | Make silent sync skip `setSyncing` state; only show full-screen spinner when no data; table renders instantly from cache/fetch |
-| `QuickAddFreelancerDialog.tsx` | Add `z-[200]` to DialogContent so it appears above the overlay |
+- Update `quickAddFreelancer` to always use skills map instead of hardcoded role assignments
+- Compute hybrid flags:
+  ```
+  hybridShooter = photographer && videographer ? 'YES' : ''
+  hybridEditor = photoEditor && videoEditor ? 'YES' : ''
+  ```
+- Derive mainJob from priority list based on first checked skill
+- Pass all flags to `addFreelancer()`
 
