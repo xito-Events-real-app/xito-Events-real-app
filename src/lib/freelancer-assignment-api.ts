@@ -147,7 +147,8 @@ export async function quickAddFreelancer(
   name: string,
   contactNo: string,
   roleField: FreelancerField,
-  skills?: Record<string, boolean>
+  skills?: Record<string, boolean>,
+  mainJobOverride?: string
 ): Promise<void> {
   if (skills) {
     const data: Partial<FreelancerData> = { name, contactNo };
@@ -160,7 +161,7 @@ export async function quickAddFreelancer(
     if (skills.iphoneShooter) data.iphoneShooter = 'YES';
     data.hybridShooter = (skills.photographer && skills.videographer) ? 'YES' : '';
     data.hybridEditor = (skills.photoEditor && skills.videoEditor) ? 'YES' : '';
-    data.mainJob = JOB_PRIORITY.find(([key]) => skills[key])?.[1] || '';
+    data.mainJob = mainJobOverride || JOB_PRIORITY.find(([key]) => skills[key])?.[1] || '';
     await addFreelancer(data);
   } else {
     // Fallback: old behavior
