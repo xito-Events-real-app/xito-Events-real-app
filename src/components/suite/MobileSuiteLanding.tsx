@@ -21,6 +21,7 @@ import { useCachedData } from "@/hooks/useCachedData";
 import { isAlmostLost, getColdDatesClients } from "@/lib/fresh-client-utils";
 import { AlmostLostColdDatesDialog } from "./AlmostLostColdDatesDialog";
 import { AllClientsCrewTable } from "./AllClientsCrewTable";
+import { AllClientsAnnouncementDialog } from "./AllClientsAnnouncementDialog";
 
 const HANDLERS = [
   { name: 'Benzo', colorScheme: 'violet' as const },
@@ -43,6 +44,7 @@ export function MobileSuiteLanding() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col overflow-x-hidden w-full max-w-full">
+      <AllClientsAnnouncementDialog onNavigate={() => setActiveTab('crew')} />
       {/* Global Mode Toggle */}
       <GlobalModeToggle />
 
