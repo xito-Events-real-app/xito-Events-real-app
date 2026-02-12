@@ -327,25 +327,32 @@ export function TodayEventsHero() {
           )}>
             <Calendar className="w-4 h-4 md:w-6 md:h-6 text-white" />
           </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-sm md:text-2xl font-bold text-gray-900">
-                Upcoming Events
-              </h2>
-              <span className="text-[11px] md:text-sm font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-                {(() => {
-                  const todayBS = getCurrentBSDate();
-                  const todayAD = format(new Date(), 'MMM d');
-                  return `${nepaliMonthsEnglish[todayBS.month - 1]} ${todayBS.day} / ${todayAD}`;
-                })()}
-              </span>
-            </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-sm md:text-2xl font-bold text-gray-900">
+              Upcoming Events
+            </h2>
             <p className="text-[11px] md:text-sm text-gray-500">
               {hasEvents 
                 ? `${upcomingEvents.length} event${upcomingEvents.length > 1 ? 's' : ''} scheduled`
                 : "No upcoming events"
               }
             </p>
+          </div>
+          {/* Today's date pill - styled like sync button */}
+          <div className={cn(
+            "h-9 rounded-full font-semibold px-4 flex items-center gap-1.5 text-[11px] md:text-xs shrink-0",
+            "bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-600",
+            "shadow-md shadow-emerald-500/25",
+            "text-white"
+          )}>
+            <Calendar className="w-3.5 h-3.5 shrink-0" />
+            <span>
+              {(() => {
+                const todayBS = getCurrentBSDate();
+                const todayAD = format(new Date(), 'MMM d');
+                return `${nepaliMonthsEnglish[todayBS.month - 1]} ${todayBS.day} / ${todayAD}`;
+              })()}
+            </span>
           </div>
         </div>
 
@@ -449,7 +456,7 @@ export function TodayEventsHero() {
                             )}
                           </div>
                           
-                          {/* Client name and event - clickable link */}
+                          {/* Client name, event, and date - clickable link */}
                           <Link 
                             to={`/client-tracker/client/${encodeURIComponent(clientId)}`}
                             className="flex-1 min-w-0"
@@ -459,6 +466,23 @@ export function TodayEventsHero() {
                             </p>
                             <p className="text-sm font-medium text-emerald-600 truncate">
                               {displayEventName}
+                            </p>
+                            <p className="text-[11px] text-gray-500">
+                              {(() => {
+                                // BS date
+                                const months = event.client.eventMonth?.split('\n') || [];
+                                const days = event.client.eventDay?.split('\n') || [];
+                                const years = event.client.eventYear?.split('\n') || [];
+                                const m = months[event.eventIndex] || months[0] || '';
+                                const d = days[event.eventIndex] || days[0] || '';
+                                const y = years[event.eventIndex] || years[0] || '';
+                                const monthName = m ? (nepaliMonthsEnglish[parseInt(m) - 1] || m) : '';
+                                const bsPart = monthName && d ? `${monthName} ${d}` : '';
+                                // AD date
+                                const adDate = event.eventDate;
+                                const adPart = format(adDate, 'MMM d, yyyy');
+                                return bsPart ? `${bsPart}, ${y} / ${adPart}` : adPart;
+                              })()}
                             </p>
                           </Link>
                           
