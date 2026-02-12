@@ -742,7 +742,8 @@ const ClientDetail = () => {
       const result = await addClientComment(
         client.rowNumber, 
         commentText.trim(), 
-        currentComments || client.comments || ''
+        currentComments || client.comments || '',
+        client.registeredDateTimeAD
       );
       setCurrentComments(result.comments);
       toast({ title: "Comment added" });
