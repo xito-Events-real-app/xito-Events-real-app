@@ -331,7 +331,8 @@ export async function updateBenzoKeepNotes(
 export async function addClientComment(
   rowNumber: number,
   comment: string,
-  existingComments: string
+  existingComments: string,
+  registeredDateTimeAD?: string
 ): Promise<{ success: boolean; comments: string }> {
   // Generate timestamp on client side to ensure correct local time
   const now = new Date();
@@ -343,7 +344,7 @@ export async function addClientComment(
   const clientTimestamp = `${month}/${day}/${year} ${hours}:${mins}`;
   
   return callSheetsFunction<{ success: boolean; comments: string }>("addClientComment", {
-    data: { rowNumber, comment, existingComments, clientTimestamp },
+    data: { rowNumber, comment, existingComments, clientTimestamp, registeredDateTimeAD },
   });
 }
 

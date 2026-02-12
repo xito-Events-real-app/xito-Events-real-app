@@ -590,7 +590,7 @@ export function DesktopClientRow({
     
     setIsAddingComment(true);
     try {
-      const result = await addClientComment(client.rowNumber, newComment.trim(), currentComments);
+      const result = await addClientComment(client.rowNumber, newComment.trim(), currentComments, client.registeredDateTimeAD);
       setCurrentComments(result.comments);
       setNewComment('');
       toast.success('Comment added');
