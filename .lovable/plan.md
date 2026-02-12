@@ -1,40 +1,29 @@
 
-# Date Display Fixes for Upcoming Events
 
-## What Changes
+# Fix: Comments Appearing on Wrong Client
 
-### 1. Today's Date Pill - Right Side of "Upcoming Events" Title
-Keep the date pill next to "Upcoming Events" but style it exactly like the Sync button:
-- Use `bg-gradient-to-r from-orange-500 via-red-500 to-purple-600` gradient (same as Sync)
-- Same shadow: `shadow-md shadow-orange-500/25`
-- Same sizing: `h-9 rounded-full font-semibold`
-- Same hover effects: `hover:shadow-lg hover:scale-[1.02]`
-- Calendar icon + "Falgun 1 / Feb 13" text
-- No year
+## Root Cause
 
-### 2. Event Card Date - Inline Pill Next to Client Name
-On each event card, move the date from a 3rd line below the event name to an **inline pill next to the client name** on the same row:
-- Remove the separate date paragraph (lines 470-486)
-- Add a small gradient pill (same orange-red-purple style) after the client name
-- Format: "Falgun 1 / Feb 13" (no year, no comma)
-- The client name and date pill sit on the same flex row
+The `addClientComment` function only sends `rowNumber` to the backend, but does NOT send `registeredDateTimeAD` (the unique client identifier). When rows shift in Google Sheets (because new clients are added), the `rowNumber` becomes stale, causing the comment to be written to a **different client's row**.
 
-### 3. Both Desktop and Mobile
-All changes apply to both viewports since this component renders for both.
+For example: You open Urusha Ghimirey (row 15), but by the time you add a comment, a new client was added above her, shifting her to row 16. The comment goes to row 15 -- which is now Anuja (Birat Wosti).
 
-## Technical Details
+The `addBookedClientComment` function already handles this correctly by passing `registeredDateTimeAD`. The fix is to do the same for `addClientComment`.
 
-### File: `src/components/suite/TodayEventsHero.tsx`
+## Changes
 
-**Header date pill (lines 342-356):** Change gradient from `from-emerald-500 via-teal-500 to-cyan-600` to `from-orange-500 via-red-500 to-purple-600` with matching shadow. Keep Calendar icon and date text.
+### 1. Update `addClientComment` in `sheets-api.ts`
+Add `registeredDateTimeAD` as an optional parameter and pass it to the backend, so the backend's `verifyRowNumber` can find the correct row.
 
-**Event card layout (lines 460-487):**
-- Change client name line to a flex row with the client name on the left and a small gradient date pill on the right
-- Remove the 3rd line date paragraph (lines 470-486)
-- Date pill format: `Falgun 1 / Feb 13` (no year)
-- Small pill style matching the header pill but smaller (text-[10px])
+### 2. Update all callers to pass `registeredDateTimeAD`
 
-| Change | Location |
-|--------|----------|
-| Restyle header date pill to match Sync button gradient | Lines 342-356 |
-| Move event date inline with client name as pill, remove year | Lines 460-487 |
+**`ClientDetail.tsx`** -- Pass `client.registeredDateTimeAD` when calling `addClientComment`.
+
+**`FreshClientCard.tsx`** -- Same fix: pass `client.registeredDateTimeAD`.
+
+**`DesktopClientRow.tsx`** -- Same fix: pass `client.registeredDateTimeAD`.
+
+## Why This Works
+
+The backend already has `verifyRowNumber()` which searches Column A for the `registeredDateTimeAD` value to find the **actual** current row, regardless of shifts. It's already being used for comments -- but only when `registeredDateTimeAD` is provided. When it's `undefined`, it falls back to the raw (potentially stale) `rowNumber`.
+
