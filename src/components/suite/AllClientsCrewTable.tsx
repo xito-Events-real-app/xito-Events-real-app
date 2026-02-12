@@ -91,7 +91,7 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
   }, []);
 
   const handleSync = useCallback(async (silent = false) => {
-    setSyncing(true);
+    if (!silent) setSyncing(true);
     try {
       const result = await fullSyncFreelancerAssignments();
       if (!silent) {
@@ -101,7 +101,7 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
     } catch (err) {
       if (!silent) toast.error("Sync failed");
     } finally {
-      setSyncing(false);
+      if (!silent) setSyncing(false);
     }
   }, [loadData]);
 
@@ -270,18 +270,11 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
       </div>
 
       {/* Table Container */}
-      {loading && !syncing ? (
+      {(loading || syncing) && assignments.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="flex flex-col items-center gap-3">
-            <Loader2 className="w-10 h-10 animate-spin text-violet-500" />
-            <p className="text-sm text-gray-500">Loading crew data...</p>
-          </div>
-        </div>
-      ) : syncing ? (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-3">
-            <Database className="w-10 h-10 animate-pulse text-violet-500" />
-            <p className="text-sm text-gray-500">Syncing booked clients...</p>
+            {syncing ? <Database className="w-10 h-10 animate-pulse text-violet-500" /> : <Loader2 className="w-10 h-10 animate-spin text-violet-500" />}
+            <p className="text-sm text-gray-500">{syncing ? "Syncing booked clients..." : "Loading crew data..."}</p>
           </div>
         </div>
       ) : (

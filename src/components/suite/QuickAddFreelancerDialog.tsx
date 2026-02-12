@@ -40,7 +40,7 @@ export function QuickAddFreelancerDialog({ open, onOpenChange, roleField, roleLa
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className="sm:max-w-sm z-[200]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserPlus className="w-5 h-5 text-emerald-600" />
