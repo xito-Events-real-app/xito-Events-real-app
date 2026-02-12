@@ -8,7 +8,7 @@ import { Loader2, Users, Plus, RefreshCw, X, ChevronLeft, Database } from "lucid
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getCurrentBSDate, nepaliMonthsEnglish, getBSYearsRange } from "@/lib/nepali-date";
-import { NEPALI_MONTHS } from "@/lib/nepali-months";
+// NEPALI_MONTHS no longer needed for filter
 import {
   getAllFreelancerAssignments,
   updateFreelancerAssignment,
@@ -70,6 +70,8 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
       ]);
       setAssignments(allAssignments);
       setFreelancers(allFreelancers);
+      try { sessionStorage.setItem('crew_assignments_cache', JSON.stringify(allAssignments)); } catch {}
+      try { sessionStorage.setItem('crew_freelancers_cache', JSON.stringify(allFreelancers)); } catch {}
     } catch (err) {
       toast.error("Failed to load crew data");
     } finally {
@@ -92,23 +94,37 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
     }
   }, [loadData]);
 
-  // Auto-sync on mount + every 30 mins
+  // Instant load from cache, then fresh fetch, then background sync
   useEffect(() => {
+    // 1. Load from cache instantly
+    try {
+      const cachedA = sessionStorage.getItem('crew_assignments_cache');
+      const cachedF = sessionStorage.getItem('crew_freelancers_cache');
+      if (cachedA) setAssignments(JSON.parse(cachedA));
+      if (cachedF) setFreelancers(JSON.parse(cachedF));
+      if (cachedA) setLoading(false);
+    } catch {}
+
+    // 2. Fresh data fetch
+    loadData();
+
+    // 3. Background sync (non-blocking, won't show loading)
     if (!hasSyncedOnMount.current) {
       hasSyncedOnMount.current = true;
-      handleSync(true);
+      handleSync(true).then(() => loadData());
     }
-    const interval = setInterval(() => handleSync(true), SYNC_INTERVAL);
+
+    // 4. Auto-sync every 30 mins
+    const interval = setInterval(() => handleSync(true).then(() => loadData()), SYNC_INTERVAL);
     return () => clearInterval(interval);
-  }, [handleSync]);
+  }, [handleSync, loadData]);
 
   // Fix filter: convert month number to month name for comparison
   const filteredRows = useMemo(() => {
-    const monthName = NEPALI_MONTHS[parseInt(selectedMonth)] || "";
     return assignments
       .filter(a => {
         const yearMatch = a.eventYear === selectedYear;
-        const monthMatch = a.eventMonth?.toUpperCase() === monthName;
+        const monthMatch = a.eventMonth === selectedMonth;
         return yearMatch && monthMatch;
       })
       .sort((a, b) => {
