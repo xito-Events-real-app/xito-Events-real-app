@@ -1,97 +1,114 @@
 
-# Freelancer Profile Page with Booking Calendar
+# ALL CLIENTS -- Monthly Crew Assignment View
 
-## What You'll Get
+## Overview
 
-A dedicated page for each freelancer at `/freelancer/:freelancerName` that shows:
-1. **Full profile details** -- name, contact, social links, location, roles/skills
-2. **A personalized booking calendar** -- 12-month view showing only the dates THIS freelancer is assigned to events
-3. **Hover popups on booked dates** -- showing client name, event name, role assigned, and venue details
+A new section added to the **Home Screen** (above "Client Tracker" in the left sidebar on desktop, and as a new tab on mobile) showing all booked events for the current Nepali month in a clean table. Each row = one event, with inline freelancer assignment dropdowns and a "Quick Add Freelancer" mini-modal.
 
-Clicking on any freelancer name (in the Dashboard Event Details column, in the Assignment dropdowns, or in the Freelancers module table) will navigate to this page.
-
----
-
-## How It Works
+## What You Will See
 
 ```text
-User clicks "Ram Sharma" anywhere in the app
-        |
-        v
-  /freelancer/Ram%20Sharma
-        |
-        v
-  Page loads:
-    1. Fetches freelancer profile from WTN FREELANCERS sheet (by name match)
-    2. Fetches ALL rows from BOOKED CLIENTS FREELANCERS sheet
-    3. Scans every row + every event index for this freelancer's name
-    4. Builds a calendar map: date -> [{ clientName, event, role, venue }]
-        |
-        v
-  Renders:
-    - Left: Profile card (details, contact, roles)
-    - Right: 12-month booking calendar with green dots on booked dates
-    - Hover on date: popup showing event details for that day
+ALL CLIENTS
+[ 2082 v ] [ MAGH v ]
+
+| Day | Client          | Event            | PB            | PG           | VB     | VG     | EP     | EV     | Asst   | iPhone | Drone  | FPV    |
+|-----|-----------------|------------------|---------------|--------------|--------|--------|--------|--------|--------|--------|--------|--------|
+| 15  | Prasanna Mainali| Bride Reception  | Arjun Pandey  | Barun K.     | Assign | Assign | Assign | Assign | Assign | Assign | Assign | Assign |
+| 17  | Riya Shrestha   | Wedding          | Ram Sharma    | Assign       | Hari K | Assign | Assign | Assign | Assign | Assign | Assign | Assign |
+| 22  | Sita Thapa      | Engagement       | Assign        | Assign       | Assign | Assign | Assign | Assign | Assign | Assign | Assign | Assign |
 ```
+
+- Default: current BS year + month
+- Click any "Assign" cell to open a role-filtered dropdown
+- Each dropdown has "+ Add New Freelancer" at the bottom
+- Quick Add modal: just Name (required) + Contact Number (required)
+- Auto-assigns the role column and saves instantly
 
 ---
 
 ## Technical Details
 
-### Step 1: New Backend Action -- `getFreelancerBookings`
+### Step 1: New Backend Action -- `getAllFreelancerAssignments`
 
 **File: `supabase/functions/google-sheets/index.ts`**
 
-Add a new action that:
-- Reads ALL rows from `BOOKED CLIENTS FREELANCERS` sheet (A2:R1000)
-- For each row, splits all columns by `\n` and checks each event index
-- If any column I-R at a given index matches the freelancer name, collect:
-  - `clientName` (Col C), `event` (Col D at index), `eventDateAD` (Col H at index), `eventMonth` (Col F at index), `eventDay` (Col G at index), `eventYear` (Col E at index), `role` (which column matched), `registeredDateTimeAD` (Col A)
-- Returns the full list of bookings for this freelancer
+A new action that reads ALL rows from `BOOKED CLIENTS FREELANCERS` sheet (A2:R1000), splits each row's newline-separated columns into individual event rows, and returns them all. Each returned item includes:
+- `registeredDateTimeAD`, `clientName`, `event`, `eventYear`, `eventMonth`, `eventDay`, `eventDateAD`
+- All 10 crew fields: `photographerBride` through `fpvOperator`
+- `rowNumber` for updates
+
+This is a read-only bulk fetch (no writes). The frontend filters by year/month.
 
 ### Step 2: New API Function
 
 **File: `src/lib/freelancer-assignment-api.ts`**
 
-Add `getFreelancerBookings(freelancerName: string)` that calls the new backend action and returns typed booking data.
+Add `getAllFreelancerAssignments()` function that invokes the new backend action and returns typed data.
 
-### Step 3: New Page Component -- `FreelancerProfile`
+Add `quickAddFreelancer(name, contactNo, roleField)` function that:
+1. Calls `addFreelancer` with the name, contact, and the correct role set to YES
+2. Returns the added freelancer data
 
-**File: `src/pages/FreelancerProfile.tsx`**
+### Step 3: New Component -- `AllClientsCrewTable`
 
-- Route param: `freelancerName` (URL-decoded)
-- Fetches freelancer details from `getFreelancers()` (find by name)
-- Fetches bookings from `getFreelancerBookings(name)`
-- Layout:
-  - **Left column (1/3)**: Profile card with name, main job badge, contact info (call/WhatsApp links), social links (Instagram/Facebook), location (city/area), map link, and role badges (color-coded chips for each YES role)
-  - **Right column (2/3)**: 12-month booking calendar similar to `BookingCalendarMini` but using the freelancer's personal booking data instead of all clients. Each booked date gets an emerald circle. Hovering shows a popup with client name, event type, role assigned, and venue info. Clicking a client name in the popup navigates to their detail page.
+**File: `src/components/suite/AllClientsCrewTable.tsx`**
 
-### Step 4: Route Registration
+This is the main component containing:
+- **Header**: "ALL CLIENTS" title with BS Year and Month dropdowns (defaulting to current)
+- **Table**: Horizontally scrollable table with columns: Day, Client, Event, PB, PG, VB, VG, EP, EV, Asst, iPhone, Drone, FPV
+- **Crew Cells**: Each crew cell is a clickable dropdown (using Command/Popover) showing role-filtered freelancers from the WTN FREELANCERS sheet. Selecting a name saves immediately via `updateFreelancerAssignment`.
+- **Quick Add**: Each dropdown includes a "+ Add New Freelancer" option at the bottom. Clicking it opens a small inline dialog with Name + Contact Number fields. On save, adds the freelancer to the FREELANCERS sheet with the correct role = YES, then auto-assigns them to the current cell.
+- **Sorting**: Rows sorted by event day ascending within the filtered month.
 
-**File: `src/App.tsx`**
+### Step 4: Integrate into Desktop Suite
 
-Add route: `<Route path="/freelancer/:freelancerName" element={<ProtectedRoute><FreelancerProfile /></ProtectedRoute>} />`
+**File: `src/components/suite/SuiteLeftSidebar.tsx`**
 
-### Step 5: Make Freelancer Names Clickable
+Add an "ALL CLIENTS" button at the very top of the sidebar (above the module list) that sets a state to show the crew table in the main content area.
 
-Three files need freelancer names wrapped in links:
+**File: `src/components/suite/SuiteDashboardContent.tsx`**
 
-1. **`src/components/client-detail/DashboardEventDetails.tsx`** -- The freelancer names in the third column become clickable links to `/freelancer/{name}`
-2. **`src/components/client-detail/FreelancerAssignmentSection.tsx`** -- The selected freelancer name in each dropdown trigger becomes a clickable link
-3. **`src/components/freelancers/FreelancerTable.tsx`** -- The name column in the freelancers module table becomes clickable
+Add a conditional: when "ALL CLIENTS" is selected from the sidebar, render `AllClientsCrewTable` instead of the normal tabs content.
 
-All links use `useNavigate` to go to `/freelancer/${encodeURIComponent(name)}`.
+**File: `src/components/suite/DesktopSuiteLanding.tsx`**
 
----
+Add state management for `showAllClients` and pass it through the sidebar and dashboard content components.
 
-## Files Summary
+### Step 5: Integrate into Mobile Suite
+
+**File: `src/components/suite/MobileSuiteLanding.tsx`**
+
+Add a new "Crew" tab in the bottom navigation that renders `AllClientsCrewTable` in a mobile-friendly scrollable layout.
+
+### Step 6: Quick Add Freelancer Dialog
+
+**File: `src/components/suite/QuickAddFreelancerDialog.tsx`**
+
+A small, focused dialog with:
+- Name input (required)
+- Contact Number input (required)
+- Save button that calls `addFreelancer` with role auto-set based on which column triggered it
+- On success: refreshes the freelancer list, auto-assigns to the cell, closes dialog
+
+### Data Flow
+
+1. Page loads -> calls `getAllFreelancerAssignments()` to get all rows from BOOKED CLIENTS FREELANCERS
+2. Frontend filters by selected BS year + month
+3. Splits newline-separated rows into individual event rows
+4. Each crew cell shows current assignment or "Assign"
+5. Clicking a cell -> fetches freelancers list (cached) -> shows role-filtered dropdown
+6. Selection -> calls `updateFreelancerAssignment()` to save to sheet
+7. "+ Add New" -> opens QuickAddFreelancerDialog -> saves to FREELANCERS sheet -> auto-assigns
+
+### Files Summary
 
 | File | Action |
 |------|--------|
-| `supabase/functions/google-sheets/index.ts` | Add `getFreelancerBookings` action |
-| `src/lib/freelancer-assignment-api.ts` | Add `getFreelancerBookings()` API call |
-| `src/pages/FreelancerProfile.tsx` | New page with profile + booking calendar |
-| `src/App.tsx` | Add `/freelancer/:freelancerName` route |
-| `src/components/client-detail/DashboardEventDetails.tsx` | Make freelancer names clickable |
-| `src/components/client-detail/FreelancerAssignmentSection.tsx` | Make assigned names clickable |
-| `src/components/freelancers/FreelancerTable.tsx` | Make name column clickable |
+| `supabase/functions/google-sheets/index.ts` | Add `getAllFreelancerAssignments` action |
+| `src/lib/freelancer-assignment-api.ts` | Add `getAllFreelancerAssignments()` + `quickAddFreelancer()` |
+| `src/components/suite/AllClientsCrewTable.tsx` | New: main crew table component |
+| `src/components/suite/QuickAddFreelancerDialog.tsx` | New: minimal add freelancer modal |
+| `src/components/suite/SuiteLeftSidebar.tsx` | Add "ALL CLIENTS" button at top |
+| `src/components/suite/SuiteDashboardContent.tsx` | Show crew table when selected |
+| `src/components/suite/DesktopSuiteLanding.tsx` | Add state for ALL CLIENTS view |
+| `src/components/suite/MobileSuiteLanding.tsx` | Add "Crew" tab |
