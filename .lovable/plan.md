@@ -1,85 +1,26 @@
 
 
-# Quick Add Freelancer: Always Ask All Skill Columns
+# Fix Assistant Role: Show All Freelancers
 
-## What Changes
+## Two Issues
 
-Instead of only showing skill checkboxes for the "Assistant" role, the Quick Add Freelancer dialog will **always** show checkboxes for all professional skills regardless of which role column triggered it. The role that triggered the dialog will be **pre-checked** automatically.
+### 1. "Prasan Karki" appearing but not in FREELANCERS sheet
+This is likely a caching issue -- the freelancer data is cached for 5 minutes in `useFreelancerAssignments.ts`. If Prasan Karki was recently removed from the sheet, the cached data still shows him. No code fix needed for this specifically, but the second fix below will resolve any filtering inconsistencies.
 
-## How It Works
+### 2. Assistant column should show ALL freelancers
+Currently, `ROLE_FILTER_MAP` maps `assistant` to `hybridShooter`, so only freelancers marked as Hybrid Shooters appear. Since anyone can be an assistant, the assistant column should show every freelancer from the sheet.
 
-### Dialog Layout
+## Fix
 
-```
-Name: [_______________] *
-Contact: [_______________] *
+### File: `src/lib/freelancer-assignment-api.ts`
 
-What can this freelancer do? (check all that apply)
-[x] Photographer    [ ] Videographer
-[ ] Photo Editor    [ ] Video Editor
-[ ] Drone Operator  [ ] FPV Operator
-[ ] iPhone Shooter
-```
+Remove the `assistant` entry from `ROLE_FILTER_MAP`. When the map has no entry for a field, the `getFilteredFreelancersByRole` function already falls through to returning ALL freelancer names (line 120: `if (!filterKey) return freelancers.map(f => f.name).filter(Boolean)`).
 
-- The checkbox matching the triggering role is **pre-checked and visually highlighted**
-- User can check additional skills before saving
+**Change on line 112:**
+Remove `assistant: 'hybridShooter',` from the `ROLE_FILTER_MAP` object.
 
-### Pre-check Rules
-
-| Triggered From | Pre-checked Skill |
-|---|---|
-| Photographer Bride/Groom/Extra | Photographer |
-| Videographer Bride/Groom/Extra | Videographer |
-| Assistant | None (user picks) |
-| iPhone Shooter | iPhone Shooter |
-| Drone Operator | Drone Operator |
-| FPV Operator | FPV Operator |
-
-### Hybrid Auto-Computation (unchanged logic)
-
-- **Hybrid Shooter** = YES only if BOTH Photographer AND Videographer are checked
-- **Hybrid Editor** = YES only if BOTH Photo Editor AND Video Editor are checked
-- These are computed automatically, not shown as checkboxes
-
-### Main Job Derivation
-
-Set from the first checked skill using priority order:
-1. Photographer
-2. Videographer
-3. Photo Editor
-4. Video Editor
-5. Drone Operator
-6. FPV Operator
-7. iPhone Shooter
-
-### Validation
-
-At least one skill must be checked before saving.
-
-## Files to Change
+That single line removal fixes both issues -- assistant will now show all freelancers, and role-specific filtering continues to work for all other columns.
 
 | File | Change |
 |---|---|
-| `src/components/suite/QuickAddFreelancerDialog.tsx` | Add skills checkboxes (always visible), pre-check based on triggering role, pass skills to API |
-| `src/lib/freelancer-assignment-api.ts` | Update `quickAddFreelancer` to accept skills map, compute hybrid flags, derive mainJob from checked skills |
-
-## Technical Details
-
-### QuickAddFreelancerDialog.tsx
-
-- Add `skills` state initialized with the triggering role pre-checked using `ROLE_TO_SKILL_MAP`
-- Render a 2-column grid of `Checkbox` + `Label` pairs for all 7 skills
-- On save, pass skills to `quickAddFreelancer(name, contact, roleField, skills)`
-- Reset skills on close/success
-
-### freelancer-assignment-api.ts
-
-- Update `quickAddFreelancer` to always use skills map instead of hardcoded role assignments
-- Compute hybrid flags:
-  ```
-  hybridShooter = photographer && videographer ? 'YES' : ''
-  hybridEditor = photoEditor && videoEditor ? 'YES' : ''
-  ```
-- Derive mainJob from priority list based on first checked skill
-- Pass all flags to `addFreelancer()`
-
+| `src/lib/freelancer-assignment-api.ts` | Remove `assistant: 'hybridShooter'` from `ROLE_FILTER_MAP` so assistant shows all freelancers |
