@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { quickAddFreelancer, FreelancerField } from "@/lib/freelancer-assignment-api";
 import { Loader2, UserPlus } from "lucide-react";
@@ -25,6 +26,28 @@ const SKILL_OPTIONS = [
   { key: 'fpvOperator', label: 'FPV Operator' },
   { key: 'iphoneShooter', label: 'iPhone Shooter' },
 ] as const;
+
+const MAIN_JOB_OPTIONS = [
+  { key: 'photographer', label: 'PHOTOGRAPHER' },
+  { key: 'videographer', label: 'VIDEOGRAPHER' },
+  { key: 'photoEditor', label: 'PHOTO EDITOR' },
+  { key: 'videoEditor', label: 'VIDEO EDITOR' },
+  { key: 'droneOperator', label: 'DRONE OPERATOR' },
+  { key: 'fpvOperator', label: 'FPV OPERATOR' },
+  { key: 'iphoneShooter', label: 'IPHONE SHOOTER' },
+  { key: 'hybridShooter', label: 'HYBRID SHOOTER' },
+  { key: 'hybridEditor', label: 'HYBRID EDITOR' },
+] as const;
+
+const JOB_PRIORITY: [string, string][] = [
+  ['photographer', 'PHOTOGRAPHER'],
+  ['videographer', 'VIDEOGRAPHER'],
+  ['photoEditor', 'PHOTO EDITOR'],
+  ['videoEditor', 'VIDEO EDITOR'],
+  ['droneOperator', 'DRONE OPERATOR'],
+  ['fpvOperator', 'FPV OPERATOR'],
+  ['iphoneShooter', 'IPHONE SHOOTER'],
+];
 
 type SkillKey = typeof SKILL_OPTIONS[number]['key'];
 
@@ -54,7 +77,22 @@ export function QuickAddFreelancerDialog({ open, onOpenChange, roleField, roleLa
   const [name, setName] = useState("");
   const [contactNo, setContactNo] = useState("");
   const [skills, setSkills] = useState(() => getInitialSkills(roleField));
+  const [mainJob, setMainJob] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Auto-derive main job from skills when skills change
+  const derivedMainJob = useMemo(() => {
+    const isHybridShooter = skills.photographer && skills.videographer;
+    const isHybridEditor = skills.photoEditor && skills.videoEditor;
+    if (isHybridShooter) return 'HYBRID SHOOTER';
+    if (isHybridEditor) return 'HYBRID EDITOR';
+    return JOB_PRIORITY.find(([key]) => skills[key as SkillKey])?.[1] || '';
+  }, [skills]);
+
+  // Update mainJob when skills change (only if user hasn't manually overridden)
+  useEffect(() => {
+    setMainJob(derivedMainJob);
+  }, [derivedMainJob]);
 
   // Reset skills when roleField changes
   useEffect(() => {
@@ -74,12 +112,13 @@ export function QuickAddFreelancerDialog({ open, onOpenChange, roleField, roleLa
     if (!hasAnySkill) { toast.error("Select at least one skill"); return; }
     setSaving(true);
     try {
-      await quickAddFreelancer(name.trim(), contactNo.trim(), roleField, skills);
+      await quickAddFreelancer(name.trim(), contactNo.trim(), roleField, skills, mainJob || undefined);
       toast.success(`${name.trim()} added as ${roleLabel}`);
       onSuccess(name.trim());
       setName("");
       setContactNo("");
       setSkills(getInitialSkills(roleField));
+      setMainJob("");
       onOpenChange(false);
     } catch (err) {
       toast.error("Failed to add freelancer");
@@ -129,6 +168,19 @@ export function QuickAddFreelancerDialog({ open, onOpenChange, roleField, roleLa
                 </label>
               ))}
             </div>
+          </div>
+          <div>
+            <Label className="text-xs font-semibold text-muted-foreground">Main Job</Label>
+            <Select value={mainJob} onValueChange={setMainJob}>
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Select main job" />
+              </SelectTrigger>
+              <SelectContent className="z-[200]">
+                {MAIN_JOB_OPTIONS.map(({ key, label }) => (
+                  <SelectItem key={key} value={label}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <DialogFooter>
