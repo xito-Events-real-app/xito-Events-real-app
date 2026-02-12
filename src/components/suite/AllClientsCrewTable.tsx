@@ -8,7 +8,7 @@ import { Loader2, Users, Plus, RefreshCw, X, ChevronLeft, Database, Trash2 } fro
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { getCurrentBSDate, nepaliMonthsEnglish, getBSYearsRange } from "@/lib/nepali-date";
+import { getCurrentBSDate, nepaliMonthsEnglish, getBSYearsRange, isBSDatePast } from "@/lib/nepali-date";
 import {
   getAllFreelancerAssignments,
   updateFreelancerAssignment,
@@ -324,8 +324,8 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                                         {val}
                                       </button>
                                     </HoverCardTrigger>
-                                    <HoverCardContent className="w-56 p-3 z-[200]" side="top">
-                                      <FreelancerHoverInfo name={val} allAssignments={assignments} />
+                                    <HoverCardContent className="w-72 p-3 z-[200]" side="bottom" avoidCollisions={true} collisionPadding={16}>
+                                      <FreelancerHoverInfo name={val} allAssignments={assignments} selectedYear={selectedYear} selectedMonth={selectedMonth} />
                                     </HoverCardContent>
                                   </HoverCard>
                                   <button
@@ -400,13 +400,13 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                         <td className="px-3 py-2 border-r border-gray-100">
                           <button
                             onClick={() => navigate(`/client-tracker/client/${encodeURIComponent(row.registeredDateTimeAD)}`)}
-                            className="font-semibold text-gray-900 hover:text-violet-600 transition-colors truncate block max-w-[170px] text-sm"
+                            className="font-semibold text-gray-900 hover:text-violet-600 transition-colors text-sm text-left leading-tight"
                           >
                             {row.clientName}
                           </button>
                         </td>
                         <td className="px-3 py-2 border-r border-gray-100 text-gray-600 text-sm">
-                          <span className="truncate block max-w-[140px]">{row.event}</span>
+                          <span className="block leading-tight">{row.event}</span>
                         </td>
                         {CREW_COLUMNS.map(col => (
                           <CrewCell
@@ -418,6 +418,8 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                             colWidth={columnWidths[col.field]}
                             freelancers={freelancers}
                             allAssignments={assignments}
+                            selectedYear={selectedYear}
+                            selectedMonth={selectedMonth}
                             onAssign={(name) => handleAssign(row, col.field, name)}
                             onQuickAdd={() => setQuickAddState({ open: true, field: col.field, label: col.label, row })}
                           />
@@ -444,23 +446,39 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
 }
 
 /* ─── Shared Freelancer Hover Info ─── */
-function FreelancerHoverInfo({ name, allAssignments }: { name: string; allAssignments: FreelancerAssignment[] }) {
+function FreelancerHoverInfo({ name, allAssignments, selectedYear, selectedMonth }: { name: string; allAssignments: FreelancerAssignment[]; selectedYear: string; selectedMonth: string }) {
   const navigate = useNavigate();
-  const upcomingEvents = useMemo(() => {
+  const currentBS = getCurrentBSDate();
+
+  const { monthEvents, upcomingEvents } = useMemo(() => {
     const upper = name.trim().toUpperCase();
-    const events: { clientName: string; event: string; day: string; month: string }[] = [];
+    const monthEvts: { clientName: string; event: string; day: string; month: string; year: string }[] = [];
+
     for (const a of allAssignments) {
       for (const col of CREW_COLUMNS) {
         const cellVal = (a[col.field] as string)?.trim().toUpperCase();
         if (cellVal === upper) {
-          events.push({ clientName: a.clientName, event: a.event, day: a.eventDay, month: a.eventMonth });
+          // Filter to selected month/year only
+          if (a.eventYear === selectedYear && a.eventMonth === selectedMonth) {
+            monthEvts.push({ clientName: a.clientName, event: a.event, day: a.eventDay, month: a.eventMonth, year: a.eventYear });
+          }
           break;
         }
       }
-      if (events.length >= 5) break;
     }
-    return events;
-  }, [name, allAssignments]);
+
+    // Filter out past events
+    const upcoming = monthEvts.filter(ev => {
+      return !isBSDatePast(ev.year, ev.month, ev.day);
+    });
+
+    // Sort by day
+    upcoming.sort((a, b) => (parseInt(a.day) || 0) - (parseInt(b.day) || 0));
+
+    return { monthEvents: monthEvts, upcomingEvents: upcoming };
+  }, [name, allAssignments, selectedYear, selectedMonth]);
+
+  const monthName = nepaliMonthsEnglish[parseInt(selectedMonth) - 1] || selectedMonth;
 
   return (
     <div className="space-y-2">
@@ -470,18 +488,23 @@ function FreelancerHoverInfo({ name, allAssignments }: { name: string; allAssign
       >
         {name}
       </button>
+      <p className="text-xs font-bold text-violet-600">{monthEvents.length} event{monthEvents.length !== 1 ? 's' : ''} in {monthName}</p>
       {upcomingEvents.length > 0 && (
         <div>
-          <p className="text-xs font-medium text-gray-500 mb-1">Upcoming Events</p>
-          <div className="space-y-1">
+          <p className="text-xs font-medium text-gray-500 mb-1.5">Upcoming</p>
+          <div className="space-y-2">
             {upcomingEvents.map((ev, i) => (
-              <div key={i} className="text-xs text-gray-600 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0" />
-                <span className="truncate">{ev.clientName} — {ev.event} ({ev.day} {nepaliMonthsEnglish[parseInt(ev.month) - 1] || ev.month})</span>
+              <div key={i} className="text-xs border-l-2 border-violet-300 pl-2">
+                <p className="font-bold text-violet-700">{ev.day} {nepaliMonthsEnglish[parseInt(ev.month) - 1] || ev.month}</p>
+                <p className="text-gray-800">{ev.clientName}</p>
+                <p className="text-gray-500">{ev.event}</p>
               </div>
             ))}
           </div>
         </div>
+      )}
+      {upcomingEvents.length === 0 && monthEvents.length > 0 && (
+        <p className="text-xs text-gray-400 italic">All events have passed</p>
       )}
     </div>
   );
@@ -496,6 +519,8 @@ function CrewCell({
   colWidth,
   freelancers,
   allAssignments,
+  selectedYear,
+  selectedMonth,
   onAssign,
   onQuickAdd,
 }: {
@@ -506,6 +531,8 @@ function CrewCell({
   colWidth: number;
   freelancers: FreelancerData[];
   allAssignments: FreelancerAssignment[];
+  selectedYear: string;
+  selectedMonth: string;
   onAssign: (name: string) => void;
   onQuickAdd: () => void;
 }) {
@@ -535,8 +562,8 @@ function CrewCell({
                 {firstName}
               </span>
             </HoverCardTrigger>
-            <HoverCardContent className="w-64 p-3 z-[200]" side="top">
-              <FreelancerHoverInfo name={value} allAssignments={allAssignments} />
+            <HoverCardContent className="w-72 p-3 z-[200]" side="bottom" avoidCollisions={true} collisionPadding={16}>
+              <FreelancerHoverInfo name={value} allAssignments={allAssignments} selectedYear={selectedYear} selectedMonth={selectedMonth} />
             </HoverCardContent>
           </HoverCard>
 
