@@ -12,6 +12,7 @@ import { notifyCacheUpdate } from "@/lib/cache-manager";
 import { SuiteLeftSidebar } from "./SuiteLeftSidebar";
 import { SuiteQuickActionsBar } from "./SuiteQuickActionsBar";
 import { SuiteDashboardContent } from "./SuiteDashboardContent";
+import { AllClientsAnnouncementDialog } from "./AllClientsAnnouncementDialog";
 
 export function DesktopSuiteLanding() {
   const navigate = useNavigate();
@@ -49,6 +50,7 @@ export function DesktopSuiteLanding() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex w-full">
+      <AllClientsAnnouncementDialog onNavigate={() => setShowAllClients(true)} />
       {/* Left Sidebar - Module Navigation */}
       <SuiteLeftSidebar 
         onSelectStarHandler={(h) => { setSelectedStarHandler(h || null); setShowAllClients(false); }}

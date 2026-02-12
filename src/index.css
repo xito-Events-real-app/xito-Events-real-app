@@ -495,3 +495,63 @@
   animation: calendar-bubble-enter 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
              calendar-bubble-float 2s ease-in-out 0.3s infinite;
 }
+
+/* ALL CLIENTS Announcement Animations */
+@keyframes announcement-confetti-fall {
+  0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+}
+
+@keyframes announcement-dance {
+  0%, 100% { transform: translateY(0) rotate(-5deg); }
+  25% { transform: translateY(-20px) rotate(5deg); }
+  50% { transform: translateY(0) rotate(-3deg); }
+  75% { transform: translateY(-15px) rotate(4deg); }
+}
+
+@keyframes announcement-flash {
+  0%, 90%, 100% { opacity: 0; }
+  92% { opacity: 0.15; }
+  94% { opacity: 0; }
+  96% { opacity: 0.1; }
+}
+
+@keyframes announcement-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+@keyframes announcement-icon-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(139, 92, 246, 0.4); }
+  50% { transform: scale(1.05); box-shadow: 0 0 60px rgba(139, 92, 246, 0.6); }
+}
+
+@keyframes announcement-cta-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(139, 92, 246, 0.3); }
+  50% { box-shadow: 0 0 40px rgba(139, 92, 246, 0.6), 0 0 80px rgba(236, 72, 153, 0.3); }
+}
+
+.announcement-confetti {
+  animation: announcement-confetti-fall 4s linear infinite;
+}
+
+.announcement-dance-sway {
+  animation: announcement-dance 1.5s ease-in-out infinite;
+}
+
+.announcement-camera-flash {
+  animation: announcement-flash 4s ease-in-out infinite;
+  background: white;
+}
+
+.announcement-float {
+  animation: announcement-float 2s ease-in-out infinite;
+}
+
+.announcement-icon-pulse {
+  animation: announcement-icon-pulse 2s ease-in-out infinite;
+}
+
+.announcement-cta-glow {
+  animation: announcement-cta-glow 2s ease-in-out infinite;
+}
