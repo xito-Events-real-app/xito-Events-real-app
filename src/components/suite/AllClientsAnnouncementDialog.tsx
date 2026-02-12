@@ -118,17 +118,18 @@ export function AllClientsAnnouncementDialog({ onNavigate }: { onNavigate: () =>
 
         {/* Title */}
         <h1 className="text-4xl sm:text-5xl md:text-6xl font-black text-white mb-4 leading-tight">
-          Meet{" "}
+          Hamro pyaro{" "}
           <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-            ALL CLIENTS
+            all clients 2082
           </span>
+          {" "} is finally here now
         </h1>
 
         <p className="text-5xl sm:text-6xl mb-6">🎉🎊🥳</p>
 
         {/* Description */}
         <p className="text-lg sm:text-xl text-white/70 max-w-xl leading-relaxed mb-10">
-          Your favourite crew dashboard is here! View all monthly assignments, freelancer roles, and client bookings — 
+          Your favourite crew dashboard is ready! View all monthly assignments, freelancer roles, and client bookings — 
           <span className="text-white font-semibold"> all in one beautiful view.</span>
         </p>
 
