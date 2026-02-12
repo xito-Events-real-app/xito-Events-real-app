@@ -45,13 +45,24 @@ const SYNC_INTERVAL = 30 * 60 * 1000;
 
 const DAY_COLORS = [
   "bg-white",
-  "bg-blue-100/70",
-  "bg-amber-100/60",
-  "bg-emerald-100/60",
-  "bg-purple-100/60",
-  "bg-rose-100/60",
-  "bg-cyan-100/60",
-  "bg-orange-100/60",
+  "bg-blue-200/80",
+  "bg-amber-200/70",
+  "bg-emerald-200/70",
+  "bg-purple-200/70",
+  "bg-rose-200/70",
+  "bg-cyan-200/70",
+  "bg-orange-200/70",
+];
+
+const DAY_BORDER_COLORS = [
+  "border-gray-400",
+  "border-blue-400",
+  "border-amber-400",
+  "border-emerald-400",
+  "border-purple-400",
+  "border-rose-400",
+  "border-cyan-400",
+  "border-orange-400",
 ];
 
 const PILL_STYLES = {
@@ -158,6 +169,15 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
     return map;
   }, [filteredRows]);
 
+  // Count how many rows share each eventDay (for multi-row border boxing)
+  const dayCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    filteredRows.forEach(row => {
+      counts.set(row.eventDay, (counts.get(row.eventDay) || 0) + 1);
+    });
+    return counts;
+  }, [filteredRows]);
+
   const years = getBSYearsRange(-3, 3);
 
   const handleAssign = async (row: FreelancerAssignment, field: FreelancerField, freelancerName: string) => {
@@ -216,7 +236,7 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
   }, [filteredRows]);
 
   return (
-    <div className="fixed inset-0 z-[100] bg-white flex flex-col">
+    <div className="fixed inset-0 z-[100] bg-gray-200 flex flex-col">
       {/* Header Bar */}
       <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-violet-700 text-white px-4 sm:px-6 py-3 flex items-center gap-3 shrink-0 shadow-lg">
         <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/20 transition-colors">
@@ -287,8 +307,20 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                   const rowKey = `${row.registeredDateTimeAD}-${row.event}-${row.eventDateAD}`;
                   const groupIdx = dayGroups.get(rowKey) ?? 0;
                   const dayBg = DAY_COLORS[groupIdx % DAY_COLORS.length];
+                  const isMultiRow = (dayCounts.get(row.eventDay) || 0) > 1;
+                  const isFirstInGroup = isMultiRow && (idx === 0 || filteredRows[idx - 1].eventDay !== row.eventDay);
+                  const isLastInGroup = isMultiRow && (idx === filteredRows.length - 1 || filteredRows[idx + 1].eventDay !== row.eventDay);
+                  const borderColor = DAY_BORDER_COLORS[groupIdx % DAY_BORDER_COLORS.length];
                   return (
-                    <div key={`${rowKey}-${idx}`} className={cn("rounded-xl border border-gray-200 p-3 shadow-sm", dayBg)}>
+                    <div key={`${rowKey}-${idx}`} className={cn(
+                      "p-3 shadow-sm",
+                      dayBg,
+                      !isMultiRow && "rounded-xl border border-gray-200",
+                      isMultiRow && `border-l-2 border-r-2 ${borderColor}`,
+                      isFirstInGroup && `border-t-2 ${borderColor} rounded-t-xl`,
+                      isLastInGroup && `border-b-2 ${borderColor} rounded-b-xl`,
+                      isFirstInGroup && "mt-2",
+                    )}>
                       <div className="flex items-center gap-2 mb-2">
                         <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-violet-100 text-violet-700 font-bold text-sm shrink-0">
                           {row.eventDay}
@@ -387,10 +419,22 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                     const rowKey = `${row.registeredDateTimeAD}-${row.event}-${row.eventDateAD}`;
                     const groupIdx = dayGroups.get(rowKey) ?? 0;
                     const dayBg = DAY_COLORS[groupIdx % DAY_COLORS.length];
+                    const isMultiRow = (dayCounts.get(row.eventDay) || 0) > 1;
+                    const isFirstInGroup = isMultiRow && (idx === 0 || filteredRows[idx - 1].eventDay !== row.eventDay);
+                    const isLastInGroup = isMultiRow && (idx === filteredRows.length - 1 || filteredRows[idx + 1].eventDay !== row.eventDay);
+                    const isMiddleInGroup = isMultiRow && !isFirstInGroup && !isLastInGroup;
+                    const borderColor = DAY_BORDER_COLORS[groupIdx % DAY_BORDER_COLORS.length];
                     return (
                       <tr
                         key={`${rowKey}-${idx}`}
-                        className={cn("border-b border-gray-100 hover:bg-violet-50/40 transition-colors group", dayBg)}
+                        className={cn(
+                          "border-b border-gray-100 hover:bg-violet-50/40 transition-colors group",
+                          dayBg,
+                          isMultiRow && `border-l-2 border-r-2 ${borderColor}`,
+                          isFirstInGroup && `border-t-2 ${borderColor}`,
+                          isLastInGroup && `border-b-2 ${borderColor}`,
+                          isMiddleInGroup && "border-b-0",
+                        )}
                       >
                         <td className="px-3 py-2 border-r border-gray-100 text-center">
                           <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-violet-100 text-violet-700 font-bold text-sm">
