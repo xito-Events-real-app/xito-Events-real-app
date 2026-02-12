@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Users, Sparkles, ArrowRight, X, Camera, PartyPopper } from "lucide-react";
+import { Users, Sparkles, ArrowRight, X, Camera, PartyPopper, Sheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const ANNOUNCEMENT_KEY = "all-clients-announcement-dismissed";
@@ -97,20 +97,32 @@ export function AllClientsAnnouncementDialog({ onNavigate }: { onNavigate: () =>
       <div
         className={`relative z-10 flex flex-col items-center justify-center min-h-screen px-6 text-center transition-all duration-700 ${showContent ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}
       >
-        {/* Party poppers */}
+        {/* Party poppers + Sheet icon */}
         <div className="flex items-center gap-4 mb-6">
           <PartyPopper className="w-10 h-10 text-amber-400 announcement-float" style={{ animationDelay: "0s" }} />
-          <Camera className="w-8 h-8 text-indigo-300 announcement-float" style={{ animationDelay: "0.5s" }} />
-          <PartyPopper className="w-10 h-10 text-pink-400 announcement-float" style={{ animationDelay: "1s" }} />
+          <Sheet className="w-9 h-9 text-green-400 announcement-float" style={{ animationDelay: "0.3s" }} />
+          <Camera className="w-8 h-8 text-indigo-300 announcement-float" style={{ animationDelay: "0.6s" }} />
+          <Sheet className="w-9 h-9 text-green-400 announcement-float" style={{ animationDelay: "0.9s" }} />
+          <PartyPopper className="w-10 h-10 text-pink-400 announcement-float" style={{ animationDelay: "1.2s" }} />
         </div>
 
-        {/* Main icon */}
-        <div className="mb-8 w-28 h-28 sm:w-36 sm:h-36 rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-2xl shadow-purple-500/40 announcement-icon-pulse">
-          <Users className="h-14 w-14 sm:h-20 sm:w-20 text-white" />
+        {/* Main icon - Google Sheet themed green */}
+        <div className="mb-8 w-28 h-28 sm:w-36 sm:h-36 rounded-full bg-gradient-to-br from-green-500 via-emerald-500 to-teal-500 flex items-center justify-center shadow-2xl shadow-green-500/40 announcement-icon-pulse relative">
+          <Sheet className="h-14 w-14 sm:h-20 sm:w-20 text-white" />
+          {/* Floating mini sheets around the icon */}
+          <div className="absolute -top-2 -right-2 announcement-sheet-fly" style={{ animationDelay: "0s" }}>
+            <Sheet className="w-6 h-6 text-green-300" />
+          </div>
+          <div className="absolute -bottom-1 -left-3 announcement-sheet-fly" style={{ animationDelay: "0.7s" }}>
+            <Sheet className="w-5 h-5 text-emerald-300" />
+          </div>
+          <div className="absolute top-0 -left-4 announcement-sheet-fly" style={{ animationDelay: "1.4s" }}>
+            <Sheet className="w-4 h-4 text-teal-300" />
+          </div>
         </div>
 
         {/* NEW FEATURE badge */}
-        <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-300 text-sm font-bold mb-6 tracking-wider">
+        <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-green-500/20 border border-green-500/30 text-green-300 text-sm font-bold mb-6 tracking-wider">
           <Sparkles className="h-4 w-4" />
           ✨ NEW FEATURE ✨
           <Sparkles className="h-4 w-4" />
@@ -118,11 +130,12 @@ export function AllClientsAnnouncementDialog({ onNavigate }: { onNavigate: () =>
 
         {/* Title */}
         <h1 className="text-4xl sm:text-5xl md:text-6xl font-black text-white mb-4 leading-tight">
-          Hamro pyaro{" "}
-          <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-            all clients 2082
+          Hamro Pyaro{" "}
+          <span className="text-green-400 font-black uppercase" style={{ textShadow: "0 0 30px rgba(74, 222, 128, 0.5)" }}>
+            ALL CLIENTS 2082
           </span>
-          {" "} is finally here now
+          <br />
+          <span className="text-3xl sm:text-4xl md:text-5xl">is finally here now</span>
         </h1>
 
         <p className="text-5xl sm:text-6xl mb-6">🎉🎊🥳</p>
