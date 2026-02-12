@@ -5877,7 +5877,7 @@ const FIELD_TO_COL_INDEX: Record<string, number> = {
 
 // ============= GET ALL FREELANCER ASSIGNMENTS (BULK) =============
 async function getAllFreelancerAssignments(accessToken: string, spreadsheetId: string) {
-  const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:R1000");
+  const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:R5000");
   const flUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${flRange}`;
   const flResp = await fetch(flUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
   if (!flResp.ok) throw new Error('Failed to read freelancer assignments');

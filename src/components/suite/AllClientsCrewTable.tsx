@@ -1,10 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty, CommandGroup, CommandSeparator } from "@/components/ui/command";
 import { Button } from "@/components/ui/button";
-import { Loader2, Users, Plus, RefreshCw } from "lucide-react";
+import { Loader2, Users, Plus, RefreshCw, X, ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getCurrentBSDate, nepaliMonthsEnglish, getBSYearsRange } from "@/lib/nepali-date";
@@ -19,20 +18,31 @@ import { getFreelancers, FreelancerData } from "@/lib/freelancer-api";
 import { QuickAddFreelancerDialog } from "./QuickAddFreelancerDialog";
 import { useNavigate } from "react-router-dom";
 
-const CREW_COLUMNS: { field: FreelancerField; label: string; short: string }[] = [
-  { field: 'photographerBride', label: 'Photographer Bride', short: 'PB' },
-  { field: 'photographerGroom', label: 'Photographer Groom', short: 'PG' },
-  { field: 'videographerBride', label: 'Videographer Bride', short: 'VB' },
-  { field: 'videographerGroom', label: 'Videographer Groom', short: 'VG' },
-  { field: 'extraPhotographer', label: 'Extra Photographer', short: 'EP' },
-  { field: 'extraVideographer', label: 'Extra Videographer', short: 'EV' },
-  { field: 'assistant', label: 'Assistant', short: 'Asst' },
-  { field: 'iphoneShooter', label: 'iPhone Shooter', short: 'iPhone' },
-  { field: 'droneOperator', label: 'Drone Operator', short: 'Drone' },
-  { field: 'fpvOperator', label: 'FPV Operator', short: 'FPV' },
+const CREW_COLUMNS: { field: FreelancerField; label: string; short: string; group: 'photo' | 'video' | 'assist' | 'tech' }[] = [
+  { field: 'photographerBride', label: 'Photographer Bride', short: 'PB', group: 'photo' },
+  { field: 'photographerGroom', label: 'Photographer Groom', short: 'PG', group: 'photo' },
+  { field: 'videographerBride', label: 'Videographer Bride', short: 'VB', group: 'video' },
+  { field: 'videographerGroom', label: 'Videographer Groom', short: 'VG', group: 'video' },
+  { field: 'extraPhotographer', label: 'Extra Photographer', short: 'EP', group: 'photo' },
+  { field: 'extraVideographer', label: 'Extra Videographer', short: 'EV', group: 'video' },
+  { field: 'assistant', label: 'Assistant', short: 'Asst', group: 'assist' },
+  { field: 'iphoneShooter', label: 'iPhone Shooter', short: 'iPhone', group: 'tech' },
+  { field: 'droneOperator', label: 'Drone Operator', short: 'Drone', group: 'tech' },
+  { field: 'fpvOperator', label: 'FPV Operator', short: 'FPV', group: 'tech' },
 ];
 
-export function AllClientsCrewTable() {
+const GROUP_STYLES = {
+  photo: 'bg-amber-100 text-amber-800 border-amber-200',
+  video: 'bg-purple-100 text-purple-800 border-purple-200',
+  assist: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  tech: 'bg-cyan-100 text-cyan-800 border-cyan-200',
+};
+
+interface AllClientsCrewTableProps {
+  onClose?: () => void;
+}
+
+export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
   const navigate = useNavigate();
   const currentBS = getCurrentBSDate();
   const [selectedYear, setSelectedYear] = useState(String(currentBS.year));
@@ -77,7 +87,6 @@ export function AllClientsCrewTable() {
   const handleAssign = async (row: FreelancerAssignment, field: FreelancerField, freelancerName: string) => {
     try {
       await updateFreelancerAssignment(row.registeredDateTimeAD, row.event, row.eventDateAD, field, freelancerName);
-      // Update local state
       setAssignments(prev => prev.map(a =>
         a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event && a.eventDateAD === row.eventDateAD
           ? { ...a, [field]: freelancerName }
@@ -90,98 +99,175 @@ export function AllClientsCrewTable() {
   };
 
   const handleQuickAddSuccess = async (name: string) => {
-    // Refresh freelancers list
     try {
       const updated = await getFreelancers();
       setFreelancers(updated);
     } catch {}
-    // Auto-assign if we have a row context
     if (quickAddState.row) {
       await handleAssign(quickAddState.row, quickAddState.field, name);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center p-12">
-        <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
-      </div>
-    );
-  }
+  // Count assigned cells
+  const assignedCount = useMemo(() => {
+    let count = 0;
+    filteredRows.forEach(row => {
+      CREW_COLUMNS.forEach(col => {
+        if ((row[col.field] as string)?.trim()) count++;
+      });
+    });
+    return count;
+  }, [filteredRows]);
+
+  const totalCells = filteredRows.length * CREW_COLUMNS.length;
 
   return (
-    <div className="flex-1 flex flex-col p-4 sm:p-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-center gap-3 mb-4">
+    <div className="fixed inset-0 z-[100] bg-white flex flex-col">
+      {/* Header Bar */}
+      <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-violet-700 text-white px-4 sm:px-6 py-3 flex items-center gap-3 shrink-0 shadow-lg">
+        <button
+          onClick={onClose}
+          className="p-1.5 rounded-lg hover:bg-white/20 transition-colors"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+
         <div className="flex items-center gap-2">
-          <Users className="w-5 h-5 text-violet-600" />
-          <h2 className="text-lg font-bold text-gray-900">ALL CLIENTS</h2>
+          <Users className="w-5 h-5" />
+          <h1 className="text-lg font-bold tracking-wide">ALL CLIENTS</h1>
         </div>
-        <Select value={selectedYear} onValueChange={setSelectedYear}>
-          <SelectTrigger className="w-24 h-9">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-          <SelectTrigger className="w-32 h-9">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {nepaliMonthsEnglish.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Button variant="outline" size="sm" onClick={loadData} className="gap-1">
-          <RefreshCw className="w-3.5 h-3.5" /> Refresh
+
+        <div className="flex items-center gap-2 ml-4">
+          <Select value={selectedYear} onValueChange={setSelectedYear}>
+            <SelectTrigger className="w-24 h-8 bg-white/15 border-white/30 text-white text-sm [&>svg]:text-white">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <SelectTrigger className="w-32 h-8 bg-white/15 border-white/30 text-white text-sm [&>svg]:text-white">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {nepaliMonthsEnglish.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={loadData}
+          className="gap-1.5 text-white hover:bg-white/20 hover:text-white ml-1"
+        >
+          <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
+          Refresh
         </Button>
-        <span className="text-sm text-muted-foreground ml-auto">{filteredRows.length} events</span>
+
+        <div className="ml-auto flex items-center gap-3">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="bg-white/20 px-3 py-1 rounded-full font-semibold">
+              {filteredRows.length} events
+            </span>
+            <span className="bg-emerald-500/80 px-3 py-1 rounded-full font-medium text-xs">
+              {assignedCount}/{totalCells} assigned
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-white/20 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
-      {/* Table */}
-      <div className="border rounded-lg bg-white overflow-hidden flex-1">
-        <ScrollArea className="w-full">
-          <div className="min-w-[1200px]">
-            {/* Header Row */}
-            <div className="grid grid-cols-[50px_160px_140px_repeat(10,1fr)] border-b bg-gray-50 text-xs font-semibold text-gray-600 sticky top-0 z-10">
-              <div className="px-2 py-2.5 border-r">Day</div>
-              <div className="px-2 py-2.5 border-r">Client</div>
-              <div className="px-2 py-2.5 border-r">Event</div>
-              {CREW_COLUMNS.map(c => (
-                <div key={c.field} className="px-1.5 py-2.5 border-r text-center">{c.short}</div>
-              ))}
-            </div>
+      {/* Table Container */}
+      {loading ? (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="w-10 h-10 animate-spin text-violet-500" />
+            <p className="text-sm text-gray-500">Loading crew data...</p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-auto">
+          <table className="w-full border-collapse min-w-[1400px]">
+            {/* Sticky Header */}
+            <thead className="sticky top-0 z-20">
+              <tr>
+                <th className="bg-gray-800 text-white text-xs font-semibold px-3 py-2.5 text-left border-r border-gray-700 w-[50px]">Day</th>
+                <th className="bg-gray-800 text-white text-xs font-semibold px-3 py-2.5 text-left border-r border-gray-700 w-[180px]">Client</th>
+                <th className="bg-gray-800 text-white text-xs font-semibold px-3 py-2.5 text-left border-r border-gray-700 w-[140px]">Event</th>
+                {CREW_COLUMNS.map(col => (
+                  <th
+                    key={col.field}
+                    className={cn(
+                      "text-xs font-bold px-2 py-2.5 text-center border-r last:border-r-0",
+                      GROUP_STYLES[col.group]
+                    )}
+                  >
+                    {col.short}
+                  </th>
+                ))}
+              </tr>
+            </thead>
 
-            {/* Data Rows */}
-            <ScrollArea className="max-h-[calc(100vh-280px)]">
+            <tbody>
               {filteredRows.length === 0 ? (
-                <div className="text-center py-12 text-gray-400">No events for this month</div>
+                <tr>
+                  <td colSpan={13} className="text-center py-20 text-gray-400">
+                    <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p className="text-lg font-medium">No events for this month</p>
+                    <p className="text-sm mt-1">Try selecting a different year or month</p>
+                  </td>
+                </tr>
               ) : (
                 filteredRows.map((row, idx) => (
-                  <div key={`${row.registeredDateTimeAD}-${row.event}-${idx}`} className="grid grid-cols-[50px_160px_140px_repeat(10,1fr)] border-b hover:bg-gray-50/50 text-sm">
-                    <div className="px-2 py-2 border-r font-semibold text-gray-700">{row.eventDay}</div>
-                    <div className="px-2 py-2 border-r text-gray-900 truncate font-medium">{row.clientName}</div>
-                    <div className="px-2 py-2 border-r text-gray-600 truncate">{row.event}</div>
+                  <tr
+                    key={`${row.registeredDateTimeAD}-${row.event}-${idx}`}
+                    className={cn(
+                      "border-b border-gray-100 hover:bg-violet-50/40 transition-colors group",
+                      idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"
+                    )}
+                  >
+                    <td className="px-3 py-2 border-r border-gray-100 text-center">
+                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-violet-100 text-violet-700 font-bold text-sm">
+                        {row.eventDay}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 border-r border-gray-100">
+                      <button
+                        onClick={() => navigate(`/client/${encodeURIComponent(row.registeredDateTimeAD)}`)}
+                        className="text-sm font-semibold text-gray-900 hover:text-violet-600 transition-colors truncate block max-w-[170px]"
+                      >
+                        {row.clientName}
+                      </button>
+                    </td>
+                    <td className="px-3 py-2 border-r border-gray-100 text-sm text-gray-600 truncate max-w-[140px]">
+                      {row.event}
+                    </td>
                     {CREW_COLUMNS.map(col => (
                       <CrewCell
                         key={col.field}
                         value={row[col.field] as string}
                         field={col.field}
                         label={col.label}
+                        group={col.group}
                         freelancers={freelancers}
                         onAssign={(name) => handleAssign(row, col.field, name)}
                         onQuickAdd={() => setQuickAddState({ open: true, field: col.field, label: col.label, row })}
-                        onNavigate={(name) => navigate(`/freelancer/${encodeURIComponent(name)}`)}
                       />
                     ))}
-                  </div>
+                  </tr>
                 ))
               )}
-            </ScrollArea>
-          </div>
-        </ScrollArea>
-      </div>
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <QuickAddFreelancerDialog
         open={quickAddState.open}
@@ -194,40 +280,49 @@ export function AllClientsCrewTable() {
   );
 }
 
+/* ─── Individual Crew Cell ─── */
+
+const PILL_STYLES = {
+  photo: 'bg-amber-50 text-amber-700 border-amber-200',
+  video: 'bg-purple-50 text-purple-700 border-purple-200',
+  assist: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  tech: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+};
+
 function CrewCell({
   value,
   field,
   label,
+  group,
   freelancers,
   onAssign,
   onQuickAdd,
-  onNavigate,
 }: {
   value: string;
   field: FreelancerField;
   label: string;
+  group: 'photo' | 'video' | 'assist' | 'tech';
   freelancers: FreelancerData[];
   onAssign: (name: string) => void;
   onQuickAdd: () => void;
-  onNavigate: (name: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const filtered = useMemo(() => getFilteredFreelancersByRole(freelancers, field), [freelancers, field]);
   const hasValue = value && value.trim().length > 0;
 
   return (
-    <div className="px-1 py-1.5 border-r">
+    <td className="px-1 py-1.5 border-r border-gray-100 last:border-r-0">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button
             className={cn(
-              "w-full text-xs px-1.5 py-1 rounded text-center truncate transition-colors",
+              "w-full text-xs px-2 py-1.5 rounded-md text-center truncate transition-all",
               hasValue
-                ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-medium"
-                : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+                ? cn("border font-medium", PILL_STYLES[group])
+                : "border border-dashed border-gray-300 text-gray-400 hover:border-violet-400 hover:text-violet-500 hover:bg-violet-50/50"
             )}
           >
-            {hasValue ? value : "Assign"}
+            {hasValue ? value : <Plus className="w-3 h-3 mx-auto" />}
           </button>
         </PopoverTrigger>
         <PopoverContent className="w-56 p-0" align="start">
@@ -257,6 +352,6 @@ function CrewCell({
           </Command>
         </PopoverContent>
       </Popover>
-    </div>
+    </td>
   );
 }
