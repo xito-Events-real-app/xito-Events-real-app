@@ -1,9 +1,9 @@
 import { Link } from "react-router-dom";
 import { useBookedCachedData } from "@/hooks/useBookedCachedData";
 import { useBulkEventDetails } from "@/hooks/useBulkEventDetails";
-import { Calendar, Sparkles, ArrowRight, Clock, MapPin, Scissors, Phone, MessageCircle, MessageSquare, Plus, Loader2, ExternalLink, ChevronDown, ChevronUp, FileText, Image } from "lucide-react";
+import { Calendar, Sparkles, ArrowRight, Clock, MapPin, Scissors, Phone, MessageCircle, MessageSquare, Plus, Loader2, ExternalLink, ChevronDown, ChevronUp, FileText, Image, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { parseComments } from "@/lib/client-card-utils";
 import { addBookedClientComment } from "@/lib/sheets-api";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from "@/components/ui/drawer";
@@ -11,6 +11,20 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { getAllFreelancerAssignments, FreelancerAssignment } from "@/lib/freelancer-assignment-api";
+
+const CREW_ROLE_CONFIG = [
+  { field: 'photographerBride' as const, label: 'PB', color: 'bg-amber-100 text-amber-700' },
+  { field: 'videographerBride' as const, label: 'VB', color: 'bg-purple-100 text-purple-700' },
+  { field: 'photographerGroom' as const, label: 'PG', color: 'bg-amber-100 text-amber-700' },
+  { field: 'videographerGroom' as const, label: 'VG', color: 'bg-purple-100 text-purple-700' },
+  { field: 'extraPhotographer' as const, label: 'EP', color: 'bg-orange-100 text-orange-700' },
+  { field: 'extraVideographer' as const, label: 'EV', color: 'bg-fuchsia-100 text-fuchsia-700' },
+  { field: 'assistant' as const, label: 'Asst', color: 'bg-emerald-100 text-emerald-700' },
+  { field: 'iphoneShooter' as const, label: 'iPhone', color: 'bg-cyan-100 text-cyan-700' },
+  { field: 'droneOperator' as const, label: 'Drone', color: 'bg-sky-100 text-sky-700' },
+  { field: 'fpvOperator' as const, label: 'FPV', color: 'bg-teal-100 text-teal-700' },
+];
 // Helper to get upcoming events
 function getUpcomingEvents(clients: any[]) {
   const today = new Date();
@@ -202,6 +216,21 @@ export function TodayEventsHero() {
   }, [upcomingEvents]);
   
   const { eventDetailsMap, isLoading: isLoadingDetails } = useBulkEventDetails(clientIds);
+
+  // Fetch crew assignments (use sessionStorage cache for instant load)
+  const [crewAssignments, setCrewAssignments] = useState<FreelancerAssignment[]>([]);
+  useEffect(() => {
+    // Load from cache first
+    try {
+      const cached = sessionStorage.getItem('crew_assignments_cache');
+      if (cached) setCrewAssignments(JSON.parse(cached));
+    } catch {}
+    // Fresh fetch
+    getAllFreelancerAssignments().then(data => {
+      setCrewAssignments(data);
+      try { sessionStorage.setItem('crew_assignments_cache', JSON.stringify(data)); } catch {}
+    }).catch(() => {});
+  }, []);
   
   // Handle adding a comment
   const handleAddComment = async () => {
@@ -353,6 +382,17 @@ export function TodayEventsHero() {
                   const eventDemand = eventDetail?.eventDemand || '';
                   const eventReferences = eventDetail?.eventReferences || '';
                   const hasExpandableContent = Boolean(eventDemand || eventReferences);
+                  
+                  // Match crew assignments for this event
+                  const matchedCrew = crewAssignments.find(a => {
+                    const nameMatch = a.event?.trim().toLowerCase() === (eventDetail?.eventName || event.eventName)?.trim().toLowerCase();
+                    const monthMatch = String(a.eventMonth)?.trim() === String(event.client.eventMonth?.split('\n')[event.eventIndex])?.trim();
+                    const dayMatch = String(a.eventDay)?.trim() === String(event.client.eventDay?.split('\n')[event.eventIndex])?.trim();
+                    return nameMatch && monthMatch && dayMatch;
+                  });
+                  const assignedRoles = matchedCrew
+                    ? CREW_ROLE_CONFIG.filter(r => matchedCrew[r.field] && String(matchedCrew[r.field]).trim())
+                    : [];
                   
                   // Parse comments
                   const parsedComments = parseComments(event.client.comments);
@@ -526,6 +566,23 @@ export function TodayEventsHero() {
                                   <span className="text-gray-400 italic">Parlour not set</span>
                                 )}
                               </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Assigned Crew */}
+                        {assignedRoles.length > 0 && (
+                          <div className="mt-2 pt-2 border-t border-gray-200">
+                            <div className="flex items-center gap-1 mb-1">
+                              <Users className="w-3 h-3 text-violet-500" />
+                              <span className="text-[10px] font-semibold text-gray-500 uppercase">Crew</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {assignedRoles.map(role => (
+                                <span key={role.field} className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", role.color)}>
+                                  {role.label}: {String(matchedCrew![role.field]).split(' ')[0]}
+                                </span>
+                              ))}
                             </div>
                           </div>
                         )}
