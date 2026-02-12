@@ -1,29 +1,33 @@
 
 
-# Fix: Comments Appearing on Wrong Client
+# Fix: addClientComment Must Search Both Sheets
 
-## Root Cause
+## Problem
+The backend `addClientComment` function (line 2804) is hardcoded to only search `'CLIENT TRACKER'` when verifying the row number. Since booked clients like Urusha Ghimirey exist **only** in the `'BOOKED CLIENTS'` sheet (they are transferred out of the Tracker), `verifyRowNumber` can't find her, falls back to the raw `rowNumber`, and writes the comment to whoever is at that row in the Tracker (Anuja/Birat Wosti).
 
-The `addClientComment` function only sends `rowNumber` to the backend, but does NOT send `registeredDateTimeAD` (the unique client identifier). When rows shift in Google Sheets (because new clients are added), the `rowNumber` becomes stale, causing the comment to be written to a **different client's row**.
+## Fix (Single file: Edge Function)
 
-For example: You open Urusha Ghimirey (row 15), but by the time you add a comment, a new client was added above her, shifting her to row 16. The comment goes to row 15 -- which is now Anuja (Birat Wosti).
+Update `addClientComment` in `supabase/functions/google-sheets/index.ts` (~line 2790-2835):
 
-The `addBookedClientComment` function already handles this correctly by passing `registeredDateTimeAD`. The fix is to do the same for `addClientComment`.
+1. When `registeredDateTimeAD` is provided, first search `'BOOKED CLIENTS'` Column A
+2. If found there, write the comment to that row in `'BOOKED CLIENTS'` (no cross-sheet sync needed since the client only exists in one sheet)
+3. If NOT found in Booked, search `'CLIENT TRACKER'` as before
+4. If `registeredDateTimeAD` is not provided, fall back to the current behavior (raw `rowNumber` on Tracker)
 
-## Changes
+No cross-sheet syncing is needed because clients only exist in one sheet at a time.
 
-### 1. Update `addClientComment` in `sheets-api.ts`
-Add `registeredDateTimeAD` as an optional parameter and pass it to the backend, so the backend's `verifyRowNumber` can find the correct row.
+## Technical Detail
 
-### 2. Update all callers to pass `registeredDateTimeAD`
+```text
+Current flow:
+  verifyRowNumber(... 'CLIENT TRACKER' ...) --> not found --> falls back to raw rowNumber on Tracker --> WRONG CLIENT
 
-**`ClientDetail.tsx`** -- Pass `client.registeredDateTimeAD` when calling `addClientComment`.
+Fixed flow:
+  verifyRowNumber(... 'BOOKED CLIENTS' ...) --> found at row X --> write to BOOKED CLIENTS row X --> CORRECT
+  OR
+  verifyRowNumber(... 'CLIENT TRACKER' ...) --> found at row Y --> write to CLIENT TRACKER row Y --> CORRECT
+```
 
-**`FreshClientCard.tsx`** -- Same fix: pass `client.registeredDateTimeAD`.
+The activity log call (`appendActivityLog`) will also target the correct sheet instead of being hardcoded to `'CLIENT TRACKER'`.
 
-**`DesktopClientRow.tsx`** -- Same fix: pass `client.registeredDateTimeAD`.
-
-## Why This Works
-
-The backend already has `verifyRowNumber()` which searches Column A for the `registeredDateTimeAD` value to find the **actual** current row, regardless of shifts. It's already being used for comments -- but only when `registeredDateTimeAD` is provided. When it's `undefined`, it falls back to the raw (potentially stale) `rowNumber`.
-
+No frontend changes needed -- the previous fix already passes `registeredDateTimeAD` from all callers.
