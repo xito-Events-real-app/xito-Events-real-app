@@ -109,7 +109,7 @@ const ROLE_FILTER_MAP: Record<string, keyof FreelancerData> = {
   videographerBride: 'videographer',
   videographerGroom: 'videographer',
   extraVideographer: 'videographer',
-  assistant: 'hybridShooter',
+  
   iphoneShooter: 'iphoneShooter',
   droneOperator: 'droneOperator',
   fpvOperator: 'fpvOperator',
