@@ -133,23 +133,50 @@ export async function getAllFreelancerAssignments(): Promise<FreelancerAssignmen
   return data.data || [];
 }
 
+const JOB_PRIORITY: [string, string][] = [
+  ['photographer', 'PHOTOGRAPHER'],
+  ['videographer', 'VIDEOGRAPHER'],
+  ['photoEditor', 'PHOTO EDITOR'],
+  ['videoEditor', 'VIDEO EDITOR'],
+  ['droneOperator', 'DRONE OPERATOR'],
+  ['fpvOperator', 'FPV OPERATOR'],
+  ['iphoneShooter', 'IPHONE SHOOTER'],
+];
+
 export async function quickAddFreelancer(
   name: string,
   contactNo: string,
-  roleField: FreelancerField
+  roleField: FreelancerField,
+  skills?: Record<string, boolean>
 ): Promise<void> {
-  const roleMap: Record<string, Partial<FreelancerData>> = {
-    photographerBride: { photographer: 'YES', mainJob: 'PHOTOGRAPHER' },
-    photographerGroom: { photographer: 'YES', mainJob: 'PHOTOGRAPHER' },
-    extraPhotographer: { photographer: 'YES', mainJob: 'PHOTOGRAPHER' },
-    videographerBride: { videographer: 'YES', mainJob: 'VIDEOGRAPHER' },
-    videographerGroom: { videographer: 'YES', mainJob: 'VIDEOGRAPHER' },
-    extraVideographer: { videographer: 'YES', mainJob: 'VIDEOGRAPHER' },
-    assistant: { hybridShooter: 'YES', mainJob: 'HYBRID SHOOTER' },
-    iphoneShooter: { iphoneShooter: 'YES', mainJob: 'IPHONE SHOOTER' },
-    droneOperator: { droneOperator: 'YES', mainJob: 'DRONE OPERATOR' },
-    fpvOperator: { fpvOperator: 'YES', mainJob: 'FPV OPERATOR' },
-  };
-  const roleData = roleMap[roleField] || {};
-  await addFreelancer({ name, contactNo, ...roleData });
+  if (skills) {
+    const data: Partial<FreelancerData> = { name, contactNo };
+    if (skills.photographer) data.photographer = 'YES';
+    if (skills.videographer) data.videographer = 'YES';
+    if (skills.photoEditor) data.photoEditor = 'YES';
+    if (skills.videoEditor) data.videoEditor = 'YES';
+    if (skills.droneOperator) data.droneOperator = 'YES';
+    if (skills.fpvOperator) data.fpvOperator = 'YES';
+    if (skills.iphoneShooter) data.iphoneShooter = 'YES';
+    data.hybridShooter = (skills.photographer && skills.videographer) ? 'YES' : '';
+    data.hybridEditor = (skills.photoEditor && skills.videoEditor) ? 'YES' : '';
+    data.mainJob = JOB_PRIORITY.find(([key]) => skills[key])?.[1] || '';
+    await addFreelancer(data);
+  } else {
+    // Fallback: old behavior
+    const roleMap: Record<string, Partial<FreelancerData>> = {
+      photographerBride: { photographer: 'YES', mainJob: 'PHOTOGRAPHER' },
+      photographerGroom: { photographer: 'YES', mainJob: 'PHOTOGRAPHER' },
+      extraPhotographer: { photographer: 'YES', mainJob: 'PHOTOGRAPHER' },
+      videographerBride: { videographer: 'YES', mainJob: 'VIDEOGRAPHER' },
+      videographerGroom: { videographer: 'YES', mainJob: 'VIDEOGRAPHER' },
+      extraVideographer: { videographer: 'YES', mainJob: 'VIDEOGRAPHER' },
+      assistant: { hybridShooter: 'YES', mainJob: 'HYBRID SHOOTER' },
+      iphoneShooter: { iphoneShooter: 'YES', mainJob: 'IPHONE SHOOTER' },
+      droneOperator: { droneOperator: 'YES', mainJob: 'DRONE OPERATOR' },
+      fpvOperator: { fpvOperator: 'YES', mainJob: 'FPV OPERATOR' },
+    };
+    const roleData = roleMap[roleField] || {};
+    await addFreelancer({ name, contactNo, ...roleData });
+  }
 }
