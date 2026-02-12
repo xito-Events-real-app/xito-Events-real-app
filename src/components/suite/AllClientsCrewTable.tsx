@@ -46,13 +46,13 @@ const SYNC_INTERVAL = 30 * 60 * 1000; // 30 minutes
 
 const DAY_COLORS = [
   "bg-white",
-  "bg-blue-50/60",
-  "bg-amber-50/50",
-  "bg-emerald-50/50",
-  "bg-purple-50/50",
-  "bg-rose-50/50",
-  "bg-cyan-50/50",
-  "bg-orange-50/50",
+  "bg-blue-100/70",
+  "bg-amber-100/60",
+  "bg-emerald-100/60",
+  "bg-purple-100/60",
+  "bg-rose-100/60",
+  "bg-cyan-100/60",
+  "bg-orange-100/60",
 ];
 
 interface AllClientsCrewTableProps {
@@ -306,11 +306,14 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                         <div className="flex-1 min-w-0">
                           <button
                             onClick={() => navigate(`/client/${encodeURIComponent(row.registeredDateTimeAD)}`)}
-                            className="text-sm font-bold text-gray-900 hover:text-violet-600 transition-colors truncate block"
+                            className="font-bold text-gray-900 hover:text-violet-600 transition-colors block truncate"
+                            style={{ fontSize: (row.clientName?.length || 0) > 18 ? '11px' : '14px' }}
                           >
                             {row.clientName}
                           </button>
-                          <p className="text-xs text-gray-500 truncate">{row.event}</p>
+                          <p className="text-gray-500 truncate" style={{ fontSize: (row.event?.length || 0) > 22 ? '10px' : '12px' }}>
+                            {row.event}
+                          </p>
                         </div>
                       </div>
 
@@ -325,7 +328,19 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                               </span>
                               {val ? (
                                 <div className="flex items-center gap-1 flex-1 min-w-0">
-                                  <span className="text-xs text-gray-800 truncate">{val}</span>
+                                  <HoverCard openDelay={200}>
+                                    <HoverCardTrigger asChild>
+                                      <button
+                                        onClick={() => navigate(`/freelancer/${encodeURIComponent(val)}`)}
+                                        className="text-xs text-gray-800 truncate hover:text-violet-600 transition-colors"
+                                      >
+                                        {val}
+                                      </button>
+                                    </HoverCardTrigger>
+                                    <HoverCardContent className="w-56 p-3 z-[200]" side="top">
+                                      <MobileFreelancerHover name={val} allAssignments={assignments} />
+                                    </HoverCardContent>
+                                  </HoverCard>
                                   <button
                                     onClick={() => handleAssign(row, col.field, '')}
                                     className="p-0.5 rounded-full hover:bg-red-100 text-gray-400 hover:text-red-500 shrink-0"
@@ -401,12 +416,13 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                         <td className="px-3 py-2 border-r border-gray-100">
                           <button
                             onClick={() => navigate(`/client/${encodeURIComponent(row.registeredDateTimeAD)}`)}
-                            className="text-sm font-semibold text-gray-900 hover:text-violet-600 transition-colors truncate block max-w-[170px]"
+                            className="font-semibold text-gray-900 hover:text-violet-600 transition-colors truncate block max-w-[170px]"
+                            style={{ fontSize: (row.clientName?.length || 0) > 20 ? '11px' : '14px' }}
                           >
                             {row.clientName}
                           </button>
                         </td>
-                        <td className="px-3 py-2 border-r border-gray-100 text-sm text-gray-600 truncate max-w-[140px]">
+                        <td className="px-3 py-2 border-r border-gray-100 text-gray-600 truncate max-w-[140px]" style={{ fontSize: (row.event?.length || 0) > 20 ? '11px' : '14px' }}>
                           {row.event}
                         </td>
                         {CREW_COLUMNS.map(col => (
@@ -444,7 +460,50 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
   );
 }
 
-/* ─── Individual Crew Cell with Hover Card ─── */
+/* ─── Mobile Freelancer Hover Content ─── */
+function MobileFreelancerHover({ name, allAssignments }: { name: string; allAssignments: FreelancerAssignment[] }) {
+  const navigate = useNavigate();
+  const upcomingEvents = useMemo(() => {
+    const upper = name.trim().toUpperCase();
+    const events: { clientName: string; event: string; day: string; month: string }[] = [];
+    for (const a of allAssignments) {
+      for (const col of CREW_COLUMNS) {
+        const cellVal = (a[col.field] as string)?.trim().toUpperCase();
+        if (cellVal === upper) {
+          events.push({ clientName: a.clientName, event: a.event, day: a.eventDay, month: a.eventMonth });
+          break;
+        }
+      }
+      if (events.length >= 5) break;
+    }
+    return events;
+  }, [name, allAssignments]);
+
+  return (
+    <div className="space-y-2">
+      <button
+        onClick={() => navigate(`/freelancer/${encodeURIComponent(name.trim())}`)}
+        className="font-semibold text-sm text-gray-900 hover:text-violet-600 transition-colors"
+      >
+        {name}
+      </button>
+      {upcomingEvents.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-gray-500 mb-1">Upcoming Events</p>
+          <div className="space-y-1">
+            {upcomingEvents.map((ev, i) => (
+              <div key={i} className="text-xs text-gray-600 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0" />
+                <span className="truncate">{ev.clientName} — {ev.event} ({ev.day} {nepaliMonthsEnglish[parseInt(ev.month) - 1] || ev.month})</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 const PILL_STYLES = {
   photo: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -480,6 +539,7 @@ function CrewCell({
   onAssign: (name: string) => void;
   onQuickAdd: () => void;
 }) {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const filtered = useMemo(() => getFilteredFreelancersByRole(freelancers, field), [freelancers, field]);
   const hasValue = value && value.trim().length > 0;
@@ -553,9 +613,14 @@ function CrewCell({
               </PopoverContent>
             </Popover>
           </HoverCardTrigger>
-          <HoverCardContent className="w-64 p-3" side="top">
+          <HoverCardContent className="w-64 p-3 z-[200]" side="top">
             <div className="space-y-2">
-              <p className="font-semibold text-sm text-gray-900">{value}</p>
+              <button
+                onClick={() => navigate(`/freelancer/${encodeURIComponent(value.trim())}`)}
+                className="font-semibold text-sm text-gray-900 hover:text-violet-600 transition-colors"
+              >
+                {value}
+              </button>
               {upcomingEvents.length > 0 && (
                 <div>
                   <p className="text-xs font-medium text-gray-500 mb-1">Upcoming Events</p>
@@ -563,7 +628,7 @@ function CrewCell({
                     {upcomingEvents.map((ev, i) => (
                       <div key={i} className="text-xs text-gray-600 flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0" />
-                        <span className="truncate">{ev.clientName} — {ev.event} ({ev.day} {ev.month})</span>
+                        <span className="truncate">{ev.clientName} — {ev.event} ({ev.day} {nepaliMonthsEnglish[parseInt(ev.month) - 1] || ev.month})</span>
                       </div>
                     ))}
                   </div>
