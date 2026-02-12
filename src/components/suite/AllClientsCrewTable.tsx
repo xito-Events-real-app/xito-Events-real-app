@@ -43,6 +43,17 @@ const GROUP_STYLES = {
 
 const SYNC_INTERVAL = 30 * 60 * 1000; // 30 minutes
 
+const DAY_COLORS = [
+  "bg-white",
+  "bg-blue-50/60",
+  "bg-amber-50/50",
+  "bg-emerald-50/50",
+  "bg-purple-50/50",
+  "bg-rose-50/50",
+  "bg-cyan-50/50",
+  "bg-orange-50/50",
+];
+
 interface AllClientsCrewTableProps {
   onClose?: () => void;
 }
@@ -208,7 +219,7 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
             <SelectTrigger className="w-24 h-8 bg-white/15 border-white/30 text-white text-sm [&>svg]:text-white">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="z-[200]">
               {years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -216,7 +227,7 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
             <SelectTrigger className="w-32 h-8 bg-white/15 border-white/30 text-white text-sm [&>svg]:text-white">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="z-[200]">
               {nepaliMonthsEnglish.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -309,7 +320,7 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                 filteredRows.map((row, idx) => {
                   const rowKey = `${row.registeredDateTimeAD}-${row.event}-${row.eventDateAD}`;
                   const groupIdx = dayGroups.get(rowKey) ?? 0;
-                  const dayBg = groupIdx % 2 === 0 ? "bg-white" : "bg-blue-50/40";
+                  const dayBg = DAY_COLORS[groupIdx % DAY_COLORS.length];
 
                   return (
                     <tr
@@ -445,7 +456,7 @@ function CrewCell({
                   {shortName}
                 </button>
               </PopoverTrigger>
-              <PopoverContent className="w-56 p-0" align="start">
+              <PopoverContent className="z-[200] w-56 p-0" align="start">
                 <Command>
                   <CommandInput placeholder={`Search ${label}...`} />
                   <CommandList>
@@ -497,7 +508,7 @@ function CrewCell({
               <Plus className="w-3 h-3 mx-auto" />
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-56 p-0" align="start">
+          <PopoverContent className="z-[200] w-56 p-0" align="start">
             <Command>
               <CommandInput placeholder={`Search ${label}...`} />
               <CommandList>
