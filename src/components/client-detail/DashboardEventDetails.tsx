@@ -21,8 +21,8 @@ interface DashboardEventDetailsProps {
 // Role config for display
 const ROLE_CONFIG: { field: keyof FreelancerAssignment; label: string; color: string }[] = [
   { field: 'photographerBride', label: 'PB', color: 'text-amber-600 bg-amber-50' },
-  { field: 'photographerGroom', label: 'PG', color: 'text-amber-700 bg-amber-50' },
   { field: 'videographerBride', label: 'VB', color: 'text-purple-600 bg-purple-50' },
+  { field: 'photographerGroom', label: 'PG', color: 'text-amber-700 bg-amber-50' },
   { field: 'videographerGroom', label: 'VG', color: 'text-purple-700 bg-purple-50' },
   { field: 'extraPhotographer', label: 'EP', color: 'text-orange-600 bg-orange-50' },
   { field: 'extraVideographer', label: 'EV', color: 'text-fuchsia-600 bg-fuchsia-50' },

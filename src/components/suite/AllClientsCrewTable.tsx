@@ -4,9 +4,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty, CommandGroup, CommandSeparator } from "@/components/ui/command";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Users, Plus, RefreshCw, X, ChevronLeft, Database } from "lucide-react";
+import { Loader2, Users, Plus, RefreshCw, X, ChevronLeft, Database, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { getCurrentBSDate, nepaliMonthsEnglish, getBSYearsRange } from "@/lib/nepali-date";
 // NEPALI_MONTHS no longer needed for filter
 import {
@@ -23,8 +24,8 @@ import { useNavigate } from "react-router-dom";
 
 const CREW_COLUMNS: { field: FreelancerField; label: string; short: string; group: 'photo' | 'video' | 'assist' | 'tech'; size: 'wide' | 'narrow' }[] = [
   { field: 'photographerBride', label: 'Photographer Bride', short: 'PB', group: 'photo', size: 'wide' },
-  { field: 'photographerGroom', label: 'Photographer Groom', short: 'PG', group: 'photo', size: 'wide' },
   { field: 'videographerBride', label: 'Videographer Bride', short: 'VB', group: 'video', size: 'wide' },
+  { field: 'photographerGroom', label: 'Photographer Groom', short: 'PG', group: 'photo', size: 'wide' },
   { field: 'videographerGroom', label: 'Videographer Groom', short: 'VG', group: 'video', size: 'wide' },
   { field: 'extraPhotographer', label: 'Extra Photographer', short: 'EP', group: 'photo', size: 'wide' },
   { field: 'extraVideographer', label: 'Extra Videographer', short: 'EV', group: 'video', size: 'wide' },
@@ -60,6 +61,7 @@ interface AllClientsCrewTableProps {
 
 export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const currentBS = getCurrentBSDate();
   const [selectedYear, setSelectedYear] = useState(String(currentBS.year));
   const [selectedMonth, setSelectedMonth] = useState(String(currentBS.month));
@@ -279,36 +281,15 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
         </div>
       ) : (
         <div className="flex-1 overflow-auto">
-          <table className="w-full border-collapse min-w-[1400px]">
-            <thead className="sticky top-0 z-20">
-              <tr>
-                <th className="bg-gray-800 text-white text-xs font-semibold px-3 py-2.5 text-left border-r border-gray-700 w-[50px]">Day</th>
-                <th className="bg-gray-800 text-white text-xs font-semibold px-3 py-2.5 text-left border-r border-gray-700 w-[180px]">Client</th>
-                <th className="bg-gray-800 text-white text-xs font-semibold px-3 py-2.5 text-left border-r border-gray-700 w-[140px]">Event</th>
-                {CREW_COLUMNS.map(col => (
-                  <th
-                    key={col.field}
-                    className={cn(
-                      "text-xs font-bold px-2 py-2.5 text-center border-r last:border-r-0",
-                      GROUP_STYLES[col.group],
-                      col.size === 'wide' ? 'min-w-[120px]' : 'min-w-[70px]'
-                    )}
-                  >
-                    {col.short}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-
-            <tbody>
+          {isMobile ? (
+            /* ─── MOBILE CARD LAYOUT ─── */
+            <div className="p-3 space-y-3">
               {filteredRows.length === 0 ? (
-                <tr>
-                  <td colSpan={13} className="text-center py-20 text-gray-400">
-                    <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                    <p className="text-lg font-medium">No events for this month</p>
-                    <p className="text-sm mt-1">Try selecting a different year or month</p>
-                  </td>
-                </tr>
+                <div className="text-center py-20 text-gray-400">
+                  <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-lg font-medium">No events for this month</p>
+                  <p className="text-sm mt-1">Try selecting a different year or month</p>
+                </div>
               ) : (
                 filteredRows.map((row, idx) => {
                   const rowKey = `${row.registeredDateTimeAD}-${row.event}-${row.eventDateAD}`;
@@ -316,49 +297,139 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                   const dayBg = DAY_COLORS[groupIdx % DAY_COLORS.length];
 
                   return (
-                    <tr
-                      key={`${rowKey}-${idx}`}
-                      className={cn(
-                        "border-b border-gray-100 hover:bg-violet-50/40 transition-colors group",
-                        dayBg
-                      )}
-                    >
-                      <td className="px-3 py-2 border-r border-gray-100 text-center">
-                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-violet-100 text-violet-700 font-bold text-sm">
+                    <div key={`${rowKey}-${idx}`} className={cn("rounded-xl border border-gray-200 p-3 shadow-sm", dayBg)}>
+                      {/* Card Header */}
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-violet-100 text-violet-700 font-bold text-sm shrink-0">
                           {row.eventDay}
                         </span>
-                      </td>
-                      <td className="px-3 py-2 border-r border-gray-100">
-                        <button
-                          onClick={() => navigate(`/client/${encodeURIComponent(row.registeredDateTimeAD)}`)}
-                          className="text-sm font-semibold text-gray-900 hover:text-violet-600 transition-colors truncate block max-w-[170px]"
-                        >
-                          {row.clientName}
-                        </button>
-                      </td>
-                      <td className="px-3 py-2 border-r border-gray-100 text-sm text-gray-600 truncate max-w-[140px]">
-                        {row.event}
-                      </td>
-                      {CREW_COLUMNS.map(col => (
-                        <CrewCell
-                          key={col.field}
-                          value={row[col.field] as string}
-                          field={col.field}
-                          label={col.label}
-                          group={col.group}
-                          size={col.size}
-                          freelancers={freelancers}
-                          allAssignments={assignments}
-                          onAssign={(name) => handleAssign(row, col.field, name)}
-                          onQuickAdd={() => setQuickAddState({ open: true, field: col.field, label: col.label, row })}
-                        />
-                      ))}
-                    </tr>
+                        <div className="flex-1 min-w-0">
+                          <button
+                            onClick={() => navigate(`/client/${encodeURIComponent(row.registeredDateTimeAD)}`)}
+                            className="text-sm font-bold text-gray-900 hover:text-violet-600 transition-colors truncate block"
+                          >
+                            {row.clientName}
+                          </button>
+                          <p className="text-xs text-gray-500 truncate">{row.event}</p>
+                        </div>
+                      </div>
+
+                      {/* Crew Grid */}
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {CREW_COLUMNS.map(col => {
+                          const val = (row[col.field] as string)?.trim();
+                          return (
+                            <div key={col.field} className="flex items-center gap-1.5">
+                              <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0", GROUP_STYLES[col.group])}>
+                                {col.short}
+                              </span>
+                              {val ? (
+                                <div className="flex items-center gap-1 flex-1 min-w-0">
+                                  <span className="text-xs text-gray-800 truncate">{val}</span>
+                                  <button
+                                    onClick={() => handleAssign(row, col.field, '')}
+                                    className="p-0.5 rounded-full hover:bg-red-100 text-gray-400 hover:text-red-500 shrink-0"
+                                    title="Remove"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <MobileCrewAssign
+                                  field={col.field}
+                                  label={col.label}
+                                  freelancers={freelancers}
+                                  onAssign={(name) => handleAssign(row, col.field, name)}
+                                  onQuickAdd={() => setQuickAddState({ open: true, field: col.field, label: col.label, row })}
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   );
                 })
               )}
-            </tbody>
-          </table>
+            </div>
+          ) : (
+            /* ─── DESKTOP TABLE LAYOUT ─── */
+            <table className="w-full border-collapse min-w-[1400px]">
+              <thead className="sticky top-0 z-20">
+                <tr>
+                  <th className="bg-gray-800 text-white text-xs font-semibold px-3 py-2.5 text-left border-r border-gray-700 w-[50px]">Day</th>
+                  <th className="bg-gray-800 text-white text-xs font-semibold px-3 py-2.5 text-left border-r border-gray-700 w-[180px]">Client</th>
+                  <th className="bg-gray-800 text-white text-xs font-semibold px-3 py-2.5 text-left border-r border-gray-700 w-[140px]">Event</th>
+                  {CREW_COLUMNS.map(col => (
+                    <th
+                      key={col.field}
+                      className={cn(
+                        "text-xs font-bold px-2 py-2.5 text-center border-r last:border-r-0",
+                        GROUP_STYLES[col.group],
+                        col.size === 'wide' ? 'min-w-[120px]' : 'min-w-[70px]'
+                      )}
+                    >
+                      {col.short}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={13} className="text-center py-20 text-gray-400">
+                      <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                      <p className="text-lg font-medium">No events for this month</p>
+                      <p className="text-sm mt-1">Try selecting a different year or month</p>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredRows.map((row, idx) => {
+                    const rowKey = `${row.registeredDateTimeAD}-${row.event}-${row.eventDateAD}`;
+                    const groupIdx = dayGroups.get(rowKey) ?? 0;
+                    const dayBg = DAY_COLORS[groupIdx % DAY_COLORS.length];
+                    return (
+                      <tr
+                        key={`${rowKey}-${idx}`}
+                        className={cn("border-b border-gray-100 hover:bg-violet-50/40 transition-colors group", dayBg)}
+                      >
+                        <td className="px-3 py-2 border-r border-gray-100 text-center">
+                          <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-violet-100 text-violet-700 font-bold text-sm">
+                            {row.eventDay}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 border-r border-gray-100">
+                          <button
+                            onClick={() => navigate(`/client/${encodeURIComponent(row.registeredDateTimeAD)}`)}
+                            className="text-sm font-semibold text-gray-900 hover:text-violet-600 transition-colors truncate block max-w-[170px]"
+                          >
+                            {row.clientName}
+                          </button>
+                        </td>
+                        <td className="px-3 py-2 border-r border-gray-100 text-sm text-gray-600 truncate max-w-[140px]">
+                          {row.event}
+                        </td>
+                        {CREW_COLUMNS.map(col => (
+                          <CrewCell
+                            key={col.field}
+                            value={row[col.field] as string}
+                            field={col.field}
+                            label={col.label}
+                            group={col.group}
+                            size={col.size}
+                            freelancers={freelancers}
+                            allAssignments={assignments}
+                            onAssign={(name) => handleAssign(row, col.field, name)}
+                            onQuickAdd={() => setQuickAddState({ open: true, field: col.field, label: col.label, row })}
+                          />
+                        ))}
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 
@@ -454,6 +525,15 @@ function CrewCell({
                   <CommandInput placeholder={`Search ${label}...`} />
                   <CommandList>
                     <CommandEmpty>No freelancers found</CommandEmpty>
+                    {hasValue && (
+                      <CommandGroup heading="Actions">
+                        <CommandItem onSelect={() => { onAssign(''); setOpen(false); }} className="text-red-500 font-medium">
+                          <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                          Clear Assignment
+                        </CommandItem>
+                      </CommandGroup>
+                    )}
+                    {hasValue && <CommandSeparator />}
                     <CommandGroup>
                       {filtered.map(name => (
                         <CommandItem key={name} onSelect={() => { onAssign(name); setOpen(false); }} className="text-sm">
@@ -526,5 +606,55 @@ function CrewCell({
         </Popover>
       )}
     </td>
+  );
+}
+
+/* ─── Mobile Crew Assign Popover (compact "+" button) ─── */
+function MobileCrewAssign({
+  field,
+  label,
+  freelancers,
+  onAssign,
+  onQuickAdd,
+}: {
+  field: FreelancerField;
+  label: string;
+  freelancers: FreelancerData[];
+  onAssign: (name: string) => void;
+  onQuickAdd: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const filtered = useMemo(() => getFilteredFreelancersByRole(freelancers, field), [freelancers, field]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button className="text-[10px] text-gray-400 hover:text-violet-500 px-1">
+          <Plus className="w-3 h-3" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="z-[200] w-52 p-0" align="start">
+        <Command>
+          <CommandInput placeholder={`Search ${label}...`} />
+          <CommandList>
+            <CommandEmpty>No freelancers found</CommandEmpty>
+            <CommandGroup>
+              {filtered.map(name => (
+                <CommandItem key={name} onSelect={() => { onAssign(name); setOpen(false); }} className="text-sm">
+                  {name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+            <CommandSeparator />
+            <CommandGroup>
+              <CommandItem onSelect={() => { setOpen(false); onQuickAdd(); }} className="text-emerald-600 font-medium">
+                <Plus className="w-3.5 h-3.5 mr-1.5" />
+                Add New
+              </CommandItem>
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
