@@ -128,6 +128,7 @@ export function DesktopSuiteLanding() {
           selectedStarHandler={selectedStarHandler}
           onClearStarHandler={() => setSelectedStarHandler(null)}
           showAllClients={showAllClients}
+          onCloseAllClients={() => setShowAllClients(false)}
         />
       </div>
 

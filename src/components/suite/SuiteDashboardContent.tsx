@@ -18,16 +18,19 @@ interface SuiteDashboardContentProps {
   selectedStarHandler?: string | null;
   onClearStarHandler?: () => void;
   showAllClients?: boolean;
+  onCloseAllClients?: () => void;
 }
 
-export function SuiteDashboardContent({ selectedStarHandler, onClearStarHandler, showAllClients }: SuiteDashboardContentProps) {
+export function SuiteDashboardContent({ selectedStarHandler, onClearStarHandler, showAllClients, onCloseAllClients }: SuiteDashboardContentProps) {
+  // Render full-screen overlay separately
+  if (showAllClients) {
+    return <AllClientsCrewTable onClose={onCloseAllClients} />;
+  }
+
   return (
     <div className="flex-1 flex flex-col relative">
       <ScrollArea className="flex-1">
-        {/* Show ALL CLIENTS crew table */}
-        {showAllClients ? (
-          <AllClientsCrewTable />
-        ) : selectedStarHandler ? (
+        {selectedStarHandler ? (
           <StarClientDetailView 
             handlerName={selectedStarHandler} 
             onClose={() => onClearStarHandler?.()} 
