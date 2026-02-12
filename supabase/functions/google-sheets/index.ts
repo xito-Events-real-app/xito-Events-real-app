@@ -6,6 +6,27 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Retry wrapper for Google Sheets API calls to handle 429 rate limits
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const response = await fetch(url, options);
+    
+    if (response.status === 429 && attempt < maxRetries) {
+      const retryAfter = response.headers.get('Retry-After');
+      const waitMs = retryAfter 
+        ? parseInt(retryAfter, 10) * 1000 
+        : Math.pow(2, attempt + 1) * 1000 + Math.random() * 1000;
+      console.log(`[RETRY] 429 rate limited, waiting ${Math.round(waitMs)}ms (attempt ${attempt + 1}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, waitMs));
+      continue;
+    }
+    
+    return response;
+  }
+  // Should not reach here, but return last attempt
+  return fetch(url, options);
+}
+
 interface ServiceAccountCredentials {
   type: string;
   project_id: string;
@@ -95,7 +116,7 @@ async function getDropdowns(accessToken: string, spreadsheetId: string) {
   const range = encodeURIComponent("'CLIENT TRACKER SETUP DATA'!A2:X100");
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
-  const response = await fetch(url, {
+  const response = await fetchWithRetry(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
@@ -524,7 +545,7 @@ async function getDailyTasks(accessToken: string, taskSpreadsheetId: string) {
   const range = encodeURIComponent("'WTN TASK'!A2:K5000");
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${taskSpreadsheetId}/values/${range}`;
   
-  const response = await fetch(url, {
+  const response = await fetchWithRetry(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
@@ -4640,7 +4661,7 @@ async function getBookedClients(accessToken: string, spreadsheetId: string, limi
   const range = encodeURIComponent("'BOOKED CLIENTS'!A2:AL" + (limit + 1));
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
-  const response = await fetch(url, {
+  const response = await fetchWithRetry(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
@@ -4655,7 +4676,7 @@ async function getBookedClients(accessToken: string, spreadsheetId: string, limi
 
   // 2. Fetch CLIENT TRACKER registeredDateTimeAD column (Column A) for lookup
   const trackerRange = encodeURIComponent("'CLIENT TRACKER'!A2:A2000");
-  const trackerResponse = await fetch(
+  const trackerResponse = await fetchWithRetry(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
