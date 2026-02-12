@@ -3,6 +3,7 @@ import { HandlerActivitySection } from "./HandlerActivitySection";
 import { HandlerStarClients } from "./HandlerStarClients";
 import { StarClientDetailView } from "./StarClientDetailView";
 import { MasterSearchButton } from "./MasterSearchButton";
+import { AllClientsCrewTable } from "./AllClientsCrewTable";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Calendar, User } from "lucide-react";
@@ -16,14 +17,17 @@ const HANDLERS = [
 interface SuiteDashboardContentProps {
   selectedStarHandler?: string | null;
   onClearStarHandler?: () => void;
+  showAllClients?: boolean;
 }
 
-export function SuiteDashboardContent({ selectedStarHandler, onClearStarHandler }: SuiteDashboardContentProps) {
+export function SuiteDashboardContent({ selectedStarHandler, onClearStarHandler, showAllClients }: SuiteDashboardContentProps) {
   return (
     <div className="flex-1 flex flex-col relative">
       <ScrollArea className="flex-1">
-        {/* Show Star Client Details OR Normal Tab Content */}
-        {selectedStarHandler ? (
+        {/* Show ALL CLIENTS crew table */}
+        {showAllClients ? (
+          <AllClientsCrewTable />
+        ) : selectedStarHandler ? (
           <StarClientDetailView 
             handlerName={selectedStarHandler} 
             onClose={() => onClearStarHandler?.()} 

@@ -7,7 +7,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { StarRating } from "@/components/ui/star-rating";
 import { useHandlerStarClients } from "@/hooks/useHandlerStarClients";
-import { ChevronRight, Construction, Star, CheckSquare, AlertTriangle } from "lucide-react";
+import { ChevronRight, Construction, Star, CheckSquare, AlertTriangle, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { SuiteBenzoKeepSection } from "./SuiteBenzoKeepSection";
@@ -23,6 +23,8 @@ const HANDLERS = [
 interface SuiteLeftSidebarProps {
   onSelectStarHandler?: (handlerName: string) => void;
   selectedStarHandler?: string | null;
+  onShowAllClients?: () => void;
+  showAllClients?: boolean;
 }
 
 function HandlerStarItem({ 
@@ -64,7 +66,7 @@ function HandlerStarItem({
   );
 }
 
-export function SuiteLeftSidebar({ onSelectStarHandler, selectedStarHandler }: SuiteLeftSidebarProps) {
+export function SuiteLeftSidebar({ onSelectStarHandler, selectedStarHandler, onShowAllClients, showAllClients }: SuiteLeftSidebarProps) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'active' | 'coming-soon'>('active');
   const stats = useSuiteStats();
@@ -145,6 +147,27 @@ export function SuiteLeftSidebar({ onSelectStarHandler, selectedStarHandler }: S
             </TabsTrigger>
           </TabsList>
         </Tabs>
+      </div>
+
+      {/* ALL CLIENTS Button */}
+      <div className="p-2 border-b border-gray-200">
+        <button
+          onClick={() => { onShowAllClients?.(); onSelectStarHandler?.(''); }}
+          className={cn(
+            "w-full flex items-center gap-3 p-3 rounded-xl transition-all text-left font-semibold",
+            showAllClients
+              ? "bg-violet-100 border-violet-300 text-violet-800 border"
+              : "hover:bg-violet-50 border border-transparent text-gray-800"
+          )}
+        >
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-purple-700 flex items-center justify-center shadow-sm">
+            <Users className="w-5 h-5 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold truncate">ALL CLIENTS</p>
+            <p className="text-xs text-gray-500">Monthly Crew View</p>
+          </div>
+        </button>
       </div>
 
       {/* Module List */}

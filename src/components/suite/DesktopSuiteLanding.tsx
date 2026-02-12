@@ -21,6 +21,7 @@ export function DesktopSuiteLanding() {
   const [showNews, setShowNews] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedStarHandler, setSelectedStarHandler] = useState<string | null>(null);
+  const [showAllClients, setShowAllClients] = useState(false);
 
   const handleRefreshNews = async () => {
     setIsRefreshing(true);
@@ -50,8 +51,10 @@ export function DesktopSuiteLanding() {
     <div className="min-h-screen bg-gray-50 flex w-full">
       {/* Left Sidebar - Module Navigation */}
       <SuiteLeftSidebar 
-        onSelectStarHandler={handleSelectStarHandler}
+        onSelectStarHandler={(h) => { setSelectedStarHandler(h || null); setShowAllClients(false); }}
         selectedStarHandler={selectedStarHandler}
+        onShowAllClients={() => { setShowAllClients(true); setSelectedStarHandler(null); }}
+        showAllClients={showAllClients}
       />
 
       {/* Main Content Area */}
@@ -124,6 +127,7 @@ export function DesktopSuiteLanding() {
         <SuiteDashboardContent 
           selectedStarHandler={selectedStarHandler}
           onClearStarHandler={() => setSelectedStarHandler(null)}
+          showAllClients={showAllClients}
         />
       </div>
 

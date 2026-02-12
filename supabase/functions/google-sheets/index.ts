@@ -18,7 +18,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient' | 'getDailyTasks' | 'addDailyTask' | 'updateDailyTask' | 'updateDailyTaskStatus' | 'getDailyTaskSetupData' | 'getFreelancers' | 'addFreelancer' | 'updateFreelancer' | 'deleteFreelancer' | 'syncFreelancerCategories' | 'getClientFreelancerAssignments' | 'updateFreelancerAssignment' | 'checkFreelancerAvailability' | 'fullSyncFreelancerAssignments' | 'getFreelancerBookings';
+  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient' | 'getDailyTasks' | 'addDailyTask' | 'updateDailyTask' | 'updateDailyTaskStatus' | 'getDailyTaskSetupData' | 'getFreelancers' | 'addFreelancer' | 'updateFreelancer' | 'deleteFreelancer' | 'syncFreelancerCategories' | 'getClientFreelancerAssignments' | 'updateFreelancerAssignment' | 'checkFreelancerAvailability' | 'fullSyncFreelancerAssignments' | 'getFreelancerBookings' | 'getAllFreelancerAssignments';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -5875,6 +5875,62 @@ const FIELD_TO_COL_INDEX: Record<string, number> = {
   fpvOperator: 17,        // R
 };
 
+// ============= GET ALL FREELANCER ASSIGNMENTS (BULK) =============
+async function getAllFreelancerAssignments(accessToken: string, spreadsheetId: string) {
+  const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:R1000");
+  const flUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${flRange}`;
+  const flResp = await fetch(flUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!flResp.ok) throw new Error('Failed to read freelancer assignments');
+  const flData = await flResp.json();
+  const rows: string[][] = flData.values || [];
+
+  const allAssignments: Record<string, unknown>[] = [];
+
+  for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
+    const row = rows[rowIdx];
+    const registeredDateTimeAD = (row[0] || '').trim();
+    if (!registeredDateTimeAD) continue;
+
+    const clientName = (row[2] || '').trim();
+    const eventNames = (row[3] || '').split('\n');
+    const eventYears = (row[4] || '').split('\n');
+    const eventMonths = (row[5] || '').split('\n');
+    const eventDays = (row[6] || '').split('\n');
+    const eventDatesAD = (row[7] || '').split('\n');
+
+    const eventCount = eventNames.filter((n: string) => n.trim()).length;
+    if (eventCount === 0) continue;
+
+    for (let i = 0; i < eventCount; i++) {
+      const name = (eventNames[i] || '').trim();
+      if (!name) continue;
+      allAssignments.push({
+        rowNumber: rowIdx + 2,
+        registeredDateTimeAD,
+        clientName,
+        event: name,
+        eventYear: (eventYears[i] || '').trim(),
+        eventMonth: (eventMonths[i] || '').trim(),
+        eventDay: (eventDays[i] || '').trim(),
+        eventDateAD: (eventDatesAD[i] || '').trim(),
+        photographerBride: ((row[8] || '').split('\n')[i] || '').trim(),
+        photographerGroom: ((row[9] || '').split('\n')[i] || '').trim(),
+        videographerBride: ((row[10] || '').split('\n')[i] || '').trim(),
+        videographerGroom: ((row[11] || '').split('\n')[i] || '').trim(),
+        extraPhotographer: ((row[12] || '').split('\n')[i] || '').trim(),
+        extraVideographer: ((row[13] || '').split('\n')[i] || '').trim(),
+        assistant: ((row[14] || '').split('\n')[i] || '').trim(),
+        iphoneShooter: ((row[15] || '').split('\n')[i] || '').trim(),
+        droneOperator: ((row[16] || '').split('\n')[i] || '').trim(),
+        fpvOperator: ((row[17] || '').split('\n')[i] || '').trim(),
+      });
+    }
+  }
+
+  console.log(`[GET ALL ASSIGNMENTS] Returned ${allAssignments.length} event rows from ${rows.length} client rows`);
+  return allAssignments;
+}
+
 async function getClientFreelancerAssignments(accessToken: string, spreadsheetId: string, registeredDateTimeAD: string) {
   // 1. Read event details for this client (single row with newline-separated values)
   const eventRange = encodeURIComponent("'BOOKED CLIENTS EVENT DETAILS'!A2:H1000");
@@ -6806,6 +6862,10 @@ Deno.serve(async (req) => {
       case 'getFreelancerBookings': {
         if (!data || !data.freelancerName) throw new Error('freelancerName is required');
         result = await getFreelancerBookings(accessToken, spreadsheetId, data.freelancerName as string);
+        break;
+      }
+      case 'getAllFreelancerAssignments': {
+        result = await getAllFreelancerAssignments(accessToken, spreadsheetId);
         break;
       }
       default:
