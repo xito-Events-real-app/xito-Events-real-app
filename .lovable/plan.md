@@ -1,83 +1,105 @@
 
-# ALL CLIENTS -- Full Screen Redesign + Show All Data
 
-## Problems Found
+# Fix ALL CLIENTS: Sync, Filters, Names, Layout, and Day Grouping
 
-1. **Data range capped at 1000 rows** -- The backend reads `A2:R1000`. If your sheet has more than ~999 client rows, they get cut off.
-2. **Not full screen** -- The table is squeezed inside the dashboard content area with the left sidebar and news panel visible. It should take over the entire screen.
-3. **Plain table UI** -- The current design is a basic grid with minimal styling. Needs a polished, production-grade look.
+## Problems Identified
 
-## What Changes
+1. **No data on first load**: The `BOOKED CLIENTS FREELANCERS` sheet may be empty or stale. There is no sync trigger when opening ALL CLIENTS -- it just reads whatever is already there.
+2. **Filters broken**: The sheet stores month as a TEXT name (e.g., `"MAGH"`) but the filter compares it with a number string (`"10"`). They never match, so all rows are filtered out.
+3. **Freelancer names take too much space**: Full names overflow the cells.
+4. **Drone/FPV columns are same size as PB-iPhone**: They should be narrower since they are rarely used.
+5. **Same-day events blend together**: No visual grouping for events on the same day.
 
-### 1. Expand Data Range (Backend)
+---
 
-**File: `supabase/functions/google-sheets/index.ts`**
+## Changes
 
-Change the sheet range from `A2:R1000` to `A2:R5000` to capture all your client data. This ensures no rows are silently dropped.
+### 1. Add Sync Button + Auto-Sync Every 30 Minutes
 
-### 2. Full-Screen Overlay Mode
+Add a prominent "Sync Clients" button in the header bar that calls `fullSyncFreelancerAssignments()` to copy latest booked clients into the FREELANCERS sheet before loading data.
+
+On first load, the component will auto-sync, then reload the table. A `setInterval` will re-sync every 30 minutes in the background.
 
 **File: `src/components/suite/AllClientsCrewTable.tsx`**
 
-Redesign the component to render as a **full-screen fixed overlay** (like a modal that covers the entire viewport), with:
-- A top toolbar with title, filters, refresh, event count, and a close button
-- The table takes up the entire remaining height
-- No sidebar, no news panel visible -- just the crew table
+### 2. Fix Month Filter Mismatch
 
-### 3. Visual Upgrade
+The sheet stores month names like `MAGH`, `FALGUN`, etc. The filter dropdown uses index numbers (`1`-`12`). Fix by converting the filter month number to the corresponding month name before comparing, using the existing `NEPALI_MONTHS` map from `nepali-months.ts`.
 
-Same file -- complete UI overhaul:
-- **Dark header bar** with gradient (violet-to-purple) matching the app branding
-- **Sticky column headers** with better contrast and color-coding:
-  - Amber background for Photographer columns (PB, PG, EP)
-  - Purple background for Videographer columns (VB, VG, EV)
-  - Emerald background for Assistant column
-  - Cyan background for iPhone, Drone, FPV columns
-- **Alternating row stripes** for readability
-- **Assigned cells** show colored pills (emerald background with name)
-- **Empty cells** show a subtle dashed border with "+" icon instead of plain "Assign" text
-- **Row hover effect** with a left border highlight
-- **Client names are clickable** -- navigate to client detail page
-- **Event count badge** in the header
+The filter logic changes from:
+```
+a.eventMonth === selectedMonth  // "MAGH" === "10" = NEVER MATCHES
+```
+To:
+```
+a.eventMonth.toUpperCase() === NEPALI_MONTHS[parseInt(selectedMonth)]  // "MAGH" === "MAGH"
+```
 
-### 4. Remove Wrapper ScrollArea
+**File: `src/components/suite/AllClientsCrewTable.tsx`**
 
-**File: `src/components/suite/SuiteDashboardContent.tsx`**
+### 3. Show Half Name + Hover Card with Upcoming Events
 
-When `showAllClients` is true, render `AllClientsCrewTable` directly as a full-screen overlay instead of inside the dashboard scroll area. This removes the nested scrolling issue.
+Each assigned freelancer cell will show only the **first name** (or first 8 characters). On hover, a `HoverCard` appears showing:
+- Full name
+- Up to 5 upcoming events from the loaded assignments data (same freelancer name appearing in other rows with future dates)
 
-### 5. Close Button to Return
+This uses the already-loaded `assignments` array to find upcoming bookings -- no extra API call needed.
 
-Add a close/back button in the top-left of the full-screen view that sets `showAllClients` back to false, returning to the normal dashboard.
+**File: `src/components/suite/AllClientsCrewTable.tsx`** (CrewCell component)
+
+### 4. Resize Columns -- Drone/FPV Smaller, PB through iPhone Bigger
+
+Update the column width definitions:
+- PB, PG, VB, VG, EP, EV, Asst, iPhone: `min-w-[120px]` (wider)
+- Drone, FPV: `min-w-[80px]` (narrower)
+
+Add a `width` property to the `CREW_COLUMNS` config.
+
+**File: `src/components/suite/AllClientsCrewTable.tsx`**
+
+### 5. Same-Day Event Background Grouping
+
+When sorting rows by day, events sharing the same day number get alternating group background colors (e.g., light violet vs light blue) so they visually cluster together. A simple algorithm tracks "current day" and toggles a color flag when the day changes.
+
+**File: `src/components/suite/AllClientsCrewTable.tsx`**
 
 ---
 
 ## Technical Details
 
-### File 1: `supabase/functions/google-sheets/index.ts`
-- Change line with range `A2:R1000` to `A2:R5000` in the `getAllFreelancerAssignments` function
+### File: `src/components/suite/AllClientsCrewTable.tsx`
 
-### File 2: `src/components/suite/AllClientsCrewTable.tsx`
-Complete rewrite with:
-- Outer container: `fixed inset-0 z-[100] bg-white flex flex-col` for true full-screen
-- Top bar: gradient header with filters inline, close button (X icon), refresh, event count
-- Table header: sticky with color-coded column groups
-- Table body: native `overflow-y-auto` (no nested ScrollArea) filling remaining height
-- Crew cells: color-coded pills for assigned, dashed empty state for unassigned
-- `onClose` prop to exit full-screen mode
+All changes are in this single file:
 
-### File 3: `src/components/suite/SuiteDashboardContent.tsx`
-- Pass `onCloseAllClients` callback to `AllClientsCrewTable`
-- Render the table outside the ScrollArea wrapper when active
+**Sync button and auto-sync:**
+- Import `fullSyncFreelancerAssignments` from the API
+- Add a `handleSync` function that calls `fullSyncFreelancerAssignments()`, then reloads data
+- Add a "Sync Clients" button (with Database icon) next to the existing Refresh button in the header
+- On first mount, call `handleSync` automatically (sync then load)
+- Set up a `useEffect` with `setInterval` for 30-minute auto-sync (clears on unmount)
 
-### File 4: `src/components/suite/DesktopSuiteLanding.tsx`
-- Pass `setShowAllClients(false)` as the close handler through to `SuiteDashboardContent`
+**Filter fix:**
+- Import `NEPALI_MONTHS` from `@/lib/nepali-months`
+- Change the filter comparison to normalize month names: convert selectedMonth number to the uppercase month name, then compare case-insensitively with `a.eventMonth`
+
+**Half-name + hover card:**
+- Import `HoverCard`, `HoverCardTrigger`, `HoverCardContent` from `@/components/ui/hover-card`
+- In `CrewCell`, when a freelancer is assigned, display only `value.split(' ')[0]` (first name)
+- Wrap the pill in a `HoverCard` that shows full name and up to 5 upcoming events
+- Pass the full `assignments` array to `CrewCell` so it can search for other bookings by the same freelancer name
+
+**Column widths:**
+- Add a `width` field to `CREW_COLUMNS`: `'wide'` for PB through iPhone, `'narrow'` for Drone and FPV
+- Apply `min-w-[120px]` for wide columns and `min-w-[80px]` for narrow in both `<th>` and `<td>`
+
+**Same-day grouping:**
+- In the render loop, compute a `dayGroup` map: for each unique day, assign an alternating index (0 or 1)
+- Apply different background classes based on group index: group 0 gets `bg-white`, group 1 gets `bg-blue-50/40`
+- This replaces the simple odd/even row striping
 
 ### Files Summary
 
 | File | Change |
 |------|--------|
-| `supabase/functions/google-sheets/index.ts` | Expand range to R5000 |
-| `src/components/suite/AllClientsCrewTable.tsx` | Full rewrite -- full-screen overlay + visual upgrade |
-| `src/components/suite/SuiteDashboardContent.tsx` | Pass close handler, render outside scroll wrapper |
-| `src/components/suite/DesktopSuiteLanding.tsx` | Pass close callback |
+| `src/components/suite/AllClientsCrewTable.tsx` | Sync button, auto-sync, filter fix, half-names with hover, column widths, day grouping |
+
