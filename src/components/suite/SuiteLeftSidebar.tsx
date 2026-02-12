@@ -152,7 +152,7 @@ export function SuiteLeftSidebar({ onSelectStarHandler, selectedStarHandler, onS
       {/* ALL CLIENTS Button */}
       <div className="p-2 border-b border-gray-200">
         <button
-          onClick={() => { onShowAllClients?.(); onSelectStarHandler?.(''); }}
+          onClick={() => { onShowAllClients?.(); }}
           className={cn(
             "w-full flex items-center gap-3 p-3 rounded-xl transition-all text-left font-semibold",
             showAllClients
