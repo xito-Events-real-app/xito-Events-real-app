@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { XitoSearchPanel } from "@/components/shared/XitoSearchPanel";
 import { BookingCalendarMini } from "@/components/shared/BookingCalendarMini";
+import { BenzoDateConverter } from "@/components/shared/BenzoDateConverter";
 
 const MARKER_COLORS = [
   { id: 'yellow', name: 'Yellow', bg: 'bg-yellow-200', border: 'border-yellow-400', ring: 'ring-yellow-500' },
@@ -258,6 +259,8 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
         {isMobile ? (
           /* Mobile: single column */
           <div className="py-2 space-y-4">
+            {/* Date Converter */}
+            <BenzoDateConverter />
             {/* Color Picker */}
             <div>
               <Label className="text-sm font-medium text-gray-700 mb-2 block">Marker Color</Label>
@@ -305,6 +308,8 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
 
             {/* Center: Note Editor */}
             <div className="col-span-2 space-y-4">
+              {/* Date Converter */}
+              <BenzoDateConverter />
               <div>
                 <Label className="text-sm font-medium text-gray-700 mb-2 block">Marker Color</Label>
                 <div className="flex gap-2">
