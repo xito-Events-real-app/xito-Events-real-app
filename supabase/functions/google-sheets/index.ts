@@ -4123,36 +4123,10 @@ async function copyToEventDetails(accessToken: string, spreadsheetId: string, cl
     return { success: true, alreadyExists: true, rowNumber: existingRow };
   }
   
-  // Get sheet ID for inserting new row
-  const sheetId = await getSheetId(accessToken, spreadsheetId, 'BOOKED CLIENTS EVENT DETAILS');
-  
-  // Insert a new row at position 2
-  const insertUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
-  await fetch(insertUrl, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      requests: [{
-        insertDimension: {
-          range: {
-            sheetId,
-            dimension: 'ROWS',
-            startIndex: 1,
-            endIndex: 2,
-          },
-          inheritFromBefore: false,
-        },
-      }],
-    }),
-  });
-  
   // Map columns from BOOKED CLIENTS to EVENT DETAILS:
   // A-C (same): registeredDateTimeAD, registeredDateBS, clientName
   // L-P -> D-H: events, eventYear, eventMonth, eventDay, eventDateAD
-  const eventDetailsValues = [[
+  const eventDetailsValues = [
     clientRow[0] || '',   // A: registeredDateTimeAD (same)
     clientRow[1] || '',   // B: registeredDateBS (same)
     clientRow[2] || '',   // C: clientName (same)
@@ -4162,19 +4136,19 @@ async function copyToEventDetails(accessToken: string, spreadsheetId: string, cl
     clientRow[14] || '',  // G: eventDay (from O)
     clientRow[15] || '',  // H: eventDateAD (from P)
     '',                   // I: empty/reserved separator
-    // J-AH are empty - user input columns
-  ]];
+  ];
   
-  const writeRange = encodeURIComponent("'BOOKED CLIENTS EVENT DETAILS'!A2:I2");
-  const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${writeRange}?valueInputOption=USER_ENTERED`;
+  // Use append API (safe - no row shifting) instead of insertDimension
+  const appendRange = encodeURIComponent("'BOOKED CLIENTS EVENT DETAILS'!A:I");
+  const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${appendRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
   
-  const writeResponse = await fetch(writeUrl, {
-    method: 'PUT',
+  const writeResponse = await fetchWithRetry(appendUrl, {
+    method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ values: eventDetailsValues }),
+    body: JSON.stringify({ values: [eventDetailsValues] }),
   });
 
   if (!writeResponse.ok) {
