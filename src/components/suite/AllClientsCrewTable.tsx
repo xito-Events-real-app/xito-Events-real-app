@@ -82,7 +82,9 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
   const [freelancers, setFreelancers] = useState<FreelancerData[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const hasSyncedOnMount = useRef(false);
+  const isBusy = useRef(false);
   const [quickAddState, setQuickAddState] = useState<{ open: boolean; field: FreelancerField; label: string; row: FreelancerAssignment | null }>({
     open: false, field: 'photographerBride', label: '', row: null
   });
@@ -109,7 +111,21 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
     }
   }, []);
 
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadData();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadData]);
+
   const handleSync = useCallback(async (silent = false) => {
+    if (isBusy.current) {
+      if (!silent) toast.info("Another sync is already running, please wait");
+      return;
+    }
+    isBusy.current = true;
     if (!silent) setSyncing(true);
     try {
       // Step 1: Sync EVENT DETAILS (populate new + remove stale against BOOKED CLIENTS)
@@ -129,6 +145,7 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
     } catch (err) {
       if (!silent) toast.error("Sync failed");
     } finally {
+      isBusy.current = false;
       if (!silent) setSyncing(false);
     }
   }, [loadData]);
@@ -144,14 +161,13 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
     loadData();
     if (!hasSyncedOnMount.current) {
       hasSyncedOnMount.current = true;
-      handleSync(true).then(() => loadData());
+      handleSync(true);
     }
-    const interval = setInterval(() => handleSync(true).then(() => loadData()), SYNC_INTERVAL);
+    // Background full sync every 30 min, but skips if busy
+    const interval = setInterval(() => handleSync(true), SYNC_INTERVAL);
 
-    // Listen for client data changes (e.g., events added/removed via QuickAdd)
-    const handleClientChange = () => {
-      handleSync(true).then(() => loadData());
-    };
+    // Cache invalidation listeners -- lightweight only
+    const handleClientChange = () => loadData();
     window.addEventListener('clients-invalidate', handleClientChange);
     window.addEventListener('booked-clients-invalidate', handleClientChange);
 
@@ -202,6 +218,7 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
   }, [filteredRows, selectedYear, selectedMonth]);
 
   const handleUploadRestore = useCallback(async (file: File) => {
+    isBusy.current = true;
     setIsRestoring(true);
     try {
       const text = await file.text();
@@ -243,6 +260,7 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
     } catch (err: any) {
       toast.error(err.message || 'Failed to restore from backup');
     } finally {
+      isBusy.current = false;
       setIsRestoring(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
@@ -360,13 +378,13 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
             </SelectContent>
           </Select>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => handleSync(false)} disabled={syncing} className="gap-1.5 text-white hover:bg-white/20 hover:text-white ml-1">
+        <Button variant="ghost" size="sm" onClick={() => handleSync(false)} disabled={syncing || isBusy.current} className="gap-1.5 text-white hover:bg-white/20 hover:text-white ml-1">
           <Database className={cn("w-3.5 h-3.5", syncing && "animate-pulse")} />
           {syncing ? "Syncing..." : "Sync Clients"}
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => handleSync(false)} disabled={syncing} className="gap-1.5 text-white hover:bg-white/20 hover:text-white">
-          <RefreshCw className={cn("w-3.5 h-3.5", syncing && "animate-spin")} />
-          Refresh
+        <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={refreshing} className="gap-1.5 text-white hover:bg-white/20 hover:text-white">
+          <RefreshCw className={cn("w-3.5 h-3.5", refreshing && "animate-spin")} />
+          {refreshing ? "Refreshing..." : "Refresh"}
         </Button>
         <div className="ml-auto flex items-center gap-3">
           <div className="flex items-center gap-2 text-sm">
