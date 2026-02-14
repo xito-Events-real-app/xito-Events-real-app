@@ -1,61 +1,58 @@
 
+# Fix: Event Data Not Showing After Edit + Sync Button Fix
 
-# Benzo Keep Client Panel Overhaul
+## Problem
+1. After editing events in the Quick Add form, data saves to Google Sheets correctly but the Client Detail page shows stale event data because `useEventDetails` (which fetches from the logistics sheet) is never re-triggered.
+2. The Sync button refreshes client data but does NOT refresh event details from the logistics sheet.
+3. `DashboardEventDetails` prioritizes `eventDetailsData` (logistics sheet) over `clientEvents` (client record), so even when the client record updates, stale logistics data takes precedence.
 
-## Summary of Changes
+## Root Cause
+The `refetchEventDetails` function is destructured from `useEventDetails` on line 292 of `ClientDetail.tsx` but is **never called anywhere** -- not after editing, not after syncing.
 
-### 1. Remove fields after Status in the top form bar
-Remove Event, Year, Month, Day fields from the horizontal form row. Keep only: **Name, Phone, WhatsApp, Source, Handler, Status**. Space them properly with wider widths so the Client Full Name is fully visible.
+## Solution
 
-### 2. Fix: Clicking a client name loads their Keep Notes + auto-fills form fields
-The current `handleSelectClient` in the dialog correctly parses `benzoKeepNotes`, but the `BenzoKeepClientPanel` bypasses this -- when a client is selected, it shows a "Selected Client" view instead of populating the form fields. Fix:
-- When a client is selected, populate **all quick-add fields** (Name, Phone, WhatsApp, Source, Handler, Status) with the client's data
-- Call `onSelectClient(client)` which triggers the existing `handleSelectClient` in the dialog that loads their Benzo Keep notes into the textarea
-- Keep the form fields editable but pre-filled, instead of showing the separate "Selected" card
+### File: `src/pages/ClientDetail.tsx`
 
-### 3. Booked Clients-style graphics for the top section
-Style the top bar with a dark slate theme similar to `EventClientCard` / Booked Clients:
-- Dark background (`bg-slate-800/90`) with light text
-- Gradient avatar circles and colored badges
-- Clean card-style separation between form row and recent clients row
+**1. Sync button fix** -- Add `refetchEventDetails()` call inside `handleSyncClient`:
 
-### 4. Recent Clients: Replace scrollbar with "Show More" button
-Instead of `overflow-x-auto` with a visible scrollbar, show a limited number of client chips (e.g., 8) and place a "More" button at the right end that reveals additional clients when clicked.
+```typescript
+const handleSyncClient = async () => {
+  if (!client?.registeredDateTimeAD) return;
+  
+  setIsSyncingClient(true);
+  try {
+    const freshClient = await getSingleClient(client.registeredDateTimeAD);
+    if (freshClient && updateClientCache) {
+      updateClientCache(freshClient);
+      setCurrentStatusLog(freshClient.statusLog || '');
+      setCurrentPaymentsMade(freshClient.paymentsMade || '');
+      setCurrentRemainingPayment(freshClient.remainingPayment || '');
+      setCurrentComments(freshClient.comments || '');
+      setCurrentQuotationData(freshClient.quotationData || '');
+      setCurrentFinalQuotation(freshClient.finalQuotation || '');
+      toast({ title: "Client data synced from sheets" });
+    }
+    // Also refresh event details from logistics sheet
+    await refetchEventDetails();
+  } catch (err) {
+    // ... error handling
+  } finally {
+    setIsSyncingClient(false);
+  }
+};
+```
 
-### 5. Hover on client name shows client details (HoverCard)
-Use `@radix-ui/react-hover-card` (already installed) to show a rich preview card when hovering over a client chip in the Recent Clients row. The card will display:
-- Client Name, Contact, WhatsApp
-- Events, Event Date (BS)
-- Source, Handler, Status
-- Similar to what's shown on the Client Detail page dashboard
+**2. Post-edit refresh** -- Add an effect that triggers `refetchEventDetails()` when the client's event fields change (which happens when returning from the QuickAdd edit form):
 
-## Technical Details
+```typescript
+useEffect(() => {
+  if (client?.events) {
+    refetchEventDetails();
+  }
+}, [client?.events, client?.eventYear, client?.eventMonth, client?.eventDay]);
+```
 
-### File: `src/components/suite/BenzoKeepClientPanel.tsx`
+This ensures that whenever the cached client's event data changes (after an edit), the logistics sheet data is also re-fetched to stay in sync.
 
-**Form row changes:**
-- Remove Event/Year/Month/Day inputs and the Full Form button from the horizontal layout
-- Increase Name input width to `w-48` so full names are visible
-- Apply Booked Clients dark theme: `bg-slate-800/90 text-white` for the container, lighter inputs with dark text
-
-**Client selection auto-fill:**
-- Remove the separate "Selected Client" card view (lines 72-98)
-- Instead, when `selectedClient` is set, populate `quickData` fields via `onQuickDataChange` with client's data and show a "Clear" button
-- The `onSelectClient` callback in the dialog already handles loading notes
-
-**Recent clients row:**
-- Track `visibleCount` state (default 8)
-- Show `clients.slice(0, visibleCount)` chips
-- Add a "More" `Button` at the end that increments `visibleCount` by 8
-- Remove `overflow-x-auto`, use `flex-wrap` instead or keep inline with hidden overflow
-
-**HoverCard on client chips:**
-- Wrap each client chip button in `HoverCard` + `HoverCardTrigger` + `HoverCardContent`
-- HoverCardContent shows: Name, Phone, WhatsApp, Events, Date, Source, Handler, Status
-
-### File: `src/components/suite/BenzoKeepNotepadDialog.tsx`
-
-**Update `handleSelectClient`:**
-- In addition to loading notes, also call `setQuickClientData` with the client's fields (name, phone, whatsapp, source, handler, status)
-- This ensures the top form fields auto-populate when clicking a client name
-
+### Files Modified
+- `src/pages/ClientDetail.tsx` (2 small changes: add `refetchEventDetails()` to sync handler + add useEffect for post-edit refresh)
