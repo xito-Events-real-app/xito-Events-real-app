@@ -1,53 +1,63 @@
 
 
-# Fix: Columns Placed Wrongly in BOOKED CLIENTS FREELANCERS Sheet
+# Fix: FREELANCERS Sheet Not Populated for New Booked Clients
 
 ## Root Cause
 
-The `copyToEventDetails` function uses Google Sheets `insertDimension` to insert a new row at position 2, which **shifts all existing rows down by one**. When the downstream `syncSingleClientToFreelancers` runs immediately after, it reads EVENT DETAILS data from shifted positions. This causes the FREELANCERS row data to land in wrong columns because the source data (EVENT DETAILS) has been corrupted by the row shift.
+When `updateClientStatus` triggers the 3-sheet sync chain, it runs sequentially:
+1. `syncToEventDetails` -- appends to EVENT DETAILS (works)
+2. `syncSingleClientToFreelancers` -- reads from EVENT DETAILS to find the client (FAILS silently)
+3. `resyncClientContactDetails` -- reads from BOOKED CLIENTS directly (works)
 
-The `fullSyncEventDetails` function already uses the safer `:append` API, but the single-client `copyToEventDetails` was never updated to match.
+The problem: `syncSingleClientToFreelancers` reads EVENT DETAILS immediately after it was just written to. If the Google Sheets API hasn't propagated the append yet, the client row isn't found, and the function silently skips (returns `{ success: true, skipped: true }` -- not an error).
 
 ## Fix
 
 ### File: `supabase/functions/google-sheets/index.ts`
 
-**Replace `copyToEventDetails` row insertion logic (lines 4126-4150 and 4168)**
+**Add a fallback in `syncSingleClientToFreelancers`** (around line 6559-6563)
 
-Change from the dangerous `insertDimension` (insert at row 2) pattern to the safe `:append` pattern that `fullSyncEventDetails` already uses.
+When the client is NOT found in EVENT DETAILS, instead of silently skipping, fall back to reading directly from the BOOKED CLIENTS sheet and build the freelancer row from that data.
 
-Before (dangerous):
 ```typescript
-// Insert a new row at position 2
-const sheetId = await getSheetId(...);
-await fetch(insertUrl, { body: { insertDimension: { startIndex: 1, endIndex: 2 } } });
-// Write to A2:I2
-const writeRange = "'BOOKED CLIENTS EVENT DETAILS'!A2:I2";
+// Current (breaks silently):
+const evRow = eventRows.find(...);
+if (!evRow) {
+  console.log(`... not found in EVENT DETAILS, skipping`);
+  return { success: true, skipped: true };
+}
+
+// Fixed (falls back to BOOKED CLIENTS):
+let evRow = eventRows.find(...);
+if (!evRow) {
+  console.log(`... not found in EVENT DETAILS, reading from BOOKED CLIENTS instead`);
+  // Read from BOOKED CLIENTS directly
+  const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:P1000");
+  const bookedResp = await fetchWithRetry(...);
+  const bookedRows = ...;
+  const bookedRow = bookedRows.find(r => r[0].trim() === normalizedId);
+  if (!bookedRow) {
+    return { success: true, skipped: true };  // truly not found anywhere
+  }
+  // Build equivalent evRow from BOOKED CLIENTS columns
+  // A=col0, B=col1, C=col2, D=col11(events), E=col12, F=col13, G=col14, H=col15
+  evRow = [
+    bookedRow[0], bookedRow[1], bookedRow[2],
+    bookedRow[11], bookedRow[12], bookedRow[13], bookedRow[14], bookedRow[15]
+  ];
+}
 ```
 
-After (safe):
-```typescript
-// Append at bottom - no row shifting
-const appendUrl = `.../'BOOKED CLIENTS EVENT DETAILS'!A:I:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
-await fetchWithRetry(appendUrl, { method: 'POST', body: { values: [eventDetailsValues] } });
-```
+This mirrors exactly what `syncToEventDetails`/`copyToEventDetails` does (mapping BOOKED CLIENTS columns L-P to EVENT DETAILS columns D-H), so the data will be identical.
 
-This eliminates:
-- Row shifting that corrupts existing EVENT DETAILS data positions
-- The `getSheetId` call (no longer needed)
-- The separate insert + write two-step (replaced by single append)
+## Why This Works
 
-It also uses `fetchWithRetry` instead of raw `fetch` to handle 429 rate limits.
-
-## Column Layout Confirmation (No Changes Needed)
-
-The FREELANCERS sheet column mapping is correct and stays as-is:
-- **A-H**: Metadata (Registered DateTime, Date BS, Client Name, Event, Year, Month, Day, Date AD)
-- **I-R**: 10 freelancer role columns (PB, PG, VB, VG, EP, EV, Asst, iPhone, Drone, FPV)
-- **S-Z**: Reserved/unused
-- **AA**: Required Freelancers (categories)
+- EVENT DETAILS and CONTACT DETAILS both work because they read from BOOKED CLIENTS directly
+- FREELANCERS was the only one depending on EVENT DETAILS as an intermediary
+- This fallback removes that dependency chain, making FREELANCERS sync self-sufficient
+- The function remains idempotent -- safe to call multiple times
 
 ## Files to Modify
 
-1. `supabase/functions/google-sheets/index.ts` -- replace `copyToEventDetails` row-insert logic with append (lines 4126-4178)
+1. `supabase/functions/google-sheets/index.ts` -- add BOOKED CLIENTS fallback in `syncSingleClientToFreelancers` (around lines 6559-6563)
 
