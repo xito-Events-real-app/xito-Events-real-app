@@ -6388,6 +6388,13 @@ async function fullSyncFreelancerAssignments(accessToken: string, spreadsheetId:
     if (key) existingMap.set(key, idx);
   });
 
+  // Build set of valid booked client IDs from event details
+  const validIds = new Set<string>();
+  for (const evRow of eventRows) {
+    const regId = (evRow[0] || '').trim();
+    if (regId) validIds.add(regId);
+  }
+
   let copiedCount = 0;
   let updatedCount = 0;
   const newRows: string[][] = [];
@@ -6434,7 +6441,44 @@ async function fullSyncFreelancerAssignments(accessToken: string, spreadsheetId:
     });
   }
 
-  return { copiedCount, updatedCount, totalFreelancers: flRows.length + newRows.length };
+  // Cleanup: remove rows from FREELANCERS sheet that are NOT in EVENT DETAILS (e.g., BOOKED SOMEWHERE ELSE)
+  let removedCount = 0;
+  const rowsToDelete: number[] = [];
+  flRows.forEach((r, idx) => {
+    const key = (r[0] || '').trim();
+    if (key && !validIds.has(key)) {
+      rowsToDelete.push(idx + 2); // sheet row number (1-indexed, header is row 1)
+    }
+  });
+
+  if (rowsToDelete.length > 0) {
+    // Get sheet ID for BOOKED CLIENTS FREELANCERS
+    const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets(properties(sheetId,title))`;
+    const metaResp = await fetch(metaUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (metaResp.ok) {
+      const metaData = await metaResp.json();
+      const flSheet = metaData.sheets?.find((s: any) => s.properties?.title === 'BOOKED CLIENTS FREELANCERS');
+      if (flSheet) {
+        const sheetId = flSheet.properties.sheetId;
+        // Delete rows bottom-up to avoid index shifting
+        const sortedRows = rowsToDelete.sort((a, b) => b - a);
+        const requests = sortedRows.map(rowNum => ({
+          deleteDimension: {
+            range: { sheetId, dimension: 'ROWS', startIndex: rowNum - 1, endIndex: rowNum }
+          }
+        }));
+        await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requests }),
+        });
+        removedCount = rowsToDelete.length;
+        console.log(`[fullSyncFreelancerAssignments] Removed ${removedCount} stale rows (not in EVENT DETAILS)`);
+      }
+    }
+  }
+
+  return { copiedCount, updatedCount, removedCount, totalFreelancers: flRows.length + newRows.length - removedCount };
 }
 
 Deno.serve(async (req) => {
