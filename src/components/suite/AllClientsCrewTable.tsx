@@ -270,8 +270,8 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
           <Database className={cn("w-3.5 h-3.5", syncing && "animate-pulse")} />
           {syncing ? "Syncing..." : "Sync Clients"}
         </Button>
-        <Button variant="ghost" size="sm" onClick={loadData} className="gap-1.5 text-white hover:bg-white/20 hover:text-white">
-          <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
+        <Button variant="ghost" size="sm" onClick={() => handleSync(false)} disabled={syncing} className="gap-1.5 text-white hover:bg-white/20 hover:text-white">
+          <RefreshCw className={cn("w-3.5 h-3.5", syncing && "animate-spin")} />
           Refresh
         </Button>
         <div className="ml-auto flex items-center gap-3">
