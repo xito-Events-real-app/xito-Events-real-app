@@ -21,6 +21,7 @@ export interface FreelancerAssignment {
   iphoneShooter: string;
   droneOperator: string;
   fpvOperator: string;
+  requiredCategories: string;
 }
 
 export type FreelancerField = 
@@ -35,6 +36,26 @@ export interface AvailabilityConflict {
   event: string;
   role: string;
 }
+
+// Category code mapping
+export const CATEGORY_CODES: Record<FreelancerField, string> = {
+  photographerBride: 'PB',
+  photographerGroom: 'PG',
+  videographerBride: 'VB',
+  videographerGroom: 'VG',
+  extraPhotographer: 'EP',
+  extraVideographer: 'EV',
+  assistant: 'Asst',
+  iphoneShooter: 'iPhone',
+  droneOperator: 'Drone',
+  fpvOperator: 'FPV',
+};
+
+export const CATEGORY_CODE_TO_FIELD: Record<string, FreelancerField> = Object.fromEntries(
+  Object.entries(CATEGORY_CODES).map(([field, code]) => [code, field as FreelancerField])
+) as Record<string, FreelancerField>;
+
+export const ALL_CATEGORY_CODES = Object.values(CATEGORY_CODES);
 
 export async function getClientFreelancerAssignments(registeredDateTimeAD: string): Promise<FreelancerAssignment[]> {
   const { data, error } = await supabase.functions.invoke('google-sheets', {
@@ -78,6 +99,19 @@ export async function fullSyncFreelancerAssignments(): Promise<{ copiedCount: nu
   if (error) throw new Error('Failed to sync freelancer assignments');
   if (!data.success) throw new Error(data.error || 'Failed to sync freelancer assignments');
   return data.data;
+}
+
+export async function updateRequiredCrewCategories(
+  registeredDateTimeAD: string,
+  eventName: string,
+  eventDateAD: string,
+  categories: string
+): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('google-sheets', {
+    body: { action: 'updateRequiredCrewCategories', data: { registeredDateTimeAD, eventName, eventDateAD, categories } }
+  });
+  if (error) throw new Error('Failed to update required crew categories');
+  if (!data.success) throw new Error(data.error || 'Failed to update required crew categories');
 }
 
 export interface FreelancerBooking {

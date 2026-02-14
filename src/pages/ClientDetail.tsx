@@ -52,6 +52,7 @@ import NepaliDate from "nepali-date-converter";
 import PaymentDrawer from "@/components/finance/PaymentDrawer";
 import { ClientDetailSidebar, ClientHeroSection, SectionType, EventDetailsSummaryCard, FullScreenEventCard, ClientDetailsCard, BenzoKeepDialog, BenzoKeepViewer } from "@/components/client-detail";
 import FreelancerAssignmentSection from "@/components/client-detail/FreelancerAssignmentSection";
+import { updateRequiredCrewCategories } from "@/lib/freelancer-assignment-api";
 import { EventDetailCard } from "@/components/client-detail/EventDetailCard";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useEventDetails } from "@/hooks/useEventDetails";
@@ -1126,6 +1127,17 @@ const ClientDetail = () => {
                           }}
                           onSave={updateEventDetail}
                           isUrgent={isUrgent}
+                          registeredDateTimeAD={client?.registeredDateTimeAD}
+                          requiredCategories={
+                            freelancerAssignments.find(
+                              a => a.event.trim() === (eventDetail.eventName || '').trim() && a.eventDateAD.trim() === (eventDetail.eventDateAD || '').trim()
+                            )?.requiredCategories || ''
+                          }
+                          onUpdateCategories={async (evName, evDateAD, cats) => {
+                            if (client?.registeredDateTimeAD) {
+                              await updateRequiredCrewCategories(client.registeredDateTimeAD, evName, evDateAD, cats);
+                            }
+                          }}
                         />
                       );
                     })}
