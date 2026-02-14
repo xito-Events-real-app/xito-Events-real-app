@@ -1,18 +1,21 @@
 import { useState, useEffect } from "react";
-import { StickyNote, Loader2, UserPlus, Search, User, ChevronRight } from "lucide-react";
+import { StickyNote, Loader2, UserPlus, Search, User, ChevronRight, ChevronDown } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import { saveUnassignedBenzoKeepNote, assignBenzoKeepNoteToClient, getClientsForNoteAssignment, ClientData } from "@/lib/sheets-api";
+import { saveUnassignedBenzoKeepNote, assignBenzoKeepNoteToClient, getClientsForNoteAssignment, addClient, ClientData } from "@/lib/sheets-api";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useNavigate } from "react-router-dom";
+import { useDropdownData } from "@/hooks/useDropdownData";
 import { XitoSearchPanel } from "@/components/shared/XitoSearchPanel";
-import { BookingCalendarMini } from "@/components/shared/BookingCalendarMini";
 import { BenzoDateConverter } from "@/components/shared/BenzoDateConverter";
+import { BenzoKeepClientPanel, QuickClientData } from "@/components/suite/BenzoKeepClientPanel";
 
 const MARKER_COLORS = [
   { id: 'yellow', name: 'Yellow', bg: 'bg-yellow-200', border: 'border-yellow-400', ring: 'ring-yellow-500' },
@@ -32,64 +35,60 @@ interface BenzoKeepNotepadDialogProps {
 
 export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: BenzoKeepNotepadDialogProps) {
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
+  const { data: dropdownData } = useDropdownData();
+
   const [content, setContent] = useState('');
   const [markerColor, setMarkerColor] = useState<MarkerColor>('yellow');
   const [isSaving, setIsSaving] = useState(false);
-  const [showClientPicker, setShowClientPicker] = useState(false);
-  const [clients, setClients] = useState<ClientData[]>([]);
+
+  // Client panel state
+  const [quickClientData, setQuickClientData] = useState<QuickClientData>({ clientName: '', contactNo: '', whatsappNo: '', source: '' });
+  const [selectedClient, setSelectedClient] = useState<ClientData | null>(null);
+  const [recentClients, setRecentClients] = useState<ClientData[]>([]);
   const [isLoadingClients, setIsLoadingClients] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [clientPanelOpen, setClientPanelOpen] = useState(false);
 
   const selectedColorConfig = MARKER_COLORS.find(c => c.id === markerColor) || MARKER_COLORS[0];
 
   const resetForm = () => {
     setContent('');
     setMarkerColor('yellow');
-    setShowClientPicker(false);
-    setSearchQuery("");
-    setSelectedClientId(null);
+    setQuickClientData({ clientName: '', contactNo: '', whatsappNo: '', source: '' });
+    setSelectedClient(null);
+    setClientPanelOpen(false);
   };
 
-  const loadClients = async () => {
-    setIsLoadingClients(true);
-    try {
-      const data = await getClientsForNoteAssignment();
-      const sorted = data.sort((a, b) => {
-        const dateA = a.registeredDateTimeAD || '';
-        const dateB = b.registeredDateTimeAD || '';
-        return dateB.localeCompare(dateA);
-      });
-      setClients(sorted);
-    } catch (error) {
-      console.error("Failed to load clients:", error);
-      toast.error("Failed to load clients");
-    } finally {
-      setIsLoadingClients(false);
-    }
-  };
-
+  // Load recent clients when dialog opens
   useEffect(() => {
-    if (showClientPicker && clients.length === 0) {
-      loadClients();
+    if (open && recentClients.length === 0) {
+      setIsLoadingClients(true);
+      getClientsForNoteAssignment()
+        .then((data) => {
+          const sorted = data.sort((a, b) => {
+            const dateA = a.registeredDateTimeAD || '';
+            const dateB = b.registeredDateTimeAD || '';
+            return dateB.localeCompare(dateA);
+          });
+          setRecentClients(sorted);
+        })
+        .catch(() => toast.error("Failed to load clients"))
+        .finally(() => setIsLoadingClients(false));
     }
-  }, [showClientPicker]);
+  }, [open]);
 
-  const filteredClients = clients.filter((client) => {
-    const query = searchQuery.toLowerCase();
-    return (
-      client.clientName?.toLowerCase().includes(query) ||
-      client.contactNo?.includes(query) ||
-      client.whatsappNo?.includes(query)
-    );
-  });
+  const sources = dropdownData?.sources || [];
+
+  const handleOpenFullForm = () => {
+    onOpenChange(false);
+    navigate('/client-tracker/quick-add');
+  };
 
   const handleSaveUnassigned = async () => {
     if (!content.trim()) {
       toast.error("Please write something before saving");
       return;
     }
-
     setIsSaving(true);
     try {
       const note = {
@@ -99,7 +98,6 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
         createdAt: new Date().toISOString(),
         lastUpdated: new Date().toISOString(),
       };
-      
       await saveUnassignedBenzoKeepNote(note);
       toast.success("Note saved to unassigned pool");
       resetForm();
@@ -113,136 +111,136 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
     }
   };
 
-  const handleAssignClick = () => {
+  const handleSaveWithClient = async () => {
     if (!content.trim()) {
-      toast.error("Please write something before assigning");
-      return;
-    }
-    setShowClientPicker(true);
-  };
-
-  const handleAssignToClient = async (client: ClientData) => {
-    if (!client.registeredDateTimeAD) {
-      toast.error("Invalid client data");
+      toast.error("Please write something before saving");
       return;
     }
 
-    setSelectedClientId(client.registeredDateTimeAD);
+    // If a recent client is selected, assign directly
+    if (selectedClient) {
+      if (!selectedClient.registeredDateTimeAD) {
+        toast.error("Invalid client data");
+        return;
+      }
+      setIsSaving(true);
+      try {
+        const noteData = {
+          content: content.trim(),
+          markerColor,
+          lastUpdated: new Date().toISOString(),
+        };
+        await assignBenzoKeepNoteToClient(selectedClient.registeredDateTimeAD, JSON.stringify(noteData));
+        toast.success(`Note assigned to ${selectedClient.clientName}`);
+        resetForm();
+        onOpenChange(false);
+        onNoteSaved?.();
+      } catch (error) {
+        console.error("Failed to assign note:", error);
+        toast.error("Failed to assign note");
+      } finally {
+        setIsSaving(false);
+      }
+      return;
+    }
+
+    // If quick-add fields filled, create client first then assign
+    if (!quickClientData.clientName.trim()) {
+      toast.error("Enter a client name or select a recent client");
+      return;
+    }
+
     setIsSaving(true);
     try {
+      const now = new Date();
+      const registeredDateTimeAD = now.toISOString();
+      const newClient: ClientData = {
+        clientName: quickClientData.clientName.trim(),
+        contactNo: quickClientData.contactNo.trim(),
+        whatsappNo: quickClientData.whatsappNo.trim(),
+        source: quickClientData.source,
+        registeredDateTimeAD,
+      };
+
+      await addClient(newClient);
+
       const noteData = {
         content: content.trim(),
         markerColor,
         lastUpdated: new Date().toISOString(),
       };
-      
-      await assignBenzoKeepNoteToClient(client.registeredDateTimeAD, JSON.stringify(noteData));
-      toast.success(`Note assigned to ${client.clientName}`);
+      await assignBenzoKeepNoteToClient(registeredDateTimeAD, JSON.stringify(noteData));
+
+      toast.success(`Client "${quickClientData.clientName}" created & note assigned`);
       resetForm();
       onOpenChange(false);
       onNoteSaved?.();
     } catch (error) {
-      console.error("Failed to assign note:", error);
-      toast.error("Failed to assign note to client");
+      console.error("Failed to create client and assign note:", error);
+      toast.error("Failed to create client");
     } finally {
       setIsSaving(false);
-      setSelectedClientId(null);
     }
   };
 
-  // Client Picker View
-  if (showClientPicker) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-md max-h-[80vh] flex flex-col bg-white">
-          <DialogHeader>
-            <DialogTitle>Assign Note to Client</DialogTitle>
-          </DialogHeader>
+  const hasClientTarget = selectedClient || quickClientData.clientName.trim();
+  const assignButtonLabel = selectedClient
+    ? `Assign to ${selectedClient.clientName}`
+    : quickClientData.clientName.trim()
+      ? `Create "${quickClientData.clientName}" + Assign`
+      : "Assign to Client";
 
-          {/* Note Preview */}
-          <div className={cn("rounded-lg p-3 mb-2 border", selectedColorConfig.bg, selectedColorConfig.border)}>
-            <p className="text-xs text-gray-600 font-medium mb-1">Note to assign:</p>
-            <p className="text-sm text-gray-700 line-clamp-2">{content}</p>
-          </div>
-
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search clients..."
-              className="pl-9"
-            />
-          </div>
-
-          {/* Client List */}
-          <ScrollArea className="flex-1 -mx-2 px-2">
-            {isLoadingClients ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-              </div>
-            ) : filteredClients.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                {searchQuery ? "No clients match your search" : "No clients available"}
-              </div>
-            ) : (
-              <div className="space-y-1 py-2">
-                {filteredClients.map((client) => {
-                  const isSelected = selectedClientId === client.registeredDateTimeAD;
-                  
-                  return (
-                    <button
-                      key={client.registeredDateTimeAD}
-                      onClick={() => handleAssignToClient(client)}
-                      disabled={isSaving}
-                      className={cn(
-                        "w-full flex items-center gap-3 p-3 rounded-lg text-left transition-all",
-                        "hover:bg-violet-50 border border-transparent hover:border-violet-200",
-                        isSelected && "bg-violet-100 border-violet-300"
-                      )}
-                    >
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center shadow-sm">
-                        <User className="w-5 h-5 text-white" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 truncate">
-                          {client.clientName}
-                        </p>
-                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                          {client.events && (
-                            <span className="truncate">{client.events}</span>
-                          )}
-                          {client.eventMonth && client.eventYear && (
-                            <span className="text-gray-400">
-                              • {client.eventMonth} {client.eventYear}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      {isSelected && isSaving ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-violet-500" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4 text-gray-400" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+  // Shared color picker
+  const colorPicker = (
+    <div>
+      <Label className="text-sm font-medium text-gray-700 mb-2 block">Marker Color</Label>
+      <div className="flex gap-2">
+        {MARKER_COLORS.map((color) => (
+          <button
+            key={color.id}
+            type="button"
+            onClick={() => setMarkerColor(color.id as MarkerColor)}
+            className={cn(
+              "w-8 h-8 rounded-full transition-all border-2",
+              color.bg, color.border,
+              markerColor === color.id ? `ring-2 ${color.ring} ring-offset-2` : ''
             )}
-          </ScrollArea>
+            title={color.name}
+          />
+        ))}
+      </div>
+    </div>
+  );
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowClientPicker(false)} disabled={isSaving}>
-              Back
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    );
-  }
+  // Shared note textarea
+  const noteTextarea = (
+    <div>
+      <Label className="text-sm font-medium text-gray-700 mb-2 block">Note</Label>
+      <Textarea
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        placeholder="Write your notes here... Dates like 'Magh 25' will show matching events in Xito Search."
+        className={cn(
+          isMobile ? "min-h-[200px]" : "min-h-[300px]",
+          "resize-none text-gray-900 placeholder:text-gray-400 border-2",
+          selectedColorConfig.bg, selectedColorConfig.border
+        )}
+      />
+    </div>
+  );
 
-  // Main Notepad View
+  // Client panel props
+  const clientPanelProps = {
+    quickData: quickClientData,
+    onQuickDataChange: setQuickClientData,
+    selectedClient,
+    onSelectClient: setSelectedClient,
+    recentClients,
+    isLoadingClients,
+    sources,
+    onOpenFullForm: handleOpenFullForm,
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={cn("bg-white text-gray-900", isMobile ? "max-w-xl" : "max-w-[90vw] w-full max-h-[85vh]")}>
@@ -257,43 +255,28 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
         </DialogHeader>
 
         {isMobile ? (
-          /* Mobile: single column */
+          /* Mobile: single column with collapsible client panel */
           <div className="py-2 space-y-4">
-            {/* Date Converter */}
             <BenzoDateConverter />
-            {/* Color Picker */}
-            <div>
-              <Label className="text-sm font-medium text-gray-700 mb-2 block">Marker Color</Label>
-              <div className="flex gap-2">
-                {MARKER_COLORS.map((color) => (
-                  <button
-                    key={color.id}
-                    type="button"
-                    onClick={() => setMarkerColor(color.id as MarkerColor)}
-                    className={cn(
-                      "w-8 h-8 rounded-full transition-all border-2",
-                      color.bg,
-                      color.border,
-                      markerColor === color.id ? `ring-2 ${color.ring} ring-offset-2` : ''
-                    )}
-                    title={color.name}
-                  />
-                ))}
-              </div>
-            </div>
-            <div>
-              <Label className="text-sm font-medium text-gray-700 mb-2 block">Note</Label>
-              <Textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder="Write your notes here... Dates like 'Magh 25' will show matching events in Xito Search."
-                className={cn(
-                  "min-h-[250px] resize-none text-gray-900 placeholder:text-gray-400 border-2",
-                  selectedColorConfig.bg,
-                  selectedColorConfig.border
-                )}
-              />
-            </div>
+
+            {/* Collapsible Client Panel */}
+            <Collapsible open={clientPanelOpen} onOpenChange={setClientPanelOpen}>
+              <CollapsibleTrigger className="flex items-center justify-between w-full p-2.5 rounded-lg bg-violet-50 border border-violet-200 text-sm font-medium text-violet-700">
+                <span className="flex items-center gap-2">
+                  <User className="w-4 h-4" />
+                  {selectedClient ? `Client: ${selectedClient.clientName}` : "Client (optional)"}
+                </span>
+                <ChevronDown className={cn("w-4 h-4 transition-transform", clientPanelOpen && "rotate-180")} />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-3">
+                <div className="border rounded-lg p-3 bg-gray-50">
+                  <BenzoKeepClientPanel {...clientPanelProps} />
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
+            {colorPicker}
+            {noteTextarea}
             <div className="text-xs text-gray-500">
               💡 Save unassigned or assign to a client directly
             </div>
@@ -308,58 +291,23 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
 
             {/* Center: Note Editor */}
             <div className="col-span-2 space-y-4">
-              {/* Date Converter */}
               <BenzoDateConverter />
-              <div>
-                <Label className="text-sm font-medium text-gray-700 mb-2 block">Marker Color</Label>
-                <div className="flex gap-2">
-                  {MARKER_COLORS.map((color) => (
-                    <button
-                      key={color.id}
-                      type="button"
-                      onClick={() => setMarkerColor(color.id as MarkerColor)}
-                      className={cn(
-                        "w-8 h-8 rounded-full transition-all border-2",
-                        color.bg,
-                        color.border,
-                        markerColor === color.id ? `ring-2 ${color.ring} ring-offset-2` : ''
-                      )}
-                      title={color.name}
-                    />
-                  ))}
-                </div>
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-gray-700 mb-2 block">Note</Label>
-                <Textarea
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder="Write your notes here... Dates like 'Magh 25' will show matching events in Xito Search."
-                  className={cn(
-                    "min-h-[300px] resize-none text-gray-900 placeholder:text-gray-400 border-2",
-                    selectedColorConfig.bg,
-                    selectedColorConfig.border
-                  )}
-                />
-              </div>
+              {colorPicker}
+              {noteTextarea}
               <div className="text-xs text-gray-500">
                 💡 Save unassigned or assign to a client directly
               </div>
             </div>
 
-            {/* Right: Booking Calendar */}
+            {/* Right: Client Panel (replaces BookingCalendarMini) */}
             <div className="col-span-1 border rounded-lg p-3 bg-gray-50 overflow-hidden">
-              <BookingCalendarMini />
+              <BenzoKeepClientPanel {...clientPanelProps} />
             </div>
           </div>
         )}
 
         <DialogFooter className="gap-2 sm:gap-0 flex-col sm:flex-row">
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={isSaving}
-          >
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
             Cancel
           </Button>
           <Button
@@ -368,20 +316,16 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
             disabled={isSaving}
             className="gap-2"
           >
-            {isSaving ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <StickyNote className="w-4 h-4" />
-            )}
+            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <StickyNote className="w-4 h-4" />}
             Save Unassigned
           </Button>
           <Button
-            onClick={handleAssignClick}
-            disabled={isSaving}
+            onClick={handleSaveWithClient}
+            disabled={isSaving || !hasClientTarget}
             className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
           >
-            <UserPlus className="w-4 h-4" />
-            Assign to Client
+            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+            <span className="truncate max-w-[200px]">{assignButtonLabel}</span>
           </Button>
         </DialogFooter>
       </DialogContent>
