@@ -4,7 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty, CommandGroup, CommandSeparator } from "@/components/ui/command";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Users, Plus, RefreshCw, X, ChevronLeft, Database, Trash2 } from "lucide-react";
+import { Loader2, Users, Plus, RefreshCw, X, ChevronLeft, Database, Trash2, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -88,6 +88,8 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
   });
   const [filterDay, setFilterDay] = useState<string | null>(null);
   const [filterClient, setFilterClient] = useState<string | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -168,6 +170,83 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
     if (filterClient) rows = rows.filter(a => a.clientName === filterClient);
     return rows;
   }, [assignments, selectedYear, selectedMonth, filterDay, filterClient]);
+
+  const handleDownloadBackup = useCallback(() => {
+    if (filteredRows.length === 0) {
+      toast.error("No data to download");
+      return;
+    }
+    const csvHeaders = [
+      'registeredDateTimeAD','clientName','event','eventDateAD',
+      'eventYear','eventMonth','eventDay',
+      'photographerBride','videographerBride','photographerGroom',
+      'videographerGroom','extraPhotographer','extraVideographer',
+      'assistant','iphoneShooter','droneOperator','fpvOperator'
+    ];
+    const csvRows = [
+      csvHeaders.join(','),
+      ...filteredRows.map(row =>
+        csvHeaders.map(h => `"${((row[h as keyof FreelancerAssignment] as string) || '').replace(/"/g, '""')}"`).join(',')
+      )
+    ];
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const monthName = nepaliMonthsEnglish[parseInt(selectedMonth) - 1] || selectedMonth;
+    const today = new Date().toISOString().split('T')[0];
+    a.href = url;
+    a.download = `crew-backup-${selectedYear}-${monthName}-${today}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Downloaded backup for ${filteredRows.length} events`);
+  }, [filteredRows, selectedYear, selectedMonth]);
+
+  const handleUploadRestore = useCallback(async (file: File) => {
+    setIsRestoring(true);
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) throw new Error('CSV file is empty');
+      const headerLine = lines[0];
+      const headers = headerLine.split(',').map(h => h.replace(/^"|"$/g, '').trim());
+      const crewFields = [
+        'photographerBride','videographerBride','photographerGroom',
+        'videographerGroom','extraPhotographer','extraVideographer',
+        'assistant','iphoneShooter','droneOperator','fpvOperator'
+      ];
+      const updates: { registeredDateTimeAD: string; event: string; assignments: Record<string, string> }[] = [];
+      for (let i = 1; i < lines.length; i++) {
+        const vals: string[] = [];
+        let current = '';
+        let inQuotes = false;
+        for (const ch of lines[i]) {
+          if (ch === '"') { inQuotes = !inQuotes; continue; }
+          if (ch === ',' && !inQuotes) { vals.push(current); current = ''; continue; }
+          current += ch;
+        }
+        vals.push(current);
+        const rowObj: Record<string, string> = {};
+        headers.forEach((h, idx) => { rowObj[h] = (vals[idx] || '').trim(); });
+        if (!rowObj.registeredDateTimeAD || !rowObj.event) continue;
+        const assignmentValues: Record<string, string> = {};
+        crewFields.forEach(f => { assignmentValues[f] = rowObj[f] || ''; });
+        updates.push({ registeredDateTimeAD: rowObj.registeredDateTimeAD, event: rowObj.event, assignments: assignmentValues });
+      }
+      if (updates.length === 0) throw new Error('No valid rows found in CSV');
+      const { data, error } = await supabase.functions.invoke('google-sheets', {
+        body: { action: 'restoreFreelancerAssignments', data: { updates } }
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Restore failed');
+      toast.success(`Restored ${data.data?.matchedCount || 0} of ${updates.length} assignments`);
+      await loadData();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to restore from backup');
+    } finally {
+      setIsRestoring(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }, [loadData]);
 
   const dayGroups = useMemo(() => {
     const map = new Map<string, number>();
@@ -294,6 +373,22 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
             <span className="bg-white/20 px-3 py-1 rounded-full font-semibold">{filteredRows.length} events</span>
             <span className="bg-emerald-500/80 px-3 py-1 rounded-full font-medium text-xs">{assignedCount}/{totalCells} assigned</span>
           </div>
+          <button onClick={handleDownloadBackup} title="Download Backup CSV" className="p-1.5 rounded-lg hover:bg-white/20 transition-colors">
+            <Download className="w-5 h-5" />
+          </button>
+          <button onClick={() => fileInputRef.current?.click()} disabled={isRestoring} title="Upload & Restore from CSV" className="p-1.5 rounded-lg hover:bg-white/20 transition-colors disabled:opacity-50">
+            {isRestoring ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleUploadRestore(file);
+            }}
+          />
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/20 transition-colors">
             <X className="w-5 h-5" />
           </button>
