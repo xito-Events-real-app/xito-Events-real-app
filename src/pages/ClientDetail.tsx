@@ -1,5 +1,5 @@
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, Calendar, User, Clock, DollarSign, FileText, Activity, MessageSquare, Briefcase, Pencil, Loader2, Plus, CreditCard, RefreshCw, RotateCcw, Send } from "lucide-react";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { Button } from "@/components/ui/button";
@@ -292,9 +292,17 @@ const ClientDetail = () => {
     refetch: refetchEventDetails
   } = useEventDetails(client?.registeredDateTimeAD);
 
-  // Re-fetch event details when client event fields change (after edit)
+  // Re-fetch event details when client event fields change (after edit) - skip initial mount
+  const eventFieldsRef = useRef<string | null>(null);
   useEffect(() => {
-    if (client?.events) {
+    const key = `${client?.events}|${client?.eventYear}|${client?.eventMonth}|${client?.eventDay}`;
+    if (eventFieldsRef.current === null) {
+      // First render — just record, don't refetch (hook already fetches on mount)
+      eventFieldsRef.current = key;
+      return;
+    }
+    if (key !== eventFieldsRef.current && client?.events) {
+      eventFieldsRef.current = key;
       refetchEventDetails();
     }
   }, [client?.events, client?.eventYear, client?.eventMonth, client?.eventDay]);
