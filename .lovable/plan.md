@@ -1,46 +1,54 @@
 
 
-# Fix: Remove Duplicate Booked Clients from Client Tracker
+# Fix: "Sync Clients" Button Always Clickable
 
 ## Problem
 
-Multiple booked clients exist in BOTH sheets because:
-1. **`updateBookedClient` (lines 5410-5423)** writes non-payment field updates BACK to CLIENT TRACKER, re-creating rows that should have been deleted
-2. **`resyncAllBookedClients`** never calls the existing `cleanupDuplicateBookedFromTracker` function, so duplicates are never auto-cleaned
+The "Sync Clients" button in the All Clients Crew Table is disabled when `isBusy.current` is true. Since `isBusy` is a `useRef`, its value doesn't trigger re-renders, so the button can stay visually disabled even after the operation finishes (until something else causes a re-render). Additionally, the `isBusy` guard prevents clicking during background syncs or upload/restore operations.
 
-## Fix (2 changes in 1 file)
+## Fix
 
-### File: `supabase/functions/google-sheets/index.ts`
+### File: `src/components/suite/AllClientsCrewTable.tsx`
 
-**Change 1 -- Remove tracker write-back from `updateBookedClient` (lines 5410-5423)**
+**Change 1 -- Remove `isBusy.current` from the disabled prop (line 385)**
 
-Delete the entire block that syncs non-payment fields to CLIENT TRACKER. A BOOKED client should ONLY exist in BOOKED CLIENTS -- writing to the tracker is always wrong.
-
+Change:
+```tsx
+disabled={syncing || isBusy.current}
 ```
-// DELETE this block entirely (lines 5410-5423):
-if (!paymentOnlyFields.includes(field) && originalRowNumber >= 2) {
-  const trackerRange = ...
-  await fetch(trackerUrl, { method: 'PUT', ... });
-}
+To:
+```tsx
+disabled={syncing}
 ```
 
-**Change 2 -- Auto-cleanup duplicates after resync (after line 5157)**
+This ensures the button is only disabled while its own sync operation is actively running (with visual "Syncing..." feedback), and is always available to click otherwise.
 
-Add a call to the existing `cleanupDuplicateBookedFromTracker` at the end of `resyncAllBookedClients` so any lingering duplicates are purged automatically on every sync.
+**Change 2 -- Remove the `isBusy` guard from `handleSync` (lines 128-131)**
 
+Remove the early return that blocks syncing when another operation is running. The button should always trigger a sync when clicked. The `syncing` state already prevents double-clicks on the same button.
+
+Change:
 ```typescript
-// After the resync loop, before returning:
-await cleanupDuplicateBookedFromTracker(accessToken, spreadsheetId);
+const handleSync = useCallback(async (silent = false) => {
+  if (isBusy.current) {
+    if (!silent) toast.info("Another sync is already running, please wait");
+    return;
+  }
+  isBusy.current = true;
+  if (!silent) setSyncing(true);
 ```
+To:
+```typescript
+const handleSync = useCallback(async (silent = false) => {
+  if (syncing) return; // Only prevent double-clicks on same button
+  if (!silent) setSyncing(true);
+```
+
+The `isBusy` ref will remain for the `handleUploadRestore` function where concurrency protection is still useful, but it will no longer block manual sync requests.
 
 ## Result
 
-- All existing duplicates (AAKAR EVENTS and others) will be removed from CLIENT TRACKER on the next resync or Master Sync
-- Future booked client updates will never write back to the tracker
-- Payment data remains protected (previous fix unchanged)
-- Single source of truth fully enforced
-
-## Files to Modify
-
-1. `supabase/functions/google-sheets/index.ts`
+- "Sync Clients" button is always clickable (only disabled during its own active sync with "Syncing..." text)
+- Background syncs and upload/restore operations no longer block manual sync
+- Upload/restore still has its own concurrency guard via `isBusy`
 
