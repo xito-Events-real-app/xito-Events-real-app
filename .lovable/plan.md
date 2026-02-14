@@ -1,69 +1,74 @@
 
 
-# Fix: Clean Up Stale Clients from EVENT DETAILS Sheet
+# Fix: Complete 4-Sheet Sync from Refresh Button on All Clients Page
 
 ## Problem
 
-The data flows in a chain:
+The "All Clients" page is missing booked clients because the sync chain is incomplete. When a client is added to BOOKED CLIENTS, the downstream sheets (EVENT DETAILS, FREELANCERS, CONTACT DETAILS) need to be populated. Currently:
 
-```text
-BOOKED CLIENTS --> EVENT DETAILS --> FREELANCERS
-```
+- `fullSyncEventDetails` populates and cleans EVENT DETAILS (working)
+- `fullSyncFreelancerAssignments` populates and cleans FREELANCERS (working)
+- `fullSyncContactDetails` populates and cleans CONTACT DETAILS (working -- but NOT triggered from Refresh button or 30-min interval)
 
-Currently, the FREELANCERS sheet is cleaned against EVENT DETAILS (already implemented), but EVENT DETAILS itself is never cleaned against BOOKED CLIENTS. So when a client like Prashamsha is removed from BOOKED CLIENTS (e.g., moved to "BOOKED SOMEWHERE ELSE"), her row stays in EVENT DETAILS forever. The FREELANCERS cleanup then sees her in EVENT DETAILS and keeps her too.
+The Refresh button on the All Clients page only calls `fullSyncEventDetails` and `fullSyncFreelancerAssignments`. It does NOT call `fullSyncContactDetails`. Additionally, the complete chain needs to be reliable and run in the correct order every time.
 
 ## Solution
 
-Add a cleanup phase at the end of `fullSyncEventDetails` that removes rows from EVENT DETAILS whose `registeredDateTimeAD` does not exist in the BOOKED CLIENTS sheet. This cleanup will run:
+Update the `handleSync` function in `AllClientsCrewTable.tsx` to run the complete 4-sheet sync chain on every Refresh click and every 30-minute interval:
 
-- During every **Master Sync** (Phase 3 calls `fullSyncEventDetails`)
-- During the **30-minute background sync** (by also triggering `fullSyncEventDetails` before `fullSyncFreelancerAssignments` in the All Clients page interval)
-- On every manual **Refresh** button click
+```
+BOOKED CLIENTS (source of truth)
+  --> fullSyncEventDetails (populate + cleanup EVENT DETAILS)
+  --> fullSyncFreelancerAssignments (populate + cleanup FREELANCERS)
+  --> fullSyncContactDetails (populate + cleanup CONTACT DETAILS)
+  --> Reload UI data
+```
 
 ## Files to Change
 
-### 1. `supabase/functions/google-sheets/index.ts`
+### 1. `src/components/suite/AllClientsCrewTable.tsx`
 
-At the end of the `fullSyncEventDetails` function (after line 4258, before the return), add:
+Update `handleSync` to call all three sync functions sequentially:
 
-- Build a `Set` of valid `registeredDateTimeAD` from `bookedData.values`
-- Re-read EVENT DETAILS column A to get current rows
-- Identify rows where the ID is NOT in the valid set
-- Delete those stale rows bottom-up using `batchUpdate` with `deleteDimension` (same proven pattern used in the FREELANCERS cleanup)
-- Include `removedCount` in the return value
+1. `fullSyncEventDetails` -- syncs and cleans EVENT DETAILS against BOOKED CLIENTS
+2. `fullSyncFreelancerAssignments` -- syncs and cleans FREELANCERS against EVENT DETAILS
+3. `fullSyncContactDetails` -- syncs and cleans CONTACT DETAILS against BOOKED CLIENTS
+4. Reload the crew data for UI
 
-### 2. `src/components/suite/AllClientsCrewTable.tsx`
+This runs on:
+- Every manual Refresh/Sync button click
+- Every 30-minute background interval
+- On mount (first load)
+- On `clients-invalidate` / `booked-clients-invalidate` events
 
-Update the `handleSync` function and the 30-minute interval to also call `fullSyncEventDetails` before `fullSyncFreelancerAssignments`. This ensures stale EVENT DETAILS rows are cleaned first, so the FREELANCERS cleanup has accurate source data.
+### Technical Detail
 
-The flow on every sync (manual or interval) will become:
-
-1. Call `fullSyncEventDetails` -- cleans EVENT DETAILS against BOOKED CLIENTS
-2. Call `fullSyncFreelancerAssignments` -- cleans FREELANCERS against EVENT DETAILS
-3. Reload data from FREELANCERS sheet
-
-## Technical Details
-
-**EVENT DETAILS cleanup logic (edge function):**
+```typescript
+// handleSync update in AllClientsCrewTable.tsx
+const handleSync = useCallback(async (silent = false) => {
+  if (!silent) setSyncing(true);
+  try {
+    // Step 1: Sync EVENT DETAILS (populate new + remove stale)
+    await supabase.functions.invoke('google-sheets', {
+      body: { action: 'fullSyncEventDetails' }
+    });
+    // Step 2: Sync FREELANCERS (populate new + remove stale)
+    const result = await fullSyncFreelancerAssignments();
+    // Step 3: Sync CONTACT DETAILS (populate new + remove stale)
+    await supabase.functions.invoke('google-sheets', {
+      body: { action: 'fullSyncContactDetails' }
+    });
+    if (!silent) {
+      toast.success(`Synced! ${result.copiedCount} new, ${result.updatedCount} updated`);
+    }
+    await loadData();
+  } catch (err) {
+    if (!silent) toast.error("Sync failed");
+  } finally {
+    if (!silent) setSyncing(false);
+  }
+}, [loadData]);
 ```
-// After the copy/update loop in fullSyncEventDetails:
-const validBookedIds = new Set(
-  bookedData.values.map(row => (row[0] || '').trim()).filter(Boolean)
-);
 
-// Re-read EVENT DETAILS column A
-// Find rows where ID is not in validBookedIds
-// Delete bottom-up using batchUpdate deleteDimension
-```
-
-**AllClientsCrewTable.tsx handleSync update:**
-```
-// Before calling fullSyncFreelancerAssignments, first call:
-await supabase.functions.invoke('google-sheets', {
-  body: { action: 'fullSyncEventDetails' }
-});
-// Then proceed with fullSyncFreelancerAssignments as before
-```
-
-This ensures the entire chain stays clean on every sync cycle -- manual, 30-minute interval, or Master Sync.
+This ensures all 4 sheets stay in sync on every trigger -- manual, interval, or event-driven.
 
