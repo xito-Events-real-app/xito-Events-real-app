@@ -88,12 +88,13 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
   const [refreshing, setRefreshing] = useState(false);
   const hasSyncedOnMount = useRef(false);
   const isBusy = useRef(false);
-  const [quickAddState, setQuickAddState] = useState<{ open: boolean; field: FreelancerField; label: string; row: FreelancerAssignment | null }>({
+   const [quickAddState, setQuickAddState] = useState<{ open: boolean; field: FreelancerField; label: string; row: FreelancerAssignment | null }>({
     open: false, field: 'photographerBride', label: '', row: null
   });
   const [filterDay, setFilterDay] = useState<string | null>(null);
   const [filterClient, setFilterClient] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [isLockingSlots, setIsLockingSlots] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadData = useCallback(async () => {
@@ -388,6 +389,41 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
         <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={refreshing} className="gap-1.5 text-white hover:bg-white/20 hover:text-white">
           <RefreshCw className={cn("w-3.5 h-3.5", refreshing && "animate-spin")} />
           {refreshing ? "Refreshing..." : "Refresh"}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={isLockingSlots || filteredRows.length === 0}
+          className="gap-1.5 text-white hover:bg-white/20 hover:text-white"
+          onClick={async () => {
+            setIsLockingSlots(true);
+            try {
+              let updatedCount = 0;
+              for (const row of filteredRows) {
+                const filledCodes = CREW_COLUMNS
+                  .filter(col => !!(row[col.field] as string)?.trim())
+                  .map(col => col.short);
+                const cats = filledCodes.join(',');
+                await updateRequiredCrewCategories(
+                  row.registeredDateTimeAD,
+                  row.event,
+                  row.eventDateAD,
+                  cats
+                );
+                updatedCount++;
+              }
+              await loadData();
+              toast.success(`${updatedCount} event(s) locked — empty slots marked as Not Required`);
+            } catch (err) {
+              console.error('Lock empty slots failed:', err);
+              toast.error("Failed to lock empty slots");
+            } finally {
+              setIsLockingSlots(false);
+            }
+          }}
+        >
+          {isLockingSlots ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserCog className="w-3.5 h-3.5" />}
+          {isLockingSlots ? "Locking..." : "Lock Empty Slots"}
         </Button>
         <div className="ml-auto flex items-center gap-3">
           <div className="flex items-center gap-2 text-sm">

@@ -1,6 +1,6 @@
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, Calendar, User, Clock, DollarSign, FileText, Activity, MessageSquare, Briefcase, Pencil, Loader2, Plus, CreditCard, RefreshCw, RotateCcw, Send, UserCog } from "lucide-react";
+import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, Calendar, User, Clock, DollarSign, FileText, Activity, MessageSquare, Briefcase, Pencil, Loader2, Plus, CreditCard, RefreshCw, RotateCcw, Send } from "lucide-react";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -52,7 +52,7 @@ import NepaliDate from "nepali-date-converter";
 import PaymentDrawer from "@/components/finance/PaymentDrawer";
 import { ClientDetailSidebar, ClientHeroSection, SectionType, EventDetailsSummaryCard, FullScreenEventCard, ClientDetailsCard, BenzoKeepDialog, BenzoKeepViewer } from "@/components/client-detail";
 import FreelancerAssignmentSection from "@/components/client-detail/FreelancerAssignmentSection";
-import { updateRequiredCrewCategories, CATEGORY_CODES, FreelancerField } from "@/lib/freelancer-assignment-api";
+import { updateRequiredCrewCategories } from "@/lib/freelancer-assignment-api";
 import { EventDetailCard } from "@/components/client-detail/EventDetailCard";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useEventDetails } from "@/hooks/useEventDetails";
@@ -188,9 +188,6 @@ const ClientDetail = () => {
   const [showBenzoKeepDialog, setShowBenzoKeepDialog] = useState(false);
   const [isSavingKeepNotes, setIsSavingKeepNotes] = useState(false);
   const [currentKeepNotes, setCurrentKeepNotes] = useState("");
-
-  // Lock empty slots state
-  const [isLockingSlots, setIsLockingSlots] = useState(false);
 
   // Client sync state
   const [isSyncingClient, setIsSyncingClient] = useState(false);
@@ -1074,50 +1071,11 @@ const ClientDetail = () => {
               {/* Compact Header with Client Name and Handler */}
               <div className="flex items-center justify-between py-2 px-1 border-b border-white/10 mb-4">
                 <h2 className="text-lg font-bold text-white">{client.clientName}</h2>
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-xs border-white/20 text-white/70 hover:bg-white/10"
-                    disabled={isLockingSlots || freelancerAssignments.length === 0}
-                    onClick={async () => {
-                      if (!client?.registeredDateTimeAD || freelancerAssignments.length === 0) return;
-                      setIsLockingSlots(true);
-                      try {
-                        let updatedCount = 0;
-                        for (const assignment of freelancerAssignments) {
-                          const filledCodes = (Object.entries(CATEGORY_CODES) as [FreelancerField, string][])
-                            .filter(([field]) => !!(assignment[field] as string)?.trim())
-                            .map(([, code]) => code);
-                          const cats = filledCodes.join(',');
-                          await updateRequiredCrewCategories(
-                            client.registeredDateTimeAD,
-                            assignment.event,
-                            assignment.eventDateAD,
-                            cats
-                          );
-                          updatedCount++;
-                        }
-                        await refetchFreelancerAssignments();
-                        window.dispatchEvent(new Event('clients-invalidate'));
-                        toast({ title: "Locked", description: `${updatedCount} event(s) updated — empty slots marked as Not Required.` });
-                      } catch (err) {
-                        console.error('Lock empty slots failed:', err);
-                        toast({ title: "Error", description: "Failed to lock empty slots", variant: "destructive" });
-                      } finally {
-                        setIsLockingSlots(false);
-                      }
-                    }}
-                  >
-                    {isLockingSlots ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserCog className="h-3 w-3" />}
-                    Lock Empty Slots
-                  </Button>
-                  {client.clientHandler && (
-                    <Badge variant="outline" className="text-xs text-white/70 border-white/30">
-                      Handler: {client.clientHandler}
-                    </Badge>
-                  )}
-                </div>
+                {client.clientHandler && (
+                  <Badge variant="outline" className="text-xs text-white/70 border-white/30">
+                    Handler: {client.clientHandler}
+                  </Badge>
+                )}
               </div>
               
               {events.length > 0 ? (
