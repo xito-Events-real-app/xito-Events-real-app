@@ -292,6 +292,13 @@ const ClientDetail = () => {
     refetch: refetchEventDetails
   } = useEventDetails(client?.registeredDateTimeAD);
 
+  // Re-fetch event details when client event fields change (after edit)
+  useEffect(() => {
+    if (client?.events) {
+      refetchEventDetails();
+    }
+  }, [client?.events, client?.eventYear, client?.eventMonth, client?.eventDay]);
+
   // Fetch freelancer assignments for dashboard display
   const {
     assignments: freelancerAssignments,
@@ -686,10 +693,12 @@ const ClientDetail = () => {
         setCurrentComments(freshClient.comments || '');
         setCurrentQuotationData(freshClient.quotationData || '');
         setCurrentFinalQuotation(freshClient.finalQuotation || '');
-        toast({ title: "Client data synced from sheets" });
+      toast({ title: "Client data synced from sheets" });
       } else if (!freshClient) {
         toast({ title: "Client not found in sheets", variant: "destructive" });
       }
+      // Also refresh event details from logistics sheet
+      await refetchEventDetails();
     } catch (err) {
       console.error('Failed to sync client:', err);
       toast({ title: "Failed to sync client data", variant: "destructive" });
