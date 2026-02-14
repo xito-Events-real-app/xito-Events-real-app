@@ -1,43 +1,69 @@
 
 
-# Fix: All Clients Page Auto-Update + Freelancer Auto-Assignment Bug
+# Fix: Clean Up Stale Clients from EVENT DETAILS Sheet
 
-## Problems Identified
+## Problem
 
-1. **Refresh button doesn't sync**: The "Refresh" button on the All Clients page only re-reads data from the FREELANCERS sheet (`loadData`). It does NOT trigger `fullSyncFreelancerAssignments` to update the sheet first, so new/removed events won't appear until a Master Sync or 30-min interval.
+The data flows in a chain:
 
-2. **Freelancers incorrectly appearing on new events**: When `syncSingleClientToFreelancers` updates an existing client row, it only writes columns A-H (event info) and preserves columns I-R (freelancer names). However, it does NOT adjust the freelancer columns to match the new event count. If a client previously had 2 events with freelancers assigned (e.g., "John\nJane" in column I), and a 3rd event is added, the column still reads "John\nJane" -- but the newline-indexed parsing can cause misalignment, or old assignments may appear mapped to wrong events.
+```text
+BOOKED CLIENTS --> EVENT DETAILS --> FREELANCERS
+```
+
+Currently, the FREELANCERS sheet is cleaned against EVENT DETAILS (already implemented), but EVENT DETAILS itself is never cleaned against BOOKED CLIENTS. So when a client like Prashamsha is removed from BOOKED CLIENTS (e.g., moved to "BOOKED SOMEWHERE ELSE"), her row stays in EVENT DETAILS forever. The FREELANCERS cleanup then sees her in EVENT DETAILS and keeps her too.
 
 ## Solution
 
-### 1. Refresh Button Triggers Full Sync (AllClientsCrewTable.tsx)
+Add a cleanup phase at the end of `fullSyncEventDetails` that removes rows from EVENT DETAILS whose `registeredDateTimeAD` does not exist in the BOOKED CLIENTS sheet. This cleanup will run:
 
-Change the "Refresh" button's `onClick` from just `loadData` to `handleSync(false)` so it triggers `fullSyncFreelancerAssignments` (which updates the sheet) before reading data.
+- During every **Master Sync** (Phase 3 calls `fullSyncEventDetails`)
+- During the **30-minute background sync** (by also triggering `fullSyncEventDetails` before `fullSyncFreelancerAssignments` in the All Clients page interval)
+- On every manual **Refresh** button click
 
-### 2. Fix Freelancer Column Alignment on Event Changes (Edge Function)
+## Files to Change
 
-Update `syncSingleClientToFreelancers` in the edge function to:
-- Compare old event count vs new event count
-- When event count changes, re-align freelancer columns (I-R) by:
-  - Reading the existing I-R data
-  - Padding with empty entries for new events (so new events get blank assignments)
-  - Trimming excess entries if events were removed
-  - Writing the adjusted I-R data back
+### 1. `supabase/functions/google-sheets/index.ts`
 
-This prevents old freelancer assignments from bleeding into newly added event slots.
+At the end of the `fullSyncEventDetails` function (after line 4258, before the return), add:
 
-### Files Modified
-- `src/components/suite/AllClientsCrewTable.tsx` -- Refresh button triggers sync
-- `supabase/functions/google-sheets/index.ts` -- Fix `syncSingleClientToFreelancers` to realign freelancer columns when event count changes
+- Build a `Set` of valid `registeredDateTimeAD` from `bookedData.values`
+- Re-read EVENT DETAILS column A to get current rows
+- Identify rows where the ID is NOT in the valid set
+- Delete those stale rows bottom-up using `batchUpdate` with `deleteDimension` (same proven pattern used in the FREELANCERS cleanup)
+- Include `removedCount` in the return value
 
-### Technical Details
+### 2. `src/components/suite/AllClientsCrewTable.tsx`
 
-**AllClientsCrewTable.tsx change:**
+Update the `handleSync` function and the 30-minute interval to also call `fullSyncEventDetails` before `fullSyncFreelancerAssignments`. This ensures stale EVENT DETAILS rows are cleaned first, so the FREELANCERS cleanup has accurate source data.
+
+The flow on every sync (manual or interval) will become:
+
+1. Call `fullSyncEventDetails` -- cleans EVENT DETAILS against BOOKED CLIENTS
+2. Call `fullSyncFreelancerAssignments` -- cleans FREELANCERS against EVENT DETAILS
+3. Reload data from FREELANCERS sheet
+
+## Technical Details
+
+**EVENT DETAILS cleanup logic (edge function):**
 ```
-// Line 273: Change onClick from loadData to handleSync
-<Button onClick={() => handleSync(false)} ...>
+// After the copy/update loop in fullSyncEventDetails:
+const validBookedIds = new Set(
+  bookedData.values.map(row => (row[0] || '').trim()).filter(Boolean)
+);
+
+// Re-read EVENT DETAILS column A
+// Find rows where ID is not in validBookedIds
+// Delete bottom-up using batchUpdate deleteDimension
 ```
 
-**Edge function `syncSingleClientToFreelancers` fix:**
-When updating an existing row, after writing A-H, also check if the event count changed. If it did, read columns I-R, split each by `\n`, pad/trim to match new event count, and write back I-R. This ensures new events always start with empty freelancer assignments.
+**AllClientsCrewTable.tsx handleSync update:**
+```
+// Before calling fullSyncFreelancerAssignments, first call:
+await supabase.functions.invoke('google-sheets', {
+  body: { action: 'fullSyncEventDetails' }
+});
+// Then proceed with fullSyncFreelancerAssignments as before
+```
+
+This ensures the entire chain stays clean on every sync cycle -- manual, 30-minute interval, or Master Sync.
 
