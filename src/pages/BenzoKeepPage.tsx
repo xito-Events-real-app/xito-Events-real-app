@@ -12,6 +12,7 @@ import { highlightDatesAndMonths } from "@/components/client-detail/BenzoKeepDia
 import { GlobalModeToggle } from "@/components/layout/GlobalModeToggle";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { BenzoDateConverter } from "@/components/shared/BenzoDateConverter";
 
 const NOTE_COLORS = {
   yellow: { bg: 'bg-yellow-100', border: 'border-yellow-300', dot: 'bg-yellow-400', ring: 'ring-yellow-400', hoverBg: 'hover:bg-yellow-200' },
@@ -244,6 +245,10 @@ const BenzoKeepPage = () => {
       </div>
 
       <div className="px-3 sm:px-6 py-4 max-w-6xl mx-auto">
+        {/* Date Converter */}
+        <div className="mb-4">
+          <BenzoDateConverter />
+        </div>
         {/* Add New Note Form */}
         {isAdding && (
           <div className={cn("rounded-xl p-4 mb-4 border", NOTE_COLORS[selectedColor].bg, NOTE_COLORS[selectedColor].border)}>
