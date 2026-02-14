@@ -6853,10 +6853,23 @@ async function updateRequiredCrewCategories(
   const flResp = await fetchWithRetry(flUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
   if (!flResp.ok) throw new Error('Failed to read freelancer assignments');
   const flData = await flResp.json();
-  const rows = flData.values || [];
+  let rows = flData.values || [];
 
-  const clientRowIdx = rows.findIndex((r: string[]) => (r[0] || '').trim() === registeredDateTimeAD.trim());
-  if (clientRowIdx === -1) throw new Error('Client row not found in freelancers sheet');
+  let clientRowIdx = rows.findIndex((r: string[]) => (r[0] || '').trim() === registeredDateTimeAD.trim());
+  
+  // Auto-sync if client row is missing
+  if (clientRowIdx === -1) {
+    console.log(`[updateRequiredCrewCategories] Client not found, auto-syncing to freelancers sheet...`);
+    await syncSingleClientToFreelancers(accessToken, spreadsheetId, registeredDateTimeAD);
+    // Re-read after sync
+    const flResp2 = await fetchWithRetry(flUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (flResp2.ok) {
+      const flData2 = await flResp2.json();
+      rows = flData2.values || [];
+      clientRowIdx = rows.findIndex((r: string[]) => (r[0] || '').trim() === registeredDateTimeAD.trim());
+    }
+    if (clientRowIdx === -1) throw new Error('Client row not found in freelancers sheet even after sync');
+  }
 
   const row = rows[clientRowIdx];
 
