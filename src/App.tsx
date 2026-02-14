@@ -19,6 +19,7 @@ import HandlerClients from "./pages/HandlerClients";
 import BookedClients from "./pages/BookedClients";
 import FinanceManager from "./pages/FinanceManager";
 import ComingSoon from "./pages/ComingSoon";
+import FileManagement from "./pages/FileManagement";
 import DailyTasks from "./pages/DailyTasks";
 import Vendors from "./pages/Vendors";
 import MyAccounts from "./pages/MyAccounts";
@@ -117,7 +118,7 @@ const App = () => (
             <Route path="/tasks" element={<ProtectedRoute><DailyTasks /></ProtectedRoute>} />
             <Route path="/video-edit" element={<ProtectedRoute><ComingSoon moduleId="video-edit-tracker" /></ProtectedRoute>} />
             <Route path="/photo-edit" element={<ProtectedRoute><ComingSoon moduleId="photo-edit-tracker" /></ProtectedRoute>} />
-            <Route path="/files" element={<ProtectedRoute><ComingSoon moduleId="file-management" /></ProtectedRoute>} />
+            <Route path="/files" element={<ProtectedRoute><FileManagement /></ProtectedRoute>} />
             <Route path="/media" element={<ProtectedRoute><ComingSoon moduleId="album-media" /></ProtectedRoute>} />
             <Route path="/vendors" element={<ProtectedRoute><Vendors /></ProtectedRoute>} />
             <Route path="/my-accounts" element={<ProtectedRoute><MyAccounts /></ProtectedRoute>} />

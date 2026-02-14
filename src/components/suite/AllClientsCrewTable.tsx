@@ -83,9 +83,10 @@ function getFirstName(fullName: string): string {
 
 interface AllClientsCrewTableProps {
   onClose?: () => void;
+  readOnly?: boolean;
 }
 
-export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
+export function AllClientsCrewTable({ onClose, readOnly = false }: AllClientsCrewTableProps) {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const currentBS = getCurrentBSDate();
@@ -403,7 +404,7 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
         </button>
         <div className="flex items-center gap-2">
           <Users className="w-5 h-5" />
-          <h1 className="text-lg font-bold tracking-wide">ALL CLIENTS</h1>
+          <h1 className="text-lg font-bold tracking-wide">{readOnly ? "FILE MANAGEMENT" : "ALL CLIENTS"}</h1>
         </div>
         <div className="flex items-center gap-2 ml-4">
           <Select value={selectedYear} onValueChange={setSelectedYear}>
@@ -423,58 +424,62 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
             </SelectContent>
           </Select>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => handleSync(false)} disabled={syncing} className="gap-1.5 text-white hover:bg-white/20 hover:text-white ml-1">
-          <Database className={cn("w-3.5 h-3.5", syncing && "animate-pulse")} />
-          {syncing ? "Syncing..." : "Sync Clients"}
-        </Button>
-        <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={refreshing} className="gap-1.5 text-white hover:bg-white/20 hover:text-white">
-          <RefreshCw className={cn("w-3.5 h-3.5", refreshing && "animate-spin")} />
-          {refreshing ? "Refreshing..." : "Refresh"}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={isLockingSlots || filteredRows.length === 0}
-          className="gap-1.5 text-white hover:bg-white/20 hover:text-white"
-          onClick={async () => {
-            setIsLockingSlots(true);
-            try {
-              let updatedCount = 0;
-              for (const row of filteredRows) {
-                const filledCodes = CREW_COLUMNS
-                  .filter(col => !!(row[col.field] as string)?.trim())
-                  .map(col => col.short);
-                const cats = filledCodes.join(',');
-                await updateCategoriesInCache(
-                  row.registeredDateTimeAD,
-                  row.event,
-                  cats,
-                  row.eventDateAD
-                );
-                updatedCount++;
-              }
-              setPendingSyncs(prev => prev + updatedCount);
-              schedulePush();
-              setAssignments(prev => prev.map(a => {
-                const match = filteredRows.find(r => r.registeredDateTimeAD === a.registeredDateTimeAD && r.event === a.event);
-                if (!match) return a;
-                const filledCodes = CREW_COLUMNS
-                  .filter(col => !!(match[col.field] as string)?.trim())
-                  .map(col => col.short);
-                return { ...a, requiredCategories: filledCodes.join(',') };
-              }));
-              toast.success(`${updatedCount} event(s) locked — empty slots marked as Not Required`);
-            } catch (err) {
-              console.error('Lock empty slots failed:', err);
-              toast.error("Failed to lock empty slots");
-            } finally {
-              setIsLockingSlots(false);
-            }
-          }}
-        >
-          {isLockingSlots ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserCog className="w-3.5 h-3.5" />}
-          {isLockingSlots ? "Locking..." : "Lock Empty Slots"}
-        </Button>
+        {!readOnly && (
+          <>
+            <Button variant="ghost" size="sm" onClick={() => handleSync(false)} disabled={syncing} className="gap-1.5 text-white hover:bg-white/20 hover:text-white ml-1">
+              <Database className={cn("w-3.5 h-3.5", syncing && "animate-pulse")} />
+              {syncing ? "Syncing..." : "Sync Clients"}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={refreshing} className="gap-1.5 text-white hover:bg-white/20 hover:text-white">
+              <RefreshCw className={cn("w-3.5 h-3.5", refreshing && "animate-spin")} />
+              {refreshing ? "Refreshing..." : "Refresh"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={isLockingSlots || filteredRows.length === 0}
+              className="gap-1.5 text-white hover:bg-white/20 hover:text-white"
+              onClick={async () => {
+                setIsLockingSlots(true);
+                try {
+                  let updatedCount = 0;
+                  for (const row of filteredRows) {
+                    const filledCodes = CREW_COLUMNS
+                      .filter(col => !!(row[col.field] as string)?.trim())
+                      .map(col => col.short);
+                    const cats = filledCodes.join(',');
+                    await updateCategoriesInCache(
+                      row.registeredDateTimeAD,
+                      row.event,
+                      cats,
+                      row.eventDateAD
+                    );
+                    updatedCount++;
+                  }
+                  setPendingSyncs(prev => prev + updatedCount);
+                  schedulePush();
+                  setAssignments(prev => prev.map(a => {
+                    const match = filteredRows.find(r => r.registeredDateTimeAD === a.registeredDateTimeAD && r.event === a.event);
+                    if (!match) return a;
+                    const filledCodes = CREW_COLUMNS
+                      .filter(col => !!(match[col.field] as string)?.trim())
+                      .map(col => col.short);
+                    return { ...a, requiredCategories: filledCodes.join(',') };
+                  }));
+                  toast.success(`${updatedCount} event(s) locked — empty slots marked as Not Required`);
+                } catch (err) {
+                  console.error('Lock empty slots failed:', err);
+                  toast.error("Failed to lock empty slots");
+                } finally {
+                  setIsLockingSlots(false);
+                }
+              }}
+            >
+              {isLockingSlots ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserCog className="w-3.5 h-3.5" />}
+              {isLockingSlots ? "Locking..." : "Lock Empty Slots"}
+            </Button>
+          </>
+        )}
         <div className="ml-auto flex items-center gap-3">
           <div className="flex items-center gap-2 text-sm">
             <span className="bg-white/20 px-3 py-1 rounded-full font-semibold">{filteredRows.length} events</span>
@@ -482,7 +487,7 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
             {remainingCount > 0 && (
               <span className="bg-red-500/90 px-3 py-1 rounded-full font-medium text-xs animate-pulse">{remainingCount} remaining</span>
             )}
-            {pendingSyncs > 0 && (
+            {!readOnly && pendingSyncs > 0 && (
               <button
                 onClick={async () => {
                   if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
@@ -502,22 +507,26 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
               </button>
             )}
           </div>
-          <button onClick={handleDownloadBackup} title="Download Backup CSV" className="p-1.5 rounded-lg hover:bg-white/20 transition-colors">
-            <Download className="w-5 h-5" />
-          </button>
-          <button onClick={() => fileInputRef.current?.click()} disabled={isRestoring} title="Upload & Restore from CSV" className="p-1.5 rounded-lg hover:bg-white/20 transition-colors disabled:opacity-50">
-            {isRestoring ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleUploadRestore(file);
-            }}
-          />
+          {!readOnly && (
+            <>
+              <button onClick={handleDownloadBackup} title="Download Backup CSV" className="p-1.5 rounded-lg hover:bg-white/20 transition-colors">
+                <Download className="w-5 h-5" />
+              </button>
+              <button onClick={() => fileInputRef.current?.click()} disabled={isRestoring} title="Upload & Restore from CSV" className="p-1.5 rounded-lg hover:bg-white/20 transition-colors disabled:opacity-50">
+                {isRestoring ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleUploadRestore(file);
+                }}
+              />
+            </>
+          )}
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/20 transition-colors">
             <X className="w-5 h-5" />
           </button>
@@ -632,14 +641,18 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                                       <FreelancerHoverInfo name={val} allAssignments={assignments} selectedYear={selectedYear} selectedMonth={selectedMonth} freelancers={freelancers} />
                                     </HoverCardContent>
                                   </HoverCard>
-                                  <button
-                                    onClick={() => handleAssign(row, col.field, '')}
-                                    className="p-0.5 rounded-full hover:bg-red-100 text-gray-400 hover:text-red-500 shrink-0"
-                                    title="Remove"
-                                  >
-                                    <X className="w-3 h-3" />
-                                  </button>
+                                  {!readOnly && (
+                                    <button
+                                      onClick={() => handleAssign(row, col.field, '')}
+                                      className="p-0.5 rounded-full hover:bg-red-100 text-gray-400 hover:text-red-500 shrink-0"
+                                      title="Remove"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  )}
                                 </div>
+                              ) : readOnly ? (
+                                <span className="text-[10px] text-gray-400 animate-pulse-red px-1">---</span>
                               ) : (
                                 <div className="animate-pulse-red rounded">
                                   <MobileCrewAssign
@@ -740,34 +753,36 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                         <td className="px-3 py-2 border-r border-gray-100 text-gray-600 text-sm">
                           <div className="flex items-center gap-1">
                             <span className="block leading-tight flex-1">{row.event}</span>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <button
-                                  className="p-0.5 rounded hover:bg-violet-100 text-gray-400 hover:text-violet-600 shrink-0"
-                                  title="Set required crew"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <UserCog className="w-3.5 h-3.5" />
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0 z-[200]" align="start">
-                                <CrewCategorySelector
-                                  selected={(row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean)}
-                                  onChange={async (codes) => {
-                                    try {
-                                      await updateCategoriesInCache(row.registeredDateTimeAD, row.event, codes.join(','), row.eventDateAD);
-                                      setAssignments(prev => prev.map(a =>
-                                        a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event
-                                          ? { ...a, requiredCategories: codes.join(',') }
-                                          : a
-                                      ));
-                                      setPendingSyncs(prev => prev + 1);
-                                      schedulePush();
-                                    } catch { toast.error("Failed to update categories"); }
-                                  }}
-                                />
-                              </PopoverContent>
-                            </Popover>
+                            {!readOnly && (
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <button
+                                    className="p-0.5 rounded hover:bg-violet-100 text-gray-400 hover:text-violet-600 shrink-0"
+                                    title="Set required crew"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <UserCog className="w-3.5 h-3.5" />
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 z-[200]" align="start">
+                                  <CrewCategorySelector
+                                    selected={(row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean)}
+                                    onChange={async (codes) => {
+                                      try {
+                                        await updateCategoriesInCache(row.registeredDateTimeAD, row.event, codes.join(','), row.eventDateAD);
+                                        setAssignments(prev => prev.map(a =>
+                                          a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event
+                                            ? { ...a, requiredCategories: codes.join(',') }
+                                            : a
+                                        ));
+                                        setPendingSyncs(prev => prev + 1);
+                                        schedulePush();
+                                      } catch { toast.error("Failed to update categories"); }
+                                    }}
+                                  />
+                                </PopoverContent>
+                              </Popover>
+                            )}
                           </div>
                         </td>
                         {CREW_COLUMNS.map((col, idx) => {
@@ -793,6 +808,7 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                               onQuickAdd={() => setQuickAddState({ open: true, field: col.field, label: col.label, row })}
                               isRequired={isRequired}
                               isNextRequired={isNextRequired}
+                              readOnly={readOnly}
                             />
                           );
                         })}
@@ -918,6 +934,7 @@ function CrewCell({
   onQuickAdd,
   isRequired = true,
   isNextRequired = true,
+  readOnly = false,
 }: {
   value: string;
   field: FreelancerField;
@@ -932,6 +949,7 @@ function CrewCell({
   onQuickAdd: () => void;
   isRequired?: boolean;
   isNextRequired?: boolean;
+  readOnly?: boolean;
 }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -955,15 +973,15 @@ function CrewCell({
     >
       {hasValue ? (
         <div className="relative">
-          {/* HoverCard wraps a simple span — NOT the Popover */}
           <HoverCard openDelay={200}>
             <HoverCardTrigger asChild>
               <span
                 className={cn(
-                  "block w-full text-xs px-2 py-1.5 rounded-md text-center truncate border font-medium cursor-pointer transition-all",
-                  PILL_STYLES[group]
+                  "block w-full text-xs px-2 py-1.5 rounded-md text-center truncate border font-medium transition-all",
+                  PILL_STYLES[group],
+                  !readOnly && "cursor-pointer"
                 )}
-                onClick={() => setOpen(true)}
+                onClick={() => !readOnly && setOpen(true)}
               >
                 {firstName}
               </span>
@@ -973,42 +991,47 @@ function CrewCell({
             </HoverCardContent>
           </HoverCard>
 
-          {/* Popover is separate, triggered by state */}
-          <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-              <span className="absolute inset-0 opacity-0 pointer-events-none" />
-            </PopoverTrigger>
-            <PopoverContent className="z-[200] w-56 p-0" align="start">
-              <Command>
-                <CommandInput placeholder={`Search ${label}...`} />
-                <CommandList>
-                  <CommandEmpty>No freelancers found</CommandEmpty>
-                  <CommandGroup heading="Actions">
-                    <CommandItem onSelect={() => { onAssign(''); setOpen(false); }} className="text-red-500 font-medium">
-                      <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-                      Clear Assignment
-                    </CommandItem>
-                  </CommandGroup>
-                  <CommandSeparator />
-                  <CommandGroup>
-                    {filtered.map(name => (
-                      <CommandItem key={name} onSelect={() => { onAssign(name); setOpen(false); }} className="text-sm">
-                        {name}
+          {!readOnly && (
+            <Popover open={open} onOpenChange={setOpen}>
+              <PopoverTrigger asChild>
+                <span className="absolute inset-0 opacity-0 pointer-events-none" />
+              </PopoverTrigger>
+              <PopoverContent className="z-[200] w-56 p-0" align="start">
+                <Command>
+                  <CommandInput placeholder={`Search ${label}...`} />
+                  <CommandList>
+                    <CommandEmpty>No freelancers found</CommandEmpty>
+                    <CommandGroup heading="Actions">
+                      <CommandItem onSelect={() => { onAssign(''); setOpen(false); }} className="text-red-500 font-medium">
+                        <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                        Clear Assignment
                       </CommandItem>
-                    ))}
-                  </CommandGroup>
-                  <CommandSeparator />
-                  <CommandGroup>
-                    <CommandItem onSelect={() => { setOpen(false); onQuickAdd(); }} className="text-emerald-600 font-medium">
-                      <Plus className="w-3.5 h-3.5 mr-1.5" />
-                      Add New Freelancer
-                    </CommandItem>
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
+                    </CommandGroup>
+                    <CommandSeparator />
+                    <CommandGroup>
+                      {filtered.map(name => (
+                        <CommandItem key={name} onSelect={() => { onAssign(name); setOpen(false); }} className="text-sm">
+                          {name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                    <CommandSeparator />
+                    <CommandGroup>
+                      <CommandItem onSelect={() => { setOpen(false); onQuickAdd(); }} className="text-emerald-600 font-medium">
+                        <Plus className="w-3.5 h-3.5 mr-1.5" />
+                        Add New Freelancer
+                      </CommandItem>
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          )}
         </div>
+      ) : readOnly ? (
+        <span className="block w-full text-xs px-2 py-1.5 rounded-md text-center border border-dashed border-red-400 text-red-400 animate-pulse-red">
+          ---
+        </span>
       ) : (
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>

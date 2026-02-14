@@ -89,7 +89,7 @@ export const suiteModules: SuiteModule[] = [
     description: 'Organize and manage files',
     icon: FolderOpen,
     path: '/files',
-    status: 'coming-soon',
+    status: 'active',
     gradient: 'from-cyan-500 to-blue-600',
   },
   {
