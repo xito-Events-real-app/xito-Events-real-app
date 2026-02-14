@@ -1,83 +1,61 @@
 
 
-# Expanded Client Panel with More Fields + Bigger Text in Benzo Keep
+# Benzo Keep Client Panel Overhaul
 
-## What Changes
+## Summary of Changes
 
-### 1. Expanded Quick-Add Form Fields (Horizontal Scroll)
-The top bar currently only has Name, Phone, WhatsApp, Source. This will be expanded to include ALL key fields in a single horizontal scrollable row:
+### 1. Remove fields after Status in the top form bar
+Remove Event, Year, Month, Day fields from the horizontal form row. Keep only: **Name, Phone, WhatsApp, Source, Handler, Status**. Space them properly with wider widths so the Client Full Name is fully visible.
 
-- **Client Name** (text)
-- **Contact No** (tel)
-- **WhatsApp No** (tel)
-- **Source** (dropdown)
-- **Handler** (dropdown from whatsappOwners)
-- **Status** (dropdown from clientStatuses)
-- **Events** (text, e.g. "Wedding")
-- **Event Year** (text)
-- **Event Month** (dropdown or text)
-- **Event Day** (text)
-- **Full Form** button
+### 2. Fix: Clicking a client name loads their Keep Notes + auto-fills form fields
+The current `handleSelectClient` in the dialog correctly parses `benzoKeepNotes`, but the `BenzoKeepClientPanel` bypasses this -- when a client is selected, it shows a "Selected Client" view instead of populating the form fields. Fix:
+- When a client is selected, populate **all quick-add fields** (Name, Phone, WhatsApp, Source, Handler, Status) with the client's data
+- Call `onSelectClient(client)` which triggers the existing `handleSelectClient` in the dialog that loads their Benzo Keep notes into the textarea
+- Keep the form fields editable but pre-filled, instead of showing the separate "Selected" card
 
-All laid out horizontally with `overflow-x-auto` so users can scroll through them. Inputs will be bigger (h-9 instead of h-7, text-sm instead of text-xs).
+### 3. Booked Clients-style graphics for the top section
+Style the top bar with a dark slate theme similar to `EventClientCard` / Booked Clients:
+- Dark background (`bg-slate-800/90`) with light text
+- Gradient avatar circles and colored badges
+- Clean card-style separation between form row and recent clients row
 
-### 2. Recent Clients Section Below Quick-Add (Not Inline)
-Currently recent clients are squeezed inline with the form. Instead:
-- Recent clients row moves to a **separate row below** the quick-add form, still inside the top bar area
-- Displayed as scrollable chips/pills with larger text (text-sm)
-- Clear visual separation between "New Client" form row and "Recent Clients" row
+### 4. Recent Clients: Replace scrollbar with "Show More" button
+Instead of `overflow-x-auto` with a visible scrollbar, show a limited number of client chips (e.g., 8) and place a "More" button at the right end that reveals additional clients when clicked.
 
-### 3. Increased Text Sizes Throughout
-- Form inputs: `h-9 text-sm` (up from `h-7 text-xs`)
-- Labels: `text-sm` (up from `text-[11px]`)
-- Recent client chips: `text-sm` (up from `text-xs`)
-- Search input: `h-8 text-sm`
-
-### 4. QuickClientData Interface Expanded
-Add new fields to match the expanded form:
-```
-export interface QuickClientData {
-  clientName: string;
-  contactNo: string;
-  whatsappNo: string;
-  source: string;
-  clientHandler: string;    // NEW
-  initialStatus: string;    // NEW
-  events: string;           // NEW
-  eventYear: string;        // NEW
-  eventMonth: string;       // NEW
-  eventDay: string;         // NEW
-}
-```
+### 5. Hover on client name shows client details (HoverCard)
+Use `@radix-ui/react-hover-card` (already installed) to show a rich preview card when hovering over a client chip in the Recent Clients row. The card will display:
+- Client Name, Contact, WhatsApp
+- Events, Event Date (BS)
+- Source, Handler, Status
+- Similar to what's shown on the Client Detail page dashboard
 
 ## Technical Details
 
-### Files Modified
+### File: `src/components/suite/BenzoKeepClientPanel.tsx`
 
-**`src/components/suite/BenzoKeepClientPanel.tsx`**
-- Expand `QuickClientData` interface with new fields
-- Horizontal layout: render all fields in a single scrollable `overflow-x-auto` flex row
-- Move `RecentClientsList` to a second row below the form (not inline)
-- Increase all text sizes (inputs h-9 text-sm, labels text-sm, chips text-sm)
-- Add new dropdowns: Handler (from `whatsappOwners`), Status (from `clientStatuses`)
-- Add text inputs: Events, Event Year, Event Month, Event Day
-- Add new props: `handlers`, `statuses` for the new dropdowns
+**Form row changes:**
+- Remove Event/Year/Month/Day inputs and the Full Form button from the horizontal layout
+- Increase Name input width to `w-48` so full names are visible
+- Apply Booked Clients dark theme: `bg-slate-800/90 text-white` for the container, lighter inputs with dark text
 
-**`src/components/suite/BenzoKeepNotepadDialog.tsx`**
-- Update `QuickClientData` default state to include new empty fields
-- Pass `handlers` (whatsappOwners) and `statuses` (clientStatuses) from dropdownData to the panel
-- Map new fields when creating a client via `addClient()`
+**Client selection auto-fill:**
+- Remove the separate "Selected Client" card view (lines 72-98)
+- Instead, when `selectedClient` is set, populate `quickData` fields via `onQuickDataChange` with client's data and show a "Clear" button
+- The `onSelectClient` callback in the dialog already handles loading notes
 
-### Desktop Layout (Top Bar)
-```
-+---------------------------------------------------------------+
-| ROW 1: [Name] [Phone] [WA] [Source v] [Handler v] [Status v]  |
-|        [Events] [Year] [Month] [Day] [Full Form]  --> scroll  |
-+---------------------------------------------------------------+
-| ROW 2: Recent: [Search...] [Client1] [Client2] [Client3] ...  |
-+---------------------------------------------------------------+
-```
+**Recent clients row:**
+- Track `visibleCount` state (default 8)
+- Show `clients.slice(0, visibleCount)` chips
+- Add a "More" `Button` at the end that increments `visibleCount` by 8
+- Remove `overflow-x-auto`, use `flex-wrap` instead or keep inline with hidden overflow
 
-### Mobile Layout
-Stays as collapsible accordion with vertical stacking of all fields.
+**HoverCard on client chips:**
+- Wrap each client chip button in `HoverCard` + `HoverCardTrigger` + `HoverCardContent`
+- HoverCardContent shows: Name, Phone, WhatsApp, Events, Date, Source, Handler, Status
+
+### File: `src/components/suite/BenzoKeepNotepadDialog.tsx`
+
+**Update `handleSelectClient`:**
+- In addition to loading notes, also call `setQuickClientData` with the client's fields (name, phone, whatsapp, source, handler, status)
+- This ensures the top form fields auto-populate when clicking a client name
 
