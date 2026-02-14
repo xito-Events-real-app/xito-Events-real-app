@@ -359,17 +359,21 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
     }
   };
 
-  const assignedCount = useMemo(() => {
-    let count = 0;
+  const { assignedCount, requiredCells, remainingCount } = useMemo(() => {
+    let assigned = 0;
+    let required = 0;
     filteredRows.forEach(row => {
+      const reqCodes = (row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
       CREW_COLUMNS.forEach(col => {
-        if ((row[col.field] as string)?.trim()) count++;
+        const isReq = reqCodes.length === 0 || reqCodes.includes(col.short);
+        if (isReq) {
+          required++;
+          if ((row[col.field] as string)?.trim()) assigned++;
+        }
       });
     });
-    return count;
+    return { assignedCount: assigned, requiredCells: required, remainingCount: required - assigned };
   }, [filteredRows]);
-
-  const totalCells = filteredRows.length * CREW_COLUMNS.length;
 
   // Dynamic column widths: compute based on max first-name length per column
   const columnWidths = useMemo(() => {
@@ -474,7 +478,10 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
         <div className="ml-auto flex items-center gap-3">
           <div className="flex items-center gap-2 text-sm">
             <span className="bg-white/20 px-3 py-1 rounded-full font-semibold">{filteredRows.length} events</span>
-            <span className="bg-emerald-500/80 px-3 py-1 rounded-full font-medium text-xs">{assignedCount}/{totalCells} assigned</span>
+            <span className="bg-emerald-500/80 px-3 py-1 rounded-full font-medium text-xs">{assignedCount}/{requiredCells} assigned</span>
+            {remainingCount > 0 && (
+              <span className="bg-red-500/90 px-3 py-1 rounded-full font-medium text-xs animate-pulse">{remainingCount} remaining</span>
+            )}
             {pendingSyncs > 0 && (
               <button
                 onClick={async () => {
@@ -627,13 +634,15 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                                   </button>
                                 </div>
                               ) : (
-                                <MobileCrewAssign
-                                  field={col.field}
-                                  label={col.label}
-                                  freelancers={freelancers}
-                                  onAssign={(name) => handleAssign(row, col.field, name)}
-                                  onQuickAdd={() => setQuickAddState({ open: true, field: col.field, label: col.label, row })}
-                                />
+                                <div className="animate-pulse-red rounded">
+                                  <MobileCrewAssign
+                                    field={col.field}
+                                    label={col.label}
+                                    freelancers={freelancers}
+                                    onAssign={(name) => handleAssign(row, col.field, name)}
+                                    onQuickAdd={() => setQuickAddState({ open: true, field: col.field, label: col.label, row })}
+                                  />
+                                </div>
                               )}
                             </div>
                           );
@@ -989,7 +998,7 @@ function CrewCell({
       ) : (
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
-            <button className="w-full text-xs px-2 py-1.5 rounded-md text-center truncate transition-all border border-dashed border-gray-300 text-gray-400 hover:border-violet-400 hover:text-violet-500 hover:bg-violet-50/50">
+            <button className="w-full text-xs px-2 py-1.5 rounded-md text-center truncate transition-all border border-dashed border-red-400 text-red-400 hover:border-red-500 hover:text-red-600 hover:bg-red-50 animate-pulse-red">
               <Plus className="w-3 h-3 mx-auto" />
             </button>
           </PopoverTrigger>
