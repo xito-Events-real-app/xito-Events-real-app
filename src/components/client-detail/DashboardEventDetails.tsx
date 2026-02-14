@@ -1,8 +1,12 @@
-import { MapPin, ExternalLink } from "lucide-react";
+import { useState } from "react";
+import { MapPin, ExternalLink, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { EventDetailsData, EventDetail } from "@/hooks/useEventDetails";
 import { getMonthName } from "@/lib/nepali-months";
-import { FreelancerAssignment } from "@/lib/freelancer-assignment-api";
+import { FreelancerAssignment, FreelancerField, CATEGORY_CODE_TO_FIELD, getFilteredFreelancersByRole } from "@/lib/freelancer-assignment-api";
+import { FreelancerData } from "@/lib/freelancer-api";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from "@/components/ui/command";
 
 interface ClientEventsData {
   events: string;
@@ -16,20 +20,23 @@ interface DashboardEventDetailsProps {
   isLoading?: boolean;
   clientEvents?: ClientEventsData;
   freelancerAssignments?: FreelancerAssignment[];
+  registeredDateTimeAD?: string;
+  allFreelancers?: FreelancerData[];
+  onAssignmentUpdate?: (eventName: string, eventDateAD: string, field: FreelancerField, value: string) => Promise<void>;
 }
 
 // Role config for display
-const ROLE_CONFIG: { field: keyof FreelancerAssignment; label: string; color: string }[] = [
-  { field: 'photographerBride', label: 'PB', color: 'text-amber-600 bg-amber-50' },
-  { field: 'videographerBride', label: 'VB', color: 'text-purple-600 bg-purple-50' },
-  { field: 'photographerGroom', label: 'PG', color: 'text-amber-700 bg-amber-50' },
-  { field: 'videographerGroom', label: 'VG', color: 'text-purple-700 bg-purple-50' },
-  { field: 'extraPhotographer', label: 'EP', color: 'text-orange-600 bg-orange-50' },
-  { field: 'extraVideographer', label: 'EV', color: 'text-fuchsia-600 bg-fuchsia-50' },
-  { field: 'assistant', label: 'Asst', color: 'text-emerald-600 bg-emerald-50' },
-  { field: 'iphoneShooter', label: 'iPhone', color: 'text-cyan-600 bg-cyan-50' },
-  { field: 'droneOperator', label: 'Drone', color: 'text-sky-600 bg-sky-50' },
-  { field: 'fpvOperator', label: 'FPV', color: 'text-teal-600 bg-teal-50' },
+const ROLE_CONFIG: { field: FreelancerField; label: string; code: string; color: string }[] = [
+  { field: 'photographerBride', label: 'PB', code: 'PB', color: 'text-amber-600 bg-amber-50' },
+  { field: 'videographerBride', label: 'VB', code: 'VB', color: 'text-purple-600 bg-purple-50' },
+  { field: 'photographerGroom', label: 'PG', code: 'PG', color: 'text-amber-700 bg-amber-50' },
+  { field: 'videographerGroom', label: 'VG', code: 'VG', color: 'text-purple-700 bg-purple-50' },
+  { field: 'extraPhotographer', label: 'EP', code: 'EP', color: 'text-orange-600 bg-orange-50' },
+  { field: 'extraVideographer', label: 'EV', code: 'EV', color: 'text-fuchsia-600 bg-fuchsia-50' },
+  { field: 'assistant', label: 'Asst', code: 'Asst', color: 'text-emerald-600 bg-emerald-50' },
+  { field: 'iphoneShooter', label: 'iPhone', code: 'iPhone', color: 'text-cyan-600 bg-cyan-50' },
+  { field: 'droneOperator', label: 'Drone', code: 'Drone', color: 'text-sky-600 bg-sky-50' },
+  { field: 'fpvOperator', label: 'FPV', code: 'FPV', color: 'text-teal-600 bg-teal-50' },
 ];
 
 // Build basic events from client data when no detailed event data exists
@@ -49,34 +56,19 @@ function buildBasicEvents(clientData?: ClientEventsData): EventDetail[] {
       eventMonth: months[i]?.trim() || '',
       eventDay: days[i]?.trim() || '',
       eventDateAD: '',
-      // All logistics fields empty for non-booked clients
-      venueType: '',
-      venueName: '',
-      venueArea: '',
-      venueCity: '',
-      venueMap: '',
-      eventStartTime: '',
-      eventEndTime: '',
-      parlourType: '',
-      parlourName: '',
-      parlourArea: '',
-      parlourCity: '',
-      parlourMap: '',
-      parlourStartTime: '',
-      parlourEndTime: '',
-      doGroomComeInMehndi: '',
-      guestCount: '',
-      eventDemands: [],
-      eventReferences: []
+      venueType: '', venueName: '', venueArea: '', venueCity: '', venueMap: '',
+      eventStartTime: '', eventEndTime: '',
+      parlourType: '', parlourName: '', parlourArea: '', parlourCity: '', parlourMap: '',
+      parlourStartTime: '', parlourEndTime: '',
+      doGroomComeInMehndi: '', guestCount: '',
+      eventDemands: [], eventReferences: []
     }))
     .filter(e => e.eventName);
 }
 
-// Format time for display (e.g., "8:00 AM")
 function formatTime(time: string): string {
   if (!time) return '';
   if (time.includes('AM') || time.includes('PM')) return time;
-  
   const match = time.match(/(\d{1,2}):?(\d{2})?/);
   if (match) {
     let hours = parseInt(match[1]);
@@ -88,7 +80,6 @@ function formatTime(time: string): string {
   return time;
 }
 
-// Find matching assignment for an event
 function findAssignment(assignments: FreelancerAssignment[] | undefined, event: EventDetail): FreelancerAssignment | undefined {
   if (!assignments?.length) return undefined;
   return assignments.find(a => {
@@ -99,7 +90,51 @@ function findAssignment(assignments: FreelancerAssignment[] | undefined, event: 
   });
 }
 
-const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, freelancerAssignments }: DashboardEventDetailsProps) => {
+// Inline freelancer assignment combobox
+function FreelancerAssignPopover({
+  role,
+  freelancers,
+  onSelect,
+}: {
+  role: typeof ROLE_CONFIG[0];
+  freelancers: string[];
+  onSelect: (name: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button className={`flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border border-dashed ${role.color} opacity-60 hover:opacity-100 transition-opacity`}>
+          {role.label}
+          <Plus className="h-2.5 w-2.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-52 p-0" align="start">
+        <Command>
+          <CommandInput placeholder={`Assign ${role.label}...`} value={search} onValueChange={setSearch} />
+          <CommandList>
+            <CommandEmpty>No freelancers found</CommandEmpty>
+            {freelancers.map(name => (
+              <CommandItem
+                key={name}
+                onSelect={() => {
+                  onSelect(name);
+                  setOpen(false);
+                }}
+              >
+                {name}
+              </CommandItem>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, freelancerAssignments, registeredDateTimeAD, allFreelancers, onAssignmentUpdate }: DashboardEventDetailsProps) => {
   const navigate = useNavigate();
   if (isLoading) {
     return (
@@ -115,12 +150,9 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, free
     );
   }
 
-  // Merge logistics data with client events to show ALL events
-  // Logistics sheet may have fewer events than client record (e.g., after adding new events)
   const logisticsEvents = eventDetailsData?.events || [];
   const basicEvents = buildBasicEvents(clientEvents);
   
-  // Match logistics events to client events by name+month+day (not by index, since positions can shift)
   const events = basicEvents.length > 0
     ? basicEvents.map((basic, i) => {
         const match = logisticsEvents.find(
@@ -132,9 +164,7 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, free
       })
     : logisticsEvents;
 
-  if (!events.length) {
-    return null;
-  }
+  if (!events.length) return null;
 
   return (
     <div className="bg-slate-800/60 rounded-xl p-4 mt-4 border border-slate-700/50">
@@ -145,23 +175,32 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, free
       <div className="space-y-3">
         {events.map((event, idx) => {
           const monthName = getMonthName(parseInt(event.eventMonth) || 0);
-          
-          // Build venue line
           const venueLocation = [event.venueName, event.venueArea, event.venueCity].filter(Boolean).join(', ');
           const venueTimeRange = event.eventStartTime && event.eventEndTime
             ? `${formatTime(event.eventStartTime)} - ${formatTime(event.eventEndTime)}`
             : event.eventStartTime ? formatTime(event.eventStartTime) : '';
-
-          // Build parlour line
           const parlourLocation = [event.parlourName, event.parlourArea, event.parlourCity].filter(Boolean).join(', ');
           const parlourTimeRange = event.parlourStartTime && event.parlourEndTime
             ? `${formatTime(event.parlourStartTime)} - ${formatTime(event.parlourEndTime)}`
             : event.parlourStartTime ? formatTime(event.parlourStartTime) : '';
 
           const assignment = findAssignment(freelancerAssignments, event);
-          const assignedRoles = assignment
-            ? ROLE_CONFIG.filter(r => assignment[r.field] && String(assignment[r.field]).trim())
+          
+          // Parse required categories
+          const requiredCodes = assignment?.requiredCategories
+            ? assignment.requiredCategories.split(',').map(c => c.trim()).filter(Boolean)
             : [];
+          
+          // Determine which roles to show: assigned + required-but-unassigned
+          const assignedRoles = ROLE_CONFIG.filter(r => assignment?.[r.field] && String(assignment[r.field]).trim());
+          const unassignedRequiredRoles = requiredCodes.length > 0
+            ? ROLE_CONFIG.filter(r => 
+                requiredCodes.includes(r.code) && 
+                (!assignment?.[r.field] || !String(assignment[r.field]).trim())
+              )
+            : [];
+          
+          const hasCrewInfo = assignedRoles.length > 0 || unassignedRequiredRoles.length > 0;
 
           return (
             <div 
@@ -179,7 +218,7 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, free
               </div>
 
               {/* MIDDLE - Venue & Parlour */}
-              <div className={`${assignedRoles.length ? 'w-2/5' : 'w-4/5'} space-y-1.5`}>
+              <div className={`${hasCrewInfo ? 'w-2/5' : 'w-4/5'} space-y-1.5`}>
                 {/* Venue */}
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <span className="text-xs font-medium text-amber-400">Venue:</span>
@@ -192,22 +231,13 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, free
                         </span>
                       )}
                       {event.venueMap && (
-                        <a
-                          href={event.venueMap}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-0.5 text-blue-400 hover:text-blue-300"
-                        >
+                        <a href={event.venueMap} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-blue-400 hover:text-blue-300">
                           <MapPin className="h-3 w-3" />
                           <ExternalLink className="h-2.5 w-2.5" />
                         </a>
                       )}
-                      {venueTimeRange && (
-                        <span className="text-xs font-medium text-emerald-400">{venueTimeRange}</span>
-                      )}
-                      {event.guestCount && (
-                        <span className="text-xs font-medium text-amber-400">({event.guestCount})</span>
-                      )}
+                      {venueTimeRange && <span className="text-xs font-medium text-emerald-400">{venueTimeRange}</span>}
+                      {event.guestCount && <span className="text-xs font-medium text-amber-400">({event.guestCount})</span>}
                     </>
                   ) : (
                     <span className="text-xs text-white/40 italic">Not set</span>
@@ -226,19 +256,12 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, free
                         </span>
                       )}
                       {event.parlourMap && (
-                        <a
-                          href={event.parlourMap}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-0.5 text-blue-400 hover:text-blue-300"
-                        >
+                        <a href={event.parlourMap} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-blue-400 hover:text-blue-300">
                           <MapPin className="h-3 w-3" />
                           <ExternalLink className="h-2.5 w-2.5" />
                         </a>
                       )}
-                      {parlourTimeRange && (
-                        <span className="text-xs font-medium text-emerald-400">{parlourTimeRange}</span>
-                      )}
+                      {parlourTimeRange && <span className="text-xs font-medium text-emerald-400">{parlourTimeRange}</span>}
                     </>
                   ) : (
                     <span className="text-xs text-white/40 italic">Not set</span>
@@ -246,9 +269,10 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, free
                 </div>
               </div>
 
-              {/* RIGHT - Assigned Freelancers */}
-              {assignedRoles.length > 0 && (
+              {/* RIGHT - Crew: Assigned + Unassigned Required */}
+              {hasCrewInfo && (
                 <div className="w-2/5 space-y-1">
+                  {/* Already assigned */}
                   {assignedRoles.map(role => (
                     <div key={role.field} className="flex items-center gap-1.5">
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${role.color}`}>
@@ -265,6 +289,36 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, free
                       </button>
                     </div>
                   ))}
+                  {/* Unassigned but required */}
+                  {unassignedRequiredRoles.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {unassignedRequiredRoles.map(role => {
+                        if (!onAssignmentUpdate || !allFreelancers) {
+                          return (
+                            <span key={role.field} className={`text-[10px] font-bold px-1.5 py-0.5 rounded border border-dashed ${role.color} opacity-50`}>
+                              {role.label}
+                            </span>
+                          );
+                        }
+                        const filtered = getFilteredFreelancersByRole(allFreelancers, role.field);
+                        return (
+                          <FreelancerAssignPopover
+                            key={role.field}
+                            role={role}
+                            freelancers={filtered}
+                            onSelect={(name) => {
+                              onAssignmentUpdate(
+                                event.eventName,
+                                event.eventDateAD || '',
+                                role.field,
+                                name
+                              );
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

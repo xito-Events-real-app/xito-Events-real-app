@@ -311,6 +311,9 @@ const ClientDetail = () => {
   // Fetch freelancer assignments for dashboard display
   const {
     assignments: freelancerAssignments,
+    freelancers: allFreelancers,
+    refetch: refetchFreelancerAssignments,
+    updateAssignment: updateFreelancerAssignmentFromHook,
   } = useFreelancerAssignments(client?.registeredDateTimeAD);
 
   // Fetch client contact details
@@ -1053,6 +1056,12 @@ const ClientDetail = () => {
               eventDetailsData={eventDetailsData}
               eventDetailsLoading={eventDetailsLoading}
               freelancerAssignments={freelancerAssignments}
+              registeredDateTimeAD={client?.registeredDateTimeAD}
+              allFreelancers={allFreelancers}
+              onAssignmentUpdate={async (eventName, eventDateAD, field, value) => {
+                await updateFreelancerAssignmentFromHook(eventName, eventDateAD, field, value);
+                window.dispatchEvent(new Event('clients-invalidate'));
+              }}
             />
           )}
 
@@ -1131,12 +1140,15 @@ const ClientDetail = () => {
                           registeredDateTimeAD={client?.registeredDateTimeAD}
                           requiredCategories={
                             freelancerAssignments.find(
-                              a => a.event.trim() === (eventDetail.eventName || '').trim() && a.eventDateAD.trim() === (eventDetail.eventDateAD || '').trim()
+                              a => a.event?.trim().toLowerCase() === (eventDetail.eventName || '').trim().toLowerCase()
+                                && String(a.eventMonth)?.trim() === String(eventDetail.eventMonth)?.trim()
+                                && String(a.eventDay)?.trim() === String(eventDetail.eventDay)?.trim()
                             )?.requiredCategories || ''
                           }
                           onUpdateCategories={async (evName, evDateAD, cats) => {
                             if (client?.registeredDateTimeAD) {
                               await updateRequiredCrewCategories(client.registeredDateTimeAD, evName, evDateAD, cats);
+                              await refetchFreelancerAssignments();
                             }
                           }}
                         />
