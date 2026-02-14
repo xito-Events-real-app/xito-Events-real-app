@@ -6675,13 +6675,25 @@ async function syncSingleClientToFreelancers(accessToken: string, spreadsheetId:
       '', '', '', '', '', '', '', '', // S-Z (unused)
       '' // AA (requiredCategories)
     ];
-    const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A:AA")}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
-    await fetchWithRetry(appendUrl, {
-      method: 'POST',
+    // Step 1: Find next empty row by reading column A
+    const colARange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:A5000");
+    const colAUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${colARange}`;
+    const colAResp = await fetchWithRetry(colAUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const colAData = await colAResp.json();
+    const colARows = colAData.values || [];
+    const nextRow = colARows.length + 2; // +2 for header row + 1-indexed
+
+    // Step 2: PUT to exact range to guarantee column A start
+    const writeRange = encodeURIComponent(`'BOOKED CLIENTS FREELANCERS'!A${nextRow}:AA${nextRow}`);
+    const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${writeRange}?valueInputOption=USER_ENTERED`;
+    await fetchWithRetry(writeUrl, {
+      method: 'PUT',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ values: [newRow] }),
     });
-    console.log(`[syncSingleClientToFreelancers] Appended new row`);
+    console.log(`[syncSingleClientToFreelancers] Wrote new row at row ${nextRow}`);
   }
 
   return { success: true };
@@ -6761,9 +6773,22 @@ async function fullSyncFreelancerAssignments(accessToken: string, spreadsheetId:
 
   // Append new rows
   if (newRows.length > 0) {
-    const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A:AA")}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
-    await fetch(appendUrl, {
-      method: 'POST',
+    // Find next empty row by reading column A
+    const colARange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:A5000");
+    const colAUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${colARange}`;
+    const colAResp = await fetch(colAUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const colAData = await colAResp.json();
+    const colARows = colAData.values || [];
+    const startRow = colARows.length + 2; // +2 for header + 1-indexed
+    const endRow = startRow + newRows.length - 1;
+
+    // PUT all new rows to exact range to guarantee column A start
+    const writeRange = encodeURIComponent(`'BOOKED CLIENTS FREELANCERS'!A${startRow}:AA${endRow}`);
+    const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${writeRange}?valueInputOption=USER_ENTERED`;
+    await fetchWithRetry(writeUrl, {
+      method: 'PUT',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ values: newRows }),
     });
