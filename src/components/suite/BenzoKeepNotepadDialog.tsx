@@ -43,7 +43,7 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
   const [isSaving, setIsSaving] = useState(false);
 
   // Client panel state
-  const [quickClientData, setQuickClientData] = useState<QuickClientData>({ clientName: '', contactNo: '', whatsappNo: '', source: '' });
+  const [quickClientData, setQuickClientData] = useState<QuickClientData>({ clientName: '', contactNo: '', whatsappNo: '', source: '', clientHandler: '', initialStatus: '', events: '', eventYear: '', eventMonth: '', eventDay: '' });
   const [selectedClient, setSelectedClient] = useState<ClientData | null>(null);
   const [recentClients, setRecentClients] = useState<ClientData[]>([]);
   const [isLoadingClients, setIsLoadingClients] = useState(false);
@@ -54,7 +54,7 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
   const resetForm = () => {
     setContent('');
     setMarkerColor('yellow');
-    setQuickClientData({ clientName: '', contactNo: '', whatsappNo: '', source: '' });
+    setQuickClientData({ clientName: '', contactNo: '', whatsappNo: '', source: '', clientHandler: '', initialStatus: '', events: '', eventYear: '', eventMonth: '', eventDay: '' });
     setSelectedClient(null);
     setClientPanelOpen(false);
   };
@@ -90,6 +90,8 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
   };
 
   const sources = dropdownData?.sources || [];
+  const handlers = dropdownData?.whatsappOwners || [];
+  const statuses = dropdownData?.clientStatuses || [];
 
   const handleOpenFullForm = () => {
     onOpenChange(false);
@@ -169,6 +171,12 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
         contactNo: quickClientData.contactNo.trim(),
         whatsappNo: quickClientData.whatsappNo.trim(),
         source: quickClientData.source,
+        clientHandler: quickClientData.clientHandler,
+        initialStatus: quickClientData.initialStatus,
+        events: quickClientData.events,
+        eventYear: quickClientData.eventYear,
+        eventMonth: quickClientData.eventMonth,
+        eventDay: quickClientData.eventDay,
         registeredDateTimeAD,
       };
 
@@ -239,7 +247,6 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
     </div>
   );
 
-  // Client panel props
   const clientPanelProps = {
     quickData: quickClientData,
     onQuickDataChange: setQuickClientData,
@@ -248,6 +255,8 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
     recentClients,
     isLoadingClients,
     sources,
+    handlers,
+    statuses,
     onOpenFullForm: handleOpenFullForm,
   };
 

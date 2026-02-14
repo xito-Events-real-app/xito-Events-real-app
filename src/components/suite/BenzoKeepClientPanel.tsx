@@ -13,6 +13,12 @@ export interface QuickClientData {
   contactNo: string;
   whatsappNo: string;
   source: string;
+  clientHandler: string;
+  initialStatus: string;
+  events: string;
+  eventYear: string;
+  eventMonth: string;
+  eventDay: string;
 }
 
 interface BenzoKeepClientPanelProps {
@@ -23,6 +29,8 @@ interface BenzoKeepClientPanelProps {
   recentClients: ClientData[];
   isLoadingClients: boolean;
   sources: string[];
+  handlers?: string[];
+  statuses?: string[];
   onOpenFullForm: () => void;
   layout?: 'vertical' | 'horizontal';
 }
@@ -35,6 +43,8 @@ export function BenzoKeepClientPanel({
   recentClients,
   isLoadingClients,
   sources,
+  handlers = [],
+  statuses = [],
   onOpenFullForm,
   layout = 'vertical',
 }: BenzoKeepClientPanelProps) {
@@ -51,38 +61,40 @@ export function BenzoKeepClientPanel({
 
   const handleClearSelection = () => {
     onSelectClient(null);
-    onQuickDataChange({ clientName: "", contactNo: "", whatsappNo: "", source: "" });
+    onQuickDataChange({ clientName: "", contactNo: "", whatsappNo: "", source: "", clientHandler: "", initialStatus: "", events: "", eventYear: "", eventMonth: "", eventDay: "" });
+  };
+
+  const update = (field: keyof QuickClientData, value: string) => {
+    onQuickDataChange({ ...quickData, [field]: value });
   };
 
   // Selected client detail view
   if (selectedClient) {
     if (layout === 'horizontal') {
       return (
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 shrink-0">
-            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Selected:</h4>
-            <div className="flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5">
-              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center">
-                <User className="w-3 h-3 text-white" />
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-3">
+            <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider shrink-0">Selected:</h4>
+            <div className="flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center">
+                <User className="w-3.5 h-3.5 text-white" />
               </div>
               <span className="font-semibold text-sm text-gray-900">{selectedClient.clientName}</span>
-              {selectedClient.contactNo && <span className="text-xs text-gray-500">• {selectedClient.contactNo}</span>}
-              <Button variant="ghost" size="sm" className="h-5 w-5 p-0 ml-1" onClick={handleClearSelection}>
-                <X className="h-3 w-3" />
+              {selectedClient.contactNo && <span className="text-sm text-gray-500">• {selectedClient.contactNo}</span>}
+              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 ml-1" onClick={handleClearSelection}>
+                <X className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <RecentClientsList
-              clients={filteredClients}
-              isLoading={isLoadingClients}
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-              onSelect={onSelectClient}
-              selectedId={selectedClient.registeredDateTimeAD}
-              layout="horizontal"
-            />
-          </div>
+          <RecentClientsList
+            clients={filteredClients}
+            isLoading={isLoadingClients}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            onSelect={onSelectClient}
+            selectedId={selectedClient.registeredDateTimeAD}
+            layout="horizontal"
+          />
         </div>
       );
     }
@@ -138,46 +150,123 @@ export function BenzoKeepClientPanel({
   // Horizontal layout for top bar
   if (layout === 'horizontal') {
     return (
-      <div className="flex items-center gap-4">
-        {/* Quick-add fields inline */}
-        <div className="flex items-center gap-2 shrink-0">
-          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">New Client:</h4>
-          <Input
-            value={quickData.clientName}
-            onChange={(e) => onQuickDataChange({ ...quickData, clientName: e.target.value })}
-            placeholder="Name"
-            className="h-7 text-xs w-28"
-          />
-          <Input
-            value={quickData.contactNo}
-            onChange={(e) => onQuickDataChange({ ...quickData, contactNo: e.target.value })}
-            placeholder="Phone"
-            className="h-7 text-xs w-24"
-            type="tel"
-          />
-          <Input
-            value={quickData.whatsappNo}
-            onChange={(e) => onQuickDataChange({ ...quickData, whatsappNo: e.target.value })}
-            placeholder="WhatsApp"
-            className="h-7 text-xs w-24"
-            type="tel"
-          />
-          <Select value={quickData.source} onValueChange={(v) => onQuickDataChange({ ...quickData, source: v })}>
-            <SelectTrigger className="h-7 text-xs w-28">
-              <SelectValue placeholder="Source" />
-            </SelectTrigger>
-            <SelectContent>
-              {sources.map((s) => (
-                <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-violet-600 px-1.5" onClick={onOpenFullForm}>
-            <ExternalLink className="w-3 h-3" /> Full Form
-          </Button>
+      <div className="flex flex-col gap-2">
+        {/* ROW 1: Quick-Add Form - horizontal scroll */}
+        <div>
+          <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1.5">New Client</h4>
+          <div className="flex items-end gap-2 overflow-x-auto pb-1">
+            <div className="shrink-0">
+              <Label className="text-sm text-gray-500 mb-1 block">Name *</Label>
+              <Input
+                value={quickData.clientName}
+                onChange={(e) => update('clientName', e.target.value)}
+                placeholder="Client name"
+                className="h-9 text-sm w-36"
+              />
+            </div>
+            <div className="shrink-0">
+              <Label className="text-sm text-gray-500 mb-1 block">Phone</Label>
+              <Input
+                value={quickData.contactNo}
+                onChange={(e) => update('contactNo', e.target.value)}
+                placeholder="Phone"
+                className="h-9 text-sm w-32"
+                type="tel"
+              />
+            </div>
+            <div className="shrink-0">
+              <Label className="text-sm text-gray-500 mb-1 block">WhatsApp</Label>
+              <Input
+                value={quickData.whatsappNo}
+                onChange={(e) => update('whatsappNo', e.target.value)}
+                placeholder="WhatsApp"
+                className="h-9 text-sm w-32"
+                type="tel"
+              />
+            </div>
+            <div className="shrink-0">
+              <Label className="text-sm text-gray-500 mb-1 block">Source</Label>
+              <Select value={quickData.source} onValueChange={(v) => update('source', v)}>
+                <SelectTrigger className="h-9 text-sm w-32">
+                  <SelectValue placeholder="Source" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sources.map((s) => (
+                    <SelectItem key={s} value={s} className="text-sm">{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="shrink-0">
+              <Label className="text-sm text-gray-500 mb-1 block">Handler</Label>
+              <Select value={quickData.clientHandler} onValueChange={(v) => update('clientHandler', v)}>
+                <SelectTrigger className="h-9 text-sm w-36">
+                  <SelectValue placeholder="Handler" />
+                </SelectTrigger>
+                <SelectContent>
+                  {handlers.map((h) => (
+                    <SelectItem key={h} value={h} className="text-sm">{h}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="shrink-0">
+              <Label className="text-sm text-gray-500 mb-1 block">Status</Label>
+              <Select value={quickData.initialStatus} onValueChange={(v) => update('initialStatus', v)}>
+                <SelectTrigger className="h-9 text-sm w-44">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  {statuses.map((s) => (
+                    <SelectItem key={s} value={s} className="text-sm">{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="shrink-0">
+              <Label className="text-sm text-gray-500 mb-1 block">Event</Label>
+              <Input
+                value={quickData.events}
+                onChange={(e) => update('events', e.target.value)}
+                placeholder="e.g. Wedding"
+                className="h-9 text-sm w-28"
+              />
+            </div>
+            <div className="shrink-0">
+              <Label className="text-sm text-gray-500 mb-1 block">Year</Label>
+              <Input
+                value={quickData.eventYear}
+                onChange={(e) => update('eventYear', e.target.value)}
+                placeholder="2082"
+                className="h-9 text-sm w-20"
+              />
+            </div>
+            <div className="shrink-0">
+              <Label className="text-sm text-gray-500 mb-1 block">Month</Label>
+              <Input
+                value={quickData.eventMonth}
+                onChange={(e) => update('eventMonth', e.target.value)}
+                placeholder="Magh"
+                className="h-9 text-sm w-24"
+              />
+            </div>
+            <div className="shrink-0">
+              <Label className="text-sm text-gray-500 mb-1 block">Day</Label>
+              <Input
+                value={quickData.eventDay}
+                onChange={(e) => update('eventDay', e.target.value)}
+                placeholder="25"
+                className="h-9 text-sm w-16"
+              />
+            </div>
+            <Button variant="ghost" size="sm" className="h-9 gap-1.5 text-sm text-violet-600 px-2 shrink-0" onClick={onOpenFullForm}>
+              <ExternalLink className="w-3.5 h-3.5" /> Full Form
+            </Button>
+          </div>
         </div>
-        {/* Recent clients inline */}
-        <div className="flex-1 min-w-0">
+
+        {/* ROW 2: Recent Clients - separate row */}
+        <div className="border-t pt-2">
           <RecentClientsList
             clients={filteredClients}
             isLoading={isLoadingClients}
@@ -192,7 +281,7 @@ export function BenzoKeepClientPanel({
     );
   }
 
-  // Vertical quick-add form view
+  // Vertical quick-add form view (mobile)
   return (
     <div className="flex flex-col h-full gap-3">
       <div className="flex items-center justify-between">
@@ -207,7 +296,7 @@ export function BenzoKeepClientPanel({
           <Label className="text-[11px] text-gray-500">Name</Label>
           <Input
             value={quickData.clientName}
-            onChange={(e) => onQuickDataChange({ ...quickData, clientName: e.target.value })}
+            onChange={(e) => update('clientName', e.target.value)}
             placeholder="Client name"
             className="h-8 text-xs"
           />
@@ -217,7 +306,7 @@ export function BenzoKeepClientPanel({
             <Label className="text-[11px] text-gray-500">Contact</Label>
             <Input
               value={quickData.contactNo}
-              onChange={(e) => onQuickDataChange({ ...quickData, contactNo: e.target.value })}
+              onChange={(e) => update('contactNo', e.target.value)}
               placeholder="Phone"
               className="h-8 text-xs"
               type="tel"
@@ -227,7 +316,7 @@ export function BenzoKeepClientPanel({
             <Label className="text-[11px] text-gray-500">WhatsApp</Label>
             <Input
               value={quickData.whatsappNo}
-              onChange={(e) => onQuickDataChange({ ...quickData, whatsappNo: e.target.value })}
+              onChange={(e) => update('whatsappNo', e.target.value)}
               placeholder="WhatsApp"
               className="h-8 text-xs"
               type="tel"
@@ -236,7 +325,7 @@ export function BenzoKeepClientPanel({
         </div>
         <div>
           <Label className="text-[11px] text-gray-500">Source</Label>
-          <Select value={quickData.source} onValueChange={(v) => onQuickDataChange({ ...quickData, source: v })}>
+          <Select value={quickData.source} onValueChange={(v) => update('source', v)}>
             <SelectTrigger className="h-8 text-xs">
               <SelectValue placeholder="Select source" />
             </SelectTrigger>
@@ -284,34 +373,34 @@ function RecentClientsList({
   if (layout === 'horizontal') {
     return (
       <div className="flex items-center gap-2">
-        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Recent:</h4>
+        <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Recent:</h4>
         <div className="relative shrink-0">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-400" />
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
           <Input
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search..."
-            className="h-7 text-xs pl-7 w-32"
+            className="h-8 text-sm pl-7 w-40"
           />
         </div>
-        <div className="flex items-center gap-1 overflow-x-auto flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 overflow-x-auto flex-1 min-w-0 pb-0.5">
           {isLoading ? (
             <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
           ) : clients.length === 0 ? (
-            <p className="text-xs text-gray-400">{searchQuery ? "No match" : "No clients"}</p>
+            <p className="text-sm text-gray-400">{searchQuery ? "No match" : "No clients"}</p>
           ) : (
-            clients.slice(0, 10).map((client) => (
+            clients.slice(0, 15).map((client) => (
               <button
                 key={client.registeredDateTimeAD}
                 onClick={() => onSelect(client)}
                 className={cn(
-                  "flex items-center gap-1.5 px-2 py-1 rounded-full text-xs whitespace-nowrap transition-colors shrink-0",
+                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors shrink-0",
                   "hover:bg-violet-50 border",
                   selectedId === client.registeredDateTimeAD ? "bg-violet-100 border-violet-300" : "border-gray-200"
                 )}
               >
-                <div className="w-5 h-5 rounded-full bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center shrink-0">
-                  <User className="w-2.5 h-2.5 text-white" />
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center shrink-0">
+                  <User className="w-3 h-3 text-white" />
                 </div>
                 <span className="font-medium text-gray-900">{client.clientName}</span>
               </button>
