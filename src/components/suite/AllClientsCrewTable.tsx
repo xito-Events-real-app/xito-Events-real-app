@@ -125,11 +125,7 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
   }, [loadData]);
 
   const handleSync = useCallback(async (silent = false) => {
-    if (isBusy.current) {
-      if (!silent) toast.info("Another sync is already running, please wait");
-      return;
-    }
-    isBusy.current = true;
+    if (syncing) return; // Only prevent double-clicks on same button
     if (!silent) setSyncing(true);
     try {
       // Step 1: Sync EVENT DETAILS (populate new + remove stale against BOOKED CLIENTS)
@@ -382,7 +378,7 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
             </SelectContent>
           </Select>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => handleSync(false)} disabled={syncing || isBusy.current} className="gap-1.5 text-white hover:bg-white/20 hover:text-white ml-1">
+        <Button variant="ghost" size="sm" onClick={() => handleSync(false)} disabled={syncing} className="gap-1.5 text-white hover:bg-white/20 hover:text-white ml-1">
           <Database className={cn("w-3.5 h-3.5", syncing && "animate-pulse")} />
           {syncing ? "Syncing..." : "Sync Clients"}
         </Button>
