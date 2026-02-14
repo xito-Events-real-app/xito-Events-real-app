@@ -344,9 +344,9 @@ export default function QuickAdd() {
 
         await updateClientApi(updatedClient);
         
-        // Update local cache
+        // Update local cache (must await so IndexedDB write completes before navigation)
         if (updateClientCache) {
-          updateClientCache(updatedClient);
+          await updateClientCache(updatedClient);
         }
         
         // Trigger event details refetch
