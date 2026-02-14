@@ -568,8 +568,13 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                   const rowKey = `${row.registeredDateTimeAD}-${row.event}-${row.eventDateAD}`;
                   const groupIdx = dayGroups.get(rowKey) ?? 0;
                   const dayBg = DAY_COLORS[groupIdx % DAY_COLORS.length];
+                  const reqCodes = (row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
+                  const hasUnassignedRequired = CREW_COLUMNS.some(col => {
+                    const isReq = reqCodes.length === 0 || reqCodes.includes(col.short);
+                    return isReq && !(row[col.field] as string)?.trim();
+                  });
                   return (
-                    <div key={`${rowKey}-${idx}`} className={cn("rounded-xl border border-gray-200 p-3 shadow-sm", dayBg)}>
+                    <div key={`${rowKey}-${idx}`} className={cn("rounded-xl border border-gray-200 p-3 shadow-sm", dayBg, hasUnassignedRequired && "border-red-300")}>
                       <div className="flex items-center gap-2 mb-2">
                         <button
                           onClick={() => setFilterDay(filterDay === row.eventDay ? null : row.eventDay)}
@@ -577,7 +582,9 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                             "inline-flex items-center justify-center w-9 h-9 rounded-full font-bold text-sm shrink-0 transition-all",
                             filterDay === row.eventDay
                               ? "bg-violet-600 text-white ring-2 ring-violet-400"
-                              : "bg-violet-100 text-violet-700"
+                              : hasUnassignedRequired
+                                ? "bg-red-100 text-red-700 ring-2 ring-red-400 animate-pulse-red"
+                                : "bg-violet-100 text-violet-700"
                           )}
                         >
                           {row.eventDay}
@@ -686,6 +693,11 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                     const rowKey = `${row.registeredDateTimeAD}-${row.event}-${row.eventDateAD}`;
                     const groupIdx = dayGroups.get(rowKey) ?? 0;
                     const dayBg = DAY_COLORS[groupIdx % DAY_COLORS.length];
+                    const reqCodes = (row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
+                    const hasUnassignedRequired = CREW_COLUMNS.some(col => {
+                      const isReq = reqCodes.length === 0 || reqCodes.includes(col.short);
+                      return isReq && !(row[col.field] as string)?.trim();
+                    });
                     return (
                       <tr
                         key={`${rowKey}-${idx}`}
@@ -698,7 +710,9 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                               "inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm transition-all",
                               filterDay === row.eventDay
                                 ? "bg-violet-600 text-white ring-2 ring-violet-400"
-                                : "bg-violet-100 text-violet-700 hover:bg-violet-200 cursor-pointer"
+                                : hasUnassignedRequired
+                                  ? "bg-red-100 text-red-700 ring-2 ring-red-400 animate-pulse-red"
+                                  : "bg-violet-100 text-violet-700 hover:bg-violet-200 cursor-pointer"
                             )}
                           >
                             {row.eventDay}
