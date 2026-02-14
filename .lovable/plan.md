@@ -1,39 +1,61 @@
 
 
-# Fix: Sync Button Blocked by Background Sync
+# Fix: Newly Booked Clients Not Appearing in All Clients (3-Sheet Sync Missing)
 
-## Problem
+## Root Cause
 
-The approved fix from the previous plan was not applied. Line 130 still reads:
+When a client's status is changed to "BOOKED", the `updateClientStatus` backend function correctly copies them to the BOOKED CLIENTS sheet and deletes them from the CLIENT TRACKER. However, it **never triggers the downstream sync** to the 3 dependent sheets:
 
-```typescript
-if (syncingRef.current) return;
-```
+1. **BOOKED CLIENTS EVENT DETAILS** -- needed for logistics/dashboard
+2. **BOOKED CLIENTS FREELANCERS** -- needed for the "All Clients" crew table
+3. **BOOKED CLIENTS CONTACT DETAILS** -- needed for contact info
 
-This blocks ALL sync calls -- including user clicks -- whenever the silent mount sync (line 167) or 30-minute interval sync (line 170) is running. Since the mount sync takes 20-30 seconds, any click during that window is silently ignored.
+The "All Clients" page reads from the FREELANCERS sheet, so newly booked clients simply don't exist there until a full manual sync is run.
+
+The downstream sync functions already exist and work -- they're called by `updateClient` (when editing a booked client), but they were never wired into `updateClientStatus` (when the status first changes to BOOKED).
 
 ## Fix
 
-### File: `src/components/suite/AllClientsCrewTable.tsx`
+### File: `supabase/functions/google-sheets/index.ts`
 
-**Single line change at line 130:**
+After the `copyToBookedClients` + `deleteTrackerRow` block (around line 2079), add calls to the 3 downstream sync functions:
 
-Change:
 ```typescript
-if (syncingRef.current) return;
+movedToBooked = true;
+
+// --- NEW: Trigger downstream sync to all 3 sheets ---
+try {
+  await syncToEventDetails(accessToken, spreadsheetId, fetchedRegisteredDateTime);
+  console.log(`[STATUS CHANGE] Synced to EVENT DETAILS`);
+} catch (evErr) {
+  console.warn(`[STATUS CHANGE] EVENT DETAILS sync failed:`, evErr);
+}
+
+try {
+  await syncSingleClientToFreelancers(accessToken, spreadsheetId, fetchedRegisteredDateTime);
+  console.log(`[STATUS CHANGE] Synced to FREELANCERS`);
+} catch (flErr) {
+  console.warn(`[STATUS CHANGE] FREELANCERS sync failed:`, flErr);
+}
+
+try {
+  await resyncClientContactDetails(accessToken, spreadsheetId, fetchedRegisteredDateTime);
+  console.log(`[STATUS CHANGE] Synced to CONTACT DETAILS`);
+} catch (cdErr) {
+  console.warn(`[STATUS CHANGE] CONTACT DETAILS sync failed:`, cdErr);
+}
 ```
 
-To:
-```typescript
-if (silent && syncingRef.current) return;
-```
+Each call is wrapped in its own try/catch so a failure in one sheet doesn't block the others. The functions already handle deduplication internally.
 
-This means:
-- User clicks (`silent = false`) always proceed and show "Syncing..." feedback
-- Background syncs (`silent = true`) are still guarded against piling up
-- No data corruption risk since all sync operations have built-in deduplication
+## Why This Works
+
+- `syncToEventDetails` creates the EVENT DETAILS row from the BOOKED CLIENTS data
+- `syncSingleClientToFreelancers` reads from EVENT DETAILS and creates the FREELANCERS row (which is what "All Clients" displays)
+- `resyncClientContactDetails` creates the CONTACT DETAILS row
+- All three functions are idempotent -- safe to call multiple times
 
 ## Files to Modify
 
-1. `src/components/suite/AllClientsCrewTable.tsx` -- line 130 (1 line change)
+1. `supabase/functions/google-sheets/index.ts` -- add 3 sync calls after the "copy to booked" block in `updateClientStatus`
 
