@@ -5154,6 +5154,16 @@ async function resyncAllBookedClients(accessToken: string, spreadsheetId: string
   }
   
   console.log(`[RESYNC] Complete: ${syncedCount} synced, ${skippedCount} unchanged, ${notFoundCount} not found in tracker`);
+  
+  // Auto-cleanup: remove any booked clients that are still lingering in CLIENT TRACKER
+  console.log('[RESYNC] Running auto-cleanup of duplicate booked clients from tracker...');
+  try {
+    const cleanupResult = await cleanupDuplicateBookedFromTracker(accessToken, spreadsheetId);
+    console.log(`[RESYNC] Cleanup complete: ${cleanupResult.deletedCount} duplicates removed from tracker`);
+  } catch (cleanupError) {
+    console.error('[RESYNC] Cleanup failed (non-fatal):', cleanupError);
+  }
+  
   return { success: true, syncedCount, skippedCount, notFoundCount, totalBooked: bookedRows.length };
 }
 
@@ -5407,20 +5417,8 @@ async function updateBookedClient(
         body: JSON.stringify({ values: [[value]] }),
       });
       
-      // Only sync non-payment fields to CLIENT TRACKER
-      if (!paymentOnlyFields.includes(field) && originalRowNumber >= 2) {
-        const trackerRange = encodeURIComponent(`'CLIENT TRACKER'!${column}${originalRowNumber}`);
-        const trackerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}?valueInputOption=USER_ENTERED`;
-        
-        await fetch(trackerUrl, {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ values: [[value]] }),
-        });
-      }
+      // REMOVED: No longer sync to CLIENT TRACKER. 
+      // Booked clients should ONLY exist in BOOKED CLIENTS sheet (single source of truth).
     }
   }
 
