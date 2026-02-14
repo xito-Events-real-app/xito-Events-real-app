@@ -39,7 +39,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient' | 'getDailyTasks' | 'addDailyTask' | 'updateDailyTask' | 'updateDailyTaskStatus' | 'getDailyTaskSetupData' | 'getFreelancers' | 'addFreelancer' | 'updateFreelancer' | 'deleteFreelancer' | 'syncFreelancerCategories' | 'getClientFreelancerAssignments' | 'updateFreelancerAssignment' | 'checkFreelancerAvailability' | 'fullSyncFreelancerAssignments' | 'getFreelancerBookings' | 'getAllFreelancerAssignments' | 'restoreFreelancerAssignments';
+  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient' | 'getDailyTasks' | 'addDailyTask' | 'updateDailyTask' | 'updateDailyTaskStatus' | 'getDailyTaskSetupData' | 'getFreelancers' | 'addFreelancer' | 'updateFreelancer' | 'deleteFreelancer' | 'syncFreelancerCategories' | 'getClientFreelancerAssignments' | 'updateFreelancerAssignment' | 'checkFreelancerAvailability' | 'fullSyncFreelancerAssignments' | 'getFreelancerBookings' | 'getAllFreelancerAssignments' | 'restoreFreelancerAssignments' | 'updateRequiredCrewCategories';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -6130,7 +6130,7 @@ const FIELD_TO_COL_INDEX: Record<string, number> = {
 
 // ============= GET ALL FREELANCER ASSIGNMENTS (BULK) =============
 async function getAllFreelancerAssignments(accessToken: string, spreadsheetId: string) {
-  const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:R5000");
+  const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:AA5000");
   const flUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${flRange}`;
   const flResp = await fetchWithRetry(flUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
   if (!flResp.ok) {
@@ -6153,6 +6153,7 @@ async function getAllFreelancerAssignments(accessToken: string, spreadsheetId: s
     const eventMonths = (row[5] || '').split('\n');
     const eventDays = (row[6] || '').split('\n');
     const eventDatesAD = (row[7] || '').split('\n');
+    const requiredCategoriesLines = (row[26] || '').split('\n');
 
     const eventCount = eventNames.filter((n: string) => n.trim()).length;
     if (eventCount === 0) continue;
@@ -6179,6 +6180,7 @@ async function getAllFreelancerAssignments(accessToken: string, spreadsheetId: s
         iphoneShooter: ((row[15] || '').split('\n')[i] || '').trim(),
         droneOperator: ((row[16] || '').split('\n')[i] || '').trim(),
         fpvOperator: ((row[17] || '').split('\n')[i] || '').trim(),
+        requiredCategories: (requiredCategoriesLines[i] || '').trim(),
       });
     }
   }
@@ -6213,7 +6215,7 @@ async function getClientFreelancerAssignments(accessToken: string, spreadsheetId
   if (eventCount === 0) return [];
 
   // 2. Read freelancers sheet - find SINGLE row for this client
-  const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:R1000");
+  const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:AA1000");
   const flUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${flRange}`;
   const flResp = await fetch(flUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
   let flRows: string[][] = [];
@@ -6233,9 +6235,11 @@ async function getClientFreelancerAssignments(accessToken: string, spreadsheetId
       regDateTimeAD, regDateBS, clientName,
       clientEventRow[3] || '', clientEventRow[4] || '', clientEventRow[5] || '', clientEventRow[6] || '', clientEventRow[7] || '',
       emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines,
-      emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines
+      emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines,
+      '', '', '', '', '', '', '', '', // S-Z (unused)
+      '' // AA (requiredCategories)
     ];
-    const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A:R")}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+    const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A:AA")}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
     await fetch(appendUrl, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -6287,6 +6291,7 @@ async function getClientFreelancerAssignments(accessToken: string, spreadsheetId
       iphoneShooter: ((row[15] || '').split('\n')[i] || '').trim(),
       droneOperator: ((row[16] || '').split('\n')[i] || '').trim(),
       fpvOperator: ((row[17] || '').split('\n')[i] || '').trim(),
+      requiredCategories: ((row[26] || '').split('\n')[i] || '').trim(),
     });
   }
 
@@ -6304,7 +6309,7 @@ async function updateFreelancerAssignmentAction(accessToken: string, spreadsheet
   if (colIndex === undefined) throw new Error(`Invalid field: ${field}`);
 
   // Find the client's single row
-  const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:R1000");
+  const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:AA1000");
   const flUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${flRange}`;
   const flResp = await fetchWithRetry(flUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
   if (!flResp.ok) throw new Error('Failed to read freelancer assignments');
@@ -6368,7 +6373,7 @@ async function restoreFreelancerAssignmentsAction(
   updates: { registeredDateTimeAD: string; event: string; assignments: Record<string, string> }[]
 ) {
   // Read all rows from FREELANCERS sheet
-  const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:R1000");
+  const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:AA1000");
   const flUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${flRange}`;
   const flResp = await fetchWithRetry(flUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
   if (!flResp.ok) throw new Error('Failed to read freelancer assignments');
@@ -6445,7 +6450,7 @@ async function restoreFreelancerAssignmentsAction(
 }
 
 async function checkFreelancerAvailability(accessToken: string, spreadsheetId: string, freelancerName: string, eventDateAD: string) {
-  const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:R1000");
+  const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:AA1000");
   const flUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${flRange}`;
   const flResp = await fetch(flUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
   if (!flResp.ok) return { conflicts: [] };
@@ -6483,7 +6488,7 @@ async function checkFreelancerAvailability(accessToken: string, spreadsheetId: s
 
 // Get all bookings for a specific freelancer across all clients
 async function getFreelancerBookings(accessToken: string, spreadsheetId: string, freelancerName: string) {
-  const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:R1000");
+  const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:AA1000");
   const flUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${flRange}`;
   const flResp = await fetch(flUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
   if (!flResp.ok) throw new Error('Failed to read freelancer assignments');
@@ -6552,7 +6557,7 @@ async function syncSingleClientToFreelancers(accessToken: string, spreadsheetId:
   }
 
   // 2. Read existing freelancer rows to find if this client exists
-  const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:R1000");
+  const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:AA1000");
   const flResp = await fetchWithRetry(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${flRange}`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -6586,7 +6591,7 @@ async function syncSingleClientToFreelancers(accessToken: string, spreadsheetId:
     const newCount = newEventNames.length;
 
     if (oldCount !== newCount) {
-      // Read current I-R values (columns index 8-17)
+      // Read current I-R values (columns index 8-17) and AA (index 26)
       const freelancerCols: string[] = [];
       for (let c = 8; c <= 17; c++) {
         freelancerCols.push(existingRow[c] || '');
@@ -6595,10 +6600,8 @@ async function syncSingleClientToFreelancers(accessToken: string, spreadsheetId:
       const alignedCols = freelancerCols.map(cellValue => {
         const parts = cellValue.split('\n');
         if (parts.length < newCount) {
-          // Pad with empty strings for new events
           return parts.concat(Array(newCount - parts.length).fill('')).join('\n');
         } else if (parts.length > newCount) {
-          // Trim excess entries
           return parts.slice(0, newCount).join('\n');
         }
         return cellValue;
@@ -6611,7 +6614,25 @@ async function syncSingleClientToFreelancers(accessToken: string, spreadsheetId:
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ values: [alignedCols] }),
       });
-      console.log(`[syncSingleClientToFreelancers] Re-aligned freelancer columns: ${oldCount} -> ${newCount} events`);
+
+      // Also re-align Column AA (requiredCategories)
+      const aaCellValue = existingRow[26] || '';
+      const aaParts = aaCellValue.split('\n');
+      let alignedAA = aaCellValue;
+      if (aaParts.length < newCount) {
+        alignedAA = aaParts.concat(Array(newCount - aaParts.length).fill('')).join('\n');
+      } else if (aaParts.length > newCount) {
+        alignedAA = aaParts.slice(0, newCount).join('\n');
+      }
+      const aaRange = encodeURIComponent(`'BOOKED CLIENTS FREELANCERS'!AA${sheetRow}`);
+      const aaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${aaRange}?valueInputOption=USER_ENTERED`;
+      await fetchWithRetry(aaUrl, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: [[alignedAA]] }),
+      });
+
+      console.log(`[syncSingleClientToFreelancers] Re-aligned freelancer columns + AA: ${oldCount} -> ${newCount} events`);
     }
 
     console.log(`[syncSingleClientToFreelancers] Updated row ${sheetRow}`);
@@ -6620,9 +6641,11 @@ async function syncSingleClientToFreelancers(accessToken: string, spreadsheetId:
     const newRow = [
       evRow[0] || '', evRow[1] || '', evRow[2] || '', evRow[3] || '', evRow[4] || '', evRow[5] || '', evRow[6] || '', evRow[7] || '',
       emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines,
-      emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines
+      emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines,
+      '', '', '', '', '', '', '', '', // S-Z (unused)
+      '' // AA (requiredCategories)
     ];
-    const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A:R")}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+    const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A:AA")}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
     await fetchWithRetry(appendUrl, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -6645,7 +6668,7 @@ async function fullSyncFreelancerAssignments(accessToken: string, spreadsheetId:
   const eventRows = eventData.values || [];
 
   // 2. Read all freelancer rows
-  const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:R1000");
+  const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:AA1000");
   const flUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${flRange}`;
   const flResp = await fetch(flUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
   let flRows: string[][] = [];
@@ -6698,7 +6721,9 @@ async function fullSyncFreelancerAssignments(accessToken: string, spreadsheetId:
       newRows.push([
         evRow[0] || '', evRow[1] || '', evRow[2] || '', evRow[3] || '', evRow[4] || '', evRow[5] || '', evRow[6] || '', evRow[7] || '',
         emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines,
-        emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines
+        emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines,
+        '', '', '', '', '', '', '', '', // S-Z (unused)
+        '' // AA (requiredCategories)
       ]);
       copiedCount++;
     }
@@ -6706,7 +6731,7 @@ async function fullSyncFreelancerAssignments(accessToken: string, spreadsheetId:
 
   // Append new rows
   if (newRows.length > 0) {
-    const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A:R")}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+    const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A:AA")}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
     await fetch(appendUrl, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -6813,8 +6838,72 @@ async function fullSyncFreelancerAssignments(accessToken: string, spreadsheetId:
 
   return { copiedCount, updatedCount, removedCount, dedupCount, totalFreelancers: flRows.length + newRows.length - removedCount - dedupCount };
 }
+// ============= UPDATE REQUIRED CREW CATEGORIES (COLUMN AA) =============
+async function updateRequiredCrewCategories(
+  accessToken: string,
+  spreadsheetId: string,
+  registeredDateTimeAD: string,
+  eventName: string,
+  eventDateAD: string,
+  categories: string
+) {
+  // Find the client's row
+  const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:AA1000");
+  const flUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${flRange}`;
+  const flResp = await fetchWithRetry(flUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!flResp.ok) throw new Error('Failed to read freelancer assignments');
+  const flData = await flResp.json();
+  const rows = flData.values || [];
 
-Deno.serve(async (req) => {
+  const clientRowIdx = rows.findIndex((r: string[]) => (r[0] || '').trim() === registeredDateTimeAD.trim());
+  if (clientRowIdx === -1) throw new Error('Client row not found in freelancers sheet');
+
+  const row = rows[clientRowIdx];
+
+  // Determine event index by matching event name + date
+  const eventNames = (row[3] || '').split('\n');
+  const eventDatesInRow = (row[7] || '').split('\n');
+
+  let eventIdx = -1;
+  for (let i = 0; i < eventNames.length; i++) {
+    if ((eventNames[i] || '').trim().toLowerCase() === eventName.trim().toLowerCase() &&
+        (eventDatesInRow[i] || '').trim() === eventDateAD.trim()) {
+      eventIdx = i;
+      break;
+    }
+  }
+  // Fallback: match by event name only
+  if (eventIdx === -1) {
+    for (let i = 0; i < eventNames.length; i++) {
+      if ((eventNames[i] || '').trim().toLowerCase() === eventName.trim().toLowerCase()) {
+        eventIdx = i;
+        break;
+      }
+    }
+  }
+  if (eventIdx === -1) throw new Error('Event not found in client row');
+
+  // Read current AA value, update at event index, write back
+  const currentValues = (row[26] || '').split('\n');
+  while (currentValues.length <= eventIdx) currentValues.push('');
+  currentValues[eventIdx] = categories;
+  const newCellValue = currentValues.join('\n');
+
+  const sheetRow = clientRowIdx + 2;
+  const cellRange = encodeURIComponent(`'BOOKED CLIENTS FREELANCERS'!AA${sheetRow}`);
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${cellRange}?valueInputOption=USER_ENTERED`;
+
+  const resp = await fetchWithRetry(updateUrl, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ values: [[newCellValue]] }),
+  });
+
+  if (!resp.ok) throw new Error('Failed to update required crew categories');
+  console.log(`[updateRequiredCrewCategories] Updated AA for row ${sheetRow}, event ${eventIdx}: ${categories}`);
+  return { success: true };
+}
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -7416,6 +7505,12 @@ Deno.serve(async (req) => {
       case 'restoreFreelancerAssignments': {
         if (!data || !data.updates) throw new Error('updates array is required');
         result = await restoreFreelancerAssignmentsAction(accessToken, spreadsheetId, data.updates as any[]);
+        break;
+      }
+      case 'updateRequiredCrewCategories': {
+        if (!data || !data.registeredDateTimeAD || !data.eventName || !data.eventDateAD)
+          throw new Error('registeredDateTimeAD, eventName, eventDateAD are required');
+        result = await updateRequiredCrewCategories(accessToken, spreadsheetId, data.registeredDateTimeAD as string, data.eventName as string, data.eventDateAD as string, (data.categories as string) || '');
         break;
       }
       default:

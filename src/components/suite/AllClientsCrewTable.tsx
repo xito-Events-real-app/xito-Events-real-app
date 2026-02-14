@@ -4,7 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty, CommandGroup, CommandSeparator } from "@/components/ui/command";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Users, Plus, RefreshCw, X, ChevronLeft, Database, Trash2, Download, Upload } from "lucide-react";
+import { Loader2, Users, Plus, RefreshCw, X, ChevronLeft, Database, Trash2, Download, Upload, UserCog } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -16,11 +16,14 @@ import {
   FreelancerAssignment,
   FreelancerField,
   fullSyncFreelancerAssignments,
+  updateRequiredCrewCategories,
+  CATEGORY_CODES,
 } from "@/lib/freelancer-assignment-api";
 import { getFreelancers, FreelancerData } from "@/lib/freelancer-api";
 import { QuickAddFreelancerDialog } from "./QuickAddFreelancerDialog";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { CrewCategorySelector } from "@/components/shared/CrewCategorySelector";
 
 const CREW_COLUMNS: { field: FreelancerField; label: string; short: string; group: 'photo' | 'video' | 'assist' | 'tech'; size: 'wide' | 'narrow' }[] = [
   { field: 'photographerBride', label: 'Photographer Bride', short: 'PB', group: 'photo', size: 'wide' },
@@ -490,13 +493,19 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                       </div>
                       <div className="grid grid-cols-2 gap-1.5">
                         {CREW_COLUMNS.map(col => {
+                          const reqCodes = (row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
+                          const isReq = reqCodes.length === 0 || reqCodes.includes(col.short);
                           const val = (row[col.field] as string)?.trim();
                           return (
                             <div key={col.field} className="flex items-center gap-1.5">
                               <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0", GROUP_STYLES[col.group])}>
                                 {col.short}
                               </span>
-                              {val ? (
+                              {!isReq ? (
+                                <span className="text-[10px] text-gray-500 bg-gray-900 px-1.5 py-0.5 rounded">
+                                  {val ? <span className="line-through opacity-60">{val}</span> : '—'}
+                                </span>
+                              ) : val ? (
                                 <div className="flex items-center gap-1 flex-1 min-w-0">
                                   <HoverCard openDelay={200}>
                                     <HoverCardTrigger asChild>
@@ -608,24 +617,57 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                           </button>
                         </td>
                         <td className="px-3 py-2 border-r border-gray-100 text-gray-600 text-sm">
-                          <span className="block leading-tight">{row.event}</span>
+                          <div className="flex items-center gap-1">
+                            <span className="block leading-tight flex-1">{row.event}</span>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button
+                                  className="p-0.5 rounded hover:bg-violet-100 text-gray-400 hover:text-violet-600 shrink-0"
+                                  title="Set required crew"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <UserCog className="w-3.5 h-3.5" />
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0 z-[200]" align="start">
+                                <CrewCategorySelector
+                                  selected={(row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean)}
+                                  onChange={async (codes) => {
+                                    try {
+                                      await updateRequiredCrewCategories(row.registeredDateTimeAD, row.event, row.eventDateAD, codes.join(','));
+                                      setAssignments(prev => prev.map(a =>
+                                        a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event && a.eventDateAD === row.eventDateAD
+                                          ? { ...a, requiredCategories: codes.join(',') }
+                                          : a
+                                      ));
+                                    } catch { toast.error("Failed to update categories"); }
+                                  }}
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          </div>
                         </td>
-                        {CREW_COLUMNS.map(col => (
-                          <CrewCell
-                            key={col.field}
-                            value={row[col.field] as string}
-                            field={col.field}
-                            label={col.label}
-                            group={col.group}
-                            colWidth={columnWidths[col.field]}
-                            freelancers={freelancers}
-                            allAssignments={assignments}
-                            selectedYear={selectedYear}
-                            selectedMonth={selectedMonth}
-                            onAssign={(name) => handleAssign(row, col.field, name)}
-                            onQuickAdd={() => setQuickAddState({ open: true, field: col.field, label: col.label, row })}
-                          />
-                        ))}
+                        {CREW_COLUMNS.map(col => {
+                          const reqCodes = (row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
+                          const isRequired = reqCodes.length === 0 || reqCodes.includes(col.short);
+                          return (
+                            <CrewCell
+                              key={col.field}
+                              value={row[col.field] as string}
+                              field={col.field}
+                              label={col.label}
+                              group={col.group}
+                              colWidth={columnWidths[col.field]}
+                              freelancers={freelancers}
+                              allAssignments={assignments}
+                              selectedYear={selectedYear}
+                              selectedMonth={selectedMonth}
+                              onAssign={(name) => handleAssign(row, col.field, name)}
+                              onQuickAdd={() => setQuickAddState({ open: true, field: col.field, label: col.label, row })}
+                              isRequired={isRequired}
+                            />
+                          );
+                        })}
                       </tr>
                     );
                   })
@@ -725,6 +767,7 @@ function CrewCell({
   selectedMonth,
   onAssign,
   onQuickAdd,
+  isRequired = true,
 }: {
   value: string;
   field: FreelancerField;
@@ -737,12 +780,26 @@ function CrewCell({
   selectedMonth: string;
   onAssign: (name: string) => void;
   onQuickAdd: () => void;
+  isRequired?: boolean;
 }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const filtered = useMemo(() => getFilteredFreelancersByRole(freelancers, field), [freelancers, field]);
   const hasValue = value && value.trim().length > 0;
   const firstName = hasValue ? getFirstName(value) : "";
+
+  if (!isRequired) {
+    return (
+      <td
+        className="px-1 py-1.5 border-r border-gray-100 last:border-r-0"
+        style={{ width: `${colWidth}px`, minWidth: `${colWidth}px` }}
+      >
+        <div className="w-full text-[9px] px-1 py-1.5 rounded-md text-center bg-gray-900 text-gray-500 font-medium">
+          {hasValue ? <span className="line-through opacity-60">{firstName}</span> : '—'}
+        </div>
+      </td>
+    );
+  }
 
   return (
     <td

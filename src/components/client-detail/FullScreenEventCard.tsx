@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Calendar, MapPin, Clock, Users, Scissors, ChevronDown, ChevronUp, Save, X, Loader2, ExternalLink, FileText, Link2, Plus, Trash2, AlertTriangle, Check, ChevronsUpDown } from 'lucide-react';
+import { Calendar, MapPin, Clock, Users, Scissors, ChevronDown, ChevronUp, Save, X, Loader2, ExternalLink, FileText, Link2, Plus, Trash2, AlertTriangle, Check, ChevronsUpDown, UserCog } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +16,7 @@ import { useVenueData } from '@/hooks/useVenueData';
 import { useParlourData } from '@/hooks/useParlourData';
 import { VenueEntry } from '@/lib/event-venue-api';
 import { ParlourEntry } from '@/lib/parlour-api';
+import { CrewCategorySelector, CategoryBadges } from '@/components/shared/CrewCategorySelector';
 
 interface FullScreenEventCardProps {
   event: EventDetail;
@@ -24,6 +25,9 @@ interface FullScreenEventCardProps {
   onToggleExpand: () => void;
   onSave: (eventIndex: number, updates: Partial<EventDetail> & { eventDemands?: string[]; eventReferences?: string[] }) => Promise<boolean>;
   isUrgent?: boolean;
+  registeredDateTimeAD?: string;
+  requiredCategories?: string;
+  onUpdateCategories?: (eventName: string, eventDateAD: string, categories: string) => Promise<void>;
 }
 
 // Check if an event is within urgency threshold (20 days)
@@ -75,8 +79,15 @@ export const FullScreenEventCard = ({
   isExpanded,
   onToggleExpand,
   onSave,
+  registeredDateTimeAD,
+  requiredCategories: initialRequiredCategories,
+  onUpdateCategories,
 }: FullScreenEventCardProps) => {
   const [isSaving, setIsSaving] = useState(false);
+  const [showCategorySelector, setShowCategorySelector] = useState(false);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(
+    initialRequiredCategories ? initialRequiredCategories.split(',').map(c => c.trim()).filter(Boolean) : []
+  );
   
   // Venue data hook - for dynamic dropdowns
   const { 
@@ -460,6 +471,33 @@ export const FullScreenEventCard = ({
         </div>
         
         <div className="flex items-center gap-2">
+          {!isExpanded && selectedCategories.length > 0 && (
+            <CategoryBadges categories={selectedCategories.join(',')} />
+          )}
+          {!isExpanded && onUpdateCategories && (
+            <Popover open={showCategorySelector} onOpenChange={setShowCategorySelector}>
+              <PopoverTrigger asChild>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowCategorySelector(true); }}
+                  className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+                  title="Set required crew"
+                >
+                  <UserCog className="h-3.5 w-3.5 text-white/70" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 z-[9999]" align="end" onClick={(e) => e.stopPropagation()}>
+                <CrewCategorySelector
+                  selected={selectedCategories}
+                  onChange={async (codes) => {
+                    setSelectedCategories(codes);
+                    if (onUpdateCategories) {
+                      await onUpdateCategories(event.eventName || '', eventDateAD || '', codes.join(','));
+                    }
+                  }}
+                />
+              </PopoverContent>
+            </Popover>
+          )}
           {!isExpanded && (
             <Badge 
               variant="outline" 

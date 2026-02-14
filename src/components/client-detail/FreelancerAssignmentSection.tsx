@@ -109,6 +109,36 @@ interface EventAssignmentCardProps {
 const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, onCheckAvailability }: EventAssignmentCardProps) => {
   const [showMore, setShowMore] = useState(false);
 
+  // Parse required categories - empty means all required
+  const requiredCodes = (assignment.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
+  const hasFilter = requiredCodes.length > 0;
+
+  // Category code to field mapping
+  const CODE_TO_FIELD: Record<string, string> = {
+    PB: 'photographerBride', PG: 'photographerGroom',
+    VB: 'videographerBride', VG: 'videographerGroom',
+    EP: 'extraPhotographer', EV: 'extraVideographer',
+    Asst: 'assistant', iPhone: 'iphoneShooter',
+    Drone: 'droneOperator', FPV: 'fpvOperator',
+  };
+  const FIELD_TO_CODE: Record<string, string> = Object.fromEntries(
+    Object.entries(CODE_TO_FIELD).map(([code, field]) => [field, code])
+  );
+
+  const isFieldRequired = (field: string) => {
+    if (!hasFilter) return true;
+    const code = FIELD_TO_CODE[field];
+    return code ? requiredCodes.includes(code) : true;
+  };
+
+  const filterFields = (rows: FieldConfig[][]) => {
+    if (!hasFilter) return rows;
+    return rows.map(row => row.filter(cfg => isFieldRequired(cfg.field))).filter(row => row.length > 0);
+  };
+
+  const filteredMain = filterFields(MAIN_FIELDS);
+  const filteredMore = filterFields(MORE_FIELDS);
+
   const assignedByField = useMemo(() => {
     const map: Record<string, string> = {};
     for (const cfg of ALL_FIELDS) {
@@ -165,7 +195,7 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
 
       {/* Main Fields */}
       <div className="p-5 space-y-3">
-        {MAIN_FIELDS.map((row, ri) => (
+        {filteredMain.map((row, ri) => (
           <div key={ri} className="grid grid-cols-2 gap-3">
             {row.map((cfg) => (
               <FreelancerDropdown
@@ -185,34 +215,36 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
         ))}
 
         {/* See More */}
-        <Collapsible open={showMore} onOpenChange={setShowMore}>
-          <CollapsibleTrigger asChild>
-            <Button variant="ghost" className="w-full text-gray-400 hover:text-gray-600 hover:bg-gray-50 gap-2 text-xs h-8 mt-1">
-              {showMore ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-              {showMore ? 'Show Less' : 'More Roles'}
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="space-y-3 pt-2">
-            {MORE_FIELDS.map((row, ri) => (
-              <div key={ri} className="grid grid-cols-2 gap-3">
-                {row.map((cfg) => (
-                  <FreelancerDropdown
-                    key={cfg.field}
-                    config={cfg}
-                    value={assignment[cfg.field] as string}
-                    freelancers={freelancers}
-                    eventDateAD={assignment.eventDateAD}
-                    clientName={assignment.clientName}
-                    excludedNames={getExcludedNames(cfg.field)}
-                    isUpdating={isUpdating === cfg.field}
-                    onChange={(v) => handleFieldChange(cfg.field, v)}
-                    onCheckAvailability={onCheckAvailability}
-                  />
-                ))}
-              </div>
-            ))}
-          </CollapsibleContent>
-        </Collapsible>
+        {filteredMore.length > 0 && (
+          <Collapsible open={showMore} onOpenChange={setShowMore}>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" className="w-full text-gray-400 hover:text-gray-600 hover:bg-gray-50 gap-2 text-xs h-8 mt-1">
+                {showMore ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                {showMore ? 'Show Less' : 'More Roles'}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-3 pt-2">
+              {filteredMore.map((row, ri) => (
+                <div key={ri} className="grid grid-cols-2 gap-3">
+                  {row.map((cfg) => (
+                    <FreelancerDropdown
+                      key={cfg.field}
+                      config={cfg}
+                      value={assignment[cfg.field] as string}
+                      freelancers={freelancers}
+                      eventDateAD={assignment.eventDateAD}
+                      clientName={assignment.clientName}
+                      excludedNames={getExcludedNames(cfg.field)}
+                      isUpdating={isUpdating === cfg.field}
+                      onChange={(v) => handleFieldChange(cfg.field, v)}
+                      onCheckAvailability={onCheckAvailability}
+                    />
+                  ))}
+                </div>
+              ))}
+            </CollapsibleContent>
+          </Collapsible>
+        )}
       </div>
     </div>
   );
