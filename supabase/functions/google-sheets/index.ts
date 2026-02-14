@@ -6904,6 +6904,7 @@ async function updateRequiredCrewCategories(
   return { success: true };
 }
 
+Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
