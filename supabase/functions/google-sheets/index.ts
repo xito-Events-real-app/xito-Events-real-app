@@ -2077,7 +2077,29 @@ async function updateClientStatus(accessToken: string, spreadsheetId: string, ro
       console.log(`[STATUS CHANGE] Client DELETED from CLIENT TRACKER row ${actualRowNumber} - MOVED to BOOKED CLIENTS`);
       
       movedToBooked = true;
-      
+
+      // --- Trigger downstream sync to all 3 dependent sheets ---
+      try {
+        await syncToEventDetails(accessToken, spreadsheetId, fetchedRegisteredDateTime);
+        console.log(`[STATUS CHANGE] Synced to EVENT DETAILS`);
+      } catch (evErr) {
+        console.warn(`[STATUS CHANGE] EVENT DETAILS sync failed:`, evErr);
+      }
+
+      try {
+        await syncSingleClientToFreelancers(accessToken, spreadsheetId, fetchedRegisteredDateTime);
+        console.log(`[STATUS CHANGE] Synced to FREELANCERS`);
+      } catch (flErr) {
+        console.warn(`[STATUS CHANGE] FREELANCERS sync failed:`, flErr);
+      }
+
+      try {
+        await resyncClientContactDetails(accessToken, spreadsheetId, fetchedRegisteredDateTime);
+        console.log(`[STATUS CHANGE] Synced to CONTACT DETAILS`);
+      } catch (cdErr) {
+        console.warn(`[STATUS CHANGE] CONTACT DETAILS sync failed:`, cdErr);
+      }
+
       // Log activity to BOOKED CLIENTS (the client was moved there)
       // Find the new row in BOOKED CLIENTS
       const bookedRow = await findBookedClientRow(accessToken, spreadsheetId, fetchedRegisteredDateTime);
