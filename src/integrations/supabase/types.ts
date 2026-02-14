@@ -14,7 +14,81 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      freelancer_assignments: {
+        Row: {
+          assistant: string | null
+          client_name: string | null
+          drone_operator: string | null
+          event: string
+          event_date_ad: string | null
+          event_day: string | null
+          event_month: string | null
+          event_year: string | null
+          extra_photographer: string | null
+          extra_videographer: string | null
+          fpv_operator: string | null
+          id: string
+          iphone_shooter: string | null
+          photographer_bride: string | null
+          photographer_groom: string | null
+          registered_date_bs: string | null
+          registered_date_time_ad: string
+          required_categories: string | null
+          synced_to_sheet: boolean | null
+          updated_at: string | null
+          videographer_bride: string | null
+          videographer_groom: string | null
+        }
+        Insert: {
+          assistant?: string | null
+          client_name?: string | null
+          drone_operator?: string | null
+          event: string
+          event_date_ad?: string | null
+          event_day?: string | null
+          event_month?: string | null
+          event_year?: string | null
+          extra_photographer?: string | null
+          extra_videographer?: string | null
+          fpv_operator?: string | null
+          id?: string
+          iphone_shooter?: string | null
+          photographer_bride?: string | null
+          photographer_groom?: string | null
+          registered_date_bs?: string | null
+          registered_date_time_ad: string
+          required_categories?: string | null
+          synced_to_sheet?: boolean | null
+          updated_at?: string | null
+          videographer_bride?: string | null
+          videographer_groom?: string | null
+        }
+        Update: {
+          assistant?: string | null
+          client_name?: string | null
+          drone_operator?: string | null
+          event?: string
+          event_date_ad?: string | null
+          event_day?: string | null
+          event_month?: string | null
+          event_year?: string | null
+          extra_photographer?: string | null
+          extra_videographer?: string | null
+          fpv_operator?: string | null
+          id?: string
+          iphone_shooter?: string | null
+          photographer_bride?: string | null
+          photographer_groom?: string | null
+          registered_date_bs?: string | null
+          registered_date_time_ad?: string
+          required_categories?: string | null
+          synced_to_sheet?: boolean | null
+          updated_at?: string | null
+          videographer_bride?: string | null
+          videographer_groom?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
