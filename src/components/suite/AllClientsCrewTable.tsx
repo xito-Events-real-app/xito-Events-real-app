@@ -133,7 +133,19 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
       handleSync(true).then(() => loadData());
     }
     const interval = setInterval(() => handleSync(true).then(() => loadData()), SYNC_INTERVAL);
-    return () => clearInterval(interval);
+
+    // Listen for client data changes (e.g., events added/removed via QuickAdd)
+    const handleClientChange = () => {
+      handleSync(true).then(() => loadData());
+    };
+    window.addEventListener('clients-invalidate', handleClientChange);
+    window.addEventListener('booked-clients-invalidate', handleClientChange);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('clients-invalidate', handleClientChange);
+      window.removeEventListener('booked-clients-invalidate', handleClientChange);
+    };
   }, [handleSync, loadData]);
 
   const filteredRows = useMemo(() => {
