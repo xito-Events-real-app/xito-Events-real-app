@@ -1540,13 +1540,55 @@ async function fullSyncContactDetails(accessToken: string, spreadsheetId: string
     });
   }
   
-  // 6. Cleanup: remove rows from CONTACT DETAILS that are NOT in BOOKED CLIENTS
+  // 6. Deduplication pass: remove any duplicate registeredDateTimeAD entries
+  let dedupCount = 0;
+  const dedupRange2 = encodeURIComponent("'BOOKED CLIENTS CONTACT DETAILS'!A2:A2000");
+  const dedupResp2 = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${dedupRange2}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+
+  if (dedupResp2.ok) {
+    const dedupData2 = await dedupResp2.json();
+    const dedupRows2: string[][] = dedupData2.values || [];
+    const seenIds2 = new Set<string>();
+    const dupeRowNumbers2: number[] = [];
+
+    dedupRows2.forEach((r: string[], idx: number) => {
+      const key = (r[0] || '').trim();
+      if (!key) return;
+      if (seenIds2.has(key)) {
+        dupeRowNumbers2.push(idx + 2);
+      } else {
+        seenIds2.add(key);
+      }
+    });
+
+    if (dupeRowNumbers2.length > 0) {
+      const sheetIdDedup = await getSheetId(accessToken, spreadsheetId, 'BOOKED CLIENTS CONTACT DETAILS');
+      const sortedDupes2 = dupeRowNumbers2.sort((a, b) => b - a);
+      const dedupRequests2 = sortedDupes2.map(rowNum => ({
+        deleteDimension: {
+          range: { sheetId: sheetIdDedup, dimension: 'ROWS', startIndex: rowNum - 1, endIndex: rowNum }
+        }
+      }));
+      await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests: dedupRequests2 }),
+      });
+      dedupCount = dupeRowNumbers2.length;
+      console.log(`[CONTACT SYNC] Removed ${dedupCount} duplicate rows`);
+    }
+  }
+
+  // 7. Cleanup: remove rows from CONTACT DETAILS that are NOT in BOOKED CLIENTS
   let removedCount = 0;
   const validBookedIds = new Set(
     bookedRows.map((row: string[]) => (row[0] || '').trim()).filter(Boolean)
   );
 
-  // Re-read CONTACT DETAILS column A to get current state (including newly added rows)
+  // Re-read CONTACT DETAILS column A to get current state (after dedup)
   const cleanupRange2 = encodeURIComponent("'BOOKED CLIENTS CONTACT DETAILS'!A2:A2000");
   const cleanupResponse2 = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${cleanupRange2}`,
@@ -1583,8 +1625,8 @@ async function fullSyncContactDetails(accessToken: string, spreadsheetId: string
     }
   }
 
-  console.info(`[CONTACT SYNC] Complete: ${copiedCount} created, ${updatedCount} updated, ${removedCount} removed, ${bookedRows.length} total`);
-  return { copiedCount, updatedCount, removedCount, totalClients: bookedRows.length };
+  console.info(`[CONTACT SYNC] Complete: ${copiedCount} created, ${updatedCount} updated, ${dedupCount} deduped, ${removedCount} removed, ${bookedRows.length} total`);
+  return { copiedCount, updatedCount, dedupCount, removedCount, totalClients: bookedRows.length };
 }
 
 // ============= RESYNC CLIENT CONTACT DETAILS =============
@@ -4253,6 +4295,7 @@ async function fullSyncEventDetails(accessToken: string, spreadsheetId: string) 
 
   let copiedCount = 0;
   let updatedCount = 0;
+  const newRows: string[][] = [];
 
   // 3. Process each booked client
   for (const row of bookedData.values) {
@@ -4277,7 +4320,7 @@ async function fullSyncEventDetails(accessToken: string, spreadsheetId: string) 
       const updateRange = encodeURIComponent(`'BOOKED CLIENTS EVENT DETAILS'!A${existingRowNumber}:H${existingRowNumber}`);
       const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`;
       
-      const updateResponse = await fetch(updateUrl, {
+      const updateResponse = await fetchWithRetry(updateUrl, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -4290,23 +4333,82 @@ async function fullSyncEventDetails(accessToken: string, spreadsheetId: string) 
         updatedCount++;
       }
     } else {
-      // Copy new entry
-      try {
-        await copyToEventDetails(accessToken, spreadsheetId, row);
-        copiedCount++;
-      } catch (copyError) {
-        console.error(`Failed to copy client ${registeredDateTimeAD}:`, copyError);
-      }
+      // Collect new row for batch append (NO insert-at-2, NO row shifting)
+      newRows.push([
+        row[0] || '',   // A: registeredDateTimeAD
+        row[1] || '',   // B: registeredDateBS
+        row[2] || '',   // C: clientName
+        row[11] || '',  // D: events (from L)
+        row[12] || '',  // E: eventYear (from M)
+        row[13] || '',  // F: eventMonth (from N)
+        row[14] || '',  // G: eventDay (from O)
+        row[15] || '',  // H: eventDateAD (from P)
+        '',             // I: empty/reserved separator
+      ]);
+      copiedCount++;
     }
   }
 
-  // 4. Cleanup: remove rows from EVENT DETAILS that are NOT in BOOKED CLIENTS
+  // 3b. Batch append all new rows at the end (no row shifting!)
+  if (newRows.length > 0) {
+    const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent("'BOOKED CLIENTS EVENT DETAILS'!A:I")}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+    await fetchWithRetry(appendUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: newRows }),
+    });
+    console.log(`[fullSyncEventDetails] Appended ${newRows.length} new rows`);
+  }
+
+  // 4. Deduplication pass: remove any duplicate registeredDateTimeAD entries
+  let dedupCount = 0;
+  const dedupRange = encodeURIComponent("'BOOKED CLIENTS EVENT DETAILS'!A2:A2000");
+  const dedupResponse = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${dedupRange}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+
+  if (dedupResponse.ok) {
+    const dedupData = await dedupResponse.json();
+    const dedupRows: string[][] = dedupData.values || [];
+    const seenIds = new Set<string>();
+    const dupeRowNumbers: number[] = [];
+
+    dedupRows.forEach((r: string[], idx: number) => {
+      const key = (r[0] || '').trim();
+      if (!key) return;
+      if (seenIds.has(key)) {
+        dupeRowNumbers.push(idx + 2); // mark later occurrence for deletion
+      } else {
+        seenIds.add(key);
+      }
+    });
+
+    if (dupeRowNumbers.length > 0) {
+      const sheetIdForDedup = await getSheetId(accessToken, spreadsheetId, 'BOOKED CLIENTS EVENT DETAILS');
+      const sortedDupes = dupeRowNumbers.sort((a, b) => b - a);
+      const dedupRequests = sortedDupes.map(rowNum => ({
+        deleteDimension: {
+          range: { sheetId: sheetIdForDedup, dimension: 'ROWS', startIndex: rowNum - 1, endIndex: rowNum }
+        }
+      }));
+      await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests: dedupRequests }),
+      });
+      dedupCount = dupeRowNumbers.length;
+      console.log(`[fullSyncEventDetails] Removed ${dedupCount} duplicate rows`);
+    }
+  }
+
+  // 5. Cleanup: remove rows from EVENT DETAILS that are NOT in BOOKED CLIENTS
   let removedCount = 0;
   const validBookedIds = new Set(
     bookedData.values.map((row: string[]) => (row[0] || '').trim()).filter(Boolean)
   );
 
-  // Re-read EVENT DETAILS column A to get current state (including newly added rows)
+  // Re-read EVENT DETAILS column A to get current state (after dedup)
   const cleanupRange = encodeURIComponent("'BOOKED CLIENTS EVENT DETAILS'!A2:A2000");
   const cleanupResponse = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${cleanupRange}`,
@@ -4321,13 +4423,12 @@ async function fullSyncEventDetails(accessToken: string, spreadsheetId: string) 
     edRows.forEach((r: string[], idx: number) => {
       const key = (r[0] || '').trim();
       if (key && !validBookedIds.has(key)) {
-        rowsToDelete.push(idx + 2); // sheet row number (1-indexed, header is row 1)
+        rowsToDelete.push(idx + 2);
       }
     });
 
     if (rowsToDelete.length > 0) {
       const sheetId = await getSheetId(accessToken, spreadsheetId, 'BOOKED CLIENTS EVENT DETAILS');
-      // Delete rows bottom-up to avoid index shifting
       const sortedRows = rowsToDelete.sort((a, b) => b - a);
       const requests = sortedRows.map(rowNum => ({
         deleteDimension: {
@@ -4349,6 +4450,7 @@ async function fullSyncEventDetails(accessToken: string, spreadsheetId: string) 
     copiedCount, 
     updatedCount, 
     removedCount,
+    dedupCount,
     totalEvents: bookedData.values.length 
   };
 }
@@ -6529,44 +6631,104 @@ async function fullSyncFreelancerAssignments(accessToken: string, spreadsheetId:
     });
   }
 
-  // Cleanup: remove rows from FREELANCERS sheet that are NOT in EVENT DETAILS (e.g., BOOKED SOMEWHERE ELSE)
-  let removedCount = 0;
-  const rowsToDelete: number[] = [];
-  flRows.forEach((r, idx) => {
-    const key = (r[0] || '').trim();
-    if (key && !validIds.has(key)) {
-      rowsToDelete.push(idx + 2); // sheet row number (1-indexed, header is row 1)
-    }
-  });
+  // Deduplication pass: remove any duplicate registeredDateTimeAD entries
+  let dedupCount = 0;
+  const dedupRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:A1000");
+  const dedupResp = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${dedupRange}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
 
-  if (rowsToDelete.length > 0) {
-    // Get sheet ID for BOOKED CLIENTS FREELANCERS
-    const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets(properties(sheetId,title))`;
-    const metaResp = await fetch(metaUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
-    if (metaResp.ok) {
-      const metaData = await metaResp.json();
-      const flSheet = metaData.sheets?.find((s: any) => s.properties?.title === 'BOOKED CLIENTS FREELANCERS');
-      if (flSheet) {
-        const sheetId = flSheet.properties.sheetId;
-        // Delete rows bottom-up to avoid index shifting
-        const sortedRows = rowsToDelete.sort((a, b) => b - a);
-        const requests = sortedRows.map(rowNum => ({
-          deleteDimension: {
-            range: { sheetId, dimension: 'ROWS', startIndex: rowNum - 1, endIndex: rowNum }
-          }
-        }));
-        await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ requests }),
-        });
-        removedCount = rowsToDelete.length;
-        console.log(`[fullSyncFreelancerAssignments] Removed ${removedCount} stale rows (not in EVENT DETAILS)`);
+  if (dedupResp.ok) {
+    const dedupData = await dedupResp.json();
+    const dedupRows: string[][] = dedupData.values || [];
+    const seenIds = new Set<string>();
+    const dupeRowNumbers: number[] = [];
+
+    dedupRows.forEach((r: string[], idx: number) => {
+      const key = (r[0] || '').trim();
+      if (!key) return;
+      if (seenIds.has(key)) {
+        dupeRowNumbers.push(idx + 2);
+      } else {
+        seenIds.add(key);
+      }
+    });
+
+    if (dupeRowNumbers.length > 0) {
+      const metaUrl2 = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets(properties(sheetId,title))`;
+      const metaResp2 = await fetch(metaUrl2, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (metaResp2.ok) {
+        const metaData2 = await metaResp2.json();
+        const flSheet2 = metaData2.sheets?.find((s: any) => s.properties?.title === 'BOOKED CLIENTS FREELANCERS');
+        if (flSheet2) {
+          const sortedDupes = dupeRowNumbers.sort((a, b) => b - a);
+          const dedupRequests = sortedDupes.map(rowNum => ({
+            deleteDimension: {
+              range: { sheetId: flSheet2.properties.sheetId, dimension: 'ROWS', startIndex: rowNum - 1, endIndex: rowNum }
+            }
+          }));
+          await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requests: dedupRequests }),
+          });
+          dedupCount = dupeRowNumbers.length;
+          console.log(`[fullSyncFreelancerAssignments] Removed ${dedupCount} duplicate rows`);
+        }
       }
     }
   }
 
-  return { copiedCount, updatedCount, removedCount, totalFreelancers: flRows.length + newRows.length - removedCount };
+  // Cleanup: remove rows from FREELANCERS sheet that are NOT in EVENT DETAILS (e.g., BOOKED SOMEWHERE ELSE)
+  let removedCount = 0;
+
+  // Re-read FREELANCERS column A after dedup to get current state
+  const cleanupFlRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:A1000");
+  const cleanupFlResp = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${cleanupFlRange}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+
+  if (cleanupFlResp.ok) {
+    const cleanupFlData = await cleanupFlResp.json();
+    const currentFlRows: string[][] = cleanupFlData.values || [];
+    const rowsToDelete: number[] = [];
+
+    currentFlRows.forEach((r: string[], idx: number) => {
+      const key = (r[0] || '').trim();
+      if (key && !validIds.has(key)) {
+        rowsToDelete.push(idx + 2);
+      }
+    });
+
+    if (rowsToDelete.length > 0) {
+      const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets(properties(sheetId,title))`;
+      const metaResp = await fetch(metaUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (metaResp.ok) {
+        const metaData = await metaResp.json();
+        const flSheet = metaData.sheets?.find((s: any) => s.properties?.title === 'BOOKED CLIENTS FREELANCERS');
+        if (flSheet) {
+          const sheetId = flSheet.properties.sheetId;
+          const sortedRows = rowsToDelete.sort((a, b) => b - a);
+          const requests = sortedRows.map(rowNum => ({
+            deleteDimension: {
+              range: { sheetId, dimension: 'ROWS', startIndex: rowNum - 1, endIndex: rowNum }
+            }
+          }));
+          await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requests }),
+          });
+          removedCount = rowsToDelete.length;
+          console.log(`[fullSyncFreelancerAssignments] Removed ${removedCount} stale rows (not in EVENT DETAILS)`);
+        }
+      }
+    }
+  }
+
+  return { copiedCount, updatedCount, removedCount, dedupCount, totalFreelancers: flRows.length + newRows.length - removedCount - dedupCount };
 }
 
 Deno.serve(async (req) => {
