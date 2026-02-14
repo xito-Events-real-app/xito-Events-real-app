@@ -1,58 +1,43 @@
 
-# Fix: Event Data Not Showing After Edit + Sync Button Fix
 
-## Problem
-1. After editing events in the Quick Add form, data saves to Google Sheets correctly but the Client Detail page shows stale event data because `useEventDetails` (which fetches from the logistics sheet) is never re-triggered.
-2. The Sync button refreshes client data but does NOT refresh event details from the logistics sheet.
-3. `DashboardEventDetails` prioritizes `eventDetailsData` (logistics sheet) over `clientEvents` (client record), so even when the client record updates, stale logistics data takes precedence.
+# Fix: All Clients Page Auto-Update + Freelancer Auto-Assignment Bug
 
-## Root Cause
-The `refetchEventDetails` function is destructured from `useEventDetails` on line 292 of `ClientDetail.tsx` but is **never called anywhere** -- not after editing, not after syncing.
+## Problems Identified
+
+1. **Refresh button doesn't sync**: The "Refresh" button on the All Clients page only re-reads data from the FREELANCERS sheet (`loadData`). It does NOT trigger `fullSyncFreelancerAssignments` to update the sheet first, so new/removed events won't appear until a Master Sync or 30-min interval.
+
+2. **Freelancers incorrectly appearing on new events**: When `syncSingleClientToFreelancers` updates an existing client row, it only writes columns A-H (event info) and preserves columns I-R (freelancer names). However, it does NOT adjust the freelancer columns to match the new event count. If a client previously had 2 events with freelancers assigned (e.g., "John\nJane" in column I), and a 3rd event is added, the column still reads "John\nJane" -- but the newline-indexed parsing can cause misalignment, or old assignments may appear mapped to wrong events.
 
 ## Solution
 
-### File: `src/pages/ClientDetail.tsx`
+### 1. Refresh Button Triggers Full Sync (AllClientsCrewTable.tsx)
 
-**1. Sync button fix** -- Add `refetchEventDetails()` call inside `handleSyncClient`:
+Change the "Refresh" button's `onClick` from just `loadData` to `handleSync(false)` so it triggers `fullSyncFreelancerAssignments` (which updates the sheet) before reading data.
 
-```typescript
-const handleSyncClient = async () => {
-  if (!client?.registeredDateTimeAD) return;
-  
-  setIsSyncingClient(true);
-  try {
-    const freshClient = await getSingleClient(client.registeredDateTimeAD);
-    if (freshClient && updateClientCache) {
-      updateClientCache(freshClient);
-      setCurrentStatusLog(freshClient.statusLog || '');
-      setCurrentPaymentsMade(freshClient.paymentsMade || '');
-      setCurrentRemainingPayment(freshClient.remainingPayment || '');
-      setCurrentComments(freshClient.comments || '');
-      setCurrentQuotationData(freshClient.quotationData || '');
-      setCurrentFinalQuotation(freshClient.finalQuotation || '');
-      toast({ title: "Client data synced from sheets" });
-    }
-    // Also refresh event details from logistics sheet
-    await refetchEventDetails();
-  } catch (err) {
-    // ... error handling
-  } finally {
-    setIsSyncingClient(false);
-  }
-};
-```
+### 2. Fix Freelancer Column Alignment on Event Changes (Edge Function)
 
-**2. Post-edit refresh** -- Add an effect that triggers `refetchEventDetails()` when the client's event fields change (which happens when returning from the QuickAdd edit form):
+Update `syncSingleClientToFreelancers` in the edge function to:
+- Compare old event count vs new event count
+- When event count changes, re-align freelancer columns (I-R) by:
+  - Reading the existing I-R data
+  - Padding with empty entries for new events (so new events get blank assignments)
+  - Trimming excess entries if events were removed
+  - Writing the adjusted I-R data back
 
-```typescript
-useEffect(() => {
-  if (client?.events) {
-    refetchEventDetails();
-  }
-}, [client?.events, client?.eventYear, client?.eventMonth, client?.eventDay]);
-```
-
-This ensures that whenever the cached client's event data changes (after an edit), the logistics sheet data is also re-fetched to stay in sync.
+This prevents old freelancer assignments from bleeding into newly added event slots.
 
 ### Files Modified
-- `src/pages/ClientDetail.tsx` (2 small changes: add `refetchEventDetails()` to sync handler + add useEffect for post-edit refresh)
+- `src/components/suite/AllClientsCrewTable.tsx` -- Refresh button triggers sync
+- `supabase/functions/google-sheets/index.ts` -- Fix `syncSingleClientToFreelancers` to realign freelancer columns when event count changes
+
+### Technical Details
+
+**AllClientsCrewTable.tsx change:**
+```
+// Line 273: Change onClick from loadData to handleSync
+<Button onClick={() => handleSync(false)} ...>
+```
+
+**Edge function `syncSingleClientToFreelancers` fix:**
+When updating an existing row, after writing A-H, also check if the event count changed. If it did, read columns I-R, split each by `\n`, pad/trim to match new event count, and write back I-R. This ensures new events always start with empty freelancer assignments.
+
