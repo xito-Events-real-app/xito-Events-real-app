@@ -77,14 +77,30 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
     }
   }, [open]);
 
-  // Handle client selection — also load their existing Benzo Keep notes
+  // Handle client selection — load their Keep notes + auto-fill form fields
   const handleSelectClient = (client: ClientData | null) => {
     setSelectedClient(client);
-    if (client?.benzoKeepNotes) {
-      const parsed = parseBenzoKeepNotes(client.benzoKeepNotes);
-      if (parsed) {
-        setContent(parsed.content);
-        setMarkerColor(parsed.markerColor);
+    if (client) {
+      // Auto-fill form fields with client data
+      setQuickClientData({
+        clientName: client.clientName || '',
+        contactNo: client.contactNo || '',
+        whatsappNo: client.whatsappNo || '',
+        source: client.source || '',
+        clientHandler: client.clientHandler || '',
+        initialStatus: client.initialStatus || '',
+        events: client.events || '',
+        eventYear: client.eventYear || '',
+        eventMonth: client.eventMonth || '',
+        eventDay: client.eventDay || '',
+      });
+      // Load their Benzo Keep notes
+      if (client.benzoKeepNotes) {
+        const parsed = parseBenzoKeepNotes(client.benzoKeepNotes);
+        if (parsed) {
+          setContent(parsed.content);
+          setMarkerColor(parsed.markerColor);
+        }
       }
     }
   };

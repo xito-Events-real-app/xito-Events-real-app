@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { User, ExternalLink, X, Loader2, Phone, MessageCircle, Search } from "lucide-react";
+import { User, X, Loader2, Phone, MessageCircle, Search, ChevronRight, Calendar, MapPin } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { cn } from "@/lib/utils";
 import { ClientData } from "@/lib/sheets-api";
 
@@ -64,130 +65,78 @@ export function BenzoKeepClientPanel({
     onQuickDataChange({ clientName: "", contactNo: "", whatsappNo: "", source: "", clientHandler: "", initialStatus: "", events: "", eventYear: "", eventMonth: "", eventDay: "" });
   };
 
+  const handleClientClick = (client: ClientData) => {
+    // Auto-fill the form fields with client data
+    onQuickDataChange({
+      clientName: client.clientName || "",
+      contactNo: client.contactNo || "",
+      whatsappNo: client.whatsappNo || "",
+      source: client.source || "",
+      clientHandler: client.clientHandler || "",
+      initialStatus: client.initialStatus || "",
+      events: client.events || "",
+      eventYear: client.eventYear || "",
+      eventMonth: client.eventMonth || "",
+      eventDay: client.eventDay || "",
+    });
+    // Trigger note loading in dialog
+    onSelectClient(client);
+  };
+
   const update = (field: keyof QuickClientData, value: string) => {
     onQuickDataChange({ ...quickData, [field]: value });
   };
 
-  // Selected client detail view
-  if (selectedClient) {
-    if (layout === 'horizontal') {
-      return (
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-3">
-            <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider shrink-0">Selected:</h4>
-            <div className="flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2">
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center">
-                <User className="w-3.5 h-3.5 text-white" />
-              </div>
-              <span className="font-semibold text-sm text-gray-900">{selectedClient.clientName}</span>
-              {selectedClient.contactNo && <span className="text-sm text-gray-500">• {selectedClient.contactNo}</span>}
-              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 ml-1" onClick={handleClearSelection}>
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </div>
-          <RecentClientsList
-            clients={filteredClients}
-            isLoading={isLoadingClients}
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            onSelect={onSelectClient}
-            selectedId={selectedClient.registeredDateTimeAD}
-            layout="horizontal"
-          />
-        </div>
-      );
-    }
-
-    return (
-      <div className="flex flex-col h-full gap-3">
-        <div className="flex items-center justify-between">
-          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Selected Client</h4>
-          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleClearSelection}>
-            <X className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-
-        <div className="rounded-lg border border-violet-200 bg-violet-50 p-3 space-y-2">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center">
-              <User className="w-4 h-4 text-white" />
-            </div>
-            <p className="font-semibold text-sm text-gray-900 truncate">{selectedClient.clientName}</p>
-          </div>
-          {selectedClient.contactNo && (
-            <div className="flex items-center gap-1.5 text-xs text-gray-600">
-              <Phone className="w-3 h-3" /> {selectedClient.contactNo}
-            </div>
-          )}
-          {selectedClient.whatsappNo && (
-            <div className="flex items-center gap-1.5 text-xs text-gray-600">
-              <MessageCircle className="w-3 h-3" /> {selectedClient.whatsappNo}
-            </div>
-          )}
-          {selectedClient.events && (
-            <p className="text-xs text-gray-500">{selectedClient.events} • {selectedClient.eventMonth} {selectedClient.eventYear}</p>
-          )}
-          {selectedClient.source && (
-            <p className="text-xs text-gray-400">Source: {selectedClient.source}</p>
-          )}
-        </div>
-
-        <p className="text-[10px] text-gray-400 text-center">Note will be assigned to this client</p>
-
-        <RecentClientsList
-          clients={filteredClients}
-          isLoading={isLoadingClients}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          onSelect={onSelectClient}
-          selectedId={selectedClient.registeredDateTimeAD}
-        />
-      </div>
-    );
-  }
-
-  // Horizontal layout for top bar
+  // Horizontal layout for desktop top bar
   if (layout === 'horizontal') {
     return (
-      <div className="flex flex-col gap-2">
-        {/* ROW 1: Quick-Add Form - horizontal scroll */}
-        <div>
-          <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1.5">New Client</h4>
-          <div className="flex items-end gap-2 overflow-x-auto pb-1">
-            <div className="shrink-0">
-              <Label className="text-sm text-gray-500 mb-1 block">Name *</Label>
+      <div className="flex flex-col gap-0 rounded-xl overflow-hidden bg-slate-800/90 text-white">
+        {/* ROW 1: Quick-Add Form */}
+        <div className="px-4 py-3">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">
+              {selectedClient ? "✏️ Editing Client" : "➕ New Client"}
+            </h4>
+            {selectedClient && (
+              <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-red-300 hover:text-red-200 hover:bg-red-900/30 px-2" onClick={handleClearSelection}>
+                <X className="w-3.5 h-3.5" /> Clear
+              </Button>
+            )}
+          </div>
+          <div className="flex items-end gap-3">
+            <div className="shrink-0 min-w-0">
+              <Label className="text-sm text-slate-400 mb-1 block">Name *</Label>
               <Input
                 value={quickData.clientName}
                 onChange={(e) => update('clientName', e.target.value)}
-                placeholder="Client name"
-                className="h-9 text-sm w-36"
+                placeholder="Client full name"
+                className="h-10 text-sm w-48 bg-white/10 border-slate-600 text-white placeholder:text-slate-500 focus:border-violet-400"
               />
             </div>
             <div className="shrink-0">
-              <Label className="text-sm text-gray-500 mb-1 block">Phone</Label>
+              <Label className="text-sm text-slate-400 mb-1 block">Phone</Label>
               <Input
                 value={quickData.contactNo}
                 onChange={(e) => update('contactNo', e.target.value)}
                 placeholder="Phone"
-                className="h-9 text-sm w-32"
+                className="h-10 text-sm w-36 bg-white/10 border-slate-600 text-white placeholder:text-slate-500 focus:border-violet-400"
                 type="tel"
               />
             </div>
             <div className="shrink-0">
-              <Label className="text-sm text-gray-500 mb-1 block">WhatsApp</Label>
+              <Label className="text-sm text-slate-400 mb-1 block">WhatsApp</Label>
               <Input
                 value={quickData.whatsappNo}
                 onChange={(e) => update('whatsappNo', e.target.value)}
                 placeholder="WhatsApp"
-                className="h-9 text-sm w-32"
+                className="h-10 text-sm w-36 bg-white/10 border-slate-600 text-white placeholder:text-slate-500 focus:border-violet-400"
                 type="tel"
               />
             </div>
             <div className="shrink-0">
-              <Label className="text-sm text-gray-500 mb-1 block">Source</Label>
+              <Label className="text-sm text-slate-400 mb-1 block">Source</Label>
               <Select value={quickData.source} onValueChange={(v) => update('source', v)}>
-                <SelectTrigger className="h-9 text-sm w-32">
+                <SelectTrigger className="h-10 text-sm w-36 bg-white/10 border-slate-600 text-white">
                   <SelectValue placeholder="Source" />
                 </SelectTrigger>
                 <SelectContent>
@@ -198,9 +147,9 @@ export function BenzoKeepClientPanel({
               </Select>
             </div>
             <div className="shrink-0">
-              <Label className="text-sm text-gray-500 mb-1 block">Handler</Label>
+              <Label className="text-sm text-slate-400 mb-1 block">Handler</Label>
               <Select value={quickData.clientHandler} onValueChange={(v) => update('clientHandler', v)}>
-                <SelectTrigger className="h-9 text-sm w-36">
+                <SelectTrigger className="h-10 text-sm w-40 bg-white/10 border-slate-600 text-white">
                   <SelectValue placeholder="Handler" />
                 </SelectTrigger>
                 <SelectContent>
@@ -211,9 +160,9 @@ export function BenzoKeepClientPanel({
               </Select>
             </div>
             <div className="shrink-0">
-              <Label className="text-sm text-gray-500 mb-1 block">Status</Label>
+              <Label className="text-sm text-slate-400 mb-1 block">Status</Label>
               <Select value={quickData.initialStatus} onValueChange={(v) => update('initialStatus', v)}>
-                <SelectTrigger className="h-9 text-sm w-44">
+                <SelectTrigger className="h-10 text-sm w-48 bg-white/10 border-slate-600 text-white">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -223,57 +172,18 @@ export function BenzoKeepClientPanel({
                 </SelectContent>
               </Select>
             </div>
-            <div className="shrink-0">
-              <Label className="text-sm text-gray-500 mb-1 block">Event</Label>
-              <Input
-                value={quickData.events}
-                onChange={(e) => update('events', e.target.value)}
-                placeholder="e.g. Wedding"
-                className="h-9 text-sm w-28"
-              />
-            </div>
-            <div className="shrink-0">
-              <Label className="text-sm text-gray-500 mb-1 block">Year</Label>
-              <Input
-                value={quickData.eventYear}
-                onChange={(e) => update('eventYear', e.target.value)}
-                placeholder="2082"
-                className="h-9 text-sm w-20"
-              />
-            </div>
-            <div className="shrink-0">
-              <Label className="text-sm text-gray-500 mb-1 block">Month</Label>
-              <Input
-                value={quickData.eventMonth}
-                onChange={(e) => update('eventMonth', e.target.value)}
-                placeholder="Magh"
-                className="h-9 text-sm w-24"
-              />
-            </div>
-            <div className="shrink-0">
-              <Label className="text-sm text-gray-500 mb-1 block">Day</Label>
-              <Input
-                value={quickData.eventDay}
-                onChange={(e) => update('eventDay', e.target.value)}
-                placeholder="25"
-                className="h-9 text-sm w-16"
-              />
-            </div>
-            <Button variant="ghost" size="sm" className="h-9 gap-1.5 text-sm text-violet-600 px-2 shrink-0" onClick={onOpenFullForm}>
-              <ExternalLink className="w-3.5 h-3.5" /> Full Form
-            </Button>
           </div>
         </div>
 
-        {/* ROW 2: Recent Clients - separate row */}
-        <div className="border-t pt-2">
+        {/* ROW 2: Recent Clients */}
+        <div className="px-4 py-2.5 bg-slate-900/50 border-t border-slate-700">
           <RecentClientsList
             clients={filteredClients}
             isLoading={isLoadingClients}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
-            onSelect={onSelectClient}
-            selectedId={null}
+            onSelect={handleClientClick}
+            selectedId={selectedClient?.registeredDateTimeAD}
             layout="horizontal"
           />
         </div>
@@ -281,14 +191,18 @@ export function BenzoKeepClientPanel({
     );
   }
 
-  // Vertical quick-add form view (mobile)
+  // Vertical layout (mobile)
   return (
     <div className="flex flex-col h-full gap-3">
       <div className="flex items-center justify-between">
-        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Quick Add Client</h4>
-        <Button variant="ghost" size="sm" className="h-6 gap-1 text-xs text-violet-600 px-1.5" onClick={onOpenFullForm}>
-          <ExternalLink className="w-3 h-3" /> Full Form
-        </Button>
+        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+          {selectedClient ? "Editing Client" : "Quick Add Client"}
+        </h4>
+        {selectedClient && (
+          <Button variant="ghost" size="sm" className="h-6 gap-1 text-xs text-red-500 px-1.5" onClick={handleClearSelection}>
+            <X className="w-3 h-3" /> Clear
+          </Button>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -344,9 +258,60 @@ export function BenzoKeepClientPanel({
           isLoading={isLoadingClients}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
-          onSelect={onSelectClient}
-          selectedId={null}
+          onSelect={handleClientClick}
+          selectedId={selectedClient?.registeredDateTimeAD}
         />
+      </div>
+    </div>
+  );
+}
+
+// Client detail hover card content
+function ClientHoverDetail({ client }: { client: ClientData }) {
+  return (
+    <div className="space-y-2.5 p-1">
+      <div className="flex items-center gap-2.5">
+        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shrink-0">
+          <User className="w-4 h-4 text-white" />
+        </div>
+        <div className="min-w-0">
+          <p className="font-semibold text-sm text-gray-900 truncate">{client.clientName}</p>
+          {client.source && <p className="text-xs text-gray-400">via {client.source}</p>}
+        </div>
+      </div>
+      <div className="space-y-1.5 text-xs">
+        {client.contactNo && (
+          <div className="flex items-center gap-1.5 text-gray-600">
+            <Phone className="w-3 h-3 text-blue-500" /> {client.contactNo}
+          </div>
+        )}
+        {client.whatsappNo && (
+          <div className="flex items-center gap-1.5 text-gray-600">
+            <MessageCircle className="w-3 h-3 text-green-500" /> {client.whatsappNo}
+          </div>
+        )}
+        {client.events && (
+          <div className="flex items-center gap-1.5 text-gray-600">
+            <Calendar className="w-3 h-3 text-amber-500" /> {client.events}
+            {(client.eventMonth || client.eventYear) && (
+              <span className="text-gray-400">
+                • {[client.eventDay, client.eventMonth, client.eventYear].filter(Boolean).join(" ")}
+              </span>
+            )}
+          </div>
+        )}
+        {client.clientHandler && (
+          <div className="flex items-center gap-1.5 text-gray-600">
+            <User className="w-3 h-3 text-violet-500" /> Handler: {client.clientHandler}
+          </div>
+        )}
+        {client.initialStatus && (
+          <div className="mt-1">
+            <span className="inline-block px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 text-[11px] font-medium">
+              {client.initialStatus}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -370,41 +335,65 @@ function RecentClientsList({
   selectedId: string | null | undefined;
   layout?: 'vertical' | 'horizontal';
 }) {
+  const [visibleCount, setVisibleCount] = useState(8);
+  const visibleClients = clients.slice(0, visibleCount);
+  const hasMore = clients.length > visibleCount;
+
   if (layout === 'horizontal') {
     return (
       <div className="flex items-center gap-2">
-        <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Recent:</h4>
+        <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">Recent:</h4>
         <div className="relative shrink-0">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
           <Input
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search..."
-            className="h-8 text-sm pl-7 w-40"
+            className="h-8 text-sm pl-7 w-40 bg-white/10 border-slate-600 text-white placeholder:text-slate-500"
           />
         </div>
-        <div className="flex items-center gap-1.5 overflow-x-auto flex-1 min-w-0 pb-0.5">
+        <div className="flex items-center gap-1.5 flex-1 min-w-0 flex-wrap">
           {isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+            <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
           ) : clients.length === 0 ? (
-            <p className="text-sm text-gray-400">{searchQuery ? "No match" : "No clients"}</p>
+            <p className="text-sm text-slate-500">{searchQuery ? "No match" : "No clients"}</p>
           ) : (
-            clients.slice(0, 15).map((client) => (
-              <button
-                key={client.registeredDateTimeAD}
-                onClick={() => onSelect(client)}
-                className={cn(
-                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors shrink-0",
-                  "hover:bg-violet-50 border",
-                  selectedId === client.registeredDateTimeAD ? "bg-violet-100 border-violet-300" : "border-gray-200"
-                )}
-              >
-                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center shrink-0">
-                  <User className="w-3 h-3 text-white" />
-                </div>
-                <span className="font-medium text-gray-900">{client.clientName}</span>
-              </button>
-            ))
+            <>
+              {visibleClients.map((client) => (
+                <HoverCard key={client.registeredDateTimeAD} openDelay={300} closeDelay={100}>
+                  <HoverCardTrigger asChild>
+                    <button
+                      onClick={() => onSelect(client)}
+                      className={cn(
+                        "flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-sm whitespace-nowrap transition-all shrink-0",
+                        "hover:bg-violet-500/20 border",
+                        selectedId === client.registeredDateTimeAD
+                          ? "bg-violet-500/30 border-violet-400 text-white"
+                          : "border-slate-600 text-slate-200 hover:border-violet-400"
+                      )}
+                    >
+                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center shrink-0">
+                        <User className="w-3 h-3 text-white" />
+                      </div>
+                      <span className="font-medium">{client.clientName}</span>
+                    </button>
+                  </HoverCardTrigger>
+                  <HoverCardContent side="bottom" className="w-72">
+                    <ClientHoverDetail client={client} />
+                  </HoverCardContent>
+                </HoverCard>
+              ))}
+              {hasMore && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 gap-1 text-xs text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 px-2 shrink-0"
+                  onClick={() => setVisibleCount((prev) => prev + 8)}
+                >
+                  More <ChevronRight className="w-3.5 h-3.5" />
+                </Button>
+              )}
+            </>
           )}
         </div>
       </div>
