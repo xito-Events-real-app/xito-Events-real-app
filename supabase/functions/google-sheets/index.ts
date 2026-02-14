@@ -2619,7 +2619,7 @@ async function updateClient(accessToken: string, spreadsheetId: string, clientDa
   const range = encodeURIComponent(`'CLIENT TRACKER'!A${actualRowNumber}:U${actualRowNumber}`);
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
   
-  const response = await fetch(updateUrl, {
+  const response = await fetchWithRetry(updateUrl, {
     method: 'PUT',
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -2643,7 +2643,7 @@ async function updateClient(accessToken: string, spreadsheetId: string, clientDa
       const bookedRange = encodeURIComponent(`'BOOKED CLIENTS'!A${bookedRowNumber}:U${bookedRowNumber}`);
       const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}?valueInputOption=USER_ENTERED`;
       
-      const bookedResponse = await fetch(bookedUrl, {
+      const bookedResponse = await fetchWithRetry(bookedUrl, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${accessToken}`,
