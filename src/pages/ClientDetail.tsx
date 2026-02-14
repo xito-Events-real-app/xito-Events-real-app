@@ -1119,6 +1119,7 @@ const ClientDetail = () => {
                         <FullScreenEventCard
                           key={eventDetail.eventIndex}
                           event={eventDetail}
+                          eventDateAD={eventDetail.eventDateAD}
                           isExpanded={editingEventIndex === eventDetail.eventIndex}
                           onToggleExpand={() => {
                             setEditingEventIndex(
