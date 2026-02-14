@@ -1,33 +1,46 @@
 
 
-# Darker Background + Date Group Borders (Multi-Row Dates Only)
+# Date Converter for Benzo Keep Page
 
-## What Changes
+## Overview
+Add a compact date converter bar at the top of the Benzo Keep page, below the header. Users type a date like "Magh 25" or "Feb 24" and instantly see the converted date alongside, with the converted result shown in a faded bracket style.
 
-### 1. Darker Background
-- Change the main container background from `bg-white` to `bg-gray-200`
-- Darken the `DAY_COLORS` palette to stronger shades for better contrast
+## How It Works
 
-### 2. Date Group Borders -- Only for Dates with 2+ Events
-- Compute a count of rows per `eventDay` value
-- Only apply border "box" styling when a date has **more than 1 row**
-- Single-event dates get no extra border treatment
-- For multi-row date groups:
-  - First row gets a thick top border + left/right borders with rounded top corners
-  - Middle rows get left/right borders
-  - Last row gets a thick bottom border + left/right borders with rounded bottom corners
-  - Border color matches the day's color group for visual cohesion
+**Input → Output:**
+- "Magh 25" → **Magh 25 (Feb 7, 2026)** (faded bracket)
+- "Feb 24" → **Feb 24 (Falgun 12, 2082)** (faded bracket)
+- "Falgun 3" → **Falgun 3 (Feb 14, 2026)**
 
-### Technical Details
+**Future-biased logic:**
+- No year specified → use current BS year (2082) for Nepali months, current AD year (2026) for English months
+- If the resulting date is in the past, bump to next year automatically
+- If a year IS explicitly mentioned (e.g., "Magh 25 2081"), use that year as-is
 
-**File: `src/components/suite/AllClientsCrewTable.tsx`**
+## Technical Plan
 
-- Compute a `dayCounts` map: `Map<string, number>` counting how many rows share each `eventDay`
-- Update `DAY_COLORS` to darker shades (e.g., `bg-blue-200/80`, `bg-amber-200/70`)
-- Change outer container from `bg-white` to `bg-gray-200`
-- In desktop `tbody`, for each row check:
-  - `dayCounts.get(row.eventDay) > 1` -- if yes, apply group border logic
-  - Compute `isFirstInGroup` / `isLastInGroup` by comparing with neighboring rows
-  - Apply `border-t-2`, `border-b-2`, `border-l-2`, `border-r-2` with a darker gray/violet color
-- In mobile card layout, wrap multi-row date groups in a container div with a visible border
+### 1. New Component: `src/components/shared/BenzoDateConverter.tsx`
+
+A self-contained input + result display component:
+- Single text input with a calendar icon
+- On each keystroke (debounced ~200ms), parse the input
+- Detect if input is a Nepali month name (Magh, Falgun, Baisakh, etc.) or English month name (Jan, Feb, Mar, etc.)
+- Use existing `bsToAD()` and `adToBS()` from `src/lib/nepali-date.ts` for conversion
+- Display result inline: bold input date + faded bracket with converted date
+- Uses `nepaliMonthsEnglish` array for matching Nepali month names
+
+**Parsing logic:**
+- Match month name (case-insensitive) against `nepaliMonthsEnglish` array and English month names
+- Extract day number following the month name
+- Optionally extract year (4-digit number)
+- If no year: use current year, then check if date is past → if so, use next year
+
+### 2. Integrate into `src/pages/BenzoKeepPage.tsx`
+
+- Import and place `BenzoDateConverter` between the sticky header and the notes content area (line ~246, before the notes grid)
+- Compact design: small input bar with subtle styling matching the dark theme
+
+### Files Changed
+- **New:** `src/components/shared/BenzoDateConverter.tsx`
+- **Modified:** `src/pages/BenzoKeepPage.tsx` (add converter below header)
 
