@@ -2382,7 +2382,8 @@ async function addClient(accessToken: string, spreadsheetId: string, clientData:
 
   // Now write data to row 2
   const now = new Date();
-  const registeredDateTimeAD = now.toISOString();
+  // Use frontend-provided registeredDateTimeAD if available (for consistent ID matching)
+  const registeredDateTimeAD = (clientData.registeredDateTimeAD as string) || now.toISOString();
   
   // Use BS dates sent from frontend (accurate conversion using nepali-date-converter)
   // Fallback to simplified conversion only if not provided
