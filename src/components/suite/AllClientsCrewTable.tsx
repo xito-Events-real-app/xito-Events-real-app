@@ -538,7 +538,7 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                                 {col.short}
                               </span>
                               {!isReq ? (
-                                <span className="text-[10px] text-gray-500 bg-gray-900 px-1.5 py-0.5 rounded">
+                                <span className="text-[10px] text-gray-400 bg-white border border-gray-200 px-1.5 py-0.5 rounded">
                                   {val ? <span className="line-through opacity-60">{val}</span> : '—'}
                                 </span>
                               ) : val ? (
@@ -830,7 +830,7 @@ function CrewCell({
         className="px-1 py-1.5 border-r border-gray-100 last:border-r-0"
         style={{ width: `${colWidth}px`, minWidth: `${colWidth}px` }}
       >
-        <div className="w-full text-[9px] px-1 py-1.5 rounded-md text-center bg-gray-900 text-gray-500 font-medium">
+        <div className="w-full text-[9px] px-1 py-1.5 rounded-md text-center bg-white border border-gray-200 text-gray-400 font-medium">
           {hasValue ? <span className="line-through opacity-60">{firstName}</span> : '—'}
         </div>
       </td>
