@@ -1,51 +1,71 @@
 
-# File Management Module -- Read-Only All Clients View
+# File Management Dashboard Page
 
 ## Overview
-Activate the "File Management" module on the Suite home page and create a new page that renders the `AllClientsCrewTable` component in **read-only mode**. All data stays in sync automatically since it reads from the same data source.
+Transform the File Management page from a direct crew table view into a proper dashboard with a hero stats section at the top, followed by an "All Files" section containing the existing read-only crew table. The design will feel like a professional file management hub.
+
+## Layout
+
+```text
++-----------------------------------------------+
+|  [Back]   File Management         [icon]       |
++-----------------------------------------------+
+|                                                |
+|  DASHBOARD HERO SECTION                        |
+|  +-------------------------------------------+ |
+|  | Total Clients: 42  | Assigned: 108/285    | |
+|  | Remaining: 177     | Completion: 38%      | |
+|  +-------------------------------------------+ |
+|                                                |
+|  +-------------------------------------------+ |
+|  | ALL FILES                    [folder icon] | |
+|  | View all event crew assignments            | |
+|  |                                            | |
+|  | [AllClientsCrewTable readOnly=true]         | |
+|  |                                            | |
+|  +-------------------------------------------+ |
++-----------------------------------------------+
+```
 
 ## Changes
 
-### 1. `src/lib/suite-modules.ts`
-- Change `file-management` status from `'coming-soon'` to `'active'`
+### `src/pages/FileManagement.tsx` (rewrite)
+- Add a dashboard wrapper with:
+  - **Header bar**: Back button + "File Management" title + folder icon
+  - **Stats Cards Row**: 4 compact stat cards showing:
+    - Total Events (from filtered rows count)
+    - Assigned Crew (assigned/required)
+    - Remaining (unassigned required count, red-tinted)
+    - Completion % (progress bar)
+  - **"All Files" Section**: A card container with a section header ("All Files -- Event Crew Assignments") wrapping the existing `AllClientsCrewTable` with `readOnly={true}`
+- The stats will be computed by reading the same data the crew table uses, passed up via a callback or computed independently
+- Design uses cyan-to-blue gradient (matching the module's gradient) for the header and stat card accents
 
-### 2. `src/components/suite/AllClientsCrewTable.tsx`
-- Add a `readOnly?: boolean` prop to `AllClientsCrewTableProps`
-- When `readOnly` is true:
-  - Hide all edit buttons (the `+` assign buttons in `CrewCell`, category lock toggles, Quick Add Freelancer)
-  - Hide sync/push/pull buttons in header
-  - Hide delete/clear actions in the freelancer hover popover
-  - Make crew cells display-only (no click handlers)
-  - Keep all visual styling intact (red pulse for unassigned, day colors, filters, search)
-  - Keep navigation (clicking a client name still opens detail)
-  - Header title changes to "File Management" or similar
+### Technical Approach
+Since `AllClientsCrewTable` already computes stats internally, the simplest approach is to:
+1. Create a new `FileManagementDashboard` component wrapping everything
+2. Add an `onStatsReady` callback prop to `AllClientsCrewTable` that reports `{ totalEvents, assignedCount, requiredCells, remainingCount }` whenever stats are computed
+3. The dashboard renders the stats cards using this data
+4. The crew table renders below inside a styled card section
 
-### 3. `src/pages/FileManagement.tsx` (new file)
-- Simple page that renders `AllClientsCrewTable` with `readOnly={true}` and `onClose` navigating back to `/`
+### Files to Modify
 
-### 4. `src/App.tsx`
-- Replace the `/files` route from `ComingSoon` to the new `FileManagement` page
+**`src/components/suite/AllClientsCrewTable.tsx`**
+- Add optional `onStatsReady?: (stats: { totalEvents: number; assignedCount: number; requiredCells: number; remainingCount: number }) => void` prop
+- Call it inside the existing `useMemo` that computes stats, via a `useEffect`
 
-## Technical Details
+**`src/pages/FileManagement.tsx`**
+- Complete rewrite into a dashboard layout with:
+  - Gradient header with back navigation
+  - 4 stat cards (Total Events, Assigned, Remaining, Completion %)
+  - "All Files" section card containing the read-only crew table
+  - Professional styling with the cyan-blue gradient theme
+  - Folder/file-themed iconography throughout
+  - A subtle description: "Central hub for viewing all event crew files and assignments"
 
-In `AllClientsCrewTable.tsx`, the `readOnly` prop gates interactivity:
-
-```text
-CrewCell component:
-  - readOnly=true --> render name as plain text badge (no click to reassign)
-  - readOnly=true --> hide the "+" button for empty cells (show "---" instead)
-
-Header bar:
-  - readOnly=true --> hide Sync, Push, Pull buttons
-  - readOnly=true --> hide Quick Add Freelancer button
-  - Title shows "File Management" instead of "All Clients"
-
-FreelancerHoverInfo:
-  - readOnly=true --> hide "Remove" and "Reassign" actions
-  - Keep WhatsApp send and schedule link (view-only actions)
-
-Category selector:
-  - readOnly=true --> hide the lock/edit category button
-```
-
-Filters (month, year, day, search) remain fully functional for browsing. The red pulse animation for unassigned required roles also remains visible as a status indicator.
+### Design Details
+- Stat cards use glass-effect backgrounds with colored icon accents
+- Progress bar for completion percentage (green when > 70%, amber 40-70%, red < 40%)
+- "Remaining" card pulses red when count > 0 (reuses `animate-pulse-red`)
+- Section header for "All Files" has a folder icon and subtle border
+- Mobile-responsive: stat cards stack 2x2 on mobile
