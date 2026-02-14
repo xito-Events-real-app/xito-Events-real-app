@@ -1,66 +1,46 @@
 
 
-# Fix: Payment Data Disappearing After Reload in Finance Manager
+# Fix: Remove Duplicate Booked Clients from Client Tracker
 
-## Root Cause
+## Problem
 
-The `resyncAllBookedClients` function copies payment data **from CLIENT TRACKER to BOOKED CLIENTS** (columns AE, AF, AG). However, per the single-source-of-truth architecture, payments are **only written to BOOKED CLIENTS**. The CLIENT TRACKER has empty or stale payment columns.
+Multiple booked clients exist in BOTH sheets because:
+1. **`updateBookedClient` (lines 5410-5423)** writes non-payment field updates BACK to CLIENT TRACKER, re-creating rows that should have been deleted
+2. **`resyncAllBookedClients`** never calls the existing `cleanupDuplicateBookedFromTracker` function, so duplicates are never auto-cleaned
 
-When the "Resync" button is clicked in Finance Manager (or any resync trigger), it reads the CLIENT TRACKER's empty payment columns and **overwrites** the real payment data in BOOKED CLIENTS, effectively deleting it.
-
-The edge function logs confirm this: after payments were recorded for GEETA and WILLIAM, a resync ran and "Synced row 6 from tracker row 14" -- overwriting the just-recorded payments with stale tracker data.
-
-## Fix
-
-Modify the `resyncAllBookedClients` function in the edge function to **reverse the sync direction for payment columns** -- payment data should flow FROM BOOKED CLIENTS TO CLIENT TRACKER (not the other way around), or simply be skipped entirely since the tracker is not the source of truth for payments.
-
-The simplest and safest fix: **remove payment column syncing entirely** from `resyncAllBookedClients`, since payments should never be copied between sheets. The BOOKED CLIENTS sheet is the single source of truth for payment data.
-
-## Technical Changes
+## Fix (2 changes in 1 file)
 
 ### File: `supabase/functions/google-sheets/index.ts`
 
-**Function: `resyncAllBookedClients` (lines ~5030-5146)**
+**Change 1 -- Remove tracker write-back from `updateBookedClient` (lines 5410-5423)**
 
-Current behavior (BROKEN):
-- Reads payment columns (AE-AG) from CLIENT TRACKER
-- Overwrites BOOKED CLIENTS payment columns with tracker data
+Delete the entire block that syncs non-payment fields to CLIENT TRACKER. A BOOKED client should ONLY exist in BOOKED CLIENTS -- writing to the tracker is always wrong.
 
-New behavior (FIXED):
-- Reads NON-payment columns (A-AD, AH-AI) from CLIENT TRACKER
-- Syncs only non-payment data to BOOKED CLIENTS
-- Payment columns (AE, AF, AG) are never touched -- they remain in BOOKED CLIENTS as-is
-- Optionally: sync payment data in reverse direction (BOOKED to TRACKER) for backup visibility
-
-Specifically:
-1. Change the comparison logic to skip columns 30, 31, 32 (AE, AF, AG) when determining `needsUpdate`
-2. When updating, only write non-payment columns from tracker to booked
-3. Preserve existing BOOKED CLIENTS payment data untouched
-
-### Changes in detail:
-
-```typescript
-// REMOVE: Syncing payment data from tracker to booked
-// BEFORE (lines ~5107-5129):
-// Compares tracker payment columns to booked and overwrites booked
-
-// AFTER:
-// Compare only non-payment columns (e.g., client name, event data, handler, etc.)
-// Skip columns 30, 31, 32 entirely in the needsUpdate check
-// Only update non-payment columns A-AD and AH+ from tracker to booked
+```
+// DELETE this block entirely (lines 5410-5423):
+if (!paymentOnlyFields.includes(field) && originalRowNumber >= 2) {
+  const trackerRange = ...
+  await fetch(trackerUrl, { method: 'PUT', ... });
+}
 ```
 
-The function should either:
-- **Option A (Recommended):** Skip payment columns entirely -- compare and sync only columns 0-29 and 33+ between tracker and booked
-- **Option B:** Reverse direction -- copy payment data from BOOKED to TRACKER for visibility, but never overwrite BOOKED
+**Change 2 -- Auto-cleanup duplicates after resync (after line 5157)**
 
-## Impact
+Add a call to the existing `cleanupDuplicateBookedFromTracker` at the end of `resyncAllBookedClients` so any lingering duplicates are purged automatically on every sync.
 
-- Payments recorded in Finance Manager will persist across reloads
-- The Resync button will still sync non-payment data (client details, handler, events, etc.)
-- No other modules are affected since they all respect the single source of truth architecture
+```typescript
+// After the resync loop, before returning:
+await cleanupDuplicateBookedFromTracker(accessToken, spreadsheetId);
+```
+
+## Result
+
+- All existing duplicates (AAKAR EVENTS and others) will be removed from CLIENT TRACKER on the next resync or Master Sync
+- Future booked client updates will never write back to the tracker
+- Payment data remains protected (previous fix unchanged)
+- Single source of truth fully enforced
 
 ## Files to Modify
 
-1. `supabase/functions/google-sheets/index.ts` -- Fix `resyncAllBookedClients` function
+1. `supabase/functions/google-sheets/index.ts`
 
