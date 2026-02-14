@@ -127,7 +127,7 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
   const syncingRef = useRef(false);
 
   const handleSync = useCallback(async (silent = false) => {
-    if (syncingRef.current) return; // Ref always has latest value - no stale closure
+    if (silent && syncingRef.current) return; // Only block background syncs from piling up
     syncingRef.current = true;
     if (!silent) setSyncing(true);
     try {
