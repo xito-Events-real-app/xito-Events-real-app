@@ -1,48 +1,52 @@
 
 
-# Fix WhatsApp Send & Fallback to Contact Number
+# Highlight Unassigned Required Roles + Fix Assignment Counter
 
-## Problems
-1. The "Send Schedule to WhatsApp" button opens `wa.me` directly but gets blocked in the preview iframe. The existing `openWhatsApp` utility already handles this with a fallback mechanism.
-2. The button currently opens WhatsApp without a recipient number (just `wa.me/?text=...`), so it doesn't send to anyone specific.
-3. If the freelancer has no WhatsApp number, there's no fallback to their contact number.
+## Problem
+1. Empty cells for **required** roles (e.g., VB is required but not yet assigned) have no visual urgency -- they look the same as optional empty slots.
+2. The header shows `108/400 assigned` but `400` counts ALL cells (including "Not Required" ones). The denominator should only count **required** cells.
 
 ## Solution
 
-### 1. Pass freelancers list to FreelancerHoverInfo
-- Add `freelancers: FreelancerData[]` to the `FreelancerHoverInfo` props
-- Pass the `freelancers` prop from both desktop `CrewCell` and mobile render locations
+### 1. Red Flashing Highlight on Unassigned Required Cells
 
-### 2. Look up the freelancer's phone number
-Inside `handleSendToWhatsApp`:
-- Find the matching freelancer from the list by name (case-insensitive)
-- Use `whatsappNo` if available, otherwise fall back to `contactNo`
-- If neither exists, show a toast error "No phone number found for {name}"
+**Desktop**: The empty `+` button in `CrewCell` will get a red-tinted background with a subtle CSS pulse animation when the role is required but unassigned.
 
-### 3. Use the existing openWhatsApp utility
-- Replace the manual `window.open` / anchor fallback with the centralized `openWhatsApp(phoneNumber, message)` function from `src/lib/whatsapp-utils.ts`
-- This handles iframe blocking gracefully
+**Mobile**: Same treatment on the mobile card layout -- empty required slots get a red border/background pulse.
 
-## Files to Modify
-
-### `src/components/suite/AllClientsCrewTable.tsx`
-- Update `FreelancerHoverInfo` signature to accept `freelancers: FreelancerData[]`
-- Update `handleSendToWhatsApp` to:
-  - Look up the freelancer by name in the `freelancers` array
-  - Use `whatsappNo || contactNo` as the phone number
-  - Call `openWhatsApp(phone, message)` instead of manual `window.open`
-  - Show toast if no number found
-- Pass `freelancers` prop from all call sites of `FreelancerHoverInfo`
-
-## Technical Details
-
-```text
-handleSendToWhatsApp flow:
-  1. Find freelancer in list by name match
-  2. phone = freelancer.whatsappNo || freelancer.contactNo
-  3. If no phone --> toast error, return
-  4. Build message with schedule URL
-  5. Call openWhatsApp(phone, message)
+CSS animation to add in `src/index.css`:
+```css
+@keyframes pulse-red {
+  0%, 100% { background-color: rgba(239, 68, 68, 0.08); }
+  50% { background-color: rgba(239, 68, 68, 0.2); }
+}
+.animate-pulse-red { animation: pulse-red 2s ease-in-out infinite; }
 ```
 
-Changes are confined to a single file with minimal modifications -- adding one prop and updating the handler logic.
+### 2. Fix Header Stats to Show Only Required Counts
+
+Replace `totalCells` (which is `filteredRows * 10`) with a computed `requiredCells` that only counts cells where the role is actually required (based on `requiredCategories`).
+
+Add a new stat showing **remaining unassigned required roles**:
+- `X remaining` in a red/amber badge next to the assigned count
+- Formula: `requiredCells - assignedCount`
+
+### Files to Modify
+
+**`src/index.css`** -- Add the `pulse-red` keyframe animation
+
+**`src/components/suite/AllClientsCrewTable.tsx`**:
+- Compute `requiredCells` instead of using `totalCells` for the denominator
+- Add `remainingCount = requiredCells - assignedCount` stat in the header (red badge)
+- In `CrewCell`: when `isRequired && !hasValue`, apply red border + `animate-pulse-red` class to the empty button
+- In mobile layout: same red pulse on empty required slots
+- Header stat changes from `108/400 assigned` to `108/285 assigned | 177 remaining` (where 285 is actual required count)
+
+### Visual Result
+
+**Header**: `42 events | 108/285 assigned | 177 remaining`
+
+**Desktop table**: Empty required cells pulse with a soft red glow instead of plain dashed gray border
+
+**Mobile cards**: Empty required role badges pulse red
+
