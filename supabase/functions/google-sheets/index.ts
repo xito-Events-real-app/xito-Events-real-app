@@ -4257,10 +4257,55 @@ async function fullSyncEventDetails(accessToken: string, spreadsheetId: string) 
     }
   }
 
+  // 4. Cleanup: remove rows from EVENT DETAILS that are NOT in BOOKED CLIENTS
+  let removedCount = 0;
+  const validBookedIds = new Set(
+    bookedData.values.map((row: string[]) => (row[0] || '').trim()).filter(Boolean)
+  );
+
+  // Re-read EVENT DETAILS column A to get current state (including newly added rows)
+  const cleanupRange = encodeURIComponent("'BOOKED CLIENTS EVENT DETAILS'!A2:A2000");
+  const cleanupResponse = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${cleanupRange}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+
+  if (cleanupResponse.ok) {
+    const cleanupData = await cleanupResponse.json();
+    const edRows: string[][] = cleanupData.values || [];
+    const rowsToDelete: number[] = [];
+
+    edRows.forEach((r: string[], idx: number) => {
+      const key = (r[0] || '').trim();
+      if (key && !validBookedIds.has(key)) {
+        rowsToDelete.push(idx + 2); // sheet row number (1-indexed, header is row 1)
+      }
+    });
+
+    if (rowsToDelete.length > 0) {
+      const sheetId = await getSheetId(accessToken, spreadsheetId, 'BOOKED CLIENTS EVENT DETAILS');
+      // Delete rows bottom-up to avoid index shifting
+      const sortedRows = rowsToDelete.sort((a, b) => b - a);
+      const requests = sortedRows.map(rowNum => ({
+        deleteDimension: {
+          range: { sheetId, dimension: 'ROWS', startIndex: rowNum - 1, endIndex: rowNum }
+        }
+      }));
+      await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests }),
+      });
+      removedCount = rowsToDelete.length;
+      console.log(`[fullSyncEventDetails] Removed ${removedCount} stale rows (not in BOOKED CLIENTS)`);
+    }
+  }
+
   return { 
     success: true, 
     copiedCount, 
     updatedCount, 
+    removedCount,
     totalEvents: bookedData.values.length 
   };
 }

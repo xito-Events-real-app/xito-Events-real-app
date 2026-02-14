@@ -20,6 +20,7 @@ import {
 import { getFreelancers, FreelancerData } from "@/lib/freelancer-api";
 import { QuickAddFreelancerDialog } from "./QuickAddFreelancerDialog";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 
 const CREW_COLUMNS: { field: FreelancerField; label: string; short: string; group: 'photo' | 'video' | 'assist' | 'tech'; size: 'wide' | 'narrow' }[] = [
   { field: 'photographerBride', label: 'Photographer Bride', short: 'PB', group: 'photo', size: 'wide' },
@@ -109,6 +110,11 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
   const handleSync = useCallback(async (silent = false) => {
     if (!silent) setSyncing(true);
     try {
+      // Step 1: Clean EVENT DETAILS against BOOKED CLIENTS (remove stale rows)
+      await supabase.functions.invoke('google-sheets', {
+        body: { action: 'fullSyncEventDetails' }
+      });
+      // Step 2: Clean FREELANCERS against EVENT DETAILS (already implemented)
       const result = await fullSyncFreelancerAssignments();
       if (!silent) {
         toast.success(`Synced! ${result.copiedCount} new, ${result.updatedCount} updated`);
