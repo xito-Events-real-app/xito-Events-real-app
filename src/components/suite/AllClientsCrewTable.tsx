@@ -110,12 +110,16 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
   const handleSync = useCallback(async (silent = false) => {
     if (!silent) setSyncing(true);
     try {
-      // Step 1: Clean EVENT DETAILS against BOOKED CLIENTS (remove stale rows)
+      // Step 1: Sync EVENT DETAILS (populate new + remove stale against BOOKED CLIENTS)
       await supabase.functions.invoke('google-sheets', {
         body: { action: 'fullSyncEventDetails' }
       });
-      // Step 2: Clean FREELANCERS against EVENT DETAILS (already implemented)
+      // Step 2: Sync FREELANCERS (populate new + remove stale against EVENT DETAILS)
       const result = await fullSyncFreelancerAssignments();
+      // Step 3: Sync CONTACT DETAILS (populate new + remove stale against BOOKED CLIENTS)
+      await supabase.functions.invoke('google-sheets', {
+        body: { action: 'fullSyncContactDetails' }
+      });
       if (!silent) {
         toast.success(`Synced! ${result.copiedCount} new, ${result.updatedCount} updated`);
       }
