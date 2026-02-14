@@ -1,61 +1,53 @@
 
 
-# Fix: Newly Booked Clients Not Appearing in All Clients (3-Sheet Sync Missing)
+# Fix: Columns Placed Wrongly in BOOKED CLIENTS FREELANCERS Sheet
 
 ## Root Cause
 
-When a client's status is changed to "BOOKED", the `updateClientStatus` backend function correctly copies them to the BOOKED CLIENTS sheet and deletes them from the CLIENT TRACKER. However, it **never triggers the downstream sync** to the 3 dependent sheets:
+The `copyToEventDetails` function uses Google Sheets `insertDimension` to insert a new row at position 2, which **shifts all existing rows down by one**. When the downstream `syncSingleClientToFreelancers` runs immediately after, it reads EVENT DETAILS data from shifted positions. This causes the FREELANCERS row data to land in wrong columns because the source data (EVENT DETAILS) has been corrupted by the row shift.
 
-1. **BOOKED CLIENTS EVENT DETAILS** -- needed for logistics/dashboard
-2. **BOOKED CLIENTS FREELANCERS** -- needed for the "All Clients" crew table
-3. **BOOKED CLIENTS CONTACT DETAILS** -- needed for contact info
-
-The "All Clients" page reads from the FREELANCERS sheet, so newly booked clients simply don't exist there until a full manual sync is run.
-
-The downstream sync functions already exist and work -- they're called by `updateClient` (when editing a booked client), but they were never wired into `updateClientStatus` (when the status first changes to BOOKED).
+The `fullSyncEventDetails` function already uses the safer `:append` API, but the single-client `copyToEventDetails` was never updated to match.
 
 ## Fix
 
 ### File: `supabase/functions/google-sheets/index.ts`
 
-After the `copyToBookedClients` + `deleteTrackerRow` block (around line 2079), add calls to the 3 downstream sync functions:
+**Replace `copyToEventDetails` row insertion logic (lines 4126-4150 and 4168)**
 
+Change from the dangerous `insertDimension` (insert at row 2) pattern to the safe `:append` pattern that `fullSyncEventDetails` already uses.
+
+Before (dangerous):
 ```typescript
-movedToBooked = true;
-
-// --- NEW: Trigger downstream sync to all 3 sheets ---
-try {
-  await syncToEventDetails(accessToken, spreadsheetId, fetchedRegisteredDateTime);
-  console.log(`[STATUS CHANGE] Synced to EVENT DETAILS`);
-} catch (evErr) {
-  console.warn(`[STATUS CHANGE] EVENT DETAILS sync failed:`, evErr);
-}
-
-try {
-  await syncSingleClientToFreelancers(accessToken, spreadsheetId, fetchedRegisteredDateTime);
-  console.log(`[STATUS CHANGE] Synced to FREELANCERS`);
-} catch (flErr) {
-  console.warn(`[STATUS CHANGE] FREELANCERS sync failed:`, flErr);
-}
-
-try {
-  await resyncClientContactDetails(accessToken, spreadsheetId, fetchedRegisteredDateTime);
-  console.log(`[STATUS CHANGE] Synced to CONTACT DETAILS`);
-} catch (cdErr) {
-  console.warn(`[STATUS CHANGE] CONTACT DETAILS sync failed:`, cdErr);
-}
+// Insert a new row at position 2
+const sheetId = await getSheetId(...);
+await fetch(insertUrl, { body: { insertDimension: { startIndex: 1, endIndex: 2 } } });
+// Write to A2:I2
+const writeRange = "'BOOKED CLIENTS EVENT DETAILS'!A2:I2";
 ```
 
-Each call is wrapped in its own try/catch so a failure in one sheet doesn't block the others. The functions already handle deduplication internally.
+After (safe):
+```typescript
+// Append at bottom - no row shifting
+const appendUrl = `.../'BOOKED CLIENTS EVENT DETAILS'!A:I:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+await fetchWithRetry(appendUrl, { method: 'POST', body: { values: [eventDetailsValues] } });
+```
 
-## Why This Works
+This eliminates:
+- Row shifting that corrupts existing EVENT DETAILS data positions
+- The `getSheetId` call (no longer needed)
+- The separate insert + write two-step (replaced by single append)
 
-- `syncToEventDetails` creates the EVENT DETAILS row from the BOOKED CLIENTS data
-- `syncSingleClientToFreelancers` reads from EVENT DETAILS and creates the FREELANCERS row (which is what "All Clients" displays)
-- `resyncClientContactDetails` creates the CONTACT DETAILS row
-- All three functions are idempotent -- safe to call multiple times
+It also uses `fetchWithRetry` instead of raw `fetch` to handle 429 rate limits.
+
+## Column Layout Confirmation (No Changes Needed)
+
+The FREELANCERS sheet column mapping is correct and stays as-is:
+- **A-H**: Metadata (Registered DateTime, Date BS, Client Name, Event, Year, Month, Day, Date AD)
+- **I-R**: 10 freelancer role columns (PB, PG, VB, VG, EP, EV, Asst, iPhone, Drone, FPV)
+- **S-Z**: Reserved/unused
+- **AA**: Required Freelancers (categories)
 
 ## Files to Modify
 
-1. `supabase/functions/google-sheets/index.ts` -- add 3 sync calls after the "copy to booked" block in `updateClientStatus`
+1. `supabase/functions/google-sheets/index.ts` -- replace `copyToEventDetails` row-insert logic with append (lines 4126-4178)
 
