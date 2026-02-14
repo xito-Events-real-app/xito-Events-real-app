@@ -29,6 +29,7 @@ import HotDates from "./pages/HotDates";
 import BenzoKeepPage from "./pages/BenzoKeepPage";
 import Freelancers from "./pages/Freelancers";
 import FreelancerProfile from "./pages/FreelancerProfile";
+import CrewSchedule from "./pages/CrewSchedule";
 
 const queryClient = new QueryClient();
 
@@ -86,6 +87,7 @@ const App = () => (
           <Routes>
             {/* Public routes - no auth required */}
             <Route path="/client-form/:clientName/:clientId" element={<ClientContactForm />} />
+            <Route path="/crew-schedule/:freelancerName" element={<CrewSchedule />} />
             <Route path="/login" element={<Login />} />
             
             {/* Protected routes */}
