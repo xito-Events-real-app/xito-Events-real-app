@@ -4,7 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty, CommandGroup, CommandSeparator } from "@/components/ui/command";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Users, Plus, RefreshCw, X, ChevronLeft, Database, Trash2, Download, Upload, UserCog } from "lucide-react";
+import { Loader2, Users, Plus, RefreshCw, X, ChevronLeft, Database, Trash2, Download, Upload, UserCog, Cloud } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -19,6 +19,15 @@ import {
   updateRequiredCrewCategories,
   CATEGORY_CODES,
 } from "@/lib/freelancer-assignment-api";
+import {
+  loadAssignmentsFromCache,
+  updateAssignmentInCache,
+  updateCategoriesInCache,
+  isCachePopulated,
+  getUnsyncedCount,
+  pushUnsyncedToSheets,
+  populateCacheFromSheets,
+} from "@/lib/freelancer-assignment-cache";
 import { getFreelancers, FreelancerData } from "@/lib/freelancer-api";
 import { QuickAddFreelancerDialog } from "./QuickAddFreelancerDialog";
 import { useNavigate } from "react-router-dom";
@@ -95,19 +104,49 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
   const [filterClient, setFilterClient] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
   const [isLockingSlots, setIsLockingSlots] = useState(false);
+  const [pendingSyncs, setPendingSyncs] = useState(0);
+  const [isPushing, setIsPushing] = useState(false);
+  const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const loadData = useCallback(async () => {
+  // Schedule auto-push to sheets after 3 seconds of inactivity
+  const schedulePush = useCallback(() => {
+    if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+    pushTimerRef.current = setTimeout(async () => {
+      setIsPushing(true);
+      try {
+        await pushUnsyncedToSheets();
+        setPendingSyncs(0);
+      } catch (err) {
+        console.error('Auto-push failed:', err);
+      } finally {
+        setIsPushing(false);
+      }
+    }, 3000);
+  }, []);
+
+  const loadData = useCallback(async (fromSheets = false) => {
     setLoading(true);
     try {
+      if (fromSheets) {
+        // Pull fresh data from Sheets into Supabase cache
+        await populateCacheFromSheets();
+      } else {
+        // Check if cache has data; if not, populate from sheets
+        const hasCache = await isCachePopulated();
+        if (!hasCache) {
+          await populateCacheFromSheets();
+        }
+      }
+      // Always load from Supabase (fast)
       const [allAssignments, allFreelancers] = await Promise.all([
-        getAllFreelancerAssignments(),
+        loadAssignmentsFromCache(),
         getFreelancers(),
       ]);
       setAssignments(allAssignments);
       setFreelancers(allFreelancers);
-      try { sessionStorage.setItem('crew_assignments_cache', JSON.stringify(allAssignments)); } catch {}
-      try { sessionStorage.setItem('crew_freelancers_cache', JSON.stringify(allFreelancers)); } catch {}
+      const count = await getUnsyncedCount();
+      setPendingSyncs(count);
     } catch (err) {
       toast.error("Failed to load crew data");
     } finally {
@@ -118,7 +157,7 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await loadData();
+      await loadData(true); // Pull from sheets
     } finally {
       setRefreshing(false);
     }
@@ -127,24 +166,27 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
   const syncingRef = useRef(false);
 
   const handleSync = useCallback(async (silent = false) => {
-    if (silent && syncingRef.current) return; // Only block background syncs from piling up
+    if (silent && syncingRef.current) return;
     syncingRef.current = true;
     if (!silent) setSyncing(true);
     try {
-      // Step 1: Sync EVENT DETAILS (populate new + remove stale against BOOKED CLIENTS)
+      // First push any pending local changes to sheets
+      await pushUnsyncedToSheets();
+      // Step 1: Sync EVENT DETAILS
       await supabase.functions.invoke('google-sheets', {
         body: { action: 'fullSyncEventDetails' }
       });
-      // Step 2: Sync FREELANCERS (populate new + remove stale against EVENT DETAILS)
+      // Step 2: Sync FREELANCERS
       const result = await fullSyncFreelancerAssignments();
-      // Step 3: Sync CONTACT DETAILS (populate new + remove stale against BOOKED CLIENTS)
+      // Step 3: Sync CONTACT DETAILS
       await supabase.functions.invoke('google-sheets', {
         body: { action: 'fullSyncContactDetails' }
       });
       if (!silent) {
         toast.success(`Synced! ${result.copiedCount} new, ${result.updatedCount} updated`);
       }
-      await loadData();
+      // Refresh Supabase cache from sheets
+      await loadData(true);
     } catch (err) {
       if (!silent) toast.error("Sync failed");
     } finally {
@@ -154,28 +196,20 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
   }, [loadData]);
 
   useEffect(() => {
-    try {
-      const cachedA = sessionStorage.getItem('crew_assignments_cache');
-      const cachedF = sessionStorage.getItem('crew_freelancers_cache');
-      if (cachedA) setAssignments(JSON.parse(cachedA));
-      if (cachedF) setFreelancers(JSON.parse(cachedF));
-      if (cachedA) setLoading(false);
-    } catch {}
     loadData();
     if (!hasSyncedOnMount.current) {
       hasSyncedOnMount.current = true;
       handleSync(true);
     }
-    // Background full sync every 30 min, but skips if busy
     const interval = setInterval(() => handleSync(true), SYNC_INTERVAL);
 
-    // Cache invalidation listeners -- lightweight only
     const handleClientChange = () => loadData();
     window.addEventListener('clients-invalidate', handleClientChange);
     window.addEventListener('booked-clients-invalidate', handleClientChange);
 
     return () => {
       clearInterval(interval);
+      if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
       window.removeEventListener('clients-invalidate', handleClientChange);
       window.removeEventListener('booked-clients-invalidate', handleClientChange);
     };
@@ -299,12 +333,15 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
 
   const handleAssign = async (row: FreelancerAssignment, field: FreelancerField, freelancerName: string) => {
     try {
-      await updateFreelancerAssignment(row.registeredDateTimeAD, row.event, row.eventDateAD, field, freelancerName);
+      // Write to Supabase cache instantly
+      await updateAssignmentInCache(row.registeredDateTimeAD, row.event, field, freelancerName);
       setAssignments(prev => prev.map(a =>
-        a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event && a.eventDateAD === row.eventDateAD
+        a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event
           ? { ...a, [field]: freelancerName }
           : a
       ));
+      setPendingSyncs(prev => prev + 1);
+      schedulePush(); // Auto-push after 3s of inactivity
       toast.success(freelancerName ? `Assigned ${freelancerName}` : 'Assignment cleared');
     } catch {
       toast.error("Failed to assign");
@@ -403,15 +440,23 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                   .filter(col => !!(row[col.field] as string)?.trim())
                   .map(col => col.short);
                 const cats = filledCodes.join(',');
-                await updateRequiredCrewCategories(
+                await updateCategoriesInCache(
                   row.registeredDateTimeAD,
                   row.event,
-                  row.eventDateAD,
                   cats
                 );
                 updatedCount++;
               }
-              await loadData();
+              setPendingSyncs(prev => prev + updatedCount);
+              schedulePush();
+              setAssignments(prev => prev.map(a => {
+                const match = filteredRows.find(r => r.registeredDateTimeAD === a.registeredDateTimeAD && r.event === a.event);
+                if (!match) return a;
+                const filledCodes = CREW_COLUMNS
+                  .filter(col => !!(match[col.field] as string)?.trim())
+                  .map(col => col.short);
+                return { ...a, requiredCategories: filledCodes.join(',') };
+              }));
               toast.success(`${updatedCount} event(s) locked — empty slots marked as Not Required`);
             } catch (err) {
               console.error('Lock empty slots failed:', err);
@@ -428,6 +473,25 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
           <div className="flex items-center gap-2 text-sm">
             <span className="bg-white/20 px-3 py-1 rounded-full font-semibold">{filteredRows.length} events</span>
             <span className="bg-emerald-500/80 px-3 py-1 rounded-full font-medium text-xs">{assignedCount}/{totalCells} assigned</span>
+            {pendingSyncs > 0 && (
+              <button
+                onClick={async () => {
+                  if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+                  setIsPushing(true);
+                  try {
+                    await pushUnsyncedToSheets();
+                    setPendingSyncs(0);
+                    toast.success("Changes saved to sheets");
+                  } catch { toast.error("Failed to push to sheets"); }
+                  finally { setIsPushing(false); }
+                }}
+                disabled={isPushing}
+                className="bg-amber-500/80 hover:bg-amber-500 px-3 py-1 rounded-full font-medium text-xs transition-colors flex items-center gap-1"
+              >
+                {isPushing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Cloud className="w-3 h-3" />}
+                {isPushing ? "Pushing..." : `${pendingSyncs} pending`}
+              </button>
+            )}
           </div>
           <button onClick={handleDownloadBackup} title="Download Backup CSV" className="p-1.5 rounded-lg hover:bg-white/20 transition-colors">
             <Download className="w-5 h-5" />
@@ -666,12 +730,14 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                                   selected={(row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean)}
                                   onChange={async (codes) => {
                                     try {
-                                      await updateRequiredCrewCategories(row.registeredDateTimeAD, row.event, row.eventDateAD, codes.join(','));
+                                      await updateCategoriesInCache(row.registeredDateTimeAD, row.event, codes.join(','));
                                       setAssignments(prev => prev.map(a =>
-                                        a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event && a.eventDateAD === row.eventDateAD
+                                        a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event
                                           ? { ...a, requiredCategories: codes.join(',') }
                                           : a
                                       ));
+                                      setPendingSyncs(prev => prev + 1);
+                                      schedulePush();
                                     } catch { toast.error("Failed to update categories"); }
                                   }}
                                 />
