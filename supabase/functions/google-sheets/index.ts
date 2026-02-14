@@ -6556,10 +6556,34 @@ async function syncSingleClientToFreelancers(accessToken: string, spreadsheetId:
   const eventRows = (eventData.values || []) as string[][];
   
   const normalizedId = registeredDateTimeAD.trim();
-  const evRow = eventRows.find((r: string[]) => (r[0] || '').trim() === normalizedId);
+  let evRow = eventRows.find((r: string[]) => (r[0] || '').trim() === normalizedId);
   if (!evRow) {
-    console.log(`[syncSingleClientToFreelancers] Client ${normalizedId} not found in EVENT DETAILS, skipping`);
-    return { success: true, skipped: true };
+    console.log(`[syncSingleClientToFreelancers] Client ${normalizedId} not found in EVENT DETAILS, falling back to BOOKED CLIENTS`);
+    // Fallback: read directly from BOOKED CLIENTS to bypass Google Sheets propagation delay
+    const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:P1000");
+    const bookedResp = await fetchWithRetry(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    if (bookedResp.ok) {
+      const bookedData = await bookedResp.json();
+      const bookedRows = (bookedData.values || []) as string[][];
+      const bookedRow = bookedRows.find((r: string[]) => (r[0] || '').trim() === normalizedId);
+      if (bookedRow) {
+        // Build equivalent evRow from BOOKED CLIENTS columns:
+        // A(0)=registeredDateTimeAD, B(1)=dateBS, C(2)=clientName,
+        // L(11)=events, M(12)=year, N(13)=month, O(14)=day, P(15)=dateAD
+        evRow = [
+          bookedRow[0] || '', bookedRow[1] || '', bookedRow[2] || '',
+          bookedRow[11] || '', bookedRow[12] || '', bookedRow[13] || '', bookedRow[14] || '', bookedRow[15] || ''
+        ];
+        console.log(`[syncSingleClientToFreelancers] Found client in BOOKED CLIENTS, built evRow from fallback`);
+      }
+    }
+    if (!evRow) {
+      console.log(`[syncSingleClientToFreelancers] Client ${normalizedId} not found in BOOKED CLIENTS either, skipping`);
+      return { success: true, skipped: true };
+    }
   }
 
   // 2. Read existing freelancer rows to find if this client exists
