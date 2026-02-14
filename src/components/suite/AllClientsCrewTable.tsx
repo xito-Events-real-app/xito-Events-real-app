@@ -124,8 +124,11 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
     }
   }, [loadData]);
 
+  const syncingRef = useRef(false);
+
   const handleSync = useCallback(async (silent = false) => {
-    if (syncing) return; // Only prevent double-clicks on same button
+    if (syncingRef.current) return; // Ref always has latest value - no stale closure
+    syncingRef.current = true;
     if (!silent) setSyncing(true);
     try {
       // Step 1: Sync EVENT DETAILS (populate new + remove stale against BOOKED CLIENTS)
@@ -145,7 +148,7 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
     } catch (err) {
       if (!silent) toast.error("Sync failed");
     } finally {
-      isBusy.current = false;
+      syncingRef.current = false;
       if (!silent) setSyncing(false);
     }
   }, [loadData]);
