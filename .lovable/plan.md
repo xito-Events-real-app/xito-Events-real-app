@@ -1,54 +1,60 @@
 
-
-# Fix: "Sync Clients" Button Always Clickable
+# Fix: Sync Clients Button and Refresh Not Working (Stale Closure Bug)
 
 ## Problem
 
-The "Sync Clients" button in the All Clients Crew Table is disabled when `isBusy.current` is true. Since `isBusy` is a `useRef`, its value doesn't trigger re-renders, so the button can stay visually disabled even after the operation finishes (until something else causes a re-render). Additionally, the `isBusy` guard prevents clicking during background syncs or upload/restore operations.
+The `handleSync` function has a **stale closure bug**. It references the `syncing` state variable inside its body, but `syncing` is NOT included in its `useCallback` dependency array (`[loadData]`). This means:
+
+1. The `if (syncing) return` guard always sees `false` (the initial value), so it NEVER blocks
+2. Multiple syncs can run in parallel (mount sync + user click + interval timer) and interfere with each other
+3. When parallel syncs complete, their `loadData()` calls race against each other, causing data to flicker or appear empty
+4. The silent mount sync and 30-minute interval syncs can overlap with user-triggered syncs, causing the user's sync results to be overwritten
 
 ## Fix
 
 ### File: `src/components/suite/AllClientsCrewTable.tsx`
 
-**Change 1 -- Remove `isBusy.current` from the disabled prop (line 385)**
+**Use a `useRef` for the sync guard** instead of state. This avoids the stale closure problem entirely and properly prevents concurrent syncs:
 
-Change:
-```tsx
-disabled={syncing || isBusy.current}
-```
-To:
-```tsx
-disabled={syncing}
-```
+1. Add a `syncingRef = useRef(false)` to track whether a sync is actually running
+2. Use `syncingRef.current` as the guard in `handleSync` (always reads the latest value, no stale closure)
+3. Keep the `syncing` state for UI rendering only (button disabled state, "Syncing..." text)
+4. Set `syncingRef.current = true` at the start and `false` in the finally block
+5. Remove `syncing` from the closure guard entirely
 
-This ensures the button is only disabled while its own sync operation is actively running (with visual "Syncing..." feedback), and is always available to click otherwise.
-
-**Change 2 -- Remove the `isBusy` guard from `handleSync` (lines 128-131)**
-
-Remove the early return that blocks syncing when another operation is running. The button should always trigger a sync when clicked. The `syncing` state already prevents double-clicks on the same button.
-
-Change:
 ```typescript
+// Add ref for concurrency guard
+const syncingRef = useRef(false);
+
 const handleSync = useCallback(async (silent = false) => {
-  if (isBusy.current) {
-    if (!silent) toast.info("Another sync is already running, please wait");
-    return;
+  if (syncingRef.current) return; // Ref always has latest value - no stale closure
+  syncingRef.current = true;
+  if (!silent) setSyncing(true);
+  try {
+    // ... sync steps (unchanged)
+    await loadData();
+  } catch (err) {
+    if (!silent) toast.error("Sync failed");
+  } finally {
+    syncingRef.current = false;
+    if (!silent) setSyncing(false);
   }
-  isBusy.current = true;
-  if (!silent) setSyncing(true);
-```
-To:
-```typescript
-const handleSync = useCallback(async (silent = false) => {
-  if (syncing) return; // Only prevent double-clicks on same button
-  if (!silent) setSyncing(true);
+}, [loadData]);
 ```
 
-The `isBusy` ref will remain for the `handleUploadRestore` function where concurrency protection is still useful, but it will no longer block manual sync requests.
+This ensures:
+- Only ONE sync runs at a time (mount, interval, or user click)
+- The user's manual sync always completes fully before another can start
+- No parallel data fetches overwriting each other
+- The button correctly shows "Syncing..." during the operation
 
 ## Result
 
-- "Sync Clients" button is always clickable (only disabled during its own active sync with "Syncing..." text)
-- Background syncs and upload/restore operations no longer block manual sync
-- Upload/restore still has its own concurrency guard via `isBusy`
+- Sync Clients button will properly trigger a sync and show results
+- Refresh button will fetch the latest FREELANCERS sheet data
+- No more parallel sync interference causing data to appear empty
+- New booked clients will appear after sync completes (assuming they have events set up)
 
+## Files to Modify
+
+1. `src/components/suite/AllClientsCrewTable.tsx`
