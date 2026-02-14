@@ -2574,6 +2574,14 @@ async function updateClient(accessToken: string, spreadsheetId: string, clientDa
         try {
           await syncToEventDetails(accessToken, spreadsheetId, registeredDateTimeAD);
           console.log(`[updateClient] Synced event dates to EVENT DETAILS`);
+          
+          // Also sync to BOOKED CLIENTS FREELANCERS sheet
+          try {
+            await syncSingleClientToFreelancers(accessToken, spreadsheetId, registeredDateTimeAD);
+            console.log(`[updateClient] Synced to FREELANCERS sheet`);
+          } catch (flSyncErr) {
+            console.error(`[updateClient] Failed to sync to FREELANCERS:`, flSyncErr);
+          }
         } catch (eventSyncErr) {
           console.error(`[updateClient] Failed to sync to EVENT DETAILS:`, eventSyncErr);
           // Non-fatal: don't block the main update
@@ -6246,6 +6254,71 @@ async function getFreelancerBookings(accessToken: string, spreadsheetId: string,
   }
 
   return bookings;
+}
+
+// Sync a SINGLE client to BOOKED CLIENTS FREELANCERS sheet (lightweight, called after updateClient)
+async function syncSingleClientToFreelancers(accessToken: string, spreadsheetId: string, registeredDateTimeAD: string) {
+  // 1. Read the client's event details row
+  const eventRange = encodeURIComponent("'BOOKED CLIENTS EVENT DETAILS'!A2:H1000");
+  const eventResp = await fetchWithRetry(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${eventRange}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!eventResp.ok) throw new Error('Failed to read event details for freelancer sync');
+  const eventData = await eventResp.json();
+  const eventRows = (eventData.values || []) as string[][];
+  
+  const normalizedId = registeredDateTimeAD.trim();
+  const evRow = eventRows.find((r: string[]) => (r[0] || '').trim() === normalizedId);
+  if (!evRow) {
+    console.log(`[syncSingleClientToFreelancers] Client ${normalizedId} not found in EVENT DETAILS, skipping`);
+    return { success: true, skipped: true };
+  }
+
+  // 2. Read existing freelancer rows to find if this client exists
+  const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:R1000");
+  const flResp = await fetchWithRetry(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${flRange}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  let flRows: string[][] = [];
+  if (flResp.ok) {
+    const flData = await flResp.json();
+    flRows = flData.values || [];
+  }
+
+  const existingIdx = flRows.findIndex((r: string[]) => (r[0] || '').trim() === normalizedId);
+  const eventCount = (evRow[3] || '').split('\n').filter((n: string) => n.trim()).length;
+  const emptyNewlines = Array(eventCount).fill('').join('\n');
+
+  if (existingIdx >= 0) {
+    // Update columns A-H only (preserve I-R freelancer assignments)
+    const sheetRow = existingIdx + 2;
+    const updateRange = encodeURIComponent(`'BOOKED CLIENTS FREELANCERS'!A${sheetRow}:H${sheetRow}`);
+    const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`;
+    await fetchWithRetry(updateUrl, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: [[evRow[0] || '', evRow[1] || '', evRow[2] || '', evRow[3] || '', evRow[4] || '', evRow[5] || '', evRow[6] || '', evRow[7] || '']] }),
+    });
+    console.log(`[syncSingleClientToFreelancers] Updated row ${sheetRow}`);
+  } else {
+    // Append new row
+    const newRow = [
+      evRow[0] || '', evRow[1] || '', evRow[2] || '', evRow[3] || '', evRow[4] || '', evRow[5] || '', evRow[6] || '', evRow[7] || '',
+      emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines,
+      emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines, emptyNewlines
+    ];
+    const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A:R")}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+    await fetchWithRetry(appendUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: [newRow] }),
+    });
+    console.log(`[syncSingleClientToFreelancers] Appended new row`);
+  }
+
+  return { success: true };
 }
 
 // Bulk sync all booked clients to freelancers sheet (same pattern as fullSyncEventDetails)
