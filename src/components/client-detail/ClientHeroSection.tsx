@@ -10,6 +10,8 @@ import QuotationDisplaySection from "./QuotationDisplaySection";
 import DashboardEventDetails from "./DashboardEventDetails";
 import { EventDetailsData } from "@/hooks/useEventDetails";
 import { FreelancerAssignment } from "@/lib/freelancer-assignment-api";
+import { FreelancerData } from "@/lib/freelancer-api";
+
 interface ClientHeroSectionProps {
   client: ClientData;
   currentStatus: string;
@@ -20,9 +22,9 @@ interface ClientHeroSectionProps {
   onSync: () => void;
   onAddComment: (comment: string) => Promise<void>;
   onAddQuotation: () => void;
-  onAddFinalQuotation?: () => void; // New: for BOOKED clients to add/edit final quotation
+  onAddFinalQuotation?: () => void;
   onPriorityChange?: (priority: number) => Promise<void>;
-  onBenzoKeepClick?: () => void; // New: open Benzo Keep dialog
+  onBenzoKeepClick?: () => void;
   isLoggingCall?: boolean;
   isChangingStatus?: boolean;
   isAddingComment?: boolean;
@@ -31,6 +33,9 @@ interface ClientHeroSectionProps {
   eventDetailsData?: EventDetailsData | null;
   eventDetailsLoading?: boolean;
   freelancerAssignments?: FreelancerAssignment[];
+  registeredDateTimeAD?: string;
+  allFreelancers?: FreelancerData[];
+  onAssignmentUpdate?: (eventName: string, eventDateAD: string, field: any, value: string) => Promise<void>;
 }
 
 // Get status color
@@ -81,6 +86,9 @@ const ClientHeroSection = ({
   eventDetailsData,
   eventDetailsLoading = false,
   freelancerAssignments,
+  registeredDateTimeAD,
+  allFreelancers,
+  onAssignmentUpdate,
 }: ClientHeroSectionProps) => {
   const inquiryMonth = parseInquiryMonth(client.inquiryDateBS);
   const monthColorClasses = inquiryMonth ? getMonthColorClasses(inquiryMonth) : '';
@@ -290,6 +298,9 @@ const ClientHeroSection = ({
             eventDay: client.eventDay || '',
           }}
           freelancerAssignments={freelancerAssignments}
+          registeredDateTimeAD={registeredDateTimeAD}
+          allFreelancers={allFreelancers}
+          onAssignmentUpdate={onAssignmentUpdate}
         />
 
         {/* Description Box - Always visible */}

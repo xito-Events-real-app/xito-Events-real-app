@@ -86,5 +86,27 @@ export function useFreelancerAssignments(registeredDateTimeAD: string | undefine
     }
   }, []);
 
-  return { assignments, freelancers, isLoading, isUpdating, updateAssignment, checkAvailability };
+  const refetch = useCallback(async () => {
+    fetchedRef.current = false;
+    setIsLoading(true);
+    try {
+      const [assignData, flData] = await Promise.all([
+        getClientFreelancerAssignments(registeredDateTimeAD!),
+        freelancerCache && Date.now() - freelancerCacheTime < CACHE_TTL
+          ? Promise.resolve(freelancerCache)
+          : getFreelancers(500),
+      ]);
+      setAssignments(assignData);
+      freelancerCache = flData;
+      freelancerCacheTime = Date.now();
+      setFreelancers(flData);
+      fetchedRef.current = true;
+    } catch (err) {
+      console.error('Failed to refetch freelancer assignments:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [registeredDateTimeAD]);
+
+  return { assignments, freelancers, isLoading, isUpdating, updateAssignment, checkAvailability, refetch };
 }
