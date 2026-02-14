@@ -531,17 +531,14 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                         {CREW_COLUMNS.map(col => {
                           const reqCodes = (row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
                           const isReq = reqCodes.length === 0 || reqCodes.includes(col.short);
+                          if (!isReq) return null;
                           const val = (row[col.field] as string)?.trim();
                           return (
                             <div key={col.field} className="flex items-center gap-1.5">
                               <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0", GROUP_STYLES[col.group])}>
                                 {col.short}
                               </span>
-                              {!isReq ? (
-                                <span className="text-[10px] text-gray-400 bg-white border border-gray-200 px-1.5 py-0.5 rounded">
-                                  {val ? <span className="line-through opacity-60">{val}</span> : '—'}
-                                </span>
-                              ) : val ? (
+                              {val ? (
                                 <div className="flex items-center gap-1 flex-1 min-w-0">
                                   <HoverCard openDelay={200}>
                                     <HoverCardTrigger asChild>
@@ -683,9 +680,13 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                             </Popover>
                           </div>
                         </td>
-                        {CREW_COLUMNS.map(col => {
+                        {CREW_COLUMNS.map((col, idx) => {
                           const reqCodes = (row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
                           const isRequired = reqCodes.length === 0 || reqCodes.includes(col.short);
+                          const nextCol = CREW_COLUMNS[idx + 1];
+                          const isNextRequired = nextCol
+                            ? (reqCodes.length === 0 || reqCodes.includes(nextCol.short))
+                            : true;
                           return (
                             <CrewCell
                               key={col.field}
@@ -701,6 +702,7 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                               onAssign={(name) => handleAssign(row, col.field, name)}
                               onQuickAdd={() => setQuickAddState({ open: true, field: col.field, label: col.label, row })}
                               isRequired={isRequired}
+                              isNextRequired={isNextRequired}
                             />
                           );
                         })}
@@ -804,6 +806,7 @@ function CrewCell({
   onAssign,
   onQuickAdd,
   isRequired = true,
+  isNextRequired = true,
 }: {
   value: string;
   field: FreelancerField;
@@ -817,6 +820,7 @@ function CrewCell({
   onAssign: (name: string) => void;
   onQuickAdd: () => void;
   isRequired?: boolean;
+  isNextRequired?: boolean;
 }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -827,13 +831,9 @@ function CrewCell({
   if (!isRequired) {
     return (
       <td
-        className="px-1 py-1.5 border-r border-gray-100 last:border-r-0"
+        className={cn("py-1.5 bg-white", isNextRequired && "border-r border-gray-100")}
         style={{ width: `${colWidth}px`, minWidth: `${colWidth}px` }}
-      >
-        <div className="w-full text-[9px] px-1 py-1.5 rounded-md text-center bg-white border border-gray-200 text-gray-400 font-medium">
-          {hasValue ? <span className="line-through opacity-60">{firstName}</span> : '—'}
-        </div>
-      </td>
+      />
     );
   }
 
