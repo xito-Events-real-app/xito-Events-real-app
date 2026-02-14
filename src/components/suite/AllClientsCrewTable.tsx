@@ -29,6 +29,7 @@ import {
   populateCacheFromSheets,
 } from "@/lib/freelancer-assignment-cache";
 import { getFreelancers, FreelancerData } from "@/lib/freelancer-api";
+import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { QuickAddFreelancerDialog } from "./QuickAddFreelancerDialog";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -614,7 +615,7 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                                       </button>
                                     </HoverCardTrigger>
                                     <HoverCardContent className="w-72 p-3 z-[200]" side="bottom" avoidCollisions={true} collisionPadding={16}>
-                                      <FreelancerHoverInfo name={val} allAssignments={assignments} selectedYear={selectedYear} selectedMonth={selectedMonth} />
+                                      <FreelancerHoverInfo name={val} allAssignments={assignments} selectedYear={selectedYear} selectedMonth={selectedMonth} freelancers={freelancers} />
                                     </HoverCardContent>
                                   </HoverCard>
                                   <button
@@ -794,7 +795,7 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
 }
 
 /* ─── Shared Freelancer Hover Info ─── */
-function FreelancerHoverInfo({ name, allAssignments, selectedYear, selectedMonth }: { name: string; allAssignments: FreelancerAssignment[]; selectedYear: string; selectedMonth: string }) {
+function FreelancerHoverInfo({ name, allAssignments, selectedYear, selectedMonth, freelancers }: { name: string; allAssignments: FreelancerAssignment[]; selectedYear: string; selectedMonth: string; freelancers: FreelancerData[] }) {
   const navigate = useNavigate();
   const currentBS = getCurrentBSDate();
 
@@ -830,19 +831,16 @@ function FreelancerHoverInfo({ name, allAssignments, selectedYear, selectedMonth
     const scheduleUrl = `https://wtnclienttracker.lovable.app/crew-schedule/${encodeURIComponent(firstName)}`;
     const message = `Hi! Check your upcoming event schedule here:\n${scheduleUrl}`;
     
-    // Find freelancer's phone from the freelancers list (search by name match)
-    // We don't have direct access to freelancer phone here, so open WhatsApp web share
-    const waUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-    const win = window.open(waUrl, '_blank', 'noopener,noreferrer');
-    if (!win) {
-      const link = document.createElement('a');
-      link.href = waUrl;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+    // Look up freelancer by name (case-insensitive)
+    const match = freelancers.find(f => f.name.trim().toLowerCase() === name.trim().toLowerCase());
+    const phone = match?.whatsappNo || match?.contactNo;
+    
+    if (!phone) {
+      toast.error(`No phone number found for ${name}`);
+      return;
     }
+    
+    openWhatsApp(phone, message);
   };
 
   return (
@@ -948,7 +946,7 @@ function CrewCell({
               </span>
             </HoverCardTrigger>
             <HoverCardContent className="w-72 p-3 z-[200]" side="bottom" avoidCollisions={true} collisionPadding={16}>
-              <FreelancerHoverInfo name={value} allAssignments={allAssignments} selectedYear={selectedYear} selectedMonth={selectedMonth} />
+              <FreelancerHoverInfo name={value} allAssignments={allAssignments} selectedYear={selectedYear} selectedMonth={selectedMonth} freelancers={freelancers} />
             </HoverCardContent>
           </HoverCard>
 
