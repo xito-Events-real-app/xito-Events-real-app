@@ -1,57 +1,66 @@
 
 
-# Clean White "Not Required" Cells with Visual Merging
+# Fix: Payment Data Disappearing After Reload in Finance Manager
 
-## What Changes
+## Root Cause
 
-"Not Required" cells will become completely clean white -- no inner boxes, no dashes, no text, no borders between adjacent not-required cells. When multiple consecutive cells are all "Not Required", they visually merge into one seamless white area.
+The `resyncAllBookedClients` function copies payment data **from CLIENT TRACKER to BOOKED CLIENTS** (columns AE, AF, AG). However, per the single-source-of-truth architecture, payments are **only written to BOOKED CLIENTS**. The CLIENT TRACKER has empty or stale payment columns.
+
+When the "Resync" button is clicked in Finance Manager (or any resync trigger), it reads the CLIENT TRACKER's empty payment columns and **overwrites** the real payment data in BOOKED CLIENTS, effectively deleting it.
+
+The edge function logs confirm this: after payments were recorded for GEETA and WILLIAM, a resync ran and "Synced row 6 from tracker row 14" -- overwriting the just-recorded payments with stale tracker data.
+
+## Fix
+
+Modify the `resyncAllBookedClients` function in the edge function to **reverse the sync direction for payment columns** -- payment data should flow FROM BOOKED CLIENTS TO CLIENT TRACKER (not the other way around), or simply be skipped entirely since the tracker is not the source of truth for payments.
+
+The simplest and safest fix: **remove payment column syncing entirely** from `resyncAllBookedClients`, since payments should never be copied between sheets. The BOOKED CLIENTS sheet is the single source of truth for payment data.
 
 ## Technical Changes
 
-### File: `src/components/suite/AllClientsCrewTable.tsx`
+### File: `supabase/functions/google-sheets/index.ts`
 
-**1. CrewCell component (line ~794)** -- Add a new prop `isNextRequired` to know whether to show the right border:
+**Function: `resyncAllBookedClients` (lines ~5030-5146)**
 
-- Change the not-required return block (lines 827-837) to render a completely empty white `<td>` with no inner div, no text, no dash
-- Remove `border-r` when the next cell is also not required (seamless merge)
-- Remove padding and inner box so it's just flat white space
+Current behavior (BROKEN):
+- Reads payment columns (AE-AG) from CLIENT TRACKER
+- Overwrites BOOKED CLIENTS payment columns with tracker data
 
-```
-// Before:
-<td className="px-1 py-1.5 border-r border-gray-100">
-  <div className="... bg-white border border-gray-200 text-gray-400">—</div>
-</td>
+New behavior (FIXED):
+- Reads NON-payment columns (A-AD, AH-AI) from CLIENT TRACKER
+- Syncs only non-payment data to BOOKED CLIENTS
+- Payment columns (AE, AF, AG) are never touched -- they remain in BOOKED CLIENTS as-is
+- Optionally: sync payment data in reverse direction (BOOKED to TRACKER) for backup visibility
 
-// After:
-<td className="py-1.5 bg-white"  // no px, no border-r if next is also not-required
-    style={{ width, minWidth }}
-/>
-```
+Specifically:
+1. Change the comparison logic to skip columns 30, 31, 32 (AE, AF, AG) when determining `needsUpdate`
+2. When updating, only write non-payment columns from tracker to booked
+3. Preserve existing BOOKED CLIENTS payment data untouched
 
-**2. Row rendering (line ~686)** -- Pass `isNextRequired` to each CrewCell by checking the next column's requirement status:
+### Changes in detail:
 
 ```typescript
-{CREW_COLUMNS.map((col, idx) => {
-  const isRequired = ...;
-  const nextCol = CREW_COLUMNS[idx + 1];
-  const isNextRequired = nextCol
-    ? (reqCodes.length === 0 || reqCodes.includes(nextCol.short))
-    : true; // last column always has border
-  return (
-    <CrewCell ... isRequired={isRequired} isNextRequired={isNextRequired} />
-  );
-})}
+// REMOVE: Syncing payment data from tracker to booked
+// BEFORE (lines ~5107-5129):
+// Compares tracker payment columns to booked and overwrites booked
+
+// AFTER:
+// Compare only non-payment columns (e.g., client name, event data, handler, etc.)
+// Skip columns 30, 31, 32 entirely in the needsUpdate check
+// Only update non-payment columns A-AD and AH+ from tracker to booked
 ```
 
-**3. Expanded card view (line ~540)** -- Hide not-required roles entirely from the mobile/expanded card grid instead of showing a white box. Simply skip rendering them with `if (!isReq) return null;` so only required roles appear.
+The function should either:
+- **Option A (Recommended):** Skip payment columns entirely -- compare and sync only columns 0-29 and 33+ between tracker and booked
+- **Option B:** Reverse direction -- copy payment data from BOOKED to TRACKER for visibility, but never overwrite BOOKED
 
-## Result
+## Impact
 
-- Desktop compact table: Not-required cells are flat white empty space, merging seamlessly when adjacent
-- Mobile/expanded cards: Not-required roles are hidden entirely, showing only relevant crew slots
-- Required but empty cells still show the colored combobox for assignment
+- Payments recorded in Finance Manager will persist across reloads
+- The Resync button will still sync non-payment data (client details, handler, events, etc.)
+- No other modules are affected since they all respect the single source of truth architecture
 
 ## Files to Modify
 
-1. `src/components/suite/AllClientsCrewTable.tsx`
+1. `supabase/functions/google-sheets/index.ts` -- Fix `resyncAllBookedClients` function
 
