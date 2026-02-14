@@ -15,6 +15,7 @@ import { useNavigate } from "react-router-dom";
 import { useDropdownData } from "@/hooks/useDropdownData";
 import { XitoSearchPanel } from "@/components/shared/XitoSearchPanel";
 import { BenzoDateConverter } from "@/components/shared/BenzoDateConverter";
+import { BookingCalendarMini } from "@/components/shared/BookingCalendarMini";
 import { BenzoKeepClientPanel, QuickClientData } from "@/components/suite/BenzoKeepClientPanel";
 
 const MARKER_COLORS = [
@@ -282,11 +283,16 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
             </div>
           </div>
         ) : (
-          /* Desktop: 3-column layout */
+          /* Desktop: 4-column layout with client panel + xito on left, notes center, calendar right */
           <div className="grid grid-cols-4 gap-4 py-2 min-h-[400px] max-h-[60vh]">
-            {/* Left: Xito Search */}
-            <div className="col-span-1 border rounded-lg p-3 bg-gray-50 overflow-hidden">
-              <XitoSearchPanel noteContent={content} />
+            {/* Left: Client Panel + Xito Search stacked */}
+            <div className="col-span-1 flex flex-col gap-3 overflow-hidden">
+              <div className="border rounded-lg p-3 bg-gray-50 overflow-auto">
+                <BenzoKeepClientPanel {...clientPanelProps} />
+              </div>
+              <div className="border rounded-lg p-3 bg-gray-50 overflow-hidden flex-1 min-h-0">
+                <XitoSearchPanel noteContent={content} />
+              </div>
             </div>
 
             {/* Center: Note Editor */}
@@ -299,9 +305,9 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
               </div>
             </div>
 
-            {/* Right: Client Panel (replaces BookingCalendarMini) */}
+            {/* Right: Booking Calendar */}
             <div className="col-span-1 border rounded-lg p-3 bg-gray-50 overflow-hidden">
-              <BenzoKeepClientPanel {...clientPanelProps} />
+              <BookingCalendarMini />
             </div>
           </div>
         )}
