@@ -806,7 +806,6 @@ function FreelancerHoverInfo({ name, allAssignments, selectedYear, selectedMonth
       for (const col of CREW_COLUMNS) {
         const cellVal = (a[col.field] as string)?.trim().toUpperCase();
         if (cellVal === upper) {
-          // Filter to selected month/year only
           if (a.eventYear === selectedYear && a.eventMonth === selectedMonth) {
             monthEvts.push({ clientName: a.clientName, event: a.event, day: a.eventDay, month: a.eventMonth, year: a.eventYear });
           }
@@ -815,18 +814,36 @@ function FreelancerHoverInfo({ name, allAssignments, selectedYear, selectedMonth
       }
     }
 
-    // Filter out past events
     const upcoming = monthEvts.filter(ev => {
       return !isBSDatePast(ev.year, ev.month, ev.day);
     });
 
-    // Sort by day
     upcoming.sort((a, b) => (parseInt(a.day) || 0) - (parseInt(b.day) || 0));
 
     return { monthEvents: monthEvts, upcomingEvents: upcoming };
   }, [name, allAssignments, selectedYear, selectedMonth]);
 
   const monthName = nepaliMonthsEnglish[parseInt(selectedMonth) - 1] || selectedMonth;
+
+  const handleSendToWhatsApp = () => {
+    const firstName = name.trim().split(/\s+/)[0];
+    const scheduleUrl = `https://wtnclienttracker.lovable.app/crew-schedule/${encodeURIComponent(firstName)}`;
+    const message = `Hi! Check your upcoming event schedule here:\n${scheduleUrl}`;
+    
+    // Find freelancer's phone from the freelancers list (search by name match)
+    // We don't have direct access to freelancer phone here, so open WhatsApp web share
+    const waUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    const win = window.open(waUrl, '_blank', 'noopener,noreferrer');
+    if (!win) {
+      const link = document.createElement('a');
+      link.href = waUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
 
   return (
     <div className="space-y-2">
@@ -854,6 +871,13 @@ function FreelancerHoverInfo({ name, allAssignments, selectedYear, selectedMonth
       {upcomingEvents.length === 0 && monthEvents.length > 0 && (
         <p className="text-xs text-gray-400 italic">All events have passed</p>
       )}
+      <button
+        onClick={handleSendToWhatsApp}
+        className="w-full mt-2 flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold py-1.5 px-3 rounded-lg transition-colors"
+      >
+        <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-current"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.625.846 5.059 2.284 7.034L.789 23.492a.5.5 0 00.612.616l4.529-1.474A11.956 11.956 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-2.3 0-4.438-.768-6.152-2.063l-.43-.338-2.809.914.94-2.76-.37-.462A9.935 9.935 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+        Send Schedule to WhatsApp
+      </button>
     </div>
   );
 }
