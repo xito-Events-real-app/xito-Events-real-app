@@ -1,99 +1,48 @@
 
 
-# Freelancer Schedule Share Page (WhatsApp Link)
+# Fix WhatsApp Send & Fallback to Contact Number
 
-## Overview
-Add a "Send to WhatsApp" button inside the freelancer hover card on the All Clients page. When clicked, it generates a shareable link to a **public, mobile-friendly page** that shows the freelancer's booked dates in a calendar view. The data comes from the existing `freelancer_assignments` Supabase table for instant loading.
+## Problems
+1. The "Send Schedule to WhatsApp" button opens `wa.me` directly but gets blocked in the preview iframe. The existing `openWhatsApp` utility already handles this with a fallback mechanism.
+2. The button currently opens WhatsApp without a recipient number (just `wa.me/?text=...`), so it doesn't send to anyone specific.
+3. If the freelancer has no WhatsApp number, there's no fallback to their contact number.
 
-## How It Works
+## Solution
 
-```text
-Hover on freelancer name
-  --> See existing info + new "Send to WhatsApp" button
-  --> Click button
-  --> Opens WhatsApp with pre-filled message containing a link like:
-      https://wtnclienttracker.lovable.app/crew-schedule/Safal
+### 1. Pass freelancers list to FreelancerHoverInfo
+- Add `freelancers: FreelancerData[]` to the `FreelancerHoverInfo` props
+- Pass the `freelancers` prop from both desktop `CrewCell` and mobile render locations
 
-Freelancer opens link on phone:
-  --> Public page (no login required)
-  --> Greeting: "Hi Safal, Good Evening" (time-based)
-  --> Interactive Nepali calendar (month nav)
-  --> Booked dates highlighted
-  --> Stats: Total events this month, remaining this month, total remaining overall
-  --> Data fetched from Supabase (fast)
-```
+### 2. Look up the freelancer's phone number
+Inside `handleSendToWhatsApp`:
+- Find the matching freelancer from the list by name (case-insensitive)
+- Use `whatsappNo` if available, otherwise fall back to `contactNo`
+- If neither exists, show a toast error "No phone number found for {name}"
 
-## Data Source
+### 3. Use the existing openWhatsApp utility
+- Replace the manual `window.open` / anchor fallback with the centralized `openWhatsApp(phoneNumber, message)` function from `src/lib/whatsapp-utils.ts`
+- This handles iframe blocking gracefully
 
-The existing `freelancer_assignments` table already has all the data needed. We query it by matching the freelancer's name across all role columns (photographer_bride, photographer_groom, etc.) -- no new tables needed.
+## Files to Modify
 
-## Changes
-
-### 1. New Public Page: `src/pages/CrewSchedule.tsx`
-- Route: `/crew-schedule/:freelancerName` (public, no auth)
-- Mobile-first responsive design
-- Time-based greeting ("Good Morning/Afternoon/Evening")
-- Full Nepali calendar with month navigation (back/forth)
-- Booked dates shown as highlighted circles (emerald green)
-- Stats section:
-  - Total events in current month
-  - Remaining events this month (future dates only)
-  - Total remaining events overall (across all months)
-- Reads directly from the `freelancer_assignments` Supabase table
-- Tap on a booked date shows the event count for that day
-
-### 2. Update: `src/components/suite/AllClientsCrewTable.tsx`
-- Add a "Send to WhatsApp" button inside `FreelancerHoverInfo`
-- Button generates the public URL and opens WhatsApp with a pre-filled message:
-  "Check your upcoming schedule here: [link]"
-- Uses existing `openWhatsApp` utility
-- Needs the freelancer's WhatsApp number -- will look it up from the freelancers list (already loaded in the component)
-
-### 3. Update: `src/App.tsx`
-- Add the new public route `/crew-schedule/:freelancerName` outside the ProtectedRoute wrapper (like the existing `/client-form/:clientName/:clientId` route)
-
-### 4. No New Database Tables
-- All data comes from the existing `freelancer_assignments` table
-- Since it already has an open RLS policy (`true`), the public page can read from it directly
-- Any updates (adding/removing freelancers) in the system automatically reflect on the shared page since it reads live from Supabase
+### `src/components/suite/AllClientsCrewTable.tsx`
+- Update `FreelancerHoverInfo` signature to accept `freelancers: FreelancerData[]`
+- Update `handleSendToWhatsApp` to:
+  - Look up the freelancer by name in the `freelancers` array
+  - Use `whatsappNo || contactNo` as the phone number
+  - Call `openWhatsApp(phone, message)` instead of manual `window.open`
+  - Show toast if no number found
+- Pass `freelancers` prop from all call sites of `FreelancerHoverInfo`
 
 ## Technical Details
 
-### Public Page Component Structure
 ```text
-CrewSchedule.tsx
-  |-- Greeting section (time-based: Morning/Afternoon/Evening)
-  |-- Stats bar (total month / remaining month / total remaining)
-  |-- Calendar grid (Nepali months, navigable)
-  |-- Booked date indicators (green dots/highlights)
+handleSendToWhatsApp flow:
+  1. Find freelancer in list by name match
+  2. phone = freelancer.whatsappNo || freelancer.contactNo
+  3. If no phone --> toast error, return
+  4. Build message with schedule URL
+  5. Call openWhatsApp(phone, message)
 ```
 
-### Supabase Query (in CrewSchedule.tsx)
-```typescript
-// Fetch all assignments where this freelancer appears in ANY role column
-const { data } = await supabase
-  .from('freelancer_assignments')
-  .select('*')
-  .or(`photographer_bride.ilike.%${name}%,photographer_groom.ilike.%${name}%,...all role columns`);
-```
-
-### WhatsApp Message Format
-```
-Hi! Check your upcoming event schedule here:
-https://wtnclienttracker.lovable.app/crew-schedule/Safal
-```
-
-### Calendar Navigation
-- Uses existing Nepali date utilities (`getCurrentBSDate`, `nepaliMonthsEnglish`, `getDaysInBSMonth`)
-- Left/right arrows to navigate months
-- Current month shown by default
-- Booked dates highlighted with emerald background
-- Tapping a booked date shows a small tooltip with event count
-
-### Files to Create
-- `src/pages/CrewSchedule.tsx` -- the public schedule page
-
-### Files to Modify
-- `src/App.tsx` -- add public route
-- `src/components/suite/AllClientsCrewTable.tsx` -- add WhatsApp button to hover card
-
+Changes are confined to a single file with minimal modifications -- adding one prop and updating the handler logic.
