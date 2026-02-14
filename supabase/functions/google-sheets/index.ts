@@ -5028,12 +5028,14 @@ async function migrateExistingBookedClients(accessToken: string, spreadsheetId: 
   return { success: true, migratedCount, alreadyExistsCount, skippedCount };
 }
 
-// Resync all booked clients: sync payment data from CLIENT TRACKER to BOOKED CLIENTS
+// Resync all booked clients: sync NON-PAYMENT data from CLIENT TRACKER to BOOKED CLIENTS
+// IMPORTANT: Payment columns (AE=30, AF=31, AG=32) are NEVER overwritten.
+// BOOKED CLIENTS is the single source of truth for payment data.
 async function resyncAllBookedClients(accessToken: string, spreadsheetId: string) {
-  console.log('[RESYNC] Starting full resync of booked clients...');
+  console.log('[RESYNC] Starting resync of booked clients (payment columns protected)...');
   
-  // Get all data from CLIENT TRACKER (columns A and AE-AG for payments)
-  const trackerRange = encodeURIComponent("'CLIENT TRACKER'!A2:AG2000");
+  // Get all data from CLIENT TRACKER (full row for non-payment comparison)
+  const trackerRange = encodeURIComponent("'CLIENT TRACKER'!A2:AI2000");
   const trackerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}`;
   
   const trackerResponse = await fetch(trackerUrl, {
@@ -5047,27 +5049,21 @@ async function resyncAllBookedClients(accessToken: string, spreadsheetId: string
   const trackerData = await trackerResponse.json();
   const trackerRows = trackerData.values || [];
   
-  // Build a map of registeredDateTimeAD -> payment data from CLIENT TRACKER
-  // Column indices: A=0, AE=30, AF=31, AG=32
-  const trackerPaymentMap: Record<string, { paymentsMade: string; paymentDatesAD: string; remainingPayment: string; rowNumber: number }> = {};
+  // Build a map of registeredDateTimeAD -> full row data from CLIENT TRACKER
+  const trackerMap: Record<string, { row: string[]; rowNumber: number }> = {};
   
   for (let i = 0; i < trackerRows.length; i++) {
     const row = trackerRows[i];
     const registeredDateTime = (row[0] || '').trim();
     if (registeredDateTime) {
-      trackerPaymentMap[registeredDateTime] = {
-        paymentsMade: row[30] || '',
-        paymentDatesAD: row[31] || '',
-        remainingPayment: row[32] || '',
-        rowNumber: i + 2
-      };
+      trackerMap[registeredDateTime] = { row, rowNumber: i + 2 };
     }
   }
   
-  console.log(`[RESYNC] Built tracker map with ${Object.keys(trackerPaymentMap).length} entries`);
+  console.log(`[RESYNC] Built tracker map with ${Object.keys(trackerMap).length} entries`);
   
   // Get all data from BOOKED CLIENTS
-  const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:AG500");
+  const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:AI500");
   const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}`;
   
   const bookedResponse = await fetch(bookedUrl, {
@@ -5080,6 +5076,9 @@ async function resyncAllBookedClients(accessToken: string, spreadsheetId: string
   
   const bookedData = await bookedResponse.json();
   const bookedRows = bookedData.values || [];
+  
+  // Payment column indices to SKIP: AE=30, AF=31, AG=32
+  const PAYMENT_COLS = new Set([30, 31, 32]);
   
   let syncedCount = 0;
   let skippedCount = 0;
@@ -5095,28 +5094,43 @@ async function resyncAllBookedClients(accessToken: string, spreadsheetId: string
       continue;
     }
     
-    const trackerData = trackerPaymentMap[registeredDateTime];
+    const trackerEntry = trackerMap[registeredDateTime];
     
-    if (!trackerData) {
+    if (!trackerEntry) {
       console.log(`[RESYNC] No match in tracker for booked row ${bookedRowNumber}: ${registeredDateTime.substring(0, 20)}...`);
       notFoundCount++;
       continue;
     }
     
-    // Current values in BOOKED CLIENTS
-    const bookedPaymentsMade = row[30] || '';
-    const bookedPaymentDatesAD = row[31] || '';
-    const bookedRemainingPayment = row[32] || '';
-    
-    // Check if data differs and needs update
-    const needsUpdate = 
-      bookedPaymentsMade !== trackerData.paymentsMade ||
-      bookedPaymentDatesAD !== trackerData.paymentDatesAD ||
-      bookedRemainingPayment !== trackerData.remainingPayment;
+    // Compare ONLY non-payment columns to determine if update is needed
+    const maxLen = Math.max(row.length, trackerEntry.row.length);
+    let needsUpdate = false;
+    for (let col = 0; col < maxLen; col++) {
+      if (PAYMENT_COLS.has(col)) continue; // Skip payment columns
+      const bookedVal = String(row[col] || '');
+      const trackerVal = String(trackerEntry.row[col] || '');
+      if (bookedVal !== trackerVal) {
+        needsUpdate = true;
+        break;
+      }
+    }
     
     if (needsUpdate) {
-      // Update BOOKED CLIENTS with data from CLIENT TRACKER
-      const updateRange = encodeURIComponent(`'BOOKED CLIENTS'!AE${bookedRowNumber}:AG${bookedRowNumber}`);
+      // Build updated row: use tracker data for all columns EXCEPT payment columns
+      // For payment columns, preserve the existing BOOKED CLIENTS values
+      const updatedRow: string[] = [];
+      const totalCols = Math.max(row.length, trackerEntry.row.length, 35); // at least up to AI
+      for (let col = 0; col < totalCols; col++) {
+        if (PAYMENT_COLS.has(col)) {
+          // PRESERVE existing booked payment data
+          updatedRow.push(row[col] || '');
+        } else {
+          // Use tracker data for non-payment columns
+          updatedRow.push(trackerEntry.row[col] || '');
+        }
+      }
+      
+      const updateRange = encodeURIComponent(`'BOOKED CLIENTS'!A${bookedRowNumber}:AI${bookedRowNumber}`);
       const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`;
       
       const updateResponse = await fetch(updateUrl, {
@@ -5125,13 +5139,11 @@ async function resyncAllBookedClients(accessToken: string, spreadsheetId: string
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-          values: [[trackerData.paymentsMade, trackerData.paymentDatesAD, trackerData.remainingPayment]] 
-        }),
+        body: JSON.stringify({ values: [updatedRow] }),
       });
       
       if (updateResponse.ok) {
-        console.log(`[RESYNC] Synced row ${bookedRowNumber} from tracker row ${trackerData.rowNumber}`);
+        console.log(`[RESYNC] Synced row ${bookedRowNumber} from tracker row ${trackerEntry.rowNumber} (payment data preserved)`);
         syncedCount++;
       } else {
         console.error(`[RESYNC] Failed to update row ${bookedRowNumber}:`, await updateResponse.text());
