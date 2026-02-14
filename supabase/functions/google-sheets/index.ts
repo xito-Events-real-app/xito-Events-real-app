@@ -708,9 +708,20 @@ async function getDailyTaskSetupData(accessToken: string, taskSpreadsheetId: str
   return { handlers, handlerWhatsApp };
 }
 
-// Get clients for note assignment (CLIENT TRACKER only, basic info, sorted by most recent)
+// Extract the latest status from a status log string like "STATUS1 [timestamp]\nSTATUS2 [timestamp]"
+function extractLatestStatus(statusLog: string): string {
+  if (!statusLog) return '';
+  const lines = statusLog.split('\n').filter(l => l.trim());
+  if (lines.length === 0) return '';
+  const lastLine = lines[lines.length - 1].trim();
+  // Extract status before the timestamp bracket
+  const bracketIdx = lastLine.indexOf(' [');
+  return bracketIdx > 0 ? lastLine.substring(0, bracketIdx).trim() : lastLine;
+}
+
+// Get clients for note assignment (CLIENT TRACKER only, includes handler/status/notes)
 async function getClientsForNoteAssignment(accessToken: string, spreadsheetId: string) {
-  const range = encodeURIComponent("'CLIENT TRACKER'!A2:P500"); // A to P covers basic client info
+  const range = encodeURIComponent("'CLIENT TRACKER'!A2:AL500"); // A to AL covers up to benzoKeepNotes
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
   
   const response = await fetch(url, {
@@ -730,13 +741,18 @@ async function getClientsForNoteAssignment(accessToken: string, spreadsheetId: s
       rowNumber: index + 2,
       registeredDateTimeAD: row[0] || '',
       clientName: row[2] || '',
+      source: row[3] || '',
       contactNo: row[6] || '',
       whatsappNo: row[7] || '',
       events: row[11] || '',
       eventYear: row[12] || '',
       eventMonth: row[13] || '',
+      eventDay: row[14] || '',
+      initialStatus: extractLatestStatus(row[22] || ''), // Column W - status log, extract latest
+      clientHandler: row[23] || '', // Column X
+      benzoKeepNotes: row[37] || '', // Column AL (index 37)
     }))
-    .filter((client: { clientName: string }) => client.clientName); // Filter out empty rows
+    .filter((client: { clientName: string }) => client.clientName);
 }
 
 // Assign a new Benzo Keep note directly to a client's Column AL (without going through unassigned pool)
