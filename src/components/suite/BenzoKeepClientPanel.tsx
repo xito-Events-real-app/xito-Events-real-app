@@ -24,6 +24,7 @@ interface BenzoKeepClientPanelProps {
   isLoadingClients: boolean;
   sources: string[];
   onOpenFullForm: () => void;
+  layout?: 'vertical' | 'horizontal';
 }
 
 export function BenzoKeepClientPanel({
@@ -35,6 +36,7 @@ export function BenzoKeepClientPanel({
   isLoadingClients,
   sources,
   onOpenFullForm,
+  layout = 'vertical',
 }: BenzoKeepClientPanelProps) {
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -54,6 +56,37 @@ export function BenzoKeepClientPanel({
 
   // Selected client detail view
   if (selectedClient) {
+    if (layout === 'horizontal') {
+      return (
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 shrink-0">
+            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Selected:</h4>
+            <div className="flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5">
+              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center">
+                <User className="w-3 h-3 text-white" />
+              </div>
+              <span className="font-semibold text-sm text-gray-900">{selectedClient.clientName}</span>
+              {selectedClient.contactNo && <span className="text-xs text-gray-500">• {selectedClient.contactNo}</span>}
+              <Button variant="ghost" size="sm" className="h-5 w-5 p-0 ml-1" onClick={handleClearSelection}>
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <RecentClientsList
+              clients={filteredClients}
+              isLoading={isLoadingClients}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              onSelect={onSelectClient}
+              selectedId={selectedClient.registeredDateTimeAD}
+              layout="horizontal"
+            />
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="flex flex-col h-full gap-3">
         <div className="flex items-center justify-between">
@@ -90,7 +123,6 @@ export function BenzoKeepClientPanel({
 
         <p className="text-[10px] text-gray-400 text-center">Note will be assigned to this client</p>
 
-        {/* Still show recent list below */}
         <RecentClientsList
           clients={filteredClients}
           isLoading={isLoadingClients}
@@ -103,7 +135,64 @@ export function BenzoKeepClientPanel({
     );
   }
 
-  // Quick-add form view
+  // Horizontal layout for top bar
+  if (layout === 'horizontal') {
+    return (
+      <div className="flex items-center gap-4">
+        {/* Quick-add fields inline */}
+        <div className="flex items-center gap-2 shrink-0">
+          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">New Client:</h4>
+          <Input
+            value={quickData.clientName}
+            onChange={(e) => onQuickDataChange({ ...quickData, clientName: e.target.value })}
+            placeholder="Name"
+            className="h-7 text-xs w-28"
+          />
+          <Input
+            value={quickData.contactNo}
+            onChange={(e) => onQuickDataChange({ ...quickData, contactNo: e.target.value })}
+            placeholder="Phone"
+            className="h-7 text-xs w-24"
+            type="tel"
+          />
+          <Input
+            value={quickData.whatsappNo}
+            onChange={(e) => onQuickDataChange({ ...quickData, whatsappNo: e.target.value })}
+            placeholder="WhatsApp"
+            className="h-7 text-xs w-24"
+            type="tel"
+          />
+          <Select value={quickData.source} onValueChange={(v) => onQuickDataChange({ ...quickData, source: v })}>
+            <SelectTrigger className="h-7 text-xs w-28">
+              <SelectValue placeholder="Source" />
+            </SelectTrigger>
+            <SelectContent>
+              {sources.map((s) => (
+                <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-violet-600 px-1.5" onClick={onOpenFullForm}>
+            <ExternalLink className="w-3 h-3" /> Full Form
+          </Button>
+        </div>
+        {/* Recent clients inline */}
+        <div className="flex-1 min-w-0">
+          <RecentClientsList
+            clients={filteredClients}
+            isLoading={isLoadingClients}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            onSelect={onSelectClient}
+            selectedId={null}
+            layout="horizontal"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Vertical quick-add form view
   return (
     <div className="flex flex-col h-full gap-3">
       <div className="flex items-center justify-between">
@@ -182,6 +271,7 @@ function RecentClientsList({
   onSearchChange,
   onSelect,
   selectedId,
+  layout = 'vertical',
 }: {
   clients: ClientData[];
   isLoading: boolean;
@@ -189,7 +279,49 @@ function RecentClientsList({
   onSearchChange: (q: string) => void;
   onSelect: (client: ClientData) => void;
   selectedId: string | null | undefined;
+  layout?: 'vertical' | 'horizontal';
 }) {
+  if (layout === 'horizontal') {
+    return (
+      <div className="flex items-center gap-2">
+        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Recent:</h4>
+        <div className="relative shrink-0">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-400" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Search..."
+            className="h-7 text-xs pl-7 w-32"
+          />
+        </div>
+        <div className="flex items-center gap-1 overflow-x-auto flex-1 min-w-0">
+          {isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+          ) : clients.length === 0 ? (
+            <p className="text-xs text-gray-400">{searchQuery ? "No match" : "No clients"}</p>
+          ) : (
+            clients.slice(0, 10).map((client) => (
+              <button
+                key={client.registeredDateTimeAD}
+                onClick={() => onSelect(client)}
+                className={cn(
+                  "flex items-center gap-1.5 px-2 py-1 rounded-full text-xs whitespace-nowrap transition-colors shrink-0",
+                  "hover:bg-violet-50 border",
+                  selectedId === client.registeredDateTimeAD ? "bg-violet-100 border-violet-300" : "border-gray-200"
+                )}
+              >
+                <div className="w-5 h-5 rounded-full bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center shrink-0">
+                  <User className="w-2.5 h-2.5 text-white" />
+                </div>
+                <span className="font-medium text-gray-900">{client.clientName}</span>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-2 flex-1 min-h-0">
       <div className="flex items-center justify-between">
