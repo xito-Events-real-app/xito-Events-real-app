@@ -1,48 +1,68 @@
 
 
-# Fix: Intermittent Freelancer Assignment Updates on All Clients Page
+# Separate Refresh (Fast) from Sync Clients (Full Chain) with Concurrency Guard
 
-## Root Cause
+## Current Problem
+Both "Sync Clients" and "Refresh" buttons call the same heavy `handleSync` function, which runs the full 3-step chain. The Refresh button should be instant.
 
-The `updateFreelancerAssignmentAction` in the backend uses **plain `fetch`** for both reading and writing to Google Sheets. When the Google Sheets API hits rate limits (HTTP 429) or returns transient errors, the request fails silently. Meanwhile, all other heavy operations (restore, sync, etc.) already use `fetchWithRetry` with exponential backoff.
+## Changes to `src/components/suite/AllClientsCrewTable.tsx`
 
-This is why it works "sometimes" -- it depends on whether you hit the API quota at that moment. Multiple rapid assignments (clicking through several crew cells) will exhaust the quota quickly, causing intermittent failures.
+### 1. Add concurrency guard (`isBusy` ref)
+A new `useRef(false)` that all heavy operations (Sync, Restore) check before starting. If busy, background syncs skip silently; manual syncs show a toast warning.
 
-## Solution
+### 2. Refresh button becomes lightweight
+- New `refreshing` state for its own spinner
+- Calls `loadData()` only (reads directly from `BOOKED CLIENTS FREELANCERS` sheet via `getAllFreelancerAssignments`)
+- No syncing, no comparing -- just pulls whatever is currently in the freelancers sheet
 
-Replace both `fetch` calls in `updateFreelancerAssignmentAction` with `fetchWithRetry` to automatically retry on 429 errors with exponential backoff (up to 3 retries). This is the same pattern already proven across all other API calls in the edge function.
+### 3. Sync Clients button stays heavy (full chain)
+- Keeps the existing 3-step chain which syncs FROM the `BOOKED CLIENTS` sheet:
+  - Step 1: `fullSyncEventDetails` -- syncs EVENT DETAILS against BOOKED CLIENTS
+  - Step 2: `fullSyncFreelancerAssignments` -- syncs FREELANCERS against EVENT DETAILS
+  - Step 3: `fullSyncContactDetails` -- syncs CONTACT DETAILS against BOOKED CLIENTS
+- Now wrapped with `isBusy` guard
 
-## File to Change
+### 4. Background 30-min interval keeps full sync but respects busy guard
+- Still runs `handleSync(true)` every 30 minutes
+- If `isBusy` is true (manual sync or restore running), it silently skips that cycle
 
-### `supabase/functions/google-sheets/index.ts` -- `updateFreelancerAssignmentAction`
+### 5. Cache invalidation listeners become lightweight
+- `clients-invalidate` and `booked-clients-invalidate` events call `loadData()` instead of `handleSync(true)` -- they just refresh the UI data
 
-Two changes inside this function (lines ~6309 and ~6354):
+### 6. Restore upload also sets `isBusy`
+- Prevents background sync from colliding with an active restore operation
 
-**Change 1: Reading the sheet**
+## Technical Summary
+
 ```
-// Before (line ~6309):
-const flResp = await fetch(flUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+// Concurrency guard
+const isBusy = useRef(false);
 
-// After:
-const flResp = await fetchWithRetry(flUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+// Refresh = fast (just read sheet)
+const handleRefresh = async () => {
+  setRefreshing(true);
+  await loadData(); // Reads from BOOKED CLIENTS FREELANCERS
+  setRefreshing(false);
+};
+
+// Sync = heavy (full chain from BOOKED CLIENTS)
+const handleSync = async (silent) => {
+  if (isBusy.current) { if (!silent) toast("Another sync running"); return; }
+  isBusy.current = true;
+  try {
+    // Step 1: EVENT DETAILS vs BOOKED CLIENTS
+    // Step 2: FREELANCERS vs EVENT DETAILS  
+    // Step 3: CONTACT DETAILS vs BOOKED CLIENTS
+    await loadData();
+  } finally { isBusy.current = false; }
+};
+
+// Background: full sync, but skip if busy
+setInterval(() => handleSync(true), 30 * 60 * 1000);
+
+// Cache events: lightweight only
+window.addEventListener('clients-invalidate', () => loadData());
 ```
 
-**Change 2: Writing the update**
-```
-// Before (line ~6354):
-const resp = await fetch(updateUrl, {
-  method: 'PUT',
-  headers: { ... },
-  body: JSON.stringify({ values: [[newCellValue]] }),
-});
-
-// After:
-const resp = await fetchWithRetry(updateUrl, {
-  method: 'PUT',
-  headers: { ... },
-  body: JSON.stringify({ values: [[newCellValue]] }),
-});
-```
-
-That is the entire fix. No UI changes needed. The `fetchWithRetry` utility already exists and handles 429 errors with exponential backoff (2^attempt seconds, up to 3 retries).
+No backend changes needed -- all 3 sync actions already compare against the BOOKED CLIENTS sheet as the source of truth.
 
