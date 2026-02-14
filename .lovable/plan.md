@@ -1,47 +1,83 @@
 
-# Full-Screen Benzo Keep Notepad with Client Panel on Top + Load Client Notes
+
+# Expanded Client Panel with More Fields + Bigger Text in Benzo Keep
 
 ## What Changes
 
-### 1. Full-Screen Dialog
-- Change the dialog size from `max-w-[90vw] max-h-[85vh]` to true full-screen: `w-screen h-screen max-w-none max-h-none rounded-none`
+### 1. Expanded Quick-Add Form Fields (Horizontal Scroll)
+The top bar currently only has Name, Phone, WhatsApp, Source. This will be expanded to include ALL key fields in a single horizontal scrollable row:
 
-### 2. Restructured Desktop Layout
-Instead of the current 4-column grid, switch to a **top bar + main content** layout:
-- **Top Bar**: Client Quick-Add form (inline, horizontal) + Recent Clients list (horizontal scroll or compact)
-- **Main Content Area**: The existing 3-column grid below (Xito Search | Note Editor + Date Converter + Color Picker | Booking Calendar)
+- **Client Name** (text)
+- **Contact No** (tel)
+- **WhatsApp No** (tel)
+- **Source** (dropdown)
+- **Handler** (dropdown from whatsappOwners)
+- **Status** (dropdown from clientStatuses)
+- **Events** (text, e.g. "Wedding")
+- **Event Year** (text)
+- **Event Month** (dropdown or text)
+- **Event Day** (text)
+- **Full Form** button
 
-This keeps ALL existing elements in their places -- just adds the client panel on top.
+All laid out horizontally with `overflow-x-auto` so users can scroll through them. Inputs will be bigger (h-9 instead of h-7, text-sm instead of text-xs).
 
-### 3. Load Client's Benzo Keep Notes on Selection
-When a client is clicked from the recent clients list:
-- Read their `benzoKeepNotes` field from the `ClientData` object
-- Parse the JSON (using the existing `parseBenzoKeepNotes` pattern from `BenzoKeepDialog.tsx`)
-- Populate the note textarea with the client's existing note content
-- Set the marker color to match their existing note color
+### 2. Recent Clients Section Below Quick-Add (Not Inline)
+Currently recent clients are squeezed inline with the form. Instead:
+- Recent clients row moves to a **separate row below** the quick-add form, still inside the top bar area
+- Displayed as scrollable chips/pills with larger text (text-sm)
+- Clear visual separation between "New Client" form row and "Recent Clients" row
 
-### Technical Details
+### 3. Increased Text Sizes Throughout
+- Form inputs: `h-9 text-sm` (up from `h-7 text-xs`)
+- Labels: `text-sm` (up from `text-[11px]`)
+- Recent client chips: `text-sm` (up from `text-xs`)
+- Search input: `h-8 text-sm`
 
-**File: `src/components/suite/BenzoKeepNotepadDialog.tsx`**
-- Dialog: change to full-screen classes
-- Move `BenzoKeepClientPanel` from the left column to a **horizontal bar above** the grid
-- Keep the 3-column grid below: Xito Search (left) | Note Editor (center 2 cols) | Booking Calendar (right)
-- Add `onSelectClient` handler that also loads notes: when a client is selected, parse `client.benzoKeepNotes` and set `content` and `markerColor`
+### 4. QuickClientData Interface Expanded
+Add new fields to match the expanded form:
+```
+export interface QuickClientData {
+  clientName: string;
+  contactNo: string;
+  whatsappNo: string;
+  source: string;
+  clientHandler: string;    // NEW
+  initialStatus: string;    // NEW
+  events: string;           // NEW
+  eventYear: string;        // NEW
+  eventMonth: string;       // NEW
+  eventDay: string;         // NEW
+}
+```
 
-**File: `src/components/suite/BenzoKeepClientPanel.tsx`**
-- No major changes needed -- it already handles selection and quick-add
-- May adjust layout slightly for horizontal top-bar rendering
+## Technical Details
 
-**File: `src/components/client-detail/BenzoKeepDialog.tsx`**
-- Import `parseBenzoKeepNotes` from here to reuse in the notepad dialog for parsing client notes
+### Files Modified
+
+**`src/components/suite/BenzoKeepClientPanel.tsx`**
+- Expand `QuickClientData` interface with new fields
+- Horizontal layout: render all fields in a single scrollable `overflow-x-auto` flex row
+- Move `RecentClientsList` to a second row below the form (not inline)
+- Increase all text sizes (inputs h-9 text-sm, labels text-sm, chips text-sm)
+- Add new dropdowns: Handler (from `whatsappOwners`), Status (from `clientStatuses`)
+- Add text inputs: Events, Event Year, Event Month, Event Day
+- Add new props: `handlers`, `statuses` for the new dropdowns
+
+**`src/components/suite/BenzoKeepNotepadDialog.tsx`**
+- Update `QuickClientData` default state to include new empty fields
+- Pass `handlers` (whatsappOwners) and `statuses` (clientStatuses) from dropdownData to the panel
+- Map new fields when creating a client via `addClient()`
+
+### Desktop Layout (Top Bar)
+```
++---------------------------------------------------------------+
+| ROW 1: [Name] [Phone] [WA] [Source v] [Handler v] [Status v]  |
+|        [Events] [Year] [Month] [Day] [Full Form]  --> scroll  |
++---------------------------------------------------------------+
+| ROW 2: Recent: [Search...] [Client1] [Client2] [Client3] ...  |
++---------------------------------------------------------------+
+```
 
 ### Mobile Layout
-- Stays as-is (collapsible section) but the dialog becomes full-screen on mobile too
+Stays as collapsible accordion with vertical stacking of all fields.
 
-### User Flow
-1. Open Benzo Keep notepad -- full-screen dialog appears
-2. Top: Quick-add client form + recent clients list visible immediately
-3. Click a recent client -- their existing Benzo Keep notes populate the textarea
-4. Edit/write notes in the center area
-5. Xito Search on left, Booking Calendar on right -- all preserved
-6. Save: unassigned, assign to selected client, or create new client + assign
