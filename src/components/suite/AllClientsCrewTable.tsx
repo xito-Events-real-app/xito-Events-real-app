@@ -81,12 +81,20 @@ function getFirstName(fullName: string): string {
   return fullName.trim().split(/\s+/)[0];
 }
 
+export interface CrewStats {
+  totalEvents: number;
+  assignedCount: number;
+  requiredCells: number;
+  remainingCount: number;
+}
+
 interface AllClientsCrewTableProps {
   onClose?: () => void;
   readOnly?: boolean;
+  onStatsReady?: (stats: CrewStats) => void;
 }
 
-export function AllClientsCrewTable({ onClose, readOnly = false }: AllClientsCrewTableProps) {
+export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }: AllClientsCrewTableProps) {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const currentBS = getCurrentBSDate();
@@ -375,6 +383,13 @@ export function AllClientsCrewTable({ onClose, readOnly = false }: AllClientsCre
     });
     return { assignedCount: assigned, requiredCells: required, remainingCount: required - assigned };
   }, [filteredRows]);
+
+  // Report stats to parent dashboard
+  useEffect(() => {
+    if (onStatsReady) {
+      onStatsReady({ totalEvents: filteredRows.length, assignedCount, requiredCells, remainingCount });
+    }
+  }, [filteredRows.length, assignedCount, requiredCells, remainingCount, onStatsReady]);
 
   // Dynamic column widths: compute based on max first-name length per column
   const columnWidths = useMemo(() => {
