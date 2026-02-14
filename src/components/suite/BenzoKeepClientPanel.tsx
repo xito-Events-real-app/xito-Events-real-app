@@ -161,16 +161,22 @@ export function BenzoKeepClientPanel({
             </div>
             <div className="shrink-0">
               <Label className="text-sm text-slate-400 mb-1 block">Status</Label>
-              <Select value={quickData.initialStatus} onValueChange={(v) => update('initialStatus', v)}>
-                <SelectTrigger className="h-10 text-sm w-48 bg-white/10 border-slate-600 text-white">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  {statuses.map((s) => (
-                    <SelectItem key={s} value={s} className="text-sm">{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {selectedClient && quickData.initialStatus ? (
+                <div className="h-10 flex items-center px-3 rounded-md text-sm w-48 bg-white/10 border border-slate-600 text-white truncate">
+                  {quickData.initialStatus}
+                </div>
+              ) : (
+                <Select value={quickData.initialStatus} onValueChange={(v) => update('initialStatus', v)}>
+                  <SelectTrigger className="h-10 text-sm w-48 bg-white/10 border-slate-600 text-white">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statuses.map((s) => (
+                      <SelectItem key={s} value={s} className="text-sm">{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
         </div>

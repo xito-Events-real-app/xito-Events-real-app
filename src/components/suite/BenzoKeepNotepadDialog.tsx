@@ -94,13 +94,19 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
         eventMonth: client.eventMonth || '',
         eventDay: client.eventDay || '',
       });
-      // Load their Benzo Keep notes
+      // Load their Benzo Keep notes — or clear if none
       if (client.benzoKeepNotes) {
         const parsed = parseBenzoKeepNotes(client.benzoKeepNotes);
         if (parsed) {
           setContent(parsed.content);
           setMarkerColor(parsed.markerColor);
+        } else {
+          setContent('');
+          setMarkerColor('yellow');
         }
+      } else {
+        setContent('');
+        setMarkerColor('yellow');
       }
     }
   };
