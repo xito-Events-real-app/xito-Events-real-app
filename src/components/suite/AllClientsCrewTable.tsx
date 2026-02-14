@@ -85,6 +85,8 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
   const [quickAddState, setQuickAddState] = useState<{ open: boolean; field: FreelancerField; label: string; row: FreelancerAssignment | null }>({
     open: false, field: 'photographerBride', label: '', row: null
   });
+  const [filterDay, setFilterDay] = useState<string | null>(null);
+  const [filterClient, setFilterClient] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -149,10 +151,13 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
   }, [handleSync, loadData]);
 
   const filteredRows = useMemo(() => {
-    return assignments
+    let rows = assignments
       .filter(a => a.eventYear === selectedYear && a.eventMonth === selectedMonth)
       .sort((a, b) => (parseInt(a.eventDay) || 0) - (parseInt(b.eventDay) || 0));
-  }, [assignments, selectedYear, selectedMonth]);
+    if (filterDay) rows = rows.filter(a => a.eventDay === filterDay);
+    if (filterClient) rows = rows.filter(a => a.clientName === filterClient);
+    return rows;
+  }, [assignments, selectedYear, selectedMonth, filterDay, filterClient]);
 
   const dayGroups = useMemo(() => {
     const map = new Map<string, number>();
@@ -285,6 +290,26 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
         </div>
       </div>
 
+      {/* Active Filter Bar */}
+      {(filterDay || filterClient) && (
+        <div className="bg-violet-50 border-b border-violet-200 px-4 py-2 flex items-center gap-2 shrink-0">
+          <span className="text-xs font-medium text-violet-700">Filtered by:</span>
+          {filterDay && (
+            <button onClick={() => setFilterDay(null)} className="inline-flex items-center gap-1 bg-violet-200 text-violet-800 text-xs font-bold px-2.5 py-1 rounded-full hover:bg-violet-300 transition-colors">
+              Day {filterDay} <X className="w-3 h-3" />
+            </button>
+          )}
+          {filterClient && (
+            <button onClick={() => setFilterClient(null)} className="inline-flex items-center gap-1 bg-violet-200 text-violet-800 text-xs font-bold px-2.5 py-1 rounded-full hover:bg-violet-300 transition-colors">
+              {filterClient} <X className="w-3 h-3" />
+            </button>
+          )}
+          <button onClick={() => { setFilterDay(null); setFilterClient(null); }} className="text-xs text-violet-500 hover:text-violet-700 underline ml-2">
+            Clear All
+          </button>
+        </div>
+      )}
+
       {/* Table Container */}
       {(loading || syncing) && assignments.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
@@ -312,13 +337,26 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                   return (
                     <div key={`${rowKey}-${idx}`} className={cn("rounded-xl border border-gray-200 p-3 shadow-sm", dayBg)}>
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-violet-100 text-violet-700 font-bold text-sm shrink-0">
+                        <button
+                          onClick={() => setFilterDay(filterDay === row.eventDay ? null : row.eventDay)}
+                          className={cn(
+                            "inline-flex items-center justify-center w-9 h-9 rounded-full font-bold text-sm shrink-0 transition-all",
+                            filterDay === row.eventDay
+                              ? "bg-violet-600 text-white ring-2 ring-violet-400"
+                              : "bg-violet-100 text-violet-700"
+                          )}
+                        >
                           {row.eventDay}
-                        </span>
+                        </button>
                         <div className="flex-1 min-w-0">
                           <button
-                            onClick={() => navigate(`/client-tracker/client/${encodeURIComponent(row.registeredDateTimeAD)}`)}
-                            className="font-bold text-gray-900 hover:text-violet-600 transition-colors block truncate text-sm"
+                            onClick={() => setFilterClient(filterClient === row.clientName ? null : row.clientName)}
+                            className={cn(
+                              "font-bold block truncate text-sm transition-colors",
+                              filterClient === row.clientName
+                                ? "text-violet-600 underline"
+                                : "text-gray-900 hover:text-violet-600"
+                            )}
                           >
                             {row.clientName}
                           </button>
@@ -415,14 +453,33 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                         className={cn("border-b border-gray-100 hover:bg-violet-50/40 transition-colors group", dayBg)}
                       >
                         <td className="px-3 py-2 border-r border-gray-100 text-center">
-                          <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-violet-100 text-violet-700 font-bold text-sm">
+                          <button
+                            onClick={() => setFilterDay(filterDay === row.eventDay ? null : row.eventDay)}
+                            className={cn(
+                              "inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm transition-all",
+                              filterDay === row.eventDay
+                                ? "bg-violet-600 text-white ring-2 ring-violet-400"
+                                : "bg-violet-100 text-violet-700 hover:bg-violet-200 cursor-pointer"
+                            )}
+                          >
                             {row.eventDay}
-                          </span>
+                          </button>
                         </td>
                         <td className="px-3 py-2 border-r border-gray-100">
                           <button
-                            onClick={() => navigate(`/client-tracker/client/${encodeURIComponent(row.registeredDateTimeAD)}`)}
-                            className="font-semibold text-gray-900 hover:text-violet-600 transition-colors text-sm text-left leading-tight"
+                            onClick={(e) => {
+                              if (e.ctrlKey || e.metaKey) {
+                                navigate(`/client-tracker/client/${encodeURIComponent(row.registeredDateTimeAD)}`);
+                              } else {
+                                setFilterClient(filterClient === row.clientName ? null : row.clientName);
+                              }
+                            }}
+                            className={cn(
+                              "font-semibold text-sm text-left leading-tight transition-colors",
+                              filterClient === row.clientName
+                                ? "text-violet-600 underline"
+                                : "text-gray-900 hover:text-violet-600"
+                            )}
                           >
                             {row.clientName}
                           </button>
