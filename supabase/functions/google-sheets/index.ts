@@ -6306,7 +6306,7 @@ async function updateFreelancerAssignmentAction(accessToken: string, spreadsheet
   // Find the client's single row
   const flRange = encodeURIComponent("'BOOKED CLIENTS FREELANCERS'!A2:R1000");
   const flUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${flRange}`;
-  const flResp = await fetch(flUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+  const flResp = await fetchWithRetry(flUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
   if (!flResp.ok) throw new Error('Failed to read freelancer assignments');
   const flData = await flResp.json();
   const rows = flData.values || [];
@@ -6351,7 +6351,7 @@ async function updateFreelancerAssignmentAction(accessToken: string, spreadsheet
   const cellRange = encodeURIComponent(`'BOOKED CLIENTS FREELANCERS'!${colLetter}${sheetRow}`);
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${cellRange}?valueInputOption=USER_ENTERED`;
 
-  const resp = await fetch(updateUrl, {
+  const resp = await fetchWithRetry(updateUrl, {
     method: 'PUT',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ values: [[newCellValue]] }),
