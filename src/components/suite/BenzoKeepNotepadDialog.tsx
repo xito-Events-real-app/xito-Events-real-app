@@ -1,14 +1,13 @@
 import { useState, useEffect } from "react";
-import { StickyNote, Loader2, UserPlus, Search, User, ChevronRight, ChevronDown } from "lucide-react";
+import { StickyNote, Loader2, UserPlus, User, ChevronDown } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { saveUnassignedBenzoKeepNote, assignBenzoKeepNoteToClient, getClientsForNoteAssignment, addClient, ClientData } from "@/lib/sheets-api";
+import { parseBenzoKeepNotes } from "@/components/client-detail/BenzoKeepDialog";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useNavigate } from "react-router-dom";
@@ -78,6 +77,18 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
     }
   }, [open]);
 
+  // Handle client selection — also load their existing Benzo Keep notes
+  const handleSelectClient = (client: ClientData | null) => {
+    setSelectedClient(client);
+    if (client?.benzoKeepNotes) {
+      const parsed = parseBenzoKeepNotes(client.benzoKeepNotes);
+      if (parsed) {
+        setContent(parsed.content);
+        setMarkerColor(parsed.markerColor);
+      }
+    }
+  };
+
   const sources = dropdownData?.sources || [];
 
   const handleOpenFullForm = () => {
@@ -118,7 +129,6 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
       return;
     }
 
-    // If a recent client is selected, assign directly
     if (selectedClient) {
       if (!selectedClient.registeredDateTimeAD) {
         toast.error("Invalid client data");
@@ -145,7 +155,6 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
       return;
     }
 
-    // If quick-add fields filled, create client first then assign
     if (!quickClientData.clientName.trim()) {
       toast.error("Enter a client name or select a recent client");
       return;
@@ -235,7 +244,7 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
     quickData: quickClientData,
     onQuickDataChange: setQuickClientData,
     selectedClient,
-    onSelectClient: setSelectedClient,
+    onSelectClient: handleSelectClient,
     recentClients,
     isLoadingClients,
     sources,
@@ -244,7 +253,12 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn("bg-white text-gray-900", isMobile ? "max-w-xl" : "max-w-[90vw] w-full max-h-[85vh]")}>
+      <DialogContent className={cn(
+        "bg-white text-gray-900",
+        isMobile
+          ? "max-w-xl"
+          : "w-screen h-screen max-w-none max-h-none rounded-none flex flex-col"
+      )}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <StickyNote className="w-5 h-5 text-amber-500" />
@@ -283,36 +297,39 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
             </div>
           </div>
         ) : (
-          /* Desktop: 4-column layout with client panel + xito on left, notes center, calendar right */
-          <div className="grid grid-cols-4 gap-4 py-2 min-h-[400px] max-h-[60vh]">
-            {/* Left: Client Panel + Xito Search stacked */}
-            <div className="col-span-1 flex flex-col gap-3 overflow-hidden">
-              <div className="border rounded-lg p-3 bg-gray-50 overflow-auto">
-                <BenzoKeepClientPanel {...clientPanelProps} />
-              </div>
-              <div className="border rounded-lg p-3 bg-gray-50 overflow-hidden flex-1 min-h-0">
+          /* Desktop: Top bar (client panel) + 3-column grid below */
+          <div className="flex flex-col flex-1 min-h-0 gap-3">
+            {/* TOP BAR: Client Panel */}
+            <div className="border rounded-lg p-3 bg-gray-50 shrink-0">
+              <BenzoKeepClientPanel {...clientPanelProps} layout="horizontal" />
+            </div>
+
+            {/* MAIN: 3-column grid — Xito Search | Note Editor | Booking Calendar */}
+            <div className="grid grid-cols-4 gap-4 flex-1 min-h-0 overflow-hidden">
+              {/* Left: Xito Search */}
+              <div className="col-span-1 border rounded-lg p-3 bg-gray-50 overflow-hidden">
                 <XitoSearchPanel noteContent={content} />
               </div>
-            </div>
 
-            {/* Center: Note Editor */}
-            <div className="col-span-2 space-y-4">
-              <BenzoDateConverter />
-              {colorPicker}
-              {noteTextarea}
-              <div className="text-xs text-gray-500">
-                💡 Save unassigned or assign to a client directly
+              {/* Center: Note Editor */}
+              <div className="col-span-2 space-y-4 overflow-auto">
+                <BenzoDateConverter />
+                {colorPicker}
+                {noteTextarea}
+                <div className="text-xs text-gray-500">
+                  💡 Save unassigned or assign to a client directly
+                </div>
               </div>
-            </div>
 
-            {/* Right: Booking Calendar */}
-            <div className="col-span-1 border rounded-lg p-3 bg-gray-50 overflow-hidden">
-              <BookingCalendarMini />
+              {/* Right: Booking Calendar */}
+              <div className="col-span-1 border rounded-lg p-3 bg-gray-50 overflow-hidden">
+                <BookingCalendarMini />
+              </div>
             </div>
           </div>
         )}
 
-        <DialogFooter className="gap-2 sm:gap-0 flex-col sm:flex-row">
+        <DialogFooter className="gap-2 sm:gap-0 flex-col sm:flex-row shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
             Cancel
           </Button>
