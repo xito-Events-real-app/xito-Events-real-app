@@ -115,10 +115,22 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, free
     );
   }
 
-  // Use detailed event data if available, otherwise build from client events
-  const events = eventDetailsData?.events?.length 
-    ? eventDetailsData.events 
-    : buildBasicEvents(clientEvents);
+  // Merge logistics data with client events to show ALL events
+  // Logistics sheet may have fewer events than client record (e.g., after adding new events)
+  const logisticsEvents = eventDetailsData?.events || [];
+  const basicEvents = buildBasicEvents(clientEvents);
+  
+  // Match logistics events to client events by name+month+day (not by index, since positions can shift)
+  const events = basicEvents.length > 0
+    ? basicEvents.map((basic, i) => {
+        const match = logisticsEvents.find(
+          le => le.eventName?.trim().toLowerCase() === basic.eventName?.trim().toLowerCase()
+            && String(le.eventMonth)?.trim() === String(basic.eventMonth)?.trim()
+            && String(le.eventDay)?.trim() === String(basic.eventDay)?.trim()
+        );
+        return match ? { ...match, eventIndex: i } : basic;
+      })
+    : logisticsEvents;
 
   if (!events.length) {
     return null;
