@@ -6292,7 +6292,7 @@ async function syncSingleClientToFreelancers(accessToken: string, spreadsheetId:
   const emptyNewlines = Array(eventCount).fill('').join('\n');
 
   if (existingIdx >= 0) {
-    // Update columns A-H only (preserve I-R freelancer assignments)
+    // Update columns A-H (event info)
     const sheetRow = existingIdx + 2;
     const updateRange = encodeURIComponent(`'BOOKED CLIENTS FREELANCERS'!A${sheetRow}:H${sheetRow}`);
     const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`;
@@ -6301,6 +6301,43 @@ async function syncSingleClientToFreelancers(accessToken: string, spreadsheetId:
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ values: [[evRow[0] || '', evRow[1] || '', evRow[2] || '', evRow[3] || '', evRow[4] || '', evRow[5] || '', evRow[6] || '', evRow[7] || '']] }),
     });
+
+    // Re-align freelancer columns I-R if event count changed
+    const existingRow = flRows[existingIdx];
+    const oldEventNames = (existingRow[3] || '').split('\n').filter((n: string) => n.trim());
+    const newEventNames = (evRow[3] || '').split('\n').filter((n: string) => n.trim());
+    const oldCount = oldEventNames.length;
+    const newCount = newEventNames.length;
+
+    if (oldCount !== newCount) {
+      // Read current I-R values (columns index 8-17)
+      const freelancerCols: string[] = [];
+      for (let c = 8; c <= 17; c++) {
+        freelancerCols.push(existingRow[c] || '');
+      }
+      // Pad or trim each column to match new event count
+      const alignedCols = freelancerCols.map(cellValue => {
+        const parts = cellValue.split('\n');
+        if (parts.length < newCount) {
+          // Pad with empty strings for new events
+          return parts.concat(Array(newCount - parts.length).fill('')).join('\n');
+        } else if (parts.length > newCount) {
+          // Trim excess entries
+          return parts.slice(0, newCount).join('\n');
+        }
+        return cellValue;
+      });
+      // Write back I-R
+      const irRange = encodeURIComponent(`'BOOKED CLIENTS FREELANCERS'!I${sheetRow}:R${sheetRow}`);
+      const irUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${irRange}?valueInputOption=USER_ENTERED`;
+      await fetchWithRetry(irUrl, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: [alignedCols] }),
+      });
+      console.log(`[syncSingleClientToFreelancers] Re-aligned freelancer columns: ${oldCount} -> ${newCount} events`);
+    }
+
     console.log(`[syncSingleClientToFreelancers] Updated row ${sheetRow}`);
   } else {
     // Append new row
