@@ -93,12 +93,13 @@ export async function updateAssignmentInCache(
   registeredDateTimeAD: string,
   event: string,
   field: FreelancerField,
-  value: string
+  value: string,
+  eventDateAD?: string
 ): Promise<void> {
   const column = FIELD_TO_COLUMN[field];
   if (!column) throw new Error(`Invalid field: ${field}`);
 
-  const { error } = await supabase
+  let query = supabase
     .from('freelancer_assignments')
     .update({
       [column]: value,
@@ -108,6 +109,11 @@ export async function updateAssignmentInCache(
     .eq('registered_date_time_ad', registeredDateTimeAD)
     .eq('event', event);
 
+  if (eventDateAD) {
+    query = query.eq('event_date_ad', eventDateAD);
+  }
+
+  const { error } = await query;
   if (error) throw error;
 }
 
@@ -115,9 +121,10 @@ export async function updateAssignmentInCache(
 export async function updateCategoriesInCache(
   registeredDateTimeAD: string,
   event: string,
-  categories: string
+  categories: string,
+  eventDateAD?: string
 ): Promise<void> {
-  const { error } = await supabase
+  let query = supabase
     .from('freelancer_assignments')
     .update({
       required_categories: categories,
@@ -127,6 +134,11 @@ export async function updateCategoriesInCache(
     .eq('registered_date_time_ad', registeredDateTimeAD)
     .eq('event', event);
 
+  if (eventDateAD) {
+    query = query.eq('event_date_ad', eventDateAD);
+  }
+
+  const { error } = await query;
   if (error) throw error;
 }
 

@@ -302,6 +302,15 @@ serve(async (req) => {
         }
       }
 
+      // Deduplicate by composite key (registered_date_time_ad + event + event_date_ad)
+      const seenKeys = new Set<string>();
+      const dedupedRows = upsertRows.filter((r: any) => {
+        const key = `${r.registered_date_time_ad}|${r.event}|${r.event_date_ad}`;
+        if (seenKeys.has(key)) return false;
+        seenKeys.add(key);
+        return true;
+      });
+
       // Clear existing synced data and upsert
       // First, delete rows that are synced (preserve pending local changes)
       await supabase
@@ -311,11 +320,11 @@ serve(async (req) => {
 
       // Upsert in batches of 500
       let count = 0;
-      for (let i = 0; i < upsertRows.length; i += 500) {
-        const batch = upsertRows.slice(i, i + 500);
+      for (let i = 0; i < dedupedRows.length; i += 500) {
+        const batch = dedupedRows.slice(i, i + 500);
         const { error: upsertError } = await supabase
           .from('freelancer_assignments')
-          .upsert(batch, { onConflict: 'registered_date_time_ad,event' });
+          .upsert(batch, { onConflict: 'registered_date_time_ad,event,event_date_ad' });
 
         if (upsertError) {
           console.error(`[sync-crew] Upsert batch error:`, upsertError);

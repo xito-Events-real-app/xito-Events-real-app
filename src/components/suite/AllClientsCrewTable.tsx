@@ -334,7 +334,7 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
   const handleAssign = async (row: FreelancerAssignment, field: FreelancerField, freelancerName: string) => {
     try {
       // Write to Supabase cache instantly
-      await updateAssignmentInCache(row.registeredDateTimeAD, row.event, field, freelancerName);
+      await updateAssignmentInCache(row.registeredDateTimeAD, row.event, field, freelancerName, row.eventDateAD);
       setAssignments(prev => prev.map(a =>
         a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event
           ? { ...a, [field]: freelancerName }
@@ -443,7 +443,8 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                 await updateCategoriesInCache(
                   row.registeredDateTimeAD,
                   row.event,
-                  cats
+                  cats,
+                  row.eventDateAD
                 );
                 updatedCount++;
               }
@@ -730,7 +731,7 @@ export function AllClientsCrewTable({ onClose }: AllClientsCrewTableProps) {
                                   selected={(row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean)}
                                   onChange={async (codes) => {
                                     try {
-                                      await updateCategoriesInCache(row.registeredDateTimeAD, row.event, codes.join(','));
+                                      await updateCategoriesInCache(row.registeredDateTimeAD, row.event, codes.join(','), row.eventDateAD);
                                       setAssignments(prev => prev.map(a =>
                                         a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event
                                           ? { ...a, requiredCategories: codes.join(',') }
