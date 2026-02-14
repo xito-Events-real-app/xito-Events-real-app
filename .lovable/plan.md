@@ -1,52 +1,51 @@
 
+# File Management Module -- Read-Only All Clients View
 
-# Highlight Unassigned Required Roles + Fix Assignment Counter
+## Overview
+Activate the "File Management" module on the Suite home page and create a new page that renders the `AllClientsCrewTable` component in **read-only mode**. All data stays in sync automatically since it reads from the same data source.
 
-## Problem
-1. Empty cells for **required** roles (e.g., VB is required but not yet assigned) have no visual urgency -- they look the same as optional empty slots.
-2. The header shows `108/400 assigned` but `400` counts ALL cells (including "Not Required" ones). The denominator should only count **required** cells.
+## Changes
 
-## Solution
+### 1. `src/lib/suite-modules.ts`
+- Change `file-management` status from `'coming-soon'` to `'active'`
 
-### 1. Red Flashing Highlight on Unassigned Required Cells
+### 2. `src/components/suite/AllClientsCrewTable.tsx`
+- Add a `readOnly?: boolean` prop to `AllClientsCrewTableProps`
+- When `readOnly` is true:
+  - Hide all edit buttons (the `+` assign buttons in `CrewCell`, category lock toggles, Quick Add Freelancer)
+  - Hide sync/push/pull buttons in header
+  - Hide delete/clear actions in the freelancer hover popover
+  - Make crew cells display-only (no click handlers)
+  - Keep all visual styling intact (red pulse for unassigned, day colors, filters, search)
+  - Keep navigation (clicking a client name still opens detail)
+  - Header title changes to "File Management" or similar
 
-**Desktop**: The empty `+` button in `CrewCell` will get a red-tinted background with a subtle CSS pulse animation when the role is required but unassigned.
+### 3. `src/pages/FileManagement.tsx` (new file)
+- Simple page that renders `AllClientsCrewTable` with `readOnly={true}` and `onClose` navigating back to `/`
 
-**Mobile**: Same treatment on the mobile card layout -- empty required slots get a red border/background pulse.
+### 4. `src/App.tsx`
+- Replace the `/files` route from `ComingSoon` to the new `FileManagement` page
 
-CSS animation to add in `src/index.css`:
-```css
-@keyframes pulse-red {
-  0%, 100% { background-color: rgba(239, 68, 68, 0.08); }
-  50% { background-color: rgba(239, 68, 68, 0.2); }
-}
-.animate-pulse-red { animation: pulse-red 2s ease-in-out infinite; }
+## Technical Details
+
+In `AllClientsCrewTable.tsx`, the `readOnly` prop gates interactivity:
+
+```text
+CrewCell component:
+  - readOnly=true --> render name as plain text badge (no click to reassign)
+  - readOnly=true --> hide the "+" button for empty cells (show "---" instead)
+
+Header bar:
+  - readOnly=true --> hide Sync, Push, Pull buttons
+  - readOnly=true --> hide Quick Add Freelancer button
+  - Title shows "File Management" instead of "All Clients"
+
+FreelancerHoverInfo:
+  - readOnly=true --> hide "Remove" and "Reassign" actions
+  - Keep WhatsApp send and schedule link (view-only actions)
+
+Category selector:
+  - readOnly=true --> hide the lock/edit category button
 ```
 
-### 2. Fix Header Stats to Show Only Required Counts
-
-Replace `totalCells` (which is `filteredRows * 10`) with a computed `requiredCells` that only counts cells where the role is actually required (based on `requiredCategories`).
-
-Add a new stat showing **remaining unassigned required roles**:
-- `X remaining` in a red/amber badge next to the assigned count
-- Formula: `requiredCells - assignedCount`
-
-### Files to Modify
-
-**`src/index.css`** -- Add the `pulse-red` keyframe animation
-
-**`src/components/suite/AllClientsCrewTable.tsx`**:
-- Compute `requiredCells` instead of using `totalCells` for the denominator
-- Add `remainingCount = requiredCells - assignedCount` stat in the header (red badge)
-- In `CrewCell`: when `isRequired && !hasValue`, apply red border + `animate-pulse-red` class to the empty button
-- In mobile layout: same red pulse on empty required slots
-- Header stat changes from `108/400 assigned` to `108/285 assigned | 177 remaining` (where 285 is actual required count)
-
-### Visual Result
-
-**Header**: `42 events | 108/285 assigned | 177 remaining`
-
-**Desktop table**: Empty required cells pulse with a soft red glow instead of plain dashed gray border
-
-**Mobile cards**: Empty required role badges pulse red
-
+Filters (month, year, day, search) remain fully functional for browsing. The red pulse animation for unassigned required roles also remains visible as a status indicator.
