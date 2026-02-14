@@ -1540,8 +1540,51 @@ async function fullSyncContactDetails(accessToken: string, spreadsheetId: string
     });
   }
   
-  console.info(`[CONTACT SYNC] Complete: ${copiedCount} created, ${updatedCount} updated, ${bookedRows.length} total`);
-  return { copiedCount, updatedCount, totalClients: bookedRows.length };
+  // 6. Cleanup: remove rows from CONTACT DETAILS that are NOT in BOOKED CLIENTS
+  let removedCount = 0;
+  const validBookedIds = new Set(
+    bookedRows.map((row: string[]) => (row[0] || '').trim()).filter(Boolean)
+  );
+
+  // Re-read CONTACT DETAILS column A to get current state (including newly added rows)
+  const cleanupRange2 = encodeURIComponent("'BOOKED CLIENTS CONTACT DETAILS'!A2:A2000");
+  const cleanupResponse2 = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${cleanupRange2}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+
+  if (cleanupResponse2.ok) {
+    const cleanupData2 = await cleanupResponse2.json();
+    const cdRows: string[][] = cleanupData2.values || [];
+    const rowsToDelete: number[] = [];
+
+    cdRows.forEach((r: string[], idx: number) => {
+      const key = (r[0] || '').trim();
+      if (key && !validBookedIds.has(key)) {
+        rowsToDelete.push(idx + 2);
+      }
+    });
+
+    if (rowsToDelete.length > 0) {
+      const sheetId = await getSheetId(accessToken, spreadsheetId, 'BOOKED CLIENTS CONTACT DETAILS');
+      const sortedRows = rowsToDelete.sort((a, b) => b - a);
+      const requests = sortedRows.map(rowNum => ({
+        deleteDimension: {
+          range: { sheetId, dimension: 'ROWS', startIndex: rowNum - 1, endIndex: rowNum }
+        }
+      }));
+      await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests }),
+      });
+      removedCount = rowsToDelete.length;
+      console.log(`[CONTACT SYNC] Removed ${removedCount} stale rows (not in BOOKED CLIENTS)`);
+    }
+  }
+
+  console.info(`[CONTACT SYNC] Complete: ${copiedCount} created, ${updatedCount} updated, ${removedCount} removed, ${bookedRows.length} total`);
+  return { copiedCount, updatedCount, removedCount, totalClients: bookedRows.length };
 }
 
 // ============= RESYNC CLIENT CONTACT DETAILS =============
