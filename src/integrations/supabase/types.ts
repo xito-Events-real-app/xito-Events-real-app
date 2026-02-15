@@ -14,6 +14,141 @@ export type Database = {
   }
   public: {
     Tables: {
+      clients_cache: {
+        Row: {
+          benzo_keep_notes: string | null
+          call_log: string | null
+          client_bargained_rates: string | null
+          client_handler: string | null
+          client_location: string | null
+          client_name: string | null
+          comments: string | null
+          company_name: string | null
+          contact_no: string | null
+          current_country: string | null
+          description: string | null
+          email: string | null
+          event_city: string | null
+          event_date_ad: string | null
+          event_day: string | null
+          event_location: string | null
+          event_month: string | null
+          event_year: string | null
+          events: string | null
+          final_quotation: string | null
+          inquiry_date_ad: string | null
+          inquiry_date_bs: string | null
+          inquiry_time: string | null
+          last_activity_log: string | null
+          mindset: string | null
+          our_bargained_rates: string | null
+          payment_dates_ad: string | null
+          payments_made: string | null
+          priority: string | null
+          quotation_data: string | null
+          registered_date_bs: string | null
+          registered_date_time_ad: string
+          remaining_payment: string | null
+          row_number: number | null
+          service_types: string | null
+          sheet_source: string
+          source: string | null
+          status_log: string | null
+          synced_to_sheet: boolean | null
+          updated_at: string | null
+          whatsapp_no: string | null
+          who_added: string | null
+        }
+        Insert: {
+          benzo_keep_notes?: string | null
+          call_log?: string | null
+          client_bargained_rates?: string | null
+          client_handler?: string | null
+          client_location?: string | null
+          client_name?: string | null
+          comments?: string | null
+          company_name?: string | null
+          contact_no?: string | null
+          current_country?: string | null
+          description?: string | null
+          email?: string | null
+          event_city?: string | null
+          event_date_ad?: string | null
+          event_day?: string | null
+          event_location?: string | null
+          event_month?: string | null
+          event_year?: string | null
+          events?: string | null
+          final_quotation?: string | null
+          inquiry_date_ad?: string | null
+          inquiry_date_bs?: string | null
+          inquiry_time?: string | null
+          last_activity_log?: string | null
+          mindset?: string | null
+          our_bargained_rates?: string | null
+          payment_dates_ad?: string | null
+          payments_made?: string | null
+          priority?: string | null
+          quotation_data?: string | null
+          registered_date_bs?: string | null
+          registered_date_time_ad: string
+          remaining_payment?: string | null
+          row_number?: number | null
+          service_types?: string | null
+          sheet_source?: string
+          source?: string | null
+          status_log?: string | null
+          synced_to_sheet?: boolean | null
+          updated_at?: string | null
+          whatsapp_no?: string | null
+          who_added?: string | null
+        }
+        Update: {
+          benzo_keep_notes?: string | null
+          call_log?: string | null
+          client_bargained_rates?: string | null
+          client_handler?: string | null
+          client_location?: string | null
+          client_name?: string | null
+          comments?: string | null
+          company_name?: string | null
+          contact_no?: string | null
+          current_country?: string | null
+          description?: string | null
+          email?: string | null
+          event_city?: string | null
+          event_date_ad?: string | null
+          event_day?: string | null
+          event_location?: string | null
+          event_month?: string | null
+          event_year?: string | null
+          events?: string | null
+          final_quotation?: string | null
+          inquiry_date_ad?: string | null
+          inquiry_date_bs?: string | null
+          inquiry_time?: string | null
+          last_activity_log?: string | null
+          mindset?: string | null
+          our_bargained_rates?: string | null
+          payment_dates_ad?: string | null
+          payments_made?: string | null
+          priority?: string | null
+          quotation_data?: string | null
+          registered_date_bs?: string | null
+          registered_date_time_ad?: string
+          remaining_payment?: string | null
+          row_number?: number | null
+          service_types?: string | null
+          sheet_source?: string
+          source?: string | null
+          status_log?: string | null
+          synced_to_sheet?: boolean | null
+          updated_at?: string | null
+          whatsapp_no?: string | null
+          who_added?: string | null
+        }
+        Relationships: []
+      }
       freelancer_assignments: {
         Row: {
           assistant: string | null
