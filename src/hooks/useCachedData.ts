@@ -35,28 +35,41 @@ const fetchState = {
   hasRefreshed: false,
 };
 
-// Fetch dropdowns from Google Sheets (still uses IndexedDB for dropdowns)
+// Fetch dropdowns from Google Sheets (with caching to avoid repeated API calls)
+let dropdownFetchPromise: Promise<DropdownData> | null = null;
+
 async function fetchDropdowns(): Promise<DropdownData> {
-  const [dropdownsResult, eventSetupResult] = await Promise.all([
-    supabase.functions.invoke("google-sheets", {
-      body: { action: "getDropdowns" },
-    }),
-    supabase.functions.invoke("google-sheets", {
-      body: { action: "getEventSetupData" },
-    }),
-  ]);
+  // Deduplicate concurrent calls
+  if (dropdownFetchPromise) return dropdownFetchPromise;
 
-  if (dropdownsResult.error) throw new Error(dropdownsResult.error.message);
-  if (!dropdownsResult.data?.success) throw new Error(dropdownsResult.data?.error || "Failed to fetch dropdowns");
+  dropdownFetchPromise = (async () => {
+    try {
+      const [dropdownsResult, eventSetupResult] = await Promise.all([
+        supabase.functions.invoke("google-sheets", {
+          body: { action: "getDropdowns" },
+        }),
+        supabase.functions.invoke("google-sheets", {
+          body: { action: "getEventSetupData" },
+        }),
+      ]);
 
-  const dropdowns = dropdownsResult.data.data as DropdownData;
-  if (eventSetupResult.data?.success) {
-    dropdowns.allEvents = eventSetupResult.data.data || [];
-  } else {
-    dropdowns.allEvents = [];
-  }
+      if (dropdownsResult.error) throw new Error(dropdownsResult.error.message);
+      if (!dropdownsResult.data?.success) throw new Error(dropdownsResult.data?.error || "Failed to fetch dropdowns");
 
-  return dropdowns;
+      const dropdowns = dropdownsResult.data.data as DropdownData;
+      if (eventSetupResult.data?.success) {
+        dropdowns.allEvents = eventSetupResult.data.data || [];
+      } else {
+        dropdowns.allEvents = [];
+      }
+
+      return dropdowns;
+    } finally {
+      dropdownFetchPromise = null;
+    }
+  })();
+
+  return dropdownFetchPromise;
 }
 
 export function useCachedData(): UseCachedDataResult {
