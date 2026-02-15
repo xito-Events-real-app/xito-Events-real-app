@@ -23,10 +23,51 @@ export interface VenueEntry {
   rating: string;
 }
 
+function cacheRowToVenue(row: any): VenueEntry {
+  return {
+    rowNumber: row.row_number || 0,
+    name: row.name || '',
+    companyWhatsapp: row.company_whatsapp || '',
+    companyContact: row.company_contact || '',
+    owner1: row.owner1 || '',
+    owner1Contact: row.owner1_contact || '',
+    owner1Whatsapp: row.owner1_whatsapp || '',
+    owner2: row.owner2 || '',
+    owner2Contact: row.owner2_contact || '',
+    owner2Whatsapp: row.owner2_whatsapp || '',
+    city: row.city || '',
+    area: row.area || '',
+    googleMap: row.google_map || '',
+    instagram: row.instagram || '',
+    facebook: row.facebook || '',
+    tiktok: row.tiktok || '',
+    youtube: row.youtube || '',
+    website: row.website || '',
+    gmail: row.gmail || '',
+    rating: row.rating || '',
+  };
+}
+
 /**
- * Fetches venue types from "EVENT DETAILS SETUP DATA" sheet Column A
+ * Fetches venue types from cache or EVENT DETAILS SETUP DATA sheet Column A
  */
 export async function getVenueTypes(): Promise<string[]> {
+  // Try cache first
+  try {
+    const { data: cached, error } = await supabase
+      .from('logistics_types_cache')
+      .select('type_name')
+      .eq('category', 'venue');
+
+    if (!error && cached && cached.length > 0) {
+      console.log(`[event-venue-api] Loaded ${cached.length} venue types from cache`);
+      return cached.map(r => r.type_name).filter(Boolean);
+    }
+  } catch (err) {
+    console.warn('[event-venue-api] Cache read failed for venue types:', err);
+  }
+
+  // Fallback
   const { data, error } = await supabase.functions.invoke('google-sheets', {
     body: { action: 'getEventDetailsSetupData' }
   });
@@ -40,21 +81,37 @@ export async function getVenueTypes(): Promise<string[]> {
     throw new Error(data.error || 'Failed to fetch venue types');
   }
 
+  // Background: populate cache
+  supabase.functions.invoke('sync-all-data', { body: { tables: ['logistics'] } }).catch(() => {});
+
   return data.data || [];
 }
 
 /**
- * Fetches venues from a specific type sheet (e.g., "BANQUET", "DECORATION")
- * @param venueType - The venue type (sheet name)
+ * Fetches venues from cache or a specific type sheet
  */
 export async function getVenuesByType(venueType: string): Promise<VenueEntry[]> {
   if (!venueType) return [];
-  
-  const { data, error } = await supabase.functions.invoke('google-sheets', {
-    body: { 
-      action: 'getVenuesByType',
-      data: { venueType }
+
+  // Try cache first
+  try {
+    const { data: cached, error } = await supabase
+      .from('logistics_vendors_cache')
+      .select('*')
+      .eq('vendor_category', 'venue')
+      .eq('vendor_type', venueType);
+
+    if (!error && cached && cached.length > 0) {
+      console.log(`[event-venue-api] Loaded ${cached.length} venues for "${venueType}" from cache`);
+      return cached.map(cacheRowToVenue);
     }
+  } catch (err) {
+    console.warn('[event-venue-api] Cache read failed for venues:', err);
+  }
+
+  // Fallback
+  const { data, error } = await supabase.functions.invoke('google-sheets', {
+    body: { action: 'getVenuesByType', data: { venueType } }
   });
 
   if (error) {
@@ -63,7 +120,6 @@ export async function getVenuesByType(venueType: string): Promise<VenueEntry[]> 
   }
 
   if (!data.success) {
-    // If sheet doesn't exist, return empty array
     if (data.error?.includes('Unable to parse range') || data.error?.includes('sheet')) {
       console.warn(`No sheet found for venue type: ${venueType}`);
       return [];
@@ -75,9 +131,7 @@ export async function getVenuesByType(venueType: string): Promise<VenueEntry[]> 
 }
 
 /**
- * Adds a new venue entry to the type-specific sheet
- * @param venueType - The venue type (sheet name)
- * @param venueData - The venue data (name, city, area, googleMap required)
+ * Adds a new venue entry to the type-specific sheet + cache
  */
 export async function addVenueEntry(
   venueType: string, 
@@ -88,10 +142,7 @@ export async function addVenueEntry(
   }
 
   const { data, error } = await supabase.functions.invoke('google-sheets', {
-    body: { 
-      action: 'addVenueEntry',
-      data: { venueType, ...venueData }
-    }
+    body: { action: 'addVenueEntry', data: { venueType, ...venueData } }
   });
 
   if (error) {
@@ -102,13 +153,26 @@ export async function addVenueEntry(
   if (!data.success) {
     throw new Error(data.error || 'Failed to add venue');
   }
+
+  // Upsert cache
+  try {
+    await supabase.from('logistics_vendors_cache').insert({
+      vendor_category: 'venue',
+      vendor_type: venueType,
+      name: venueData.name,
+      city: venueData.city,
+      area: venueData.area,
+      google_map: venueData.googleMap,
+      synced_to_sheet: true,
+      updated_at: new Date().toISOString(),
+    } as any);
+  } catch (err) {
+    console.warn('[event-venue-api] Cache insert after add failed:', err);
+  }
 }
 
 /**
  * Refreshes client venue/parlour data from vendor sheets.
- * Syncs City, Area, and Map Link from vendor type sheets to client event details.
- * @param registeredDateTimeAD - The unique client identifier
- * @returns boolean indicating if refresh was successful
  */
 export async function refreshClientVendorData(registeredDateTimeAD: string): Promise<boolean> {
   if (!registeredDateTimeAD) return false;

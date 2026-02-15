@@ -15,6 +15,55 @@ export function useClientContactDetails(registeredDateTimeAD: string | undefined
     setIsLoading(true);
     setError(null);
 
+    // Try Supabase cache first
+    try {
+      const { data: cached, error: cacheError } = await supabase
+        .from('contact_details_cache')
+        .select('*')
+        .eq('registered_date_time_ad', registeredDateTimeAD)
+        .single();
+
+      if (!cacheError && cached) {
+        console.log('[useClientContactDetails] Loaded from cache');
+        setData({
+          rowNumber: cached.row_number || 0,
+          registeredDateTimeAD: cached.registered_date_time_ad,
+          registeredDateBS: cached.registered_date_bs || '',
+          clientName: cached.client_name || '',
+          brideFullName: cached.bride_full_name || '',
+          brideContactNumber: cached.bride_contact_number || '',
+          brideWhatsappNumber: cached.bride_whatsapp_number || '',
+          brideBackupNumber: cached.bride_backup_number || '',
+          brideBackupRelation: cached.bride_backup_relation || '',
+          brideBackupNumber2: cached.bride_backup_number2 || '',
+          brideBackupRelation2: cached.bride_backup_relation2 || '',
+          brideInstagram: cached.bride_instagram || '',
+          brideHomeCity: cached.bride_home_city || '',
+          brideHomeArea: cached.bride_home_area || '',
+          brideHomeMap: cached.bride_home_map || '',
+          brideHomeLandmark: cached.bride_home_landmark || '',
+          groomFullName: cached.groom_full_name || '',
+          groomContactNumber: cached.groom_contact_number || '',
+          groomWhatsappNumber: cached.groom_whatsapp_number || '',
+          groomBackupNumber: cached.groom_backup_number || '',
+          groomBackupRelation: cached.groom_backup_relation || '',
+          groomBackupNumber2: cached.groom_backup_number2 || '',
+          groomBackupRelation2: cached.groom_backup_relation2 || '',
+          groomInstagram: cached.groom_instagram || '',
+          groomHomeCity: cached.groom_home_city || '',
+          groomHomeArea: cached.groom_home_area || '',
+          groomHomeMap: cached.groom_home_map || '',
+          groomHomeLandmark: cached.groom_home_landmark || '',
+          formSentDate: cached.form_sent_date || '',
+        });
+        setIsLoading(false);
+        return;
+      }
+    } catch (err) {
+      console.warn('[useClientContactDetails] Cache read failed, falling back to Sheets:', err);
+    }
+
+    // Fallback: original Google Sheets call
     try {
       const { data: result, error: fetchError } = await supabase.functions.invoke('google-sheets', {
         body: {
