@@ -34,9 +34,9 @@ const ROLE_COLUMNS = [
   "drone_operator", "fpv_operator",
 ] as const;
 
-export default function CrewSchedule() {
+export default function CrewSchedule({ previewName }: { previewName?: string }) {
   const { freelancerName } = useParams<{ freelancerName: string }>();
-  const decodedName = decodeURIComponent(freelancerName || "");
+  const decodedName = previewName || decodeURIComponent(freelancerName || "");
   const currentBS = getCurrentBSDate();
 
   const [navYear, setNavYear] = useState(currentBS.year);
