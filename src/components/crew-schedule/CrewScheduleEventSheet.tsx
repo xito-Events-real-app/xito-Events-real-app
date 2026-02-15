@@ -1,10 +1,12 @@
-import { X, Phone, ExternalLink, MapPin, Instagram, Clock } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, Phone, ExternalLink, MapPin, Instagram, Clock, StickyNote } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { EventDetail } from "@/hooks/useEventDetails";
 import { ClientContactDetails, formatInstagramLink } from "@/lib/client-contact-api";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { nepaliMonthsEnglish } from "@/lib/nepali-date";
 import { AssignmentRow } from "./types";
+import { supabase } from "@/integrations/supabase/client";
 
 const ROLE_LABELS: { key: keyof AssignmentRow; label: string; color: string }[] = [
   { key: "photographer_bride", label: "PB", color: "bg-rose-500/30 text-rose-300" },
@@ -19,6 +21,14 @@ const ROLE_LABELS: { key: keyof AssignmentRow; label: string; color: string }[] 
   { key: "fpv_operator", label: "FPV", color: "bg-cyan-500/30 text-cyan-300" },
 ];
 
+interface VisibilitySettings {
+  show_bride_details: boolean;
+  show_groom_details: boolean;
+  show_venue_details: boolean;
+  show_parlour_details: boolean;
+  personal_note: string;
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -26,6 +36,7 @@ interface Props {
   eventDetail?: EventDetail;
   contactDetails?: ClientContactDetails | null;
   freelancerPhones?: Map<string, string>;
+  freelancerName?: string;
 }
 
 function SectionHeader({ title, borderColor }: { title: string; borderColor: string }) {
@@ -109,11 +120,45 @@ function PersonSection({ title, borderColor, name, contact, whatsapp, backup, ba
   );
 }
 
-export default function CrewScheduleEventSheet({ open, onOpenChange, assignment, eventDetail, contactDetails, freelancerPhones }: Props) {
+export default function CrewScheduleEventSheet({ open, onOpenChange, assignment, eventDetail, contactDetails, freelancerPhones, freelancerName }: Props) {
   const day = assignment.event_day || "";
   const month = parseInt(assignment.event_month || "0");
   const year = assignment.event_year || "";
   const monthName = nepaliMonthsEnglish[month - 1] || "";
+
+  const [visibility, setVisibility] = useState<VisibilitySettings | null>(null);
+
+  // Fetch visibility settings for this freelancer + event
+  useEffect(() => {
+    if (!open || !freelancerName || !assignment.registered_date_time_ad) {
+      setVisibility(null);
+      return;
+    }
+
+    const fetchVisibility = async () => {
+      const { data } = await supabase
+        .from('freelancer_event_settings')
+        .select('show_bride_details, show_groom_details, show_venue_details, show_parlour_details, personal_note')
+        .eq('registered_date_time_ad', assignment.registered_date_time_ad)
+        .eq('event_name', assignment.event || '')
+        .eq('freelancer_name', freelancerName)
+        .maybeSingle();
+
+      if (data) {
+        setVisibility(data as VisibilitySettings);
+      } else {
+        // Default: all visible, no note
+        setVisibility({ show_bride_details: true, show_groom_details: true, show_venue_details: true, show_parlour_details: true, personal_note: '' });
+      }
+    };
+    fetchVisibility();
+  }, [open, freelancerName, assignment.registered_date_time_ad, assignment.event]);
+
+  const showBride = visibility?.show_bride_details !== false;
+  const showGroom = visibility?.show_groom_details !== false;
+  const showVenue = visibility?.show_venue_details !== false;
+  const showParlour = visibility?.show_parlour_details !== false;
+  const personalNote = visibility?.personal_note?.trim() || '';
 
   const crewEntries = ROLE_LABELS
     .map(r => ({ ...r, name: (assignment[r.key] as string)?.trim() || "" }))
@@ -139,6 +184,17 @@ export default function CrewScheduleEventSheet({ open, onOpenChange, assignment,
         </div>
 
         <div className="flex-1 overflow-y-auto pb-10 px-4 pt-3 space-y-3">
+          {/* Personal Note */}
+          {personalNote && (
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 space-y-1">
+              <div className="flex items-center gap-1.5">
+                <StickyNote className="w-3 h-3 text-amber-400" />
+                <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Personal Note</span>
+              </div>
+              <p className="text-white/80 text-[11px] leading-relaxed whitespace-pre-wrap">{personalNote}</p>
+            </div>
+          )}
+
           {/* Crew */}
           {crewEntries.length > 0 && (
             <div className="space-y-1">
@@ -165,31 +221,35 @@ export default function CrewScheduleEventSheet({ open, onOpenChange, assignment,
           )}
 
           {/* Bride */}
-          <PersonSection
-            title="Bride" borderColor="border-rose-400"
-            name={contactDetails?.brideFullName} contact={contactDetails?.brideContactNumber}
-            whatsapp={contactDetails?.brideWhatsappNumber}
-            backup={contactDetails?.brideBackupNumber} backupRelation={contactDetails?.brideBackupRelation}
-            backup2={contactDetails?.brideBackupNumber2} backupRelation2={contactDetails?.brideBackupRelation2}
-            instagram={contactDetails?.brideInstagram}
-            city={contactDetails?.brideHomeCity} area={contactDetails?.brideHomeArea}
-            landmark={contactDetails?.brideHomeLandmark} mapLink={contactDetails?.brideHomeMap}
-          />
+          {showBride && (
+            <PersonSection
+              title="Bride" borderColor="border-rose-400"
+              name={contactDetails?.brideFullName} contact={contactDetails?.brideContactNumber}
+              whatsapp={contactDetails?.brideWhatsappNumber}
+              backup={contactDetails?.brideBackupNumber} backupRelation={contactDetails?.brideBackupRelation}
+              backup2={contactDetails?.brideBackupNumber2} backupRelation2={contactDetails?.brideBackupRelation2}
+              instagram={contactDetails?.brideInstagram}
+              city={contactDetails?.brideHomeCity} area={contactDetails?.brideHomeArea}
+              landmark={contactDetails?.brideHomeLandmark} mapLink={contactDetails?.brideHomeMap}
+            />
+          )}
 
           {/* Groom */}
-          <PersonSection
-            title="Groom" borderColor="border-sky-400"
-            name={contactDetails?.groomFullName} contact={contactDetails?.groomContactNumber}
-            whatsapp={contactDetails?.groomWhatsappNumber}
-            backup={contactDetails?.groomBackupNumber} backupRelation={contactDetails?.groomBackupRelation}
-            backup2={contactDetails?.groomBackupNumber2} backupRelation2={contactDetails?.groomBackupRelation2}
-            instagram={contactDetails?.groomInstagram}
-            city={contactDetails?.groomHomeCity} area={contactDetails?.groomHomeArea}
-            landmark={contactDetails?.groomHomeLandmark} mapLink={contactDetails?.groomHomeMap}
-          />
+          {showGroom && (
+            <PersonSection
+              title="Groom" borderColor="border-sky-400"
+              name={contactDetails?.groomFullName} contact={contactDetails?.groomContactNumber}
+              whatsapp={contactDetails?.groomWhatsappNumber}
+              backup={contactDetails?.groomBackupNumber} backupRelation={contactDetails?.groomBackupRelation}
+              backup2={contactDetails?.groomBackupNumber2} backupRelation2={contactDetails?.groomBackupRelation2}
+              instagram={contactDetails?.groomInstagram}
+              city={contactDetails?.groomHomeCity} area={contactDetails?.groomHomeArea}
+              landmark={contactDetails?.groomHomeLandmark} mapLink={contactDetails?.groomHomeMap}
+            />
+          )}
 
           {/* Venue */}
-          {eventDetail && (eventDetail.venueName || eventDetail.venueType) && (
+          {showVenue && eventDetail && (eventDetail.venueName || eventDetail.venueType) && (
             <div className="space-y-0.5">
               <SectionHeader title="Venue" borderColor="border-amber-400" />
               <InfoRow label="Type" value={eventDetail.venueType} />
@@ -206,7 +266,7 @@ export default function CrewScheduleEventSheet({ open, onOpenChange, assignment,
           )}
 
           {/* Parlour */}
-          {eventDetail && (eventDetail.parlourName || eventDetail.parlourType) && (
+          {showParlour && eventDetail && (eventDetail.parlourName || eventDetail.parlourType) && (
             <div className="space-y-0.5">
               <SectionHeader title="Parlour" borderColor="border-purple-400" />
               <InfoRow label="Type" value={eventDetail.parlourType} />

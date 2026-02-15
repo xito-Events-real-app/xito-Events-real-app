@@ -359,6 +359,7 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
                       isLoadingDetails={loadingKeys.has(ev.registered_date_time_ad)}
                       onRequestDetails={fetchDetailsForClient}
                       freelancerPhones={freelancerPhones}
+                      freelancerName={decodedName}
                     />
                   );
                 })}
@@ -373,6 +374,7 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
             loadingKeys={loadingKeys}
             onRequestDetails={fetchDetailsForClient}
             freelancerPhones={freelancerPhones}
+            freelancerName={decodedName}
           />
         )}
       </div>
