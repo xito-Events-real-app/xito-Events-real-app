@@ -1,37 +1,52 @@
 
 
-# Fix: Crew Schedule Link Using First Name Instead of Full Name
+# Fix: Crew Schedule Calendar Showing Nothing for Partial Name URLs
 
 ## Problem
 
-In `AllClientsCrewTable.tsx`, the WhatsApp share link for the crew schedule uses only the **first word** of the freelancer's name:
+After implementing exact-match filtering in the Crew Schedule page, old links that use only the first name (e.g., `/crew-schedule/SAFAL` instead of `/crew-schedule/SAFAL%20KC`) now return zero results because the exact-match filter correctly rejects "SAFAL" since no assignment has that as a standalone name.
 
-```
-const firstName = name.trim().split(/\s+/)[0];
-```
+The link generator in `AllClientsCrewTable.tsx` was fixed to use full names, but existing shared links (WhatsApp messages, bookmarks) still use the old first-name-only format.
 
-So "SAFAL KC" becomes "SAFAL", and the link `/crew-schedule/SAFAL` matches zero assignments because the exact-match filter (correctly) finds no freelancer named just "SAFAL".
+## Solution
 
-## Fix
+Add a **smart fallback** in `src/pages/CrewSchedule.tsx`: if the exact-match filter returns zero results, attempt a "starts-with" match as a fallback. This way:
 
-**File: `src/components/suite/AllClientsCrewTable.tsx` (line 903-904)**
+- `/crew-schedule/SAFAL%20KC` --> exact match --> finds "SAFAL KC" assignments (correct)
+- `/crew-schedule/SAFAL` --> exact match fails --> starts-with fallback --> finds "SAFAL KC" but NOT "AJAY ADHIKARI (SAFAL)" (correct)
+- `/crew-schedule/AJAY%20ADHIKARI%20(SAFAL)` --> exact match --> finds only their assignments (correct)
 
-Replace `firstName` with the **full name** so the link matches exactly:
+## Technical Details
+
+**File: `src/pages/CrewSchedule.tsx` (lines 67-75)**
+
+After the exact-match filter, add a fallback:
 
 ```typescript
-// Before:
-const firstName = name.trim().split(/\s+/)[0];
-const scheduleUrl = `https://wtnclienttracker.lovable.app/crew-schedule/${encodeURIComponent(firstName)}`;
-
-// After:
-const scheduleUrl = `https://wtnclienttracker.lovable.app/crew-schedule/${encodeURIComponent(name.trim())}`;
+if (!assignRes.error && assignRes.data) {
+  const target = decodedName.trim().toLowerCase();
+  
+  // Step 1: Try exact match first
+  const exactFiltered = assignRes.data.filter(row =>
+    ROLE_COLUMNS.some(col => {
+      const val = ((row as any)[col] || '').toString();
+      return val.split('\n').some(entry => entry.trim().toLowerCase() === target);
+    })
+  );
+  
+  // Step 2: If no exact matches, try "starts with" as fallback for old partial-name links
+  if (exactFiltered.length === 0) {
+    const startsWithFiltered = assignRes.data.filter(row =>
+      ROLE_COLUMNS.some(col => {
+        const val = ((row as any)[col] || '').toString();
+        return val.split('\n').some(entry => entry.trim().toLowerCase().startsWith(target));
+      })
+    );
+    setAssignments(startsWithFiltered as AssignmentRow[]);
+  } else {
+    setAssignments(exactFiltered as AssignmentRow[]);
+  }
+}
 ```
 
-This is a one-line change. The full name ("SAFAL KC") will now be encoded in the URL, and the exact-match filter on the schedule page will find all the correct assignments.
-
-## Impact
-
-- "SAFAL KC" link will correctly show 8+ booked dates
-- "AJAY ADHIKARI (SAFAL)" link will correctly show its own bookings
-- All other freelancer links continue to work as before since they already used full names that happened to be single words
-
+This is backward-compatible with old links while still preventing the "AJAY ADHIKARI (SAFAL)" false positive since "SAFAL" does not start-with match "AJAY ADHIKARI (SAFAL)".
