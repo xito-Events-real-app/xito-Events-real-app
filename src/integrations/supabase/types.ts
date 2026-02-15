@@ -251,6 +251,27 @@ export type Database = {
         }
         Relationships: []
       }
+      dropdowns_cache: {
+        Row: {
+          category: string
+          id: string
+          updated_at: string | null
+          values_json: string | null
+        }
+        Insert: {
+          category: string
+          id?: string
+          updated_at?: string | null
+          values_json?: string | null
+        }
+        Update: {
+          category?: string
+          id?: string
+          updated_at?: string | null
+          values_json?: string | null
+        }
+        Relationships: []
+      }
       event_details_cache: {
         Row: {
           do_groom_come_in_mehndi: string | null
@@ -419,6 +440,84 @@ export type Database = {
         }
         Relationships: []
       }
+      freelancers_cache: {
+        Row: {
+          area: string | null
+          city: string | null
+          contact_no: string | null
+          drone_operator: string | null
+          facebook: string | null
+          fpv_operator: string | null
+          hybrid_editor: string | null
+          hybrid_shooter: string | null
+          id: string
+          instagram: string | null
+          iphone_shooter: string | null
+          main_job: string | null
+          map_link: string | null
+          name: string | null
+          pathao_landmark: string | null
+          photo_editor: string | null
+          photographer: string | null
+          row_number: number | null
+          synced_to_sheet: boolean | null
+          updated_at: string | null
+          video_editor: string | null
+          videographer: string | null
+          whatsapp_no: string | null
+        }
+        Insert: {
+          area?: string | null
+          city?: string | null
+          contact_no?: string | null
+          drone_operator?: string | null
+          facebook?: string | null
+          fpv_operator?: string | null
+          hybrid_editor?: string | null
+          hybrid_shooter?: string | null
+          id?: string
+          instagram?: string | null
+          iphone_shooter?: string | null
+          main_job?: string | null
+          map_link?: string | null
+          name?: string | null
+          pathao_landmark?: string | null
+          photo_editor?: string | null
+          photographer?: string | null
+          row_number?: number | null
+          synced_to_sheet?: boolean | null
+          updated_at?: string | null
+          video_editor?: string | null
+          videographer?: string | null
+          whatsapp_no?: string | null
+        }
+        Update: {
+          area?: string | null
+          city?: string | null
+          contact_no?: string | null
+          drone_operator?: string | null
+          facebook?: string | null
+          fpv_operator?: string | null
+          hybrid_editor?: string | null
+          hybrid_shooter?: string | null
+          id?: string
+          instagram?: string | null
+          iphone_shooter?: string | null
+          main_job?: string | null
+          map_link?: string | null
+          name?: string | null
+          pathao_landmark?: string | null
+          photo_editor?: string | null
+          photographer?: string | null
+          row_number?: number | null
+          synced_to_sheet?: boolean | null
+          updated_at?: string | null
+          video_editor?: string | null
+          videographer?: string | null
+          whatsapp_no?: string | null
+        }
+        Relationships: []
+      }
       logistics_types_cache: {
         Row: {
           category: string
@@ -521,6 +620,81 @@ export type Database = {
           vendor_type?: string
           website?: string | null
           youtube?: string | null
+        }
+        Relationships: []
+      }
+      vendors_cache: {
+        Row: {
+          area: string | null
+          city: string | null
+          company_contact_no: string | null
+          email: string | null
+          facebook_link: string | null
+          google_map_link: string | null
+          id: string
+          instagram_link: string | null
+          owner1_contact_no: string | null
+          owner1_name: string | null
+          owner1_whatsapp_no: string | null
+          owner2_contact_no: string | null
+          owner2_name: string | null
+          owner2_whatsapp_no: string | null
+          row_number: number | null
+          synced_to_sheet: boolean | null
+          tiktok_link: string | null
+          updated_at: string | null
+          vendor_name: string | null
+          vendor_type: string | null
+          website_link: string | null
+          youtube_link: string | null
+        }
+        Insert: {
+          area?: string | null
+          city?: string | null
+          company_contact_no?: string | null
+          email?: string | null
+          facebook_link?: string | null
+          google_map_link?: string | null
+          id?: string
+          instagram_link?: string | null
+          owner1_contact_no?: string | null
+          owner1_name?: string | null
+          owner1_whatsapp_no?: string | null
+          owner2_contact_no?: string | null
+          owner2_name?: string | null
+          owner2_whatsapp_no?: string | null
+          row_number?: number | null
+          synced_to_sheet?: boolean | null
+          tiktok_link?: string | null
+          updated_at?: string | null
+          vendor_name?: string | null
+          vendor_type?: string | null
+          website_link?: string | null
+          youtube_link?: string | null
+        }
+        Update: {
+          area?: string | null
+          city?: string | null
+          company_contact_no?: string | null
+          email?: string | null
+          facebook_link?: string | null
+          google_map_link?: string | null
+          id?: string
+          instagram_link?: string | null
+          owner1_contact_no?: string | null
+          owner1_name?: string | null
+          owner1_whatsapp_no?: string | null
+          owner2_contact_no?: string | null
+          owner2_name?: string | null
+          owner2_whatsapp_no?: string | null
+          row_number?: number | null
+          synced_to_sheet?: boolean | null
+          tiktok_link?: string | null
+          updated_at?: string | null
+          vendor_name?: string | null
+          vendor_type?: string | null
+          website_link?: string | null
+          youtube_link?: string | null
         }
         Relationships: []
       }

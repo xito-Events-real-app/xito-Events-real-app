@@ -23,7 +23,62 @@ export interface FreelancerData {
   iphoneShooter: string;
 }
 
+// Helper: convert Supabase row to FreelancerData
+function cacheRowToFreelancer(row: any): FreelancerData {
+  return {
+    rowNumber: row.row_number || 0,
+    name: row.name || '',
+    contactNo: row.contact_no || '',
+    whatsappNo: row.whatsapp_no || '',
+    instagram: row.instagram || '',
+    facebook: row.facebook || '',
+    city: row.city || '',
+    area: row.area || '',
+    mapLink: row.map_link || '',
+    pathaoLandmark: row.pathao_landmark || '',
+    mainJob: row.main_job || '',
+    photographer: row.photographer || 'NO',
+    videographer: row.videographer || 'NO',
+    photoEditor: row.photo_editor || 'NO',
+    videoEditor: row.video_editor || 'NO',
+    hybridShooter: row.hybrid_shooter || 'NO',
+    hybridEditor: row.hybrid_editor || 'NO',
+    droneOperator: row.drone_operator || 'NO',
+    fpvOperator: row.fpv_operator || 'NO',
+    iphoneShooter: row.iphone_shooter || 'NO',
+  };
+}
+
+// Trigger sync-all-data for freelancers if cache is empty
+async function triggerFreelancersSync(): Promise<void> {
+  try {
+    console.log('[freelancer-api] Cache empty, triggering sync-all-data for freelancers...');
+    await supabase.functions.invoke('sync-all-data', {
+      body: { tables: ['freelancers'] }
+    });
+  } catch (err) {
+    console.error('[freelancer-api] Failed to trigger sync:', err);
+  }
+}
+
 export async function getFreelancers(limit = 500): Promise<FreelancerData[]> {
+  // Try Supabase cache first
+  try {
+    const { data: cached, error } = await supabase
+      .from('freelancers_cache')
+      .select('*')
+      .order('row_number', { ascending: true })
+      .limit(limit);
+
+    if (!error && cached && cached.length > 0) {
+      console.log(`[freelancer-api] Loaded ${cached.length} freelancers from cache`);
+      return cached.map(cacheRowToFreelancer);
+    }
+  } catch (err) {
+    console.warn('[freelancer-api] Cache read failed, falling back to Sheets:', err);
+  }
+
+  // Fallback: original Google Sheets call
   const { data, error } = await supabase.functions.invoke('google-sheets', {
     body: { action: 'getFreelancers', limit }
   });
@@ -37,10 +92,16 @@ export async function getFreelancers(limit = 500): Promise<FreelancerData[]> {
     throw new Error(data.error || 'Failed to fetch freelancers');
   }
 
-  return data.data || [];
+  const freelancers = data.data || [];
+
+  // Background: populate cache for next time
+  triggerFreelancersSync().catch(() => {});
+
+  return freelancers;
 }
 
 export async function addFreelancer(freelancerData: Partial<FreelancerData>): Promise<void> {
+  // Write to Google Sheets first (source of truth)
   const { data, error } = await supabase.functions.invoke('google-sheets', {
     body: { action: 'addFreelancer', data: freelancerData }
   });
@@ -52,6 +113,35 @@ export async function addFreelancer(freelancerData: Partial<FreelancerData>): Pr
 
   if (!data.success) {
     throw new Error(data.error || 'Failed to add freelancer');
+  }
+
+  // Upsert into cache
+  try {
+    await supabase.from('freelancers_cache').upsert({
+      name: freelancerData.name || '',
+      contact_no: freelancerData.contactNo || '',
+      whatsapp_no: freelancerData.whatsappNo || '',
+      instagram: freelancerData.instagram || '',
+      facebook: freelancerData.facebook || '',
+      city: freelancerData.city || '',
+      area: freelancerData.area || '',
+      map_link: freelancerData.mapLink || '',
+      pathao_landmark: freelancerData.pathaoLandmark || '',
+      main_job: freelancerData.mainJob || '',
+      photographer: freelancerData.photographer || '',
+      videographer: freelancerData.videographer || '',
+      photo_editor: freelancerData.photoEditor || '',
+      video_editor: freelancerData.videoEditor || '',
+      hybrid_shooter: freelancerData.hybridShooter || '',
+      hybrid_editor: freelancerData.hybridEditor || '',
+      drone_operator: freelancerData.droneOperator || '',
+      fpv_operator: freelancerData.fpvOperator || '',
+      iphone_shooter: freelancerData.iphoneShooter || '',
+      synced_to_sheet: true,
+      updated_at: new Date().toISOString(),
+    } as any, { onConflict: 'name' });
+  } catch (err) {
+    console.warn('[freelancer-api] Cache upsert after add failed:', err);
   }
 }
 
@@ -68,9 +158,50 @@ export async function updateFreelancer(freelancerData: FreelancerData): Promise<
   if (!data.success) {
     throw new Error(data.error || 'Failed to update freelancer');
   }
+
+  // Update cache
+  try {
+    await supabase.from('freelancers_cache').upsert({
+      row_number: freelancerData.rowNumber,
+      name: freelancerData.name,
+      contact_no: freelancerData.contactNo,
+      whatsapp_no: freelancerData.whatsappNo,
+      instagram: freelancerData.instagram,
+      facebook: freelancerData.facebook,
+      city: freelancerData.city,
+      area: freelancerData.area,
+      map_link: freelancerData.mapLink,
+      pathao_landmark: freelancerData.pathaoLandmark,
+      main_job: freelancerData.mainJob,
+      photographer: freelancerData.photographer,
+      videographer: freelancerData.videographer,
+      photo_editor: freelancerData.photoEditor,
+      video_editor: freelancerData.videoEditor,
+      hybrid_shooter: freelancerData.hybridShooter,
+      hybrid_editor: freelancerData.hybridEditor,
+      drone_operator: freelancerData.droneOperator,
+      fpv_operator: freelancerData.fpvOperator,
+      iphone_shooter: freelancerData.iphoneShooter,
+      synced_to_sheet: true,
+      updated_at: new Date().toISOString(),
+    } as any, { onConflict: 'name' });
+  } catch (err) {
+    console.warn('[freelancer-api] Cache upsert after update failed:', err);
+  }
 }
 
 export async function deleteFreelancer(rowNumber: number): Promise<void> {
+  // Get the name before deleting so we can remove from cache
+  let nameToDelete = '';
+  try {
+    const { data: cached } = await supabase
+      .from('freelancers_cache')
+      .select('name')
+      .eq('row_number', rowNumber)
+      .single();
+    if (cached) nameToDelete = cached.name;
+  } catch {}
+
   const { data, error } = await supabase.functions.invoke('google-sheets', {
     body: { action: 'deleteFreelancer', data: { rowNumber } }
   });
@@ -82,6 +213,15 @@ export async function deleteFreelancer(rowNumber: number): Promise<void> {
 
   if (!data.success) {
     throw new Error(data.error || 'Failed to delete freelancer');
+  }
+
+  // Remove from cache
+  if (nameToDelete) {
+    try {
+      await supabase.from('freelancers_cache').delete().eq('name', nameToDelete);
+    } catch (err) {
+      console.warn('[freelancer-api] Cache delete failed:', err);
+    }
   }
 }
 
@@ -98,6 +238,9 @@ export async function syncFreelancerCategories(): Promise<{ mirrored: number }> 
   if (!data.success) {
     throw new Error(data.error || 'Failed to sync freelancer categories');
   }
+
+  // Re-sync cache after category sync
+  triggerFreelancersSync().catch(() => {});
 
   return data.data;
 }

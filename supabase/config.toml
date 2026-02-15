@@ -2,3 +2,6 @@ project_id = "jgkclkyjjfrlperamzrz"
 
 [functions.sync-crew-to-sheets]
 verify_jwt = false
+
+[functions.sync-all-data]
+verify_jwt = false
