@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckSquare, Plus, ArrowLeft, Send, ChevronLeft, ChevronRight, Clock, User, Phone, Pencil, ChevronDown } from "lucide-react";
+import { CheckSquare, Plus, ArrowLeft, Send, ChevronLeft, ChevronRight, Clock, User, Phone, Pencil, ChevronDown, RefreshCw, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -13,7 +13,7 @@ import type { DailyTask } from "@/lib/daily-task-api";
 export function MobileDailyTasks() {
   const navigate = useNavigate();
   const {
-    tasks, setupData, loading, fetchData,
+    tasks, setupData, loading, error, fetchData,
     shiftDates, selectedDate, setSelectedDate,
     handlerFilter, setHandlerFilter,
     dateStrip, taskCountByDate, filteredTasks, activeHandlers,
@@ -103,6 +103,14 @@ export function MobileDailyTasks() {
       <div className="px-3 py-3 space-y-3">
         {loading ? (
           <div className="text-center py-16 text-gray-500 text-sm">Loading tasks...</div>
+        ) : error ? (
+          <div className="text-center py-16">
+            <AlertTriangle className="w-10 h-10 text-amber-400 mx-auto mb-2" />
+            <p className="text-gray-700 text-sm font-medium">{error}</p>
+            <Button variant="outline" size="sm" className="mt-3 gap-2 text-xs" onClick={fetchData}>
+              <RefreshCw className="w-3.5 h-3.5" /> Retry
+            </Button>
+          </div>
         ) : filteredTasks.length === 0 ? (
           <div className="text-center py-16">
             <CheckSquare className="w-10 h-10 text-gray-300 mx-auto mb-2" />

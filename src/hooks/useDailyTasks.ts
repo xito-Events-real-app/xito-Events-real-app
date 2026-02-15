@@ -58,18 +58,26 @@ export function useDailyTasks() {
   const [tasks, setTasks] = useState<DailyTask[]>([]);
   const [setupData, setSetupData] = useState<DailyTaskSetupData>({ handlers: [], handlerWhatsApp: {} });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [centerDate, setCenterDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(format(new Date(), "yyyy-MM-dd"));
   const [handlerFilter, setHandlerFilter] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const [tasksData, setup] = await Promise.all([getDailyTasks(), getDailyTaskSetupData()]);
       setTasks(tasksData);
       setSetupData(setup);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to fetch tasks:", err);
+      const errMsg = err?.message || String(err);
+      if (errMsg.includes("429") || errMsg.includes("rate") || errMsg.includes("quota")) {
+        setError("Google Sheets API rate limit reached. Please wait a minute and try again.");
+      } else {
+        setError("Failed to load tasks. Please try again.");
+      }
       toast.error("Failed to load tasks");
     } finally {
       setLoading(false);
@@ -154,7 +162,7 @@ export function useDailyTasks() {
   }, []);
 
   return {
-    tasks, setupData, loading, fetchData,
+    tasks, setupData, loading, error, fetchData,
     centerDate, setCenterDate, shiftDates,
     selectedDate, setSelectedDate,
     handlerFilter, setHandlerFilter,
