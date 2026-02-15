@@ -72,7 +72,17 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
             return val.split('\n').some((entry: string) => entry.trim().toLowerCase() === target);
           })
         );
-        setAssignments(exactFiltered as AssignmentRow[]);
+        if (exactFiltered.length === 0) {
+          const startsWithFiltered = assignRes.data.filter(row =>
+            ROLE_COLUMNS.some(col => {
+              const val = ((row as any)[col] || '').toString();
+              return val.split('\n').some((entry: string) => entry.trim().toLowerCase().startsWith(target));
+            })
+          );
+          setAssignments(startsWithFiltered as AssignmentRow[]);
+        } else {
+          setAssignments(exactFiltered as AssignmentRow[]);
+        }
       }
       
       // Build name->phone map (lowercase keys)
