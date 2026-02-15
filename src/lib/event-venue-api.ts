@@ -82,7 +82,7 @@ export async function getVenueTypes(): Promise<string[]> {
   }
 
   // Background: populate cache
-  supabase.functions.invoke('sync-all-data', { body: { tables: ['logistics'] } }).catch(() => {});
+  try { supabase.functions.invoke('sync-all-data', { body: { action: 'pull-logistics' } }).catch(() => {}); } catch { /* ignore */ }
 
   return data.data || [];
 }
