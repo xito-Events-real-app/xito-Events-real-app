@@ -158,20 +158,23 @@ export default function EventDetailCard({ assignment, eventDetails, contactDetai
                     {day} {monthName} {year}
                   </span>
                 )}
-                <p className="text-sm font-semibold text-white truncate">
-                  {!showDatePill && <span className="text-emerald-400">{day} {monthName}</span>}
-                  {!showDatePill && <span className="text-white/30 mx-1.5">—</span>}
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-semibold text-white truncate">
+                    {!showDatePill && <span className="text-emerald-400">{day} {monthName}</span>}
+                    {!showDatePill && <span className="text-white/30 mx-1.5">—</span>}
+                    <span>{assignment.event}</span>
+                  </p>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!eventDetails && !isLoadingDetails) onRequestDetails(assignment.registered_date_time_ad);
                       setEventSheetOpen(true);
                     }}
-                    className="text-white hover:text-violet-300 transition-colors"
+                    className="shrink-0 bg-violet-500/20 text-violet-300 hover:bg-violet-500/30 px-2 py-0.5 rounded-full text-[9px] font-medium transition-colors"
                   >
-                    {assignment.event}
+                    Full Details
                   </button>
-                </p>
+                </div>
                 {assignment.client_name && (
                   <button
                     onClick={(e) => {
