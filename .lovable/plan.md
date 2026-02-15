@@ -1,67 +1,52 @@
 
 
-# Event Detail Sheet -- Add Bride/Groom Details, Remove Groom Mehndi
+# Event Detail Card -- "Full Details" Button + Mobile Sheet Fix
 
-## Changes to `src/components/crew-schedule/CrewScheduleEventSheet.tsx`
+## Changes
 
-### Remove
-- Remove "Groom comes in Mehndi" row entirely
+### 1. Add "Full Details" button next to event name (`EventDetailCard.tsx`)
 
-### Add Bride and Groom Sections
-Include the same bride/groom contact details already shown in the Client Detail Sheet:
+Currently, tapping the event name itself opens the event detail sheet. Instead:
+- The event name will be plain text (no longer a button that opens the sheet)
+- Add a small "Full Details" pill/button next to the event name that opens the event detail sheet
+- This keeps the interaction clear -- tapping the card expands/collapses the dropdown, tapping "Full Details" opens the full sheet
 
-- **Bride** (rose border): Full name, Contact (tel:), WhatsApp (wa.me), backup numbers with relation labels, Instagram, home city/area/landmark, map link
-- **Groom** (sky border): Same structure
-
-### Updated Sheet Layout
+**Visual layout of the collapsed card:**
 ```text
-+--------------------------------------------+
-| [Event Name]                    [X Close]  |
-| 15 Falgun 2082 -- Client Name              |
-+--------------------------------------------+
-| CREW (cyan)                                |
-|   PB: Name [phone] ...                     |
-+--------------------------------------------+
-| BRIDE (rose)                               |
-|   Name | Contact | WhatsApp | Backup       |
-|   Instagram | Location | Map               |
-+--------------------------------------------+
-| GROOM (sky)                                |
-|   Name | Contact | WhatsApp | Backup       |
-|   Instagram | Location | Map               |
-+--------------------------------------------+
-| VENUE (amber)                              |
-|   Type | Name | Location | Time | Map      |
-+--------------------------------------------+
-| PARLOUR (purple)                           |
-|   Type | Name | Location | Time | Map      |
-+--------------------------------------------+
-| DEMANDS (cyan)                             |
-|   [pill] [pill] [pill]                     |
-+--------------------------------------------+
-| REFERENCES (pink)                          |
-|   [pill] [pill]                            |
-+--------------------------------------------+
-| GUEST COUNT: 500                           |
-+--------------------------------------------+
+[11 Falgun] -- Reception  [Full Details]    [v]
+  Client Name Badge
 ```
 
-### Props Update
-The `CrewScheduleEventSheet` needs to also accept `contactDetails` (ClientContactDetails) so it can render bride/groom info. This prop will be passed from `EventDetailCard.tsx` which already has access to it.
+The "Full Details" button will be a small violet pill with `e.stopPropagation()` to avoid toggling the dropdown.
 
-### Technical Details
+### 2. Fix mobile clipping and lag on Event Detail Sheet (`CrewScheduleEventSheet.tsx`)
 
-**`src/components/crew-schedule/CrewScheduleEventSheet.tsx`**
-- Add `contactDetails?: ClientContactDetails | null` to props
-- Add Bride section using PersonSection-style layout (reuse pattern from CrewScheduleClientSheet): name, contact (tel:), WhatsApp (wa.me), backup numbers with relation labels, Instagram link, city/area/landmark, map
-- Add Groom section with identical structure
-- Remove the "Groom comes in Mehndi" row
-- Keep: Crew, Venue, Parlour, Demands, References, Guest Count
+Current issues:
+- `h-[92vh]` combined with `overflow-hidden` on SheetContent clips the top section on some mobile browsers (address bar takes space)
+- The scrollable area uses `h-full` which can conflict with the fixed header
 
-**`src/components/crew-schedule/EventDetailCard.tsx`**
-- Pass `contactDetails` prop through to `CrewScheduleEventSheet`
+Fixes:
+- Change `h-[92vh]` to `h-[95dvh]` (using `dvh` -- dynamic viewport height -- which accounts for mobile browser chrome)
+- Remove `overflow-hidden` from SheetContent (the inner scroll area handles overflow)
+- Change the scroll area from `h-full` to `flex-1 overflow-y-auto` using a flex column layout so it properly fills remaining space after the header
+- Reduce `pb-20` to `pb-10` to avoid excessive bottom padding
+- Use `will-change-transform` on the sheet content to hint the browser for smoother animations
+
+## Technical Details
+
+### `src/components/crew-schedule/EventDetailCard.tsx`
+- Remove the `button` wrapper around `{assignment.event}` (lines 164-173)
+- Replace with plain `span` for the event name
+- Add a new "Full Details" pill button after the event name that sets `eventSheetOpen(true)`
+- Keep the `e.stopPropagation()` on the new button
+- Keep all other behavior (client name opens client sheet, dropdown still works)
+
+### `src/components/crew-schedule/CrewScheduleEventSheet.tsx`
+- Line 124: Change `h-[92vh]` to `h-[95dvh]`
+- Line 124: Remove `overflow-hidden`, add `flex flex-col`
+- Line 141: Change `overflow-y-auto h-full pb-20` to `flex-1 overflow-y-auto pb-10`
+- Add `will-change-transform` to the SheetContent for smoother open/close
 
 ### Files Modified
-- `src/components/crew-schedule/CrewScheduleEventSheet.tsx` -- add bride/groom sections, remove mehndi row
-- `src/components/crew-schedule/EventDetailCard.tsx` -- pass contactDetails to event sheet
-
+- `src/components/crew-schedule/EventDetailCard.tsx`
+- `src/components/crew-schedule/CrewScheduleEventSheet.tsx`
