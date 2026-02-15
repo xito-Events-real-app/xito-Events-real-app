@@ -87,7 +87,9 @@ export function useDropdownData() {
       setIsUsingMock(false);
 
       // Background: populate cache for next time
-      supabase.functions.invoke('sync-all-data', { body: { tables: ['dropdowns'] } }).catch(() => {});
+      try {
+        supabase.functions.invoke('sync-all-data', { body: { action: 'pull-dropdowns' } }).catch(() => {});
+      } catch { /* ignore */ }
     } catch (err) {
       console.error("Failed to fetch dropdowns:", err);
       setError(err instanceof Error ? err.message : "Failed to load dropdowns");
