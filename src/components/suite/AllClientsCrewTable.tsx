@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from "react";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty, CommandGroup, CommandSeparator } from "@/components/ui/command";
@@ -68,7 +69,7 @@ const DAY_COLORS = [
   "bg-orange-200/70",
 ];
 
-
+const LazyCrewSchedule = lazy(() => import("@/pages/CrewSchedule"));
 const PILL_STYLES = {
   photo: 'bg-amber-50 text-amber-700 border-amber-200',
   video: 'bg-purple-50 text-purple-700 border-purple-200',
@@ -115,6 +116,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
   const [isRestoring, setIsRestoring] = useState(false);
   const [isLockingSlots, setIsLockingSlots] = useState(false);
   const [pendingSyncs, setPendingSyncs] = useState(0);
+  const [showCrewPreview, setShowCrewPreview] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -421,15 +423,13 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
           <Users className="w-5 h-5" />
           <h1 className="text-lg font-bold tracking-wide">{readOnly ? "FILE MANAGEMENT" : "ALL CLIENTS"}</h1>
         </div>
-        <a
-          href="https://wtnclienttracker.lovable.app/crew-schedule/Demo"
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          onClick={() => setShowCrewPreview(true)}
           className="flex items-center gap-1 text-xs bg-white/15 px-2.5 py-1 rounded-full hover:bg-white/25 transition-colors"
         >
           <ExternalLink className="w-3 h-3" />
           Preview Crew Link
-        </a>
+        </button>
         <div className="flex items-center gap-2 ml-4">
           <Select value={selectedYear} onValueChange={setSelectedYear}>
             <SelectTrigger className="w-24 h-8 bg-white/15 border-white/30 text-white text-sm [&>svg]:text-white">
@@ -853,6 +853,16 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
         roleLabel={quickAddState.label}
         onSuccess={handleQuickAddSuccess}
       />
+
+      <Dialog open={showCrewPreview} onOpenChange={setShowCrewPreview}>
+        <DialogContent className="max-w-md h-[85vh] p-0 overflow-hidden rounded-2xl z-[200]">
+          <div className="w-full h-full overflow-y-auto">
+            <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="w-6 h-6 animate-spin" /></div>}>
+              <LazyCrewSchedule previewName="Barun Koirala" />
+            </Suspense>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
