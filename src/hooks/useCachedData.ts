@@ -16,6 +16,14 @@ import {
   populateCacheFromSheets,
   updateClientInCacheRecord,
 } from "@/lib/clients-supabase-cache";
+import {
+  getMemoryClients,
+  setMemoryClients,
+  getMemoryDropdowns,
+  setMemoryDropdowns,
+  isMemoryLoaded,
+  updateMemoryClient,
+} from "@/lib/memory-cache";
 
 interface UseCachedDataResult {
   clients: ClientData[];
@@ -84,12 +92,25 @@ export function useCachedData(): UseCachedDataResult {
 
   const loadData = useCallback(async (forceRefresh = false) => {
     try {
+      // Step 0: Check in-memory cache first (0ms, instant)
+      if (!forceRefresh && isMemoryLoaded()) {
+        const memClients = getMemoryClients()!;
+        const memDD = getMemoryDropdowns();
+        setClients(memClients);
+        if (memDD) setDropdowns(memDD);
+        setIsFromCache(true);
+        setIsLoading(false);
+        setLastSyncedAt(new Date());
+        return;
+      }
+
       // Step 1: Try Supabase cache first (instant ~50ms)
       const hasCache = await isCachePopulated();
 
       if (hasCache && !forceRefresh) {
         const cachedClients = await loadClientsFromCache();
         setClients(cachedClients);
+        setMemoryClients(cachedClients);
         setIsFromCache(true);
         setIsLoading(false);
         setLastSyncedAt(new Date());
@@ -98,12 +119,14 @@ export function useCachedData(): UseCachedDataResult {
         const cached = await getCachedData();
         if (cached?.dropdowns) {
           setDropdowns(cached.dropdowns);
+          setMemoryDropdowns(cached.dropdowns);
         } else {
           // Fetch dropdowns in background
           try {
             const dd = await fetchDropdowns();
             setDropdowns(dd);
             await setCachedDropdowns(dd);
+            setMemoryDropdowns(dd);
           } catch (err) {
             console.log('Dropdown fetch failed, continuing without:', err);
           }
@@ -118,6 +141,7 @@ export function useCachedData(): UseCachedDataResult {
           await populateCacheFromSheets();
           const freshClients = await loadClientsFromCache();
           setClients(freshClients);
+          setMemoryClients(freshClients);
 
           // Also cache to IndexedDB for dropdowns
           await setCachedClients(freshClients);
@@ -126,6 +150,7 @@ export function useCachedData(): UseCachedDataResult {
           const dd = await fetchDropdowns();
           setDropdowns(dd);
           await setCachedDropdowns(dd);
+          setMemoryDropdowns(dd);
 
           setLastSyncedAt(new Date());
           setIsFromCache(false);
@@ -168,12 +193,14 @@ export function useCachedData(): UseCachedDataResult {
       await populateCacheFromSheets();
       const freshClients = await loadClientsFromCache();
       setClients(freshClients);
+      setMemoryClients(freshClients);
       await setCachedClients(freshClients);
 
       // Also refresh dropdowns
       const dd = await fetchDropdowns();
       setDropdowns(dd);
       await setCachedDropdowns(dd);
+      setMemoryDropdowns(dd);
 
       setLastSyncedAt(new Date());
       setIsFromCache(false);
@@ -189,7 +216,7 @@ export function useCachedData(): UseCachedDataResult {
 
   // Update a single client in state + Supabase cache
   const updateClient = useCallback(async (updatedClient: ClientData) => {
-    // 1. Update local state immediately
+    // 1. Update local state + memory cache immediately
     setClients(prev => prev.map(c => {
       if (updatedClient.registeredDateTimeAD && c.registeredDateTimeAD === updatedClient.registeredDateTimeAD) {
         return { ...c, ...updatedClient };
@@ -199,6 +226,7 @@ export function useCachedData(): UseCachedDataResult {
       }
       return c;
     }));
+    updateMemoryClient(updatedClient);
 
     // 2. Update Supabase cache (marks unsynced)
     try {
