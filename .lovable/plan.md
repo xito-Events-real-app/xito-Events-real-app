@@ -1,70 +1,71 @@
 
-# Freelancer Schedule -- Tabbed Layout + Compact Header
+# Freelancer Schedule -- Tabs on Top + Crew Details + Client Detail Sheet
 
 ## Overview
-Restructure the CrewSchedule page so that:
-1. The top section (greeting, name, today's date, stats) is compressed into a compact 2-row header
-2. A bottom tab bar switches between "Booking Calendar" and "Upcoming Events"
-3. The Booking Calendar tab defaults to showing today's/next upcoming events when no date is selected
+Three major changes:
+1. Move the tab bar from bottom to top (above the calendar)
+2. Show assigned crew members (PB through FPV) with direct call icons on each event card
+3. Add a full-screen client detail sheet when tapping a client name, showing bride/groom details, event demands, references, and all contacts with proper call vs WhatsApp behavior
 
-## Layout Structure
+## Changes
 
-```text
-Row 1: "Good Morning, Barun Koirala"  |  11 Falgun 2082 / Feb 15, 2026
-Row 2: [12 This Month] [8 Remaining] [24 Total Upcoming]
--------------------------------------------------------------
-TAB CONTENT (scrollable area, takes remaining height)
--------------------------------------------------------------
-[ Booking Calendar ]  [ Upcoming Events ]   <-- Fixed bottom tab bar
+### 1. Move Tab Bar to Top (`src/pages/CrewSchedule.tsx`)
+- Remove the fixed bottom tab bar
+- Place the two tabs ("Booking Calendar" / "Upcoming Events") directly below the compact 2-row header, above the calendar content
+- Same styling (pill buttons with active/inactive states)
+- Footer stays at bottom
+
+### 2. Fetch Crew Data for Each Event (`src/pages/CrewSchedule.tsx`)
+- Update the Supabase query to also SELECT all 10 role columns: `photographer_bride, photographer_groom, videographer_bride, videographer_groom, extra_photographer, extra_videographer, assistant, iphone_shooter, drone_operator, fpv_operator`
+- Update `AssignmentRow` type in `types.ts` to include these fields
+- On page mount, fetch the full freelancers list (name + contactNo) via `getFreelancers()` and build a `Map<string, string>` of name-to-phone for quick lookup
+- Pass this phone map down to `EventDetailCard`
+
+### 3. Show Crew Section on Event Cards (`src/components/crew-schedule/EventDetailCard.tsx`)
+- Add a new "Crew" section (border-l-cyan-400) inside the expanded details
+- For each of the 10 role fields, if a name is assigned, show:
+  - Role abbreviation badge (PB, PG, VB, VG, EP, EV, Asst, iPhone, Drone, FPV) in a small colored pill
+  - Freelancer name
+  - Phone icon (blue) that uses `tel:` protocol for direct calling (looked up from freelancerPhones map)
+- Only display roles that have an assigned freelancer (skip empty ones)
+
+### 4. Fix Contact vs WhatsApp Behavior (`src/components/crew-schedule/EventDetailCard.tsx`)
+- "Contact" number fields use `tel:` protocol (opens phone dialer) -- render with a blue Phone icon
+- "WhatsApp" number fields use `openWhatsApp()` (opens wa.me) -- keep green styling
+- Update `DetailRow` component to accept `isCall` prop (for `tel:` links) separate from `isPhone` (renamed to `isWhatsApp`)
+
+### 5. Client Detail Sheet (`src/components/crew-schedule/CrewScheduleClientSheet.tsx` -- NEW)
+- Full-screen dark sheet (matching page theme) that opens when tapping a client name badge
+- Sections:
+  - **Bride** (rose border): Full name, contact (tel:), WhatsApp (wa.me), backup numbers with relation labels, Instagram link, home city/area/landmark, home map link
+  - **Groom** (sky border): Same structure as bride
+  - **Event Demands** (cyan border): List of demands from `eventDetails`
+  - **Event References** (pink border): List of references from `eventDetails`
+  - **Venue Details** (amber border): Type, name, location, timing, map
+  - **Parlour Details** (purple border): Same structure as venue
+- Uses existing cached data (contactDetailsCache + eventDetailsCache) -- no extra API calls
+- Close button at top right
+
+### 6. Update Types (`src/components/crew-schedule/types.ts`)
+- Add all 10 role columns to `AssignmentRow`:
+```
+photographer_bride?: string | null
+photographer_groom?: string | null
+videographer_bride?: string | null
+videographer_groom?: string | null
+extra_photographer?: string | null
+extra_videographer?: string | null
+assistant?: string | null
+iphone_shooter?: string | null
+drone_operator?: string | null
+fpv_operator?: string | null
 ```
 
-## Detailed Changes
+## Files Modified
+- `src/components/crew-schedule/types.ts` -- add role columns to AssignmentRow
+- `src/pages/CrewSchedule.tsx` -- move tabs to top, fetch role columns + freelancers list, pass phone map
+- `src/components/crew-schedule/EventDetailCard.tsx` -- add crew section, fix call vs WhatsApp, make client name tappable
+- `src/components/crew-schedule/UpcomingEventsSection.tsx` -- pass through new props (freelancerPhones)
 
-### 1. Compact Header (2 rows max)
-
-**Row 1**: Single line combining greeting + name + today's date
-- Left side: "Good Morning, Barun Koirala" (small text)
-- Right side: "11 Falgun 2082 | Feb 15, 2026" as a small pill
-
-**Row 2**: Stats as a single compact row of 3 inline badges
-- `12 This Month | 8 Remaining | 24 Upcoming` -- small inline pills, not tall cards
-
-This replaces the current 4 separate sections (greeting block, TodayDateHeader component, stats grid).
-
-### 2. Bottom Tab Bar
-- Fixed at the bottom of the page (or at the bottom of the container in popup mode)
-- Two tabs side by side: "Booking Calendar" (with calendar icon) and "Upcoming Events" (with list icon)
-- Active tab: `bg-white/20 text-white font-bold`
-- Inactive tab: `text-white/50`
-- State: `activeTab: "calendar" | "upcoming"`
-
-### 3. Booking Calendar Tab (default)
-- Shows the calendar grid with month navigation (as-is)
-- Below the calendar:
-  - If no date selected: show today's events, or if none today, show the next closest upcoming event with a "Next Event" label
-  - If a date is clicked: show that day's events (as currently)
-- Remove the old UpcomingEventsSection from this tab
-
-### 4. Upcoming Events Tab
-- Shows the full UpcomingEventsSection (moved here from below the calendar)
-- Everything else stays the same
-
-## Technical Changes
-
-### `src/pages/CrewSchedule.tsx`
-- Add `activeTab` state: `"calendar" | "upcoming"`, default `"calendar"`
-- Compress the greeting + TodayDateHeader + stats into 2 compact rows
-- Remove standalone TodayDateHeader component usage (inline the date info)
-- Wrap calendar and upcoming in tab content areas
-- Add a fixed bottom tab bar
-- Add logic for "default events" -- compute today's events or next upcoming event to show when no date is selected on the calendar tab
-- Use `flex flex-col h-full` layout so the tab bar stays at the bottom and content scrolls
-
-### `src/components/crew-schedule/UpcomingEventsSection.tsx`
-- No changes needed (just moved to the other tab)
-
-### `src/components/crew-schedule/EventDetailCard.tsx`
-- No changes needed
-
-### Files Modified
-- `src/pages/CrewSchedule.tsx` -- major layout restructure
+## Files Created
+- `src/components/crew-schedule/CrewScheduleClientSheet.tsx` -- full client detail overlay
