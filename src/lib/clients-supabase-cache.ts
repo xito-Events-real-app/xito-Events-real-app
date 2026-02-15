@@ -241,13 +241,30 @@ export async function updateClientInCacheRecord(client: ClientData): Promise<voi
   if (error) throw error;
 }
 
-/** Trigger pull from Google Sheets into cache */
+/** Deduplicate concurrent populateCache calls */
+let populatePromise: Promise<number> | null = null;
+
+/** Trigger pull from Google Sheets into cache (deduplicated) */
 export async function populateCacheFromSheets(): Promise<number> {
-  const { data, error } = await supabase.functions.invoke('sync-clients-to-sheets', {
-    body: { action: 'pull' }
-  });
-  if (error) throw error;
-  return data?.count || 0;
+  // If already running, return the existing promise
+  if (populatePromise) {
+    console.log('[CACHE] populateCacheFromSheets already running, reusing promise');
+    return populatePromise;
+  }
+
+  populatePromise = (async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-clients-to-sheets', {
+        body: { action: 'pull' }
+      });
+      if (error) throw error;
+      return data?.count || 0;
+    } finally {
+      populatePromise = null;
+    }
+  })();
+
+  return populatePromise;
 }
 
 /** Push unsynced rows to Google Sheets */
