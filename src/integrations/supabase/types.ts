@@ -149,6 +149,201 @@ export type Database = {
         }
         Relationships: []
       }
+      contact_details_cache: {
+        Row: {
+          bride_backup_number: string | null
+          bride_backup_number2: string | null
+          bride_backup_relation: string | null
+          bride_backup_relation2: string | null
+          bride_contact_number: string | null
+          bride_full_name: string | null
+          bride_home_area: string | null
+          bride_home_city: string | null
+          bride_home_landmark: string | null
+          bride_home_map: string | null
+          bride_instagram: string | null
+          bride_whatsapp_number: string | null
+          client_name: string | null
+          form_sent_date: string | null
+          groom_backup_number: string | null
+          groom_backup_number2: string | null
+          groom_backup_relation: string | null
+          groom_backup_relation2: string | null
+          groom_contact_number: string | null
+          groom_full_name: string | null
+          groom_home_area: string | null
+          groom_home_city: string | null
+          groom_home_landmark: string | null
+          groom_home_map: string | null
+          groom_instagram: string | null
+          groom_whatsapp_number: string | null
+          registered_date_bs: string | null
+          registered_date_time_ad: string
+          row_number: number | null
+          synced_to_sheet: boolean | null
+          updated_at: string | null
+        }
+        Insert: {
+          bride_backup_number?: string | null
+          bride_backup_number2?: string | null
+          bride_backup_relation?: string | null
+          bride_backup_relation2?: string | null
+          bride_contact_number?: string | null
+          bride_full_name?: string | null
+          bride_home_area?: string | null
+          bride_home_city?: string | null
+          bride_home_landmark?: string | null
+          bride_home_map?: string | null
+          bride_instagram?: string | null
+          bride_whatsapp_number?: string | null
+          client_name?: string | null
+          form_sent_date?: string | null
+          groom_backup_number?: string | null
+          groom_backup_number2?: string | null
+          groom_backup_relation?: string | null
+          groom_backup_relation2?: string | null
+          groom_contact_number?: string | null
+          groom_full_name?: string | null
+          groom_home_area?: string | null
+          groom_home_city?: string | null
+          groom_home_landmark?: string | null
+          groom_home_map?: string | null
+          groom_instagram?: string | null
+          groom_whatsapp_number?: string | null
+          registered_date_bs?: string | null
+          registered_date_time_ad: string
+          row_number?: number | null
+          synced_to_sheet?: boolean | null
+          updated_at?: string | null
+        }
+        Update: {
+          bride_backup_number?: string | null
+          bride_backup_number2?: string | null
+          bride_backup_relation?: string | null
+          bride_backup_relation2?: string | null
+          bride_contact_number?: string | null
+          bride_full_name?: string | null
+          bride_home_area?: string | null
+          bride_home_city?: string | null
+          bride_home_landmark?: string | null
+          bride_home_map?: string | null
+          bride_instagram?: string | null
+          bride_whatsapp_number?: string | null
+          client_name?: string | null
+          form_sent_date?: string | null
+          groom_backup_number?: string | null
+          groom_backup_number2?: string | null
+          groom_backup_relation?: string | null
+          groom_backup_relation2?: string | null
+          groom_contact_number?: string | null
+          groom_full_name?: string | null
+          groom_home_area?: string | null
+          groom_home_city?: string | null
+          groom_home_landmark?: string | null
+          groom_home_map?: string | null
+          groom_instagram?: string | null
+          groom_whatsapp_number?: string | null
+          registered_date_bs?: string | null
+          registered_date_time_ad?: string
+          row_number?: number | null
+          synced_to_sheet?: boolean | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      event_details_cache: {
+        Row: {
+          do_groom_come_in_mehndi: string | null
+          event_date_ad: string | null
+          event_day: string | null
+          event_demands: string | null
+          event_end_time: string | null
+          event_index: number
+          event_month: string | null
+          event_name: string | null
+          event_references: string | null
+          event_start_time: string | null
+          event_year: string | null
+          guest_count: string | null
+          id: string
+          parlour_area: string | null
+          parlour_city: string | null
+          parlour_end_time: string | null
+          parlour_map: string | null
+          parlour_name: string | null
+          parlour_start_time: string | null
+          parlour_type: string | null
+          registered_date_time_ad: string
+          synced_to_sheet: boolean | null
+          updated_at: string | null
+          venue_area: string | null
+          venue_city: string | null
+          venue_map: string | null
+          venue_name: string | null
+          venue_type: string | null
+        }
+        Insert: {
+          do_groom_come_in_mehndi?: string | null
+          event_date_ad?: string | null
+          event_day?: string | null
+          event_demands?: string | null
+          event_end_time?: string | null
+          event_index?: number
+          event_month?: string | null
+          event_name?: string | null
+          event_references?: string | null
+          event_start_time?: string | null
+          event_year?: string | null
+          guest_count?: string | null
+          id?: string
+          parlour_area?: string | null
+          parlour_city?: string | null
+          parlour_end_time?: string | null
+          parlour_map?: string | null
+          parlour_name?: string | null
+          parlour_start_time?: string | null
+          parlour_type?: string | null
+          registered_date_time_ad: string
+          synced_to_sheet?: boolean | null
+          updated_at?: string | null
+          venue_area?: string | null
+          venue_city?: string | null
+          venue_map?: string | null
+          venue_name?: string | null
+          venue_type?: string | null
+        }
+        Update: {
+          do_groom_come_in_mehndi?: string | null
+          event_date_ad?: string | null
+          event_day?: string | null
+          event_demands?: string | null
+          event_end_time?: string | null
+          event_index?: number
+          event_month?: string | null
+          event_name?: string | null
+          event_references?: string | null
+          event_start_time?: string | null
+          event_year?: string | null
+          guest_count?: string | null
+          id?: string
+          parlour_area?: string | null
+          parlour_city?: string | null
+          parlour_end_time?: string | null
+          parlour_map?: string | null
+          parlour_name?: string | null
+          parlour_start_time?: string | null
+          parlour_type?: string | null
+          registered_date_time_ad?: string
+          synced_to_sheet?: boolean | null
+          updated_at?: string | null
+          venue_area?: string | null
+          venue_city?: string | null
+          venue_map?: string | null
+          venue_name?: string | null
+          venue_type?: string | null
+        }
+        Relationships: []
+      }
       freelancer_assignments: {
         Row: {
           assistant: string | null
