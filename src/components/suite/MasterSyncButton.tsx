@@ -106,7 +106,8 @@ export function MasterSyncButton() {
       let vendorUpdatesCount = 0;
       const bookedClients = bookedClientsData?.data || [];
       
-      // Refresh vendor data for each booked client (in batches to avoid rate limits)
+      // Refresh vendor data for each booked client (with delays to avoid rate limits)
+      const BATCH_SIZE = 5;
       for (let i = 0; i < bookedClients.length; i++) {
         const client = bookedClients[i];
         if (!client.registeredDateTimeAD) continue;
@@ -126,6 +127,11 @@ export function MasterSyncButton() {
           console.warn(`Failed to refresh vendor data for ${client.clientName}:`, err);
         }
         
+        // Add delay every BATCH_SIZE calls to avoid 429 rate limits
+        if ((i + 1) % BATCH_SIZE === 0 && i < bookedClients.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1500));
+        }
+        
         // Update progress incrementally
         const progressIncrement = (88 - 76) * ((i + 1) / bookedClients.length);
         setProgress(76 + progressIncrement);
@@ -133,7 +139,8 @@ export function MasterSyncButton() {
       
       setSyncStats(prev => ({ ...prev, vendors: vendorUpdatesCount }));
       setProgress(88);
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Cooldown before contact sync to let API quota recover
+      await new Promise(resolve => setTimeout(resolve, 2500));
       
       // Phase 5: Contact Details Sync (89-100%)
       setCurrentPhase('contacts');

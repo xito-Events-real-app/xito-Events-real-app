@@ -1438,7 +1438,7 @@ async function fullSyncContactDetails(accessToken: string, spreadsheetId: string
   const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:C2000");
   const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}`;
   
-  const bookedResponse = await fetch(bookedUrl, {
+  const bookedResponse = await fetchWithRetry(bookedUrl, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   
