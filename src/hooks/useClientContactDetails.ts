@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { ClientContactDetails, emptyContactDetails } from '@/lib/client-contact-api';
 
-export function useClientContactDetails(registeredDateTimeAD: string | undefined) {
+export function useClientContactDetails(registeredDateTimeAD: string | undefined, enabled = true) {
   const [data, setData] = useState<ClientContactDetails | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isResyncing, setIsResyncing] = useState(false);
@@ -36,9 +36,12 @@ export function useClientContactDetails(registeredDateTimeAD: string | undefined
     }
   }, [registeredDateTimeAD]);
 
+  // Only fetch when enabled (lazy-load for contact tab)
   useEffect(() => {
-    fetchContactDetails();
-  }, [fetchContactDetails]);
+    if (enabled) {
+      fetchContactDetails();
+    }
+  }, [fetchContactDetails, enabled]);
 
   const updateContactDetails = useCallback(async (
     updates: Partial<Omit<ClientContactDetails, 'rowNumber' | 'registeredDateTimeAD' | 'registeredDateBS' | 'clientName'>>
@@ -59,7 +62,6 @@ export function useClientContactDetails(registeredDateTimeAD: string | undefined
       if (updateError) throw new Error(updateError.message);
       if (!result?.success) throw new Error(result?.error || 'Failed to update contact details');
 
-      // Refresh data after update
       await fetchContactDetails();
 
       toast({
@@ -95,7 +97,6 @@ export function useClientContactDetails(registeredDateTimeAD: string | undefined
       if (resyncError) throw new Error(resyncError.message);
       if (!result?.success) throw new Error(result?.error || 'Failed to resync contact details');
 
-      // Update local state with refreshed data
       setData(result.data);
 
       toast({
