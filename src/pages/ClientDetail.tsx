@@ -316,7 +316,7 @@ const ClientDetail = () => {
     updateAssignment: updateFreelancerAssignmentFromHook,
   } = useFreelancerAssignments(client?.registeredDateTimeAD);
 
-  // Fetch client contact details
+  // Fetch client contact details (lazy-loaded: only when contact tab is active)
   const {
     data: contactDetailsData,
     isLoading: contactDetailsLoading,
@@ -324,7 +324,7 @@ const ClientDetail = () => {
     updateContactDetails,
     resyncClient: resyncContactDetails,
     markFormAsSent,
-  } = useClientContactDetails(client?.registeredDateTimeAD);
+  } = useClientContactDetails(client?.registeredDateTimeAD, activeSection === 'clientDetails');
 
 
   const handleEdit = () => {

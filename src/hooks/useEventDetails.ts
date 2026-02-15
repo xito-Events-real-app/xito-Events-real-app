@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
@@ -51,26 +51,78 @@ export function serializeQuotedList(items: string[]): string {
   return items.filter(Boolean).map(i => `"${i}"`).join(' ');
 }
 
-// Parse multi-line column value at specific index
-function getValueAtIndex(multiLineValue: string, index: number): string {
-  const lines = multiLineValue ? multiLineValue.split('\n') : [];
-  return lines[index] || '';
+// Convert Supabase cache row to EventDetail
+function cacheRowToEventDetail(row: any): EventDetail {
+  return {
+    eventIndex: row.event_index ?? 0,
+    eventName: row.event_name || '',
+    eventYear: row.event_year || '',
+    eventMonth: row.event_month || '',
+    eventDay: row.event_day || '',
+    eventDateAD: row.event_date_ad || '',
+    venueType: row.venue_type || '',
+    venueName: row.venue_name || '',
+    venueCity: row.venue_city || '',
+    venueArea: row.venue_area || '',
+    venueMap: row.venue_map || '',
+    eventStartTime: row.event_start_time || '',
+    eventEndTime: row.event_end_time || '',
+    parlourType: row.parlour_type || '',
+    parlourName: row.parlour_name || '',
+    parlourCity: row.parlour_city || '',
+    parlourArea: row.parlour_area || '',
+    parlourMap: row.parlour_map || '',
+    parlourStartTime: row.parlour_start_time || '',
+    parlourEndTime: row.parlour_end_time || '',
+    doGroomComeInMehndi: row.do_groom_come_in_mehndi || '',
+    guestCount: row.guest_count || '',
+    eventDemands: parseQuotedList(row.event_demands || ''),
+    eventReferences: parseQuotedList(row.event_references || ''),
+  };
 }
+
+// Background refresh cooldown: 5 minutes
+const BACKGROUND_REFRESH_INTERVAL = 5 * 60 * 1000;
+const lastRefreshMap = new Map<string, number>();
 
 export function useEventDetails(registeredDateTimeAD: string | undefined) {
   const [data, setData] = useState<EventDetailsData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const backgroundRefreshRef = useRef(false);
 
-  const fetchEventDetails = useCallback(async () => {
-    if (!registeredDateTimeAD) return;
-
-    setIsLoading(true);
-    setError(null);
+  // Step 1: Load from Supabase cache instantly
+  const loadFromCache = useCallback(async () => {
+    if (!registeredDateTimeAD) return false;
 
     try {
-      // Step 1: Refresh vendor data (auto-sync from vendor sheets)
-      // This updates City, Area, Map from vendor type sheets if they differ
+      const { data: rows, error: fetchError } = await supabase
+        .from('event_details_cache')
+        .select('*')
+        .eq('registered_date_time_ad', registeredDateTimeAD)
+        .order('event_index', { ascending: true });
+
+      if (fetchError || !rows || rows.length === 0) return false;
+
+      const events = rows.map(cacheRowToEventDetail);
+      setData({ rowNumber: 0, events });
+      return true;
+    } catch {
+      return false;
+    }
+  }, [registeredDateTimeAD]);
+
+  // Step 2: Full fetch from Google Sheets (used as background refresh or fallback)
+  const fetchFromSheets = useCallback(async (isBackground = false) => {
+    if (!registeredDateTimeAD) return;
+
+    if (!isBackground) {
+      setIsLoading(true);
+      setError(null);
+    }
+
+    try {
+      // Refresh vendor data + fetch event details from Sheets
       await supabase.functions.invoke('google-sheets', {
         body: {
           action: 'refreshClientVendorData',
@@ -78,7 +130,6 @@ export function useEventDetails(registeredDateTimeAD: string | undefined) {
         }
       });
       
-      // Step 2: Fetch the (now-updated) event details
       const { data: result, error: fetchError } = await supabase.functions.invoke('google-sheets', {
         body: {
           action: 'getClientEventDetails',
@@ -90,18 +141,54 @@ export function useEventDetails(registeredDateTimeAD: string | undefined) {
       if (!result?.success) throw new Error(result?.error || 'Failed to fetch event details');
 
       setData(result.data);
+      lastRefreshMap.set(registeredDateTimeAD, Date.now());
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load event details';
-      setError(message);
-      console.error('Error fetching event details:', err);
+      if (!isBackground) {
+        const message = err instanceof Error ? err.message : 'Failed to load event details';
+        setError(message);
+        console.error('Error fetching event details:', err);
+      }
     } finally {
-      setIsLoading(false);
+      if (!isBackground) {
+        setIsLoading(false);
+      }
     }
   }, [registeredDateTimeAD]);
 
+  // Combined load: cache first, then background refresh if stale
+  const loadData = useCallback(async () => {
+    if (!registeredDateTimeAD) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    const hadCache = await loadFromCache();
+
+    if (hadCache) {
+      setIsLoading(false);
+      
+      // Background refresh if stale (>5 min since last refresh)
+      const lastRefresh = lastRefreshMap.get(registeredDateTimeAD) || 0;
+      if (Date.now() - lastRefresh > BACKGROUND_REFRESH_INTERVAL && !backgroundRefreshRef.current) {
+        backgroundRefreshRef.current = true;
+        fetchFromSheets(true).finally(() => {
+          backgroundRefreshRef.current = false;
+        });
+      }
+    } else {
+      // No cache — must fetch from Sheets
+      await fetchFromSheets(false);
+    }
+  }, [registeredDateTimeAD, loadFromCache, fetchFromSheets]);
+
   useEffect(() => {
-    fetchEventDetails();
-  }, [fetchEventDetails]);
+    loadData();
+  }, [loadData]);
+
+  // Manual refetch always goes to Sheets
+  const refetch = useCallback(async () => {
+    await fetchFromSheets(false);
+  }, [fetchFromSheets]);
 
   const updateEventDetail = useCallback(async (
     eventIndex: number,
@@ -113,7 +200,6 @@ export function useEventDetails(registeredDateTimeAD: string | undefined) {
     if (!registeredDateTimeAD) return false;
 
     try {
-      // Convert arrays to quoted strings before sending
       const processedUpdates = {
         ...updates,
         eventDemands: updates.eventDemands ? serializeQuotedList(updates.eventDemands) : undefined,
@@ -134,8 +220,8 @@ export function useEventDetails(registeredDateTimeAD: string | undefined) {
       if (updateError) throw new Error(updateError.message);
       if (!result?.success) throw new Error(result?.error || 'Failed to update event details');
 
-      // Refresh data after update
-      await fetchEventDetails();
+      // Refresh from Sheets after update
+      await fetchFromSheets(false);
 
       toast({
         title: "Saved",
@@ -153,13 +239,13 @@ export function useEventDetails(registeredDateTimeAD: string | undefined) {
       console.error('Error updating event details:', err);
       return false;
     }
-  }, [registeredDateTimeAD, fetchEventDetails]);
+  }, [registeredDateTimeAD, fetchFromSheets]);
 
   return {
     data,
     isLoading,
     error,
-    refetch: fetchEventDetails,
+    refetch,
     updateEventDetail,
   };
 }
