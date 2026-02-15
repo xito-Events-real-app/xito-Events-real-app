@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckSquare, Plus, ArrowLeft, Send, ChevronLeft, ChevronRight, Clock, User, Phone, Pencil, ChevronDown } from "lucide-react";
+import { CheckSquare, Plus, ArrowLeft, Send, ChevronLeft, ChevronRight, Clock, User, Phone, Pencil, ChevronDown, RefreshCw, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -13,7 +13,7 @@ import type { DailyTask } from "@/lib/daily-task-api";
 export function DesktopDailyTasks() {
   const navigate = useNavigate();
   const {
-    tasks, setupData, loading, fetchData,
+    tasks, setupData, loading, error, fetchData,
     shiftDates, selectedDate, setSelectedDate,
     handlerFilter, setHandlerFilter,
     dateStrip, taskCountByDate, filteredTasks, activeHandlers,
@@ -106,6 +106,14 @@ export function DesktopDailyTasks() {
       <div className="px-6 py-4">
         {loading ? (
           <div className="text-center py-20 text-gray-500">Loading tasks...</div>
+        ) : error ? (
+          <div className="text-center py-20">
+            <AlertTriangle className="w-12 h-12 text-amber-400 mx-auto mb-3" />
+            <p className="text-gray-700 font-medium">{error}</p>
+            <Button variant="outline" className="mt-4 gap-2" onClick={fetchData}>
+              <RefreshCw className="w-4 h-4" /> Retry
+            </Button>
+          </div>
         ) : filteredTasks.length === 0 ? (
           <div className="text-center py-20">
             <CheckSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
