@@ -7,6 +7,7 @@ import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { nepaliMonthsEnglish } from "@/lib/nepali-date";
 import { AssignmentRow } from "./types";
 import CrewScheduleClientSheet from "./CrewScheduleClientSheet";
+import CrewScheduleEventSheet from "./CrewScheduleEventSheet";
 
 const ROLE_LABELS: { key: keyof AssignmentRow; label: string; color: string }[] = [
   { key: "photographer_bride", label: "PB", color: "bg-rose-500/30 text-rose-300" },
@@ -127,6 +128,7 @@ function CrewSection({ assignment, freelancerPhones }: { assignment: AssignmentR
 export default function EventDetailCard({ assignment, eventDetails, contactDetails, isLoadingDetails, onRequestDetails, showDatePill, freelancerPhones }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [clientSheetOpen, setClientSheetOpen] = useState(false);
+  const [eventSheetOpen, setEventSheetOpen] = useState(false);
 
   const day = assignment.event_day || "";
   const month = parseInt(assignment.event_month || "0");
@@ -159,7 +161,16 @@ export default function EventDetailCard({ assignment, eventDetails, contactDetai
                 <p className="text-sm font-semibold text-white truncate">
                   {!showDatePill && <span className="text-emerald-400">{day} {monthName}</span>}
                   {!showDatePill && <span className="text-white/30 mx-1.5">—</span>}
-                  {assignment.event}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!eventDetails && !isLoadingDetails) onRequestDetails(assignment.registered_date_time_ad);
+                      setEventSheetOpen(true);
+                    }}
+                    className="text-white hover:text-violet-300 transition-colors"
+                  >
+                    {assignment.event}
+                  </button>
                 </p>
                 {assignment.client_name && (
                   <button
@@ -229,6 +240,15 @@ export default function EventDetailCard({ assignment, eventDetails, contactDetai
         contactDetails={contactDetails}
         eventDetails={eventDetails}
         clientName={assignment.client_name || undefined}
+      />
+
+      <CrewScheduleEventSheet
+        open={eventSheetOpen}
+        onOpenChange={setEventSheetOpen}
+        assignment={assignment}
+        eventDetail={matchingEvent}
+        contactDetails={contactDetails}
+        freelancerPhones={freelancerPhones}
       />
     </>
   );
