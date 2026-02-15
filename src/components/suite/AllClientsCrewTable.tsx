@@ -4,7 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty, CommandGroup, CommandSeparator } from "@/components/ui/command";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Users, Plus, RefreshCw, X, ChevronLeft, Database, Trash2, Download, Upload, UserCog, Cloud } from "lucide-react";
+import { Loader2, Users, Plus, RefreshCw, X, ChevronLeft, Database, Trash2, Download, Upload, UserCog, Cloud, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -421,6 +421,15 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
           <Users className="w-5 h-5" />
           <h1 className="text-lg font-bold tracking-wide">{readOnly ? "FILE MANAGEMENT" : "ALL CLIENTS"}</h1>
         </div>
+        <a
+          href="https://wtnclienttracker.lovable.app/crew-schedule/Demo"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1 text-xs bg-white/15 px-2.5 py-1 rounded-full hover:bg-white/25 transition-colors"
+        >
+          <ExternalLink className="w-3 h-3" />
+          Preview Crew Link
+        </a>
         <div className="flex items-center gap-2 ml-4">
           <Select value={selectedYear} onValueChange={setSelectedYear}>
             <SelectTrigger className="w-24 h-8 bg-white/15 border-white/30 text-white text-sm [&>svg]:text-white">
