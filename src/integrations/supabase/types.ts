@@ -419,6 +419,111 @@ export type Database = {
         }
         Relationships: []
       }
+      logistics_types_cache: {
+        Row: {
+          category: string
+          id: string
+          type_name: string
+          updated_at: string | null
+        }
+        Insert: {
+          category?: string
+          id?: string
+          type_name?: string
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string
+          id?: string
+          type_name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      logistics_vendors_cache: {
+        Row: {
+          area: string | null
+          city: string | null
+          company_contact: string | null
+          company_whatsapp: string | null
+          facebook: string | null
+          gmail: string | null
+          google_map: string | null
+          id: string
+          instagram: string | null
+          name: string | null
+          owner1: string | null
+          owner1_contact: string | null
+          owner1_whatsapp: string | null
+          owner2: string | null
+          owner2_contact: string | null
+          owner2_whatsapp: string | null
+          rating: string | null
+          row_number: number | null
+          synced_to_sheet: boolean | null
+          tiktok: string | null
+          updated_at: string | null
+          vendor_category: string
+          vendor_type: string
+          website: string | null
+          youtube: string | null
+        }
+        Insert: {
+          area?: string | null
+          city?: string | null
+          company_contact?: string | null
+          company_whatsapp?: string | null
+          facebook?: string | null
+          gmail?: string | null
+          google_map?: string | null
+          id?: string
+          instagram?: string | null
+          name?: string | null
+          owner1?: string | null
+          owner1_contact?: string | null
+          owner1_whatsapp?: string | null
+          owner2?: string | null
+          owner2_contact?: string | null
+          owner2_whatsapp?: string | null
+          rating?: string | null
+          row_number?: number | null
+          synced_to_sheet?: boolean | null
+          tiktok?: string | null
+          updated_at?: string | null
+          vendor_category?: string
+          vendor_type?: string
+          website?: string | null
+          youtube?: string | null
+        }
+        Update: {
+          area?: string | null
+          city?: string | null
+          company_contact?: string | null
+          company_whatsapp?: string | null
+          facebook?: string | null
+          gmail?: string | null
+          google_map?: string | null
+          id?: string
+          instagram?: string | null
+          name?: string | null
+          owner1?: string | null
+          owner1_contact?: string | null
+          owner1_whatsapp?: string | null
+          owner2?: string | null
+          owner2_contact?: string | null
+          owner2_whatsapp?: string | null
+          rating?: string | null
+          row_number?: number | null
+          synced_to_sheet?: boolean | null
+          tiktok?: string | null
+          updated_at?: string | null
+          vendor_category?: string
+          vendor_type?: string
+          website?: string | null
+          youtube?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
