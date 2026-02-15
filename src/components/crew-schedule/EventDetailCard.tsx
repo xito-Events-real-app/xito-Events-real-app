@@ -15,9 +15,10 @@ interface Props {
   onRequestDetails: (registeredDateTimeAD: string) => void;
   showDatePill?: boolean;
   freelancerPhones?: Map<string, string>;
+  freelancerName?: string;
 }
 
-export default function EventDetailCard({ assignment, eventDetails, contactDetails, isLoadingDetails, onRequestDetails, showDatePill, freelancerPhones }: Props) {
+export default function EventDetailCard({ assignment, eventDetails, contactDetails, isLoadingDetails, onRequestDetails, showDatePill, freelancerPhones, freelancerName }: Props) {
   const [clientSheetOpen, setClientSheetOpen] = useState(false);
   const [eventSheetOpen, setEventSheetOpen] = useState(false);
 
@@ -82,6 +83,7 @@ export default function EventDetailCard({ assignment, eventDetails, contactDetai
         eventDetail={matchingEvent}
         contactDetails={contactDetails}
         freelancerPhones={freelancerPhones}
+        freelancerName={freelancerName}
       />
     </>
   );

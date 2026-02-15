@@ -440,6 +440,48 @@ export type Database = {
         }
         Relationships: []
       }
+      freelancer_event_settings: {
+        Row: {
+          event_name: string
+          freelancer_name: string
+          id: string
+          personal_note: string | null
+          registered_date_time_ad: string
+          role_code: string
+          show_bride_details: boolean
+          show_groom_details: boolean
+          show_parlour_details: boolean
+          show_venue_details: boolean
+          updated_at: string | null
+        }
+        Insert: {
+          event_name: string
+          freelancer_name: string
+          id?: string
+          personal_note?: string | null
+          registered_date_time_ad: string
+          role_code?: string
+          show_bride_details?: boolean
+          show_groom_details?: boolean
+          show_parlour_details?: boolean
+          show_venue_details?: boolean
+          updated_at?: string | null
+        }
+        Update: {
+          event_name?: string
+          freelancer_name?: string
+          id?: string
+          personal_note?: string | null
+          registered_date_time_ad?: string
+          role_code?: string
+          show_bride_details?: boolean
+          show_groom_details?: boolean
+          show_parlour_details?: boolean
+          show_venue_details?: boolean
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       freelancers_cache: {
         Row: {
           area: string | null
