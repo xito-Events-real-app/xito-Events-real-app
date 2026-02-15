@@ -10,6 +10,11 @@ import {
   isCachePopulated,
   populateCacheFromSheets,
 } from "@/lib/clients-supabase-cache";
+import {
+  getMemoryBookedClients,
+  setMemoryBookedClients,
+  isBookedMemoryLoaded,
+} from "@/lib/memory-cache";
 
 interface UseBookedCachedDataResult {
   clients: BookedClientData[];
@@ -35,12 +40,23 @@ export function useBookedCachedData(): UseBookedCachedDataResult {
 
   const loadData = useCallback(async (forceRefresh = false) => {
     try {
+      // Step 0: Check in-memory cache first (0ms)
+      if (!forceRefresh && isBookedMemoryLoaded()) {
+        const memBooked = getMemoryBookedClients()!;
+        setClients(memBooked);
+        setIsFromCache(true);
+        setIsLoading(false);
+        setLastSyncedAt(new Date());
+        return;
+      }
+
       // Step 1: Try Supabase cache first
       const hasCache = await isCachePopulated();
 
       if (hasCache && !forceRefresh) {
         const cachedClients = await loadBookedClientsFromCache();
         setClients(cachedClients);
+        setMemoryBookedClients(cachedClients);
         setIsFromCache(true);
         setIsLoading(false);
         setLastSyncedAt(new Date());
@@ -53,6 +69,7 @@ export function useBookedCachedData(): UseBookedCachedDataResult {
           await populateCacheFromSheets();
           const freshClients = await loadBookedClientsFromCache();
           setClients(freshClients);
+          setMemoryBookedClients(freshClients);
           await setCachedBookedClients(freshClients);
 
           setLastSyncedAt(new Date());
@@ -93,6 +110,7 @@ export function useBookedCachedData(): UseBookedCachedDataResult {
       await populateCacheFromSheets();
       const freshClients = await loadBookedClientsFromCache();
       setClients(freshClients);
+      setMemoryBookedClients(freshClients);
       await setCachedBookedClients(freshClients);
 
       setLastSyncedAt(new Date());
