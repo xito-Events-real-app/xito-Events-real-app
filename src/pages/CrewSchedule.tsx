@@ -5,6 +5,7 @@ import { getCurrentBSDate, nepaliMonthsEnglish, getDaysInBSMonth, bsToAD } from 
 import { ChevronLeft, ChevronRight, Calendar, Loader2, CalendarDays, List } from "lucide-react";
 import { EventDetail } from "@/hooks/useEventDetails";
 import { ClientContactDetails } from "@/lib/client-contact-api";
+import { getFreelancers } from "@/lib/freelancer-api";
 import { AssignmentRow } from "@/components/crew-schedule/types";
 import EventDetailCard from "@/components/crew-schedule/EventDetailCard";
 import UpcomingEventsSection from "@/components/crew-schedule/UpcomingEventsSection";
@@ -44,22 +45,35 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
   const [loading, setLoading] = useState(true);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<"calendar" | "upcoming">("calendar");
+  const [freelancerPhones, setFreelancerPhones] = useState<Map<string, string>>(new Map());
 
   // Caches for lazy-loaded details
   const [eventDetailsCache, setEventDetailsCache] = useState<Map<string, { events: EventDetail[] }>>(new Map());
   const [contactDetailsCache, setContactDetailsCache] = useState<Map<string, ClientContactDetails>>(new Map());
   const [loadingKeys, setLoadingKeys] = useState<Set<string>>(new Set());
 
-  // Fetch all assignments
+  // Fetch all assignments + freelancer phone map
   useEffect(() => {
     async function fetch() {
       setLoading(true);
       const orFilter = ROLE_COLUMNS.map(col => `${col}.ilike.%${decodedName}%`).join(",");
-      const { data, error } = await supabase
-        .from("freelancer_assignments")
-        .select("event_year, event_month, event_day, event, client_name, registered_date_time_ad")
-        .or(orFilter);
-      if (!error && data) setAssignments(data as AssignmentRow[]);
+      const [assignRes, flData] = await Promise.all([
+        supabase
+          .from("freelancer_assignments")
+          .select("event_year, event_month, event_day, event, client_name, registered_date_time_ad, photographer_bride, photographer_groom, videographer_bride, videographer_groom, extra_photographer, extra_videographer, assistant, iphone_shooter, drone_operator, fpv_operator")
+          .or(orFilter),
+        getFreelancers(500).catch(() => []),
+      ]);
+      if (!assignRes.error && assignRes.data) setAssignments(assignRes.data as AssignmentRow[]);
+      
+      // Build name->phone map (lowercase keys)
+      const phoneMap = new Map<string, string>();
+      for (const fl of flData) {
+        if (fl.name && (fl.contactNo || fl.whatsappNo)) {
+          phoneMap.set(fl.name.trim().toLowerCase(), fl.contactNo || fl.whatsappNo);
+        }
+      }
+      setFreelancerPhones(phoneMap);
       setLoading(false);
     }
     if (decodedName) fetch();
@@ -122,7 +136,7 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
     return { totalThisMonth, remainingThisMonth, totalRemaining };
   }, [assignments, navYear, navMonth]);
 
-  // Today's date info for compact header
+  // Today's date info
   const bsMonth = nepaliMonthsEnglish[currentBS.month - 1] || "";
   const adFormatted = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
@@ -146,7 +160,6 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
     return false;
   }, [navYear, navMonth, currentBS]);
 
-  // Events for selected day
   const selectedDayEvents = useMemo(() => {
     if (selectedDay === null) return [];
     return assignments.filter(a =>
@@ -154,18 +167,14 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
     );
   }, [assignments, navYear, navMonth, selectedDay]);
 
-  // Default events: today's events, or next upcoming if none today
   const defaultCalendarEvents = useMemo(() => {
     const today = getCurrentBSDate();
     const tY = today.year, tM = today.month, tD = today.day as number;
-
-    // Today's events
     const todayEvents = assignments.filter(a =>
       a.event_year === String(tY) && a.event_month === String(tM) && a.event_day === String(tD)
     );
     if (todayEvents.length > 0) return { events: todayEvents, label: "Today's Events" };
 
-    // Next upcoming
     const upcoming = assignments
       .filter(a => {
         const y = parseInt(a.event_year || "0"), m = parseInt(a.event_month || "0"), d = parseInt(a.event_day || "0");
@@ -178,7 +187,6 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
       });
 
     if (upcoming.length > 0) {
-      // Get all events for the next upcoming date
       const first = upcoming[0];
       const sameDay = upcoming.filter(a =>
         a.event_year === first.event_year && a.event_month === first.event_month && a.event_day === first.event_day
@@ -186,11 +194,9 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
       const nextMonth = nepaliMonthsEnglish[parseInt(first.event_month || "1") - 1] || "";
       return { events: sameDay, label: `Next Event — ${first.event_day} ${nextMonth}` };
     }
-
     return { events: [], label: "" };
   }, [assignments]);
 
-  // Which events to show below calendar
   const calendarBottomEvents = selectedDay !== null ? selectedDayEvents : defaultCalendarEvents.events;
   const calendarBottomLabel = selectedDay !== null
     ? `${selectedDay} ${monthName} — ${selectedDayEvents.length} event${selectedDayEvents.length !== 1 ? "s" : ""}`
@@ -208,7 +214,6 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
     <div className="h-screen bg-gradient-to-br from-slate-900 via-violet-950 to-slate-900 text-white flex flex-col">
       {/* Compact Header — 2 rows */}
       <div className="px-4 pt-4 pb-2 space-y-1.5 flex-shrink-0">
-        {/* Row 1: Greeting + Date */}
         <div className="flex items-center justify-between">
           <p className="text-xs text-violet-200 truncate">
             {getGreeting()}, <span className="font-semibold text-white">{decodedName}</span>
@@ -217,7 +222,6 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
             {currentBS.day} {bsMonth} {currentBS.year} / {adFormatted}
           </span>
         </div>
-        {/* Row 2: Stats */}
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-semibold">
             {stats.totalThisMonth} This Month
@@ -231,8 +235,28 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
         </div>
       </div>
 
+      {/* Tab Bar — Top */}
+      <div className="flex-shrink-0 px-4 pb-2 flex gap-2">
+        <button
+          onClick={() => setActiveTab("calendar")}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all
+            ${activeTab === "calendar" ? "bg-white/15 text-white font-bold" : "text-white/50"}`}
+        >
+          <CalendarDays className="w-4 h-4" />
+          Booking Calendar
+        </button>
+        <button
+          onClick={() => setActiveTab("upcoming")}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all
+            ${activeTab === "upcoming" ? "bg-white/15 text-white font-bold" : "text-white/50"}`}
+        >
+          <List className="w-4 h-4" />
+          Upcoming Events
+        </button>
+      </div>
+
       {/* Scrollable Tab Content */}
-      <div className="flex-1 overflow-y-auto px-4 pb-16">
+      <div className="flex-1 overflow-y-auto px-4 pb-4">
         {activeTab === "calendar" ? (
           <div className="space-y-4">
             {/* Calendar Navigation */}
@@ -315,6 +339,7 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
                       contactDetails={contact}
                       isLoadingDetails={loadingKeys.has(ev.registered_date_time_ad)}
                       onRequestDetails={fetchDetailsForClient}
+                      freelancerPhones={freelancerPhones}
                     />
                   );
                 })}
@@ -328,28 +353,9 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
             contactDetailsCache={contactDetailsCache}
             loadingKeys={loadingKeys}
             onRequestDetails={fetchDetailsForClient}
+            freelancerPhones={freelancerPhones}
           />
         )}
-      </div>
-
-      {/* Fixed Bottom Tab Bar */}
-      <div className="flex-shrink-0 bg-slate-900/95 backdrop-blur border-t border-white/10 px-4 py-2 flex gap-2">
-        <button
-          onClick={() => setActiveTab("calendar")}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-medium transition-all
-            ${activeTab === "calendar" ? "bg-white/15 text-white font-bold" : "text-white/50"}`}
-        >
-          <CalendarDays className="w-4 h-4" />
-          Booking Calendar
-        </button>
-        <button
-          onClick={() => setActiveTab("upcoming")}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-medium transition-all
-            ${activeTab === "upcoming" ? "bg-white/15 text-white font-bold" : "text-white/50"}`}
-        >
-          <List className="w-4 h-4" />
-          Upcoming Events
-        </button>
       </div>
 
       {/* Footer */}
