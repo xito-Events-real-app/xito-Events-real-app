@@ -64,7 +64,16 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
           .or(orFilter),
         getFreelancers(500).catch(() => []),
       ]);
-      if (!assignRes.error && assignRes.data) setAssignments(assignRes.data as AssignmentRow[]);
+      if (!assignRes.error && assignRes.data) {
+        const target = decodedName.trim().toLowerCase();
+        const exactFiltered = assignRes.data.filter(row =>
+          ROLE_COLUMNS.some(col => {
+            const val = ((row as any)[col] || '').toString();
+            return val.split('\n').some((entry: string) => entry.trim().toLowerCase() === target);
+          })
+        );
+        setAssignments(exactFiltered as AssignmentRow[]);
+      }
       
       // Build name->phone map (lowercase keys)
       const phoneMap = new Map<string, string>();
