@@ -900,8 +900,7 @@ function FreelancerHoverInfo({ name, allAssignments, selectedYear, selectedMonth
   const monthName = nepaliMonthsEnglish[parseInt(selectedMonth) - 1] || selectedMonth;
 
   const handleSendToWhatsApp = () => {
-    const firstName = name.trim().split(/\s+/)[0];
-    const scheduleUrl = `https://wtnclienttracker.lovable.app/crew-schedule/${encodeURIComponent(firstName)}`;
+    const scheduleUrl = `https://wtnclienttracker.lovable.app/crew-schedule/${encodeURIComponent(name.trim())}`;
     const message = `Hi! Check your upcoming event schedule here:\n${scheduleUrl}`;
     
     // Look up freelancer by name (case-insensitive)
