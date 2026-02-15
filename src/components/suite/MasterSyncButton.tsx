@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Rocket } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
-import { getClients, getDropdowns, fullResyncAllBookedClients, fullSyncEventDetails, fullSyncContactDetails, getBookedClients } from "@/lib/sheets-api";
+import { getClients, getDropdowns, fullResyncAllBookedClients, fullSyncEventDetails, getBookedClients } from "@/lib/sheets-api";
 import { setCachedData, notifyCacheUpdate, CACHE_SCHEMA_VERSION, setCachedBookedClients } from "@/lib/cache-manager";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -94,61 +94,37 @@ export function MasterSyncButton() {
       setProgress(75);
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Phase 4: Vendor Sync (76-88%)
+      // Phase 4: Vendor & Logistics Sync (76-88%) — bulk via sync-all-data
       setCurrentPhase('vendors');
       setProgress(76);
       
-      // Get all booked clients and refresh their vendor data
-      const { data: bookedClientsData } = await supabase.functions.invoke('google-sheets', {
-        body: { action: 'getBookedClients', limit: 500 }
-      });
-      
-      let vendorUpdatesCount = 0;
-      const bookedClients = bookedClientsData?.data || [];
-      
-      // Refresh vendor data for each booked client (with delays to avoid rate limits)
-      const BATCH_SIZE = 5;
-      for (let i = 0; i < bookedClients.length; i++) {
-        const client = bookedClients[i];
-        if (!client.registeredDateTimeAD) continue;
+      try {
+        const { data: bulkResult } = await supabase.functions.invoke('sync-all-data', {
+          body: { action: 'pull-all' }
+        });
         
-        try {
-          const { data: refreshResult } = await supabase.functions.invoke('google-sheets', {
-            body: {
-              action: 'refreshClientVendorData',
-              data: { registeredDateTimeAD: client.registeredDateTimeAD }
-            }
-          });
-          
-          if (refreshResult?.data?.eventsUpdated > 0) {
-            vendorUpdatesCount += refreshResult.data.eventsUpdated;
-          }
-        } catch (err) {
-          console.warn(`Failed to refresh vendor data for ${client.clientName}:`, err);
-        }
-        
-        // Add delay every BATCH_SIZE calls to avoid 429 rate limits
-        if ((i + 1) % BATCH_SIZE === 0 && i < bookedClients.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1500));
-        }
-        
-        // Update progress incrementally
-        const progressIncrement = (88 - 76) * ((i + 1) / bookedClients.length);
-        setProgress(76 + progressIncrement);
+        const vendorUpdatesCount = (bulkResult?.results?.vendors?.count || 0) + 
+          (bulkResult?.results?.logistics?.vendorsCount || 0);
+        setSyncStats(prev => ({ ...prev, vendors: vendorUpdatesCount }));
+      } catch (err) {
+        console.warn('Bulk sync-all-data failed, non-critical:', err);
       }
       
-      setSyncStats(prev => ({ ...prev, vendors: vendorUpdatesCount }));
       setProgress(88);
-      // Cooldown before contact sync to let API quota recover
-      await new Promise(resolve => setTimeout(resolve, 2500));
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Phase 5: Contact Details Sync (89-100%)
+      // Phase 5: Contact Details Sync (89-100%) — already handled by pull-all above, just update UI
       setCurrentPhase('contacts');
       setProgress(89);
       
-      const contactsResult = await fullSyncContactDetails();
+      // Contact details were synced in pull-all; read count from cache
+      try {
+        const { count } = await supabase
+          .from('contact_details_cache')
+          .select('*', { count: 'exact', head: true });
+        setSyncStats(prev => ({ ...prev, contacts: count || 0 }));
+      } catch { /* ignore */ }
       
-      setSyncStats(prev => ({ ...prev, contacts: contactsResult.copiedCount + contactsResult.updatedCount }));
       setProgress(100);
       await new Promise(resolve => setTimeout(resolve, 500));
       
@@ -159,7 +135,7 @@ export function MasterSyncButton() {
       await new Promise(resolve => setTimeout(resolve, 3000));
       
       toast.success("Master Sync Complete!", {
-        description: `${syncStats.clients} clients • ${syncStats.synced} synced • ${syncStats.events} events • ${vendorUpdatesCount} vendor updates • ${contactsResult.copiedCount + contactsResult.updatedCount} contacts`,
+        description: `${syncStats.clients} clients • ${syncStats.synced} synced • ${syncStats.events} events • All caches refreshed`,
       });
       
     } catch (error) {
