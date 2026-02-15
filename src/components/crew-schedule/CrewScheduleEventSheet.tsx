@@ -121,7 +121,7 @@ export default function CrewScheduleEventSheet({ open, onOpenChange, assignment,
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="h-[92vh] bg-gradient-to-br from-slate-900 via-violet-950 to-slate-900 border-t border-white/10 rounded-t-2xl p-0 overflow-hidden">
+      <SheetContent side="bottom" className="h-[95dvh] bg-gradient-to-br from-slate-900 via-violet-950 to-slate-900 border-t border-white/10 rounded-t-2xl p-0 flex flex-col will-change-transform">
         <SheetTitle className="sr-only">Event Details</SheetTitle>
         
         {/* Header */}
@@ -138,7 +138,7 @@ export default function CrewScheduleEventSheet({ open, onOpenChange, assignment,
           </button>
         </div>
 
-        <div className="overflow-y-auto h-full pb-20 px-4 pt-3 space-y-3">
+        <div className="flex-1 overflow-y-auto pb-10 px-4 pt-3 space-y-3">
           {/* Crew */}
           {crewEntries.length > 0 && (
             <div className="space-y-1">
