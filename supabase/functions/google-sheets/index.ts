@@ -1424,6 +1424,55 @@ async function updateClientContactDetails(
   }
 
   console.info(`[CONTACT DETAILS UPDATE] Successfully updated row ${rowNumber}`);
+
+  // Sync updated data to Supabase contact_details_cache
+  try {
+    const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.49.2");
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+
+    // Re-read the updated row from Sheets
+    const freshData = await getClientContactDetails(accessToken, spreadsheetId, registeredDateTimeAD);
+
+    await supabaseAdmin.from('contact_details_cache').upsert({
+      registered_date_time_ad: registeredDateTimeAD,
+      registered_date_bs: freshData.registeredDateBS || '',
+      client_name: freshData.clientName || '',
+      row_number: freshData.rowNumber || 0,
+      bride_full_name: freshData.brideFullName || '',
+      bride_contact_number: freshData.brideContactNumber || '',
+      bride_whatsapp_number: freshData.brideWhatsappNumber || '',
+      bride_backup_number: freshData.brideBackupNumber || '',
+      bride_backup_relation: freshData.brideBackupRelation || '',
+      bride_backup_number2: freshData.brideBackupNumber2 || '',
+      bride_backup_relation2: freshData.brideBackupRelation2 || '',
+      bride_instagram: freshData.brideInstagram || '',
+      bride_home_city: freshData.brideHomeCity || '',
+      bride_home_area: freshData.brideHomeArea || '',
+      bride_home_map: freshData.brideHomeMap || '',
+      bride_home_landmark: freshData.brideHomeLandmark || '',
+      groom_full_name: freshData.groomFullName || '',
+      groom_contact_number: freshData.groomContactNumber || '',
+      groom_whatsapp_number: freshData.groomWhatsappNumber || '',
+      groom_backup_number: freshData.groomBackupNumber || '',
+      groom_backup_relation: freshData.groomBackupRelation || '',
+      groom_backup_number2: freshData.groomBackupNumber2 || '',
+      groom_backup_relation2: freshData.groomBackupRelation2 || '',
+      groom_instagram: freshData.groomInstagram || '',
+      groom_home_city: freshData.groomHomeCity || '',
+      groom_home_area: freshData.groomHomeArea || '',
+      groom_home_map: freshData.groomHomeMap || '',
+      groom_home_landmark: freshData.groomHomeLandmark || '',
+      form_sent_date: freshData.formSentDate || '',
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'registered_date_time_ad' });
+
+    console.info(`[CONTACT DETAILS UPDATE] Cache synced for ${registeredDateTimeAD}`);
+  } catch (cacheErr) {
+    console.warn(`[CONTACT DETAILS UPDATE] Cache sync failed (non-fatal):`, cacheErr);
+  }
+
   return { success: true, rowNumber };
 }
 

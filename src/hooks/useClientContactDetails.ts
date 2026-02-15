@@ -24,40 +24,49 @@ export function useClientContactDetails(registeredDateTimeAD: string | undefined
         .single();
 
       if (!cacheError && cached) {
-        console.log('[useClientContactDetails] Loaded from cache');
-        setData({
-          rowNumber: cached.row_number || 0,
-          registeredDateTimeAD: cached.registered_date_time_ad,
-          registeredDateBS: cached.registered_date_bs || '',
-          clientName: cached.client_name || '',
-          brideFullName: cached.bride_full_name || '',
-          brideContactNumber: cached.bride_contact_number || '',
-          brideWhatsappNumber: cached.bride_whatsapp_number || '',
-          brideBackupNumber: cached.bride_backup_number || '',
-          brideBackupRelation: cached.bride_backup_relation || '',
-          brideBackupNumber2: cached.bride_backup_number2 || '',
-          brideBackupRelation2: cached.bride_backup_relation2 || '',
-          brideInstagram: cached.bride_instagram || '',
-          brideHomeCity: cached.bride_home_city || '',
-          brideHomeArea: cached.bride_home_area || '',
-          brideHomeMap: cached.bride_home_map || '',
-          brideHomeLandmark: cached.bride_home_landmark || '',
-          groomFullName: cached.groom_full_name || '',
-          groomContactNumber: cached.groom_contact_number || '',
-          groomWhatsappNumber: cached.groom_whatsapp_number || '',
-          groomBackupNumber: cached.groom_backup_number || '',
-          groomBackupRelation: cached.groom_backup_relation || '',
-          groomBackupNumber2: cached.groom_backup_number2 || '',
-          groomBackupRelation2: cached.groom_backup_relation2 || '',
-          groomInstagram: cached.groom_instagram || '',
-          groomHomeCity: cached.groom_home_city || '',
-          groomHomeArea: cached.groom_home_area || '',
-          groomHomeMap: cached.groom_home_map || '',
-          groomHomeLandmark: cached.groom_home_landmark || '',
-          formSentDate: cached.form_sent_date || '',
-        });
-        setIsLoading(false);
-        return;
+        // Check if the cached row actually has meaningful data
+        const hasData = !!(
+          cached.bride_full_name || cached.groom_full_name ||
+          cached.bride_contact_number || cached.groom_contact_number
+        );
+
+        if (hasData) {
+          console.log('[useClientContactDetails] Loaded from cache (has data)');
+          setData({
+            rowNumber: cached.row_number || 0,
+            registeredDateTimeAD: cached.registered_date_time_ad,
+            registeredDateBS: cached.registered_date_bs || '',
+            clientName: cached.client_name || '',
+            brideFullName: cached.bride_full_name || '',
+            brideContactNumber: cached.bride_contact_number || '',
+            brideWhatsappNumber: cached.bride_whatsapp_number || '',
+            brideBackupNumber: cached.bride_backup_number || '',
+            brideBackupRelation: cached.bride_backup_relation || '',
+            brideBackupNumber2: cached.bride_backup_number2 || '',
+            brideBackupRelation2: cached.bride_backup_relation2 || '',
+            brideInstagram: cached.bride_instagram || '',
+            brideHomeCity: cached.bride_home_city || '',
+            brideHomeArea: cached.bride_home_area || '',
+            brideHomeMap: cached.bride_home_map || '',
+            brideHomeLandmark: cached.bride_home_landmark || '',
+            groomFullName: cached.groom_full_name || '',
+            groomContactNumber: cached.groom_contact_number || '',
+            groomWhatsappNumber: cached.groom_whatsapp_number || '',
+            groomBackupNumber: cached.groom_backup_number || '',
+            groomBackupRelation: cached.groom_backup_relation || '',
+            groomBackupNumber2: cached.groom_backup_number2 || '',
+            groomBackupRelation2: cached.groom_backup_relation2 || '',
+            groomInstagram: cached.groom_instagram || '',
+            groomHomeCity: cached.groom_home_city || '',
+            groomHomeArea: cached.groom_home_area || '',
+            groomHomeMap: cached.groom_home_map || '',
+            groomHomeLandmark: cached.groom_home_landmark || '',
+            formSentDate: cached.form_sent_date || '',
+          });
+          setIsLoading(false);
+          return;
+        }
+        console.log('[useClientContactDetails] Cache row is empty, fetching from Sheets...');
       }
     } catch (err) {
       console.warn('[useClientContactDetails] Cache read failed, falling back to Sheets:', err);
@@ -76,6 +85,47 @@ export function useClientContactDetails(registeredDateTimeAD: string | undefined
       if (!result?.success) throw new Error(result?.error || 'Failed to fetch contact details');
 
       setData(result.data);
+
+      // Backfill cache with fresh Sheets data
+      if (result.data) {
+        try {
+          await supabase.from('contact_details_cache').upsert({
+            registered_date_time_ad: registeredDateTimeAD,
+            row_number: result.data.rowNumber || 0,
+            registered_date_bs: result.data.registeredDateBS || '',
+            client_name: result.data.clientName || '',
+            bride_full_name: result.data.brideFullName || '',
+            bride_contact_number: result.data.brideContactNumber || '',
+            bride_whatsapp_number: result.data.brideWhatsappNumber || '',
+            bride_backup_number: result.data.brideBackupNumber || '',
+            bride_backup_relation: result.data.brideBackupRelation || '',
+            bride_backup_number2: result.data.brideBackupNumber2 || '',
+            bride_backup_relation2: result.data.brideBackupRelation2 || '',
+            bride_instagram: result.data.brideInstagram || '',
+            bride_home_city: result.data.brideHomeCity || '',
+            bride_home_area: result.data.brideHomeArea || '',
+            bride_home_map: result.data.brideHomeMap || '',
+            bride_home_landmark: result.data.brideHomeLandmark || '',
+            groom_full_name: result.data.groomFullName || '',
+            groom_contact_number: result.data.groomContactNumber || '',
+            groom_whatsapp_number: result.data.groomWhatsappNumber || '',
+            groom_backup_number: result.data.groomBackupNumber || '',
+            groom_backup_relation: result.data.groomBackupRelation || '',
+            groom_backup_number2: result.data.groomBackupNumber2 || '',
+            groom_backup_relation2: result.data.groomBackupRelation2 || '',
+            groom_instagram: result.data.groomInstagram || '',
+            groom_home_city: result.data.groomHomeCity || '',
+            groom_home_area: result.data.groomHomeArea || '',
+            groom_home_map: result.data.groomHomeMap || '',
+            groom_home_landmark: result.data.groomHomeLandmark || '',
+            form_sent_date: result.data.formSentDate || '',
+            updated_at: new Date().toISOString(),
+          } as any, { onConflict: 'registered_date_time_ad' });
+          console.log('[useClientContactDetails] Cache backfilled from Sheets');
+        } catch (backfillErr) {
+          console.warn('[useClientContactDetails] Cache backfill failed:', backfillErr);
+        }
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load contact details';
       setError(message);
