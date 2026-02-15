@@ -12,9 +12,10 @@ interface Props {
   contactDetailsCache: Map<string, ClientContactDetails>;
   loadingKeys: Set<string>;
   onRequestDetails: (registeredDateTimeAD: string) => void;
+  freelancerPhones?: Map<string, string>;
 }
 
-export default function UpcomingEventsSection({ assignments, eventDetailsCache, contactDetailsCache, loadingKeys, onRequestDetails }: Props) {
+export default function UpcomingEventsSection({ assignments, eventDetailsCache, contactDetailsCache, loadingKeys, onRequestDetails, freelancerPhones }: Props) {
   const upcomingEvents = useMemo(() => {
     const today = getCurrentBSDate();
     const tY = today.year;
@@ -59,6 +60,7 @@ export default function UpcomingEventsSection({ assignments, eventDetailsCache, 
               isLoadingDetails={loadingKeys.has(ev.registered_date_time_ad)}
               onRequestDetails={onRequestDetails}
               showDatePill
+              freelancerPhones={freelancerPhones}
             />
           );
         })}
