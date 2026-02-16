@@ -1,115 +1,85 @@
 
-
-# Fix: Client Contact Details Not Appearing After Form Submission
+# Fix: Make Benzo Keep Notes Save Instantly (Supabase-First)
 
 ## Problem
 
-When a client fills out the contact form, the data is saved directly to the **Google Sheet** ("BOOKED CLIENTS CONTACT DETAILS"). However, the Client Detail page reads from the **Supabase cache table** (`contact_details_cache`) first. Since the cache still has the old (empty) data, it returns that and never falls through to Google Sheets -- so the filled details never appear.
-
-The root cause is in `useClientContactDetails.ts` (line 26):
-```
-if (!cacheError && cached) {
-  // Returns cached (stale) data -- never checks Sheets
-}
-```
-
-The cache row exists (created during Master Sync with empty fields), so the hook returns it immediately with all blank values.
+When saving a Benzo Keep note, the app waits for Google Sheets to respond (~2-5 seconds) before updating the UI. You have to refresh the page to see the saved data because the slow Sheets write blocks the entire flow.
 
 ## Solution
 
-Two changes to close the gap:
+Flip the save order to **Supabase-first**: update the local state and Supabase cache instantly, then sync to Google Sheets in the background. This makes the save feel instant and ensures all users see updates immediately.
 
-### 1. Update `contact_details_cache` after form submission (edge function)
+## How It Will Work
 
-In `supabase/functions/google-sheets/index.ts`, after the `updateClientContactDetails` function successfully writes to Google Sheets, also upsert the updated data into the `contact_details_cache` Supabase table. This ensures the cache is immediately consistent.
-
-**What changes:**
-- After the Sheets write succeeds (line ~1427), fetch the updated row from Sheets using `getClientContactDetails`
-- Upsert the result into `contact_details_cache` using the Supabase service client
-- This means next time anyone opens the Client Detail page, the cache has the fresh data
-
-### 2. Add a staleness check to the cache read (frontend hook)
-
-In `src/hooks/useClientContactDetails.ts`, when a cached row is found but has no filled data (all bride/groom fields empty), treat it as a cache miss and fall through to the Sheets API. This handles the case where form data was submitted but the cache upsert somehow failed.
-
-**What changes:**
-- After loading from cache, check if at least one meaningful field (e.g., `bride_full_name`, `groom_full_name`) has data
-- If the cache row is all-empty, skip it and fetch from Sheets instead
-- If Sheets returns data, upsert it back into the cache for future reads
+1. User clicks "Save Note"
+2. **Instant**: Update local state + memory cache + Supabase `clients_cache` table (the `benzo_keep_notes` column)
+3. **Background**: Fire-and-forget the Google Sheets update (via the existing edge function)
+4. UI updates immediately, dialog closes, note appears in the viewer
+5. If the Sheets sync fails, the data is still safe in Supabase and will sync on next Master Sync
 
 ## Technical Details
 
-### File: `supabase/functions/google-sheets/index.ts`
+### File: `src/pages/ClientDetail.tsx` - `handleSaveKeepNotes` function
 
-In the `updateClientContactDetails` function (around line 1426), after the successful Sheets update:
-
-```typescript
-// After successful sheet update, sync to Supabase cache
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-// Re-read the updated row from Sheets
-const freshData = await getClientContactDetails(accessToken, spreadsheetId, registeredDateTimeAD);
-
-// Upsert into contact_details_cache
-await supabase.from('contact_details_cache').upsert({
-  registered_date_time_ad: registeredDateTimeAD,
-  row_number: freshData.rowNumber,
-  bride_full_name: freshData.brideFullName,
-  bride_contact_number: freshData.brideContactNumber,
-  // ... all other fields mapped
-  updated_at: new Date().toISOString(),
-}, { onConflict: 'registered_date_time_ad' });
+Change the save flow from:
+```
+Sheets API call (wait) -> update local state -> update cache
+```
+To:
+```
+Update local state immediately -> update Supabase cache -> close dialog -> Sheets API call (background)
 ```
 
-### File: `src/hooks/useClientContactDetails.ts`
+The updated function will:
+1. Set `currentKeepNotes` immediately with the new data
+2. Call `updateClientCache()` which already updates memory + Supabase `clients_cache` + IndexedDB
+3. Close the dialog and show success toast
+4. Fire the `updateBenzoKeepNotes` Sheets API call in the background (non-blocking)
+5. If the background Sheets call fails, log a warning but don't show an error (data is safe in Supabase)
 
-In `fetchContactDetails`, after the cache read succeeds, add an emptiness check:
+### No Other File Changes Needed
+
+The existing infrastructure already supports this pattern:
+- `updateClientCache` (from `useCachedData`) already writes to Supabase `clients_cache.benzo_keep_notes`
+- `updateClientInCacheRecord` already marks `synced_to_sheet: false` for tracking
+- The `clients_cache` table already has a `benzo_keep_notes` column
+- Other users loading the client will read from Supabase cache first and see the updated note
+- The Master Sync will eventually reconcile Supabase with Sheets
+
+### Resulting Code Pattern
 
 ```typescript
-if (!cacheError && cached) {
-  // Check if the cached row actually has data
-  const hasData = !!(
-    cached.bride_full_name || cached.groom_full_name ||
-    cached.bride_contact_number || cached.groom_contact_number
-  );
-  
-  if (hasData) {
-    // Use cached data
-    setData({ ... });
-    setIsLoading(false);
-    return;
+const handleSaveKeepNotes = async (notesData: string) => {
+  if (!client?.registeredDateTimeAD) return;
+  setIsSavingKeepNotes(true);
+  try {
+    // Step 1: Update UI + caches instantly
+    setCurrentKeepNotes(notesData);
+    if (updateClientCache) {
+      await updateClientCache({ ...client, benzoKeepNotes: notesData });
+    }
+    toast({ title: "Note saved" });
+    setShowBenzoKeepDialog(false);
+
+    // Step 2: Sync to Google Sheets in background
+    updateBenzoKeepNotes(
+      client.rowNumber, notesData, client.registeredDateTimeAD
+    ).catch(err => {
+      console.warn('[BENZO KEEP] Background sheet sync failed:', err);
+    });
+  } catch (err) {
+    console.error('Failed to save note:', err);
+    toast({ title: "Failed to save note", variant: "destructive" });
+  } finally {
+    setIsSavingKeepNotes(false);
   }
-  // Otherwise fall through to Sheets API
-  console.log('[useClientContactDetails] Cache row is empty, fetching from Sheets...');
-}
-```
-
-When the Sheets fallback returns data, also upsert it back into the cache:
-
-```typescript
-if (result?.data) {
-  setData(result.data);
-  // Backfill cache
-  await supabase.from('contact_details_cache').upsert({
-    registered_date_time_ad: registeredDateTimeAD,
-    // ... map all fields
-  }, { onConflict: 'registered_date_time_ad' });
-}
+};
 ```
 
 ## Impact
 
-- Clients who fill the form will have their data visible immediately on the Client Detail page
-- Old cached empty rows will be automatically refreshed on next view
-- No change to the existing Master Sync flow -- it continues to work as before
-- The Resync button on the Client Detail page also continues to work as a manual override
-
-## Files Modified
-
-| File | Change |
-|------|--------|
-| `supabase/functions/google-sheets/index.ts` | Upsert to `contact_details_cache` after form data is saved to Sheets |
-| `src/hooks/useClientContactDetails.ts` | Skip empty cache rows and fall through to Sheets; backfill cache after Sheets read |
-
+- Save feels **instant** (no more waiting for Sheets API)
+- No page refresh needed - note appears immediately in the viewer
+- All users see updated notes via shared Supabase cache
+- Google Sheets stays in sync via background write
+- Zero risk of data loss - Supabase is the primary store, Sheets is the backup
