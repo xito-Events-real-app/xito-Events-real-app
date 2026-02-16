@@ -857,26 +857,28 @@ const ClientDetail = () => {
 
   // Handle saving Benzo Keep notes
   const handleSaveKeepNotes = async (notesData: string) => {
-    if (!client?.rowNumber) return;
+    if (!client?.registeredDateTimeAD) return;
     
     setIsSavingKeepNotes(true);
     try {
-      const result = await updateBenzoKeepNotes(
-        client.rowNumber, 
-        notesData, 
-        client.registeredDateTimeAD
-      );
-      setCurrentKeepNotes(result.benzoKeepNotes);
-      
-      // Update global cache
+      // Step 1: Update UI + caches instantly
+      setCurrentKeepNotes(notesData);
       if (updateClientCache) {
-        updateClientCache({ ...client, benzoKeepNotes: result.benzoKeepNotes });
+        await updateClientCache({ ...client, benzoKeepNotes: notesData });
       }
-      
       toast({ title: "Note saved" });
       setShowBenzoKeepDialog(false);
+
+      // Step 2: Sync to Google Sheets in background (non-blocking)
+      updateBenzoKeepNotes(
+        client.rowNumber,
+        notesData,
+        client.registeredDateTimeAD
+      ).catch(err => {
+        console.warn('[BENZO KEEP] Background sheet sync failed:', err);
+      });
     } catch (err) {
-      console.error('Failed to save Benzo Keep notes:', err);
+      console.error('Failed to save note:', err);
       toast({ title: "Failed to save note", variant: "destructive" });
     } finally {
       setIsSavingKeepNotes(false);
