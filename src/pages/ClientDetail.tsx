@@ -22,6 +22,7 @@ import {
 import { useCachedData } from "@/hooks/useCachedData";
 import { useDropdownData } from "@/hooks/useDropdownData";
 import { updateClient, ClientData, updateClientStatus, logCallAttempt, addPayment, updateClientQuotation, addClientComment, updateFinalQuotation, getSingleClient, updateClientPriority, updateBargainingRates, updateBenzoKeepNotes } from "@/lib/sheets-api";
+import { generateCallLogEntry, generateStatusLogEntry, generateCommentEntry } from "@/lib/timestamp-utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { forceResetDatabase, notifyCacheUpdate } from "@/lib/cache-manager";
 import { toast } from "@/hooks/use-toast";
@@ -356,15 +357,22 @@ const ClientDetail = () => {
     navigate('/client-tracker');
   };
 
-  // FAB handlers
+  // FAB handlers — Supabase-first: update local + cache instantly, Sheets in background
   const handleCall = async (type: 'DIRECT' | 'WHATSAPP') => {
     if (!client?.rowNumber) return;
     
     setIsLoggingCall(true);
     try {
-      const result = await logCallAttempt(client.rowNumber, type, currentStatusLog || client.callLog || '');
-      setCurrentStatusLog(result.callLog);
+      // Step 1: Compute new call log locally and update state + cache instantly
+      const existingLog = currentStatusLog || client.callLog || '';
+      const newCallLog = generateCallLogEntry(type, existingLog);
+      setCurrentStatusLog(newCallLog);
       
+      if (updateClientCache) {
+        await updateClientCache({ ...client, callLog: newCallLog });
+      }
+      
+      // Open phone/WhatsApp immediately
       const phoneNumber = type === 'DIRECT' ? client.contactNo : client.whatsappNo;
       if (type === 'DIRECT' && phoneNumber) {
         window.location.href = `tel:${phoneNumber}`;
@@ -373,9 +381,11 @@ const ClientDetail = () => {
       }
       
       toast({ title: "Success", description: `${type} call logged` });
-      if (updateClientCache) {
-        updateClientCache({ ...client, callLog: result.callLog });
-      }
+
+      // Step 2: Sync to Google Sheets in background (non-blocking)
+      logCallAttempt(client.rowNumber, type, existingLog).catch(err => {
+        console.warn('[CALL LOG] Background sheet sync failed:', err);
+      });
     } catch (err) {
       console.error('Failed to log call:', err);
       toast({ title: "Error", description: "Failed to log call", variant: "destructive" });
@@ -431,18 +441,25 @@ const ClientDetail = () => {
     
     setIsChangingStatus(true);
     try {
-      const result = await updateClientStatus(client.rowNumber, newStatus, currentStatusLog || client.statusLog || '');
-      setCurrentStatusLog(result.statusLog);
+      // Supabase-first: compute new status log locally
+      const existingLog = currentStatusLog || client.statusLog || '';
+      const newStatusLog = generateStatusLogEntry(newStatus, existingLog);
+      setCurrentStatusLog(newStatusLog);
       
       // CRITICAL: Update global cache to sync across the app
       if (updateClientCache) {
-        updateClientCache({ 
+        await updateClientCache({ 
           ...client, 
-          statusLog: result.statusLog 
+          statusLog: newStatusLog 
         });
       }
       
       toast({ title: "Success", description: `Status changed to ${newStatus}` });
+
+      // Background sync to Sheets
+      updateClientStatus(client.rowNumber, newStatus, existingLog).catch(err => {
+        console.warn('[STATUS] Background sheet sync failed:', err);
+      });
     } catch (err) {
       console.error('Failed to update status:', err);
       toast({ title: "Error", description: "Failed to update status", variant: "destructive" });
@@ -452,7 +469,7 @@ const ClientDetail = () => {
     }
   };
 
-  // Handle quotation save and status update
+  // Handle quotation save and status update — Supabase-first
   const handleSaveQuotation = async () => {
     if (!client?.rowNumber) return;
     
@@ -467,23 +484,20 @@ const ClientDetail = () => {
     }
     
     const quotationData = filledQuotations.join('\n');
+    const existingLog = currentStatusLog || client.statusLog || '';
+    const newStatusLog = generateStatusLogEntry('QUOTATION SENT : REVIEW PENDING', existingLog);
     
     setIsSavingQuotation(true);
     try {
-      // Save quotation data
-      await updateClientQuotation(client.rowNumber, quotationData, client.registeredDateTimeAD);
+      // Instant: update state + cache
       setCurrentQuotationData(quotationData);
+      setCurrentStatusLog(newStatusLog);
       
-      // Update status to QUOTATION SENT
-      const statusResult = await updateClientStatus(client.rowNumber, 'QUOTATION SENT : REVIEW PENDING', currentStatusLog || client.statusLog || '');
-      setCurrentStatusLog(statusResult.statusLog);
-      
-      // Update global cache with both quotation and status
       if (updateClientCache) {
-        updateClientCache({
+        await updateClientCache({
           ...client,
           quotationData: quotationData,
-          statusLog: statusResult.statusLog
+          statusLog: newStatusLog
         });
       }
       
@@ -491,6 +505,14 @@ const ClientDetail = () => {
       setShowQuotationDialog(false);
       setQuotationAmounts({});
       setPendingStatus("");
+
+      // Background: sync to Sheets
+      updateClientQuotation(client.rowNumber, quotationData, client.registeredDateTimeAD).catch(err => {
+        console.warn('[QUOTATION] Background sheet sync failed:', err);
+      });
+      updateClientStatus(client.rowNumber, 'QUOTATION SENT : REVIEW PENDING', existingLog).catch(err => {
+        console.warn('[QUOTATION STATUS] Background sheet sync failed:', err);
+      });
     } catch (err) {
       console.error('Failed to save quotation:', err);
       toast({ title: "Failed to save quotation", variant: "destructive" });
@@ -499,34 +521,39 @@ const ClientDetail = () => {
     }
   };
 
-  // Handle ADVANCE PENDING final quotation save
+  // Handle ADVANCE PENDING final quotation save — Supabase-first
   const handleSaveAdvancePendingQuotation = async (packageName: string, amount: string) => {
     if (!client?.rowNumber) return;
     
     const finalData = `${packageName}: NPR ${formatNPR(amount)}/-`;
+    const existingLog = currentStatusLog || client.statusLog || '';
+    const newStatusLog = generateStatusLogEntry(pendingStatus, existingLog);
     
     setIsSavingAdvancePending(true);
     try {
-      // Save final quotation
-      const quotationResult = await updateFinalQuotation(client.rowNumber, finalData, client.registeredDateTimeAD);
-      setCurrentFinalQuotation(quotationResult.finalQuotation);
+      // Instant: update state + cache
+      setCurrentFinalQuotation(finalData);
+      setCurrentStatusLog(newStatusLog);
       
-      // Update status to ADVANCE PENDING
-      const statusResult = await updateClientStatus(client.rowNumber, pendingStatus, currentStatusLog || client.statusLog || '');
-      setCurrentStatusLog(statusResult.statusLog);
-      
-      // Update global cache
       if (updateClientCache) {
-        updateClientCache({
+        await updateClientCache({
           ...client,
-          finalQuotation: quotationResult.finalQuotation,
-          statusLog: statusResult.statusLog
+          finalQuotation: finalData,
+          statusLog: newStatusLog
         });
       }
       
       toast({ title: "Final quotation locked & status updated to ADVANCE PENDING" });
       setShowAdvancePendingDialog(false);
       setPendingStatus("");
+
+      // Background: sync to Sheets
+      updateFinalQuotation(client.rowNumber, finalData, client.registeredDateTimeAD).catch(err => {
+        console.warn('[ADVANCE PENDING QUOTATION] Background sheet sync failed:', err);
+      });
+      updateClientStatus(client.rowNumber, pendingStatus, existingLog).catch(err => {
+        console.warn('[ADVANCE PENDING STATUS] Background sheet sync failed:', err);
+      });
     } catch (err) {
       console.error('Failed to save final quotation:', err);
       toast({ title: "Failed to save final quotation", variant: "destructive" });
@@ -535,7 +562,7 @@ const ClientDetail = () => {
     }
   };
 
-  // Handle BARGAINING IS ON - save bargaining rates and update status
+  // Handle BARGAINING IS ON — Supabase-first
   const handleSaveBargaining = async () => {
     if (!client?.rowNumber) return;
     
@@ -554,35 +581,34 @@ const ClientDetail = () => {
         if (clientBargainRates[tier]) clientLines.push(`${tier}: NPR ${formatNPR(clientBargainRates[tier])}/-`);
       });
 
-      // Save bargaining rates to Columns AA and AB
-      await updateBargainingRates(client.rowNumber, ourLines.join('\n'), clientLines.join('\n'));
-      
-      // Update status to BARGAINING IS ON
-      const statusResult = await updateClientStatus(
-        client.rowNumber, 
-        pendingStatus, 
-        currentStatusLog || client.statusLog || ''
-      );
-      setCurrentStatusLog(statusResult.statusLog);
-      
-      // Update global cache
+      const existingLog = currentStatusLog || client.statusLog || '';
+      const newStatusLog = generateStatusLogEntry(pendingStatus, existingLog);
+
+      // Instant: update state + cache
+      setCurrentStatusLog(newStatusLog);
       if (updateClientCache) {
-        updateClientCache({
+        await updateClientCache({
           ...client,
           ourBargainedRates: ourLines.join('\n'),
           clientBargainedRates: clientLines.join('\n'),
-          statusLog: statusResult.statusLog
+          statusLog: newStatusLog
         });
       }
       
       toast({ title: "Bargaining details saved & status updated" });
       setShowBargainingDialog(false);
-      
-      // Reset form
       setSelectedBargainPackages([]);
       setClientBargainRates({});
       setOurBargainRates({});
       setPendingStatus("");
+
+      // Background: sync to Sheets
+      updateBargainingRates(client.rowNumber, ourLines.join('\n'), clientLines.join('\n')).catch(err => {
+        console.warn('[BARGAINING RATES] Background sheet sync failed:', err);
+      });
+      updateClientStatus(client.rowNumber, pendingStatus, existingLog).catch(err => {
+        console.warn('[BARGAINING STATUS] Background sheet sync failed:', err);
+      });
     } catch (err) {
       console.error('Failed to save bargaining:', err);
       toast({ title: "Failed to save bargaining details", variant: "destructive" });
@@ -591,35 +617,27 @@ const ClientDetail = () => {
     }
   };
 
-  // Handle BOOKED client - Save ONLY final quotation (no status change)
-  // Used when a client is already BOOKED but needs to add/edit their final quotation in Column AD
+  // Handle BOOKED client - Save ONLY final quotation — Supabase-first
   const handleSaveFinalQuotationOnly = async (packageName: string, amount: string) => {
     if (!client?.rowNumber) return;
     
     const finalData = `${packageName}: NPR ${formatNPR(amount)}/-`;
     
-    setIsSavingAdvancePending(true); // Reuse existing saving state
+    setIsSavingAdvancePending(true);
     try {
-      // Save final quotation ONLY - no status change
-      const quotationResult = await updateFinalQuotation(
-        client.rowNumber, 
-        finalData, 
-        client.registeredDateTimeAD
-      );
-      
-      setCurrentFinalQuotation(quotationResult.finalQuotation);
-      
-      // Immediately refetch to get fresh data from the correct sheet
-      const freshClient = await getSingleClient(client.registeredDateTimeAD!);
-      if (freshClient && updateClientCache) {
-        updateClientCache(freshClient);
-        // Also update local state
-        setCurrentStatusLog(freshClient.statusLog || '');
-        setCurrentFinalQuotation(freshClient.finalQuotation || '');
+      // Instant: update state + cache
+      setCurrentFinalQuotation(finalData);
+      if (updateClientCache) {
+        await updateClientCache({ ...client, finalQuotation: finalData });
       }
       
       toast({ title: "Final quotation saved" });
       setShowFinalQuotationSaveDialog(false);
+
+      // Background: sync to Sheets
+      updateFinalQuotation(client.rowNumber, finalData, client.registeredDateTimeAD).catch(err => {
+        console.warn('[FINAL QUOTATION] Background sheet sync failed:', err);
+      });
     } catch (err) {
       console.error('Failed to save final quotation:', err);
       toast({ title: "Failed to save final quotation", variant: "destructive" });
@@ -719,25 +737,24 @@ const ClientDetail = () => {
     }
   };
 
-  // Handle updating client priority (star rating)
+  // Handle updating client priority (star rating) — Supabase-first
   const handlePriorityChange = async (priority: number) => {
     if (!client?.rowNumber) return;
     
     setIsUpdatingPriority(true);
     try {
-      await updateClientPriority(
-        client.rowNumber, 
-        priority.toString(),
-        client.registeredDateTimeAD
-      );
-      
-      // Update global cache
+      // Instant: update cache
       if (updateClientCache) {
-        updateClientCache({ ...client, priority: priority.toString() });
+        await updateClientCache({ ...client, priority: priority.toString() });
       }
       
       toast({ 
         title: priority > 0 ? `Priority set to ${priority} star${priority !== 1 ? 's' : ''}` : "Priority cleared"
+      });
+
+      // Background: sync to Sheets
+      updateClientPriority(client.rowNumber, priority.toString(), client.registeredDateTimeAD).catch(err => {
+        console.warn('[PRIORITY] Background sheet sync failed:', err);
       });
     } catch (err) {
       console.error('Failed to update priority:', err);
@@ -754,25 +771,32 @@ const ClientDetail = () => {
     setNewComment('');
   };
 
-  // Handle adding a comment directly (from Hero section chat)
+  // Handle adding a comment directly — Supabase-first
   const handleAddCommentDirect = async (commentText: string) => {
     if (!client?.rowNumber || !commentText.trim()) return;
     
     setIsAddingComment(true);
     try {
-      const result = await addClientComment(
+      // Instant: compute new comments locally and update state + cache
+      const existingComments = currentComments || client.comments || '';
+      const newComments = generateCommentEntry(commentText.trim(), existingComments);
+      setCurrentComments(newComments);
+      
+      if (updateClientCache) {
+        await updateClientCache({ ...client, comments: newComments });
+      }
+      
+      toast({ title: "Comment added" });
+
+      // Background: sync to Sheets
+      addClientComment(
         client.rowNumber, 
         commentText.trim(), 
-        currentComments || client.comments || '',
+        existingComments,
         client.registeredDateTimeAD
-      );
-      setCurrentComments(result.comments);
-      toast({ title: "Comment added" });
-      
-      // Update global cache
-      if (updateClientCache) {
-        updateClientCache({ ...client, comments: result.comments });
-      }
+      ).catch(err => {
+        console.warn('[COMMENT] Background sheet sync failed:', err);
+      });
     } catch (err) {
       console.error('Failed to add comment:', err);
       toast({ title: "Failed to add comment", variant: "destructive" });

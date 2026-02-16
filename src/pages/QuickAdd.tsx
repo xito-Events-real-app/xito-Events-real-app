@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { AppLayout, PageHeader } from "@/components/layout";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import { NepaliDateObject, bsToAD, adToBS, formatBSDate, isUnknownDay, getDayFor
 import { useCachedData } from "@/hooks/useCachedData";
 import { addClient, addOldClient, updateClient as updateClientApi, isSheetsConfigured, ClientData } from "@/lib/sheets-api";
 import { notifyCacheUpdate } from "@/lib/cache-manager";
+import { setMemoryClients, getMemoryClients } from "@/lib/memory-cache";
 import { toast } from "@/hooks/use-toast";
 import { Save, Loader2, AlertTriangle, User, FileText, MapPin, Calendar, Phone, Sparkles, RefreshCw, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -362,10 +364,13 @@ export default function QuickAdd() {
           replace: true
         });
       } else {
-        // === ADD MODE ===
+        // === ADD MODE — Supabase-first ===
         const now = new Date();
         const registeredBS = adToBS(now);
         const registeredBSFormatted = `${registeredBS.year}-${String(registeredBS.month).padStart(2, '0')}-${String(registeredBS.day).padStart(2, '0')}`;
+        
+        // Generate the immutable unique ID (registeredDateTimeAD)
+        const registeredDateTimeAD = now.toISOString();
         
         const inquiryDateValue = inquiryDate || now;
         const inquiryDateADFormatted = format(inquiryDateValue, "yyyy-MM-dd");
@@ -380,7 +385,11 @@ export default function QuickAdd() {
           }
         }
 
-        const clientData = {
+        // Build initial status log
+        const statusTimestamp = `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}/${now.getFullYear()}, ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+        const statusLog = `${statusTimestamp} - ${initialStatus}`;
+
+        const clientData: ClientData = {
           clientName,
           companyName,
           serviceTypes: serviceTypes.join("/"),
@@ -405,12 +414,62 @@ export default function QuickAdd() {
           registeredDateBS: registeredBSFormatted,
           inquiryDateBS: inquiryBSFormatted,
           finalQuotation: finalQuotationValue,
+          registeredDateTimeAD,
+          statusLog,
+          email: emailInput,
         };
 
         if (isConfigured) {
-          await addClient(clientData);
-          toast({ title: "Success!", description: "Client added to Google Sheets" });
-          await refreshData();
+          // Step 1: Insert into Supabase clients_cache instantly
+          const { error: insertError } = await supabase.from('clients_cache').upsert({
+            registered_date_time_ad: registeredDateTimeAD,
+            registered_date_bs: registeredBSFormatted,
+            client_name: clientName,
+            source: getSourceValue(),
+            client_location: clientLocation,
+            current_country: countryForSheet,
+            contact_no: contactNo,
+            whatsapp_no: whatsappNo,
+            email: emailInput,
+            event_location: eventLocation,
+            event_city: getEventCityValue(),
+            events: eventsFormatted,
+            event_year: eventYears,
+            event_month: eventMonths,
+            event_day: eventDays,
+            event_date_ad: eventADDates,
+            who_added: whoAdded,
+            inquiry_date_ad: inquiryDateADFormatted,
+            inquiry_date_bs: inquiryBSFormatted,
+            inquiry_time: inquiryTime,
+            description,
+            status_log: statusLog,
+            client_handler: clientHandler,
+            company_name: companyName,
+            service_types: serviceTypes.join("/"),
+            final_quotation: finalQuotationValue,
+            sheet_source: isBookedStatus ? 'booked' : 'tracker',
+            synced_to_sheet: false,
+          }, { onConflict: 'registered_date_time_ad' });
+
+          if (insertError) {
+            console.error('Supabase cache insert failed:', insertError);
+            throw insertError;
+          }
+
+          // Step 2: Update memory cache
+          const memClients = getMemoryClients();
+          if (memClients) {
+            setMemoryClients([clientData, ...memClients]);
+          }
+          notifyCacheUpdate('clients');
+
+          toast({ title: "Success!", description: "Client added instantly" });
+
+          // Step 3: Sync to Google Sheets in background
+          addClient(clientData).catch(err => {
+            console.warn('[QUICK ADD] Background sheet sync failed:', err);
+          });
         } else {
           await new Promise((r) => setTimeout(r, 1000));
           toast({ title: "Demo Mode", description: "Client would be saved (configure Google Sheets first)" });
