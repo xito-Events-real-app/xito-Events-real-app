@@ -1,85 +1,129 @@
 
-# Fix: Make Benzo Keep Notes Save Instantly (Supabase-First)
 
-## Problem
+# Make Everything Supabase-First: Instant Saves Across the Entire App
 
-When saving a Benzo Keep note, the app waits for Google Sheets to respond (~2-5 seconds) before updating the UI. You have to refresh the page to see the saved data because the slow Sheets write blocks the entire flow.
+## Overview
 
-## Solution
+Apply the same "Supabase-first" pattern used for Benzo Keep notes to **every write operation** in the app. Instead of waiting 2-5 seconds for Google Sheets to respond, every action will:
 
-Flip the save order to **Supabase-first**: update the local state and Supabase cache instantly, then sync to Google Sheets in the background. This makes the save feel instant and ensures all users see updates immediately.
+1. Update local state + Supabase cache **instantly**
+2. Show success toast and close dialogs immediately
+3. Sync to Google Sheets **in the background** (non-blocking)
 
-## How It Will Work
+This makes the entire app feel instant for all users.
 
-1. User clicks "Save Note"
-2. **Instant**: Update local state + memory cache + Supabase `clients_cache` table (the `benzo_keep_notes` column)
-3. **Background**: Fire-and-forget the Google Sheets update (via the existing edge function)
-4. UI updates immediately, dialog closes, note appears in the viewer
-5. If the Sheets sync fails, the data is still safe in Supabase and will sync on next Master Sync
+## Operations to Convert
+
+Here are all the write operations on the Client Detail page that currently block on Google Sheets:
+
+| Operation | Current Wait | After |
+|-----------|-------------|-------|
+| Log Call (Direct/WhatsApp) | 2-5s | Instant |
+| Change Status | 2-5s | Instant |
+| Save Quotation | 2-5s | Instant |
+| Save Final Quotation (Advance Pending) | 2-5s | Instant |
+| Save Bargaining Rates | 2-5s | Instant |
+| Save Final Quotation Only (Booked) | 2-5s | Instant |
+| Add Comment | 2-5s | Instant |
+| Update Priority (Star Rating) | 2-5s | Instant |
+| Add Client (Quick Add) | 2-5s | Instant |
+
+**Note**: The "BOOKED + Payment" flow and "Payment" operations will stay Sheets-first because they involve moving rows between sheets and financial records that need guaranteed consistency.
+
+## How It Works
+
+For each operation, the pattern is:
+
+```
+BEFORE: await sheetsAPI() -> update local state -> update cache -> toast
+AFTER:  update local state + cache instantly -> toast -> sheetsAPI() in background
+```
 
 ## Technical Details
 
-### File: `src/pages/ClientDetail.tsx` - `handleSaveKeepNotes` function
+### File: `src/pages/ClientDetail.tsx`
 
-Change the save flow from:
-```
-Sheets API call (wait) -> update local state -> update cache
-```
-To:
-```
-Update local state immediately -> update Supabase cache -> close dialog -> Sheets API call (background)
-```
+**1. `handleCall` (Log Call)**
+- Compute the new call log string locally (timestamp + type + existing log)
+- Update state + cache immediately
+- Fire `logCallAttempt()` in background
 
-The updated function will:
-1. Set `currentKeepNotes` immediately with the new data
-2. Call `updateClientCache()` which already updates memory + Supabase `clients_cache` + IndexedDB
-3. Close the dialog and show success toast
-4. Fire the `updateBenzoKeepNotes` Sheets API call in the background (non-blocking)
-5. If the background Sheets call fails, log a warning but don't show an error (data is safe in Supabase)
+**2. `performStatusChange` (Change Status)**
+- Compute the new status log string locally (timestamp + new status + existing log)
+- Update state + cache immediately
+- Fire `updateClientStatus()` in background
+- **Exception**: Status changes to BOOKED stay synchronous (row migration required)
 
-### No Other File Changes Needed
+**3. `handleSaveQuotation` (Quotation Sent)**
+- Update quotation data + status log in state + cache immediately
+- Fire `updateClientQuotation()` and `updateClientStatus()` in background
 
-The existing infrastructure already supports this pattern:
-- `updateClientCache` (from `useCachedData`) already writes to Supabase `clients_cache.benzo_keep_notes`
-- `updateClientInCacheRecord` already marks `synced_to_sheet: false` for tracking
-- The `clients_cache` table already has a `benzo_keep_notes` column
-- Other users loading the client will read from Supabase cache first and see the updated note
-- The Master Sync will eventually reconcile Supabase with Sheets
+**4. `handleSaveAdvancePendingQuotation` (Advance Pending)**
+- Update final quotation + status log in state + cache immediately
+- Fire `updateFinalQuotation()` and `updateClientStatus()` in background
 
-### Resulting Code Pattern
+**5. `handleSaveBargaining` (Bargaining)**
+- Update bargaining rates + status log in state + cache immediately
+- Fire `updateBargainingRates()` and `updateClientStatus()` in background
 
-```typescript
-const handleSaveKeepNotes = async (notesData: string) => {
-  if (!client?.registeredDateTimeAD) return;
-  setIsSavingKeepNotes(true);
-  try {
-    // Step 1: Update UI + caches instantly
-    setCurrentKeepNotes(notesData);
-    if (updateClientCache) {
-      await updateClientCache({ ...client, benzoKeepNotes: notesData });
-    }
-    toast({ title: "Note saved" });
-    setShowBenzoKeepDialog(false);
+**6. `handleSaveFinalQuotationOnly` (Edit Final Quotation for Booked)**
+- Update final quotation in state + cache immediately
+- Fire `updateFinalQuotation()` in background
 
-    // Step 2: Sync to Google Sheets in background
-    updateBenzoKeepNotes(
-      client.rowNumber, notesData, client.registeredDateTimeAD
-    ).catch(err => {
-      console.warn('[BENZO KEEP] Background sheet sync failed:', err);
-    });
-  } catch (err) {
-    console.error('Failed to save note:', err);
-    toast({ title: "Failed to save note", variant: "destructive" });
-  } finally {
-    setIsSavingKeepNotes(false);
-  }
-};
-```
+**7. `handleAddCommentDirect` (Add Comment)**
+- Compute new comments string locally (timestamp + comment + existing)
+- Update state + cache immediately
+- Fire `addClientComment()` in background
+
+**8. `handlePriorityChange` (Star Rating)**
+- Update priority in state + cache immediately
+- Fire `updateClientPriority()` in background
+
+### File: `src/pages/QuickAdd.tsx`
+
+**9. `handleSubmit` (Add New Client)**
+- Generate the client data locally
+- Insert directly into `clients_cache` via Supabase (instant)
+- Update memory cache
+- Fire `addClient()` to Sheets in background
+- Navigate away immediately
+
+### Helper: Local Timestamp Generation
+
+Several operations (status change, call log, comments) need timestamps that are currently generated in `sheets-api.ts` before calling the API. We will extract these into a shared utility so the same timestamp format is used for both the local optimistic update and the background Sheets sync.
+
+A small utility function `generateClientTimestamp()` and `generateCallLogEntry()` will be added to `src/lib/sheets-api.ts` (or a new `src/lib/timestamp-utils.ts`) so the local state update produces the exact same formatted string that the Sheets API would return.
+
+### What Stays Synchronous (Sheets-First)
+
+These operations will NOT be converted because they require server-side coordination:
+
+- **BOOKED status change + payment** - Moves rows between sheets; needs sequential guarantee
+- **Add Payment** - Financial data that must be recorded accurately with remaining balance calculation
+- **Client Sync (Resync button)** - Explicitly pulls fresh data from Sheets
+- **Master Sync** - Full data refresh
+- **Edit Client (full form)** - Complex multi-field update that modifies many columns
+
+### Error Handling
+
+If a background Sheets sync fails:
+- Log a warning to console (no error toast - data is safe in Supabase)
+- The `synced_to_sheet: false` flag in `clients_cache` tracks unsynced records
+- The next Master Sync or manual Resync will reconcile everything
+- The existing `pushUnsyncedToSheets()` function already handles pushing unsynced records
+
+## Files Modified
+
+| File | Change |
+|------|--------|
+| `src/pages/ClientDetail.tsx` | Convert 8 handlers to Supabase-first pattern |
+| `src/pages/QuickAdd.tsx` | Convert addClient to write to Supabase cache first |
+| `src/lib/timestamp-utils.ts` (new) | Shared timestamp formatting for local optimistic updates |
 
 ## Impact
 
-- Save feels **instant** (no more waiting for Sheets API)
-- No page refresh needed - note appears immediately in the viewer
-- All users see updated notes via shared Supabase cache
-- Google Sheets stays in sync via background write
-- Zero risk of data loss - Supabase is the primary store, Sheets is the backup
+- Every action in the app feels **instant** (0-50ms instead of 2-5 seconds)
+- All users see updates immediately via shared Supabase cache
+- Google Sheets stays in sync via background writes
+- No data loss risk - Supabase is the primary store, Sheets syncs in background
+- Financial operations (payments) remain synchronous for accuracy
