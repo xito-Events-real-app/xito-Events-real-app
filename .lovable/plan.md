@@ -1,96 +1,119 @@
 
 
-# Upgrade Freelancer Assignment Section: Granular Switches, Grouping & Highlighting
+# Fix Freelancer Assignment: Tooltips, Default OFF, Labels & Note Popup
 
-## Overview
+## Changes
 
-Redesign the Freelancer Assignment section in the Client Detail page with bigger professional switches, granular visibility controls (6 toggles instead of 4), visual grouping of PB/VB and PG/VG, Barun highlighting, and mandatory demand display.
+### 1. Tooltip on Every Switch Icon
 
-## Database Change
+Add `Tooltip` on hover for each toggle showing exactly what it controls with the event name:
+- Bride Phone: "Bride (Wedding) Contacts" 
+- Bride Location: "Bride (Wedding) Location"
+- Groom Phone: "Groom (Wedding) Contacts"
+- Groom Location: "Groom (Wedding) Location"
+- Venue: "Venue (Wedding) Details"
+- Parlour: "Parlour (Wedding) Details"
 
-Add 2 new columns to `freelancer_event_settings` to split Bride and Groom toggles into Phone vs Location:
+The event name is dynamically inserted from `assignment.event`.
 
-| New Column | Type | Default | Purpose |
-|---|---|---|---|
-| `show_bride_location` | boolean | true | Controls bride home city, area, landmark, map |
-| `show_groom_location` | boolean | true | Controls groom home city, area, landmark, map |
+### 2. Default All Switches OFF
 
-The existing `show_bride_details` will now mean "Bride Phone" (name, contact, whatsapp, backups) and `show_groom_details` will mean "Groom Phone" (same for groom).
+Change the default values in `getSettingForFreelancer` from `true` to `false` for all 6 toggles:
+- `show_bride_details: false`
+- `show_bride_location: false`
+- `show_groom_details: false`
+- `show_groom_location: false`
+- `show_venue_details: false`
+- `show_parlour_details: false`
 
-## UI Changes in `FreelancerAssignmentSection.tsx`
+This means freelancers see NO details until the admin explicitly turns each switch ON.
 
-### 1. Bigger Switches
-Replace the tiny `h-4 w-7` switches with `h-6 w-11` (default Switch size). Each toggle gets an icon instead of text label:
-- Bride Phone: Phone icon (rose color)
-- Bride Location: MapPin icon (rose color)
-- Groom Phone: Phone icon (sky color)
-- Groom Location: MapPin icon (sky color)
-- Venue: Building icon (amber color)
-- Parlour: Scissors icon (purple color)
+### 3. Add Text Labels Next to Icons
 
-### 2. PB/VB and PG/VG Grouping
-The assigned freelancers list will be reorganized:
-- PB and VB inside a bordered box labeled "Bride Side"
-- PG and VG inside a bordered box labeled "Groom Side"
-- EP, EV, Asst, iPhone, Drone, FPV remain as individual rows below
+Each toggle will show a short label + icon (not just icon):
+- "BRIDE" + Phone icon
+- "BRIDE" + MapPin icon
+- "GROOM" + Phone icon
+- "GROOM" + MapPin icon
+- "VENUE" + Building icon
+- "PARLOUR" + Scissors icon
 
-### 3. Barun Highlighting
-When a freelancer's name matches "Barun" (case-insensitive), their row gets a distinct light-blue background and a subtle border glow to indicate "this is you".
+Labels will be `text-[9px] font-bold uppercase` for compactness.
 
-### 4. Demand is Mandatory
-Event demands from the event details will be fetched and displayed prominently at the top of each event card, always visible regardless of any toggle state.
+### 4. Compact Single-Row Layout
 
-## Changes to Crew Schedule (Public Freelancer View)
+Rearrange the toggle area so all 6 toggles + note button fit in a single wrapping row instead of 3 stacked rows. Each freelancer takes one row:
 
-Update `CrewScheduleEventSheet.tsx` to respect the 2 new granular toggles:
-- `show_bride_details` = true: show bride name, contact, whatsapp, backups
-- `show_bride_location` = true: show bride city, area, landmark, map
-- Same split for groom
+```text
+[PB] Barun   BRIDE📞[sw] BRIDE📍[sw] GROOM📞[sw] GROOM📍[sw] VENUE🏢[sw] PARLOUR✂[sw] [📝]
+```
 
-## Files Modified
+Switches will be slightly smaller (`h-5 w-9`) to fit inline.
+
+### 5. Note Opens as Dialog Popup
+
+Replace the inline expanding textarea with a `Dialog` component:
+- Title: "Note for Barun"
+- Subtitle (small text): Event name + Client name
+- Textarea for the note
+- Save / Cancel buttons
+
+## File Modified
 
 | File | Change |
 |---|---|
-| DB Migration | Add `show_bride_location` and `show_groom_location` columns |
-| `src/components/client-detail/FreelancerAssignmentSection.tsx` | Bigger switches with icons, 6 toggles, PB/VB + PG/VG grouping, Barun highlight, demand display |
-| `src/components/crew-schedule/CrewScheduleEventSheet.tsx` | Respect new granular bride/groom location toggles |
+| `src/components/client-detail/FreelancerAssignmentSection.tsx` | Tooltips on toggles, default OFF, text labels, single-row layout, Dialog note popup |
 
 ## Technical Details
 
-### Switch Size
-The `VisibilityToggle` component will use the default Switch dimensions (`h-6 w-11`) with an icon label beside it instead of text. Each toggle rendered as:
-```
-[PhoneIcon] [====SWITCH====]   [MapPinIcon] [====SWITCH====]
-```
-
-### Grouping Layout
-```
-+--- Bride Side --------------------------------+
-| PB: Ram Sharma     [switches...]              |
-| VB: Hari KC        [switches...]              |
-+-----------------------------------------------+
-
-+--- Groom Side --------------------------------+
-| PG: Sita Devi      [switches...]              |
-| VG: Bikash Thapa   [switches...]              |
-+-----------------------------------------------+
-
-EP: Someone          [switches...]
-Asst: Barun          [switches...] <-- highlighted
-Drone: Pilot Name    [switches...]
+### VisibilityToggle Updated Signature
+```tsx
+function VisibilityToggle({ label, icon, iconColor, checked, onChange, checkedColor, tooltip }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className="flex items-center gap-0.5">
+          <span className="text-[9px] font-bold uppercase">{label}</span>
+          <Icon className="w-3 h-3" />
+          <Switch className="h-5 w-9" checked={checked} onCheckedChange={onChange} />
+        </div>
+      </TooltipTrigger>
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
+  );
+}
 ```
 
-### Demand Section
-Each event card will show demands at the top in a mandatory, non-toggleable section with colored badges, pulled from existing event details data (passed as a new prop or fetched inline).
+### Default Settings Change
+```tsx
+const getSettingForFreelancer = (freelancerName) => ({
+  // All false by default - freelancer sees nothing until admin turns on
+  show_bride_details: false,
+  show_bride_location: false,
+  show_groom_details: false,
+  show_groom_location: false,
+  show_venue_details: false,
+  show_parlour_details: false,
+  personal_note: '',
+});
+```
 
-### Toggle-to-Data Mapping
-
-| Toggle | Icon | Data Controlled |
-|---|---|---|
-| Bride Phone | Phone (rose) | brideFullName, brideContactNumber, brideWhatsappNumber, brideBackupNumber, brideBackupRelation, brideBackupNumber2, brideBackupRelation2 |
-| Bride Location | MapPin (rose) | brideHomeCity, brideHomeArea, brideHomeLandmark, brideHomeMap |
-| Groom Phone | Phone (sky) | groomFullName, groomContactNumber, groomWhatsappNumber, groomBackupNumber, groomBackupRelation, groomBackupNumber2, groomBackupRelation2 |
-| Groom Location | MapPin (sky) | groomHomeCity, groomHomeArea, groomHomeLandmark, groomHomeMap |
-| Venue | Building (amber) | venueName, venueType, venueCity, venueArea, venueMap, eventStartTime, eventEndTime |
-| Parlour | Scissors (purple) | parlourName, parlourType, parlourCity, parlourArea, parlourMap, parlourStartTime, parlourEndTime |
+### Note Dialog
+```tsx
+<Dialog open={!!noteOpenFor} onOpenChange={(o) => !o && setNoteOpenFor(null)}>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>Note for {noteOpenFor}</DialogTitle>
+      <DialogDescription className="text-xs">
+        {assignment.event} - {assignment.clientName}
+      </DialogDescription>
+    </DialogHeader>
+    <Textarea value={noteText} onChange={...} />
+    <DialogFooter>
+      <Button variant="ghost" onClick={cancel}>Cancel</Button>
+      <Button onClick={save}>Save Note</Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+```
 
