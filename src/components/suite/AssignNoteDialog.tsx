@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { UnassignedBenzoNote } from "@/hooks/useUnassignedBenzoKeepNotes";
 import { getClientsForNoteAssignment, transferBenzoKeepNote, ClientData } from "@/lib/sheets-api";
 import { updateClientFieldInCache } from "@/lib/clients-supabase-cache";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -77,7 +78,19 @@ export function AssignNoteDialog({ open, onOpenChange, note, onSuccess }: Assign
           markerColor: note.markerColor,
           lastUpdated: new Date().toISOString(),
         });
-        await updateClientFieldInCache(client.registeredDateTimeAD!, 'benzoKeepNotes', noteData);
+        // Try exact match first, then fallback to client name match
+        const { data: updated } = await supabase
+          .from('clients_cache')
+          .update({ benzo_keep_notes: noteData, synced_to_sheet: false, updated_at: new Date().toISOString() } as any)
+          .eq('registered_date_time_ad', client.registeredDateTimeAD!)
+          .select('registered_date_time_ad');
+        
+        if (!updated?.length && client.clientName) {
+          await supabase
+            .from('clients_cache')
+            .update({ benzo_keep_notes: noteData, synced_to_sheet: false, updated_at: new Date().toISOString() } as any)
+            .eq('client_name', client.clientName);
+        }
       } catch (cacheErr) {
         console.warn("Cache update failed (non-blocking):", cacheErr);
       }

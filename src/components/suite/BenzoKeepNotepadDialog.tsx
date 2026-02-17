@@ -15,6 +15,7 @@ import { useDropdownData } from "@/hooks/useDropdownData";
 import { XitoSearchPanel } from "@/components/shared/XitoSearchPanel";
 import { BenzoDateConverter } from "@/components/shared/BenzoDateConverter";
 import { updateClientFieldInCache } from "@/lib/clients-supabase-cache";
+import { supabase } from "@/integrations/supabase/client";
 import { BookingCalendarMini } from "@/components/shared/BookingCalendarMini";
 import { BenzoKeepClientPanel, QuickClientData } from "@/components/suite/BenzoKeepClientPanel";
 
@@ -168,7 +169,20 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
         };
         await assignBenzoKeepNoteToClient(selectedClient.registeredDateTimeAD, JSON.stringify(noteData));
         try {
-          await updateClientFieldInCache(selectedClient.registeredDateTimeAD, 'benzoKeepNotes', JSON.stringify(noteData));
+          // Try exact match first, then fallback to client name match (handles date format differences)
+          const noteJson = JSON.stringify(noteData);
+          const { data: updated } = await supabase
+            .from('clients_cache')
+            .update({ benzo_keep_notes: noteJson, synced_to_sheet: false, updated_at: new Date().toISOString() } as any)
+            .eq('registered_date_time_ad', selectedClient.registeredDateTimeAD)
+            .select('registered_date_time_ad');
+          
+          if (!updated?.length && selectedClient.clientName) {
+            await supabase
+              .from('clients_cache')
+              .update({ benzo_keep_notes: noteJson, synced_to_sheet: false, updated_at: new Date().toISOString() } as any)
+              .eq('client_name', selectedClient.clientName);
+          }
         } catch (cacheErr) {
           console.warn("Cache update failed (non-blocking):", cacheErr);
         }
