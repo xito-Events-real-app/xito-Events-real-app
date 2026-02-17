@@ -449,7 +449,9 @@ export type Database = {
           registered_date_time_ad: string
           role_code: string
           show_bride_details: boolean
+          show_bride_location: boolean
           show_groom_details: boolean
+          show_groom_location: boolean
           show_parlour_details: boolean
           show_venue_details: boolean
           updated_at: string | null
@@ -462,7 +464,9 @@ export type Database = {
           registered_date_time_ad: string
           role_code?: string
           show_bride_details?: boolean
+          show_bride_location?: boolean
           show_groom_details?: boolean
+          show_groom_location?: boolean
           show_parlour_details?: boolean
           show_venue_details?: boolean
           updated_at?: string | null
@@ -475,7 +479,9 @@ export type Database = {
           registered_date_time_ad?: string
           role_code?: string
           show_bride_details?: boolean
+          show_bride_location?: boolean
           show_groom_details?: boolean
+          show_groom_location?: boolean
           show_parlour_details?: boolean
           show_venue_details?: boolean
           updated_at?: string | null

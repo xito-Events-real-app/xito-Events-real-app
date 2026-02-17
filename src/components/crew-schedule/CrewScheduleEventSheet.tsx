@@ -26,6 +26,8 @@ interface VisibilitySettings {
   show_groom_details: boolean;
   show_venue_details: boolean;
   show_parlour_details: boolean;
+  show_bride_location: boolean;
+  show_groom_location: boolean;
   personal_note: string;
 }
 
@@ -138,7 +140,7 @@ export default function CrewScheduleEventSheet({ open, onOpenChange, assignment,
     const fetchVisibility = async () => {
       const { data } = await supabase
         .from('freelancer_event_settings')
-        .select('show_bride_details, show_groom_details, show_venue_details, show_parlour_details, personal_note')
+        .select('show_bride_details, show_groom_details, show_venue_details, show_parlour_details, show_bride_location, show_groom_location, personal_note')
         .eq('registered_date_time_ad', assignment.registered_date_time_ad)
         .eq('event_name', assignment.event || '')
         .eq('freelancer_name', freelancerName)
@@ -147,15 +149,16 @@ export default function CrewScheduleEventSheet({ open, onOpenChange, assignment,
       if (data) {
         setVisibility(data as VisibilitySettings);
       } else {
-        // Default: all visible, no note
-        setVisibility({ show_bride_details: true, show_groom_details: true, show_venue_details: true, show_parlour_details: true, personal_note: '' });
+        setVisibility({ show_bride_details: true, show_groom_details: true, show_venue_details: true, show_parlour_details: true, show_bride_location: true, show_groom_location: true, personal_note: '' });
       }
     };
     fetchVisibility();
   }, [open, freelancerName, assignment.registered_date_time_ad, assignment.event]);
 
   const showBride = visibility?.show_bride_details !== false;
+  const showBrideLocation = visibility?.show_bride_location !== false;
   const showGroom = visibility?.show_groom_details !== false;
+  const showGroomLocation = visibility?.show_groom_location !== false;
   const showVenue = visibility?.show_venue_details !== false;
   const showParlour = visibility?.show_parlour_details !== false;
   const personalNote = visibility?.personal_note?.trim() || '';
@@ -229,6 +232,17 @@ export default function CrewScheduleEventSheet({ open, onOpenChange, assignment,
               backup={contactDetails?.brideBackupNumber} backupRelation={contactDetails?.brideBackupRelation}
               backup2={contactDetails?.brideBackupNumber2} backupRelation2={contactDetails?.brideBackupRelation2}
               instagram={contactDetails?.brideInstagram}
+              city={showBrideLocation ? contactDetails?.brideHomeCity : undefined}
+              area={showBrideLocation ? contactDetails?.brideHomeArea : undefined}
+              landmark={showBrideLocation ? contactDetails?.brideHomeLandmark : undefined}
+              mapLink={showBrideLocation ? contactDetails?.brideHomeMap : undefined}
+            />
+          )}
+
+          {/* Bride Location Only (when phone is hidden but location is visible) */}
+          {!showBride && showBrideLocation && (contactDetails?.brideHomeCity || contactDetails?.brideHomeArea) && (
+            <PersonSection
+              title="Bride Location" borderColor="border-rose-400"
               city={contactDetails?.brideHomeCity} area={contactDetails?.brideHomeArea}
               landmark={contactDetails?.brideHomeLandmark} mapLink={contactDetails?.brideHomeMap}
             />
@@ -243,6 +257,17 @@ export default function CrewScheduleEventSheet({ open, onOpenChange, assignment,
               backup={contactDetails?.groomBackupNumber} backupRelation={contactDetails?.groomBackupRelation}
               backup2={contactDetails?.groomBackupNumber2} backupRelation2={contactDetails?.groomBackupRelation2}
               instagram={contactDetails?.groomInstagram}
+              city={showGroomLocation ? contactDetails?.groomHomeCity : undefined}
+              area={showGroomLocation ? contactDetails?.groomHomeArea : undefined}
+              landmark={showGroomLocation ? contactDetails?.groomHomeLandmark : undefined}
+              mapLink={showGroomLocation ? contactDetails?.groomHomeMap : undefined}
+            />
+          )}
+
+          {/* Groom Location Only (when phone is hidden but location is visible) */}
+          {!showGroom && showGroomLocation && (contactDetails?.groomHomeCity || contactDetails?.groomHomeArea) && (
+            <PersonSection
+              title="Groom Location" borderColor="border-sky-400"
               city={contactDetails?.groomHomeCity} area={contactDetails?.groomHomeArea}
               landmark={contactDetails?.groomHomeLandmark} mapLink={contactDetails?.groomHomeMap}
             />
