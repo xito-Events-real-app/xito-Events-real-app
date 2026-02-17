@@ -4909,11 +4909,57 @@ async function updateClientEventDetails(
     }
   }
 
-  // Write updated values back to columns J-AH
-  const updateRange = encodeURIComponent(`'BOOKED CLIENTS EVENT DETAILS'!J${rowNumber}:AH${rowNumber}`);
+  // ===== RACE CONDITION FIX: Re-verify row before writing =====
+  // Between our initial read and now, another operation may have shifted rows.
+  // Re-read Column A at the found rowNumber to verify it still matches.
+  const verifyRange = encodeURIComponent(`'BOOKED CLIENTS EVENT DETAILS'!A${rowNumber}`);
+  const verifyUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${verifyRange}`;
+  const verifyResp = await fetchWithRetry(verifyUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  
+  let verifiedRowNumber = rowNumber;
+  
+  if (verifyResp.ok) {
+    const verifyData = await verifyResp.json();
+    const currentCellValue = (verifyData.values?.[0]?.[0] || '').trim();
+    
+    if (currentCellValue !== normalizedId) {
+      console.warn(`[RACE CONDITION] Row ${rowNumber} shifted! Expected "${normalizedId}" but found "${currentCellValue}". Re-scanning...`);
+      
+      // Re-scan the entire sheet to find the correct row
+      const rescanResp = await fetchWithRetry(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent("'BOOKED CLIENTS EVENT DETAILS'!A2:A500")}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      
+      if (rescanResp.ok) {
+        const rescanData = await rescanResp.json();
+        let newRowFound = false;
+        
+        if (rescanData.values) {
+          for (let ri = 0; ri < rescanData.values.length; ri++) {
+            if ((rescanData.values[ri][0] || '').trim() === normalizedId) {
+              verifiedRowNumber = ri + 2;
+              newRowFound = true;
+              console.log(`[RACE CONDITION] Found correct row at ${verifiedRowNumber}`);
+              break;
+            }
+          }
+        }
+        
+        if (!newRowFound) {
+          throw new Error(`[RACE CONDITION] Client ${normalizedId} no longer found in EVENT DETAILS sheet after row shift`);
+        }
+      }
+    }
+  }
+
+  // Write updated values back to columns J-AH using VERIFIED row number
+  const updateRange = encodeURIComponent(`'BOOKED CLIENTS EVENT DETAILS'!J${verifiedRowNumber}:AH${verifiedRowNumber}`);
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`;
   
-  const updateResponse = await fetch(updateUrl, {
+  const updateResponse = await fetchWithRetry(updateUrl, {
     method: 'PUT',
     headers: {
       Authorization: `Bearer ${accessToken}`,
