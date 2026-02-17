@@ -1,7 +1,9 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { Camera, Video, UserCog, Smartphone, Loader2, Circle, Zap, StickyNote, Phone, MapPin, Building2, Scissors, NotebookPen } from "lucide-react";
+import { Camera, Video, UserCog, Smartphone, Loader2, Circle, Zap, StickyNote, Phone, MapPin, Building2, Scissors, NotebookPen, Settings2 } from "lucide-react";
 import { useFreelancerAssignments } from "@/hooks/useFreelancerAssignments";
-import { getFilteredFreelancersByRole, FreelancerField, AvailabilityConflict } from "@/lib/freelancer-assignment-api";
+import { getFilteredFreelancersByRole, FreelancerField, AvailabilityConflict, updateRequiredCrewCategories } from "@/lib/freelancer-assignment-api";
+import { updateCategoriesInCache } from "@/lib/freelancer-assignment-cache";
+import { CrewCategorySelector } from "@/components/shared/CrewCategorySelector";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -83,7 +85,7 @@ interface FreelancerEventSetting {
 }
 
 const FreelancerAssignmentSection = ({ registeredDateTimeAD }: FreelancerAssignmentSectionProps) => {
-  const { assignments, freelancers, isLoading, isUpdating, updateAssignment, checkAvailability } = useFreelancerAssignments(registeredDateTimeAD);
+  const { assignments, freelancers, isLoading, isUpdating, updateAssignment, checkAvailability, refetch } = useFreelancerAssignments(registeredDateTimeAD);
   const [settings, setSettings] = useState<Map<string, FreelancerEventSetting>>(new Map());
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const { data: eventDetailsData } = useEventDetails(registeredDateTimeAD);
@@ -169,6 +171,7 @@ const FreelancerAssignmentSection = ({ registeredDateTimeAD }: FreelancerAssignm
             settings={settings}
             onUpsertSetting={upsertSetting}
             eventDemands={matchedEvent?.eventDemands || []}
+            refetch={refetch}
           />
         );
       })}
@@ -186,11 +189,14 @@ interface EventAssignmentCardProps {
   settings: Map<string, FreelancerEventSetting>;
   onUpsertSetting: (setting: Omit<FreelancerEventSetting, 'id'>) => Promise<void>;
   eventDemands: string[];
+  refetch: () => Promise<void>;
 }
 
-const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, onCheckAvailability, registeredDateTimeAD, settings, onUpsertSetting, eventDemands }: EventAssignmentCardProps) => {
+const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, onCheckAvailability, registeredDateTimeAD, settings, onUpsertSetting, eventDemands, refetch }: EventAssignmentCardProps) => {
   const [noteOpenFor, setNoteOpenFor] = useState<{ name: string; code: string } | null>(null);
   const [noteText, setNoteText] = useState("");
+  const [crewPopoverOpen, setCrewPopoverOpen] = useState(false);
+  const [savingCrew, setSavingCrew] = useState(false);
 
   const requiredCodes = (assignment.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
   const hasFilter = requiredCodes.length > 0;
@@ -423,6 +429,36 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-gray-800 text-xs">{assignment.event}</h3>
           <div className="flex items-center gap-3">
+            {/* Set Required Crew */}
+            <Popover open={crewPopoverOpen} onOpenChange={setCrewPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1 px-2" disabled={savingCrew}>
+                  <Settings2 className="w-3 h-3" />
+                  Set Crew
+                  {savingCrew && <Loader2 className="w-3 h-3 animate-spin" />}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 z-[9999]" align="end">
+                <CrewCategorySelector
+                  selected={requiredCodes}
+                  onChange={async (codes) => {
+                    setSavingCrew(true);
+                    try {
+                      const cats = codes.join(',');
+                      await updateRequiredCrewCategories(registeredDateTimeAD, assignment.event, assignment.eventDateAD, cats);
+                      await updateCategoriesInCache(registeredDateTimeAD, assignment.event, cats, assignment.eventDateAD);
+                      await refetch();
+                      toast({ title: "Crew updated", description: `Required crew set for ${assignment.event}` });
+                    } catch (err) {
+                      console.error('Failed to update required crew:', err);
+                      toast({ title: "Error", description: "Failed to update required crew", variant: "destructive" });
+                    } finally {
+                      setSavingCrew(false);
+                    }
+                  }}
+                />
+              </PopoverContent>
+            </Popover>
             <span className="text-[11px] font-medium text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
               {assignedCount}/{totalSlots} assigned
             </span>
@@ -668,6 +704,20 @@ const UnassignedFreelancerRow = ({ config, value, freelancers, eventDateAD, clie
           <VisibilityToggle label="VENUE" icon={Building2} iconColor="text-amber-500" checked={setting.show_venue_details} onChange={(v) => handleToggle(placeholderName, config.shortCode, 'show_venue_details', v)} checkedColor="data-[state=checked]:bg-amber-500" tooltip={`Venue (${eventName}) Details`} />
           <VisibilityToggle label="PARLOUR" icon={Scissors} iconColor="text-purple-500" checked={setting.show_parlour_details} onChange={(v) => handleToggle(placeholderName, config.shortCode, 'show_parlour_details', v)} checkedColor="data-[state=checked]:bg-purple-500" tooltip={`Parlour (${eventName}) Details`} />
         </TooltipProvider>
+
+          {/* Note button */}
+          <button
+            onClick={() => handleOpenNote(placeholderName, config.shortCode)}
+            className={cn(
+              "flex items-center gap-1 text-[10px] px-2 py-1 rounded-md transition-colors",
+              setting.personal_note?.trim()
+                ? "bg-amber-50 text-amber-600 hover:bg-amber-100"
+                : "bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            )}
+          >
+            <NotebookPen className="w-3 h-3" />
+            {setting.personal_note?.trim() ? "Note" : "+Note"}
+          </button>
       </div>
     </div>
   );
