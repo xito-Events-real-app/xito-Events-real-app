@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useCachedData } from "@/hooks/useCachedData";
 import { useDropdownData } from "@/hooks/useDropdownData";
-import { updateClient, ClientData, updateClientStatus, logCallAttempt, addPayment, updateClientQuotation, addClientComment, updateFinalQuotation, getSingleClient, updateClientPriority, updateBargainingRates, updateBenzoKeepNotes } from "@/lib/sheets-api";
+import { updateClient, ClientData, updateClientStatus, logCallAttempt, addPayment, updateClientQuotation, addClientComment, updateFinalQuotation, getSingleClient, updateClientPriority, updateBargainingRates, updateBenzoKeepNotes, deleteClient } from "@/lib/sheets-api";
 import { generateCallLogEntry, generateStatusLogEntry, generateCommentEntry } from "@/lib/timestamp-utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { forceResetDatabase, notifyCacheUpdate } from "@/lib/cache-manager";
@@ -51,7 +51,7 @@ import { nepaliMonthsEnglish, NepaliDateObject, bsToAD, isUnknownDay, getDayForS
 import { getMonthName } from "@/lib/nepali-months";
 import NepaliDate from "nepali-date-converter";
 import PaymentDrawer from "@/components/finance/PaymentDrawer";
-import { ClientDetailSidebar, ClientHeroSection, SectionType, EventDetailsSummaryCard, FullScreenEventCard, ClientDetailsCard, BenzoKeepDialog, BenzoKeepViewer } from "@/components/client-detail";
+import { ClientDetailSidebar, ClientHeroSection, SectionType, EventDetailsSummaryCard, FullScreenEventCard, ClientDetailsCard, BenzoKeepDialog, BenzoKeepViewer, DeleteClientDialog } from "@/components/client-detail";
 import FreelancerAssignmentSection from "@/components/client-detail/FreelancerAssignmentSection";
 import { updateRequiredCrewCategories } from "@/lib/freelancer-assignment-api";
 import { EventDetailCard } from "@/components/client-detail/EventDetailCard";
@@ -192,6 +192,10 @@ const ClientDetail = () => {
 
   // Client sync state
   const [isSyncingClient, setIsSyncingClient] = useState(false);
+
+  // Delete client state
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeletingClient, setIsDeletingClient] = useState(false);
   const fromState = location.state as { 
     from?: string; 
     searchContext?: string;  // Flag for search sequential navigation
@@ -737,6 +741,48 @@ const ClientDetail = () => {
     }
   };
 
+  // Handle deleting a client — Supabase-first
+  const handleDeleteClient = async () => {
+    if (!client?.registeredDateTimeAD) return;
+    
+    setIsDeletingClient(true);
+    try {
+      const regId = client.registeredDateTimeAD;
+      const sheetSource = (client._source === 'booked' ? 'booked' : 'tracker') as 'tracker' | 'booked';
+      
+      // 1. Delete from Supabase cache tables instantly
+      const { supabase } = await import("@/integrations/supabase/client");
+      await Promise.all([
+        supabase.from('clients_cache').delete().eq('registered_date_time_ad', regId),
+        supabase.from('event_details_cache').delete().eq('registered_date_time_ad', regId),
+        supabase.from('contact_details_cache').delete().eq('registered_date_time_ad', regId),
+        supabase.from('freelancer_assignments').delete().eq('registered_date_time_ad', regId),
+        supabase.from('freelancer_event_settings').delete().eq('registered_date_time_ad', regId),
+      ]);
+
+      // 2. Invalidate caches so other modules reflect the deletion
+      window.dispatchEvent(new Event('clients-invalidate'));
+      window.dispatchEvent(new Event('booked-clients-invalidate'));
+
+      // 3. Show success toast
+      toast({ title: "Client deleted", description: `${client.clientName} has been permanently deleted` });
+      
+      // 3. Navigate back
+      navigate('/client-tracker');
+
+      // 4. Fire Sheets delete in background
+      deleteClient(regId, sheetSource).catch(err => {
+        console.warn('[DELETE] Background sheet delete failed:', err);
+      });
+    } catch (err) {
+      console.error('Failed to delete client:', err);
+      toast({ title: "Failed to delete client", description: "Please try again", variant: "destructive" });
+    } finally {
+      setIsDeletingClient(false);
+      setShowDeleteDialog(false);
+    }
+  };
+
   // Handle updating client priority (star rating) — Supabase-first
   const handlePriorityChange = async (priority: number) => {
     if (!client?.rowNumber) return;
@@ -1074,10 +1120,12 @@ const ClientDetail = () => {
               }}
               onPriorityChange={handlePriorityChange}
               onBenzoKeepClick={() => setShowBenzoKeepDialog(true)}
+              onDelete={() => setShowDeleteDialog(true)}
               isLoggingCall={isLoggingCall}
               isChangingStatus={isChangingStatus}
               isAddingComment={isAddingComment}
               isSyncing={isSyncingClient}
+              isDeleting={isDeletingClient}
               isUpdatingPriority={isUpdatingPriority}
               eventDetailsData={eventDetailsData}
               eventDetailsLoading={eventDetailsLoading}
@@ -1893,6 +1941,15 @@ const ClientDetail = () => {
         existingNotes={currentKeepNotes || client?.benzoKeepNotes}
         onSave={handleSaveKeepNotes}
         isSaving={isSavingKeepNotes}
+      />
+
+      {/* Delete Client Dialog */}
+      <DeleteClientDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        clientName={client?.clientName || ''}
+        onConfirmDelete={handleDeleteClient}
+        isDeleting={isDeletingClient}
       />
     </div>
   );

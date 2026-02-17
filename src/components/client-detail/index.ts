@@ -13,3 +13,4 @@ export { default as BenzoKeepDialog } from './BenzoKeepDialog';
 export { default as BenzoKeepViewer } from './BenzoKeepViewer';
 export { parseBenzoKeepNotes } from './BenzoKeepDialog';
 export { default as FreelancerAssignmentSection } from './FreelancerAssignmentSection';
+export { default as DeleteClientDialog } from './DeleteClientDialog';

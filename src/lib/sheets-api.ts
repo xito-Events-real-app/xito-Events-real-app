@@ -824,3 +824,13 @@ export async function assignBenzoKeepNoteToClient(
     data: { registeredDateTimeAD, notesData },
   });
 }
+
+// Delete a client from all sheets and Supabase cache
+export async function deleteClient(
+  registeredDateTimeAD: string,
+  sheetSource: 'tracker' | 'booked'
+): Promise<{ success: boolean }> {
+  return callSheetsFunction<{ success: boolean }>("deleteClient", {
+    data: { registeredDateTimeAD, sheetSource },
+  });
+}
