@@ -582,6 +582,10 @@ const UnassignedFreelancerRow = ({ config, value, freelancers, eventDateAD, clie
   const [search, setSearch] = useState("");
   const [availability, setAvailability] = useState<Record<string, AvailabilityConflict[]>>({});
 
+  // Use role code as placeholder name for settings when no freelancer assigned
+  const placeholderName = `__role_${config.shortCode}__`;
+  const setting = getSettingForFreelancer(placeholderName);
+
   const filteredNames = useMemo(
     () => getFilteredFreelancersByRole(freelancers, config.field).filter(
       name => !excludedNames.has(name.toLowerCase())
@@ -602,8 +606,6 @@ const UnassignedFreelancerRow = ({ config, value, freelancers, eventDateAD, clie
       setAvailability(checks);
     }
   }, [eventDateAD, clientName, filteredNames, onCheckAvailability]);
-
-  const Icon = config.icon;
 
   return (
     <div className="px-3 py-2.5 flex items-center gap-2 flex-wrap border border-gray-100 rounded-xl">
@@ -656,15 +658,15 @@ const UnassignedFreelancerRow = ({ config, value, freelancers, eventDateAD, clie
         </PopoverContent>
       </Popover>
 
-      {/* Toggles - same pattern as assigned rows, but disabled/dimmed since no one assigned yet */}
-      <div className="flex items-center gap-3 flex-wrap ml-auto opacity-40 pointer-events-none">
+      {/* Toggles - fully functional even before assignment */}
+      <div className="flex items-center gap-3 flex-wrap ml-auto">
         <TooltipProvider delayDuration={200}>
-          <VisibilityToggle label="BRIDE" icon={Phone} iconColor="text-rose-500" checked={false} onChange={() => {}} checkedColor="data-[state=checked]:bg-rose-500" tooltip={`Bride (${eventName}) Contacts`} />
-          <VisibilityToggle label="BRIDE" icon={MapPin} iconColor="text-rose-400" checked={false} onChange={() => {}} checkedColor="data-[state=checked]:bg-rose-400" tooltip={`Bride (${eventName}) Location`} />
-          <VisibilityToggle label="GROOM" icon={Phone} iconColor="text-sky-500" checked={false} onChange={() => {}} checkedColor="data-[state=checked]:bg-sky-500" tooltip={`Groom (${eventName}) Contacts`} />
-          <VisibilityToggle label="GROOM" icon={MapPin} iconColor="text-sky-400" checked={false} onChange={() => {}} checkedColor="data-[state=checked]:bg-sky-400" tooltip={`Groom (${eventName}) Location`} />
-          <VisibilityToggle label="VENUE" icon={Building2} iconColor="text-amber-500" checked={false} onChange={() => {}} checkedColor="data-[state=checked]:bg-amber-500" tooltip={`Venue (${eventName}) Details`} />
-          <VisibilityToggle label="PARLOUR" icon={Scissors} iconColor="text-purple-500" checked={false} onChange={() => {}} checkedColor="data-[state=checked]:bg-purple-500" tooltip={`Parlour (${eventName}) Details`} />
+          <VisibilityToggle label="BRIDE" icon={Phone} iconColor="text-rose-500" checked={setting.show_bride_details} onChange={(v) => handleToggle(placeholderName, config.shortCode, 'show_bride_details', v)} checkedColor="data-[state=checked]:bg-rose-500" tooltip={`Bride (${eventName}) Contacts`} />
+          <VisibilityToggle label="BRIDE" icon={MapPin} iconColor="text-rose-400" checked={setting.show_bride_location} onChange={(v) => handleToggle(placeholderName, config.shortCode, 'show_bride_location', v)} checkedColor="data-[state=checked]:bg-rose-400" tooltip={`Bride (${eventName}) Location`} />
+          <VisibilityToggle label="GROOM" icon={Phone} iconColor="text-sky-500" checked={setting.show_groom_details} onChange={(v) => handleToggle(placeholderName, config.shortCode, 'show_groom_details', v)} checkedColor="data-[state=checked]:bg-sky-500" tooltip={`Groom (${eventName}) Contacts`} />
+          <VisibilityToggle label="GROOM" icon={MapPin} iconColor="text-sky-400" checked={setting.show_groom_location} onChange={(v) => handleToggle(placeholderName, config.shortCode, 'show_groom_location', v)} checkedColor="data-[state=checked]:bg-sky-400" tooltip={`Groom (${eventName}) Location`} />
+          <VisibilityToggle label="VENUE" icon={Building2} iconColor="text-amber-500" checked={setting.show_venue_details} onChange={(v) => handleToggle(placeholderName, config.shortCode, 'show_venue_details', v)} checkedColor="data-[state=checked]:bg-amber-500" tooltip={`Venue (${eventName}) Details`} />
+          <VisibilityToggle label="PARLOUR" icon={Scissors} iconColor="text-purple-500" checked={setting.show_parlour_details} onChange={(v) => handleToggle(placeholderName, config.shortCode, 'show_parlour_details', v)} checkedColor="data-[state=checked]:bg-purple-500" tooltip={`Parlour (${eventName}) Details`} />
         </TooltipProvider>
       </div>
     </div>
