@@ -1,46 +1,69 @@
 
 
-# Fix: Crew Schedule Showing Details When Switches Are OFF
+# Add Booking Calendar Popup + Refresh Button for Each Freelancer
 
-## Problem
+## Overview
 
-When you turn ON only "Bride Contact" for Barun, both Bride AND Groom details still appear in the freelancer's crew schedule view. There are three bugs:
+Add two buttons next to each assigned freelancer's name in the assignment section:
+1. **Calendar icon button** - Opens a Dialog popup showing that freelancer's personal booking calendar (same 12-month grid style as the FreelancerProfile page)
+2. **Refresh icon button** - Refreshes that freelancer's booking data on demand
 
-1. When no settings row exists in the database for a freelancer, the code defaults everything to VISIBLE (should be HIDDEN)
-2. Boolean checks use `!== false` which treats missing/null values as "show" instead of "hide"
-3. The Client Detail Sheet (opened by tapping the client name badge) has NO visibility filtering at all -- it always shows everything
+## Changes
 
-## Fix
+### File: `src/components/client-detail/FreelancerAssignmentSection.tsx`
 
-### File: `src/components/crew-schedule/CrewScheduleEventSheet.tsx`
+**1. Add state for the calendar popup:**
+- `calendarOpenFor: string | null` - tracks which freelancer's calendar is open
+- `calendarBookings: FreelancerBooking[]` - stores fetched booking data
+- `calendarLoading: boolean` - loading state during fetch
 
-**Change 1 - Line 152**: Change the fallback defaults from `true` to `false`:
-```tsx
-// BEFORE (wrong)
-setVisibility({ show_bride_details: true, show_groom_details: true, show_venue_details: true, ... });
+**2. Add buttons in `renderFreelancerRow` (after the name, before toggles):**
+- A small Calendar icon button that sets `calendarOpenFor` to the freelancer name and fetches their bookings via `getFreelancerBookings(name)`
+- A small RefreshCw icon button that re-fetches the freelancer's bookings (calls the same API, shows a brief spin animation)
 
-// AFTER (correct)
-setVisibility({ show_bride_details: false, show_groom_details: false, show_venue_details: false, show_parlour_details: false, show_bride_location: false, show_groom_location: false, personal_note: '' });
+**3. Add a Dialog at the bottom of the component:**
+- Shows the freelancer name in the header
+- Renders a 12-month Nepali calendar grid (same layout as FreelancerProfile page) using the fetched bookings
+- Each booked day shows as an emerald circle; hovering shows a popup with event details
+- Dialog is wide enough (max-w-4xl) to show the calendar grid nicely
+
+**4. Calendar grid logic (extracted inline):**
+- Reuse the same `calendarData` calculation from FreelancerProfile (map bookings to a 12-month grid starting from Baisakh 2082)
+- Render months in a 3-column grid with day circles
+- Hover popups show client name, event name, and role
+
+### Visual Layout
+
+In each freelancer row, the name area becomes:
+```
+[PB] Barun [calendar-icon] [refresh-icon]    [toggles...] [+Note]
 ```
 
-**Change 2 - Lines 158-163**: Change boolean checks from `!== false` to `=== true`:
-```tsx
-// BEFORE (wrong - treats undefined/null as true)
-const showBride = visibility?.show_bride_details !== false;
-
-// AFTER (correct - only shows when explicitly true)
-const showBride = visibility?.show_bride_details === true;
+The calendar popup Dialog shows:
+```
++------------------------------------------+
+| Barun - Booking Calendar            [X]  |
+|------------------------------------------|
+| Baisakh 2082  | Jestha 2082  | Ashar 2082|
+| 1 2 3 (4) ... | 1 2 (3) ... | ...       |
+|               |              |           |
+| ...12 months total...                    |
++------------------------------------------+
 ```
 
-This applies to all 6 visibility checks (showBride, showBrideLocation, showGroom, showGroomLocation, showVenue, showParlour).
+### Technical Notes
 
-### No changes needed for CrewScheduleClientSheet.tsx
+- Import `getFreelancerBookings` and `FreelancerBooking` from `@/lib/freelancer-assignment-api`
+- Import `NEPALI_MONTHS` from `@/lib/nepali-months`
+- Import `RefreshCw, Calendar` from `lucide-react`
+- Import `ScrollArea` from `@/components/ui/scroll-area`
+- The refresh button spins while loading and calls the same `getFreelancerBookings` API
+- Calendar data computation is done inline (same algorithm as FreelancerProfile)
+- Day hover popup reuses inline rendering (simplified version without navigation)
 
-The Client Detail Sheet (opened by tapping client name) is intentionally a quick-reference that shows all contact info regardless of toggle state. The toggles only control the "Full Details" event sheet.
-
-## Files Modified
+### Files Modified
 
 | File | Change |
 |---|---|
-| `src/components/crew-schedule/CrewScheduleEventSheet.tsx` | Fix fallback defaults to `false`, fix boolean checks to `=== true` |
+| `src/components/client-detail/FreelancerAssignmentSection.tsx` | Add calendar popup Dialog, calendar/refresh buttons per freelancer row |
 
