@@ -1,109 +1,69 @@
 
+# Fix: Venue Data Cross-Contamination Between Clients
 
-# Delete Client Feature with Full Danger Warning, Heartbeat Sound & Password Gate
+## Root Cause
 
-## Overview
+The venue data transfer from Sargat Thapa to Sapna Bista is caused by a **race condition** in the `updateClientEventDetails` function in the backend.
 
-Add a "Delete Client" button to the Client Detail hero section. Clicking it opens a password gate (984124), followed by a dramatic red danger confirmation dialog with a synthetic heartbeat sound. Deletion removes the client from:
+Here is what happens:
 
-1. Google Sheets: CLIENT TRACKER or BOOKED CLIENTS (main sheet)
-2. Google Sheets: BOOKED CLIENTS EVENT DETAILS
-3. Google Sheets: BOOKED CLIENTS FREELANCERS
-4. Google Sheets: BOOKED CLIENTS CONTACT DETAILS
-5. Supabase: `clients_cache`, `event_details_cache`, `contact_details_cache`, `freelancer_assignments`, `freelancer_event_settings`
+1. When you open Client A's detail page, `useEventDetails` calls `refreshClientVendorData` in the background
+2. `refreshClientVendorData` calls `getClientEventDetails` which reads the entire EVENT DETAILS sheet and finds Client A at, say, row 5
+3. Meanwhile, if any other operation (sync, another client update, or a delete) inserts or removes a row in the sheet...
+4. The row number is now **stale** -- row 5 might now belong to a different client
+5. The `updateClientEventDetails` function then writes Client A's venue data to what is now **Client B's row**
 
-## User Flow
+This is the exact scenario: Sargat Thapa's venue data was written to the row that had shifted to become Sapna Bista's row.
 
-```text
-Client Detail Page
-  -> Click red "Delete Client" button (Trash icon in hero actions)
-  -> Password dialog appears (enter 984124)
-  -> If correct: Danger confirmation dialog opens
-     - Full red pulsing UI with animated danger icons
-     - Heartbeat sound starts immediately (Web Audio API - synthetic)
-     - "Go Back to Safety" button -> stops sound, closes dialog
-     - "Permanently Delete" button -> stops sound, deletes client, navigates to dashboard
-  -> If incorrect password: error shake + toast
+Additionally, there is a **second bug** in `sync-all-data/index.ts` line 409: it reads from `'EVENT DETAILS'!A2:AH5000` instead of `'BOOKED CLIENTS EVENT DETAILS'!A2:AH5000` -- the wrong sheet name! This means the Supabase event_details_cache never gets populated correctly by Master Sync.
+
+## Fix Plan
+
+### 1. Fix the race condition in `updateClientEventDetails` (Edge Function)
+
+**File**: `supabase/functions/google-sheets/index.ts`
+
+Add a **verification step** before writing: after computing the row number, verify that Column A of that row still matches the expected `registeredDateTimeAD` before writing. This prevents writing to a shifted row.
+
+```
+BEFORE: Find row -> compute updates -> write to row
+AFTER:  Find row -> compute updates -> re-verify Column A matches -> write to row (or abort if mismatch)
 ```
 
-## Files to Create/Modify
+Specifically, change `updateClientEventDetails` to:
+- After finding `rowNumber`, store the `registeredDateTimeAD` from that row
+- Before the PUT request, do a single-cell read of Column A at `rowNumber` to verify it still matches
+- If it does NOT match, re-scan the entire sheet to find the correct row number and use that instead
+- This eliminates the race window
+
+### 2. Fix the same race condition in `refreshClientVendorData`
+
+**File**: `supabase/functions/google-sheets/index.ts`
+
+The `refreshClientVendorData` function calls `updateClientEventDetails` which already has the fix from step 1. No additional change needed here -- the fix propagates.
+
+### 3. Fix the wrong sheet name in `sync-all-data`
+
+**File**: `supabase/functions/sync-all-data/index.ts`
+
+Line 409: Change `"'EVENT DETAILS'!A2:AH5000"` to `"'BOOKED CLIENTS EVENT DETAILS'!A2:AH5000"`.
+
+This fixes Master Sync so the `event_details_cache` in Supabase actually gets populated, which means most reads will come from Supabase instead of hitting Google Sheets (reducing the chance of race conditions further).
+
+### 4. Fix `pullEventDetails` data parsing in `sync-all-data`
+
+The `pullEventDetails` function currently treats each Google Sheet row as a separate event record. But in the `BOOKED CLIENTS EVENT DETAILS` sheet, each client has **one row** with multi-line cells (newline-separated events). The function needs to parse multi-line values correctly (split by `\n` and create one record per event line), matching how `getClientEventDetails` works.
+
+## Files Modified
 
 | File | Change |
 |------|--------|
-| `src/components/client-detail/DeleteClientDialog.tsx` | **New** - Two-stage dialog: password gate + danger confirmation with heartbeat |
-| `src/components/client-detail/index.ts` | Export new component |
-| `src/components/client-detail/ClientHeroSection.tsx` | Add red Delete button + props |
-| `src/pages/ClientDetail.tsx` | Add delete state/handler, pass props to hero |
-| `src/lib/sheets-api.ts` | Add `deleteClient()` API function |
-| `supabase/functions/google-sheets/index.ts` | Add `deleteClient` action - deletes from all 4 sheets + all 5 Supabase tables |
+| `supabase/functions/google-sheets/index.ts` | Add row verification before writes in `updateClientEventDetails` to prevent race conditions |
+| `supabase/functions/sync-all-data/index.ts` | Fix sheet name from `EVENT DETAILS` to `BOOKED CLIENTS EVENT DETAILS` and fix multi-line parsing |
 
-## Technical Details
+## Impact
 
-### 1. DeleteClientDialog Component
-
-**Stage 1 - Password Gate:**
-- Dark dialog with password input (type="password")
-- Validates against hardcoded "984124"
-- Wrong password shows error shake animation + toast
-
-**Stage 2 - Danger Confirmation:**
-- Red gradient background with pulsing red border (CSS animation)
-- Large AlertTriangle icon with scale-in animation
-- Client name displayed prominently in white
-- Warning text: "This action is irreversible. This client will be permanently deleted from ALL systems including event details, contact details, and crew assignments."
-- Heartbeat sound via Web Audio API (two quick low-frequency oscillator pulses in a loop, no audio file needed)
-- Sound starts on mount of stage 2, stops on unmount or any action
-- Two buttons: "Go Back to Safety" (neutral) and "Permanently Delete" (deep red)
-
-### 2. Edge Function - `deleteClient` action
-
-The backend handler will:
-
-1. Determine the main sheet (`CLIENT TRACKER` or `BOOKED CLIENTS`) based on `sheetSource` parameter
-2. Find and delete the row from the main sheet using `registeredDateTimeAD` to verify the correct row
-3. Find and delete the matching row(s) from `BOOKED CLIENTS EVENT DETAILS` (Column A = registeredDateTimeAD)
-4. Find and delete the matching row(s) from `BOOKED CLIENTS FREELANCERS` (Column A = registeredDateTimeAD)
-5. Find and delete the matching row(s) from `BOOKED CLIENTS CONTACT DETAILS` (Column A = registeredDateTimeAD)
-6. Delete from Supabase tables:
-   - `clients_cache` WHERE `registered_date_time_ad` = ID
-   - `event_details_cache` WHERE `registered_date_time_ad` = ID
-   - `contact_details_cache` WHERE `registered_date_time_ad` = ID
-   - `freelancer_assignments` WHERE `registered_date_time_ad` = ID
-   - `freelancer_event_settings` WHERE `registered_date_time_ad` = ID
-
-All sheet deletions use the `deleteDimension` batch update API (same pattern as `deleteVendor`). Rows are deleted in reverse order to avoid index shifting.
-
-### 3. Frontend Delete Handler (ClientDetail.tsx)
-
-Follows Supabase-first pattern:
-1. Delete from all Supabase cache tables instantly
-2. Remove from memory cache
-3. Show success toast
-4. Navigate to dashboard
-5. Fire Sheets delete in background (non-blocking)
-
-### 4. Heartbeat Sound (Web Audio API)
-
-No audio file needed. Synthesized directly:
-```typescript
-// Creates two quick "thump" sounds using OscillatorNode
-// Frequency ~60Hz, short duration, repeated every 800ms
-// Starts on dialog open, AudioContext.close() on dialog close
-```
-
-### 5. ClientHeroSection Changes
-
-Add two new props:
-- `onDelete?: () => void`
-- `isDeleting?: boolean`
-
-Add a red Trash2 button in the actions row (next to Edit/Sync/Benzo Keep).
-
-## Safety Measures
-
-- Password gate (984124) prevents accidental access
-- Dramatic UI and heartbeat sound create awareness
-- Clear "Go Back to Safety" escape option
-- All related data cleaned from both Sheets and Supabase (no orphaned records)
-- Supabase deletion is instant; Sheets deletion runs in background
-
+- Eliminates the venue data cross-contamination bug completely
+- Master Sync now correctly populates `event_details_cache` in Supabase
+- With populated cache, most event detail reads come from Supabase (faster, no race condition)
+- Google Sheets writes are verified before execution, preventing stale row overwrites
