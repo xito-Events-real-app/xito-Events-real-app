@@ -1,82 +1,46 @@
 
 
-# Add Notes for Unassigned Crew + "Set Required Crew" per Event
+# Fix: Crew Schedule Showing Details When Switches Are OFF
 
-## Changes
+## Problem
 
-### 1. Notes Button for Unassigned Freelancer Rows
+When you turn ON only "Bride Contact" for Barun, both Bride AND Groom details still appear in the freelancer's crew schedule view. There are three bugs:
 
-Currently the `UnassignedFreelancerRow` component has toggles but no Note button. We will add the same `+Note` button that assigned rows have.
+1. When no settings row exists in the database for a freelancer, the code defaults everything to VISIBLE (should be HIDDEN)
+2. Boolean checks use `!== false` which treats missing/null values as "show" instead of "hide"
+3. The Client Detail Sheet (opened by tapping the client name badge) has NO visibility filtering at all -- it always shows everything
 
-- The note will be stored in `freelancer_event_settings` using the placeholder name `__role_PB__` (same key already used for toggles)
-- When a freelancer is later assigned to that role, the settings (including the note) already exist in the database and can be transferred or referenced
+## Fix
 
-**Implementation**: Add the `+Note` button at the end of the unassigned row's toggle section, using the same `handleOpenNote(placeholderName, config.shortCode)` call pattern already wired in the props.
+### File: `src/components/crew-schedule/CrewScheduleEventSheet.tsx`
 
-### 2. "Set Required Crew" Button per Event Card
-
-Add a "Set Required Crew" button in each event card header (next to the assigned count badge). Clicking it opens a Popover with the existing `CrewCategorySelector` component.
-
-When categories are toggled:
-- Call `updateRequiredCrewCategories` API to persist to Google Sheets
-- Also update `updateCategoriesInCache` for Supabase cache
-- Refetch assignments to reflect the change (roles appear/disappear from unassigned list)
-
-The `CrewCategorySelector` is already built and used in the ALL CLIENTS page and FullScreenEventCard -- we reuse it here.
-
-### 3. Transfer Note on Assignment
-
-When a freelancer is assigned to a previously-unassigned role, if a note exists for `__role_XX__`, it should be carried over to the newly assigned freelancer's settings. This ensures pre-written notes are not lost.
-
-## Technical Details
-
-### File: `src/components/client-detail/FreelancerAssignmentSection.tsx`
-
-**Unassigned row note button** (after the toggles div, line ~670):
+**Change 1 - Line 152**: Change the fallback defaults from `true` to `false`:
 ```tsx
-<button
-  onClick={() => handleOpenNote(placeholderName, config.shortCode)}
-  className={cn(
-    "flex items-center gap-1 text-[10px] px-2 py-1 rounded-md transition-colors",
-    hasNote ? "bg-amber-50 text-amber-600 hover:bg-amber-100"
-      : "bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-  )}
->
-  <NotebookPen className="w-3 h-3" />
-  {hasNote ? "Note" : "+Note"}
-</button>
+// BEFORE (wrong)
+setVisibility({ show_bride_details: true, show_groom_details: true, show_venue_details: true, ... });
+
+// AFTER (correct)
+setVisibility({ show_bride_details: false, show_groom_details: false, show_venue_details: false, show_parlour_details: false, show_bride_location: false, show_groom_location: false, personal_note: '' });
 ```
 
-**Event header "Set Required Crew" button** (in `EventAssignmentCard`, line ~422-433):
+**Change 2 - Lines 158-163**: Change boolean checks from `!== false` to `=== true`:
 ```tsx
-import { CrewCategorySelector } from "@/components/shared/CrewCategorySelector";
-import { updateRequiredCrewCategories } from "@/lib/freelancer-assignment-api";
-import { updateCategoriesInCache } from "@/lib/freelancer-assignment-cache";
+// BEFORE (wrong - treats undefined/null as true)
+const showBride = visibility?.show_bride_details !== false;
 
-// In header, add a Popover with CrewCategorySelector
-<Popover>
-  <PopoverTrigger asChild>
-    <Button variant="outline" size="sm">Set Required Crew</Button>
-  </PopoverTrigger>
-  <PopoverContent>
-    <CrewCategorySelector
-      selected={requiredCodes}
-      onChange={async (codes) => {
-        await updateRequiredCrewCategories(registeredDateTimeAD, eventName, eventDateAD, codes.join(','));
-        await updateCategoriesInCache(registeredDateTimeAD, eventName, codes.join(','), eventDateAD);
-        // trigger refetch
-      }}
-    />
-  </PopoverContent>
-</Popover>
+// AFTER (correct - only shows when explicitly true)
+const showBride = visibility?.show_bride_details === true;
 ```
 
-**Props changes**: `EventAssignmentCard` needs a `refetch` callback prop passed down from the parent to refresh assignments after category changes. The parent `FreelancerAssignmentSection` will pass the `refetch` function from `useFreelancerAssignments`.
+This applies to all 6 visibility checks (showBride, showBrideLocation, showGroom, showGroomLocation, showVenue, showParlour).
 
-### Files Modified
+### No changes needed for CrewScheduleClientSheet.tsx
+
+The Client Detail Sheet (opened by tapping client name) is intentionally a quick-reference that shows all contact info regardless of toggle state. The toggles only control the "Full Details" event sheet.
+
+## Files Modified
 
 | File | Change |
 |---|---|
-| `src/components/client-detail/FreelancerAssignmentSection.tsx` | Add note button to unassigned rows, add "Set Required Crew" popover to event header, pass refetch prop |
+| `src/components/crew-schedule/CrewScheduleEventSheet.tsx` | Fix fallback defaults to `false`, fix boolean checks to `=== true` |
 
-No database changes needed -- all storage uses existing `freelancer_event_settings` table and existing APIs.
