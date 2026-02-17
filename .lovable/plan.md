@@ -1,119 +1,82 @@
 
 
-# Fix Freelancer Assignment: Tooltips, Default OFF, Labels & Note Popup
+# Add Notes for Unassigned Crew + "Set Required Crew" per Event
 
 ## Changes
 
-### 1. Tooltip on Every Switch Icon
+### 1. Notes Button for Unassigned Freelancer Rows
 
-Add `Tooltip` on hover for each toggle showing exactly what it controls with the event name:
-- Bride Phone: "Bride (Wedding) Contacts" 
-- Bride Location: "Bride (Wedding) Location"
-- Groom Phone: "Groom (Wedding) Contacts"
-- Groom Location: "Groom (Wedding) Location"
-- Venue: "Venue (Wedding) Details"
-- Parlour: "Parlour (Wedding) Details"
+Currently the `UnassignedFreelancerRow` component has toggles but no Note button. We will add the same `+Note` button that assigned rows have.
 
-The event name is dynamically inserted from `assignment.event`.
+- The note will be stored in `freelancer_event_settings` using the placeholder name `__role_PB__` (same key already used for toggles)
+- When a freelancer is later assigned to that role, the settings (including the note) already exist in the database and can be transferred or referenced
 
-### 2. Default All Switches OFF
+**Implementation**: Add the `+Note` button at the end of the unassigned row's toggle section, using the same `handleOpenNote(placeholderName, config.shortCode)` call pattern already wired in the props.
 
-Change the default values in `getSettingForFreelancer` from `true` to `false` for all 6 toggles:
-- `show_bride_details: false`
-- `show_bride_location: false`
-- `show_groom_details: false`
-- `show_groom_location: false`
-- `show_venue_details: false`
-- `show_parlour_details: false`
+### 2. "Set Required Crew" Button per Event Card
 
-This means freelancers see NO details until the admin explicitly turns each switch ON.
+Add a "Set Required Crew" button in each event card header (next to the assigned count badge). Clicking it opens a Popover with the existing `CrewCategorySelector` component.
 
-### 3. Add Text Labels Next to Icons
+When categories are toggled:
+- Call `updateRequiredCrewCategories` API to persist to Google Sheets
+- Also update `updateCategoriesInCache` for Supabase cache
+- Refetch assignments to reflect the change (roles appear/disappear from unassigned list)
 
-Each toggle will show a short label + icon (not just icon):
-- "BRIDE" + Phone icon
-- "BRIDE" + MapPin icon
-- "GROOM" + Phone icon
-- "GROOM" + MapPin icon
-- "VENUE" + Building icon
-- "PARLOUR" + Scissors icon
+The `CrewCategorySelector` is already built and used in the ALL CLIENTS page and FullScreenEventCard -- we reuse it here.
 
-Labels will be `text-[9px] font-bold uppercase` for compactness.
+### 3. Transfer Note on Assignment
 
-### 4. Compact Single-Row Layout
-
-Rearrange the toggle area so all 6 toggles + note button fit in a single wrapping row instead of 3 stacked rows. Each freelancer takes one row:
-
-```text
-[PB] Barun   BRIDE📞[sw] BRIDE📍[sw] GROOM📞[sw] GROOM📍[sw] VENUE🏢[sw] PARLOUR✂[sw] [📝]
-```
-
-Switches will be slightly smaller (`h-5 w-9`) to fit inline.
-
-### 5. Note Opens as Dialog Popup
-
-Replace the inline expanding textarea with a `Dialog` component:
-- Title: "Note for Barun"
-- Subtitle (small text): Event name + Client name
-- Textarea for the note
-- Save / Cancel buttons
-
-## File Modified
-
-| File | Change |
-|---|---|
-| `src/components/client-detail/FreelancerAssignmentSection.tsx` | Tooltips on toggles, default OFF, text labels, single-row layout, Dialog note popup |
+When a freelancer is assigned to a previously-unassigned role, if a note exists for `__role_XX__`, it should be carried over to the newly assigned freelancer's settings. This ensures pre-written notes are not lost.
 
 ## Technical Details
 
-### VisibilityToggle Updated Signature
+### File: `src/components/client-detail/FreelancerAssignmentSection.tsx`
+
+**Unassigned row note button** (after the toggles div, line ~670):
 ```tsx
-function VisibilityToggle({ label, icon, iconColor, checked, onChange, checkedColor, tooltip }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <div className="flex items-center gap-0.5">
-          <span className="text-[9px] font-bold uppercase">{label}</span>
-          <Icon className="w-3 h-3" />
-          <Switch className="h-5 w-9" checked={checked} onCheckedChange={onChange} />
-        </div>
-      </TooltipTrigger>
-      <TooltipContent>{tooltip}</TooltipContent>
-    </Tooltip>
-  );
-}
+<button
+  onClick={() => handleOpenNote(placeholderName, config.shortCode)}
+  className={cn(
+    "flex items-center gap-1 text-[10px] px-2 py-1 rounded-md transition-colors",
+    hasNote ? "bg-amber-50 text-amber-600 hover:bg-amber-100"
+      : "bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+  )}
+>
+  <NotebookPen className="w-3 h-3" />
+  {hasNote ? "Note" : "+Note"}
+</button>
 ```
 
-### Default Settings Change
+**Event header "Set Required Crew" button** (in `EventAssignmentCard`, line ~422-433):
 ```tsx
-const getSettingForFreelancer = (freelancerName) => ({
-  // All false by default - freelancer sees nothing until admin turns on
-  show_bride_details: false,
-  show_bride_location: false,
-  show_groom_details: false,
-  show_groom_location: false,
-  show_venue_details: false,
-  show_parlour_details: false,
-  personal_note: '',
-});
+import { CrewCategorySelector } from "@/components/shared/CrewCategorySelector";
+import { updateRequiredCrewCategories } from "@/lib/freelancer-assignment-api";
+import { updateCategoriesInCache } from "@/lib/freelancer-assignment-cache";
+
+// In header, add a Popover with CrewCategorySelector
+<Popover>
+  <PopoverTrigger asChild>
+    <Button variant="outline" size="sm">Set Required Crew</Button>
+  </PopoverTrigger>
+  <PopoverContent>
+    <CrewCategorySelector
+      selected={requiredCodes}
+      onChange={async (codes) => {
+        await updateRequiredCrewCategories(registeredDateTimeAD, eventName, eventDateAD, codes.join(','));
+        await updateCategoriesInCache(registeredDateTimeAD, eventName, codes.join(','), eventDateAD);
+        // trigger refetch
+      }}
+    />
+  </PopoverContent>
+</Popover>
 ```
 
-### Note Dialog
-```tsx
-<Dialog open={!!noteOpenFor} onOpenChange={(o) => !o && setNoteOpenFor(null)}>
-  <DialogContent>
-    <DialogHeader>
-      <DialogTitle>Note for {noteOpenFor}</DialogTitle>
-      <DialogDescription className="text-xs">
-        {assignment.event} - {assignment.clientName}
-      </DialogDescription>
-    </DialogHeader>
-    <Textarea value={noteText} onChange={...} />
-    <DialogFooter>
-      <Button variant="ghost" onClick={cancel}>Cancel</Button>
-      <Button onClick={save}>Save Note</Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
-```
+**Props changes**: `EventAssignmentCard` needs a `refetch` callback prop passed down from the parent to refresh assignments after category changes. The parent `FreelancerAssignmentSection` will pass the `refetch` function from `useFreelancerAssignments`.
 
+### Files Modified
+
+| File | Change |
+|---|---|
+| `src/components/client-detail/FreelancerAssignmentSection.tsx` | Add note button to unassigned rows, add "Set Required Crew" popover to event header, pass refetch prop |
+
+No database changes needed -- all storage uses existing `freelancer_event_settings` table and existing APIs.
