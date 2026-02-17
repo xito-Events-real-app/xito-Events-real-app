@@ -14,6 +14,7 @@ import { useNavigate } from "react-router-dom";
 import { useDropdownData } from "@/hooks/useDropdownData";
 import { XitoSearchPanel } from "@/components/shared/XitoSearchPanel";
 import { BenzoDateConverter } from "@/components/shared/BenzoDateConverter";
+import { updateClientFieldInCache } from "@/lib/clients-supabase-cache";
 import { BookingCalendarMini } from "@/components/shared/BookingCalendarMini";
 import { BenzoKeepClientPanel, QuickClientData } from "@/components/suite/BenzoKeepClientPanel";
 
@@ -166,6 +167,11 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
           lastUpdated: new Date().toISOString(),
         };
         await assignBenzoKeepNoteToClient(selectedClient.registeredDateTimeAD, JSON.stringify(noteData));
+        try {
+          await updateClientFieldInCache(selectedClient.registeredDateTimeAD, 'benzoKeepNotes', JSON.stringify(noteData));
+        } catch (cacheErr) {
+          console.warn("Cache update failed (non-blocking):", cacheErr);
+        }
         toast.success(`Note assigned to ${selectedClient.clientName}`);
         resetForm();
         onOpenChange(false);
