@@ -719,40 +719,48 @@ function extractLatestStatus(statusLog: string): string {
   return bracketIdx > 0 ? lastLine.substring(0, bracketIdx).trim() : lastLine;
 }
 
-// Get clients for note assignment (CLIENT TRACKER only, includes handler/status/notes)
+// Get clients for note assignment (both CLIENT TRACKER and BOOKED CLIENTS)
 async function getClientsForNoteAssignment(accessToken: string, spreadsheetId: string) {
-  const range = encodeURIComponent("'CLIENT TRACKER'!A2:AL500"); // A to AL covers up to benzoKeepNotes
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  const trackerRange = encodeURIComponent("'CLIENT TRACKER'!A2:AL500");
+  const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:AL500");
   
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const [trackerResp, bookedResp] = await Promise.all([
+    fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }),
+    fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }),
+  ]);
 
-  if (!response.ok) {
-    console.error('Failed to fetch clients for assignment');
-    return [];
-  }
+  const mapRows = (rows: string[][], sheetSource: string) =>
+    rows
+      .map((row: string[], index: number) => ({
+        rowNumber: index + 2,
+        sheetSource,
+        registeredDateTimeAD: row[0] || '',
+        clientName: row[2] || '',
+        source: row[3] || '',
+        contactNo: row[6] || '',
+        whatsappNo: row[7] || '',
+        events: row[11] || '',
+        eventYear: row[12] || '',
+        eventMonth: row[13] || '',
+        eventDay: row[14] || '',
+        initialStatus: extractLatestStatus(row[22] || ''),
+        clientHandler: row[23] || '',
+        benzoKeepNotes: row[37] || '',
+      }))
+      .filter((c: { clientName: string }) => c.clientName);
 
-  const data = await response.json();
-  if (!data.values) return [];
+  const trackerClients = trackerResp.ok ? mapRows((await trackerResp.json()).values || [], 'tracker') : [];
+  const bookedClients = bookedResp.ok ? mapRows((await bookedResp.json()).values || [], 'booked') : [];
 
-  return data.values
-    .map((row: string[], index: number) => ({
-      rowNumber: index + 2,
-      registeredDateTimeAD: row[0] || '',
-      clientName: row[2] || '',
-      source: row[3] || '',
-      contactNo: row[6] || '',
-      whatsappNo: row[7] || '',
-      events: row[11] || '',
-      eventYear: row[12] || '',
-      eventMonth: row[13] || '',
-      eventDay: row[14] || '',
-      initialStatus: extractLatestStatus(row[22] || ''), // Column W - status log, extract latest
-      clientHandler: row[23] || '', // Column X
-      benzoKeepNotes: row[37] || '', // Column AL (index 37)
-    }))
-    .filter((client: { clientName: string }) => client.clientName);
+  // Merge & deduplicate: booked wins over tracker
+  const clientMap = new Map<string, any>();
+  for (const c of trackerClients) clientMap.set(c.registeredDateTimeAD, c);
+  for (const c of bookedClients) clientMap.set(c.registeredDateTimeAD, c); // overwrite tracker
+  return Array.from(clientMap.values());
 }
 
 // Assign a new Benzo Keep note directly to a client's Column AL (without going through unassigned pool)
