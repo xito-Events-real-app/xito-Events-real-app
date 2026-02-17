@@ -1,39 +1,41 @@
 
-
-# Fix: Benzo Keep Notes Not Showing on Client Page After Assignment
+# Fix: Benzo Keep Client Search Should Include Booked Clients
 
 ## Problem
 
-When you write a Benzo Keep note from the **Suite Notepad** and assign it to a client (or transfer an unassigned note to a client), the note saves to Google Sheets successfully but does NOT appear in the Benzo Keep section on the client's detail page.
+When searching for clients in the Benzo Keep notepad (either from the Suite Notepad dialog or the Assign Note dialog), only clients from the `CLIENT TRACKER` sheet are returned. Booked clients (who live exclusively in the `BOOKED CLIENTS` sheet) are missing from search results.
 
 ## Root Cause
 
-The `assignBenzoKeepNoteToClient` and `transferBenzoKeepNote` functions only write to Google Sheets (Column AL). They do **not** update the `clients_cache` table in the database, which is where the client detail page reads data from. So the page shows stale/empty notes.
-
-Notes saved from the client detail page's own "Edit" button work fine because that path updates both the database cache and Google Sheets.
+The backend function `getClientsForNoteAssignment` (line 722-756 in the edge function) only reads from `'CLIENT TRACKER'!A2:AL500`. It never queries the `BOOKED CLIENTS` sheet.
 
 ## Fix
 
-After successfully writing to Google Sheets, also update the `clients_cache.benzo_keep_notes` column in the database so the client page reflects the change immediately.
+Update `getClientsForNoteAssignment` in `supabase/functions/google-sheets/index.ts` to also fetch clients from the `BOOKED CLIENTS` sheet and merge them into the results.
 
-### File 1: `src/components/suite/BenzoKeepNotepadDialog.tsx`
+### Changes in `supabase/functions/google-sheets/index.ts`
 
-In `handleSaveWithClient` (line 168), after `assignBenzoKeepNoteToClient` succeeds:
-- Import `updateClientFieldInCache` from `@/lib/clients-supabase-cache`
-- Call `updateClientFieldInCache(registeredDateTimeAD, 'benzoKeepNotes', JSON.stringify(noteData))` to sync the note to the database cache
-- Wrap in try/catch so a cache failure doesn't block the success toast
+1. After fetching from `'CLIENT TRACKER'!A2:AL500`, also fetch from `'BOOKED CLIENTS'!A2:AL500` using the same column mapping
+2. Merge both arrays together
+3. Deduplicate by `registeredDateTimeAD` (prioritizing booked records, consistent with existing architecture)
+4. Return the combined list
 
-### File 2: `src/components/suite/AssignNoteDialog.tsx`
+The column layout is identical between both sheets (A-AG shared schema per memory), so the same row-to-object mapping works for both.
 
-In `handleTransfer` (line 78), after `transferBenzoKeepNote` succeeds:
-- Import `updateClientFieldInCache` from `@/lib/clients-supabase-cache`
-- The note content needs to be converted to the Benzo Keep JSON format before storing
-- Call `updateClientFieldInCache(registeredDateTimeAD, 'benzoKeepNotes', noteJsonString)` to sync
+### Technical Detail
+
+```
+Current flow:
+  CLIENT TRACKER -> return results
+
+New flow:
+  CLIENT TRACKER -> results1
+  BOOKED CLIENTS -> results2
+  Merge & deduplicate (booked wins) -> return combined
+```
 
 ### Files Modified
 
 | File | Change |
 |---|---|
-| `src/components/suite/BenzoKeepNotepadDialog.tsx` | Add Supabase cache update after `assignBenzoKeepNoteToClient` |
-| `src/components/suite/AssignNoteDialog.tsx` | Add Supabase cache update after `transferBenzoKeepNote` |
-
+| `supabase/functions/google-sheets/index.ts` | Add `BOOKED CLIENTS` fetch to `getClientsForNoteAssignment`, merge and deduplicate results |
