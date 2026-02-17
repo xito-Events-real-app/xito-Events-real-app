@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { UnassignedBenzoNote } from "@/hooks/useUnassignedBenzoKeepNotes";
 import { getClientsForNoteAssignment, transferBenzoKeepNote, ClientData } from "@/lib/sheets-api";
+import { updateClientFieldInCache } from "@/lib/clients-supabase-cache";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -70,6 +71,16 @@ export function AssignNoteDialog({ open, onOpenChange, note, onSuccess }: Assign
 
     try {
       await transferBenzoKeepNote(note.id, client.registeredDateTimeAD);
+      try {
+        const noteData = JSON.stringify({
+          content: note.content,
+          markerColor: note.markerColor,
+          lastUpdated: new Date().toISOString(),
+        });
+        await updateClientFieldInCache(client.registeredDateTimeAD!, 'benzoKeepNotes', noteData);
+      } catch (cacheErr) {
+        console.warn("Cache update failed (non-blocking):", cacheErr);
+      }
       toast.success(`Note assigned to ${client.clientName}`, {
         action: {
           label: "View Client",
