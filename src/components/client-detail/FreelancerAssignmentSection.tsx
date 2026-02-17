@@ -15,6 +15,7 @@ import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useEventDetails } from "@/hooks/useEventDetails";
+import { getMonthName } from "@/lib/nepali-months";
 
 interface FreelancerAssignmentSectionProps {
   registeredDateTimeAD: string;
@@ -425,14 +426,50 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
   return (
     <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
       {/* Event Header */}
-      <div className="px-5 py-3 bg-gradient-to-r from-slate-50 to-gray-50 border-b border-gray-100">
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-gray-800 text-xs">{assignment.event}</h3>
+      <div className="px-5 py-4 bg-gradient-to-r from-slate-900 to-slate-800 border-b border-slate-700/50">
+        <div className="flex items-start justify-between gap-3">
+          {/* Left: Stamp-style event name + date info */}
           <div className="flex items-center gap-3">
+            <div className="border-2 border-emerald-400/80 rounded-lg px-3 py-1.5 bg-emerald-400/10 transform -rotate-1">
+              <h3 className="font-black text-emerald-400 text-sm uppercase tracking-wider leading-tight">{assignment.event}</h3>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              {/* Nepali date */}
+              {(() => {
+                const monthName = getMonthName(parseInt(assignment.eventMonth) || 0);
+                return monthName ? (
+                  <span className="text-xs font-bold text-amber-400">
+                    {monthName} {assignment.eventDay}, {assignment.eventYear}
+                  </span>
+                ) : null;
+              })()}
+              {/* AD date */}
+              <span className="text-[10px] text-slate-400">
+                {assignment.eventDateAD || ''}
+              </span>
+              {/* Remaining days */}
+              {(() => {
+                const eventDateStr = assignment.eventDateAD;
+                if (!eventDateStr) return null;
+                const eventDate = new Date(eventDateStr);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                eventDate.setHours(0, 0, 0, 0);
+                const diffMs = eventDate.getTime() - today.getTime();
+                const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+                if (diffDays < 0) return <span className="text-[10px] font-semibold text-red-400">{Math.abs(diffDays)}d ago</span>;
+                if (diffDays === 0) return <span className="text-[10px] font-bold text-emerald-400 animate-pulse">TODAY</span>;
+                return <span className="text-[10px] font-semibold text-sky-400">{diffDays}d remaining</span>;
+              })()}
+            </div>
+          </div>
+
+          {/* Right: Actions */}
+          <div className="flex items-center gap-2 shrink-0">
             {/* Set Required Crew */}
             <Popover open={crewPopoverOpen} onOpenChange={setCrewPopoverOpen}>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1 px-2" disabled={savingCrew}>
+                <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1 px-2 border-slate-600 text-slate-300 hover:bg-slate-700" disabled={savingCrew}>
                   <Settings2 className="w-3 h-3" />
                   Set Crew
                   {savingCrew && <Loader2 className="w-3 h-3 animate-spin" />}
@@ -459,11 +496,8 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
                 />
               </PopoverContent>
             </Popover>
-            <span className="text-[11px] font-medium text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
-              {assignedCount}/{totalSlots} assigned
-            </span>
-            <span className="text-xs text-gray-500 font-medium">
-              {assignment.eventDateAD || `${assignment.eventMonth} ${assignment.eventDay}, ${assignment.eventYear}`}
+            <span className="text-[10px] font-medium text-emerald-400/80 bg-emerald-400/10 border border-emerald-400/20 px-2 py-1 rounded-full">
+              {assignedCount}/{totalSlots}
             </span>
           </div>
         </div>
