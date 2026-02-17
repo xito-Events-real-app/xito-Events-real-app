@@ -792,13 +792,38 @@ async function assignBenzoKeepNoteToClient(
     }
   }
   
+  let targetSheet = "'CLIENT TRACKER'";
+  
   if (targetRow === -1) {
-    console.error(`[ASSIGN NOTE] Client not found: ${registeredDateTimeAD}`);
+    // Fallback: search BOOKED CLIENTS sheet
+    console.log(`[ASSIGN NOTE] Not found in tracker, searching BOOKED CLIENTS...`);
+    const bookedRange = encodeURIComponent("'BOOKED CLIENTS'!A2:A1000");
+    const bookedUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedRange}`;
+    const bookedResponse = await fetch(bookedUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (bookedResponse.ok) {
+      const bookedData = await bookedResponse.json();
+      if (bookedData.values) {
+        for (let i = 0; i < bookedData.values.length; i++) {
+          if (bookedData.values[i][0] === registeredDateTimeAD) {
+            targetRow = i + 2;
+            targetSheet = "'BOOKED CLIENTS'";
+            console.log(`[ASSIGN NOTE] Found in BOOKED CLIENTS at row ${targetRow}`);
+            break;
+          }
+        }
+      }
+    }
+  }
+  
+  if (targetRow === -1) {
+    console.error(`[ASSIGN NOTE] Client not found in either sheet: ${registeredDateTimeAD}`);
     return { success: false };
   }
   
   // Get existing notes from Column AL
-  const alRange = encodeURIComponent(`'CLIENT TRACKER'!AL${targetRow}`);
+  const alRange = encodeURIComponent(`${targetSheet}!AL${targetRow}`);
   const alUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${alRange}`;
   
   const alResponse = await fetch(alUrl, {
@@ -841,7 +866,7 @@ async function assignBenzoKeepNoteToClient(
   };
   
   // Write to Column AL
-  const updateRange = encodeURIComponent(`'CLIENT TRACKER'!AL${targetRow}`);
+  const updateRange = encodeURIComponent(`${targetSheet}!AL${targetRow}`);
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`;
   
   const updateResponse = await fetch(updateUrl, {

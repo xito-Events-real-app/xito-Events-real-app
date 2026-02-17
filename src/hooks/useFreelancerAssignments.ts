@@ -8,6 +8,7 @@ import {
   FreelancerField,
   AvailabilityConflict,
 } from "@/lib/freelancer-assignment-api";
+import { updateAssignmentInCache } from "@/lib/freelancer-assignment-cache";
 import { toast } from "@/hooks/use-toast";
 
 // Cache freelancers across hook instances
@@ -60,6 +61,12 @@ export function useFreelancerAssignments(registeredDateTimeAD: string | undefine
     setIsUpdating(field);
     try {
       await updateFreelancerAssignment(registeredDateTimeAD, eventName, eventDateAD, field, value);
+      // Also sync to Supabase cache so All Clients view reflects the change
+      try {
+        await updateAssignmentInCache(registeredDateTimeAD, eventName, field, value, eventDateAD);
+      } catch (cacheErr) {
+        console.warn('Failed to sync assignment to Supabase cache:', cacheErr);
+      }
       // Update local state
       setAssignments(prev => prev.map(a =>
         a.event.trim() === eventName.trim() && a.eventDateAD.trim() === eventDateAD.trim()
