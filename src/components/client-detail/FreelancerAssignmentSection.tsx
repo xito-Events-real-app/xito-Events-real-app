@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { Camera, Video, UserCog, Smartphone, Loader2, Circle, Zap, StickyNote, Phone, MapPin, Building2, Scissors, NotebookPen, Settings2 } from "lucide-react";
+import { Camera, Video, UserCog, Smartphone, Loader2, Circle, Zap, StickyNote, Phone, MapPin, Building2, Scissors, NotebookPen, Settings2, Calendar, RefreshCw } from "lucide-react";
 import { useFreelancerAssignments } from "@/hooks/useFreelancerAssignments";
-import { getFilteredFreelancersByRole, FreelancerField, AvailabilityConflict, updateRequiredCrewCategories } from "@/lib/freelancer-assignment-api";
+import { getFilteredFreelancersByRole, FreelancerField, AvailabilityConflict, updateRequiredCrewCategories, getFreelancerBookings, FreelancerBooking } from "@/lib/freelancer-assignment-api";
 import { updateCategoriesInCache } from "@/lib/freelancer-assignment-cache";
 import { CrewCategorySelector } from "@/components/shared/CrewCategorySelector";
 import { Button } from "@/components/ui/button";
@@ -11,11 +11,12 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useEventDetails } from "@/hooks/useEventDetails";
-import { getMonthName } from "@/lib/nepali-months";
+import { getMonthName, NEPALI_MONTHS } from "@/lib/nepali-months";
 
 interface FreelancerAssignmentSectionProps {
   registeredDateTimeAD: string;
@@ -198,6 +199,9 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
   const [noteText, setNoteText] = useState("");
   const [crewPopoverOpen, setCrewPopoverOpen] = useState(false);
   const [savingCrew, setSavingCrew] = useState(false);
+  const [calendarOpenFor, setCalendarOpenFor] = useState<string | null>(null);
+  const [calendarBookings, setCalendarBookings] = useState<FreelancerBooking[]>([]);
+  const [calendarLoading, setCalendarLoading] = useState(false);
 
   const requiredCodes = (assignment.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
   const hasFilter = requiredCodes.length > 0;
@@ -332,6 +336,69 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
     toast({ title: "Note saved", description: `Note saved for ${noteOpenFor.name}` });
   };
 
+  const handleOpenCalendar = useCallback(async (freelancerName: string) => {
+    setCalendarOpenFor(freelancerName);
+    setCalendarLoading(true);
+    try {
+      const bookings = await getFreelancerBookings(freelancerName);
+      setCalendarBookings(bookings);
+    } catch (e) {
+      console.error('Failed to load bookings:', e);
+      toast({ title: "Error", description: "Failed to load booking calendar", variant: "destructive" });
+    } finally {
+      setCalendarLoading(false);
+    }
+  }, []);
+
+  const handleRefreshCalendar = useCallback(async () => {
+    if (!calendarOpenFor) return;
+    setCalendarLoading(true);
+    try {
+      const bookings = await getFreelancerBookings(calendarOpenFor);
+      setCalendarBookings(bookings);
+      toast({ title: "Refreshed", description: `Calendar updated for ${calendarOpenFor}` });
+    } catch (e) {
+      console.error('Failed to refresh bookings:', e);
+    } finally {
+      setCalendarLoading(false);
+    }
+  }, [calendarOpenFor]);
+
+  const calendarData = useMemo(() => {
+    const bookedMap = new Map<string, FreelancerBooking[]>();
+    calendarBookings.forEach(b => {
+      if (!b.eventYear || !b.eventMonth || !b.eventDay || b.eventDay === '**') return;
+      const key = `${b.eventYear}-${b.eventMonth}-${b.eventDay}`;
+      if (!bookedMap.has(key)) bookedMap.set(key, []);
+      bookedMap.get(key)!.push(b);
+    });
+
+    const daysPerMonth: Record<number, number> = {
+      1: 31, 2: 31, 3: 32, 4: 32, 5: 31, 6: 31,
+      7: 30, 8: 29, 9: 30, 10: 29, 11: 30, 12: 30
+    };
+
+    const startMonth = 10;
+    const startYear = 2082;
+    const result: { month: number; year: number; monthName: string; days: { day: number; bookings: FreelancerBooking[] }[]; bookedCount: number }[] = [];
+
+    for (let i = 0; i < 12; i++) {
+      const monthNum = ((startMonth - 1 + i) % 12) + 1;
+      const yearNum = startYear + Math.floor((startMonth - 1 + i) / 12);
+      const daysInMonth = daysPerMonth[monthNum] || 30;
+      const days: typeof result[0]['days'] = [];
+      let bookedCount = 0;
+      for (let day = 1; day <= daysInMonth; day++) {
+        const key = `${yearNum}-${monthNum}-${day}`;
+        const dayBookings = bookedMap.get(key) || [];
+        if (dayBookings.length > 0) bookedCount++;
+        days.push({ day, bookings: dayBookings });
+      }
+      result.push({ month: monthNum, year: yearNum, monthName: NEPALI_MONTHS[monthNum], days, bookedCount });
+    }
+    return result;
+  }, [calendarBookings]);
+
   const brideSide = assignedFreelancers.filter(f => BRIDE_SIDE_CODES.has(f.code));
   const groomSide = assignedFreelancers.filter(f => GROOM_SIDE_CODES.has(f.code));
   const otherCrew = assignedFreelancers.filter(f => !BRIDE_SIDE_CODES.has(f.code) && !GROOM_SIDE_CODES.has(f.code));
@@ -357,6 +424,15 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
         <span className={cn("text-sm font-medium text-gray-800 truncate min-w-[60px]", isBarun && "text-sky-700 font-semibold")}>
           {name}
         </span>
+
+        {/* Calendar + Refresh buttons */}
+        <button
+          onClick={() => handleOpenCalendar(name)}
+          className="p-1 rounded-md hover:bg-gray-100 text-gray-400 hover:text-emerald-600 transition-colors"
+          title={`${name} Booking Calendar`}
+        >
+          <Calendar className="w-3.5 h-3.5" />
+        </button>
 
         {/* Toggles inline */}
         <div className="flex items-center gap-3 flex-wrap ml-auto">
@@ -595,6 +671,44 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Booking Calendar Dialog */}
+      <Dialog open={!!calendarOpenFor} onOpenChange={(o) => { if (!o) setCalendarOpenFor(null); }}>
+        <DialogContent className="sm:max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-emerald-500" />
+              {calendarOpenFor} — Booking Calendar
+              <button
+                onClick={handleRefreshCalendar}
+                disabled={calendarLoading}
+                className="ml-2 p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-emerald-600 transition-colors"
+                title="Refresh bookings"
+              >
+                <RefreshCw className={cn("w-4 h-4", calendarLoading && "animate-spin")} />
+              </button>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {calendarBookings.length} total assignments
+            </DialogDescription>
+          </DialogHeader>
+
+          {calendarLoading && calendarBookings.length === 0 ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-6 w-6 animate-spin text-emerald-500" />
+              <span className="ml-2 text-sm text-gray-500">Loading calendar...</span>
+            </div>
+          ) : (
+            <ScrollArea className="h-[60vh]">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 pr-2">
+                {calendarData.map((month) => (
+                  <FreelancerCalendarMonth key={`${month.year}-${month.month}`} month={month} />
+                ))}
+              </div>
+            </ScrollArea>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
@@ -624,6 +738,64 @@ function VisibilityToggle({ label, icon: Icon, iconColor, checked, onChange, che
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs">{tooltip}</TooltipContent>
     </Tooltip>
+  );
+}
+
+// Freelancer calendar month grid for popup
+function FreelancerCalendarMonth({ month }: { month: { month: number; year: number; monthName: string; days: { day: number; bookings: FreelancerBooking[] }[]; bookedCount: number } }) {
+  const [hoveredDay, setHoveredDay] = useState<number | null>(null);
+
+  return (
+    <div className="bg-gray-50 rounded-xl p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-bold text-gray-800">{month.monthName} {month.year}</span>
+        {month.bookedCount > 0 && (
+          <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-100 px-2 py-0.5 rounded-full">
+            {month.bookedCount} booked
+          </span>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-[3px]">
+        {month.days.map((dayInfo) => {
+          const hasBookings = dayInfo.bookings.length > 0;
+          return (
+            <div
+              key={dayInfo.day}
+              className="relative"
+              onMouseEnter={() => hasBookings && setHoveredDay(dayInfo.day)}
+              onMouseLeave={() => setHoveredDay(null)}
+            >
+              <span className={cn(
+                "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-medium cursor-default transition-all",
+                hasBookings
+                  ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/30"
+                  : "text-gray-400"
+              )}>
+                {dayInfo.day}
+              </span>
+              {hoveredDay === dayInfo.day && hasBookings && (
+                <div className="absolute z-50 min-w-[240px] bottom-full mb-2 left-1/2 -translate-x-1/2">
+                  <div className="bg-white border border-gray-200 rounded-lg shadow-xl p-3 space-y-2">
+                    <p className="text-xs font-bold text-gray-700 border-b border-gray-100 pb-1">
+                      {month.monthName} {dayInfo.day}, {month.year}
+                    </p>
+                    {dayInfo.bookings.map((b, idx) => (
+                      <div key={idx} className="text-xs space-y-0.5">
+                        <p className="font-semibold text-gray-800">{b.clientName}</p>
+                        <p className="text-gray-500">{b.event} — <span className="font-medium text-emerald-600">{b.roleLabel}</span></p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-center">
+                    <div className="w-2.5 h-2.5 bg-white border-r border-b border-gray-200 rotate-45 -mt-1.5" />
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
