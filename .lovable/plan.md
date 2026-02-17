@@ -1,55 +1,39 @@
 
+# Fix: Two Data Sync Issues
 
-# Replace Calendar Popup with Freelancer Event Preview
+## Issue 1: Benzo Keep Notes Not Saving for Booked Clients (e.g., Shyam Poudel)
 
-## What You Get
+**Root Cause**: The `assignBenzoKeepNoteToClient` backend function only searches `'CLIENT TRACKER'` sheet (line 768). Booked clients like Shyam Poudel live exclusively in `'BOOKED CLIENTS'` sheet, so the function silently fails with `{ success: false }`.
 
-When you click the calendar icon next to a freelancer's name (e.g., Barun), instead of a 12-month booking grid, you'll see the **exact same "Full Details" view** that the freelancer sees when they open their crew schedule link for this specific event. This lets you verify what details (bride contact, groom contact, venue, parlour, personal note, crew list, demands) are visible to that freelancer based on the switches you've toggled.
+**Fix**: Add a fallback search in `'BOOKED CLIENTS'` sheet when the client is not found in `'CLIENT TRACKER'`.
 
-## How It Works
+### File: `supabase/functions/google-sheets/index.ts`
 
-The popup will open the existing `CrewScheduleEventSheet` component (the same one used at `/crew-schedule/:freelancerName`) with this client's event data and the freelancer's visibility settings. It shows exactly what the freelancer would see -- respecting the ON/OFF toggle states.
+In `assignBenzoKeepNoteToClient` (around line 795), after the tracker search fails (`targetRow === -1`):
+- Search `'BOOKED CLIENTS'!A2:A1000` for the same `registeredDateTimeAD`
+- If found, update `'BOOKED CLIENTS'!AL{row}` instead of `'CLIENT TRACKER'!AL{row}`
+- Store which sheet was matched so the correct sheet name is used for read and write
 
-## Technical Details
+---
 
-### File: `src/components/client-detail/FreelancerAssignmentSection.tsx`
+## Issue 2: Freelancer Assignments from Client Detail Don't Appear in All Clients
 
-**1. Remove the old calendar code:**
-- Remove `calendarBookings` state, `calendarData` useMemo, `handleRefreshCalendar`, and the `FreelancerCalendarMonth` component (lines 203, 353-400, 744-800)
-- Remove imports: `getFreelancerBookings`, `FreelancerBooking`, `NEPALI_MONTHS`, `ScrollArea`
+**Root Cause**: When you assign a freelancer from the Client Detail page, `useFreelancerAssignments.updateAssignment()` calls `updateFreelancerAssignment()` which writes to Google Sheets only. It does NOT update the `freelancer_assignments` Supabase table. The All Clients crew dashboard reads from Supabase (`loadAssignmentsFromCache`), so the new assignment is invisible there until a manual "Pull" sync.
 
-**2. Add contact details fetching:**
-- Import `useClientContactDetails` hook
-- Call `useClientContactDetails(registeredDateTimeAD)` inside `EventAssignmentCard` to get bride/groom contact data
-- This data is already cached, so no extra API calls in most cases
+**Fix**: After the Google Sheets write succeeds, also update the Supabase `freelancer_assignments` cache table using `updateAssignmentInCache()`.
 
-**3. Build the `AssignmentRow` object for `CrewScheduleEventSheet`:**
-- Map the existing `assignment` data (which has `photographerBride`, `videographerBride`, etc.) to the `AssignmentRow` format (which uses `photographer_bride`, `videographer_bride`, etc.)
-- Include `event_year`, `event_month`, `event_day`, `client_name`, `registered_date_time_ad`
+### File: `src/hooks/useFreelancerAssignments.ts`
 
-**4. Replace the Dialog with a Sheet using `CrewScheduleEventSheet`:**
-- Import `CrewScheduleEventSheet` from `@/components/crew-schedule/CrewScheduleEventSheet`
-- When calendar icon is clicked, set `calendarOpenFor` to the freelancer name (no API call needed)
-- Render `CrewScheduleEventSheet` with the mapped assignment row, event detail, contact details, and the freelancer name
-- The sheet handles its own visibility settings fetch internally
+In the `updateAssignment` callback (around line 62), after `updateFreelancerAssignment()` succeeds:
+- Call `updateAssignmentInCache(registeredDateTimeAD, eventName, field, value, eventDateAD)` to sync the change to Supabase
+- Import `updateAssignmentInCache` from `@/lib/freelancer-assignment-cache`
+- Wrap in try/catch so a Supabase failure doesn't block the UI update
 
-**5. Keep the Refresh button:**
-- The refresh button next to the freelancer name calls `refetch()` from `useFreelancerAssignments` to refresh the assignment data for the current client
+---
 
-### What the Popup Shows (same as freelancer's view)
+## Summary
 
-- Event name, Nepali date, client name in header
-- Personal note (if set)
-- Crew list with all 10 roles and phone numbers
-- Bride section (only if toggle is ON)
-- Groom section (only if toggle is ON)
-- Venue details (only if toggle is ON)
-- Parlour details (only if toggle is ON)
-- Demands and References
-
-### Files Modified
-
-| File | Change |
-|---|---|
-| `src/components/client-detail/FreelancerAssignmentSection.tsx` | Replace 12-month calendar Dialog with `CrewScheduleEventSheet`, add contact details hook, remove `FreelancerCalendarMonth` component |
-
+| Issue | Root Cause | Fix File |
+|---|---|---|
+| Benzo Keep notes fail for booked clients | Only searches CLIENT TRACKER sheet | `supabase/functions/google-sheets/index.ts` |
+| Freelancer not visible in All Clients | Writes to Sheets but not Supabase cache | `src/hooks/useFreelancerAssignments.ts` |
