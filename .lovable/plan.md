@@ -1,129 +1,109 @@
 
 
-# Make Everything Supabase-First: Instant Saves Across the Entire App
+# Delete Client Feature with Full Danger Warning, Heartbeat Sound & Password Gate
 
 ## Overview
 
-Apply the same "Supabase-first" pattern used for Benzo Keep notes to **every write operation** in the app. Instead of waiting 2-5 seconds for Google Sheets to respond, every action will:
+Add a "Delete Client" button to the Client Detail hero section. Clicking it opens a password gate (984124), followed by a dramatic red danger confirmation dialog with a synthetic heartbeat sound. Deletion removes the client from:
 
-1. Update local state + Supabase cache **instantly**
-2. Show success toast and close dialogs immediately
-3. Sync to Google Sheets **in the background** (non-blocking)
+1. Google Sheets: CLIENT TRACKER or BOOKED CLIENTS (main sheet)
+2. Google Sheets: BOOKED CLIENTS EVENT DETAILS
+3. Google Sheets: BOOKED CLIENTS FREELANCERS
+4. Google Sheets: BOOKED CLIENTS CONTACT DETAILS
+5. Supabase: `clients_cache`, `event_details_cache`, `contact_details_cache`, `freelancer_assignments`, `freelancer_event_settings`
 
-This makes the entire app feel instant for all users.
+## User Flow
 
-## Operations to Convert
-
-Here are all the write operations on the Client Detail page that currently block on Google Sheets:
-
-| Operation | Current Wait | After |
-|-----------|-------------|-------|
-| Log Call (Direct/WhatsApp) | 2-5s | Instant |
-| Change Status | 2-5s | Instant |
-| Save Quotation | 2-5s | Instant |
-| Save Final Quotation (Advance Pending) | 2-5s | Instant |
-| Save Bargaining Rates | 2-5s | Instant |
-| Save Final Quotation Only (Booked) | 2-5s | Instant |
-| Add Comment | 2-5s | Instant |
-| Update Priority (Star Rating) | 2-5s | Instant |
-| Add Client (Quick Add) | 2-5s | Instant |
-
-**Note**: The "BOOKED + Payment" flow and "Payment" operations will stay Sheets-first because they involve moving rows between sheets and financial records that need guaranteed consistency.
-
-## How It Works
-
-For each operation, the pattern is:
-
-```
-BEFORE: await sheetsAPI() -> update local state -> update cache -> toast
-AFTER:  update local state + cache instantly -> toast -> sheetsAPI() in background
+```text
+Client Detail Page
+  -> Click red "Delete Client" button (Trash icon in hero actions)
+  -> Password dialog appears (enter 984124)
+  -> If correct: Danger confirmation dialog opens
+     - Full red pulsing UI with animated danger icons
+     - Heartbeat sound starts immediately (Web Audio API - synthetic)
+     - "Go Back to Safety" button -> stops sound, closes dialog
+     - "Permanently Delete" button -> stops sound, deletes client, navigates to dashboard
+  -> If incorrect password: error shake + toast
 ```
 
-## Technical Details
-
-### File: `src/pages/ClientDetail.tsx`
-
-**1. `handleCall` (Log Call)**
-- Compute the new call log string locally (timestamp + type + existing log)
-- Update state + cache immediately
-- Fire `logCallAttempt()` in background
-
-**2. `performStatusChange` (Change Status)**
-- Compute the new status log string locally (timestamp + new status + existing log)
-- Update state + cache immediately
-- Fire `updateClientStatus()` in background
-- **Exception**: Status changes to BOOKED stay synchronous (row migration required)
-
-**3. `handleSaveQuotation` (Quotation Sent)**
-- Update quotation data + status log in state + cache immediately
-- Fire `updateClientQuotation()` and `updateClientStatus()` in background
-
-**4. `handleSaveAdvancePendingQuotation` (Advance Pending)**
-- Update final quotation + status log in state + cache immediately
-- Fire `updateFinalQuotation()` and `updateClientStatus()` in background
-
-**5. `handleSaveBargaining` (Bargaining)**
-- Update bargaining rates + status log in state + cache immediately
-- Fire `updateBargainingRates()` and `updateClientStatus()` in background
-
-**6. `handleSaveFinalQuotationOnly` (Edit Final Quotation for Booked)**
-- Update final quotation in state + cache immediately
-- Fire `updateFinalQuotation()` in background
-
-**7. `handleAddCommentDirect` (Add Comment)**
-- Compute new comments string locally (timestamp + comment + existing)
-- Update state + cache immediately
-- Fire `addClientComment()` in background
-
-**8. `handlePriorityChange` (Star Rating)**
-- Update priority in state + cache immediately
-- Fire `updateClientPriority()` in background
-
-### File: `src/pages/QuickAdd.tsx`
-
-**9. `handleSubmit` (Add New Client)**
-- Generate the client data locally
-- Insert directly into `clients_cache` via Supabase (instant)
-- Update memory cache
-- Fire `addClient()` to Sheets in background
-- Navigate away immediately
-
-### Helper: Local Timestamp Generation
-
-Several operations (status change, call log, comments) need timestamps that are currently generated in `sheets-api.ts` before calling the API. We will extract these into a shared utility so the same timestamp format is used for both the local optimistic update and the background Sheets sync.
-
-A small utility function `generateClientTimestamp()` and `generateCallLogEntry()` will be added to `src/lib/sheets-api.ts` (or a new `src/lib/timestamp-utils.ts`) so the local state update produces the exact same formatted string that the Sheets API would return.
-
-### What Stays Synchronous (Sheets-First)
-
-These operations will NOT be converted because they require server-side coordination:
-
-- **BOOKED status change + payment** - Moves rows between sheets; needs sequential guarantee
-- **Add Payment** - Financial data that must be recorded accurately with remaining balance calculation
-- **Client Sync (Resync button)** - Explicitly pulls fresh data from Sheets
-- **Master Sync** - Full data refresh
-- **Edit Client (full form)** - Complex multi-field update that modifies many columns
-
-### Error Handling
-
-If a background Sheets sync fails:
-- Log a warning to console (no error toast - data is safe in Supabase)
-- The `synced_to_sheet: false` flag in `clients_cache` tracks unsynced records
-- The next Master Sync or manual Resync will reconcile everything
-- The existing `pushUnsyncedToSheets()` function already handles pushing unsynced records
-
-## Files Modified
+## Files to Create/Modify
 
 | File | Change |
 |------|--------|
-| `src/pages/ClientDetail.tsx` | Convert 8 handlers to Supabase-first pattern |
-| `src/pages/QuickAdd.tsx` | Convert addClient to write to Supabase cache first |
-| `src/lib/timestamp-utils.ts` (new) | Shared timestamp formatting for local optimistic updates |
+| `src/components/client-detail/DeleteClientDialog.tsx` | **New** - Two-stage dialog: password gate + danger confirmation with heartbeat |
+| `src/components/client-detail/index.ts` | Export new component |
+| `src/components/client-detail/ClientHeroSection.tsx` | Add red Delete button + props |
+| `src/pages/ClientDetail.tsx` | Add delete state/handler, pass props to hero |
+| `src/lib/sheets-api.ts` | Add `deleteClient()` API function |
+| `supabase/functions/google-sheets/index.ts` | Add `deleteClient` action - deletes from all 4 sheets + all 5 Supabase tables |
 
-## Impact
+## Technical Details
 
-- Every action in the app feels **instant** (0-50ms instead of 2-5 seconds)
-- All users see updates immediately via shared Supabase cache
-- Google Sheets stays in sync via background writes
-- No data loss risk - Supabase is the primary store, Sheets syncs in background
-- Financial operations (payments) remain synchronous for accuracy
+### 1. DeleteClientDialog Component
+
+**Stage 1 - Password Gate:**
+- Dark dialog with password input (type="password")
+- Validates against hardcoded "984124"
+- Wrong password shows error shake animation + toast
+
+**Stage 2 - Danger Confirmation:**
+- Red gradient background with pulsing red border (CSS animation)
+- Large AlertTriangle icon with scale-in animation
+- Client name displayed prominently in white
+- Warning text: "This action is irreversible. This client will be permanently deleted from ALL systems including event details, contact details, and crew assignments."
+- Heartbeat sound via Web Audio API (two quick low-frequency oscillator pulses in a loop, no audio file needed)
+- Sound starts on mount of stage 2, stops on unmount or any action
+- Two buttons: "Go Back to Safety" (neutral) and "Permanently Delete" (deep red)
+
+### 2. Edge Function - `deleteClient` action
+
+The backend handler will:
+
+1. Determine the main sheet (`CLIENT TRACKER` or `BOOKED CLIENTS`) based on `sheetSource` parameter
+2. Find and delete the row from the main sheet using `registeredDateTimeAD` to verify the correct row
+3. Find and delete the matching row(s) from `BOOKED CLIENTS EVENT DETAILS` (Column A = registeredDateTimeAD)
+4. Find and delete the matching row(s) from `BOOKED CLIENTS FREELANCERS` (Column A = registeredDateTimeAD)
+5. Find and delete the matching row(s) from `BOOKED CLIENTS CONTACT DETAILS` (Column A = registeredDateTimeAD)
+6. Delete from Supabase tables:
+   - `clients_cache` WHERE `registered_date_time_ad` = ID
+   - `event_details_cache` WHERE `registered_date_time_ad` = ID
+   - `contact_details_cache` WHERE `registered_date_time_ad` = ID
+   - `freelancer_assignments` WHERE `registered_date_time_ad` = ID
+   - `freelancer_event_settings` WHERE `registered_date_time_ad` = ID
+
+All sheet deletions use the `deleteDimension` batch update API (same pattern as `deleteVendor`). Rows are deleted in reverse order to avoid index shifting.
+
+### 3. Frontend Delete Handler (ClientDetail.tsx)
+
+Follows Supabase-first pattern:
+1. Delete from all Supabase cache tables instantly
+2. Remove from memory cache
+3. Show success toast
+4. Navigate to dashboard
+5. Fire Sheets delete in background (non-blocking)
+
+### 4. Heartbeat Sound (Web Audio API)
+
+No audio file needed. Synthesized directly:
+```typescript
+// Creates two quick "thump" sounds using OscillatorNode
+// Frequency ~60Hz, short duration, repeated every 800ms
+// Starts on dialog open, AudioContext.close() on dialog close
+```
+
+### 5. ClientHeroSection Changes
+
+Add two new props:
+- `onDelete?: () => void`
+- `isDeleting?: boolean`
+
+Add a red Trash2 button in the actions row (next to Edit/Sync/Benzo Keep).
+
+## Safety Measures
+
+- Password gate (984124) prevents accidental access
+- Dramatic UI and heartbeat sound create awareness
+- Clear "Go Back to Safety" escape option
+- All related data cleaned from both Sheets and Supabase (no orphaned records)
+- Supabase deletion is instant; Sheets deletion runs in background
+
