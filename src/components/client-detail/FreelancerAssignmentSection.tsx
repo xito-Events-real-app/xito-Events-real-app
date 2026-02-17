@@ -352,7 +352,7 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
         </span>
 
         {/* Toggles inline */}
-        <div className="flex items-center gap-2 flex-wrap ml-auto">
+        <div className="flex items-center gap-3 flex-wrap ml-auto">
           <TooltipProvider delayDuration={200}>
             <VisibilityToggle
               label="BRIDE" icon={Phone} iconColor="text-rose-500"
@@ -474,28 +474,31 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
         </div>
       )}
 
-      {/* Unassigned Role Dropdowns */}
+      {/* Unassigned Role Dropdowns with toggles */}
       {unassignedFields.length > 0 && (
-        <div className="p-5 space-y-3">
-          {Array.from({ length: Math.ceil(unassignedFields.length / 2) }, (_, i) => {
-            const row = unassignedFields.slice(i * 2, i * 2 + 2);
+        <div className="p-4 space-y-3">
+          {unassignedFields.map((cfg) => {
+            const val = (assignment[cfg.field] as string || '').trim();
             return (
-              <div key={i} className="grid grid-cols-2 gap-3">
-                {row.map((cfg) => (
-                  <FreelancerDropdown
-                    key={cfg.field}
-                    config={cfg}
-                    value={assignment[cfg.field] as string}
-                    freelancers={freelancers}
-                    eventDateAD={assignment.eventDateAD}
-                    clientName={assignment.clientName}
-                    excludedNames={getExcludedNames(cfg.field)}
-                    isUpdating={isUpdating === cfg.field}
-                    onChange={(v) => handleFieldChange(cfg.field, v)}
-                    onCheckAvailability={onCheckAvailability}
-                  />
-                ))}
-              </div>
+              <UnassignedFreelancerRow
+                key={cfg.field}
+                config={cfg}
+                value={val}
+                freelancers={freelancers}
+                eventDateAD={assignment.eventDateAD}
+                clientName={assignment.clientName}
+                excludedNames={getExcludedNames(cfg.field)}
+                isUpdating={isUpdating === cfg.field}
+                onChange={(v) => handleFieldChange(cfg.field, v)}
+                onCheckAvailability={onCheckAvailability}
+                eventName={eventName}
+                registeredDateTimeAD={registeredDateTimeAD}
+                settings={settings}
+                onUpsertSetting={onUpsertSetting}
+                getSettingForFreelancer={getSettingForFreelancer}
+                handleToggle={handleToggle}
+                handleOpenNote={handleOpenNote}
+              />
             );
           })}
         </div>
@@ -526,7 +529,7 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
   );
 };
 
-// Compact visibility toggle with label, icon, tooltip
+// Visibility toggle with label, icon, tooltip - full size
 function VisibilityToggle({ label, icon: Icon, iconColor, checked, onChange, checkedColor, tooltip }: {
   label: string;
   icon: React.ElementType;
@@ -539,13 +542,13 @@ function VisibilityToggle({ label, icon: Icon, iconColor, checked, onChange, che
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <div className="flex items-center gap-0.5">
-          <span className={cn("text-[9px] font-bold uppercase", checked ? "text-gray-600" : "text-gray-300")}>{label}</span>
-          <Icon className={cn("w-3 h-3", checked ? iconColor : "text-gray-300")} />
+        <div className="flex items-center gap-1">
+          <span className={cn("text-xs font-bold uppercase", checked ? "text-gray-700" : "text-gray-400")}>{label}</span>
+          <Icon className={cn("w-4 h-4", checked ? iconColor : "text-gray-300")} />
           <Switch
             checked={checked}
             onCheckedChange={onChange}
-            className={cn("h-5 w-9", checkedColor, "data-[state=unchecked]:bg-gray-200")}
+            className={cn("h-6 w-11", checkedColor, "data-[state=unchecked]:bg-gray-200")}
           />
         </div>
       </TooltipTrigger>
@@ -554,7 +557,8 @@ function VisibilityToggle({ label, icon: Icon, iconColor, checked, onChange, che
   );
 }
 
-interface FreelancerDropdownProps {
+// Unassigned freelancer row: dropdown + toggles in same row pattern
+interface UnassignedFreelancerRowProps {
   config: FieldConfig;
   value: string;
   freelancers: ReturnType<typeof useFreelancerAssignments>['freelancers'];
@@ -564,9 +568,16 @@ interface FreelancerDropdownProps {
   isUpdating: boolean;
   onChange: (value: string) => void;
   onCheckAvailability: (name: string, dateAD: string) => Promise<AvailabilityConflict[]>;
+  eventName: string;
+  registeredDateTimeAD: string;
+  settings: Map<string, FreelancerEventSetting>;
+  onUpsertSetting: (setting: Omit<FreelancerEventSetting, 'id'>) => Promise<void>;
+  getSettingForFreelancer: (name: string) => FreelancerEventSetting;
+  handleToggle: (freelancerName: string, roleCode: string, field: keyof FreelancerEventSetting, value: boolean) => void;
+  handleOpenNote: (freelancerName: string, roleCode: string) => void;
 }
 
-const FreelancerDropdown = ({ config, value, freelancers, eventDateAD, clientName, excludedNames, isUpdating, onChange, onCheckAvailability }: FreelancerDropdownProps) => {
+const UnassignedFreelancerRow = ({ config, value, freelancers, eventDateAD, clientName, excludedNames, isUpdating, onChange, onCheckAvailability, eventName, registeredDateTimeAD, settings, onUpsertSetting, getSettingForFreelancer, handleToggle, handleOpenNote }: UnassignedFreelancerRowProps) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [availability, setAvailability] = useState<Record<string, AvailabilityConflict[]>>({});
@@ -593,103 +604,72 @@ const FreelancerDropdown = ({ config, value, freelancers, eventDateAD, clientNam
   }, [eventDateAD, clientName, filteredNames, onCheckAvailability]);
 
   const Icon = config.icon;
-  const hasValue = !!value?.trim();
 
   return (
-    <div className="relative">
-      <div className={cn(
-        "rounded-xl border overflow-hidden transition-all",
-        hasValue ? "border-gray-200 shadow-sm" : "border-gray-100",
-      )}>
-        <div className={cn("h-1", config.accentBg)} />
-        <div className="px-3 py-2.5">
-          <label className={cn("text-[11px] font-semibold uppercase tracking-wider flex items-center gap-1.5 mb-2", config.iconColor)}>
-            <Icon className="h-3 w-3" />
-            {config.label}
-          </label>
-          <Popover open={open} onOpenChange={handleOpenChange}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                role="combobox"
-                className={cn(
-                  "w-full justify-between h-8 text-xs rounded-lg",
-                  hasValue
-                    ? "bg-gray-50 border-gray-200 text-gray-800 font-medium hover:bg-gray-100"
-                    : "bg-gray-50/50 border-dashed border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-gray-600",
-                  isUpdating && "opacity-50"
-                )}
-                disabled={isUpdating}
-              >
-                <span className="truncate">
-                  {value ? (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        window.location.href = `/freelancer/${encodeURIComponent(value)}`;
-                      }}
-                      className="hover:text-emerald-600 transition-colors"
+    <div className="px-3 py-2.5 flex items-center gap-2 flex-wrap border border-gray-100 rounded-xl">
+      {/* Role badge */}
+      <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0", CODE_COLORS[config.shortCode] || 'bg-gray-100 text-gray-600')}>
+        {config.shortCode}
+      </span>
+
+      {/* Dropdown */}
+      <Popover open={open} onOpenChange={handleOpenChange}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            className={cn(
+              "w-[140px] justify-between h-8 text-xs rounded-lg",
+              "bg-gray-50/50 border-dashed border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-gray-600",
+              isUpdating && "opacity-50"
+            )}
+            disabled={isUpdating}
+          >
+            <span className="truncate">Assign {config.label}...</span>
+            {isUpdating && <Loader2 className="ml-2 h-3 w-3 animate-spin" />}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[200px] p-0 z-[9999] bg-white border border-gray-200 shadow-xl rounded-xl" align="start">
+          <Command className="bg-white rounded-xl">
+            <CommandInput placeholder="Search..." value={search} onValueChange={setSearch} className="text-gray-800 text-xs" />
+            <CommandList className="max-h-48">
+              <CommandEmpty className="text-gray-400 text-xs py-4 text-center">No freelancers found</CommandEmpty>
+              <CommandGroup>
+                {filteredNames.map((name) => {
+                  const conflicts = availability[name];
+                  const isBooked = !!conflicts;
+                  return (
+                    <CommandItem
+                      key={name} value={name}
+                      onSelect={() => { onChange(name); setOpen(false); setSearch(''); }}
+                      className="text-gray-700 hover:bg-gray-50 cursor-pointer text-xs"
                     >
-                      {value}
-                    </button>
-                  ) : 'Assign...'}
-                </span>
-                {isUpdating && <Loader2 className="ml-2 h-3 w-3 animate-spin" />}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[9999] bg-white border border-gray-200 shadow-xl rounded-xl" align="start">
-              <Command className="bg-white rounded-xl">
-                <CommandInput
-                  placeholder="Search freelancer..."
-                  value={search}
-                  onValueChange={setSearch}
-                  className="text-gray-800 text-xs placeholder:text-gray-400"
-                />
-                <CommandList className="max-h-48">
-                  <CommandEmpty className="text-gray-400 text-xs py-4 text-center">No freelancers found</CommandEmpty>
-                  <CommandGroup>
-                    {value && (
-                      <CommandItem
-                        value="__clear__"
-                        onSelect={() => { onChange(''); setOpen(false); setSearch(''); }}
-                        className="text-red-400 hover:text-red-500 hover:bg-red-50 cursor-pointer text-xs"
-                      >
-                        ✕ Clear selection
-                      </CommandItem>
-                    )}
-                    {filteredNames.map((name) => {
-                      const conflicts = availability[name];
-                      const isBooked = !!conflicts;
-                      return (
-                        <CommandItem
-                          key={name}
-                          value={name}
-                          onSelect={() => { onChange(name); setOpen(false); setSearch(''); }}
-                          className="text-gray-700 hover:text-gray-900 hover:bg-gray-50 cursor-pointer text-xs"
-                        >
-                          <Circle className={cn(
-                            "h-2 w-2 mr-2 fill-current shrink-0",
-                            isBooked ? "text-red-400" : "text-emerald-400"
-                          )} />
-                          <span className="flex-1 truncate">{name}</span>
-                          {name === value && <span className="text-[10px] text-indigo-500 font-bold ml-1">✓</span>}
-                          {isBooked && (
-                            <span className="text-[10px] text-red-400 ml-1 truncate max-w-[80px]">
-                              {conflicts[0].clientName}
-                            </span>
-                          )}
-                        </CommandItem>
-                      );
-                    })}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
-        </div>
+                      <Circle className={cn("h-2 w-2 mr-2 fill-current shrink-0", isBooked ? "text-red-400" : "text-emerald-400")} />
+                      <span className="flex-1 truncate">{name}</span>
+                      {isBooked && <span className="text-[10px] text-red-400 ml-1 truncate max-w-[80px]">{conflicts[0].clientName}</span>}
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+
+      {/* Toggles - same pattern as assigned rows, but disabled/dimmed since no one assigned yet */}
+      <div className="flex items-center gap-3 flex-wrap ml-auto opacity-40 pointer-events-none">
+        <TooltipProvider delayDuration={200}>
+          <VisibilityToggle label="BRIDE" icon={Phone} iconColor="text-rose-500" checked={false} onChange={() => {}} checkedColor="data-[state=checked]:bg-rose-500" tooltip={`Bride (${eventName}) Contacts`} />
+          <VisibilityToggle label="BRIDE" icon={MapPin} iconColor="text-rose-400" checked={false} onChange={() => {}} checkedColor="data-[state=checked]:bg-rose-400" tooltip={`Bride (${eventName}) Location`} />
+          <VisibilityToggle label="GROOM" icon={Phone} iconColor="text-sky-500" checked={false} onChange={() => {}} checkedColor="data-[state=checked]:bg-sky-500" tooltip={`Groom (${eventName}) Contacts`} />
+          <VisibilityToggle label="GROOM" icon={MapPin} iconColor="text-sky-400" checked={false} onChange={() => {}} checkedColor="data-[state=checked]:bg-sky-400" tooltip={`Groom (${eventName}) Location`} />
+          <VisibilityToggle label="VENUE" icon={Building2} iconColor="text-amber-500" checked={false} onChange={() => {}} checkedColor="data-[state=checked]:bg-amber-500" tooltip={`Venue (${eventName}) Details`} />
+          <VisibilityToggle label="PARLOUR" icon={Scissors} iconColor="text-purple-500" checked={false} onChange={() => {}} checkedColor="data-[state=checked]:bg-purple-500" tooltip={`Parlour (${eventName}) Details`} />
+        </TooltipProvider>
       </div>
     </div>
   );
 };
+
 
 export default FreelancerAssignmentSection;
