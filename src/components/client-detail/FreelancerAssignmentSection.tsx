@@ -1,8 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { Camera, Video, UserCog, Smartphone, Loader2, ChevronDown, ChevronUp, Circle, Zap, StickyNote, Eye, EyeOff } from "lucide-react";
+import { Camera, Video, UserCog, Smartphone, Loader2, Circle, Zap, StickyNote, Phone, MapPin, Building2, Scissors } from "lucide-react";
 import { useFreelancerAssignments } from "@/hooks/useFreelancerAssignments";
-import { getFilteredFreelancersByRole, FreelancerField, AvailabilityConflict, CATEGORY_CODES } from "@/lib/freelancer-assignment-api";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { getFilteredFreelancersByRole, FreelancerField, AvailabilityConflict } from "@/lib/freelancer-assignment-api";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -11,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { useEventDetails } from "@/hooks/useEventDetails";
 
 interface FreelancerAssignmentSectionProps {
   registeredDateTimeAD: string;
@@ -54,7 +54,6 @@ const MORE_FIELDS: FieldConfig[][] = [
 
 const ALL_FIELDS: FieldConfig[] = [...MAIN_FIELDS.flat(), ...MORE_FIELDS.flat()];
 
-// Short code color map for assigned freelancer badges
 const CODE_COLORS: Record<string, string> = {
   PB: 'bg-amber-100 text-amber-700', PG: 'bg-amber-100 text-amber-700',
   VB: 'bg-purple-100 text-purple-700', VG: 'bg-purple-100 text-purple-700',
@@ -62,6 +61,10 @@ const CODE_COLORS: Record<string, string> = {
   Asst: 'bg-emerald-100 text-emerald-700', iPhone: 'bg-lime-100 text-lime-700',
   Drone: 'bg-cyan-100 text-cyan-700', FPV: 'bg-sky-100 text-sky-700',
 };
+
+// Bride side codes and Groom side codes for grouping
+const BRIDE_SIDE_CODES = new Set(['PB', 'VB']);
+const GROOM_SIDE_CODES = new Set(['PG', 'VG']);
 
 interface FreelancerEventSetting {
   id?: string;
@@ -73,6 +76,8 @@ interface FreelancerEventSetting {
   show_groom_details: boolean;
   show_venue_details: boolean;
   show_parlour_details: boolean;
+  show_bride_location: boolean;
+  show_groom_location: boolean;
   personal_note: string;
 }
 
@@ -80,8 +85,9 @@ const FreelancerAssignmentSection = ({ registeredDateTimeAD }: FreelancerAssignm
   const { assignments, freelancers, isLoading, isUpdating, updateAssignment, checkAvailability } = useFreelancerAssignments(registeredDateTimeAD);
   const [settings, setSettings] = useState<Map<string, FreelancerEventSetting>>(new Map());
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const { data: eventDetailsData } = useEventDetails(registeredDateTimeAD);
+  const eventDetails = eventDetailsData?.events || [];
 
-  // Fetch all settings for this client
   useEffect(() => {
     if (!registeredDateTimeAD || settingsLoaded) return;
     const fetchSettings = async () => {
@@ -104,7 +110,6 @@ const FreelancerAssignmentSection = ({ registeredDateTimeAD }: FreelancerAssignm
 
   const upsertSetting = useCallback(async (setting: Omit<FreelancerEventSetting, 'id'>) => {
     const key = `${setting.event_name}::${setting.freelancer_name}`;
-    // Optimistic update
     setSettings(prev => {
       const next = new Map(prev);
       next.set(key, { ...prev.get(key), ...setting });
@@ -113,7 +118,7 @@ const FreelancerAssignmentSection = ({ registeredDateTimeAD }: FreelancerAssignm
     
     const { error } = await supabase
       .from('freelancer_event_settings')
-      .upsert(setting, { onConflict: 'registered_date_time_ad,event_name,freelancer_name' });
+      .upsert(setting as any, { onConflict: 'registered_date_time_ad,event_name,freelancer_name' });
     if (error) {
       console.error('Failed to save setting:', error);
       toast({ title: "Error", description: "Failed to save visibility setting", variant: "destructive" });
@@ -147,19 +152,26 @@ const FreelancerAssignmentSection = ({ registeredDateTimeAD }: FreelancerAssignm
         </div>
         <h2 className="text-lg font-bold text-gray-800">Freelancer Assignments</h2>
       </div>
-      {assignments.map((assignment) => (
-        <EventAssignmentCard
-          key={`${assignment.event}-${assignment.eventDateAD}`}
-          assignment={assignment}
-          freelancers={freelancers}
-          isUpdating={isUpdating}
-          onUpdate={updateAssignment}
-          onCheckAvailability={checkAvailability}
-          registeredDateTimeAD={registeredDateTimeAD}
-          settings={settings}
-          onUpsertSetting={upsertSetting}
-        />
-      ))}
+      {assignments.map((assignment) => {
+        // Find matching event detail for demands
+        const matchedEvent = eventDetails.find(ed => 
+          ed.eventName?.toLowerCase() === assignment.event?.toLowerCase()
+        );
+        return (
+          <EventAssignmentCard
+            key={`${assignment.event}-${assignment.eventDateAD}`}
+            assignment={assignment}
+            freelancers={freelancers}
+            isUpdating={isUpdating}
+            onUpdate={updateAssignment}
+            onCheckAvailability={checkAvailability}
+            registeredDateTimeAD={registeredDateTimeAD}
+            settings={settings}
+            onUpsertSetting={upsertSetting}
+            eventDemands={matchedEvent?.eventDemands || []}
+          />
+        );
+      })}
     </div>
   );
 };
@@ -173,10 +185,10 @@ interface EventAssignmentCardProps {
   registeredDateTimeAD: string;
   settings: Map<string, FreelancerEventSetting>;
   onUpsertSetting: (setting: Omit<FreelancerEventSetting, 'id'>) => Promise<void>;
+  eventDemands: string[];
 }
 
-const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, onCheckAvailability, registeredDateTimeAD, settings, onUpsertSetting }: EventAssignmentCardProps) => {
-  const [showMore, setShowMore] = useState(false);
+const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, onCheckAvailability, registeredDateTimeAD, settings, onUpsertSetting, eventDemands }: EventAssignmentCardProps) => {
   const [noteOpenFor, setNoteOpenFor] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
 
@@ -200,15 +212,6 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
     return code ? requiredCodes.includes(code) : true;
   };
 
-  const filterFields = (rows: FieldConfig[][]) => {
-    if (!hasFilter) return rows;
-    return rows.map(row => row.filter(cfg => isFieldRequired(cfg.field))).filter(row => row.length > 0);
-  };
-
-  const filteredMain = filterFields(MAIN_FIELDS);
-  const filteredMore = filterFields(MORE_FIELDS);
-
-  // Build assigned freelancers list
   const assignedFreelancers = useMemo(() => {
     const list: { field: FreelancerField; code: string; name: string }[] = [];
     for (const cfg of ALL_FIELDS) {
@@ -220,7 +223,6 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
     return list;
   }, [assignment]);
 
-  // Build unassigned fields
   const unassignedFields = useMemo(() => {
     return ALL_FIELDS.filter(cfg => {
       const val = (assignment[cfg.field] as string || '').trim();
@@ -273,6 +275,8 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
       show_groom_details: true,
       show_venue_details: true,
       show_parlour_details: true,
+      show_bride_location: true,
+      show_groom_location: true,
       personal_note: '',
     };
   };
@@ -288,6 +292,8 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
       show_groom_details: current.show_groom_details,
       show_venue_details: current.show_venue_details,
       show_parlour_details: current.show_parlour_details,
+      show_bride_location: current.show_bride_location,
+      show_groom_location: current.show_groom_location,
       personal_note: current.personal_note,
       [field]: value,
     });
@@ -310,14 +316,137 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
       show_groom_details: current.show_groom_details,
       show_venue_details: current.show_venue_details,
       show_parlour_details: current.show_parlour_details,
+      show_bride_location: current.show_bride_location,
+      show_groom_location: current.show_groom_location,
       personal_note: noteText,
     });
     setNoteOpenFor(null);
     toast({ title: "Note saved", description: `Note saved for ${freelancerName}` });
   };
 
+  // Group assigned freelancers
+  const brideSide = assignedFreelancers.filter(f => BRIDE_SIDE_CODES.has(f.code));
+  const groomSide = assignedFreelancers.filter(f => GROOM_SIDE_CODES.has(f.code));
+  const otherCrew = assignedFreelancers.filter(f => !BRIDE_SIDE_CODES.has(f.code) && !GROOM_SIDE_CODES.has(f.code));
+
   const assignedCount = assignedFreelancers.length;
   const totalSlots = ALL_FIELDS.length;
+
+  const renderFreelancerRow = ({ field, code, name }: { field: FreelancerField; code: string; name: string }) => {
+    const setting = getSettingForFreelancer(name);
+    const hasNote = !!(setting.personal_note?.trim());
+    const isNoteOpen = noteOpenFor === name;
+    const isBarun = name.toLowerCase().includes('barun');
+
+    return (
+      <div key={`${code}-${name}`} className="border-b border-gray-50 last:border-b-0">
+        <div className={cn(
+          "px-4 py-3 flex items-start gap-2",
+          isBarun && "bg-sky-50/70 ring-1 ring-sky-200/60 ring-inset"
+        )}>
+          {/* Left: Role badge + name */}
+          <div className="flex items-center gap-2 min-w-0 shrink-0 pt-0.5">
+            <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0", CODE_COLORS[code] || 'bg-gray-100 text-gray-600')}>
+              {code}
+            </span>
+            <span className={cn("text-sm font-medium text-gray-800 truncate", isBarun && "text-sky-700 font-semibold")}>
+              {name}
+            </span>
+          </div>
+
+          <div className="flex-1" />
+
+          {/* Right: Toggles + Note */}
+          <div className="flex flex-col gap-1.5 items-end shrink-0">
+            {/* Row 1: Bride Phone + Bride Location */}
+            <div className="flex items-center gap-3">
+              <VisibilityToggle
+                icon={Phone}
+                iconColor="text-rose-500"
+                checked={setting.show_bride_details}
+                onChange={(v) => handleToggle(name, code, 'show_bride_details', v)}
+                checkedColor="data-[state=checked]:bg-rose-500"
+              />
+              <VisibilityToggle
+                icon={MapPin}
+                iconColor="text-rose-400"
+                checked={setting.show_bride_location}
+                onChange={(v) => handleToggle(name, code, 'show_bride_location', v)}
+                checkedColor="data-[state=checked]:bg-rose-400"
+              />
+            </div>
+            {/* Row 2: Groom Phone + Groom Location */}
+            <div className="flex items-center gap-3">
+              <VisibilityToggle
+                icon={Phone}
+                iconColor="text-sky-500"
+                checked={setting.show_groom_details}
+                onChange={(v) => handleToggle(name, code, 'show_groom_details', v)}
+                checkedColor="data-[state=checked]:bg-sky-500"
+              />
+              <VisibilityToggle
+                icon={MapPin}
+                iconColor="text-sky-400"
+                checked={setting.show_groom_location}
+                onChange={(v) => handleToggle(name, code, 'show_groom_location', v)}
+                checkedColor="data-[state=checked]:bg-sky-400"
+              />
+            </div>
+            {/* Row 3: Venue + Parlour */}
+            <div className="flex items-center gap-3">
+              <VisibilityToggle
+                icon={Building2}
+                iconColor="text-amber-500"
+                checked={setting.show_venue_details}
+                onChange={(v) => handleToggle(name, code, 'show_venue_details', v)}
+                checkedColor="data-[state=checked]:bg-amber-500"
+              />
+              <VisibilityToggle
+                icon={Scissors}
+                iconColor="text-purple-500"
+                checked={setting.show_parlour_details}
+                onChange={(v) => handleToggle(name, code, 'show_parlour_details', v)}
+                checkedColor="data-[state=checked]:bg-purple-500"
+              />
+            </div>
+            {/* Note button */}
+            <button
+              onClick={() => isNoteOpen ? setNoteOpenFor(null) : handleOpenNote(name)}
+              className={cn(
+                "flex items-center gap-1 text-[10px] px-2 py-1 rounded-md transition-colors mt-0.5",
+                hasNote
+                  ? "bg-amber-50 text-amber-600 hover:bg-amber-100"
+                  : "bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              )}
+            >
+              <StickyNote className="w-3 h-3" />
+              {hasNote ? "Note" : "+Note"}
+            </button>
+          </div>
+        </div>
+
+        {/* Inline note editor */}
+        {isNoteOpen && (
+          <div className="px-4 pb-3 space-y-2">
+            <Textarea
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              placeholder="Write a personal note for this freelancer on this event..."
+              className="text-xs min-h-[60px] bg-gray-50 border-gray-200"
+            />
+            <div className="flex gap-2 justify-end">
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setNoteOpenFor(null)}>
+                Cancel
+              </Button>
+              <Button size="sm" className="h-7 text-xs" onClick={() => handleSaveNote(name, code)}>
+                Save Note
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
@@ -336,93 +465,55 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
         </div>
       </div>
 
-      {/* Assigned Freelancers with Toggles */}
+      {/* Mandatory Demands */}
+      {eventDemands.length > 0 && (
+        <div className="px-5 py-3 bg-cyan-50/50 border-b border-cyan-100/60">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-[10px] font-bold text-cyan-700 uppercase tracking-wider">Demands</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {eventDemands.map((d, i) => (
+              <span key={i} className="text-[11px] font-medium bg-cyan-100 text-cyan-700 px-2.5 py-1 rounded-full">{d}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Assigned Freelancers with Grouped Layout */}
       {assignedFreelancers.length > 0 && (
         <div className="border-b border-gray-100">
-          {assignedFreelancers.map(({ field, code, name }) => {
-            const setting = getSettingForFreelancer(name);
-            const hasNote = !!(setting.personal_note?.trim());
-            const isNoteOpen = noteOpenFor === name;
-
-            return (
-              <div key={`${code}-${name}`} className="border-b border-gray-50 last:border-b-0">
-                <div className="px-4 py-2.5 flex items-center gap-2 flex-wrap">
-                  {/* Role badge + name */}
-                  <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0", CODE_COLORS[code] || 'bg-gray-100 text-gray-600')}>
-                    {code}
-                  </span>
-                  <span className="text-sm font-medium text-gray-800 min-w-0 truncate">{name}</span>
-                  
-                  <div className="flex-1" />
-                  
-                  {/* Visibility toggles */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <VisibilityToggle
-                      label="Bride"
-                      checked={setting.show_bride_details}
-                      onChange={(v) => handleToggle(name, code, 'show_bride_details', v)}
-                    />
-                    <VisibilityToggle
-                      label="Groom"
-                      checked={setting.show_groom_details}
-                      onChange={(v) => handleToggle(name, code, 'show_groom_details', v)}
-                    />
-                    <VisibilityToggle
-                      label="Venue"
-                      checked={setting.show_venue_details}
-                      onChange={(v) => handleToggle(name, code, 'show_venue_details', v)}
-                    />
-                    <VisibilityToggle
-                      label="Parlour"
-                      checked={setting.show_parlour_details}
-                      onChange={(v) => handleToggle(name, code, 'show_parlour_details', v)}
-                    />
-                  </div>
-
-                  {/* Add Note button */}
-                  <button
-                    onClick={() => isNoteOpen ? setNoteOpenFor(null) : handleOpenNote(name)}
-                    className={cn(
-                      "flex items-center gap-1 text-[10px] px-2 py-1 rounded-md transition-colors shrink-0",
-                      hasNote
-                        ? "bg-amber-50 text-amber-600 hover:bg-amber-100"
-                        : "bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                    )}
-                  >
-                    <StickyNote className="w-3 h-3" />
-                    {hasNote ? "Note" : "+Note"}
-                  </button>
-                </div>
-
-                {/* Inline note editor */}
-                {isNoteOpen && (
-                  <div className="px-4 pb-3 space-y-2">
-                    <Textarea
-                      value={noteText}
-                      onChange={(e) => setNoteText(e.target.value)}
-                      placeholder="Write a personal note for this freelancer on this event..."
-                      className="text-xs min-h-[60px] bg-gray-50 border-gray-200"
-                    />
-                    <div className="flex gap-2 justify-end">
-                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setNoteOpenFor(null)}>
-                        Cancel
-                      </Button>
-                      <Button size="sm" className="h-7 text-xs" onClick={() => handleSaveNote(name, code)}>
-                        Save Note
-                      </Button>
-                    </div>
-                  </div>
-                )}
+          {/* Bride Side Group */}
+          {brideSide.length > 0 && (
+            <div className="mx-3 mt-3 mb-2 rounded-xl border border-rose-200/60 bg-rose-50/30 overflow-hidden">
+              <div className="px-3 py-1.5 bg-rose-100/40 border-b border-rose-200/40">
+                <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wider">Bride Side</span>
               </div>
-            );
-          })}
+              {brideSide.map(renderFreelancerRow)}
+            </div>
+          )}
+
+          {/* Groom Side Group */}
+          {groomSide.length > 0 && (
+            <div className="mx-3 mt-2 mb-2 rounded-xl border border-sky-200/60 bg-sky-50/30 overflow-hidden">
+              <div className="px-3 py-1.5 bg-sky-100/40 border-b border-sky-200/40">
+                <span className="text-[10px] font-bold text-sky-600 uppercase tracking-wider">Groom Side</span>
+              </div>
+              {groomSide.map(renderFreelancerRow)}
+            </div>
+          )}
+
+          {/* Other Crew */}
+          {otherCrew.length > 0 && (
+            <div className="mx-3 mt-2 mb-3">
+              {otherCrew.map(renderFreelancerRow)}
+            </div>
+          )}
         </div>
       )}
 
       {/* Unassigned Role Dropdowns */}
       {unassignedFields.length > 0 && (
         <div className="p-5 space-y-3">
-          {/* Group unassigned fields into rows of 2 */}
           {Array.from({ length: Math.ceil(unassignedFields.length / 2) }, (_, i) => {
             const row = unassignedFields.slice(i * 2, i * 2 + 2);
             return (
@@ -450,15 +541,21 @@ const EventAssignmentCard = ({ assignment, freelancers, isUpdating, onUpdate, on
   );
 };
 
-// Small visibility toggle with label
-function VisibilityToggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+// Professional visibility toggle with icon
+function VisibilityToggle({ icon: Icon, iconColor, checked, onChange, checkedColor }: {
+  icon: React.ElementType;
+  iconColor: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  checkedColor: string;
+}) {
   return (
-    <div className="flex items-center gap-1">
-      <span className={cn("text-[9px] font-medium", checked ? "text-gray-500" : "text-gray-300")}>{label}</span>
+    <div className="flex items-center gap-1.5">
+      <Icon className={cn("w-3.5 h-3.5", checked ? iconColor : "text-gray-300")} />
       <Switch
         checked={checked}
         onCheckedChange={onChange}
-        className="h-4 w-7 data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-gray-200"
+        className={cn("h-6 w-11", checkedColor, "data-[state=unchecked]:bg-gray-200")}
       />
     </div>
   );
