@@ -1,69 +1,96 @@
 
-# Fix: Venue Data Cross-Contamination Between Clients
 
-## Root Cause
+# Upgrade Freelancer Assignment Section: Granular Switches, Grouping & Highlighting
 
-The venue data transfer from Sargat Thapa to Sapna Bista is caused by a **race condition** in the `updateClientEventDetails` function in the backend.
+## Overview
 
-Here is what happens:
+Redesign the Freelancer Assignment section in the Client Detail page with bigger professional switches, granular visibility controls (6 toggles instead of 4), visual grouping of PB/VB and PG/VG, Barun highlighting, and mandatory demand display.
 
-1. When you open Client A's detail page, `useEventDetails` calls `refreshClientVendorData` in the background
-2. `refreshClientVendorData` calls `getClientEventDetails` which reads the entire EVENT DETAILS sheet and finds Client A at, say, row 5
-3. Meanwhile, if any other operation (sync, another client update, or a delete) inserts or removes a row in the sheet...
-4. The row number is now **stale** -- row 5 might now belong to a different client
-5. The `updateClientEventDetails` function then writes Client A's venue data to what is now **Client B's row**
+## Database Change
 
-This is the exact scenario: Sargat Thapa's venue data was written to the row that had shifted to become Sapna Bista's row.
+Add 2 new columns to `freelancer_event_settings` to split Bride and Groom toggles into Phone vs Location:
 
-Additionally, there is a **second bug** in `sync-all-data/index.ts` line 409: it reads from `'EVENT DETAILS'!A2:AH5000` instead of `'BOOKED CLIENTS EVENT DETAILS'!A2:AH5000` -- the wrong sheet name! This means the Supabase event_details_cache never gets populated correctly by Master Sync.
+| New Column | Type | Default | Purpose |
+|---|---|---|---|
+| `show_bride_location` | boolean | true | Controls bride home city, area, landmark, map |
+| `show_groom_location` | boolean | true | Controls groom home city, area, landmark, map |
 
-## Fix Plan
+The existing `show_bride_details` will now mean "Bride Phone" (name, contact, whatsapp, backups) and `show_groom_details` will mean "Groom Phone" (same for groom).
 
-### 1. Fix the race condition in `updateClientEventDetails` (Edge Function)
+## UI Changes in `FreelancerAssignmentSection.tsx`
 
-**File**: `supabase/functions/google-sheets/index.ts`
+### 1. Bigger Switches
+Replace the tiny `h-4 w-7` switches with `h-6 w-11` (default Switch size). Each toggle gets an icon instead of text label:
+- Bride Phone: Phone icon (rose color)
+- Bride Location: MapPin icon (rose color)
+- Groom Phone: Phone icon (sky color)
+- Groom Location: MapPin icon (sky color)
+- Venue: Building icon (amber color)
+- Parlour: Scissors icon (purple color)
 
-Add a **verification step** before writing: after computing the row number, verify that Column A of that row still matches the expected `registeredDateTimeAD` before writing. This prevents writing to a shifted row.
+### 2. PB/VB and PG/VG Grouping
+The assigned freelancers list will be reorganized:
+- PB and VB inside a bordered box labeled "Bride Side"
+- PG and VG inside a bordered box labeled "Groom Side"
+- EP, EV, Asst, iPhone, Drone, FPV remain as individual rows below
 
-```
-BEFORE: Find row -> compute updates -> write to row
-AFTER:  Find row -> compute updates -> re-verify Column A matches -> write to row (or abort if mismatch)
-```
+### 3. Barun Highlighting
+When a freelancer's name matches "Barun" (case-insensitive), their row gets a distinct light-blue background and a subtle border glow to indicate "this is you".
 
-Specifically, change `updateClientEventDetails` to:
-- After finding `rowNumber`, store the `registeredDateTimeAD` from that row
-- Before the PUT request, do a single-cell read of Column A at `rowNumber` to verify it still matches
-- If it does NOT match, re-scan the entire sheet to find the correct row number and use that instead
-- This eliminates the race window
+### 4. Demand is Mandatory
+Event demands from the event details will be fetched and displayed prominently at the top of each event card, always visible regardless of any toggle state.
 
-### 2. Fix the same race condition in `refreshClientVendorData`
+## Changes to Crew Schedule (Public Freelancer View)
 
-**File**: `supabase/functions/google-sheets/index.ts`
-
-The `refreshClientVendorData` function calls `updateClientEventDetails` which already has the fix from step 1. No additional change needed here -- the fix propagates.
-
-### 3. Fix the wrong sheet name in `sync-all-data`
-
-**File**: `supabase/functions/sync-all-data/index.ts`
-
-Line 409: Change `"'EVENT DETAILS'!A2:AH5000"` to `"'BOOKED CLIENTS EVENT DETAILS'!A2:AH5000"`.
-
-This fixes Master Sync so the `event_details_cache` in Supabase actually gets populated, which means most reads will come from Supabase instead of hitting Google Sheets (reducing the chance of race conditions further).
-
-### 4. Fix `pullEventDetails` data parsing in `sync-all-data`
-
-The `pullEventDetails` function currently treats each Google Sheet row as a separate event record. But in the `BOOKED CLIENTS EVENT DETAILS` sheet, each client has **one row** with multi-line cells (newline-separated events). The function needs to parse multi-line values correctly (split by `\n` and create one record per event line), matching how `getClientEventDetails` works.
+Update `CrewScheduleEventSheet.tsx` to respect the 2 new granular toggles:
+- `show_bride_details` = true: show bride name, contact, whatsapp, backups
+- `show_bride_location` = true: show bride city, area, landmark, map
+- Same split for groom
 
 ## Files Modified
 
 | File | Change |
-|------|--------|
-| `supabase/functions/google-sheets/index.ts` | Add row verification before writes in `updateClientEventDetails` to prevent race conditions |
-| `supabase/functions/sync-all-data/index.ts` | Fix sheet name from `EVENT DETAILS` to `BOOKED CLIENTS EVENT DETAILS` and fix multi-line parsing |
+|---|---|
+| DB Migration | Add `show_bride_location` and `show_groom_location` columns |
+| `src/components/client-detail/FreelancerAssignmentSection.tsx` | Bigger switches with icons, 6 toggles, PB/VB + PG/VG grouping, Barun highlight, demand display |
+| `src/components/crew-schedule/CrewScheduleEventSheet.tsx` | Respect new granular bride/groom location toggles |
 
-## Impact
+## Technical Details
 
-- Eliminates the venue data cross-contamination bug completely
-- Master Sync now correctly populates `event_details_cache` in Supabase
-- With populated cache, most event detail reads come from Supabase (faster, no race condition)
-- Google Sheets writes are verified before execution, preventing stale row overwrites
+### Switch Size
+The `VisibilityToggle` component will use the default Switch dimensions (`h-6 w-11`) with an icon label beside it instead of text. Each toggle rendered as:
+```
+[PhoneIcon] [====SWITCH====]   [MapPinIcon] [====SWITCH====]
+```
+
+### Grouping Layout
+```
++--- Bride Side --------------------------------+
+| PB: Ram Sharma     [switches...]              |
+| VB: Hari KC        [switches...]              |
++-----------------------------------------------+
+
++--- Groom Side --------------------------------+
+| PG: Sita Devi      [switches...]              |
+| VG: Bikash Thapa   [switches...]              |
++-----------------------------------------------+
+
+EP: Someone          [switches...]
+Asst: Barun          [switches...] <-- highlighted
+Drone: Pilot Name    [switches...]
+```
+
+### Demand Section
+Each event card will show demands at the top in a mandatory, non-toggleable section with colored badges, pulled from existing event details data (passed as a new prop or fetched inline).
+
+### Toggle-to-Data Mapping
+
+| Toggle | Icon | Data Controlled |
+|---|---|---|
+| Bride Phone | Phone (rose) | brideFullName, brideContactNumber, brideWhatsappNumber, brideBackupNumber, brideBackupRelation, brideBackupNumber2, brideBackupRelation2 |
+| Bride Location | MapPin (rose) | brideHomeCity, brideHomeArea, brideHomeLandmark, brideHomeMap |
+| Groom Phone | Phone (sky) | groomFullName, groomContactNumber, groomWhatsappNumber, groomBackupNumber, groomBackupRelation, groomBackupNumber2, groomBackupRelation2 |
+| Groom Location | MapPin (sky) | groomHomeCity, groomHomeArea, groomHomeLandmark, groomHomeMap |
+| Venue | Building (amber) | venueName, venueType, venueCity, venueArea, venueMap, eventStartTime, eventEndTime |
+| Parlour | Scissors (purple) | parlourName, parlourType, parlourCity, parlourArea, parlourMap, parlourStartTime, parlourEndTime |
+
