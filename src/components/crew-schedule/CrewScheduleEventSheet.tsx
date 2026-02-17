@@ -149,18 +149,18 @@ export default function CrewScheduleEventSheet({ open, onOpenChange, assignment,
       if (data) {
         setVisibility(data as VisibilitySettings);
       } else {
-        setVisibility({ show_bride_details: true, show_groom_details: true, show_venue_details: true, show_parlour_details: true, show_bride_location: true, show_groom_location: true, personal_note: '' });
+        setVisibility({ show_bride_details: false, show_groom_details: false, show_venue_details: false, show_parlour_details: false, show_bride_location: false, show_groom_location: false, personal_note: '' });
       }
     };
     fetchVisibility();
   }, [open, freelancerName, assignment.registered_date_time_ad, assignment.event]);
 
-  const showBride = visibility?.show_bride_details !== false;
-  const showBrideLocation = visibility?.show_bride_location !== false;
-  const showGroom = visibility?.show_groom_details !== false;
-  const showGroomLocation = visibility?.show_groom_location !== false;
-  const showVenue = visibility?.show_venue_details !== false;
-  const showParlour = visibility?.show_parlour_details !== false;
+  const showBride = visibility?.show_bride_details === true;
+  const showBrideLocation = visibility?.show_bride_location === true;
+  const showGroom = visibility?.show_groom_details === true;
+  const showGroomLocation = visibility?.show_groom_location === true;
+  const showVenue = visibility?.show_venue_details === true;
+  const showParlour = visibility?.show_parlour_details === true;
   const personalNote = visibility?.personal_note?.trim() || '';
 
   const crewEntries = ROLE_LABELS
