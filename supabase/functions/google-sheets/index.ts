@@ -39,7 +39,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient' | 'getDailyTasks' | 'addDailyTask' | 'updateDailyTask' | 'updateDailyTaskStatus' | 'getDailyTaskSetupData' | 'getFreelancers' | 'addFreelancer' | 'updateFreelancer' | 'deleteFreelancer' | 'syncFreelancerCategories' | 'getClientFreelancerAssignments' | 'updateFreelancerAssignment' | 'checkFreelancerAvailability' | 'fullSyncFreelancerAssignments' | 'getFreelancerBookings' | 'getAllFreelancerAssignments' | 'restoreFreelancerAssignments' | 'updateRequiredCrewCategories';
+  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient' | 'getDailyTasks' | 'addDailyTask' | 'updateDailyTask' | 'updateDailyTaskStatus' | 'getDailyTaskSetupData' | 'getFreelancers' | 'addFreelancer' | 'updateFreelancer' | 'deleteFreelancer' | 'syncFreelancerCategories' | 'getClientFreelancerAssignments' | 'updateFreelancerAssignment' | 'checkFreelancerAvailability' | 'fullSyncFreelancerAssignments' | 'getFreelancerBookings' | 'getAllFreelancerAssignments' | 'restoreFreelancerAssignments' | 'updateRequiredCrewCategories' | 'deleteClient';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -5692,7 +5692,129 @@ async function deleteVendor(accessToken: string, spreadsheetId: string, rowNumbe
   return { success: true };
 }
 
-// ============= FREELANCERS MODULE =============
+// ============= DELETE CLIENT FROM ALL SHEETS + SUPABASE =============
+async function deleteClientFromAll(
+  accessToken: string,
+  spreadsheetId: string,
+  registeredDateTimeAD: string,
+  sheetSource: string
+) {
+  console.log(`[DELETE CLIENT] Starting deletion for ${registeredDateTimeAD} from ${sheetSource}`);
+  
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+  // 1. Delete from main sheet (CLIENT TRACKER or BOOKED CLIENTS)
+  const mainSheetName = sheetSource === 'booked' ? 'BOOKED CLIENTS' : 'CLIENT TRACKER';
+  await deleteRowsByColumnA(accessToken, spreadsheetId, mainSheetName, registeredDateTimeAD);
+
+  // 2. Delete from BOOKED CLIENTS EVENT DETAILS
+  await deleteRowsByColumnA(accessToken, spreadsheetId, 'BOOKED CLIENTS EVENT DETAILS', registeredDateTimeAD);
+
+  // 3. Delete from BOOKED CLIENTS FREELANCERS
+  await deleteRowsByColumnA(accessToken, spreadsheetId, 'BOOKED CLIENTS FREELANCERS', registeredDateTimeAD);
+
+  // 4. Delete from BOOKED CLIENTS CONTACT DETAILS
+  await deleteRowsByColumnA(accessToken, spreadsheetId, 'BOOKED CLIENTS CONTACT DETAILS', registeredDateTimeAD);
+
+  // 5. Delete from all Supabase cache tables
+  const tables = ['clients_cache', 'event_details_cache', 'contact_details_cache', 'freelancer_assignments', 'freelancer_event_settings'];
+  for (const table of tables) {
+    try {
+      const res = await fetch(`${supabaseUrl}/rest/v1/${table}?registered_date_time_ad=eq.${encodeURIComponent(registeredDateTimeAD)}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${supabaseKey}`,
+          'apikey': supabaseKey,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+      });
+      console.log(`[DELETE CLIENT] Supabase ${table}: ${res.status}`);
+    } catch (e) {
+      console.warn(`[DELETE CLIENT] Failed to delete from ${table}:`, e);
+    }
+  }
+
+  console.log(`[DELETE CLIENT] Completed deletion for ${registeredDateTimeAD}`);
+  return { success: true };
+}
+
+// Helper: Find and delete all rows in a sheet where Column A matches registeredDateTimeAD
+async function deleteRowsByColumnA(
+  accessToken: string,
+  spreadsheetId: string,
+  sheetName: string,
+  registeredDateTimeAD: string
+) {
+  try {
+    // Get sheet data to find matching rows
+    const range = encodeURIComponent(`'${sheetName}'!A:A`);
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!response.ok) {
+      console.warn(`[DELETE CLIENT] Sheet "${sheetName}" not accessible: ${response.status}`);
+      return;
+    }
+
+    const data = await response.json();
+    if (!data.values) return;
+
+    // Find all matching row indices (0-indexed)
+    const matchingRows: number[] = [];
+    for (let i = 0; i < data.values.length; i++) {
+      if (data.values[i]?.[0] === registeredDateTimeAD) {
+        matchingRows.push(i);
+      }
+    }
+
+    if (matchingRows.length === 0) {
+      console.log(`[DELETE CLIENT] No matching rows in "${sheetName}"`);
+      return;
+    }
+
+    // Get sheet ID
+    const sheetId = await getSheetId(accessToken, spreadsheetId, sheetName);
+
+    // Delete rows in REVERSE order to avoid index shifting
+    const requests = matchingRows
+      .sort((a, b) => b - a)
+      .map(rowIndex => ({
+        deleteDimension: {
+          range: {
+            sheetId,
+            dimension: 'ROWS',
+            startIndex: rowIndex,
+            endIndex: rowIndex + 1,
+          },
+        },
+      }));
+
+    const batchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+    const batchResponse = await fetchWithRetry(batchUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ requests }),
+    });
+
+    if (!batchResponse.ok) {
+      const errorText = await batchResponse.text();
+      console.error(`[DELETE CLIENT] Failed to delete rows from "${sheetName}":`, errorText);
+    } else {
+      console.log(`[DELETE CLIENT] Deleted ${matchingRows.length} row(s) from "${sheetName}"`);
+    }
+  } catch (e) {
+    console.warn(`[DELETE CLIENT] Error processing "${sheetName}":`, e);
+  }
+}
+
+
 
 const FREELANCER_CATEGORY_SHEETS = [
   { sheet: 'PHOTOGRAPHER', check: (d: Record<string, unknown>) => String(d.photographer || '').toUpperCase() === 'YES' },
@@ -7629,6 +7751,11 @@ Deno.serve(async (req) => {
         if (!data || !data.registeredDateTimeAD || !data.eventName || !data.eventDateAD)
           throw new Error('registeredDateTimeAD, eventName, eventDateAD are required');
         result = await updateRequiredCrewCategories(accessToken, spreadsheetId, data.registeredDateTimeAD as string, data.eventName as string, data.eventDateAD as string, (data.categories as string) || '');
+        break;
+      }
+      case 'deleteClient': {
+        if (!data || !data.registeredDateTimeAD) throw new Error('registeredDateTimeAD is required for deleteClient');
+        result = await deleteClientFromAll(accessToken, spreadsheetId, data.registeredDateTimeAD as string, (data.sheetSource as string) || 'tracker');
         break;
       }
       default:

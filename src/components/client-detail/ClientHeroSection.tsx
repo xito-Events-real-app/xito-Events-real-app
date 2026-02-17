@@ -1,4 +1,4 @@
-import { MessageCircle, Mail, MapPin, RefreshCw, Pencil, Clock } from "lucide-react";
+import { MessageCircle, Mail, MapPin, RefreshCw, Pencil, Clock, Trash2 } from "lucide-react";
 import benzoAvatar from "@/assets/benzo-avatar.jpeg";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { Button } from "@/components/ui/button";
@@ -25,11 +25,13 @@ interface ClientHeroSectionProps {
   onAddFinalQuotation?: () => void;
   onPriorityChange?: (priority: number) => Promise<void>;
   onBenzoKeepClick?: () => void;
+  onDelete?: () => void;
   isLoggingCall?: boolean;
   isChangingStatus?: boolean;
   isAddingComment?: boolean;
   isSyncing?: boolean;
   isUpdatingPriority?: boolean;
+  isDeleting?: boolean;
   eventDetailsData?: EventDetailsData | null;
   eventDetailsLoading?: boolean;
   freelancerAssignments?: FreelancerAssignment[];
@@ -78,11 +80,13 @@ const ClientHeroSection = ({
   onAddFinalQuotation,
   onPriorityChange,
   onBenzoKeepClick,
+  onDelete,
   isLoggingCall = false,
   isChangingStatus = false,
   isAddingComment = false,
   isSyncing = false,
   isUpdatingPriority = false,
+  isDeleting = false,
   eventDetailsData,
   eventDetailsLoading = false,
   freelancerAssignments,
@@ -176,6 +180,17 @@ const ClientHeroSection = ({
               >
                 <img src={benzoAvatar} alt="Benzo" className="h-5 w-5 rounded-full object-cover" />
                 <span className="hidden md:inline text-xs font-medium">Benzo Keep</span>
+              </Button>
+            )}
+            {onDelete && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onDelete}
+                disabled={isDeleting}
+                className="rounded-full text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8 w-8"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
               </Button>
             )}
           </div>
