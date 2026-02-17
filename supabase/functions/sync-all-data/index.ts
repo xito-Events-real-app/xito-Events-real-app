@@ -406,52 +406,76 @@ async function pullContactDetails(accessToken: string, supabase: any) {
 // ============= PULL EVENT DETAILS =============
 async function pullEventDetails(accessToken: string, supabase: any) {
   const spreadsheetId = Deno.env.get('GOOGLE_SPREADSHEET_ID')!;
-  const rows = await fetchSheetData(accessToken, spreadsheetId, "'EVENT DETAILS'!A2:AH5000");
+  const rows = await fetchSheetData(accessToken, spreadsheetId, "'BOOKED CLIENTS EVENT DETAILS'!A2:AH5000");
 
   if (rows.length === 0) {
     console.log('[sync-all-data] No event details rows found');
     return 0;
   }
 
-  // Group rows by registeredDateTimeAD to build event indices
-  const clientEvents: Record<string, string[][]> = {};
+  // Each row is ONE client with multi-line cells (newline-separated events)
+  // We need to split by \n to create one record per event line
+  const records: any[] = [];
+
   for (const row of rows) {
     const regId = (row[0] || '').trim();
     if (!regId) continue;
-    if (!clientEvents[regId]) clientEvents[regId] = [];
-    clientEvents[regId].push(row);
-  }
 
-  const records: any[] = [];
-  for (const [regId, events] of Object.entries(clientEvents)) {
-    for (let ei = 0; ei < events.length; ei++) {
-      const row = events[ei];
+    // Parse multi-line columns (same as getClientEventDetails in google-sheets)
+    const eventNames = (row[3] || '').split('\n');
+    const eventYears = (row[4] || '').split('\n');
+    const eventMonths = (row[5] || '').split('\n');
+    const eventDays = (row[6] || '').split('\n');
+    const eventDatesAD = (row[7] || '').split('\n');
+    const venueTypes = (row[9] || '').split('\n');
+    const venueNames = (row[10] || '').split('\n');
+    const venueCities = (row[11] || '').split('\n');
+    const venueAreas = (row[12] || '').split('\n');
+    const venueMaps = (row[13] || '').split('\n');
+    const eventStartTimes = (row[14] || '').split('\n');
+    const eventEndTimes = (row[15] || '').split('\n');
+    const parlourTypes = (row[16] || '').split('\n');
+    const parlourNames = (row[17] || '').split('\n');
+    const parlourCities = (row[18] || '').split('\n');
+    const parlourAreas = (row[19] || '').split('\n');
+    const parlourMaps = (row[20] || '').split('\n');
+    const parlourStartTimes = (row[21] || '').split('\n');
+    const parlourEndTimes = (row[22] || '').split('\n');
+    const doGroomArr = (row[30] || '').split('\n');
+    const guestCounts = (row[31] || '').split('\n');
+    const eventDemands = (row[32] || '').split('\n');
+    const eventReferences = (row[33] || '').split('\n');
+
+    for (let ei = 0; ei < eventNames.length; ei++) {
+      const name = (eventNames[ei] || '').trim();
+      if (!name) continue;
+
       records.push({
         registered_date_time_ad: regId,
         event_index: ei,
-        event_name: row[3] || '',      // D
-        event_year: row[4] || '',      // E
-        event_month: row[5] || '',     // F
-        event_day: row[6] || '',       // G
-        event_date_ad: row[7] || '',   // H
-        venue_type: row[9] || '',      // J
-        venue_name: row[10] || '',     // K
-        venue_city: row[11] || '',     // L
-        venue_area: row[12] || '',     // M
-        venue_map: row[13] || '',      // N
-        event_start_time: row[14] || '', // O
-        event_end_time: row[15] || '',   // P
-        parlour_type: row[16] || '',     // Q
-        parlour_name: row[17] || '',     // R
-        parlour_city: row[18] || '',     // S
-        parlour_area: row[19] || '',     // T
-        parlour_map: row[20] || '',      // U
-        parlour_start_time: row[21] || '', // V
-        parlour_end_time: row[22] || '',   // W
-        do_groom_come_in_mehndi: row[30] || '', // AE
-        guest_count: row[31] || '',              // AF
-        event_demands: row[32] || '',            // AG
-        event_references: row[33] || '',         // AH
+        event_name: name,
+        event_year: (eventYears[ei] || '').trim(),
+        event_month: (eventMonths[ei] || '').trim(),
+        event_day: (eventDays[ei] || '').trim(),
+        event_date_ad: (eventDatesAD[ei] || '').trim(),
+        venue_type: (venueTypes[ei] || '').trim(),
+        venue_name: (venueNames[ei] || '').trim(),
+        venue_city: (venueCities[ei] || '').trim(),
+        venue_area: (venueAreas[ei] || '').trim(),
+        venue_map: (venueMaps[ei] || '').trim(),
+        event_start_time: (eventStartTimes[ei] || '').trim(),
+        event_end_time: (eventEndTimes[ei] || '').trim(),
+        parlour_type: (parlourTypes[ei] || '').trim(),
+        parlour_name: (parlourNames[ei] || '').trim(),
+        parlour_city: (parlourCities[ei] || '').trim(),
+        parlour_area: (parlourAreas[ei] || '').trim(),
+        parlour_map: (parlourMaps[ei] || '').trim(),
+        parlour_start_time: (parlourStartTimes[ei] || '').trim(),
+        parlour_end_time: (parlourEndTimes[ei] || '').trim(),
+        do_groom_come_in_mehndi: (doGroomArr[ei] || '').trim(),
+        guest_count: (guestCounts[ei] || '').trim(),
+        event_demands: (eventDemands[ei] || '').trim(),
+        event_references: (eventReferences[ei] || '').trim(),
         synced_to_sheet: true,
         updated_at: new Date().toISOString(),
       });
