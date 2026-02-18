@@ -186,6 +186,7 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
         } catch (cacheErr) {
           console.warn("Cache update failed (non-blocking):", cacheErr);
         }
+        window.dispatchEvent(new CustomEvent('cache-updated', { detail: { type: 'clients-invalidate' } }));
         toast.success(`Note assigned to ${selectedClient.clientName}`);
         resetForm();
         onOpenChange(false);
