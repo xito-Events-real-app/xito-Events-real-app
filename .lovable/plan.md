@@ -1,70 +1,83 @@
 
-# Root Cause: Why Shyam Poudel (or Any Client) Ends Up in Both Sheets
+# Fix: Benzo Keep Notes Are Being Appended (Duplicated) Instead of Replaced
 
-## The Core Bug in `addClient`
+## Root Cause: Two Backend Functions "Merge" Instead of "Overwrite"
 
-The `addClient` backend function (line 2644-2654 of `google-sheets/index.ts`) has a **half-implemented BOOKED status handler**:
+Both backend functions that write Benzo Keep notes to Google Sheets have a **"merge/append" design** instead of a "replace" design. This is the direct cause of duplication.
 
+### Bug 1: `assignBenzoKeepNoteToClient` (lines 864-868)
+
+This function is called when you select a client in the Suite Notepad and click "Assign". It reads the **existing** content from Column AL, then **appends** the new note to it:
+
+```typescript
+// Current BROKEN behavior:
+const mergedContent = existingContent 
+  ? `${existingContent}\n\n--- New Note (${new Date().toLocaleDateString()}) ---\n${newNoteData.content}`
+  : newNoteData.content;  // ← APPENDS old + new content
 ```
-// Current broken logic in addClient:
-if (status === 'BOOKED') {
-  copyToBookedClients(...)   ← copies to BOOKED CLIENTS ✅
-  // ← NEVER deletes from CLIENT TRACKER ❌
+
+So if a client already has a note, the new note gets pasted below the old one, separated by a `--- New Note ---` divider. Both the old note AND the new note are now stored as one combined blob.
+
+When the client page renders this blob, it shows everything — old content, divider, new content — all as one note. This is why you see what looks like "two notes".
+
+### Bug 2: `transferBenzoKeepNote` (lines 501-514)
+
+Same problem in the unassigned note transfer function:
+
+```typescript
+// Current BROKEN behavior:
+if (clientNotes?.content) {
+  newContent = `${clientNotes.content}\n\n--- Transferred Note (${new Date().toLocaleDateString()}) ---\n${noteToTransfer.content}`;
 }
+// ← Also APPENDS, does not REPLACE
 ```
 
-Compare this to `updateClientStatus` (the correct flow at line 2153-2159) which correctly does both:
-```
-// Correct logic in updateClientStatus:
-copyToBookedClients(...)    ← copies to BOOKED CLIENTS ✅
-deleteTrackerRow(...)       ← deletes from CLIENT TRACKER ✅
-```
+## Why The "Merge" Design Was Wrong
 
-The `addClient` function was designed to always insert to CLIENT TRACKER first (row 2), and it handles BOOKED status by copying to BOOKED CLIENTS — but it **forgets to delete from CLIENT TRACKER**. This means any time a client is added with status BOOKED (e.g. quick-adding from BenzoKeep notepad, or from the full quick-add form), they land in BOTH sheets.
+A Benzo Keep note for a client is meant to be a **single living document** — like a sticky note on a file. When you edit and re-assign it, you want it to **replace** what was there. The merge logic treats every assignment as "adding a new section", which is completely wrong for this use case.
 
-## How This Specifically Happened to Shyam Poudel
-
-The most likely scenario: Shyam Poudel was already a BOOKED client (living in BOOKED CLIENTS sheet). Then at some point he was **re-added** via the Quick Add form or BenzoKeep with status "BOOKED". This created a new CLIENT TRACKER entry for him that was copied to BOOKED CLIENTS but never removed from CLIENT TRACKER — creating the ghost row.
-
-## Why This Is Dangerous
-
-- Benzo Keep note writes to the wrong record (CLIENT TRACKER ghost row) while the real record is in BOOKED CLIENTS
-- Status updates, call logs, comments write to the ghost row
-- The `cleanupDuplicateBookedFromTracker` function (which runs after Full Resync) should catch and remove these — but it only runs when manually triggered or during a full resync, not automatically
+The correct behavior: when you assign/re-assign a note to a client, the new content **replaces** the old content entirely. The `lastUpdated` timestamp already tracks when it changed.
 
 ## The Fix
 
 ### In `supabase/functions/google-sheets/index.ts`
 
-**In the `addClient` function** (around line 2644), after copying to BOOKED CLIENTS, add the missing delete step — exactly mirroring what `updateClientStatus` does:
+**Fix 1: `assignBenzoKeepNoteToClient`** — Remove the merge/append logic. Instead of reading existing content and appending, simply write the new note directly. Delete the "get existing notes" fetch and the `mergedContent` construction:
 
 ```typescript
-// If initial status is BOOKED, copy to BOOKED CLIENTS sheet
-if (selectedStatus.toUpperCase() === 'BOOKED') {
-  const isAlreadyBooked = await checkIfAlreadyBooked(accessToken, spreadsheetId, registeredDateTimeAD);
-  if (!isAlreadyBooked) {
-    await copyToBookedClients(accessToken, spreadsheetId, 2);
-    // ← ADD THIS: Delete from CLIENT TRACKER after copying (MOVE, not COPY)
-    await deleteTrackerRow(accessToken, spreadsheetId, 2);
-    console.log('[addClient] Client MOVED to BOOKED CLIENTS, removed from TRACKER');
-  }
-}
+// NEW behavior: Direct replace
+const finalNotes = {
+  content: newNoteData.content,  // Use new content directly
+  markerColor: newNoteData.markerColor,
+  lastUpdated: now,
+};
 ```
 
-Note: Row 2 is safe to hardcode here because the insert step always inserts at row 2 immediately before this code runs.
+**Fix 2: `transferBenzoKeepNote`** — Same fix. Remove the "merge with existing" logic. The transferred note content replaces whatever was there:
 
-### Immediate Cleanup for Shyam Poudel
+```typescript
+// NEW behavior: Direct replace
+const mergedNotes = {
+  content: noteToTransfer.content,  // Use transferred content directly
+  markerColor: noteToTransfer.markerColor,
+  lastUpdated: now,
+};
+```
 
-The current duplicate (Shyam Poudel in both sheets) needs to be cleaned up by running `cleanupDuplicateBookedFromTracker`. This can be triggered from the Booked Clients page → Full Resync, which automatically calls the cleanup at the end. The user should run a Full Resync once to purge the ghost row from CLIENT TRACKER.
+## Impact
+
+- When you write a note in Benzo Keep and assign it to a client → their Column AL is **overwritten** with exactly what you wrote. Clean, single note.
+- When you re-open the client in Benzo Keep and edit their note → the new version **replaces** the old version completely. No dividers, no appended sections.
+- When you transfer an unassigned note to a client → the transferred content **replaces** their current note. Clean single note.
+- The Supabase `clients_cache` update (which writes `benzo_keep_notes` directly) was already doing a replace — so that part was always correct. Now the Google Sheets backend will match.
+
+## Cleanup for Existing Duplicated Notes
+
+Any notes that are already duplicated (like Shyam Poudel's) will need to be manually fixed by editing them in Benzo Keep — write the clean version and save. There is no automated cleanup needed for the data since the column is a single free-text field.
 
 ## Files Modified
 
 | File | Change |
 |---|---|
-| `supabase/functions/google-sheets/index.ts` | Add `deleteTrackerRow(accessToken, spreadsheetId, 2)` after `copyToBookedClients` in the `addClient` function when status is BOOKED |
-
-## Summary
-
-The bug is simple: `addClient` copies to BOOKED CLIENTS when status is BOOKED but never deletes the source row from CLIENT TRACKER. One missing line of code. The fix mirrors the correct logic that already exists in `updateClientStatus`.
-
-To clean up Shyam Poudel's existing duplicate: run Full Resync from the Booked Clients page once — it will auto-clean the ghost row.
+| `supabase/functions/google-sheets/index.ts` | Fix `assignBenzoKeepNoteToClient`: remove existing-content fetch and merge logic, write new note directly |
+| `supabase/functions/google-sheets/index.ts` | Fix `transferBenzoKeepNote`: remove merge-with-existing logic, write transferred note directly |
