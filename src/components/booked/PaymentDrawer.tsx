@@ -23,6 +23,7 @@ import {
 import { addPayment, getDropdowns } from "@/lib/sheets-api";
 import { toast } from "sonner";
 import { PaymentDatePicker } from "@/components/finance/PaymentDatePicker";
+import { computePaymentUpdate } from "@/lib/timestamp-utils";
 
 interface PaymentDrawerProps {
   isOpen: boolean;
@@ -147,13 +148,35 @@ const PaymentDrawer = ({
 
     setIsSubmitting(true);
     try {
-      // Format Nepali date as YYYY-MM-DD
+      // Format dates
       const nepaliDateStr = `${selectedBSDate.year}-${String(selectedBSDate.month).padStart(2, '0')}-${String(selectedBSDate.day).padStart(2, '0')}`;
-      
-      // Format AD date
       const adDateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
-      
-      const result = await addPayment(
+
+      // ── Instant: compute updated payment strings locally (mirrors backend exactly) ──
+      const { updatedPaymentsMade, remainingPayment } = computePaymentUpdate({
+        paymentAmount,
+        paymentType,
+        nepaliDate: nepaliDateStr,
+        nepaliDateAD: adDateStr,
+        bank,
+        existingPaymentsMade,
+        existingPaymentDatesAD,
+        finalQuotationAmount,
+      });
+
+      toast.success(`Payment of NPR ${parseInt(paymentAmount).toLocaleString('en-IN')} recorded`);
+      onPaymentAdded(updatedPaymentsMade, remainingPayment);
+
+      // Reset form and close immediately
+      setPaymentAmount("");
+      setPaymentType("");
+      setBank("");
+      setSelectedDate(null);
+      setSelectedBSDate(null);
+      onClose();
+
+      // ── Background: sync to Google Sheets (non-blocking) ──
+      addPayment(
         rowNumber,
         paymentAmount,
         paymentType,
@@ -165,18 +188,9 @@ const PaymentDrawer = ({
         finalQuotationAmount,
         registeredDateTimeAD,
         clientName
-      );
-
-      toast.success(`Payment of NPR ${parseInt(paymentAmount).toLocaleString('en-IN')} recorded`);
-      onPaymentAdded(result.paymentsMade, result.remainingPayment);
-      
-      // Reset form
-      setPaymentAmount("");
-      setPaymentType("");
-      setBank("");
-      setSelectedDate(null);
-      setSelectedBSDate(null);
-      onClose();
+      ).catch(err => {
+        console.warn('[BACKGROUND-SHEETS] [addPayment/booked] Sync failed, data safe in local state:', err);
+      });
     } catch (error) {
       console.error("Error adding payment:", error);
       toast.error("Failed to add payment");

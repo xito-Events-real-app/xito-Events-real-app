@@ -241,6 +241,34 @@ export async function updateClientInCacheRecord(client: ClientData): Promise<voi
   if (error) throw error;
 }
 
+/**
+ * Atomically migrate a client from 'tracker' to 'booked' in Supabase cache.
+ * Sets sheet_source = 'booked', writes all payment + status fields, marks synced_to_sheet = false.
+ * This is the Supabase-first step for the BOOKED status migration — no Sheets await required.
+ */
+export async function migrateClientToBookedInCache(
+  registeredDateTimeAD: string,
+  newStatusLog: string,
+  newPaymentsMade: string,
+  newPaymentDatesAD: string,
+  newRemainingPayment: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('clients_cache')
+    .update({
+      sheet_source: 'booked',
+      status_log: newStatusLog,
+      payments_made: newPaymentsMade,
+      payment_dates_ad: newPaymentDatesAD,
+      remaining_payment: newRemainingPayment,
+      synced_to_sheet: false,
+      updated_at: new Date().toISOString(),
+    } as any)
+    .eq('registered_date_time_ad', registeredDateTimeAD);
+
+  if (error) throw error;
+}
+
 /** Deduplicate concurrent populateCache calls */
 let populatePromise: Promise<number> | null = null;
 

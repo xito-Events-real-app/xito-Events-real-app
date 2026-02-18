@@ -22,7 +22,8 @@ import {
 import { useCachedData } from "@/hooks/useCachedData";
 import { useDropdownData } from "@/hooks/useDropdownData";
 import { updateClient, ClientData, updateClientStatus, logCallAttempt, addPayment, updateClientQuotation, addClientComment, updateFinalQuotation, getSingleClient, updateClientPriority, updateBargainingRates, updateBenzoKeepNotes, deleteClient } from "@/lib/sheets-api";
-import { generateCallLogEntry, generateStatusLogEntry, generateCommentEntry } from "@/lib/timestamp-utils";
+import { generateCallLogEntry, generateStatusLogEntry, generateCommentEntry, computePaymentUpdate } from "@/lib/timestamp-utils";
+import { migrateClientToBookedInCache } from "@/lib/clients-supabase-cache";
 import { Checkbox } from "@/components/ui/checkbox";
 import { forceResetDatabase, notifyCacheUpdate } from "@/lib/cache-manager";
 import { toast } from "@/hooks/use-toast";
@@ -650,7 +651,7 @@ const ClientDetail = () => {
     }
   };
 
-  // Handle BOOKED advance payment save
+  // Handle BOOKED advance payment save — Supabase-first
   const handleSaveBookedPayment = async (data: {
     amount: string;
     paymentType: string;
@@ -658,51 +659,82 @@ const ClientDetail = () => {
     nepaliDate: string;
     adDate: string;
   }) => {
-    if (!client?.rowNumber) return;
-    
+    if (!client?.registeredDateTimeAD) return;
+
     const parsedFinal = parseFinalQuotation(currentFinalQuotation || client.finalQuotation || '');
     const finalAmount = parsedFinal ? parseInt(parsedFinal.amount.replace(/[^0-9]/g, '')) : 0;
-    
+
     setIsSavingBookedPayment(true);
     try {
-      // Step 1: Update status to BOOKED FIRST - this MOVES the client to BOOKED CLIENTS sheet
-      const statusResult = await updateClientStatus(client.rowNumber, pendingStatus, currentStatusLog || client.statusLog || '');
-      setCurrentStatusLog(statusResult.statusLog);
-      
-      // Step 2: NOW add payment - client exists in BOOKED CLIENTS sheet after status update
-      const paymentResult = await addPayment(
-        client.rowNumber,
-        data.amount,
-        data.paymentType,
-        data.nepaliDate,
-        data.adDate,
-        data.bank,
-        currentPaymentsMade || client.paymentsMade || '',
-        client.paymentDatesAD || '',
-        finalAmount,
+      // ── Step 1: Compute status log locally ──
+      const newStatusLog = generateStatusLogEntry(pendingStatus, currentStatusLog || client.statusLog || '');
+
+      // ── Step 2: Compute payment fields locally (mirrors backend exactly) ──
+      const { updatedPaymentsMade, updatedPaymentDatesAD, remainingPayment } = computePaymentUpdate({
+        paymentAmount: data.amount,
+        paymentType: data.paymentType,
+        nepaliDate: data.nepaliDate,
+        nepaliDateAD: data.adDate,
+        bank: data.bank,
+        existingPaymentsMade: currentPaymentsMade || client.paymentsMade || '',
+        existingPaymentDatesAD: client.paymentDatesAD || '',
+        finalQuotationAmount: finalAmount,
+      });
+
+      // ── Step 3: Instant Supabase update — flip to 'booked' + write all payment fields ──
+      await migrateClientToBookedInCache(
         client.registeredDateTimeAD,
-        client.clientName
+        newStatusLog,
+        updatedPaymentsMade,
+        updatedPaymentDatesAD,
+        remainingPayment,
       );
-      
-      setCurrentPaymentsMade(paymentResult.paymentsMade);
-      setCurrentRemainingPayment(paymentResult.remainingPayment);
-      
-      // Update global cache
+
+      // ── Step 4: Update local React state instantly ──
+      setCurrentStatusLog(newStatusLog);
+      setCurrentPaymentsMade(updatedPaymentsMade);
+      setCurrentRemainingPayment(remainingPayment);
+
       if (updateClientCache) {
         updateClientCache({
           ...client,
-          paymentsMade: paymentResult.paymentsMade,
-          remainingPayment: paymentResult.remainingPayment,
-          statusLog: statusResult.statusLog
+          statusLog: newStatusLog,
+          paymentsMade: updatedPaymentsMade,
+          paymentDatesAD: updatedPaymentDatesAD,
+          remainingPayment,
+          _source: 'booked',
         });
       }
-      
-      // Invalidate booked clients cache to force refresh on next access
+
       notifyCacheUpdate('booked-clients-invalidate');
-      
       toast({ title: `Payment recorded & status updated to BOOKED` });
       setShowBookedPaymentDialog(false);
       setPendingStatus("");
+
+      // ── Step 5: Background Sheets sync (non-blocking) ──
+      const rowNum = client.rowNumber;
+      const regId = client.registeredDateTimeAD;
+      const clientName = client.clientName;
+      const existingPaymentsMade = currentPaymentsMade || client.paymentsMade || '';
+      const existingPaymentDatesAD = client.paymentDatesAD || '';
+
+      updateClientStatus(rowNum, pendingStatus, currentStatusLog || client.statusLog || '')
+        .then(() => addPayment(
+          rowNum,
+          data.amount,
+          data.paymentType,
+          data.nepaliDate,
+          data.adDate,
+          data.bank,
+          existingPaymentsMade,
+          existingPaymentDatesAD,
+          finalAmount,
+          regId,
+          clientName
+        ))
+        .catch(err => {
+          console.warn('[BACKGROUND-SHEETS] [BOOKED-migration] Sync failed, data safe in Supabase:', err);
+        });
     } catch (err) {
       console.error('Failed to save payment:', err);
       toast({ title: "Failed to record payment", variant: "destructive" });
