@@ -1,41 +1,65 @@
 
-# Fix: Benzo Keep Client Search Should Include Booked Clients
+# Fix: Benzo Keep Notes Still Not Appearing on Client Page
 
-## Problem
+## Root Cause (Confirmed)
 
-When searching for clients in the Benzo Keep notepad (either from the Suite Notepad dialog or the Assign Note dialog), only clients from the `CLIENT TRACKER` sheet are returned. Booked clients (who live exclusively in the `BOOKED CLIENTS` sheet) are missing from search results.
+The client detail page gets its data from a **3-layer cache**:
+1. In-memory (fastest, served first — `memoryCache`)
+2. Supabase `clients_cache` (medium)
+3. Google Sheets (slowest, fallback)
 
-## Root Cause
+When a note is assigned via Suite Notepad, the code correctly writes to:
+- Google Sheets (via `assignBenzoKeepNoteToClient`)
+- Supabase `clients_cache` (via `supabase.from('clients_cache').update(...)`)
 
-The backend function `getClientsForNoteAssignment` (line 722-756 in the edge function) only reads from `'CLIENT TRACKER'!A2:AL500`. It never queries the `BOOKED CLIENTS` sheet.
+But it **never updates the in-memory cache**. So when you navigate to the client detail page, `useCachedData` immediately returns the stale in-memory data that has no note. The note exists in Supabase but is never read because memory is checked first.
 
-## Fix
+## The Fix
 
-Update `getClientsForNoteAssignment` in `supabase/functions/google-sheets/index.ts` to also fetch clients from the `BOOKED CLIENTS` sheet and merge them into the results.
+After successfully saving the note to Supabase `clients_cache`, the dialogs must dispatch a `cache-updated` window event with `type: 'clients-invalidate'`. This triggers `useCachedData` to invalidate its memory and re-read from Supabase, giving the client page the fresh note.
 
-### Changes in `supabase/functions/google-sheets/index.ts`
+This event pattern is already used across the app (e.g., Master Sync, Auto Sync in `App.tsx`) — we just need to fire it after the Benzo Keep assignment.
 
-1. After fetching from `'CLIENT TRACKER'!A2:AL500`, also fetch from `'BOOKED CLIENTS'!A2:AL500` using the same column mapping
-2. Merge both arrays together
-3. Deduplicate by `registeredDateTimeAD` (prioritizing booked records, consistent with existing architecture)
-4. Return the combined list
+## Changes
 
-The column layout is identical between both sheets (A-AG shared schema per memory), so the same row-to-object mapping works for both.
+### File 1: `src/components/suite/BenzoKeepNotepadDialog.tsx`
 
-### Technical Detail
+In `handleSaveWithClient`, after the Supabase cache update succeeds, fire the invalidation event:
 
-```
-Current flow:
-  CLIENT TRACKER -> return results
-
-New flow:
-  CLIENT TRACKER -> results1
-  BOOKED CLIENTS -> results2
-  Merge & deduplicate (booked wins) -> return combined
+```typescript
+window.dispatchEvent(new CustomEvent('cache-updated', {
+  detail: { type: 'clients-invalidate' }
+}));
 ```
 
-### Files Modified
+This will cause `useCachedData` to call `refreshData()` which re-reads from Supabase `clients_cache` — picking up the newly stored note.
+
+### File 2: `src/components/suite/AssignNoteDialog.tsx`
+
+Same fix in `handleTransfer`, after the Supabase cache update succeeds:
+
+```typescript
+window.dispatchEvent(new CustomEvent('cache-updated', {
+  detail: { type: 'clients-invalidate' }
+}));
+```
+
+## Why This Works
+
+The `useCachedData` hook has this listener:
+
+```typescript
+if (e.detail.type === 'clients-invalidate') {
+  fetchState.hasRefreshed = false;
+  refreshData(); // re-reads from Supabase clients_cache into memory
+}
+```
+
+So firing the event forces a re-read from Supabase into memory. The next time the client detail page reads `currentKeepNotes`, it gets the fresh data with the note.
+
+## Files Modified
 
 | File | Change |
 |---|---|
-| `supabase/functions/google-sheets/index.ts` | Add `BOOKED CLIENTS` fetch to `getClientsForNoteAssignment`, merge and deduplicate results |
+| `src/components/suite/BenzoKeepNotepadDialog.tsx` | Dispatch `clients-invalidate` event after Supabase update |
+| `src/components/suite/AssignNoteDialog.tsx` | Dispatch `clients-invalidate` event after Supabase update |
