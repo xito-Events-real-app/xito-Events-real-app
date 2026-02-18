@@ -498,17 +498,11 @@ async function transferBenzoKeepNote(
     // If parsing fails, treat as no existing notes
   }
   
-  // 4. Merge the transferred note into client's notes
+  // 4. Replace client's notes with the transferred note (overwrite, not merge)
   const now = new Date().toISOString();
-  let newContent = noteToTransfer.content;
-  
-  if (clientNotes?.content) {
-    // Append to existing content with separator
-    newContent = `${clientNotes.content}\n\n--- Transferred Note (${new Date().toLocaleDateString()}) ---\n${noteToTransfer.content}`;
-  }
   
   const mergedNotes = {
-    content: newContent,
+    content: noteToTransfer.content,
     markerColor: noteToTransfer.markerColor,
     lastUpdated: now,
   };
@@ -861,14 +855,10 @@ async function assignBenzoKeepNoteToClient(
     return { success: false };
   }
   
-  // Merge content
+  // Replace existing content with new note (overwrite, not merge)
   const now = new Date().toISOString();
-  const mergedContent = existingContent 
-    ? `${existingContent}\n\n--- New Note (${new Date().toLocaleDateString()}) ---\n${newNoteData.content}`
-    : newNoteData.content;
-  
   const finalNotes = {
-    content: mergedContent,
+    content: newNoteData.content,
     markerColor: newNoteData.markerColor,
     lastUpdated: now,
   };
