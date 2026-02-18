@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { ClientData, updateClient } from "@/lib/sheets-api";
+import { updateClientInCacheRecord } from "@/lib/clients-supabase-cache";
 import { getHandlerInitials, parseEventDetails, formatLocationDisplay, NEPALI_MONTHS } from "@/lib/nepali-months";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -273,7 +274,6 @@ export function ClientDetailSheet({ client, isOpen, onClose, onSave }: ClientDet
       const sortedForSave = [...selectedDates].sort((a, b) => {
         if (a.year !== b.year) return a.year - b.year;
         if (a.month !== b.month) return a.month - b.month;
-        // Handle ** (unknown day) - treat as 99 for sorting
         const dayA = a.day === "**" ? 99 : a.day;
         const dayB = b.day === "**" ? 99 : b.day;
         return (dayA as number) - (dayB as number);
@@ -317,18 +317,24 @@ export function ClientDetailSheet({ client, isOpen, onClose, onSave }: ClientDet
         inquiryTime,
       };
 
-      await updateClient(updatedClient);
-      
+      // ── Instant: write to Supabase cache ──
+      await updateClientInCacheRecord(updatedClient);
+
       toast({ title: "Success!", description: "Client updated successfully" });
-      
+
       if (onSave) {
         onSave(updatedClient);
       }
-      
+
       setIsEditing(false);
       resetFormState();
       onClose();
-      
+
+      // ── Background: sync to Google Sheets ──
+      updateClient(updatedClient).catch(err => {
+        console.warn('[BACKGROUND-SHEETS] [updateClient] Sync failed, data safe in Supabase:', err);
+      });
+
     } catch (error) {
       console.error("Update error:", error);
       toast({ 

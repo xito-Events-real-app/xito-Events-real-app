@@ -84,6 +84,8 @@ import {
   updateFinalQuotation,
   addPayment,
 } from "@/lib/sheets-api";
+import { generateCallLogEntry, generateStatusLogEntry, generateCommentEntry, computePaymentUpdate } from "@/lib/timestamp-utils";
+import { updateClientFieldInCache, migrateClientToBookedInCache } from "@/lib/clients-supabase-cache";
 import { bsToAD } from "@/lib/nepali-date";
 import { getStatusConfig } from "@/lib/status-config";
 import { FinalQuotationDialog, AdvancePaymentDialog } from "@/components/status-dialogs";
@@ -274,26 +276,28 @@ export function DesktopClientRow({
 
   // Handlers
   const handleCall = async (type: 'DIRECT' | 'WHATSAPP') => {
-    if (!client.rowNumber) return;
-    
-    setIsLoggingCall(true);
-    try {
-      const result = await logCallAttempt(client.rowNumber, type, currentCallLog);
-      setCurrentCallLog(result.callLog);
-      
-      const phoneNumber = type === 'DIRECT' ? client.contactNo : client.whatsappNo;
-      if (type === 'DIRECT' && phoneNumber) {
-        window.location.href = `tel:${phoneNumber}`;
-      } else if (type === 'WHATSAPP' && phoneNumber) {
-        openWhatsApp(phoneNumber);
-      }
-      
-      toast.success(`${type} call logged`);
-    } catch (err) {
-      console.error('Failed to log call:', err);
-      toast.error('Failed to log call');
-    } finally {
-      setIsLoggingCall(false);
+    const phoneNumber = type === 'DIRECT' ? client.contactNo : client.whatsappNo;
+
+    // ── Instant: compute call log locally ──
+    const newCallLog = generateCallLogEntry(type, currentCallLog);
+    setCurrentCallLog(newCallLog);
+
+    if (type === 'DIRECT' && phoneNumber) {
+      window.location.href = `tel:${phoneNumber}`;
+    } else if (type === 'WHATSAPP' && phoneNumber) {
+      openWhatsApp(phoneNumber);
+    }
+
+    toast.success(`${type} call logged`);
+
+    // ── Background: sync to Supabase + Sheets ──
+    if (client.registeredDateTimeAD) {
+      updateClientFieldInCache(client.registeredDateTimeAD, 'callLog', newCallLog)
+        .catch(err => console.warn('[BACKGROUND] [callLog cache]', err));
+    }
+    if (client.rowNumber) {
+      logCallAttempt(client.rowNumber, type, currentCallLog)
+        .catch(err => console.warn('[BACKGROUND-SHEETS] [logCallAttempt]', err));
     }
   };
 
@@ -329,16 +333,26 @@ export function DesktopClientRow({
     
     setIsUpdatingStatus(true);
     try {
-      const result = await updateClientStatus(client.rowNumber, newStatus, currentStatusLog);
-      setCurrentStatusLog(result.statusLog);
+      // ── Instant: compute status log locally ──
+      const newStatusLog = generateStatusLogEntry(newStatus, currentStatusLog);
+      setCurrentStatusLog(newStatusLog);
       toast.success(`Status changed to ${newStatus}`);
-      
-      // Trigger green flash animation
+
       setShowSuccessFlash(true);
       setTimeout(() => setShowSuccessFlash(false), 1000);
-      
+
       if (onClientUpdate) {
-        onClientUpdate({ ...client, statusLog: result.statusLog });
+        onClientUpdate({ ...client, statusLog: newStatusLog });
+      }
+
+      // ── Background: Supabase + Sheets ──
+      if (client.registeredDateTimeAD) {
+        updateClientFieldInCache(client.registeredDateTimeAD, 'statusLog', newStatusLog)
+          .catch(err => console.warn('[BACKGROUND] [statusLog cache]', err));
+      }
+      if (client.rowNumber) {
+        updateClientStatus(client.rowNumber, newStatus, currentStatusLog)
+          .catch(err => console.warn('[BACKGROUND-SHEETS] [updateClientStatus]', err));
       }
     } catch (err) {
       console.error('Failed to update status:', err);
@@ -348,37 +362,40 @@ export function DesktopClientRow({
     }
   };
 
-  // Handle ADVANCE PENDING final quotation save
+  // Handle ADVANCE PENDING final quotation save — Supabase-first
   const handleSaveAdvancePendingQuotation = async (packageName: string, amount: string) => {
-    if (!client.rowNumber) return;
-    
+    if (!client.registeredDateTimeAD) return;
+
     const finalData = `${packageName}: NPR ${formatNPR(amount)}/-`;
-    
+    const newStatusLog = generateStatusLogEntry(pendingStatus, currentStatusLog);
+
     setIsSavingAdvancePending(true);
     try {
-      // Save final quotation
-      const quotationResult = await updateFinalQuotation(client.rowNumber, finalData, client.registeredDateTimeAD);
-      setCurrentFinalQuotation(quotationResult.finalQuotation);
-      
-      // Update status to ADVANCE PENDING
-      const statusResult = await updateClientStatus(client.rowNumber, pendingStatus, currentStatusLog);
-      setCurrentStatusLog(statusResult.statusLog);
-      
-      // Trigger green flash animation
+      // ── Instant: update local state ──
+      setCurrentFinalQuotation(finalData);
+      setCurrentStatusLog(newStatusLog);
       setShowSuccessFlash(true);
       setTimeout(() => setShowSuccessFlash(false), 1000);
-      
+
       if (onClientUpdate) {
-        onClientUpdate({
-          ...client,
-          finalQuotation: quotationResult.finalQuotation,
-          statusLog: statusResult.statusLog
-        });
+        onClientUpdate({ ...client, finalQuotation: finalData, statusLog: newStatusLog });
       }
-      
+
       toast.success('Final quotation locked & status updated to ADVANCE PENDING');
       setShowAdvancePendingDialog(false);
       setPendingStatus('');
+
+      // ── Background: Supabase + Sheets ──
+      Promise.all([
+        updateClientFieldInCache(client.registeredDateTimeAD, 'finalQuotation', finalData),
+        updateClientFieldInCache(client.registeredDateTimeAD, 'statusLog', newStatusLog),
+      ]).catch(err => console.warn('[BACKGROUND] [advancePending cache]', err));
+
+      if (client.rowNumber) {
+        updateFinalQuotation(client.rowNumber, finalData, client.registeredDateTimeAD)
+          .then(() => updateClientStatus(client.rowNumber!, pendingStatus, currentStatusLog))
+          .catch(err => console.warn('[BACKGROUND-SHEETS] [advancePending]', err));
+      }
     } catch (err) {
       console.error('Failed to save final quotation:', err);
       toast.error('Failed to save final quotation');
@@ -387,7 +404,7 @@ export function DesktopClientRow({
     }
   };
 
-  // Handle BOOKED advance payment save
+  // Handle BOOKED advance payment save — Supabase-first
   const handleSaveBookedPayment = async (data: {
     amount: string;
     paymentType: string;
@@ -395,54 +412,71 @@ export function DesktopClientRow({
     nepaliDate: string;
     adDate: string;
   }) => {
-    if (!client.rowNumber) return;
-    
+    if (!client.registeredDateTimeAD) return;
+
     const parsedFinal = parseFinalQuotation(currentFinalQuotation);
     const finalAmount = parsedFinal ? parseInt(parsedFinal.amount.replace(/[^0-9]/g, '')) : 0;
-    
+
     setIsSavingBookedPayment(true);
     try {
-      // Add payment
-      const paymentResult = await addPayment(
-        client.rowNumber,
-        data.amount,
-        data.paymentType,
-        data.nepaliDate,
-        data.adDate,
-        data.bank,
-        currentPaymentsMade,
-        currentPaymentDatesAD,
-        finalAmount,
+      // ── Instant: compute status + payment locally ──
+      const newStatusLog = generateStatusLogEntry(pendingStatus, currentStatusLog);
+      const { updatedPaymentsMade, updatedPaymentDatesAD, remainingPayment } = computePaymentUpdate({
+        paymentAmount: data.amount,
+        paymentType: data.paymentType,
+        nepaliDate: data.nepaliDate,
+        nepaliDateAD: data.adDate,
+        bank: data.bank,
+        existingPaymentsMade: currentPaymentsMade,
+        existingPaymentDatesAD: currentPaymentDatesAD,
+        finalQuotationAmount: finalAmount,
+      });
+
+      // ── Instant Supabase: flip to 'booked' atomically ──
+      await migrateClientToBookedInCache(
         client.registeredDateTimeAD,
-        client.clientName
+        newStatusLog,
+        updatedPaymentsMade,
+        updatedPaymentDatesAD,
+        remainingPayment,
       );
-      
-      setCurrentPaymentsMade(paymentResult.paymentsMade);
-      setCurrentRemainingPayment(paymentResult.remainingPayment);
-      
-      // Update status to BOOKED
-      const statusResult = await updateClientStatus(client.rowNumber, pendingStatus, currentStatusLog);
-      setCurrentStatusLog(statusResult.statusLog);
-      
-      // Trigger green flash animation
+
+      setCurrentStatusLog(newStatusLog);
+      setCurrentPaymentsMade(updatedPaymentsMade);
+      setCurrentPaymentDatesAD(updatedPaymentDatesAD);
+      setCurrentRemainingPayment(remainingPayment);
       setShowSuccessFlash(true);
       setTimeout(() => setShowSuccessFlash(false), 1000);
-      
+
       if (onClientUpdate) {
         onClientUpdate({
           ...client,
-          paymentsMade: paymentResult.paymentsMade,
-          remainingPayment: paymentResult.remainingPayment,
-          statusLog: statusResult.statusLog
+          paymentsMade: updatedPaymentsMade,
+          remainingPayment,
+          statusLog: newStatusLog,
+          _source: 'booked',
         });
       }
-      
-      // Invalidate booked clients cache to force refresh on next access
+
       notifyCacheUpdate('booked-clients-invalidate');
-      
       toast.success(`Payment recorded & status updated to BOOKED`);
       setShowBookedPaymentDialog(false);
       setPendingStatus('');
+
+      // ── Background: Sheets sync (sequential — status must precede payment in Sheets) ──
+      const rowNum = client.rowNumber;
+      const regId = client.registeredDateTimeAD;
+      const clientName = client.clientName;
+      const existingPaid = currentPaymentsMade;
+      const existingDates = currentPaymentDatesAD;
+      const savedPendingStatus = pendingStatus;
+      const savedStatusLog = currentStatusLog;
+
+      if (rowNum) {
+        updateClientStatus(rowNum, savedPendingStatus, savedStatusLog)
+          .then(() => addPayment(rowNum, data.amount, data.paymentType, data.nepaliDate, data.adDate, data.bank, existingPaid, existingDates, finalAmount, regId, clientName))
+          .catch(err => console.warn('[BACKGROUND-SHEETS] [BOOKED-migration]', err));
+      }
     } catch (err) {
       console.error('Failed to save payment:', err);
       toast.error('Failed to record payment');
@@ -452,70 +486,76 @@ export function DesktopClientRow({
   };
 
   const handleHandlerChange = async (handler: string) => {
-    if (!client.rowNumber) return;
-    
-    setIsUpdatingHandler(true);
-    try {
-      await updateClientHandler(client.rowNumber, handler);
-      setCurrentHandler(handler);
-      toast.success(`Handler set to ${handler}`);
-      
-      if (onClientUpdate) {
-        onClientUpdate({ ...client, clientHandler: handler });
-      }
-    } catch (err) {
-      console.error('Failed to update handler:', err);
-      toast.error('Failed to update handler');
-    } finally {
-      setIsUpdatingHandler(false);
+    // ── Instant: update local state ──
+    setCurrentHandler(handler);
+    toast.success(`Handler set to ${handler}`);
+    if (onClientUpdate) onClientUpdate({ ...client, clientHandler: handler });
+
+    // ── Background: Supabase + Sheets ──
+    if (client.registeredDateTimeAD) {
+      updateClientFieldInCache(client.registeredDateTimeAD, 'clientHandler', handler)
+        .catch(err => console.warn('[BACKGROUND] [handler cache]', err));
+    }
+    if (client.rowNumber) {
+      updateClientHandler(client.rowNumber, handler)
+        .catch(err => console.warn('[BACKGROUND-SHEETS] [updateClientHandler]', err));
     }
   };
 
   const handleMindsetChange = async (mindset: string) => {
-    if (!client.rowNumber) return;
-    
-    setIsUpdatingMindset(true);
-    try {
-      const result = await updateClientMindset(client.rowNumber, mindset);
-      setCurrentMindset(result.mindset);
-      toast.success(`Mindset set to ${mindset}`);
-    } catch (err) {
-      console.error('Failed to update mindset:', err);
-      toast.error('Failed to update mindset');
-    } finally {
-      setIsUpdatingMindset(false);
+    // ── Instant: update local state ──
+    setCurrentMindset(mindset);
+    toast.success(`Mindset set to ${mindset}`);
+
+    // ── Background: Supabase + Sheets ──
+    if (client.registeredDateTimeAD) {
+      updateClientFieldInCache(client.registeredDateTimeAD, 'mindset', mindset)
+        .catch(err => console.warn('[BACKGROUND] [mindset cache]', err));
+    }
+    if (client.rowNumber) {
+      updateClientMindset(client.rowNumber, mindset)
+        .catch(err => console.warn('[BACKGROUND-SHEETS] [updateClientMindset]', err));
     }
   };
 
   const handleSaveQuotation = async () => {
-    if (!client.rowNumber) return;
-    
     const filledQuotations = Object.entries(quotationAmounts)
       .filter(([_, amount]) => amount.trim())
       .map(([tier, amount]) => `${tier}: NPR ${formatNPR(amount)}/-`);
-    
+
     if (filledQuotations.length === 0) {
       toast.error('Please enter at least one quotation amount');
       return;
     }
-    
+
     const quotationData = filledQuotations.join(' | ');
-    
+    const newStatusLog = generateStatusLogEntry('QUOTATION SENT', currentStatusLog);
+
     setIsSavingQuotation(true);
     try {
-      await updateClientQuotation(client.rowNumber, quotationData, client.registeredDateTimeAD);
+      // ── Instant: update local state ──
       setCurrentQuotationData(quotationData);
-      
-      // Update status to QUOTATION SENT
-      const statusResult = await updateClientStatus(client.rowNumber, 'QUOTATION SENT', currentStatusLog);
-      setCurrentStatusLog(statusResult.statusLog);
-      
+      setCurrentStatusLog(newStatusLog);
+
       toast.success('Quotation saved & status updated to QUOTATION SENT');
       setShowQuotationDialog(false);
       setQuotationAmounts({});
-      
+
       if (onClientUpdate) {
-        onClientUpdate({ ...client, quotationData, statusLog: statusResult.statusLog });
+        onClientUpdate({ ...client, quotationData, statusLog: newStatusLog });
+      }
+
+      // ── Background: Supabase + Sheets ──
+      if (client.registeredDateTimeAD) {
+        Promise.all([
+          updateClientFieldInCache(client.registeredDateTimeAD, 'quotationData', quotationData),
+          updateClientFieldInCache(client.registeredDateTimeAD, 'statusLog', newStatusLog),
+        ]).catch(err => console.warn('[BACKGROUND] [quotation cache]', err));
+      }
+      if (client.rowNumber) {
+        updateClientQuotation(client.rowNumber, quotationData, client.registeredDateTimeAD)
+          .then(() => updateClientStatus(client.rowNumber!, 'QUOTATION SENT', currentStatusLog))
+          .catch(err => console.warn('[BACKGROUND-SHEETS] [handleSaveQuotation]', err));
       }
     } catch (err) {
       console.error('Failed to save quotation:', err);
@@ -526,27 +566,36 @@ export function DesktopClientRow({
   };
 
   const handleSaveClientBargain = async () => {
-    if (!client.rowNumber || selectedClientBargainPackages.length === 0) return;
-    
+    if (selectedClientBargainPackages.length === 0) return;
+
     const bargainData = selectedClientBargainPackages
       .filter(tier => clientBargainPrices[tier])
       .map(tier => `${tier}: NPR ${formatNPR(clientBargainPrices[tier])}/-`)
       .join(' | ');
-    
+
     if (!bargainData) {
       toast.error('Please enter at least one bargain price');
       return;
     }
-    
+
     setIsSavingClientBargain(true);
     try {
-      const result = await updateClientBargainedRates(client.rowNumber, bargainData);
-      setCurrentClientBargainedRates(result.clientBargainedRates);
-      
+      // ── Instant: update local state ──
+      setCurrentClientBargainedRates(bargainData);
       toast.success('Client bargained prices saved');
       setShowClientBargainDialog(false);
       setSelectedClientBargainPackages([]);
       setClientBargainPrices({});
+
+      // ── Background: Supabase + Sheets ──
+      if (client.registeredDateTimeAD) {
+        updateClientFieldInCache(client.registeredDateTimeAD, 'clientBargainedRates', bargainData)
+          .catch(err => console.warn('[BACKGROUND] [clientBargain cache]', err));
+      }
+      if (client.rowNumber) {
+        updateClientBargainedRates(client.rowNumber, bargainData)
+          .catch(err => console.warn('[BACKGROUND-SHEETS] [updateClientBargainedRates]', err));
+      }
     } catch (err) {
       console.error('Failed to save bargain:', err);
       toast.error('Failed to save bargain prices');
@@ -556,27 +605,36 @@ export function DesktopClientRow({
   };
 
   const handleSaveCounterRate = async () => {
-    if (!client.rowNumber || selectedCounterPackages.length === 0) return;
-    
+    if (selectedCounterPackages.length === 0) return;
+
     const counterData = selectedCounterPackages
       .filter(tier => ourCounterPrices[tier])
       .map(tier => `${tier}: NPR ${formatNPR(ourCounterPrices[tier])}/-`)
       .join(' | ');
-    
+
     if (!counterData) {
       toast.error('Please enter at least one counter rate');
       return;
     }
-    
+
     setIsSavingCounterRate(true);
     try {
-      const result = await updateOurCounterRates(client.rowNumber, counterData);
-      setCurrentOurBargainedRates(result.ourBargainedRates);
-      
+      // ── Instant: update local state ──
+      setCurrentOurBargainedRates(counterData);
       toast.success('Our counter rates saved');
       setShowOurCounterRateDialog(false);
       setSelectedCounterPackages([]);
       setOurCounterPrices({});
+
+      // ── Background: Supabase + Sheets ──
+      if (client.registeredDateTimeAD) {
+        updateClientFieldInCache(client.registeredDateTimeAD, 'ourBargainedRates', counterData)
+          .catch(err => console.warn('[BACKGROUND] [counterRate cache]', err));
+      }
+      if (client.rowNumber) {
+        updateOurCounterRates(client.rowNumber, counterData)
+          .catch(err => console.warn('[BACKGROUND-SHEETS] [updateOurCounterRates]', err));
+      }
     } catch (err) {
       console.error('Failed to save counter rate:', err);
       toast.error('Failed to save counter rates');
@@ -586,14 +644,26 @@ export function DesktopClientRow({
   };
 
   const handleAddComment = async () => {
-    if (!client.rowNumber || !newComment.trim()) return;
-    
+    if (!newComment.trim()) return;
+
+    const newComments = generateCommentEntry(newComment.trim(), currentComments);
+
     setIsAddingComment(true);
     try {
-      const result = await addClientComment(client.rowNumber, newComment.trim(), currentComments, client.registeredDateTimeAD);
-      setCurrentComments(result.comments);
+      // ── Instant: update local state ──
+      setCurrentComments(newComments);
       setNewComment('');
       toast.success('Comment added');
+
+      // ── Background: Supabase + Sheets ──
+      if (client.registeredDateTimeAD) {
+        updateClientFieldInCache(client.registeredDateTimeAD, 'comments', newComments)
+          .catch(err => console.warn('[BACKGROUND] [comment cache]', err));
+      }
+      if (client.rowNumber) {
+        addClientComment(client.rowNumber, newComment.trim(), currentComments, client.registeredDateTimeAD)
+          .catch(err => console.warn('[BACKGROUND-SHEETS] [addClientComment]', err));
+      }
     } catch (err) {
       console.error('Failed to add comment:', err);
       toast.error('Failed to add comment');
@@ -603,19 +673,28 @@ export function DesktopClientRow({
   };
 
   const handleSaveFinalQuotation = async () => {
-    if (!client.rowNumber || !selectedFinalPackage || !newFinalQuotation.trim()) return;
-    
+    if (!selectedFinalPackage || !newFinalQuotation.trim()) return;
+
     const finalData = `${selectedFinalPackage} NPR ${formatNPR(newFinalQuotation)}/-`;
-    
+
     setIsSavingFinalQuotation(true);
     try {
-      const result = await updateFinalQuotation(client.rowNumber, finalData, client.registeredDateTimeAD);
-      setCurrentFinalQuotation(result.finalQuotation);
-      
+      // ── Instant: update local state ──
+      setCurrentFinalQuotation(finalData);
       toast.success('Final quotation locked');
       setShowFinalQuotationDialog(false);
       setSelectedFinalPackage('');
       setNewFinalQuotation('');
+
+      // ── Background: Supabase + Sheets ──
+      if (client.registeredDateTimeAD) {
+        updateClientFieldInCache(client.registeredDateTimeAD, 'finalQuotation', finalData)
+          .catch(err => console.warn('[BACKGROUND] [finalQuotation cache]', err));
+      }
+      if (client.rowNumber) {
+        updateFinalQuotation(client.rowNumber, finalData, client.registeredDateTimeAD)
+          .catch(err => console.warn('[BACKGROUND-SHEETS] [updateFinalQuotation]', err));
+      }
     } catch (err) {
       console.error('Failed to save final quotation:', err);
       toast.error('Failed to save final quotation');
@@ -625,52 +704,62 @@ export function DesktopClientRow({
   };
 
   const handleAddPayment = async () => {
-    if (!client.rowNumber || !paymentAmount || !selectedPaymentType || paymentNepaliDates.length === 0 || !selectedBank) return;
-    
+    if (!paymentAmount || !selectedPaymentType || paymentNepaliDates.length === 0 || !selectedBank) return;
+
     const parsed = parseFinalQuotation(currentFinalQuotation);
     const finalAmount = parsed ? parseInt(parsed.amount.replace(/[^0-9]/g, '')) : 0;
-    
+
     if (!finalAmount) {
       toast.error('No final quotation set');
       return;
     }
-    
+
     const selectedDate = paymentNepaliDates[0];
     const formattedNepaliDate = `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`;
-    
+
     const adDateResult = bsToAD(selectedDate.year, selectedDate.month, selectedDate.day);
-    const formattedADDate = adDateResult instanceof Date 
-      ? adDateResult.toISOString().split('T')[0]
+    const formattedADDate = adDateResult instanceof Date
+      ? `${adDateResult.getFullYear()}-${String(adDateResult.getMonth() + 1).padStart(2, '0')}-${String(adDateResult.getDate()).padStart(2, '0')}`
       : new Date().toISOString().split('T')[0];
-    
+
     setIsAddingPayment(true);
     try {
-      const result = await addPayment(
-        client.rowNumber,
+      // ── Instant: compute payment locally ──
+      const { updatedPaymentsMade, updatedPaymentDatesAD, remainingPayment } = computePaymentUpdate({
         paymentAmount,
-        selectedPaymentType,
-        formattedNepaliDate,
-        formattedADDate,
-        selectedBank,
-        currentPaymentsMade,
-        currentPaymentDatesAD,
-        finalAmount,
-        client.registeredDateTimeAD,
-        'tracker'
-      );
-      
-      setCurrentPaymentsMade(result.paymentsMade);
-      setCurrentPaymentDatesAD(result.paymentDatesAD);
-      setCurrentRemainingPayment(result.remainingPayment);
-      
+        paymentType: selectedPaymentType,
+        nepaliDate: formattedNepaliDate,
+        nepaliDateAD: formattedADDate,
+        bank: selectedBank,
+        existingPaymentsMade: currentPaymentsMade,
+        existingPaymentDatesAD: currentPaymentDatesAD,
+        finalQuotationAmount: finalAmount,
+      });
+
+      setCurrentPaymentsMade(updatedPaymentsMade);
+      setCurrentPaymentDatesAD(updatedPaymentDatesAD);
+      setCurrentRemainingPayment(remainingPayment);
+
       toast.success(`Payment of NPR ${formatNPR(paymentAmount)}/- recorded!`);
-      
       setPaymentAmount('');
       setSelectedPaymentType('');
       setPaymentNepaliDates([]);
       setSelectedBank('');
       setShowPaymentDrawer(false);
       setShowPaymentCalendar(false);
+
+      // ── Background: Supabase + Sheets ──
+      if (client.registeredDateTimeAD) {
+        Promise.all([
+          updateClientFieldInCache(client.registeredDateTimeAD, 'paymentsMade', updatedPaymentsMade),
+          updateClientFieldInCache(client.registeredDateTimeAD, 'paymentDatesAD', updatedPaymentDatesAD),
+          updateClientFieldInCache(client.registeredDateTimeAD, 'remainingPayment', remainingPayment),
+        ]).catch(err => console.warn('[BACKGROUND] [payment cache]', err));
+      }
+      if (client.rowNumber) {
+        addPayment(client.rowNumber, paymentAmount, selectedPaymentType, formattedNepaliDate, formattedADDate, selectedBank, currentPaymentsMade, currentPaymentDatesAD, finalAmount, client.registeredDateTimeAD, client.clientName)
+          .catch(err => console.warn('[BACKGROUND-SHEETS] [addPayment/desktop]', err));
+      }
     } catch (err) {
       console.error('Failed to add payment:', err);
       toast.error('Failed to record payment');
