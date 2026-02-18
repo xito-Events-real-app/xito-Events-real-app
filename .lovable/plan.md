@@ -1,172 +1,100 @@
 
-# `computePaymentUpdate` — Exact Format Specification & Implementation Plan
+# End-to-End Test Plan: Desktop View — Full Supabase-First Flow
 
-## Format Audit: What the Backend Produces (Verified Line-by-Line)
+## What Was Implemented (Summary)
 
-### The Canonical String (Backend `addPayment`, line 3700-3701)
-```
-NPR 30,000/- AS ADVANCE ON SUN 2082-10-04 IN MASTER BARUN
-```
+All 13 write operations across 4 files are now Supabase-first:
 
-Every component of this string is now verified:
-
-| Component | Backend Code | Frontend Must Replicate |
-|---|---|---|
-| Amount prefix | `NPR ` (with space) | `NPR ` |
-| Amount | `parseInt(paymentAmount).toLocaleString('en-IN')` | `parseInt(amount).toLocaleString('en-IN')` — **commas ARE included** |
-| Amount suffix | `/-` (no space before) | `/-` |
-| Separator | ` AS ` | ` AS ` |
-| Payment type | passed as-is (e.g. `ADVANCE`) | uppercase exactly |
-| Separator | ` ON ` | ` ON ` |
-| Weekday | `weekdays[adDateObj.getDay()]` using `new Date(yearPart, monthPart-1, dayPart)` | Must replicate this exact Date constructor (local timezone, not UTC) |
-| Date | `nepaliDate` = BS date string `YYYY-MM-DD` | BS date string passed in |
-| Separator | ` IN ` | ` IN ` |
-| Bank | `bank` as passed | uppercase, as-is |
-
-### Why Commas Are Mandatory
-
-All three parsing regexes in the codebase use `[\d,]+` to capture the amount group:
-
-- **`getTotalPaid()`** in `client-card-utils.ts` line 437: `/NPR\s*([\d,]+)\s*\/-/gi` — captures digits+commas, then strips commas for parsing. If commas are missing, the regex still matches, but **the display `amount` field in `ParsedPayment` would show without commas**. More critically, `toLocaleString('en-IN')` is the standard throughout the codebase.
-- **`parsePayments()`** in `client-card-utils.ts` line 772: same `[\d,]+` group.
-- **`parsePayments()`** in `PaymentHistorySheet.tsx` line 65: same `[\d,]+` group.
-- **Backend re-parse** at line 3722: `/NPR\s*([\d,]+)\s*\/-/i` — same pattern used when recalculating totals on subsequent payment additions.
-
-**Verdict: commas MUST be present.** The format is `NPR X,XXX/-` (with en-IN locale commas). This matches the backend exactly.
-
-### `updatePayment` Difference: Bank is Uppercased
-In `updatePaymentEntry` (line 3907), the bank is stored as `${newBank.toUpperCase()}`. The `addPayment` flow does not uppercase the bank — it uses the value as passed. The utility should not uppercase the bank (for `addPayment` parity), but this is noted for the `updatePayment` path.
-
-### Weekday Derivation — Critical Detail
-Backend at lines 3694-3697:
-```typescript
-const [yearPart, monthPart, dayPart] = nepaliDateAD.split('-').map(Number);
-const adDateObj = new Date(yearPart, monthPart - 1, dayPart); // LOCAL timezone constructor
-const weekday = weekdays[adDateObj.getDay()];
-```
-This uses `new Date(year, month-1, day)` — **not** `new Date('YYYY-MM-DD')`. The string constructor would parse as UTC and cause a 1-day offset in some timezones. The frontend utility must replicate the **local timezone constructor** exactly.
-
-### Payment Entry Order: Append, Not Prepend
-Backend line 3704-3706: new entries are **appended** (newest at the bottom):
-```typescript
-const updatedPaymentsMade = existingPaymentsMade 
-  ? `${existingPaymentsMade}\n${newPaymentEntry}` 
-  : newPaymentEntry;
-```
-This is the **opposite** of status logs and comments which prepend (newest at top). The utility must append.
-
----
-
-## Dry Run: `computePaymentUpdate` Logic (3 Bullets)
-
-- Parse `nepaliDateAD` (format `YYYY-MM-DD`) into year/month/day parts, construct `new Date(year, month-1, day)` using the local timezone constructor, look up `['SUN','MON','TUE','WED','THU','FRI','SAT'][date.getDay()]` to get the weekday abbreviation — exactly matching the backend's derivation
-- Format the amount as `NPR ${parseInt(paymentAmount).toLocaleString('en-IN')}/-`, build the full entry string `NPR X,XXX/- AS TYPE ON WEEKDAY YYYY-MM-DD IN BANK`, then append to `existingPaymentsMade` with `\n` separator (newest at bottom, matching backend line 3704) and append to `existingPaymentDatesAD` with `\n`
-- Parse all lines from the newly-updated `updatedPaymentsMade` using the regex `/NPR\s*([\d,]+)\s*\/-/i` (same as `getTotalPaid()`), sum to get `totalPaid`, compute `remaining = finalQuotationAmount - totalPaid`, format remaining as `NPR ${remaining.toLocaleString('en-IN')}/-`
-
----
-
-## Impact Analysis
-
-### File Modified: `src/lib/timestamp-utils.ts`
-**Change:** Add `computePaymentUpdate()` export — new function only, zero changes to existing code.
-
-**Potential breakage:** None. This is a pure utility function with no side effects. It does not import or modify any existing module.
-
-**Affected consumers (once wired up in subsequent steps):**
-- `src/components/booked/PaymentDrawer.tsx` — will call this instead of awaiting the edge function for UI state
-- `src/components/finance/PaymentDrawer.tsx` — same
-- `src/components/desktop/DesktopClientRow.tsx` — `handleSaveBookedPayment`
-- `src/pages/ClientDetail.tsx` — `handleSaveBookedPayment`
-
-None of those files are modified in this step. The function is created here and wired in later steps.
-
----
-
-## Exact Function Signature and Implementation
-
-```typescript
-/**
- * Compute a payment update locally — mirrors the backend addPayment logic exactly.
- *
- * String format produced: "NPR X,XXX/- AS TYPE ON WEEKDAY YYYY-MM-DD IN BANK"
- * - Amount: toLocaleString('en-IN') — commas ARE included (e.g. "30,000")
- * - Weekday: derived from nepaliDateAD using local-timezone Date constructor
- *            new Date(year, month-1, day) — NOT new Date('YYYY-MM-DD') (UTC would offset by 1 day)
- * - New entry is APPENDED (not prepended) — newest payment is at the bottom
- * - Remaining format: "NPR X,XXX/-"
- *
- * This matches backend addPayment lines 3693-3736 exactly.
- */
-export function computePaymentUpdate(params: {
-  paymentAmount: string;          // Raw amount string or number, e.g. "30000" or "30,000"
-  paymentType: string;            // e.g. "ADVANCE", "PARTIAL", "FINAL"
-  nepaliDate: string;             // BS date "YYYY-MM-DD"
-  nepaliDateAD: string;           // AD date "YYYY-MM-DD" — used for weekday derivation
-  bank: string;                   // e.g. "MASTER BARUN", "ESEWA"
-  existingPaymentsMade: string;   // Current Column AE value
-  existingPaymentDatesAD: string; // Current Column AF value
-  finalQuotationAmount: number;   // Parsed integer, e.g. 120000
-}): {
-  updatedPaymentsMade: string;    // New Column AE value (ready to write to Supabase + Sheets)
-  updatedPaymentDatesAD: string;  // New Column AF value
-  remainingPayment: string;       // Formatted "NPR X,XXX/-" for Column AG
-  totalPaid: number;              // Integer sum of all payments including new one
-}
-```
-
-### Implementation Details
-
-**Step 1 — Weekday derivation (local timezone, matching backend lines 3694-3697):**
-```typescript
-const weekdays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-const [yearPart, monthPart, dayPart] = params.nepaliDateAD.split('-').map(Number);
-const adDateObj = new Date(yearPart, monthPart - 1, dayPart); // Local timezone, not UTC
-const weekday = weekdays[adDateObj.getDay()];
-```
-
-**Step 2 — Format amount and build entry string (matching backend lines 3700-3701):**
-```typescript
-const numericAmount = parseInt(String(params.paymentAmount).replace(/,/g, ''), 10);
-const formattedAmount = `NPR ${numericAmount.toLocaleString('en-IN')}/-`;
-const newPaymentEntry = `${formattedAmount} AS ${params.paymentType} ON ${weekday} ${params.nepaliDate} IN ${params.bank}`;
-```
-
-**Step 3 — Append to existing (matching backend lines 3704-3711):**
-```typescript
-const updatedPaymentsMade = params.existingPaymentsMade
-  ? `${params.existingPaymentsMade}\n${newPaymentEntry}`
-  : newPaymentEntry;
-
-const updatedPaymentDatesAD = params.existingPaymentDatesAD
-  ? `${params.existingPaymentDatesAD}\n${params.nepaliDateAD}`
-  : params.nepaliDateAD;
-```
-
-**Step 4 — Recalculate totals (matching backend lines 3717-3736):**
-```typescript
-const allPayments = updatedPaymentsMade.split('\n').filter(Boolean);
-let totalPaid = 0;
-for (const entry of allPayments) {
-  const match = entry.match(/NPR\s*([\d,]+)\s*\/-/i);
-  if (match) {
-    totalPaid += parseInt(match[1].replace(/,/g, ''), 10);
-  } else {
-    const fallbackMatch = entry.match(/NPR\s*([\d,]+)/i);
-    if (fallbackMatch) {
-      totalPaid += parseInt(fallbackMatch[1].replace(/,/g, ''), 10);
-    }
-  }
-}
-const remaining = finalQuotationAmount - totalPaid;
-const remainingPayment = `NPR ${remaining.toLocaleString('en-IN')}/-`;
-```
-
----
-
-## File to Modify
-
-| File | Change |
+| File | Handlers Converted |
 |---|---|
-| `src/lib/timestamp-utils.ts` | ADD `computePaymentUpdate()` — pure utility, no changes to existing functions |
+| `src/lib/timestamp-utils.ts` | `computePaymentUpdate()` added |
+| `src/lib/clients-supabase-cache.ts` | `migrateClientToBookedInCache()` added |
+| `src/components/desktop/DesktopClientRow.tsx` | 11 handlers: `handleCall`, `handleStatusChange`, `handleHandlerChange`, `handleMindsetChange`, `handleSaveQuotation`, `handleSaveClientBargain`, `handleSaveCounterRate`, `handleAddComment`, `handleSaveFinalQuotation`, `handleSaveAdvancePendingQuotation`, `handleSaveBookedPayment` |
+| `src/components/dashboard/ClientDetailSheet.tsx` | `handleSave` |
 
-No other files are touched in this step. The wiring of this utility into `PaymentDrawer`, `DesktopClientRow`, and `ClientDetail` is part of the subsequent migration steps.
+## Test Sequence
+
+### Step 1 — Access Desktop View
+
+1. Log in at `/login`
+2. Once on the dashboard, click the Monitor icon (top-right) to toggle Desktop Mode
+3. Data loads from the Supabase cache — the client table should appear with status categories
+
+### Step 2 — Log a Call
+
+1. Find any client in the table with a phone number
+2. Click the phone icon (Direct Call) or WhatsApp icon
+3. **Expected:** Toast "DIRECT call logged" appears instantly — no waiting
+4. **Expected:** The call count badge on that row increments immediately
+5. **Verify in background:** After ~5-10 seconds, open the Client Detail page for that client and confirm the call log entry matches the format `H:MM AM/PM DIRECT (YYYY-MM-DD)` at the top
+
+### Step 3 — Change a Status
+
+1. On the same client row, click the status dropdown
+2. Select a status that does NOT trigger an interception dialog (e.g. "CALL NOT RECEIVED", "TEXTED", "NUMBER PROVIDED")
+3. **Expected:** Status badge updates instantly on the row — no spinner wait
+4. **Expected:** Toast appears immediately
+5. If you select "QUOTATION SENT": the quotation dialog opens — fill in amounts, submit — status + quotation both update instantly
+
+### Step 4 — Add a Comment
+
+1. Expand the client row (click the chevron) or use the comment dialog button
+2. Type a comment and submit
+3. **Expected:** Comment appears instantly in the expanded view
+4. **Expected:** Toast "Comment added" shows without delay
+
+### Step 5 — Change Handler / Mindset
+
+1. Use the Handler dropdown on the row to assign a handler
+2. Use the Mindset dropdown to set a mindset
+3. **Expected:** Both update instantly in the row with a toast — no loading indicator
+
+### Step 6 — Save a Quotation (Quotation Dialog Path)
+
+1. Find a client in "JUST ENQUIRED" or early-stage status
+2. Change status to "QUOTATION SENT" — the quotation dialog should intercept
+3. Enter NPR amounts for at least one package tier
+4. Click Save
+5. **Expected:** Dialog closes instantly, status shows "QUOTATION SENT", quotation data visible in expanded row — all before any Sheets response
+
+### Step 7 — BOOKED Migration with Payment (Critical Path)
+
+This is the most complex test. Find a client in "ADVANCE PENDING" status with a final quotation already set.
+
+1. Click the status dropdown and select "BOOKED"
+2. **Expected:** The BOOKED payment dialog opens (intercept)
+3. Enter a payment amount, select type (ADVANCE), pick a date on the Nepali calendar, select a bank
+4. Click "Book & Record Payment"
+5. **Expected (instant — before any network response):**
+   - Dialog closes
+   - Status row shows "BOOKED" badge
+   - Payment field shows the new payment entry
+   - Remaining payment updates
+   - Toast "Payment recorded & status updated to BOOKED"
+6. **Expected (background — after ~5-30 seconds):**
+   - Google Sheets "CLIENT TRACKER" moves the row to "BOOKED CLIENTS" sheet
+   - Payment entry appears in Column AE in format: `NPR X,XXX/- AS ADVANCE ON WED 2082-10-12 IN BANK NAME`
+   - Remaining payment formula in Column AG updates
+
+### Step 8 — Edit Client via ClientDetailSheet
+
+1. Click on a client name to open the Client Detail Sheet (bottom drawer)
+2. Click the pencil/edit icon
+3. Change the client name or a contact number
+4. Click the checkmark Save
+5. **Expected:** Sheet closes instantly after Supabase write — no 2-4 second wait for Sheets response
+6. **Expected:** The updated name/number reflects immediately in the table row
+
+## What to Watch For (Failure Indicators)
+
+- Any action that takes more than ~300ms to show feedback (indicates it is still awaiting Sheets) — this should NOT happen after the migration
+- Console warnings starting with `[BACKGROUND-SHEETS]` are normal — these mean Sheets sync failed in the background but Supabase already has the data
+- Console warnings starting with `[BACKGROUND]` indicate a Supabase cache write failure — these should be investigated
+- If the BOOKED payment format in Sheets shows `NPR 30000/-` (no commas) instead of `NPR 30,000/-`, the `computePaymentUpdate` formatter is not being used correctly
+
+## Technical Notes (For Reference)
+
+- All handlers use the pattern: instant local state update → Supabase write → background Sheets sync with `.catch(err => console.warn(...))`
+- The BOOKED migration uses `migrateClientToBookedInCache()` which atomically sets `sheet_source: 'booked'` and `synced_to_sheet: false` — this is the single Supabase write that guarantees data safety before the Sheets migration runs
+- Payment string format produced by `computePaymentUpdate()`: `NPR {en-IN localized amount}/- AS {TYPE} ON {WEEKDAY} {BS-date} IN {BANK}` — weekday derived using local-timezone `new Date(year, month-1, day)` constructor to avoid UTC offset issues
+- Cache invalidation after BOOKED migration fires `notifyCacheUpdate('booked-clients-invalidate')` — the Booked Clients module should auto-refresh and show the newly booked client
