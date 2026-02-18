@@ -91,10 +91,11 @@ export function AssignNoteDialog({ open, onOpenChange, note, onSuccess }: Assign
             .update({ benzo_keep_notes: noteData, synced_to_sheet: false, updated_at: new Date().toISOString() } as any)
             .eq('client_name', client.clientName);
         }
-      } catch (cacheErr) {
-        console.warn("Cache update failed (non-blocking):", cacheErr);
-      }
-      toast.success(`Note assigned to ${client.clientName}`, {
+        } catch (cacheErr) {
+          console.warn("Cache update failed (non-blocking):", cacheErr);
+        }
+        window.dispatchEvent(new CustomEvent('cache-updated', { detail: { type: 'clients-invalidate' } }));
+        toast.success(`Note assigned to ${client.clientName}`, {
         action: {
           label: "View Client",
           onClick: () => navigate(`/client/${encodeURIComponent(client.registeredDateTimeAD!)}`),
