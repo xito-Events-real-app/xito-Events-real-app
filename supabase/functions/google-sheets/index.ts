@@ -2641,15 +2641,18 @@ async function addClient(accessToken: string, spreadsheetId: string, clientData:
     body: JSON.stringify({ values }),
   });
 
-  // If initial status is BOOKED, copy to BOOKED CLIENTS sheet
+  // If initial status is BOOKED, MOVE to BOOKED CLIENTS sheet (copy then delete from tracker)
   if (selectedStatus.toUpperCase() === 'BOOKED') {
-    console.log('[addClient] Status is BOOKED, copying to BOOKED CLIENTS sheet...');
+    console.log('[addClient] Status is BOOKED, moving to BOOKED CLIENTS sheet...');
     const isAlreadyBooked = await checkIfAlreadyBooked(accessToken, spreadsheetId, registeredDateTimeAD);
     if (!isAlreadyBooked) {
       await copyToBookedClients(accessToken, spreadsheetId, 2); // Row 2 is where we just inserted
-      console.log('[addClient] Client copied to BOOKED CLIENTS sheet successfully');
+      await deleteTrackerRow(accessToken, spreadsheetId, 2);    // MOVE not COPY: remove ghost row from CLIENT TRACKER
+      console.log('[addClient] Client MOVED to BOOKED CLIENTS, removed from CLIENT TRACKER');
     } else {
       console.log('[addClient] Client already exists in BOOKED CLIENTS, skipping copy');
+      await deleteTrackerRow(accessToken, spreadsheetId, 2);    // Still remove the tracker row to prevent duplicates
+      console.log('[addClient] Removed duplicate tracker row for already-booked client');
     }
   }
 
