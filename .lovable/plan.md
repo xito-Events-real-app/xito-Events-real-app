@@ -1,258 +1,205 @@
 
-# Three Enhancements to the Expanded Row Panel
+# Fixes to the EventLogisticsPanel in AllClientsCrewTable
 
-## What Changes
+## Three User-Reported Issues
 
-### 1. Venue Card — Area in Bold + "Starts at (time)" 
-### 2. Freelancer Names in Expanded Row — Personal Note Below Each Name
-### 3. Freelancer Booking Calendar Link — Button to Open Their Crew Schedule
+### Issue 1: Crew section is a separate row — should be inline below freelancer names
+Currently the "Crew" section renders AFTER the cards in a bordered section below. The user wants crew names + notes to appear INSIDE the expanded panel, not as a new separated block.
 
----
+### Issue 2: Calendar link opens full /crew-schedule page — should open `CrewScheduleEventSheet` popup
+Currently the `<a href="/crew-schedule/...">` opens the freelancer's full page in a new tab. The user wants the same popup (`CrewScheduleEventSheet`) that already exists on the client detail page — showing ONLY that specific event's details.
 
-## Current State Analysis
-
-**`EventLogisticsPanel`** lives at lines 965–1103 in `AllClientsCrewTable.tsx`.
-
-**Current Venue card (lines 1059–1077):**
-```tsx
-{eventDetail?.venue_name && <p className="text-xs font-semibold text-gray-800 truncate">{eventDetail.venue_name}</p>}
-{(eventDetail?.venue_city || eventDetail?.venue_area) && (
-  <p className="flex items-center gap-1 text-xs text-gray-600 mt-0.5">
-    <MapPin className="w-2.5 h-2.5 shrink-0" />{[eventDetail.venue_city, eventDetail.venue_area].filter(Boolean).join(', ')}
-  </p>
-)}
-{(eventDetail?.event_start_time || eventDetail?.event_end_time) && (
-  <p className="text-xs text-gray-500 mt-0.5">⏰ {[eventDetail.event_start_time, eventDetail.event_end_time].filter(Boolean).join(' – ')}</p>
-)}
-```
-
-**Current `toggleExpand` query for `freelancer_event_settings` (lines 170–173):**
-```typescript
-supabase.from('freelancer_event_settings')
-  .select('show_bride_details,show_groom_details,show_venue_details,show_parlour_details,show_bride_location,show_groom_location')
-  .eq('registered_date_time_ad', row.registeredDateTimeAD)
-  .eq('event_name', row.event),
-```
-
-Missing: `freelancer_name`, `role_code`, `personal_note` — needed for the new freelancer notes section.
-
-**Current `EventLogisticsPanel` signature (line 966):**
-```typescript
-function EventLogisticsPanel({ eventDetail, contactDetail, settings, loading }: { ... })
-```
-
-Missing: `row` (the FreelancerAssignment) — needed to iterate over assigned freelancer names and match them to their settings.
+### Issue 3: Venue area layout — area name next to the venue name, starting time in BIG letters
+Currently: venue name → city (small) → **area** (bold, own line) → "Starts at" (tiny violet text)  
+Requested: venue name + **AREA NAME** on the same row (or immediately adjacent), starting time displayed prominently.
 
 ---
 
-## Change 1: Fix Venue Card Layout
+## Solution Design
 
-**Before:**
-- Venue name
-- MapPin + city, area (comma-joined)
-- ⏰ start – end time
+### Fix 1: Crew Section Inline — inside cards grid
 
-**After (user requested):**
-- Venue name
-- **AREA** in bold (on its own line)
-- Starts at `(venue_start_time)` immediately below area
+Instead of a separate `<div>` section below all the cards with a border-top separator, the crew mini-cards should be part of the same `flex flex-wrap gap-2` cards row. The crew members get their own compact card type alongside Bride/Groom/Venue/Parlour.
 
-The area should be displayed in bold on its own line. The city can be smaller/secondary. Then "Starts at 8:00 AM" below it.
+**New approach:** Add each assigned crew member as a card in the `cards` array (same array as Bride/Groom/Venue/Parlour). Each crew card contains:
+- Role code badge (colored)
+- Freelancer name
+- Personal note (if any) in amber
+- Calendar sheet button (icon only)
 
-**New venue card body:**
-```tsx
-{eventDetail?.venue_name && (
-  <p className="text-xs font-semibold text-gray-800 truncate">{eventDetail.venue_name}</p>
-)}
-{eventDetail?.venue_city && (
-  <p className="text-[10px] text-gray-500 mt-0.5">{eventDetail.venue_city}</p>
-)}
-{eventDetail?.venue_area && (
-  <p className="text-xs font-bold text-gray-800 mt-0.5">{eventDetail.venue_area}</p>
-)}
-{eventDetail?.event_start_time && (
-  <p className="text-[10px] text-violet-600 mt-0.5">Starts at {eventDetail.event_start_time}</p>
-)}
-{eventDetail?.event_end_time && (
-  <p className="text-[10px] text-gray-400">Ends at {eventDetail.event_end_time}</p>
-)}
-{eventDetail?.venue_map && (
-  <a href={eventDetail.venue_map} target="_blank" rel="noopener noreferrer" className="text-[10px] text-violet-600 hover:underline mt-0.5 block">Map →</a>
-)}
-```
-
-Same treatment for the **Parlour card** — area in bold, then "Starts at (parlour_start_time)".
-
----
-
-## Change 2: Freelancer Personal Notes in Expanded Row
-
-### Step A — Expand the Supabase Query
-
-In `toggleExpand` (line 170–173), add `freelancer_name`, `role_code`, `personal_note` to the select:
-
-```typescript
-supabase.from('freelancer_event_settings')
-  .select('show_bride_details,show_groom_details,show_venue_details,show_parlour_details,show_bride_location,show_groom_location,freelancer_name,role_code,personal_note')
-  .eq('registered_date_time_ad', row.registeredDateTimeAD)
-  .eq('event_name', row.event),
-```
-
-### Step B — Pass `row` to `EventLogisticsPanel`
-
-At both call sites (mobile line 756, desktop line 925), pass `row`:
-```tsx
-<EventLogisticsPanel
-  eventDetail={cached?.eventDetail ?? null}
-  contactDetail={cached?.contactDetail ?? null}
-  settings={cached?.settings ?? []}
-  loading={cached?.loading ?? true}
-  row={row}  // ← ADD THIS
-/>
-```
-
-### Step C — Add `row` to `EventLogisticsPanel` Props
-
-Update the function signature:
-```typescript
-function EventLogisticsPanel({ eventDetail, contactDetail, settings, loading, row }: {
-  eventDetail: any | null;
-  contactDetail: any | null;
-  settings: any[];
-  loading: boolean;
-  row: FreelancerAssignment;
-})
-```
-
-### Step D — Render Freelancer Notes Section
-
-After the existing cards grid, add a new "Crew Notes" section. It iterates over all `CREW_COLUMNS`, finds assigned names, looks them up in `settings` by `freelancer_name`, and if there's a `personal_note`, shows it:
+This way crew cards flow naturally in the same horizontal flex-wrap row as the logistics cards — no separate section, no border-top divider.
 
 ```tsx
-{/* Crew Personal Notes */}
-{(() => {
-  const notedCrew: { name: string; role: string; note: string }[] = [];
-  for (const col of CREW_COLUMNS) {
-    const name = (row[col.field] as string)?.trim();
-    if (!name) continue;
-    const setting = settings.find(s => 
-      s.freelancer_name?.trim().toLowerCase() === name.toLowerCase()
-    );
-    if (setting?.personal_note?.trim()) {
-      notedCrew.push({ name, role: col.short, note: setting.personal_note.trim() });
-    }
-  }
-  if (notedCrew.length === 0) return null;
-  return (
-    <div className="mt-2.5 pt-2.5 border-t border-gray-200">
-      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1.5">📝 Crew Notes</p>
-      <div className="flex flex-wrap gap-2">
-        {notedCrew.map(({ name, role, note }) => (
-          <div key={name} className="bg-yellow-50 border border-yellow-200 rounded-lg px-2.5 py-1.5 max-w-[240px]">
-            <p className="text-[10px] font-bold text-gray-700">{name} <span className="text-gray-400 font-normal">({role})</span></p>
-            <p className="text-[10px] text-gray-600 mt-0.5 leading-relaxed whitespace-pre-line">{note}</p>
-          </div>
-        ))}
+// Add crew cards into the same `cards` array
+for (const col of CREW_COLUMNS) {
+  const name = (row[col.field] as string)?.trim();
+  if (!name) continue;
+  const setting = settings.find(s =>
+    s.freelancer_name?.trim().toLowerCase() === name.toLowerCase()
+  );
+  const note = setting?.personal_note?.trim() || '';
+  cards.push(
+    <div key={`crew-${col.field}-${name}`} className="border border-gray-200 rounded-lg p-2.5 bg-white min-w-[120px]">
+      <span className="text-[10px] font-bold text-gray-400 uppercase">{col.short}</span>
+      <div className="flex items-center justify-between gap-1 mt-0.5">
+        <p className="text-xs font-semibold text-gray-800 truncate">{name}</p>
+        <button
+          onClick={() => setOpenCalendarFor({ name, col, row })}
+          className="shrink-0 p-1 rounded hover:bg-violet-100 text-violet-400 hover:text-violet-600"
+          title={`${name} event details`}
+        >
+          <CalendarIcon className="w-3 h-3" />
+        </button>
       </div>
+      {note && <p className="text-[10px] text-amber-700 bg-yellow-50 rounded px-1.5 py-0.5 mt-1 border border-yellow-100 whitespace-pre-line">{note}</p>}
     </div>
   );
-})()}
+}
 ```
 
----
+### Fix 2: CrewScheduleEventSheet popup instead of full-page link
 
-## Change 3: Booking Calendar Button Per Freelancer
+**How it works on the client page:** In `FreelancerAssignmentSection.tsx`, clicking the Calendar icon sets `calendarOpenFor` (a freelancer name string), which opens `<CrewScheduleEventSheet>` passing the current `assignment` mapped to `AssignmentRow` format, the matched `eventDetail`, contact details, and `freelancerName`.
 
-Under each freelancer note card (or even for freelancers without notes), add a small "📅 View Calendar" button that navigates to `/crew-schedule/:freelancerName`.
+**In AllClientsCrewTable:** We already have:
+- `row: FreelancerAssignment` — has all crew assignment fields and event info
+- `cached.eventDetail` — the fetched event_details_cache row
+- `cached.contactDetail` — the fetched contact_details_cache row
 
-The button is added inside each crew note card:
+We need to:
+1. Add a state `calendarOpenFor: { name: string; row: FreelancerAssignment; eventDetail: any; contactDetail: any } | null` inside `EventLogisticsPanel`
+2. Map `row` → `AssignmentRow` format (same mapping as in FreelancerAssignmentSection)
+3. Render `<CrewScheduleEventSheet>` when state is set
+
+Since `EventLogisticsPanel` is currently a pure function with no state, we need to convert it to use `useState`. The sheet also needs `eventDetail` typed as `EventDetail` from `useEventDetails`. The `cached.eventDetail` from `event_details_cache` uses the same column names so we can cast/map it.
+
+**AssignmentRow mapping from FreelancerAssignment (`row`):**
+```typescript
+const mappedRow: AssignmentRow = {
+  event_year: row.eventYear || null,
+  event_month: row.eventMonth || null,
+  event_day: row.eventDay || null,
+  event: row.event || '',
+  client_name: row.clientName || null,
+  registered_date_time_ad: row.registeredDateTimeAD,
+  photographer_bride: row.photographerBride || null,
+  photographer_groom: row.photographerGroom || null,
+  videographer_bride: row.videographerBride || null,
+  videographer_groom: row.videographerGroom || null,
+  extra_photographer: row.extraPhotographer || null,
+  extra_videographer: row.extraVideographer || null,
+  assistant: row.assistant || null,
+  iphone_shooter: row.iphoneShooter || null,
+  drone_operator: row.droneOperator || null,
+  fpv_operator: row.fpvOperator || null,
+};
+```
+
+**EventDetail mapping from `eventDetail` (event_details_cache row):**
+The `CrewScheduleEventSheet` accepts `eventDetail?: EventDetail`. The `EventDetail` type from `useEventDetails` has many fields. We map the fetched `eventDetail` to match what the sheet needs (venue, parlour, times, etc.).
+
+### Fix 3: Venue card — Area name adjacent to venue, start time in BIG letters
+
+**Current layout (wrong):**
+```
+📍 VENUE
+Taj Banquet Hall
+[city — small gray]
+Baneshwor [bold own line]
+Starts at 8:00 AM [tiny violet]
+Ends at... [tiny gray]
+```
+
+**New layout (correct):**
+```
+📍 VENUE
+Taj Banquet Hall  ·  BANESHWOR
+[city — small gray]
+[Map →]
+
+ 8:00 AM
+[small "Starts at" label above big time]
+```
+
+Specifically:
+- Venue name + area on the **same line** (`venue_name · venue_area`)  
+- Area in bold/emphasized inline next to venue name
+- City on its own small line below
+- **Start time in large text** (e.g. `text-lg font-bold` or `text-xl`)
+- "Starts at" as a tiny label above the big time
+- "Ends at" remains small
+- Map link below
+
 ```tsx
-<div key={name} className="bg-yellow-50 border border-yellow-200 rounded-lg px-2.5 py-1.5 max-w-[240px]">
-  <div className="flex items-center justify-between gap-2">
-    <p className="text-[10px] font-bold text-gray-700">{name} <span className="text-gray-400 font-normal">({role})</span></p>
-    <a
-      href={`/crew-schedule/${encodeURIComponent(name)}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="shrink-0 text-[9px] text-violet-600 hover:underline flex items-center gap-0.5"
-      title={`Open ${name}'s booking calendar`}
-    >
-      <ExternalLink className="w-2.5 h-2.5" /> Cal
-    </a>
+// New Venue card body
+<div key="venue" className="border border-amber-200 rounded-lg p-2.5 bg-amber-50/50 min-w-[160px]">
+  <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wide mb-1.5">📍 Venue</div>
+  
+  {/* Venue name + Area on same line */}
+  <div className="flex items-baseline gap-1.5 flex-wrap">
+    {eventDetail?.venue_name && (
+      <span className="text-xs font-semibold text-gray-800">{eventDetail.venue_name}</span>
+    )}
+    {eventDetail?.venue_area && (
+      <span className="text-xs font-black text-amber-800 uppercase tracking-wide">· {eventDetail.venue_area}</span>
+    )}
   </div>
-  {note && <p className="text-[10px] text-gray-600 mt-0.5 leading-relaxed whitespace-pre-line">{note}</p>}
+
+  {/* City small */}
+  {eventDetail?.venue_city && (
+    <p className="text-[10px] text-gray-500 mt-0.5">{eventDetail.venue_city}</p>
+  )}
+
+  {/* Start time BIG */}
+  {eventDetail?.event_start_time && (
+    <div className="mt-1.5">
+      <p className="text-[9px] text-gray-400 uppercase tracking-wide">Starts at</p>
+      <p className="text-base font-black text-violet-700 leading-tight">{eventDetail.event_start_time}</p>
+    </div>
+  )}
+
+  {/* End time small */}
+  {eventDetail?.event_end_time && (
+    <p className="text-[10px] text-gray-400 mt-0.5">Ends at {eventDetail.event_end_time}</p>
+  )}
+
+  {eventDetail?.venue_map && (
+    <a href={eventDetail.venue_map} target="_blank" rel="noopener noreferrer" className="text-[10px] text-violet-600 hover:underline mt-1 block">Map →</a>
+  )}
 </div>
 ```
 
-For freelancers **without** a personal note but who are assigned, we still show the calendar link. So the section loops over ALL assigned crew (not just those with notes) and shows:
-- Name + role code
-- Personal note (if any)
-- Calendar link
-
-This means splitting the rendering: a "Crew" section at the bottom of the expanded panel listing all assigned people with optional notes and calendar links.
-
-**Final Crew section (replaces the "notedCrew only" approach):**
-
-```tsx
-{/* All Assigned Crew — Notes + Calendar links */}
-{(() => {
-  const assignedCrew: { name: string; role: string; shortCode: string; note: string }[] = [];
-  for (const col of CREW_COLUMNS) {
-    const name = (row[col.field] as string)?.trim();
-    if (!name) continue;
-    const setting = settings.find(s =>
-      s.freelancer_name?.trim().toLowerCase() === name.toLowerCase()
-    );
-    assignedCrew.push({ name, role: col.label, shortCode: col.short, note: setting?.personal_note?.trim() || '' });
-  }
-  if (assignedCrew.length === 0) return null;
-  return (
-    <div className="mt-2.5 pt-2.5 border-t border-gray-200">
-      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1.5">👥 Crew</p>
-      <div className="flex flex-wrap gap-2">
-        {assignedCrew.map(({ name, shortCode, note }) => (
-          <div key={`${name}-${shortCode}`} className="bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 min-w-[130px] max-w-[220px]">
-            <div className="flex items-center justify-between gap-1">
-              <div className="min-w-0">
-                <span className="text-[10px] font-bold text-gray-500 uppercase">{shortCode}</span>
-                <p className="text-xs font-semibold text-gray-800 truncate">{name}</p>
-              </div>
-              <a
-                href={`/crew-schedule/${encodeURIComponent(name)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="shrink-0 p-1 rounded hover:bg-violet-100 text-violet-400 hover:text-violet-600 transition-colors"
-                title={`Open ${name}'s booking calendar`}
-              >
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
-            {note && (
-              <p className="text-[10px] text-amber-700 bg-yellow-50 rounded px-1.5 py-0.5 mt-1 leading-relaxed whitespace-pre-line border border-yellow-100">{note}</p>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-})()}
-```
+Same treatment for Parlour card (area + parlour_start_time big).
 
 ---
 
-## Summary of All File Changes
+## Files Changed
 
-**File: `src/components/suite/AllClientsCrewTable.tsx`**
+### `src/components/suite/AllClientsCrewTable.tsx`
 
-### 1. `toggleExpand` (line 170–173) — Add missing fields to settings query
-Change `.select('show_bride_details,...,show_groom_location')` to also include `freelancer_name,role_code,personal_note`.
+**1. Convert `EventLogisticsPanel` to a component with state** (add `useState` for `calendarOpenFor`)
 
-### 2. `EventLogisticsPanel` call sites (lines 756, 925) — Pass `row` prop
-Add `row={row}` at both the mobile and desktop call sites.
+**2. Add `CrewScheduleEventSheet` import** — it's already imported in `FreelancerAssignmentSection.tsx`. Need to add it to AllClientsCrewTable.tsx imports (line 1 area). Also import `Calendar` from lucide-react (may already be there — check: it IS at line 2 in AllClientsCrewTable).
 
-### 3. `EventLogisticsPanel` function (line 966) — 3 sub-changes:
-- **a.** Add `row: FreelancerAssignment` to props type
-- **b.** Venue card: display `venue_area` in bold on its own line, then `Starts at (time)` and `Ends at (time)` below it (same for Parlour card)  
-- **c.** After the cards grid (line 1100), add the "Crew" section that lists all assigned freelancers with their personal note and a calendar link button
+**3. Modify `EventLogisticsPanel`:**
+- Add `const [calendarFor, setCalendarFor] = useState<string | null>(null);` 
+- Remove the separate "Crew" section at bottom (lines 1114–1158)
+- Inline crew cards into the `cards[]` array (with role badge, name, note, calendar button)
+- Fix venue card: area inline with name (bold uppercase), start time large
+- Fix parlour card same way
+- Add `<CrewScheduleEventSheet>` at end of JSX, rendered when `calendarFor` is set
+- Map `row` → `AssignmentRow` and `eventDetail` → `EventDetail` for the sheet
 
-No schema changes. No new files. No other component files touched.
+**4. `Calendar` icon** — already imported in AllClientsCrewTable imports (line 2 shows `Calendar`). ✓
+
+**No other files need changes.**
+
+---
+
+## Technical Notes
+
+- `CrewScheduleEventSheet` is already imported at line 20 of AllClientsCrewTable.tsx
+- The sheet handles its own visibility settings — when opened with `freelancerName`, it fetches the `freelancer_event_settings` internally via its own `useEffect` (inside `CrewScheduleEventSheet.tsx`). This means the popup will correctly show ONLY what that specific freelancer has been configured to see.
+- The `eventDetail` from `event_details_cache` needs to be shaped into `EventDetail` type. We map the raw cache row to an object with the fields `CrewScheduleEventSheet` needs (venue fields, parlour fields, times). We can cast it as `any` or create a simple mapping.
+- The `calendarFor` state tracks which freelancer's name was clicked; the panel renders a single shared `CrewScheduleEventSheet` instance that changes based on `freelancerName` prop.
+- No new files, no schema changes.
