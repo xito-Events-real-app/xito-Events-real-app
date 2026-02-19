@@ -65,18 +65,20 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
         getFreelancers(500).catch(() => []),
       ]);
       if (!assignRes.error && assignRes.data) {
-        const target = decodedName.trim().toLowerCase();
+        // Normalize: collapse multiple spaces, trim — handles names with parens/extra spaces
+        const normalize = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+        const target = normalize(decodedName);
         const exactFiltered = assignRes.data.filter(row =>
           ROLE_COLUMNS.some(col => {
             const val = ((row as any)[col] || '').toString();
-            return val.split('\n').some((entry: string) => entry.trim().toLowerCase() === target);
+            return val.split('\n').some((entry: string) => normalize(entry) === target);
           })
         );
         if (exactFiltered.length === 0) {
           const startsWithFiltered = assignRes.data.filter(row =>
             ROLE_COLUMNS.some(col => {
               const val = ((row as any)[col] || '').toString();
-              return val.split('\n').some((entry: string) => entry.trim().toLowerCase().startsWith(target));
+              return val.split('\n').some((entry: string) => normalize(entry).startsWith(target));
             })
           );
           setAssignments(startsWithFiltered as AssignmentRow[]);
