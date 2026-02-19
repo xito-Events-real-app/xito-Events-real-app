@@ -5,7 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty, CommandGroup, CommandSeparator } from "@/components/ui/command";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Users, Plus, RefreshCw, X, ChevronLeft, Database, Trash2, Download, Upload, UserCog, Cloud, ExternalLink, ChevronDown, ChevronUp, Phone, MapPin } from "lucide-react";
+import { Loader2, Users, Plus, RefreshCw, X, ChevronLeft, Database, Trash2, Download, Upload, UserCog, Cloud, ExternalLink, ChevronDown, ChevronUp, Phone, MapPin, StickyNote, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -968,8 +968,68 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
   );
 }
 
+/* ─── Note Edit Popover ─── */
+function NoteEditPopover({ name, registeredDateTimeAD, eventName, initialNote, onSave }: {
+  name: string;
+  registeredDateTimeAD: string;
+  eventName: string;
+  initialNote: string;
+  onSave: (note: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(initialNote);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    await supabase
+      .from('freelancer_event_settings')
+      .update({ personal_note: value })
+      .eq('registered_date_time_ad', registeredDateTimeAD)
+      .eq('event_name', eventName)
+      .eq('freelancer_name', name);
+    setSaving(false);
+    setEditing(false);
+    onSave(value);
+  };
+
+  return (
+    <div className="space-y-2">
+      <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wide">📝 {name}</p>
+      {editing ? (
+        <>
+          <textarea
+            value={value}
+            onChange={e => setValue(e.target.value)}
+            className="w-full text-xs min-h-[80px] resize-none rounded border border-input bg-background px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-ring"
+            autoFocus
+          />
+          <div className="flex gap-2 justify-end">
+            <button onClick={() => { setEditing(false); setValue(initialNote); }}
+              className="text-[10px] text-gray-500 hover:text-gray-700 px-2 py-1 rounded">
+              Cancel
+            </button>
+            <button onClick={handleSave} disabled={saving}
+              className="text-[10px] bg-amber-500 text-white px-2 py-1 rounded hover:bg-amber-600 flex items-center gap-1 disabled:opacity-50">
+              {saving && <Loader2 className="w-2.5 h-2.5 animate-spin" />} Save
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{value}</p>
+          <button onClick={() => setEditing(true)}
+            className="text-[10px] text-amber-600 hover:underline flex items-center gap-1 mt-1">
+            <Pencil className="w-2.5 h-2.5" /> Edit Note
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 /* ─── Event Logistics Panel ─── */
-function EventLogisticsPanel({ eventDetail, contactDetail, settings, loading, row }: {
+function EventLogisticsPanel({ eventDetail, contactDetail, settings: settingsProp, loading, row }: {
   eventDetail: any | null;
   contactDetail: any | null;
   settings: any[];
@@ -977,6 +1037,17 @@ function EventLogisticsPanel({ eventDetail, contactDetail, settings, loading, ro
   row: FreelancerAssignment;
 }) {
   const [calendarFor, setCalendarFor] = useState<string | null>(null);
+  const [localSettings, setLocalSettings] = useState(settingsProp);
+
+  useEffect(() => { setLocalSettings(settingsProp); }, [settingsProp]);
+
+  const handleNoteSaved = (freelancerName: string, newNote: string) => {
+    setLocalSettings(prev => prev.map((s: any) =>
+      s.freelancer_name?.toLowerCase() === freelancerName.toLowerCase()
+        ? { ...s, personal_note: newNote }
+        : s
+    ));
+  };
 
   if (loading) {
     return (
@@ -986,12 +1057,12 @@ function EventLogisticsPanel({ eventDetail, contactDetail, settings, loading, ro
     );
   }
 
-  const showBride = settings.some(s => s.show_bride_details);
-  const showBrideLocation = settings.some(s => s.show_bride_location);
-  const showGroom = settings.some(s => s.show_groom_details);
-  const showGroomLocation = settings.some(s => s.show_groom_location);
-  const showVenue = settings.some(s => s.show_venue_details);
-  const showParlour = settings.some(s => s.show_parlour_details);
+  const showBride = localSettings.some((s: any) => s.show_bride_details);
+  const showBrideLocation = localSettings.some((s: any) => s.show_bride_location);
+  const showGroom = localSettings.some((s: any) => s.show_groom_details);
+  const showGroomLocation = localSettings.some((s: any) => s.show_groom_location);
+  const showVenue = localSettings.some((s: any) => s.show_venue_details);
+  const showParlour = localSettings.some((s: any) => s.show_parlour_details);
 
   const cards: React.ReactNode[] = [];
 
@@ -1123,12 +1194,12 @@ function EventLogisticsPanel({ eventDetail, contactDetail, settings, loading, ro
   for (const col of CREW_COLUMNS) {
     const name = (row[col.field] as string)?.trim();
     if (!name) continue;
-    const setting = settings.find(s =>
+    const setting = localSettings.find((s: any) =>
       s.freelancer_name?.trim().toLowerCase() === name.toLowerCase()
     );
     const note = setting?.personal_note?.trim() || '';
     cards.push(
-      <div key={`crew-${col.field}-${name}`} className="border border-gray-200 rounded-lg p-2.5 bg-white min-w-[120px]">
+      <div key={`crew-${col.field}-${name}`} className="border border-gray-200 rounded-lg p-2.5 bg-white min-w-[120px] max-w-[160px]">
         <span className="text-[10px] font-bold text-gray-400 uppercase">{col.short}</span>
         <div className="flex items-center justify-between gap-1 mt-0.5">
           <p className="text-xs font-semibold text-gray-800 truncate">{name}</p>
@@ -1141,7 +1212,23 @@ function EventLogisticsPanel({ eventDetail, contactDetail, settings, loading, ro
           </button>
         </div>
         {note && (
-          <p className="text-[10px] text-amber-700 bg-yellow-50 rounded px-1.5 py-0.5 mt-1 leading-relaxed whitespace-pre-line border border-yellow-100">{note}</p>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className="flex items-center gap-1 mt-1 text-[9px] text-amber-600 bg-yellow-50 border border-yellow-100 rounded px-1.5 py-0.5 w-full text-left hover:bg-yellow-100 transition-colors overflow-hidden">
+                <StickyNote className="w-2.5 h-2.5 shrink-0" />
+                <span className="truncate block">{note}</span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72 p-3 z-[300]" align="start" side="bottom">
+              <NoteEditPopover
+                name={name}
+                registeredDateTimeAD={row.registeredDateTimeAD}
+                eventName={row.event}
+                initialNote={note}
+                onSave={(newNote) => handleNoteSaved(name, newNote)}
+              />
+            </PopoverContent>
+          </Popover>
         )}
       </div>
     );
