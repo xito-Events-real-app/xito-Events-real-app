@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { getMemoryClients } from "@/lib/memory-cache";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty, CommandGroup, CommandSeparator } from "@/components/ui/command";
@@ -890,23 +891,34 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                             </button>
                           </td>
                           <td className="px-3 py-2 border-r border-gray-100">
-                            <button
-                              onClick={(e) => {
-                                if (e.ctrlKey || e.metaKey) {
-                                  navigate(`/client-tracker/client/${encodeURIComponent(row.registeredDateTimeAD)}`);
-                                } else {
-                                  setFilterClient(filterClient === row.clientName ? null : row.clientName);
-                                }
-                              }}
-                              className={cn(
-                                "font-semibold text-sm text-left leading-tight transition-colors",
-                                filterClient === row.clientName
-                                  ? "text-violet-600 underline"
-                                  : "text-gray-900 hover:text-violet-600"
-                              )}
-                            >
-                              {row.clientName}
-                            </button>
+                            <HoverCard openDelay={400} closeDelay={100}>
+                              <HoverCardTrigger asChild>
+                                <button
+                                  onClick={(e) => {
+                                    if (e.ctrlKey || e.metaKey) {
+                                      navigate(`/client-tracker/client/${encodeURIComponent(row.registeredDateTimeAD)}`);
+                                    } else {
+                                      setFilterClient(filterClient === row.clientName ? null : row.clientName);
+                                    }
+                                  }}
+                                  className={cn(
+                                    "font-semibold text-sm text-left leading-tight transition-colors",
+                                    filterClient === row.clientName
+                                      ? "text-violet-600 underline"
+                                      : "text-gray-900 hover:text-violet-600"
+                                  )}
+                                >
+                                  {row.clientName}
+                                </button>
+                              </HoverCardTrigger>
+                              <HoverCardContent className="w-72 p-3 z-[300] shadow-xl border border-gray-200 bg-white rounded-xl" align="start" side="right">
+                                <ClientHoverPreview
+                                  registeredDateTimeAD={row.registeredDateTimeAD}
+                                  clientName={row.clientName}
+                                  onOpenFull={() => navigate(`/client-tracker/client/${encodeURIComponent(row.registeredDateTimeAD)}`)}
+                                />
+                              </HoverCardContent>
+                            </HoverCard>
                           </td>
                           <td className="px-3 py-2 border-r border-gray-100 text-gray-600 text-sm">
                             <div className="flex items-center gap-1">
@@ -1011,6 +1023,92 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/* ─── Client Hover Preview ─── */
+function ClientHoverPreview({ registeredDateTimeAD, clientName, onOpenFull }: {
+  registeredDateTimeAD: string;
+  clientName: string;
+  onOpenFull: () => void;
+}) {
+  const clients = getMemoryClients() || [];
+  const client = clients.find(c => c.registeredDateTimeAD === registeredDateTimeAD);
+
+  if (!client) {
+    return <div className="p-3 text-xs text-gray-400 text-center">Loading…</div>;
+  }
+
+  // Derive current status from statusLog
+  const deriveStatus = (statusLog?: string) => {
+    if (!statusLog) return 'UNTOUCHED';
+    const lines = statusLog.split('\n').filter(Boolean);
+    if (!lines.length) return 'UNTOUCHED';
+    const last = lines[lines.length - 1];
+    return last.split(/[\s\[–-]/)[0].trim() || 'UNTOUCHED';
+  };
+  const status = deriveStatus(client.statusLog);
+  const handler = client.clientHandler || '—';
+  const contact = client.contactNo || client.whatsappNo || '—';
+  const events = client.events || '—';
+  const location = client.clientLocation || client.eventCity || '—';
+  const inquiryDate = client.inquiryDateBS || client.inquiryDateAD || '—';
+  const comments = client.comments || '';
+  const lastComment = comments.split('\n').filter(Boolean).slice(-1)[0] || '';
+
+  const statusColors: Record<string, string> = {
+    BOOKED: 'bg-emerald-100 text-emerald-800',
+    'ADVANCE PENDING': 'bg-blue-100 text-blue-800',
+    'QUOTATION SENT': 'bg-violet-100 text-violet-800',
+    COLD: 'bg-slate-100 text-slate-700',
+    LOST: 'bg-red-100 text-red-700',
+    UNTOUCHED: 'bg-gray-100 text-gray-600',
+  };
+  const statusCls = statusColors[status] || 'bg-amber-100 text-amber-800';
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="font-bold text-sm text-gray-900 leading-tight">{clientName}</p>
+          <p className="text-[10px] text-gray-500 mt-0.5">{inquiryDate}</p>
+        </div>
+        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${statusCls}`}>
+          {status}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px]">
+        <div>
+          <p className="text-gray-400 font-medium uppercase tracking-wide text-[9px]">Handler</p>
+          <p className="text-gray-800 font-semibold">{handler}</p>
+        </div>
+        <div>
+          <p className="text-gray-400 font-medium uppercase tracking-wide text-[9px]">Contact</p>
+          <p className="text-gray-800">{contact}</p>
+        </div>
+        <div className="col-span-2">
+          <p className="text-gray-400 font-medium uppercase tracking-wide text-[9px]">Events</p>
+          <p className="text-gray-800 truncate">{events}</p>
+        </div>
+        <div className="col-span-2">
+          <p className="text-gray-400 font-medium uppercase tracking-wide text-[9px]">Location</p>
+          <p className="text-gray-800">{location}</p>
+        </div>
+        {lastComment && (
+          <div className="col-span-2">
+            <p className="text-gray-400 font-medium uppercase tracking-wide text-[9px]">Last Note</p>
+            <p className="text-gray-700 italic text-[10px] line-clamp-2 leading-relaxed">{lastComment}</p>
+          </div>
+        )}
+      </div>
+      <button
+        onClick={onOpenFull}
+        className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold bg-violet-600 hover:bg-violet-700 text-white px-3 py-1.5 rounded-lg transition-colors"
+      >
+        <ExternalLink className="w-3 h-3" />
+        Open Client Page
+      </button>
     </div>
   );
 }
