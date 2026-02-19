@@ -71,6 +71,33 @@ export async function getFreelancers(limit = 500): Promise<FreelancerData[]> {
       .limit(limit);
 
     if (!error && cached && cached.length > 0) {
+      // Deduplicate: if same row_number appears twice, keep newest, delete rest
+      const seenRowNumbers = new Map<number, any>();
+      const toDelete: string[] = [];
+
+      for (const row of cached) {
+        const rn = row.row_number;
+        if (rn && seenRowNumbers.has(rn)) {
+          const existing = seenRowNumbers.get(rn);
+          if (new Date(row.updated_at) > new Date(existing.updated_at)) {
+            toDelete.push(existing.id);
+            seenRowNumbers.set(rn, row);
+          } else {
+            toDelete.push(row.id);
+          }
+        } else {
+          seenRowNumbers.set(rn, row);
+        }
+      }
+
+      if (toDelete.length > 0) {
+        console.log(`[freelancer-api] Deduplicating ${toDelete.length} stale row(s) from cache`);
+        await supabase.from('freelancers_cache').delete().in('id', toDelete);
+        return cached
+          .filter(r => !toDelete.includes(r.id))
+          .map(cacheRowToFreelancer);
+      }
+
       console.log(`[freelancer-api] Loaded ${cached.length} freelancers from cache`);
       return cached.map(cacheRowToFreelancer);
     }
@@ -152,7 +179,34 @@ export async function addFreelancer(freelancerData: Partial<FreelancerData>): Pr
 }
 
 export async function updateFreelancer(freelancerData: FreelancerData): Promise<void> {
-  // STEP 1: Write to Supabase immediately (~50ms) — synced_to_sheet: false marks as pending
+  let oldName: string | null = null;
+
+  // STEP 0: Detect rename — find current names for this row_number
+  if (freelancerData.rowNumber) {
+    try {
+      const { data: existing } = await supabase
+        .from('freelancers_cache')
+        .select('name, id')
+        .eq('row_number', freelancerData.rowNumber);
+
+      if (existing && existing.length > 0) {
+        const staleRows = existing.filter(r => r.name !== freelancerData.name);
+        if (staleRows.length > 0) {
+          oldName = staleRows[0].name;
+          console.log(`[freelancer-api] Rename detected: "${oldName}" → "${freelancerData.name}", deleting stale rows`);
+          await supabase
+            .from('freelancers_cache')
+            .delete()
+            .eq('row_number', freelancerData.rowNumber)
+            .neq('name', freelancerData.name);
+        }
+      }
+    } catch (err) {
+      console.warn('[freelancer-api] Old row cleanup failed:', err);
+    }
+  }
+
+  // STEP 1: Upsert new data — Supabase first (~50ms)
   const { error: cacheError } = await supabase.from('freelancers_cache').upsert({
     row_number: freelancerData.rowNumber,
     name: freelancerData.name,
@@ -183,7 +237,30 @@ export async function updateFreelancer(freelancerData: FreelancerData): Promise<
     throw new Error('Failed to update freelancer in cache');
   }
 
-  // STEP 2: Push to Google Sheets in background (non-blocking)
+  // STEP 2: If renamed, sweep all assignment columns in Supabase with the new name
+  if (oldName && oldName !== freelancerData.name) {
+    const assignmentColumns = [
+      'photographer_bride', 'photographer_groom',
+      'videographer_bride', 'videographer_groom',
+      'extra_photographer', 'extra_videographer',
+      'assistant', 'iphone_shooter',
+      'drone_operator', 'fpv_operator'
+    ];
+    for (const col of assignmentColumns) {
+      const updatePayload: Record<string, unknown> = {
+        [col]: freelancerData.name,
+        synced_to_sheet: false,
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const query = (supabase.from('freelancer_assignments') as any)
+        .update(updatePayload)
+        .eq(col, oldName as string);
+      await query;
+    }
+    console.log(`[freelancer-api] Swept assignments: "${oldName}" → "${freelancerData.name}"`);
+  }
+
+  // STEP 3: Push to Google Sheets in background (non-blocking)
   supabase.functions.invoke('google-sheets', {
     body: { action: 'updateFreelancer', data: freelancerData }
   }).then(({ data, error }) => {
