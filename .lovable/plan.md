@@ -1,132 +1,165 @@
 
-# Two Issues — Diagnosis & Fix
+# Fix: Freelancer Rename — Duplicate Row Cleanup + Assignment Sweep
 
-## Issue 1: Crew Schedule Link — Events Not Showing
+## What the Database Shows Right Now
 
-### Root Cause: Name Matching Problem
-
-The freelancer's name is `BIBEK ( BADDAS AKASH SIR )` — with parentheses and extra spaces. In `CrewSchedule.tsx` (line 59), the query builds this filter:
+Querying `freelancers_cache` for `row_number = 2` returns **two rows**:
 
 ```
-photographer_bride.ilike.%BIBEK ( BADDAS AKASH SIR )%
+row_number: 2 | name: BIBEK BADDAS AKASH SIR        | updated_at: 2026-02-19 12:28  ← new name
+row_number: 2 | name: BIBEK ( BADDAS AKASH SIR )    | updated_at: 2026-02-19 12:10  ← stale old row
 ```
 
-This filter works fine in Supabase. However, the **exact match check** on lines 68–73 is the culprit:
+The old name was never deleted — so both names appear in the All Clients dropdown. This is the confirmed root cause.
 
-```typescript
-const target = decodedName.trim().toLowerCase(); // "bibek ( baddas akash sir )"
-return val.split('\n').some((entry: string) => entry.trim().toLowerCase() === target);
-```
+## Why It Happened
 
-If the name was stored in Google Sheets (and synced to Supabase) with **slightly different spacing** — e.g., `BIBEK (BADDAS AKASH SIR)` vs `BIBEK ( BADDAS AKASH SIR )` (space inside parens vs not) — the exact match fails. When exact match returns 0 results, it falls to the `startsWith` fallback. If that also fails, `assignments` stays empty → calendar shows nothing.
+`updateFreelancer` uses `upsert({ onConflict: 'name' })`. When the name changes:
+- The upsert looks for a matching `name` — finds none (new name doesn't exist yet)
+- So it **inserts** a brand new row for the new name
+- The old name row (`BIBEK ( BADDAS AKASH SIR )`) is **never touched**
 
-Additionally, there's **a deeper problem**: the crew schedule page reads from `freelancer_assignments` Supabase table, but when the freelancer was just assigned to an event using the new Supabase-first architecture, the assignment is written **instantly to Supabase**. However, if this is a brand-new freelancer added from the Freelancers module (`/freelancers`) and then manually assigned, the assignment goes into Supabase correctly via `updateAssignmentInCache`. The crew schedule should see it.
+Result: both names coexist in `freelancers_cache` indefinitely.
 
-The real issue is the **name normalization** — special characters like `(`, `)` need more flexible matching. The fix is to normalize both the target name and the stored values by collapsing multiple spaces and ignoring special character spacing differences.
+## What the User Confirmed
 
-### Fix for Crew Schedule Name Matching
+- Google Sheets WTN FREELANCERS → FREELANCERS tab: only new name `BIBEK BADDAS AKASH SIR` ✓
+- BOOKED CLIENTS freelancer assignments: only new name ✓
+- Supabase `freelancers_cache`: still has BOTH names ✗ (this is the bug)
 
-In `src/pages/CrewSchedule.tsx`, update the exact match logic to normalize whitespace and special characters:
+So Sheets is already correct. We just need to fix `updateFreelancer` to clean up the old row in Supabase, and also sweep assignments in `freelancer_assignments` Supabase table in case any are stored under the old name.
 
-```typescript
-// Normalize: collapse multiple spaces, trim
-const normalize = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
-const target = normalize(decodedName);
+## The Two Changes
 
-const exactFiltered = assignRes.data.filter(row =>
-  ROLE_COLUMNS.some(col => {
-    const val = ((row as any)[col] || '').toString();
-    return val.split('\n').some((entry: string) => normalize(entry) === target);
-  })
-);
-```
+### Change 1: Fix `updateFreelancer` in `src/lib/freelancer-api.ts`
 
-This ensures `"bibek ( baddas akash sir )"` matches `"BIBEK ( BADDAS AKASH SIR )"` regardless of extra spaces.
+Change the upsert strategy from **conflict on `name`** to:
 
----
-
-## Issue 2: Freelancer Module — `updateFreelancer` Still Blocks on Sheets
-
-### Current State (What's Fixed vs What's Not)
-
-| Function | Current State |
-|---|---|
-| `addFreelancer` | **Fixed** — Supabase-first, Sheets in background |
-| `quickAddFreelancer` (Suite) | **Fixed** — uses `addFreelancer` |
-| `updateFreelancer` | **STILL SLOW** — Sheets first, cache after (2–5s) |
-| `getClientFreelancerAssignments` | **Fixed** — Supabase first |
-| `updateFreelancerAssignment` | **Fixed** — Supabase first |
-
-`updateFreelancer` in `src/lib/freelancer-api.ts` still follows the old blocking pattern:
-
-```typescript
-// OLD (blocking):
-const { data, error } = await supabase.functions.invoke('google-sheets', { ... }); // 2–5s wait
-if (error) throw ...
-// then updates cache after Sheets write
-```
-
-The full Freelancer module "Edit" drawer in `FreelancerDetailSheet.tsx` calls `updateFreelancer`, so editing a freelancer profile also takes 2–5 seconds.
-
-### Fix for `updateFreelancer`
-
-Apply the same Supabase-first pattern:
+1. Look up the existing record by `row_number` first
+2. If name changed → delete all rows for that `row_number` that have the old name
+3. Upsert the new record (by `row_number` conflict — or insert fresh after deletion)
+4. If name changed → sweep `freelancer_assignments` table and replace old name → new name in all 10 role columns
+5. Push to Google Sheets in background (unchanged)
 
 ```typescript
 export async function updateFreelancer(freelancerData: FreelancerData): Promise<void> {
-  // STEP 1: Write to Supabase immediately (~50ms)
-  const { error: cacheError } = await supabase.from('freelancers_cache').upsert({
+  let oldName: string | null = null;
+
+  // STEP 0: Detect rename — find current names for this row_number
+  if (freelancerData.rowNumber) {
+    const { data: existing } = await supabase
+      .from('freelancers_cache')
+      .select('name')
+      .eq('row_number', freelancerData.rowNumber);
+
+    if (existing && existing.length > 0) {
+      const staleRows = existing.filter(r => r.name !== freelancerData.name);
+      if (staleRows.length > 0) {
+        oldName = staleRows[0].name;
+        // Delete ALL stale rows for this row_number
+        await supabase
+          .from('freelancers_cache')
+          .delete()
+          .eq('row_number', freelancerData.rowNumber)
+          .neq('name', freelancerData.name);
+      }
+    }
+  }
+
+  // STEP 1: Upsert new data — Supabase first (~50ms)
+  await supabase.from('freelancers_cache').upsert({
+    row_number: freelancerData.rowNumber,
+    name: freelancerData.name,
     ...all fields...,
     synced_to_sheet: false,
     updated_at: new Date().toISOString(),
-  }, { onConflict: 'name' });
+  } as any, { onConflict: 'name' });
 
-  if (cacheError) throw new Error('Failed to update freelancer in cache');
-
-  // STEP 2: Push to Google Sheets in background (non-blocking)
-  supabase.functions.invoke('google-sheets', {
-    body: { action: 'updateFreelancer', data: freelancerData }
-  }).then(({ data, error }) => {
-    if (!error && data?.success) {
-      void supabase.from('freelancers_cache')
-        .update({ synced_to_sheet: true })
-        .eq('name', freelancerData.name);
-    } else {
-      console.warn('[BACKGROUND-SHEETS] updateFreelancer sync failed:', error || data?.error);
+  // STEP 2: If renamed, sweep freelancer_assignments in Supabase
+  if (oldName && oldName !== freelancerData.name) {
+    const assignmentColumns = [
+      'photographer_bride', 'photographer_groom',
+      'videographer_bride', 'videographer_groom',
+      'extra_photographer', 'extra_videographer',
+      'assistant', 'iphone_shooter',
+      'drone_operator', 'fpv_operator'
+    ];
+    for (const col of assignmentColumns) {
+      await supabase
+        .from('freelancer_assignments')
+        .update({ [col]: freelancerData.name, synced_to_sheet: false })
+        .eq(col, oldName);
     }
-  }).catch(err => {
-    console.warn('[BACKGROUND-SHEETS] updateFreelancer Sheets call failed:', err);
-  });
+    console.log(`[freelancer-api] Renamed "${oldName}" → "${freelancerData.name}" in assignments`);
+  }
+
+  // STEP 3: Push to Google Sheets in background (non-blocking)
+  supabase.functions.invoke('google-sheets', { ... }).then(...).catch(...);
 }
 ```
 
----
+### Change 2: One-time cleanup in `getFreelancers` — deduplicate by `row_number`
 
-## Files to Change
+Since the duplicate already exists right now in the database, add a deduplication step inside `getFreelancers` that runs once to clean up any rows where the same `row_number` has multiple entries. It keeps the most recently updated one and deletes the older ones.
 
-### 1. `src/pages/CrewSchedule.tsx`
-- Fix the name normalization in the exact match filter (lines 68–73)
-- Add a `normalize()` helper that collapses multiple spaces and trims before comparing
+```typescript
+export async function getFreelancers(limit = 500): Promise<FreelancerData[]> {
+  const { data: cached } = await supabase
+    .from('freelancers_cache')
+    .select('*')
+    .order('row_number', { ascending: true })
+    .limit(limit);
 
-### 2. `src/lib/freelancer-api.ts`
-- Flip `updateFreelancer` to write Supabase first, push Sheets in background
+  if (cached && cached.length > 0) {
+    // Deduplicate: if same row_number appears twice, keep newest, delete rest
+    const seenRowNumbers = new Map<number, any>();
+    const toDelete: string[] = [];
 
----
+    for (const row of cached) {
+      const rn = row.row_number;
+      if (rn && seenRowNumbers.has(rn)) {
+        const existing = seenRowNumbers.get(rn);
+        // Keep newer, delete older
+        if (new Date(row.updated_at) > new Date(existing.updated_at)) {
+          toDelete.push(existing.id);
+          seenRowNumbers.set(rn, row);
+        } else {
+          toDelete.push(row.id);
+        }
+      } else {
+        seenRowNumbers.set(rn, row);
+      }
+    }
+
+    if (toDelete.length > 0) {
+      await supabase.from('freelancers_cache').delete().in('id', toDelete);
+      // Return deduplicated list
+      return cached
+        .filter(r => !toDelete.includes(r.id))
+        .map(cacheRowToFreelancer);
+    }
+
+    return cached.map(cacheRowToFreelancer);
+  }
+  // ... fallback to Sheets
+}
+```
+
+This immediately fixes the existing `BIBEK ( BADDAS AKASH SIR )` stale row the next time `getFreelancers()` is called (which happens when the All Clients crew table or Freelancers module loads).
 
 ## Result After Fix
 
 | Problem | Before | After |
 |---|---|---|
-| Crew Schedule — name with spaces/parens | Events may not show | Robust normalization matches reliably |
-| Edit freelancer profile | 2–5s spinner | ~50ms instant save |
-| Add freelancer from module | Already fast (fixed previously) | No change needed |
-| Crew Schedule data source | Already reads from Supabase | No change needed |
+| Both old and new name in dropdown | Old row never deleted on rename | Detect rename by `row_number`, delete stale rows before upsert |
+| Existing duplicate `BIBEK (...)` row | Still in DB | Auto-cleaned on next `getFreelancers()` call |
+| Assignment goes empty | Old name in Supabase assignments causes Sheets pull to overwrite | Sweep all 10 role columns in `freelancer_assignments` with new name |
+| Future renames | Same bug repeats | Fixed — delete-then-upsert pattern is now permanent |
 
----
+## Files Changed
 
-## Technical Notes
+- `src/lib/freelancer-api.ts` — two changes:
+  1. `updateFreelancer`: delete old row by `row_number` before upsert + assignment sweep
+  2. `getFreelancers`: add deduplication pass to auto-clean any current stale rows
 
-- No schema changes needed — `freelancers_cache.synced_to_sheet` already exists
-- The crew schedule page already queries Supabase directly — the fix is purely a string normalization improvement
-- The `startsWith` fallback in the crew schedule is kept as a safety net for partial name matches
-- `deleteFreelancer` is left unchanged since it correctly requires a confirmed Sheets write (row number lookup) before deleting
+No schema changes. No other files.
