@@ -1,11 +1,11 @@
-import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty, CommandGroup, CommandSeparator } from "@/components/ui/command";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Users, Plus, RefreshCw, X, ChevronLeft, Database, Trash2, Download, Upload, UserCog, Cloud, ExternalLink } from "lucide-react";
+import { Loader2, Users, Plus, RefreshCw, X, ChevronLeft, Database, Trash2, Download, Upload, UserCog, Cloud, ExternalLink, ChevronDown, ChevronUp, Phone, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -120,6 +120,13 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
   const [isPushing, setIsPushing] = useState(false);
   const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [expandCache, setExpandCache] = useState<Map<string, {
+    eventDetail: any | null;
+    contactDetail: any | null;
+    settings: any[];
+    loading: boolean;
+  }>>(new Map());
 
   // Schedule auto-push to sheets after 3 seconds of inactivity
   const schedulePush = useCallback(() => {
@@ -136,6 +143,43 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
       }
     }, 3000);
   }, []);
+
+  const toggleExpand = useCallback(async (rowKey: string, row: FreelancerAssignment) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev);
+      if (next.has(rowKey)) { next.delete(rowKey); return next; }
+      next.add(rowKey);
+      return next;
+    });
+
+    const cacheKey = `${row.registeredDateTimeAD}__${row.event}`;
+    if (expandCache.has(cacheKey)) return;
+
+    setExpandCache(prev => new Map(prev).set(cacheKey, { eventDetail: null, contactDetail: null, settings: [], loading: true }));
+
+    const [edRes, cdRes, settingsRes] = await Promise.all([
+      supabase.from('event_details_cache')
+        .select('venue_name,venue_type,venue_city,venue_area,venue_map,parlour_name,parlour_type,parlour_city,parlour_area,parlour_map,event_start_time,event_end_time,parlour_start_time,parlour_end_time')
+        .eq('registered_date_time_ad', row.registeredDateTimeAD)
+        .ilike('event_name', row.event)
+        .maybeSingle(),
+      supabase.from('contact_details_cache')
+        .select('bride_full_name,bride_contact_number,bride_whatsapp_number,bride_home_city,bride_home_area,bride_home_map,groom_full_name,groom_contact_number,groom_whatsapp_number,groom_home_city,groom_home_area,groom_home_map')
+        .eq('registered_date_time_ad', row.registeredDateTimeAD)
+        .maybeSingle(),
+      supabase.from('freelancer_event_settings')
+        .select('show_bride_details,show_groom_details,show_venue_details,show_parlour_details,show_bride_location,show_groom_location')
+        .eq('registered_date_time_ad', row.registeredDateTimeAD)
+        .eq('event_name', row.event),
+    ]);
+
+    setExpandCache(prev => new Map(prev).set(cacheKey, {
+      eventDetail: edRes.data || null,
+      contactDetail: cdRes.data || null,
+      settings: settingsRes.data || [],
+      loading: false,
+    }));
+  }, [expandCache]);
 
   const loadData = useCallback(async (fromSheets = false) => {
     setLoading(true);
@@ -728,6 +772,9 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                 ) : (
                   filteredRows.map((row, idx) => {
                     const rowKey = `${row.registeredDateTimeAD}-${row.event}-${row.eventDateAD}`;
+                    const cacheKey = `${row.registeredDateTimeAD}__${row.event}`;
+                    const isExpanded = expandedRows.has(rowKey);
+                    const cached = expandCache.get(cacheKey);
                     const groupIdx = dayGroups.get(rowKey) ?? 0;
                     const dayBg = DAY_COLORS[groupIdx % DAY_COLORS.length];
                     const reqCodes = (row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
@@ -736,107 +783,130 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                       return isReq && !(row[col.field] as string)?.trim();
                     });
                     return (
-                      <tr
-                        key={`${rowKey}-${idx}`}
-                        className={cn("border-b border-gray-100 hover:bg-violet-50/40 transition-colors group", dayBg)}
-                      >
-                        <td className="px-3 py-2 border-r border-gray-100 text-center">
-                          <button
-                            onClick={() => setFilterDay(filterDay === row.eventDay ? null : row.eventDay)}
-                            className={cn(
-                              "inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm transition-all",
-                              filterDay === row.eventDay
-                                ? "bg-violet-600 text-white ring-2 ring-violet-400"
-                                : hasUnassignedRequired
-                                  ? "bg-red-100 text-red-700 ring-2 ring-red-400 animate-pulse-red"
-                                  : "bg-violet-100 text-violet-700 hover:bg-violet-200 cursor-pointer"
-                            )}
-                          >
-                            {row.eventDay}
-                          </button>
-                        </td>
-                        <td className="px-3 py-2 border-r border-gray-100">
-                          <button
-                            onClick={(e) => {
-                              if (e.ctrlKey || e.metaKey) {
-                                navigate(`/client-tracker/client/${encodeURIComponent(row.registeredDateTimeAD)}`);
-                              } else {
-                                setFilterClient(filterClient === row.clientName ? null : row.clientName);
-                              }
-                            }}
-                            className={cn(
-                              "font-semibold text-sm text-left leading-tight transition-colors",
-                              filterClient === row.clientName
-                                ? "text-violet-600 underline"
-                                : "text-gray-900 hover:text-violet-600"
-                            )}
-                          >
-                            {row.clientName}
-                          </button>
-                        </td>
-                        <td className="px-3 py-2 border-r border-gray-100 text-gray-600 text-sm">
-                          <div className="flex items-center gap-1">
-                            <span className="block leading-tight flex-1">{row.event}</span>
-                            {!readOnly && (
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <button
-                                    className="p-0.5 rounded hover:bg-violet-100 text-gray-400 hover:text-violet-600 shrink-0"
-                                    title="Set required crew"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <UserCog className="w-3.5 h-3.5" />
-                                  </button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0 z-[200]" align="start">
-                                  <CrewCategorySelector
-                                    selected={(row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean)}
-                                    onChange={async (codes) => {
-                                      try {
-                                        await updateCategoriesInCache(row.registeredDateTimeAD, row.event, codes.join(','), row.eventDateAD);
-                                        setAssignments(prev => prev.map(a =>
-                                          a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event
-                                            ? { ...a, requiredCategories: codes.join(',') }
-                                            : a
-                                        ));
-                                        setPendingSyncs(prev => prev + 1);
-                                        schedulePush();
-                                      } catch { toast.error("Failed to update categories"); }
-                                    }}
-                                  />
-                                </PopoverContent>
-                              </Popover>
-                            )}
-                          </div>
-                        </td>
-                        {CREW_COLUMNS.map((col, idx) => {
-                          const reqCodes = (row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
-                          const isRequired = reqCodes.length === 0 || reqCodes.includes(col.short);
-                          const nextCol = CREW_COLUMNS[idx + 1];
-                          const isNextRequired = nextCol
-                            ? (reqCodes.length === 0 || reqCodes.includes(nextCol.short))
-                            : true;
-                          return (
-                            <CrewCell
-                              key={col.field}
-                              value={row[col.field] as string}
-                              field={col.field}
-                              label={col.label}
-                              group={col.group}
-                              colWidth={columnWidths[col.field]}
-                              freelancers={freelancers}
-                              allAssignments={assignments}
-                              selectedYear={selectedYear}
-                              selectedMonth={selectedMonth}
-                              onAssign={(name) => handleAssign(row, col.field, name)}
-                              onQuickAdd={() => setQuickAddState({ open: true, field: col.field, label: col.label, row })}
-                              isRequired={isRequired}
-                              isNextRequired={isNextRequired}
-                              readOnly={readOnly}
-                            />
-                          );
-                        })}
-                      </tr>
+                      <React.Fragment key={`frag-${rowKey}-${idx}`}>
+                        <tr
+                          className={cn("border-b border-gray-100 hover:bg-violet-50/40 transition-colors group", dayBg, isExpanded && "border-b-0")}
+                        >
+                          <td className="px-3 py-2 border-r border-gray-100 text-center">
+                            <button
+                              onClick={() => setFilterDay(filterDay === row.eventDay ? null : row.eventDay)}
+                              className={cn(
+                                "inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm transition-all",
+                                filterDay === row.eventDay
+                                  ? "bg-violet-600 text-white ring-2 ring-violet-400"
+                                  : hasUnassignedRequired
+                                    ? "bg-red-100 text-red-700 ring-2 ring-red-400 animate-pulse-red"
+                                    : "bg-violet-100 text-violet-700 hover:bg-violet-200 cursor-pointer"
+                              )}
+                            >
+                              {row.eventDay}
+                            </button>
+                            <button
+                              onClick={() => toggleExpand(rowKey, row)}
+                              className={cn(
+                                "mt-0.5 flex items-center justify-center w-full transition-colors",
+                                isExpanded ? "text-violet-500" : "text-gray-300 hover:text-violet-500"
+                              )}
+                              title={isExpanded ? "Collapse details" : "Expand event details"}
+                            >
+                              {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                            </button>
+                          </td>
+                          <td className="px-3 py-2 border-r border-gray-100">
+                            <button
+                              onClick={(e) => {
+                                if (e.ctrlKey || e.metaKey) {
+                                  navigate(`/client-tracker/client/${encodeURIComponent(row.registeredDateTimeAD)}`);
+                                } else {
+                                  setFilterClient(filterClient === row.clientName ? null : row.clientName);
+                                }
+                              }}
+                              className={cn(
+                                "font-semibold text-sm text-left leading-tight transition-colors",
+                                filterClient === row.clientName
+                                  ? "text-violet-600 underline"
+                                  : "text-gray-900 hover:text-violet-600"
+                              )}
+                            >
+                              {row.clientName}
+                            </button>
+                          </td>
+                          <td className="px-3 py-2 border-r border-gray-100 text-gray-600 text-sm">
+                            <div className="flex items-center gap-1">
+                              <span className="block leading-tight flex-1">{row.event}</span>
+                              {!readOnly && (
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <button
+                                      className="p-0.5 rounded hover:bg-violet-100 text-gray-400 hover:text-violet-600 shrink-0"
+                                      title="Set required crew"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <UserCog className="w-3.5 h-3.5" />
+                                    </button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-0 z-[200]" align="start">
+                                    <CrewCategorySelector
+                                      selected={(row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean)}
+                                      onChange={async (codes) => {
+                                        try {
+                                          await updateCategoriesInCache(row.registeredDateTimeAD, row.event, codes.join(','), row.eventDateAD);
+                                          setAssignments(prev => prev.map(a =>
+                                            a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event
+                                              ? { ...a, requiredCategories: codes.join(',') }
+                                              : a
+                                          ));
+                                          setPendingSyncs(prev => prev + 1);
+                                          schedulePush();
+                                        } catch { toast.error("Failed to update categories"); }
+                                      }}
+                                    />
+                                  </PopoverContent>
+                                </Popover>
+                              )}
+                            </div>
+                          </td>
+                          {CREW_COLUMNS.map((col, idx) => {
+                            const reqCodes = (row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
+                            const isRequired = reqCodes.length === 0 || reqCodes.includes(col.short);
+                            const nextCol = CREW_COLUMNS[idx + 1];
+                            const isNextRequired = nextCol
+                              ? (reqCodes.length === 0 || reqCodes.includes(nextCol.short))
+                              : true;
+                            return (
+                              <CrewCell
+                                key={col.field}
+                                value={row[col.field] as string}
+                                field={col.field}
+                                label={col.label}
+                                group={col.group}
+                                colWidth={columnWidths[col.field]}
+                                freelancers={freelancers}
+                                allAssignments={assignments}
+                                selectedYear={selectedYear}
+                                selectedMonth={selectedMonth}
+                                onAssign={(name) => handleAssign(row, col.field, name)}
+                                onQuickAdd={() => setQuickAddState({ open: true, field: col.field, label: col.label, row })}
+                                isRequired={isRequired}
+                                isNextRequired={isNextRequired}
+                                readOnly={readOnly}
+                              />
+                            );
+                          })}
+                        </tr>
+                        {isExpanded && (
+                          <tr className="border-b border-violet-200">
+                            <td colSpan={13} className="bg-slate-50 px-4 py-3">
+                              <EventLogisticsPanel
+                                eventDetail={cached?.eventDetail ?? null}
+                                contactDetail={cached?.contactDetail ?? null}
+                                settings={cached?.settings ?? []}
+                                loading={cached?.loading ?? true}
+                              />
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })
                 )}
@@ -863,6 +933,147 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/* ─── Event Logistics Panel ─── */
+function EventLogisticsPanel({ eventDetail, contactDetail, settings, loading }: {
+  eventDetail: any | null;
+  contactDetail: any | null;
+  settings: any[];
+  loading: boolean;
+}) {
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 py-2 px-3 text-xs text-gray-400">
+        <Loader2 className="w-3 h-3 animate-spin" /> Loading details...
+      </div>
+    );
+  }
+
+  const showBride = settings.some(s => s.show_bride_details);
+  const showBrideLocation = settings.some(s => s.show_bride_location);
+  const showGroom = settings.some(s => s.show_groom_details);
+  const showGroomLocation = settings.some(s => s.show_groom_location);
+  const showVenue = settings.some(s => s.show_venue_details);
+  const showParlour = settings.some(s => s.show_parlour_details);
+  const hasAnything = showBride || showBrideLocation || showGroom || showGroomLocation || showVenue || showParlour;
+
+  if (settings.length === 0) {
+    return (
+      <p className="text-xs text-gray-400 italic py-1">No visibility settings configured for this event's freelancers yet.</p>
+    );
+  }
+  if (!hasAnything) {
+    return (
+      <p className="text-xs text-gray-400 italic py-1">All details are hidden for this event's freelancers.</p>
+    );
+  }
+
+  const cards: React.ReactNode[] = [];
+
+  if (showBride || showBrideLocation) {
+    cards.push(
+      <div key="bride" className="border border-pink-200 rounded-lg p-2.5 bg-pink-50/50 min-w-[150px]">
+        <div className="text-[10px] font-bold text-pink-600 uppercase tracking-wide mb-1.5">🌸 Bride</div>
+        {showBride && contactDetail?.bride_full_name && (
+          <p className="text-xs font-semibold text-gray-800 truncate">{contactDetail.bride_full_name}</p>
+        )}
+        {showBride && contactDetail?.bride_contact_number && (
+          <a href={`tel:${contactDetail.bride_contact_number}`} className="flex items-center gap-1 text-xs text-blue-600 hover:underline mt-0.5">
+            <Phone className="w-2.5 h-2.5" />{contactDetail.bride_contact_number}
+          </a>
+        )}
+        {showBride && contactDetail?.bride_whatsapp_number && contactDetail.bride_whatsapp_number !== contactDetail.bride_contact_number && (
+          <button onClick={() => openWhatsApp(contactDetail.bride_whatsapp_number)} className="flex items-center gap-1 text-xs text-green-600 hover:underline mt-0.5">
+            <Phone className="w-2.5 h-2.5" />WA: {contactDetail.bride_whatsapp_number}
+          </button>
+        )}
+        {showBrideLocation && (contactDetail?.bride_home_city || contactDetail?.bride_home_area) && (
+          <p className="flex items-center gap-1 text-xs text-gray-600 mt-0.5">
+            <MapPin className="w-2.5 h-2.5 shrink-0" />{[contactDetail.bride_home_city, contactDetail.bride_home_area].filter(Boolean).join(', ')}
+          </p>
+        )}
+        {showBrideLocation && contactDetail?.bride_home_map && (
+          <a href={contactDetail.bride_home_map} target="_blank" rel="noopener noreferrer" className="text-[10px] text-violet-600 hover:underline mt-0.5 block">Map →</a>
+        )}
+      </div>
+    );
+  }
+
+  if (showGroom || showGroomLocation) {
+    cards.push(
+      <div key="groom" className="border border-blue-200 rounded-lg p-2.5 bg-blue-50/50 min-w-[150px]">
+        <div className="text-[10px] font-bold text-blue-600 uppercase tracking-wide mb-1.5">🤵 Groom</div>
+        {showGroom && contactDetail?.groom_full_name && (
+          <p className="text-xs font-semibold text-gray-800 truncate">{contactDetail.groom_full_name}</p>
+        )}
+        {showGroom && contactDetail?.groom_contact_number && (
+          <a href={`tel:${contactDetail.groom_contact_number}`} className="flex items-center gap-1 text-xs text-blue-600 hover:underline mt-0.5">
+            <Phone className="w-2.5 h-2.5" />{contactDetail.groom_contact_number}
+          </a>
+        )}
+        {showGroom && contactDetail?.groom_whatsapp_number && contactDetail.groom_whatsapp_number !== contactDetail.groom_contact_number && (
+          <button onClick={() => openWhatsApp(contactDetail.groom_whatsapp_number)} className="flex items-center gap-1 text-xs text-green-600 hover:underline mt-0.5">
+            <Phone className="w-2.5 h-2.5" />WA: {contactDetail.groom_whatsapp_number}
+          </button>
+        )}
+        {showGroomLocation && (contactDetail?.groom_home_city || contactDetail?.groom_home_area) && (
+          <p className="flex items-center gap-1 text-xs text-gray-600 mt-0.5">
+            <MapPin className="w-2.5 h-2.5 shrink-0" />{[contactDetail.groom_home_city, contactDetail.groom_home_area].filter(Boolean).join(', ')}
+          </p>
+        )}
+        {showGroomLocation && contactDetail?.groom_home_map && (
+          <a href={contactDetail.groom_home_map} target="_blank" rel="noopener noreferrer" className="text-[10px] text-violet-600 hover:underline mt-0.5 block">Map →</a>
+        )}
+      </div>
+    );
+  }
+
+  if (showVenue) {
+    cards.push(
+      <div key="venue" className="border border-amber-200 rounded-lg p-2.5 bg-amber-50/50 min-w-[150px]">
+        <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wide mb-1.5">📍 Venue</div>
+        {eventDetail?.venue_name && <p className="text-xs font-semibold text-gray-800 truncate">{eventDetail.venue_name}</p>}
+        {(eventDetail?.venue_city || eventDetail?.venue_area) && (
+          <p className="flex items-center gap-1 text-xs text-gray-600 mt-0.5">
+            <MapPin className="w-2.5 h-2.5 shrink-0" />{[eventDetail.venue_city, eventDetail.venue_area].filter(Boolean).join(', ')}
+          </p>
+        )}
+        {(eventDetail?.event_start_time || eventDetail?.event_end_time) && (
+          <p className="text-xs text-gray-500 mt-0.5">⏰ {[eventDetail.event_start_time, eventDetail.event_end_time].filter(Boolean).join(' – ')}</p>
+        )}
+        {eventDetail?.venue_map && (
+          <a href={eventDetail.venue_map} target="_blank" rel="noopener noreferrer" className="text-[10px] text-violet-600 hover:underline mt-0.5 block">Map →</a>
+        )}
+      </div>
+    );
+  }
+
+  if (showParlour) {
+    cards.push(
+      <div key="parlour" className="border border-purple-200 rounded-lg p-2.5 bg-purple-50/50 min-w-[150px]">
+        <div className="text-[10px] font-bold text-purple-600 uppercase tracking-wide mb-1.5">💄 Parlour</div>
+        {eventDetail?.parlour_name && <p className="text-xs font-semibold text-gray-800 truncate">{eventDetail.parlour_name}</p>}
+        {(eventDetail?.parlour_city || eventDetail?.parlour_area) && (
+          <p className="flex items-center gap-1 text-xs text-gray-600 mt-0.5">
+            <MapPin className="w-2.5 h-2.5 shrink-0" />{[eventDetail.parlour_city, eventDetail.parlour_area].filter(Boolean).join(', ')}
+          </p>
+        )}
+        {(eventDetail?.parlour_start_time || eventDetail?.parlour_end_time) && (
+          <p className="text-xs text-gray-500 mt-0.5">⏰ {[eventDetail.parlour_start_time, eventDetail.parlour_end_time].filter(Boolean).join(' – ')}</p>
+        )}
+        {eventDetail?.parlour_map && (
+          <a href={eventDetail.parlour_map} target="_blank" rel="noopener noreferrer" className="text-[10px] text-violet-600 hover:underline mt-0.5 block">Map →</a>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {cards}
     </div>
   );
 }
