@@ -1,231 +1,258 @@
 
-# Expand Button on Date Circle — Inline Row Below Selected Row
+# Three Enhancements to the Expanded Row Panel
 
-## What the User Wants
+## What Changes
 
-Clicking the expand button on a date in the Day column should open an **inline details panel immediately below that specific row** in the desktop table (and below the card on mobile). This panel shows event logistics — bride/groom contacts, venue, parlour — based on what visibility settings have been configured for that event's freelancers.
+### 1. Venue Card — Area in Bold + "Starts at (time)" 
+### 2. Freelancer Names in Expanded Row — Personal Note Below Each Name
+### 3. Freelancer Booking Calendar Link — Button to Open Their Crew Schedule
 
 ---
 
-## Current Day Cell (lines 743–756)
+## Current State Analysis
 
+**`EventLogisticsPanel`** lives at lines 965–1103 in `AllClientsCrewTable.tsx`.
+
+**Current Venue card (lines 1059–1077):**
 ```tsx
-<td className="px-3 py-2 border-r border-gray-100 text-center">
-  <button onClick={() => setFilterDay(...)}>
-    {row.eventDay}
-  </button>
-</td>
+{eventDetail?.venue_name && <p className="text-xs font-semibold text-gray-800 truncate">{eventDetail.venue_name}</p>}
+{(eventDetail?.venue_city || eventDetail?.venue_area) && (
+  <p className="flex items-center gap-1 text-xs text-gray-600 mt-0.5">
+    <MapPin className="w-2.5 h-2.5 shrink-0" />{[eventDetail.venue_city, eventDetail.venue_area].filter(Boolean).join(', ')}
+  </p>
+)}
+{(eventDetail?.event_start_time || eventDetail?.event_end_time) && (
+  <p className="text-xs text-gray-500 mt-0.5">⏰ {[eventDetail.event_start_time, eventDetail.event_end_time].filter(Boolean).join(' – ')}</p>
+)}
 ```
 
-Currently just a single button for the day filter. No expand button exists yet.
+**Current `toggleExpand` query for `freelancer_event_settings` (lines 170–173):**
+```typescript
+supabase.from('freelancer_event_settings')
+  .select('show_bride_details,show_groom_details,show_venue_details,show_parlour_details,show_bride_location,show_groom_location')
+  .eq('registered_date_time_ad', row.registeredDateTimeAD)
+  .eq('event_name', row.event),
+```
+
+Missing: `freelancer_name`, `role_code`, `personal_note` — needed for the new freelancer notes section.
+
+**Current `EventLogisticsPanel` signature (line 966):**
+```typescript
+function EventLogisticsPanel({ eventDetail, contactDetail, settings, loading }: { ... })
+```
+
+Missing: `row` (the FreelancerAssignment) — needed to iterate over assigned freelancer names and match them to their settings.
 
 ---
 
-## Implementation Plan
+## Change 1: Fix Venue Card Layout
 
-### 1. New State Variables
+**Before:**
+- Venue name
+- MapPin + city, area (comma-joined)
+- ⏰ start – end time
 
-Add to the component state (after line 121):
+**After (user requested):**
+- Venue name
+- **AREA** in bold (on its own line)
+- Starts at `(venue_start_time)` immediately below area
+
+The area should be displayed in bold on its own line. The city can be smaller/secondary. Then "Starts at 8:00 AM" below it.
+
+**New venue card body:**
+```tsx
+{eventDetail?.venue_name && (
+  <p className="text-xs font-semibold text-gray-800 truncate">{eventDetail.venue_name}</p>
+)}
+{eventDetail?.venue_city && (
+  <p className="text-[10px] text-gray-500 mt-0.5">{eventDetail.venue_city}</p>
+)}
+{eventDetail?.venue_area && (
+  <p className="text-xs font-bold text-gray-800 mt-0.5">{eventDetail.venue_area}</p>
+)}
+{eventDetail?.event_start_time && (
+  <p className="text-[10px] text-violet-600 mt-0.5">Starts at {eventDetail.event_start_time}</p>
+)}
+{eventDetail?.event_end_time && (
+  <p className="text-[10px] text-gray-400">Ends at {eventDetail.event_end_time}</p>
+)}
+{eventDetail?.venue_map && (
+  <a href={eventDetail.venue_map} target="_blank" rel="noopener noreferrer" className="text-[10px] text-violet-600 hover:underline mt-0.5 block">Map →</a>
+)}
+```
+
+Same treatment for the **Parlour card** — area in bold, then "Starts at (parlour_start_time)".
+
+---
+
+## Change 2: Freelancer Personal Notes in Expanded Row
+
+### Step A — Expand the Supabase Query
+
+In `toggleExpand` (line 170–173), add `freelancer_name`, `role_code`, `personal_note` to the select:
 
 ```typescript
-const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-const [expandCache, setExpandCache] = useState<Map<string, {
+supabase.from('freelancer_event_settings')
+  .select('show_bride_details,show_groom_details,show_venue_details,show_parlour_details,show_bride_location,show_groom_location,freelancer_name,role_code,personal_note')
+  .eq('registered_date_time_ad', row.registeredDateTimeAD)
+  .eq('event_name', row.event),
+```
+
+### Step B — Pass `row` to `EventLogisticsPanel`
+
+At both call sites (mobile line 756, desktop line 925), pass `row`:
+```tsx
+<EventLogisticsPanel
+  eventDetail={cached?.eventDetail ?? null}
+  contactDetail={cached?.contactDetail ?? null}
+  settings={cached?.settings ?? []}
+  loading={cached?.loading ?? true}
+  row={row}  // ← ADD THIS
+/>
+```
+
+### Step C — Add `row` to `EventLogisticsPanel` Props
+
+Update the function signature:
+```typescript
+function EventLogisticsPanel({ eventDetail, contactDetail, settings, loading, row }: {
   eventDetail: any | null;
   contactDetail: any | null;
   settings: any[];
   loading: boolean;
-}>>(new Map());
-```
-
-### 2. New `toggleExpand` Function
-
-```typescript
-const toggleExpand = useCallback(async (rowKey: string, row: FreelancerAssignment) => {
-  setExpandedRows(prev => {
-    const next = new Set(prev);
-    if (next.has(rowKey)) { next.delete(rowKey); return next; }
-    next.add(rowKey);
-    return next;
-  });
-
-  // Only fetch if not already in cache
-  const cacheKey = `${row.registeredDateTimeAD}__${row.event}`;
-  if (expandCache.has(cacheKey)) return;
-
-  // Mark loading
-  setExpandCache(prev => new Map(prev).set(cacheKey, { eventDetail: null, contactDetail: null, settings: [], loading: true }));
-
-  const [edRes, cdRes, settingsRes] = await Promise.all([
-    supabase.from('event_details_cache')
-      .select('venue_name,venue_type,venue_city,venue_area,venue_map,parlour_name,parlour_type,parlour_city,parlour_area,parlour_map,event_start_time,event_end_time,parlour_start_time,parlour_end_time')
-      .eq('registered_date_time_ad', row.registeredDateTimeAD)
-      .ilike('event_name', row.event)
-      .maybeSingle(),
-    supabase.from('contact_details_cache')
-      .select('bride_full_name,bride_contact_number,bride_whatsapp_number,bride_home_city,bride_home_area,bride_home_map,groom_full_name,groom_contact_number,groom_whatsapp_number,groom_home_city,groom_home_area,groom_home_map')
-      .eq('registered_date_time_ad', row.registeredDateTimeAD)
-      .maybeSingle(),
-    supabase.from('freelancer_event_settings')
-      .select('show_bride_details,show_groom_details,show_venue_details,show_parlour_details,show_bride_location,show_groom_location')
-      .eq('registered_date_time_ad', row.registeredDateTimeAD)
-      .eq('event_name', row.event),
-  ]);
-
-  setExpandCache(prev => new Map(prev).set(cacheKey, {
-    eventDetail: edRes.data || null,
-    contactDetail: cdRes.data || null,
-    settings: settingsRes.data || [],
-    loading: false,
-  }));
-}, [expandCache]);
-```
-
-### 3. New `EventLogisticsPanel` Component
-
-Defined inside the file. Aggregates visibility via OR logic across all freelancer settings for the event:
-
-```typescript
-function EventLogisticsPanel({ eventDetail, contactDetail, settings, loading }: {
-  eventDetail: any | null;
-  contactDetail: any | null;
-  settings: any[];
-  loading: boolean;
-}) {
-  if (loading) return <div className="flex items-center gap-2 py-2 px-3 text-xs text-gray-400"><Loader2 className="w-3 h-3 animate-spin" /> Loading details...</div>;
-
-  const showBride = settings.some(s => s.show_bride_details);
-  const showBrideLocation = settings.some(s => s.show_bride_location);
-  const showGroom = settings.some(s => s.show_groom_details);
-  const showGroomLocation = settings.some(s => s.show_groom_location);
-  const showVenue = settings.some(s => s.show_venue_details);
-  const showParlour = settings.some(s => s.show_parlour_details);
-
-  // If nothing is visible at all, show a message
-  const hasAnything = showBride || showGroom || showVenue || showParlour || showBrideLocation || showGroomLocation;
-
-  // Render sections in a compact horizontal/vertical grid
-  // Each section: label chip + data rows
-}
-```
-
-**Layout:** Horizontal grid of cards inside the expanded row — Bride card | Groom card | Venue card | Parlour card. Only renders cards where visibility is true. If no settings exist yet, shows a soft "No details configured for freelancers yet" message.
-
-### 4. Desktop Table Row Change
-
-The core change: each event row becomes **two `<tr>` elements**. The `filteredRows.map(...)` currently returns a single `<tr>` (lines 738–840). It becomes:
-
-```tsx
-filteredRows.map((row, idx) => {
-  const rowKey = `${row.registeredDateTimeAD}-${row.event}-${row.eventDateAD}`;
-  const cacheKey = `${row.registeredDateTimeAD}__${row.event}`;
-  const isExpanded = expandedRows.has(rowKey);
-  const cached = expandCache.get(cacheKey);
-  // ... existing groupIdx, dayBg, reqCodes, hasUnassignedRequired
-
-  return (
-    <>
-      {/* Existing main row — with expand icon added to Day cell */}
-      <tr key={`main-${rowKey}-${idx}`} ...>
-        <td className="px-3 py-2 border-r border-gray-100 text-center">
-          {/* Existing day filter button */}
-          <button onClick={() => setFilterDay(...)}>
-            {row.eventDay}
-          </button>
-          {/* NEW: Expand toggle below day circle */}
-          <button
-            onClick={() => toggleExpand(rowKey, row)}
-            className="mt-0.5 flex items-center justify-center w-full text-gray-300 hover:text-violet-500 transition-colors"
-            title={isExpanded ? "Collapse details" : "Expand details"}
-          >
-            {isExpanded
-              ? <ChevronUp className="w-3 h-3" />
-              : <ChevronDown className="w-3 h-3" />}
-          </button>
-        </td>
-        {/* ... all other existing cells unchanged ... */}
-      </tr>
-
-      {/* NEW: Expand panel row */}
-      {isExpanded && (
-        <tr key={`expand-${rowKey}-${idx}`} className="bg-slate-50 border-b border-violet-100">
-          <td colSpan={13} className="px-4 py-3">
-            <EventLogisticsPanel
-              eventDetail={cached?.eventDetail ?? null}
-              contactDetail={cached?.contactDetail ?? null}
-              settings={cached?.settings ?? []}
-              loading={cached?.loading ?? true}
-            />
-          </td>
-        </tr>
-      )}
-    </>
-  );
+  row: FreelancerAssignment;
 })
 ```
 
-**Important:** Wrap the fragment pairs in `<React.Fragment key={...}>` to avoid React key warnings.
+### Step D — Render Freelancer Notes Section
 
-### 5. Imports to Add
+After the existing cards grid, add a new "Crew Notes" section. It iterates over all `CREW_COLUMNS`, finds assigned names, looks them up in `settings` by `freelancer_name`, and if there's a `personal_note`, shows it:
 
-Add to the lucide-react import on line 8:
-- `ChevronDown`
-- `ChevronUp`
-- `Phone`
-- `MapPin`
-- `ExternalLink`
-
----
-
-## `EventLogisticsPanel` UI Design
-
-Compact inline section — horizontal cards side by side, dark-outlined boxes:
-
+```tsx
+{/* Crew Personal Notes */}
+{(() => {
+  const notedCrew: { name: string; role: string; note: string }[] = [];
+  for (const col of CREW_COLUMNS) {
+    const name = (row[col.field] as string)?.trim();
+    if (!name) continue;
+    const setting = settings.find(s => 
+      s.freelancer_name?.trim().toLowerCase() === name.toLowerCase()
+    );
+    if (setting?.personal_note?.trim()) {
+      notedCrew.push({ name, role: col.short, note: setting.personal_note.trim() });
+    }
+  }
+  if (notedCrew.length === 0) return null;
+  return (
+    <div className="mt-2.5 pt-2.5 border-t border-gray-200">
+      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1.5">📝 Crew Notes</p>
+      <div className="flex flex-wrap gap-2">
+        {notedCrew.map(({ name, role, note }) => (
+          <div key={name} className="bg-yellow-50 border border-yellow-200 rounded-lg px-2.5 py-1.5 max-w-[240px]">
+            <p className="text-[10px] font-bold text-gray-700">{name} <span className="text-gray-400 font-normal">({role})</span></p>
+            <p className="text-[10px] text-gray-600 mt-0.5 leading-relaxed whitespace-pre-line">{note}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+})()}
 ```
-┌─────────────────┬─────────────────┬────────────────┬──────────────┐
-│ 🌸 BRIDE        │ 🤵 GROOM        │ 📍 VENUE       │ 💄 PARLOUR   │
-│ Sita Sharma     │ Ram Sharma      │ Taj Hall       │ Beauty Queen │
-│ 📞 9800000000   │ 📞 9811111111   │ Baneshwor      │ New Baneshwor│
-│ 📍 Lalitpur     │ 📍 Bhaktapur    │ [Map →]        │ [Map →]      │
-└─────────────────┴─────────────────┴────────────────┴──────────────┘
+
+---
+
+## Change 3: Booking Calendar Button Per Freelancer
+
+Under each freelancer note card (or even for freelancers without notes), add a small "📅 View Calendar" button that navigates to `/crew-schedule/:freelancerName`.
+
+The button is added inside each crew note card:
+```tsx
+<div key={name} className="bg-yellow-50 border border-yellow-200 rounded-lg px-2.5 py-1.5 max-w-[240px]">
+  <div className="flex items-center justify-between gap-2">
+    <p className="text-[10px] font-bold text-gray-700">{name} <span className="text-gray-400 font-normal">({role})</span></p>
+    <a
+      href={`/crew-schedule/${encodeURIComponent(name)}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="shrink-0 text-[9px] text-violet-600 hover:underline flex items-center gap-0.5"
+      title={`Open ${name}'s booking calendar`}
+    >
+      <ExternalLink className="w-2.5 h-2.5" /> Cal
+    </a>
+  </div>
+  {note && <p className="text-[10px] text-gray-600 mt-0.5 leading-relaxed whitespace-pre-line">{note}</p>}
+</div>
 ```
 
-If `settings` is empty (no freelancers configured) → show:
-> "No visibility settings configured for this event's freelancers yet."
+For freelancers **without** a personal note but who are assigned, we still show the calendar link. So the section loops over ALL assigned crew (not just those with notes) and shows:
+- Name + role code
+- Personal note (if any)
+- Calendar link
 
-If settings exist but all are `false` → show:
-> "All details are hidden for this event's freelancers."
+This means splitting the rendering: a "Crew" section at the bottom of the expanded panel listing all assigned people with optional notes and calendar links.
 
-Phone numbers are `<a href="tel:...">` links. WhatsApp numbers open WhatsApp. Map links open in new tab.
+**Final Crew section (replaces the "notedCrew only" approach):**
+
+```tsx
+{/* All Assigned Crew — Notes + Calendar links */}
+{(() => {
+  const assignedCrew: { name: string; role: string; shortCode: string; note: string }[] = [];
+  for (const col of CREW_COLUMNS) {
+    const name = (row[col.field] as string)?.trim();
+    if (!name) continue;
+    const setting = settings.find(s =>
+      s.freelancer_name?.trim().toLowerCase() === name.toLowerCase()
+    );
+    assignedCrew.push({ name, role: col.label, shortCode: col.short, note: setting?.personal_note?.trim() || '' });
+  }
+  if (assignedCrew.length === 0) return null;
+  return (
+    <div className="mt-2.5 pt-2.5 border-t border-gray-200">
+      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1.5">👥 Crew</p>
+      <div className="flex flex-wrap gap-2">
+        {assignedCrew.map(({ name, shortCode, note }) => (
+          <div key={`${name}-${shortCode}`} className="bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 min-w-[130px] max-w-[220px]">
+            <div className="flex items-center justify-between gap-1">
+              <div className="min-w-0">
+                <span className="text-[10px] font-bold text-gray-500 uppercase">{shortCode}</span>
+                <p className="text-xs font-semibold text-gray-800 truncate">{name}</p>
+              </div>
+              <a
+                href={`/crew-schedule/${encodeURIComponent(name)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 p-1 rounded hover:bg-violet-100 text-violet-400 hover:text-violet-600 transition-colors"
+                title={`Open ${name}'s booking calendar`}
+              >
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+            {note && (
+              <p className="text-[10px] text-amber-700 bg-yellow-50 rounded px-1.5 py-0.5 mt-1 leading-relaxed whitespace-pre-line border border-yellow-100">{note}</p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+})()}
+```
 
 ---
 
-## Mobile — Collapsible Section Below Card
+## Summary of All File Changes
 
-On mobile (the card-based layout), add the same expand chevron at the bottom of each day card header. When expanded, the `EventLogisticsPanel` renders below the crew assignment section inside the card.
+**File: `src/components/suite/AllClientsCrewTable.tsx`**
 
----
+### 1. `toggleExpand` (line 170–173) — Add missing fields to settings query
+Change `.select('show_bride_details,...,show_groom_location')` to also include `freelancer_name,role_code,personal_note`.
 
-## Files Changed
+### 2. `EventLogisticsPanel` call sites (lines 756, 925) — Pass `row` prop
+Add `row={row}` at both the mobile and desktop call sites.
 
-### `src/components/suite/AllClientsCrewTable.tsx`
+### 3. `EventLogisticsPanel` function (line 966) — 3 sub-changes:
+- **a.** Add `row: FreelancerAssignment` to props type
+- **b.** Venue card: display `venue_area` in bold on its own line, then `Starts at (time)` and `Ends at (time)` below it (same for Parlour card)  
+- **c.** After the cards grid (line 1100), add the "Crew" section that lists all assigned freelancers with their personal note and a calendar link button
 
-- **New imports:** `ChevronDown`, `ChevronUp`, `Phone`, `MapPin`, `ExternalLink` from lucide-react
-- **New state:** `expandedRows: Set<string>`, `expandCache: Map<string, {...}>`
-- **New function:** `toggleExpand(rowKey, row)` — lazy fetches from 3 Supabase tables in parallel
-- **New component:** `EventLogisticsPanel` — renders bride/groom/venue/parlour based on aggregated visibility settings
-- **Desktop table:** Each row becomes a `<React.Fragment>` with 2 `<tr>` elements — existing row + optional expand row
-- **Day cell:** Add `ChevronDown`/`ChevronUp` toggle button below the day number circle
-- **Mobile:** Add expand toggle to mobile card header + `EventLogisticsPanel` below crew section
-
-No schema changes. No other files.
-
----
-
-## Technical Notes
-
-- `Promise.all` runs all 3 Supabase queries in parallel — typical load time under 200ms
-- `expandCache` uses `registeredDateTimeAD + "__" + event` as key to distinguish multiple events on the same day for the same client
-- React keys use `React.Fragment key={rowKey}` to avoid duplicate key warnings from the two `<tr>` siblings
-- `colSpan={13}` covers all columns (Day + Client + Event + 10 crew columns)
-- The panel is styled `bg-slate-50` to visually distinguish it from the main table row
-- `ilike` used for the event detail query to handle case mismatch between Sheets data and stored values
+No schema changes. No new files. No other component files touched.
