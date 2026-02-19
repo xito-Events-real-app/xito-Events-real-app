@@ -101,48 +101,54 @@ export async function getFreelancers(limit = 500): Promise<FreelancerData[]> {
 }
 
 export async function addFreelancer(freelancerData: Partial<FreelancerData>): Promise<void> {
-  // Write to Google Sheets first (source of truth)
-  const { data, error } = await supabase.functions.invoke('google-sheets', {
+  // STEP 1: Write to Supabase immediately (~50ms) — synced_to_sheet: false marks as pending
+  const cachePayload = {
+    name: freelancerData.name || '',
+    contact_no: freelancerData.contactNo || '',
+    whatsapp_no: freelancerData.whatsappNo || '',
+    instagram: freelancerData.instagram || '',
+    facebook: freelancerData.facebook || '',
+    city: freelancerData.city || '',
+    area: freelancerData.area || '',
+    map_link: freelancerData.mapLink || '',
+    pathao_landmark: freelancerData.pathaoLandmark || '',
+    main_job: freelancerData.mainJob || '',
+    photographer: freelancerData.photographer || '',
+    videographer: freelancerData.videographer || '',
+    photo_editor: freelancerData.photoEditor || '',
+    video_editor: freelancerData.videoEditor || '',
+    hybrid_shooter: freelancerData.hybridShooter || '',
+    hybrid_editor: freelancerData.hybridEditor || '',
+    drone_operator: freelancerData.droneOperator || '',
+    fpv_operator: freelancerData.fpvOperator || '',
+    iphone_shooter: freelancerData.iphoneShooter || '',
+    synced_to_sheet: false,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error: cacheError } = await supabase
+    .from('freelancers_cache')
+    .upsert(cachePayload as any, { onConflict: 'name' });
+
+  if (cacheError) {
+    console.error('[freelancer-api] Supabase upsert failed:', cacheError);
+    throw new Error('Failed to add freelancer to cache');
+  }
+
+  // STEP 2: Push to Google Sheets in background (non-blocking)
+  supabase.functions.invoke('google-sheets', {
     body: { action: 'addFreelancer', data: freelancerData }
+  }).then(({ data, error }) => {
+    if (!error && data?.success) {
+      void supabase.from('freelancers_cache')
+        .update({ synced_to_sheet: true })
+        .eq('name', freelancerData.name || '');
+    } else {
+      console.warn('[BACKGROUND-SHEETS] addFreelancer sync failed:', error || data?.error);
+    }
+  }).catch(err => {
+    console.warn('[BACKGROUND-SHEETS] addFreelancer Sheets call failed:', err);
   });
-
-  if (error) {
-    console.error('Error adding freelancer:', error);
-    throw new Error('Failed to add freelancer');
-  }
-
-  if (!data.success) {
-    throw new Error(data.error || 'Failed to add freelancer');
-  }
-
-  // Upsert into cache
-  try {
-    await supabase.from('freelancers_cache').upsert({
-      name: freelancerData.name || '',
-      contact_no: freelancerData.contactNo || '',
-      whatsapp_no: freelancerData.whatsappNo || '',
-      instagram: freelancerData.instagram || '',
-      facebook: freelancerData.facebook || '',
-      city: freelancerData.city || '',
-      area: freelancerData.area || '',
-      map_link: freelancerData.mapLink || '',
-      pathao_landmark: freelancerData.pathaoLandmark || '',
-      main_job: freelancerData.mainJob || '',
-      photographer: freelancerData.photographer || '',
-      videographer: freelancerData.videographer || '',
-      photo_editor: freelancerData.photoEditor || '',
-      video_editor: freelancerData.videoEditor || '',
-      hybrid_shooter: freelancerData.hybridShooter || '',
-      hybrid_editor: freelancerData.hybridEditor || '',
-      drone_operator: freelancerData.droneOperator || '',
-      fpv_operator: freelancerData.fpvOperator || '',
-      iphone_shooter: freelancerData.iphoneShooter || '',
-      synced_to_sheet: true,
-      updated_at: new Date().toISOString(),
-    } as any, { onConflict: 'name' });
-  } catch (err) {
-    console.warn('[freelancer-api] Cache upsert after add failed:', err);
-  }
 }
 
 export async function updateFreelancer(freelancerData: FreelancerData): Promise<void> {
