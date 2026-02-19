@@ -168,7 +168,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
         .eq('registered_date_time_ad', row.registeredDateTimeAD)
         .maybeSingle(),
       supabase.from('freelancer_event_settings')
-        .select('show_bride_details,show_groom_details,show_venue_details,show_parlour_details,show_bride_location,show_groom_location')
+        .select('show_bride_details,show_groom_details,show_venue_details,show_parlour_details,show_bride_location,show_groom_location,freelancer_name,role_code,personal_note')
         .eq('registered_date_time_ad', row.registeredDateTimeAD)
         .eq('event_name', row.event),
     ]);
@@ -758,6 +758,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                             contactDetail={cached?.contactDetail ?? null}
                             settings={cached?.settings ?? []}
                             loading={cached?.loading ?? true}
+                            row={row}
                           />
                         </div>
                       )}
@@ -927,6 +928,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                                 contactDetail={cached?.contactDetail ?? null}
                                 settings={cached?.settings ?? []}
                                 loading={cached?.loading ?? true}
+                                row={row}
                               />
                             </td>
                           </tr>
@@ -963,11 +965,12 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
 }
 
 /* ─── Event Logistics Panel ─── */
-function EventLogisticsPanel({ eventDetail, contactDetail, settings, loading }: {
+function EventLogisticsPanel({ eventDetail, contactDetail, settings, loading, row }: {
   eventDetail: any | null;
   contactDetail: any | null;
   settings: any[];
   loading: boolean;
+  row: FreelancerAssignment;
 }) {
   if (loading) {
     return (
@@ -1060,14 +1063,20 @@ function EventLogisticsPanel({ eventDetail, contactDetail, settings, loading }: 
     cards.push(
       <div key="venue" className="border border-amber-200 rounded-lg p-2.5 bg-amber-50/50 min-w-[150px]">
         <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wide mb-1.5">📍 Venue</div>
-        {eventDetail?.venue_name && <p className="text-xs font-semibold text-gray-800 truncate">{eventDetail.venue_name}</p>}
-        {(eventDetail?.venue_city || eventDetail?.venue_area) && (
-          <p className="flex items-center gap-1 text-xs text-gray-600 mt-0.5">
-            <MapPin className="w-2.5 h-2.5 shrink-0" />{[eventDetail.venue_city, eventDetail.venue_area].filter(Boolean).join(', ')}
-          </p>
+        {eventDetail?.venue_name && (
+          <p className="text-xs font-semibold text-gray-800 truncate">{eventDetail.venue_name}</p>
         )}
-        {(eventDetail?.event_start_time || eventDetail?.event_end_time) && (
-          <p className="text-xs text-gray-500 mt-0.5">⏰ {[eventDetail.event_start_time, eventDetail.event_end_time].filter(Boolean).join(' – ')}</p>
+        {eventDetail?.venue_city && (
+          <p className="text-[10px] text-gray-500 mt-0.5">{eventDetail.venue_city}</p>
+        )}
+        {eventDetail?.venue_area && (
+          <p className="text-xs font-bold text-gray-800 mt-0.5">{eventDetail.venue_area}</p>
+        )}
+        {eventDetail?.event_start_time && (
+          <p className="text-[10px] text-violet-600 mt-0.5">Starts at {eventDetail.event_start_time}</p>
+        )}
+        {eventDetail?.event_end_time && (
+          <p className="text-[10px] text-gray-400">Ends at {eventDetail.event_end_time}</p>
         )}
         {eventDetail?.venue_map && (
           <a href={eventDetail.venue_map} target="_blank" rel="noopener noreferrer" className="text-[10px] text-violet-600 hover:underline mt-0.5 block">Map →</a>
@@ -1080,14 +1089,20 @@ function EventLogisticsPanel({ eventDetail, contactDetail, settings, loading }: 
     cards.push(
       <div key="parlour" className="border border-purple-200 rounded-lg p-2.5 bg-purple-50/50 min-w-[150px]">
         <div className="text-[10px] font-bold text-purple-600 uppercase tracking-wide mb-1.5">💄 Parlour</div>
-        {eventDetail?.parlour_name && <p className="text-xs font-semibold text-gray-800 truncate">{eventDetail.parlour_name}</p>}
-        {(eventDetail?.parlour_city || eventDetail?.parlour_area) && (
-          <p className="flex items-center gap-1 text-xs text-gray-600 mt-0.5">
-            <MapPin className="w-2.5 h-2.5 shrink-0" />{[eventDetail.parlour_city, eventDetail.parlour_area].filter(Boolean).join(', ')}
-          </p>
+        {eventDetail?.parlour_name && (
+          <p className="text-xs font-semibold text-gray-800 truncate">{eventDetail.parlour_name}</p>
         )}
-        {(eventDetail?.parlour_start_time || eventDetail?.parlour_end_time) && (
-          <p className="text-xs text-gray-500 mt-0.5">⏰ {[eventDetail.parlour_start_time, eventDetail.parlour_end_time].filter(Boolean).join(' – ')}</p>
+        {eventDetail?.parlour_city && (
+          <p className="text-[10px] text-gray-500 mt-0.5">{eventDetail.parlour_city}</p>
+        )}
+        {eventDetail?.parlour_area && (
+          <p className="text-xs font-bold text-gray-800 mt-0.5">{eventDetail.parlour_area}</p>
+        )}
+        {eventDetail?.parlour_start_time && (
+          <p className="text-[10px] text-violet-600 mt-0.5">Starts at {eventDetail.parlour_start_time}</p>
+        )}
+        {eventDetail?.parlour_end_time && (
+          <p className="text-[10px] text-gray-400">Ends at {eventDetail.parlour_end_time}</p>
         )}
         {eventDetail?.parlour_map && (
           <a href={eventDetail.parlour_map} target="_blank" rel="noopener noreferrer" className="text-[10px] text-violet-600 hover:underline mt-0.5 block">Map →</a>
@@ -1096,9 +1111,51 @@ function EventLogisticsPanel({ eventDetail, contactDetail, settings, loading }: 
     );
   }
 
+  // Build assigned crew list
+  const assignedCrew: { name: string; shortCode: string; note: string }[] = [];
+  for (const col of CREW_COLUMNS) {
+    const name = (row[col.field] as string)?.trim();
+    if (!name) continue;
+    const setting = settings.find(s =>
+      s.freelancer_name?.trim().toLowerCase() === name.toLowerCase()
+    );
+    assignedCrew.push({ name, shortCode: col.short, note: setting?.personal_note?.trim() || '' });
+  }
+
   return (
-    <div className="flex flex-wrap gap-2">
-      {cards}
+    <div>
+      <div className="flex flex-wrap gap-2">
+        {cards}
+      </div>
+      {assignedCrew.length > 0 && (
+        <div className="mt-2.5 pt-2.5 border-t border-gray-200">
+          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1.5">👥 Crew</p>
+          <div className="flex flex-wrap gap-2">
+            {assignedCrew.map(({ name, shortCode, note }) => (
+              <div key={`${name}-${shortCode}`} className="bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 min-w-[130px] max-w-[220px]">
+                <div className="flex items-center justify-between gap-1">
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase">{shortCode}</span>
+                    <p className="text-xs font-semibold text-gray-800 truncate">{name}</p>
+                  </div>
+                  <a
+                    href={`/crew-schedule/${encodeURIComponent(name)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 p-1 rounded hover:bg-violet-100 text-violet-400 hover:text-violet-600 transition-colors"
+                    title={`Open ${name}'s booking calendar`}
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+                {note && (
+                  <p className="text-[10px] text-amber-700 bg-yellow-50 rounded px-1.5 py-0.5 mt-1 leading-relaxed whitespace-pre-line border border-yellow-100">{note}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
