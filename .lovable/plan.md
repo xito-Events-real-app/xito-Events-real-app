@@ -1,100 +1,76 @@
 
-# End-to-End Test Plan: Desktop View — Full Supabase-First Flow
+# Phone Number Validation — Client Contact Form
 
-## What Was Implemented (Summary)
+## Problem
+The three phone number fields in `src/pages/ClientContactForm.tsx` — **Contact Number**, **Backup Number 1**, and **Backup Number 2** — currently accept any input: letters, symbols, country codes (e.g. `+977`), and numbers longer than 10 digits. Nepali mobile numbers are exactly 10 digits, so anything else is invalid data.
 
-All 13 write operations across 4 files are now Supabase-first:
+## What Will Change
 
-| File | Handlers Converted |
-|---|---|
-| `src/lib/timestamp-utils.ts` | `computePaymentUpdate()` added |
-| `src/lib/clients-supabase-cache.ts` | `migrateClientToBookedInCache()` added |
-| `src/components/desktop/DesktopClientRow.tsx` | 11 handlers: `handleCall`, `handleStatusChange`, `handleHandlerChange`, `handleMindsetChange`, `handleSaveQuotation`, `handleSaveClientBargain`, `handleSaveCounterRate`, `handleAddComment`, `handleSaveFinalQuotation`, `handleSaveAdvancePendingQuotation`, `handleSaveBookedPayment` |
-| `src/components/dashboard/ClientDetailSheet.tsx` | `handleSave` |
+Only **one file** needs editing: `src/pages/ClientContactForm.tsx`
 
-## Test Sequence
+### 1. Add a phone number sanitiser helper (top of file)
+A small helper function that:
+- Strips all non-digit characters (removes `+`, spaces, `-`, country codes like `977`)
+- Clamps input to a maximum of **10 digits**
 
-### Step 1 — Access Desktop View
+```
+function sanitizePhone(raw: string): string {
+  return raw.replace(/\D/g, '').slice(0, 10);
+}
+```
 
-1. Log in at `/login`
-2. Once on the dashboard, click the Monitor icon (top-right) to toggle Desktop Mode
-3. Data loads from the Supabase cache — the client table should appear with status categories
+### 2. Update `PersonForm` — three input fields
 
-### Step 2 — Log a Call
+**Contact Number** (currently lines 482–489):
+- Change `onChange` to pass through `sanitizePhone(e.target.value)` instead of the raw value
+- Add `maxLength={10}` attribute
+- Add `inputMode="numeric"` so mobile keyboards show the number pad
+- Add `pattern="[0-9]{10}"` for native browser form validation
+- Add a small helper text below: `"10-digit Nepali number (e.g. 98XXXXXXXX)"`
 
-1. Find any client in the table with a phone number
-2. Click the phone icon (Direct Call) or WhatsApp icon
-3. **Expected:** Toast "DIRECT call logged" appears instantly — no waiting
-4. **Expected:** The call count badge on that row increments immediately
-5. **Verify in background:** After ~5-10 seconds, open the Client Detail page for that client and confirm the call log entry matches the format `H:MM AM/PM DIRECT (YYYY-MM-DD)` at the top
+**Backup Number 1** (currently lines 507–513):
+- Same changes as Contact Number
 
-### Step 3 — Change a Status
+**Backup Number 2** (currently lines 536–542):
+- Same changes as Contact Number
 
-1. On the same client row, click the status dropdown
-2. Select a status that does NOT trigger an interception dialog (e.g. "CALL NOT RECEIVED", "TEXTED", "NUMBER PROVIDED")
-3. **Expected:** Status badge updates instantly on the row — no spinner wait
-4. **Expected:** Toast appears immediately
-5. If you select "QUOTATION SENT": the quotation dialog opens — fill in amounts, submit — status + quotation both update instantly
+### 3. Add submit-time validation in `handleSubmit`
 
-### Step 4 — Add a Comment
+Before the API call (line 163), validate that all filled phone numbers are exactly 10 digits:
 
-1. Expand the client row (click the chevron) or use the comment dialog button
-2. Type a comment and submit
-3. **Expected:** Comment appears instantly in the expanded view
-4. **Expected:** Toast "Comment added" shows without delay
+```
+const phoneFields = [
+  { value: bride.contactNumber, label: "Bride's Contact Number" },
+  { value: bride.backupNumber1, label: "Bride's Backup Number 1" },
+  { value: bride.backupNumber2, label: "Bride's Backup Number 2" },
+  { value: groom.contactNumber, label: "Groom's Contact Number" },
+  { value: groom.backupNumber1, label: "Groom's Backup Number 1" },
+  { value: groom.backupNumber2, label: "Groom's Backup Number 2" },
+];
 
-### Step 5 — Change Handler / Mindset
+for (const { value, label } of phoneFields) {
+  if (value && value.length !== 10) {
+    toast.error(`${label} must be exactly 10 digits`);
+    setIsSubmitting(false);
+    return;
+  }
+}
+```
 
-1. Use the Handler dropdown on the row to assign a handler
-2. Use the Mindset dropdown to set a mindset
-3. **Expected:** Both update instantly in the row with a toast — no loading indicator
+Note: `bride.contactNumber` is required by HTML `required` attribute, so it will always be filled. The backup numbers and groom contact are optional — we only validate length if they are non-empty.
 
-### Step 6 — Save a Quotation (Quotation Dialog Path)
+## Behaviour Summary
 
-1. Find a client in "JUST ENQUIRED" or early-stage status
-2. Change status to "QUOTATION SENT" — the quotation dialog should intercept
-3. Enter NPR amounts for at least one package tier
-4. Click Save
-5. **Expected:** Dialog closes instantly, status shows "QUOTATION SENT", quotation data visible in expanded row — all before any Sheets response
+| Scenario | Before | After |
+|---|---|---|
+| User types `+977-98XXXXXXXX` | Saved as-is | `+977` stripped → saved as `98XXXXXXXX` |
+| User types `9841234567890` (13 digits) | Saved as-is | Clamped at 10 digits → `9841234567` |
+| User types `984abc123` | Saved as-is | Letters stripped → `984123` (only 6 digits, fails submit validation) |
+| User pastes `+1 415 555 0123` | Saved as-is | Non-digits stripped, clamped → `1415555012` |
+| User types exactly `9841234567` | Saved correctly | Saved correctly ✅ |
+| Mobile keyboard | Alphanumeric keyboard | Number pad via `inputMode="numeric"` ✅ |
 
-### Step 7 — BOOKED Migration with Payment (Critical Path)
+## Files Changed
+- `src/pages/ClientContactForm.tsx` — sanitiser helper + three input field updates + submit validation
 
-This is the most complex test. Find a client in "ADVANCE PENDING" status with a final quotation already set.
-
-1. Click the status dropdown and select "BOOKED"
-2. **Expected:** The BOOKED payment dialog opens (intercept)
-3. Enter a payment amount, select type (ADVANCE), pick a date on the Nepali calendar, select a bank
-4. Click "Book & Record Payment"
-5. **Expected (instant — before any network response):**
-   - Dialog closes
-   - Status row shows "BOOKED" badge
-   - Payment field shows the new payment entry
-   - Remaining payment updates
-   - Toast "Payment recorded & status updated to BOOKED"
-6. **Expected (background — after ~5-30 seconds):**
-   - Google Sheets "CLIENT TRACKER" moves the row to "BOOKED CLIENTS" sheet
-   - Payment entry appears in Column AE in format: `NPR X,XXX/- AS ADVANCE ON WED 2082-10-12 IN BANK NAME`
-   - Remaining payment formula in Column AG updates
-
-### Step 8 — Edit Client via ClientDetailSheet
-
-1. Click on a client name to open the Client Detail Sheet (bottom drawer)
-2. Click the pencil/edit icon
-3. Change the client name or a contact number
-4. Click the checkmark Save
-5. **Expected:** Sheet closes instantly after Supabase write — no 2-4 second wait for Sheets response
-6. **Expected:** The updated name/number reflects immediately in the table row
-
-## What to Watch For (Failure Indicators)
-
-- Any action that takes more than ~300ms to show feedback (indicates it is still awaiting Sheets) — this should NOT happen after the migration
-- Console warnings starting with `[BACKGROUND-SHEETS]` are normal — these mean Sheets sync failed in the background but Supabase already has the data
-- Console warnings starting with `[BACKGROUND]` indicate a Supabase cache write failure — these should be investigated
-- If the BOOKED payment format in Sheets shows `NPR 30000/-` (no commas) instead of `NPR 30,000/-`, the `computePaymentUpdate` formatter is not being used correctly
-
-## Technical Notes (For Reference)
-
-- All handlers use the pattern: instant local state update → Supabase write → background Sheets sync with `.catch(err => console.warn(...))`
-- The BOOKED migration uses `migrateClientToBookedInCache()` which atomically sets `sheet_source: 'booked'` and `synced_to_sheet: false` — this is the single Supabase write that guarantees data safety before the Sheets migration runs
-- Payment string format produced by `computePaymentUpdate()`: `NPR {en-IN localized amount}/- AS {TYPE} ON {WEEKDAY} {BS-date} IN {BANK}` — weekday derived using local-timezone `new Date(year, month-1, day)` constructor to avoid UTC offset issues
-- Cache invalidation after BOOKED migration fires `notifyCacheUpdate('booked-clients-invalidate')` — the Booked Clients module should auto-refresh and show the newly booked client
+No backend changes, no new dependencies, no schema changes needed.
