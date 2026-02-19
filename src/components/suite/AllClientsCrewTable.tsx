@@ -643,6 +643,9 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
               ) : (
                 filteredRows.map((row, idx) => {
                   const rowKey = `${row.registeredDateTimeAD}-${row.event}-${row.eventDateAD}`;
+                  const cacheKey = `${row.registeredDateTimeAD}__${row.event}`;
+                  const isExpanded = expandedRows.has(rowKey);
+                  const cached = expandCache.get(cacheKey);
                   const groupIdx = dayGroups.get(rowKey) ?? 0;
                   const dayBg = DAY_COLORS[groupIdx % DAY_COLORS.length];
                   const reqCodes = (row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
@@ -651,91 +654,113 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                     return isReq && !(row[col.field] as string)?.trim();
                   });
                   return (
-                    <div key={`${rowKey}-${idx}`} className={cn("rounded-xl border border-gray-200 p-3 shadow-sm", dayBg, hasUnassignedRequired && "border-red-300")}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <button
-                          onClick={() => setFilterDay(filterDay === row.eventDay ? null : row.eventDay)}
-                          className={cn(
-                            "inline-flex items-center justify-center w-9 h-9 rounded-full font-bold text-sm shrink-0 transition-all",
-                            filterDay === row.eventDay
-                              ? "bg-violet-600 text-white ring-2 ring-violet-400"
-                              : hasUnassignedRequired
-                                ? "bg-red-100 text-red-700 ring-2 ring-red-400 animate-pulse-red"
-                                : "bg-violet-100 text-violet-700"
-                          )}
-                        >
-                          {row.eventDay}
-                        </button>
-                        <div className="flex-1 min-w-0">
+                    <div key={`${rowKey}-${idx}`} className={cn("rounded-xl border border-gray-200 shadow-sm overflow-hidden", dayBg, hasUnassignedRequired && "border-red-300")}>
+                      <div className="p-3">
+                        <div className="flex items-center gap-2 mb-2">
                           <button
-                            onClick={() => setFilterClient(filterClient === row.clientName ? null : row.clientName)}
+                            onClick={() => setFilterDay(filterDay === row.eventDay ? null : row.eventDay)}
                             className={cn(
-                              "font-bold block truncate text-sm transition-colors",
-                              filterClient === row.clientName
-                                ? "text-violet-600 underline"
-                                : "text-gray-900 hover:text-violet-600"
+                              "inline-flex items-center justify-center w-9 h-9 rounded-full font-bold text-sm shrink-0 transition-all",
+                              filterDay === row.eventDay
+                                ? "bg-violet-600 text-white ring-2 ring-violet-400"
+                                : hasUnassignedRequired
+                                  ? "bg-red-100 text-red-700 ring-2 ring-red-400 animate-pulse-red"
+                                  : "bg-violet-100 text-violet-700"
                             )}
                           >
-                            {row.clientName}
+                            {row.eventDay}
                           </button>
-                          <p className="text-gray-500 truncate text-xs">
-                            {row.event}
-                          </p>
+                          <div className="flex-1 min-w-0">
+                            <button
+                              onClick={() => setFilterClient(filterClient === row.clientName ? null : row.clientName)}
+                              className={cn(
+                                "font-bold block truncate text-sm transition-colors",
+                                filterClient === row.clientName
+                                  ? "text-violet-600 underline"
+                                  : "text-gray-900 hover:text-violet-600"
+                              )}
+                            >
+                              {row.clientName}
+                            </button>
+                            <p className="text-gray-500 truncate text-xs">
+                              {row.event}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => toggleExpand(rowKey, row)}
+                            className={cn(
+                              "p-1.5 rounded-full transition-colors shrink-0",
+                              isExpanded ? "bg-violet-100 text-violet-600" : "text-gray-400 hover:text-violet-500 hover:bg-violet-50"
+                            )}
+                            title={isExpanded ? "Collapse details" : "Expand event details"}
+                          >
+                            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {CREW_COLUMNS.map(col => {
+                            const reqCodes = (row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
+                            const isReq = reqCodes.length === 0 || reqCodes.includes(col.short);
+                            if (!isReq) return null;
+                            const val = (row[col.field] as string)?.trim();
+                            return (
+                              <div key={col.field} className="flex items-center gap-1.5">
+                                <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0", GROUP_STYLES[col.group])}>
+                                  {col.short}
+                                </span>
+                                {val ? (
+                                  <div className="flex items-center gap-1 flex-1 min-w-0">
+                                    <HoverCard openDelay={200}>
+                                      <HoverCardTrigger asChild>
+                                        <button
+                                          onClick={() => navigate(`/freelancer/${encodeURIComponent(val)}`)}
+                                          className="text-xs text-gray-800 truncate hover:text-violet-600 transition-colors"
+                                        >
+                                          {val}
+                                        </button>
+                                      </HoverCardTrigger>
+                                      <HoverCardContent className="w-72 p-3 z-[200]" side="bottom" avoidCollisions={true} collisionPadding={16}>
+                                        <FreelancerHoverInfo name={val} allAssignments={assignments} selectedYear={selectedYear} selectedMonth={selectedMonth} freelancers={freelancers} />
+                                      </HoverCardContent>
+                                    </HoverCard>
+                                    {!readOnly && (
+                                      <button
+                                        onClick={() => handleAssign(row, col.field, '')}
+                                        className="p-0.5 rounded-full hover:bg-red-100 text-gray-400 hover:text-red-500 shrink-0"
+                                        title="Remove"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : readOnly ? (
+                                  <span className="text-[10px] text-gray-400 animate-pulse-red px-1">---</span>
+                                ) : (
+                                  <div className="animate-pulse-red rounded">
+                                    <MobileCrewAssign
+                                      field={col.field}
+                                      label={col.label}
+                                      freelancers={freelancers}
+                                      onAssign={(name) => handleAssign(row, col.field, name)}
+                                      onQuickAdd={() => setQuickAddState({ open: true, field: col.field, label: col.label, row })}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {CREW_COLUMNS.map(col => {
-                          const reqCodes = (row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
-                          const isReq = reqCodes.length === 0 || reqCodes.includes(col.short);
-                          if (!isReq) return null;
-                          const val = (row[col.field] as string)?.trim();
-                          return (
-                            <div key={col.field} className="flex items-center gap-1.5">
-                              <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0", GROUP_STYLES[col.group])}>
-                                {col.short}
-                              </span>
-                              {val ? (
-                                <div className="flex items-center gap-1 flex-1 min-w-0">
-                                  <HoverCard openDelay={200}>
-                                    <HoverCardTrigger asChild>
-                                      <button
-                                        onClick={() => navigate(`/freelancer/${encodeURIComponent(val)}`)}
-                                        className="text-xs text-gray-800 truncate hover:text-violet-600 transition-colors"
-                                      >
-                                        {val}
-                                      </button>
-                                    </HoverCardTrigger>
-                                    <HoverCardContent className="w-72 p-3 z-[200]" side="bottom" avoidCollisions={true} collisionPadding={16}>
-                                      <FreelancerHoverInfo name={val} allAssignments={assignments} selectedYear={selectedYear} selectedMonth={selectedMonth} freelancers={freelancers} />
-                                    </HoverCardContent>
-                                  </HoverCard>
-                                  {!readOnly && (
-                                    <button
-                                      onClick={() => handleAssign(row, col.field, '')}
-                                      className="p-0.5 rounded-full hover:bg-red-100 text-gray-400 hover:text-red-500 shrink-0"
-                                      title="Remove"
-                                    >
-                                      <X className="w-3 h-3" />
-                                    </button>
-                                  )}
-                                </div>
-                              ) : readOnly ? (
-                                <span className="text-[10px] text-gray-400 animate-pulse-red px-1">---</span>
-                              ) : (
-                                <div className="animate-pulse-red rounded">
-                                  <MobileCrewAssign
-                                    field={col.field}
-                                    label={col.label}
-                                    freelancers={freelancers}
-                                    onAssign={(name) => handleAssign(row, col.field, name)}
-                                    onQuickAdd={() => setQuickAddState({ open: true, field: col.field, label: col.label, row })}
-                                  />
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
+                      {isExpanded && (
+                        <div className="border-t border-violet-200 bg-slate-50 px-3 py-2.5">
+                          <EventLogisticsPanel
+                            eventDetail={cached?.eventDetail ?? null}
+                            contactDetail={cached?.contactDetail ?? null}
+                            settings={cached?.settings ?? []}
+                            loading={cached?.loading ?? true}
+                          />
+                        </div>
+                      )}
                     </div>
                   );
                 })
