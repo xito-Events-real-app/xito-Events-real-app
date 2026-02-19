@@ -1,87 +1,132 @@
 
-# Fix: Quick Add Freelancer — Supabase-First Write for Instant Assignment
+# Two Issues — Diagnosis & Fix
 
-## The Problem: `addFreelancer` Blocks on Google Sheets
+## Issue 1: Crew Schedule Link — Events Not Showing
 
-When you click "Save & Assign" in the Quick Add Freelancer dialog from the Suite's All Clients crew table, the current write order in `src/lib/freelancer-api.ts` is:
+### Root Cause: Name Matching Problem
 
-```
-Step 1: AWAIT google-sheets Edge Function (addFreelancer)  ← BLOCKS 2–5 seconds
-Step 2: Then upsert into freelancers_cache in Supabase     ← Only after Sheets responds
-Step 3: Then handleQuickAddSuccess runs                     ← Refreshes dropdown, assigns
-```
-
-The user is staring at a spinner for the entire duration of the Google Sheets write before the freelancer shows up in the list and gets auto-assigned.
-
-## The Fix: Supabase-First Write (Same Pattern as Assignments)
-
-Flip `addFreelancer` to follow the same architecture that was applied to `updateFreelancerAssignment`:
+The freelancer's name is `BIBEK ( BADDAS AKASH SIR )` — with parentheses and extra spaces. In `CrewSchedule.tsx` (line 59), the query builds this filter:
 
 ```
-Step 1: Write to freelancers_cache in Supabase IMMEDIATELY (~50ms)
-Step 2: Call onSuccess(name) → freelancer appears in list, gets assigned instantly
-Step 3: Push to Google Sheets in BACKGROUND (non-blocking, ~2–5s)
+photographer_bride.ilike.%BIBEK ( BADDAS AKASH SIR )%
 ```
 
-## What Exactly Will Change
+This filter works fine in Supabase. However, the **exact match check** on lines 68–73 is the culprit:
 
-### File 1: `src/lib/freelancer-api.ts` — `addFreelancer` function (lines 103–146)
-
-Currently it does:
 ```typescript
-// OLD: Blocks for 2-5 seconds before cache
-const { data, error } = await supabase.functions.invoke('google-sheets', { ... });
+const target = decodedName.trim().toLowerCase(); // "bibek ( baddas akash sir )"
+return val.split('\n').some((entry: string) => entry.trim().toLowerCase() === target);
+```
+
+If the name was stored in Google Sheets (and synced to Supabase) with **slightly different spacing** — e.g., `BIBEK (BADDAS AKASH SIR)` vs `BIBEK ( BADDAS AKASH SIR )` (space inside parens vs not) — the exact match fails. When exact match returns 0 results, it falls to the `startsWith` fallback. If that also fails, `assignments` stays empty → calendar shows nothing.
+
+Additionally, there's **a deeper problem**: the crew schedule page reads from `freelancer_assignments` Supabase table, but when the freelancer was just assigned to an event using the new Supabase-first architecture, the assignment is written **instantly to Supabase**. However, if this is a brand-new freelancer added from the Freelancers module (`/freelancers`) and then manually assigned, the assignment goes into Supabase correctly via `updateAssignmentInCache`. The crew schedule should see it.
+
+The real issue is the **name normalization** — special characters like `(`, `)` need more flexible matching. The fix is to normalize both the target name and the stored values by collapsing multiple spaces and ignoring special character spacing differences.
+
+### Fix for Crew Schedule Name Matching
+
+In `src/pages/CrewSchedule.tsx`, update the exact match logic to normalize whitespace and special characters:
+
+```typescript
+// Normalize: collapse multiple spaces, trim
+const normalize = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+const target = normalize(decodedName);
+
+const exactFiltered = assignRes.data.filter(row =>
+  ROLE_COLUMNS.some(col => {
+    const val = ((row as any)[col] || '').toString();
+    return val.split('\n').some((entry: string) => normalize(entry) === target);
+  })
+);
+```
+
+This ensures `"bibek ( baddas akash sir )"` matches `"BIBEK ( BADDAS AKASH SIR )"` regardless of extra spaces.
+
+---
+
+## Issue 2: Freelancer Module — `updateFreelancer` Still Blocks on Sheets
+
+### Current State (What's Fixed vs What's Not)
+
+| Function | Current State |
+|---|---|
+| `addFreelancer` | **Fixed** — Supabase-first, Sheets in background |
+| `quickAddFreelancer` (Suite) | **Fixed** — uses `addFreelancer` |
+| `updateFreelancer` | **STILL SLOW** — Sheets first, cache after (2–5s) |
+| `getClientFreelancerAssignments` | **Fixed** — Supabase first |
+| `updateFreelancerAssignment` | **Fixed** — Supabase first |
+
+`updateFreelancer` in `src/lib/freelancer-api.ts` still follows the old blocking pattern:
+
+```typescript
+// OLD (blocking):
+const { data, error } = await supabase.functions.invoke('google-sheets', { ... }); // 2–5s wait
 if (error) throw ...
-// Then upserts to cache
-await supabase.from('freelancers_cache').upsert({ ... });
+// then updates cache after Sheets write
 ```
 
-New pattern:
+The full Freelancer module "Edit" drawer in `FreelancerDetailSheet.tsx` calls `updateFreelancer`, so editing a freelancer profile also takes 2–5 seconds.
+
+### Fix for `updateFreelancer`
+
+Apply the same Supabase-first pattern:
+
 ```typescript
-// NEW: Write to Supabase first (~50ms) — synced_to_sheet: false
-await supabase.from('freelancers_cache').upsert({
-  name: freelancerData.name || '',
-  contact_no: freelancerData.contactNo || '',
-  ...all other fields...,
-  synced_to_sheet: false,   // ← marks it as pending Sheets sync
-  updated_at: new Date().toISOString(),
-}, { onConflict: 'name' });
+export async function updateFreelancer(freelancerData: FreelancerData): Promise<void> {
+  // STEP 1: Write to Supabase immediately (~50ms)
+  const { error: cacheError } = await supabase.from('freelancers_cache').upsert({
+    ...all fields...,
+    synced_to_sheet: false,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'name' });
 
-// Push to Google Sheets in background (non-blocking)
-supabase.functions.invoke('google-sheets', {
-  body: { action: 'addFreelancer', data: freelancerData }
-}).then(({ data, error }) => {
-  if (!error && data?.success) {
-    // Mark synced in cache
-    supabase.from('freelancers_cache')
-      .update({ synced_to_sheet: true })
-      .eq('name', freelancerData.name || '')
-      .catch(() => {});
-  } else {
-    console.warn('[BACKGROUND-SHEETS] addFreelancer sync failed:', error || data?.error);
-  }
-}).catch(err => {
-  console.warn('[BACKGROUND-SHEETS] addFreelancer Sheets call failed:', err);
-});
+  if (cacheError) throw new Error('Failed to update freelancer in cache');
+
+  // STEP 2: Push to Google Sheets in background (non-blocking)
+  supabase.functions.invoke('google-sheets', {
+    body: { action: 'updateFreelancer', data: freelancerData }
+  }).then(({ data, error }) => {
+    if (!error && data?.success) {
+      void supabase.from('freelancers_cache')
+        .update({ synced_to_sheet: true })
+        .eq('name', freelancerData.name);
+    } else {
+      console.warn('[BACKGROUND-SHEETS] updateFreelancer sync failed:', error || data?.error);
+    }
+  }).catch(err => {
+    console.warn('[BACKGROUND-SHEETS] updateFreelancer Sheets call failed:', err);
+  });
+}
 ```
 
-This means `addFreelancer` completes in ~50ms instead of 2–5 seconds.
+---
+
+## Files to Change
+
+### 1. `src/pages/CrewSchedule.tsx`
+- Fix the name normalization in the exact match filter (lines 68–73)
+- Add a `normalize()` helper that collapses multiple spaces and trims before comparing
+
+### 2. `src/lib/freelancer-api.ts`
+- Flip `updateFreelancer` to write Supabase first, push Sheets in background
+
+---
 
 ## Result After Fix
 
-| Action | Before | After |
+| Problem | Before | After |
 |---|---|---|
-| Click "Save & Assign" | Spinner for 2–5 seconds | Dialog closes in ~100ms |
-| Freelancer appears in dropdown | After Sheets write completes | Instantly from Supabase cache |
-| Auto-assignment after quick-add | Delayed by 2–5s | Immediate |
-| Data in Google Sheets | Instant (blocking write) | Within ~5s (background write) |
+| Crew Schedule — name with spaces/parens | Events may not show | Robust normalization matches reliably |
+| Edit freelancer profile | 2–5s spinner | ~50ms instant save |
+| Add freelancer from module | Already fast (fixed previously) | No change needed |
+| Crew Schedule data source | Already reads from Supabase | No change needed |
 
-## File Changed
+---
 
-- `src/lib/freelancer-api.ts` — flip `addFreelancer` to write Supabase first, push Sheets in background
+## Technical Notes
 
-No other files need changing. The `quickAddFreelancer` function in `freelancer-assignment-api.ts` calls `addFreelancer` directly, so it inherits the speedup automatically. The `handleQuickAddSuccess` in `AllClientsCrewTable` calls `getFreelancers()` after — which already reads from `freelancers_cache` first (Supabase-first read is already implemented), so the newly added freelancer will be found immediately.
-
-## No Schema Changes
-
-The `freelancers_cache` table already has `synced_to_sheet` column. No migrations needed.
+- No schema changes needed — `freelancers_cache.synced_to_sheet` already exists
+- The crew schedule page already queries Supabase directly — the fix is purely a string normalization improvement
+- The `startsWith` fallback in the crew schedule is kept as a safety net for partial name matches
+- `deleteFreelancer` is left unchanged since it correctly requires a confirmed Sheets write (row number lookup) before deleting
