@@ -1,76 +1,153 @@
 
-# Phone Number Validation — Client Contact Form
+# Full Supabase-First Architecture for Freelancer Assignments
 
-## Problem
-The three phone number fields in `src/pages/ClientContactForm.tsx` — **Contact Number**, **Backup Number 1**, and **Backup Number 2** — currently accept any input: letters, symbols, country codes (e.g. `+977`), and numbers longer than 10 digits. Nepali mobile numbers are exactly 10 digits, so anything else is invalid data.
+## Current Problem (Both Read AND Write are wrong)
 
-## What Will Change
+### READ is slow:
+`getClientFreelancerAssignments()` → always calls Google Sheets edge function → 2–5 second delay every time
 
-Only **one file** needs editing: `src/pages/ClientContactForm.tsx`
+### WRITE also blocks the user:
+In `useFreelancerAssignments`, `updateAssignment()` does:
+```
+1. AWAIT updateFreelancerAssignment(...)    ← calls Google Sheets edge function (1-3 seconds)
+2. THEN writes to Supabase cache             ← only after Sheets responds
+3. THEN updates local state                  ← UI only updates after both finish
+```
+The user sees a loading spinner for 1-3 seconds every time they assign a freelancer.
 
-### 1. Add a phone number sanitiser helper (top of file)
-A small helper function that:
-- Strips all non-digit characters (removes `+`, spaces, `-`, country codes like `977`)
-- Clamps input to a maximum of **10 digits**
+## The Correct Architecture (Matching how clients_cache works)
 
 ```
-function sanitizePhone(raw: string): string {
-  return raw.replace(/\D/g, '').slice(0, 10);
-}
+READ:   Supabase first (~50ms) → fallback to Sheets only if no data
+WRITE:  1. Update local state instantly (0ms)
+        2. Write to Supabase (~50ms) — mark synced_to_sheet: false
+        3. Background push to Google Sheets (non-blocking, ~2s, .catch logs warning)
 ```
 
-### 2. Update `PersonForm` — three input fields
+## Files to Change: 3 files
 
-**Contact Number** (currently lines 482–489):
-- Change `onChange` to pass through `sanitizePhone(e.target.value)` instead of the raw value
-- Add `maxLength={10}` attribute
-- Add `inputMode="numeric"` so mobile keyboards show the number pad
-- Add `pattern="[0-9]{10}"` for native browser form validation
-- Add a small helper text below: `"10-digit Nepali number (e.g. 98XXXXXXXX)"`
+### 1. `src/lib/freelancer-assignment-cache.ts`
 
-**Backup Number 1** (currently lines 507–513):
-- Same changes as Contact Number
-
-**Backup Number 2** (currently lines 536–542):
-- Same changes as Contact Number
-
-### 3. Add submit-time validation in `handleSubmit`
-
-Before the API call (line 163), validate that all filled phone numbers are exactly 10 digits:
-
+Export the `rowToAssignment` helper (currently private) so it can be used in the API file:
+```typescript
+// Change:
+function rowToAssignment(row: SupabaseAssignmentRow): FreelancerAssignment {
+// To:
+export function rowToAssignment(row: SupabaseAssignmentRow): FreelancerAssignment {
 ```
-const phoneFields = [
-  { value: bride.contactNumber, label: "Bride's Contact Number" },
-  { value: bride.backupNumber1, label: "Bride's Backup Number 1" },
-  { value: bride.backupNumber2, label: "Bride's Backup Number 2" },
-  { value: groom.contactNumber, label: "Groom's Contact Number" },
-  { value: groom.backupNumber1, label: "Groom's Backup Number 1" },
-  { value: groom.backupNumber2, label: "Groom's Backup Number 2" },
-];
 
-for (const { value, label } of phoneFields) {
-  if (value && value.length !== 10) {
-    toast.error(`${label} must be exactly 10 digits`);
-    setIsSubmitting(false);
-    return;
+### 2. `src/lib/freelancer-assignment-api.ts`
+
+**A) Fix `getClientFreelancerAssignments` — read Supabase first:**
+```typescript
+export async function getClientFreelancerAssignments(registeredDateTimeAD: string): Promise<FreelancerAssignment[]> {
+  // STEP 1: Supabase first (~50ms)
+  try {
+    const { data: cached, error } = await supabase
+      .from('freelancer_assignments')
+      .select('*')
+      .eq('registered_date_time_ad', registeredDateTimeAD)
+      .order('event_year').order('event_month').order('event_day');
+
+    if (!error && cached && cached.length > 0) {
+      return cached.map(rowToAssignment); // instant return, no edge function
+    }
+  } catch (err) {
+    console.warn('[assignments] Supabase read failed, falling back:', err);
   }
+
+  // STEP 2: Fallback to Sheets only if Supabase has no data
+  const { data, error } = await supabase.functions.invoke('google-sheets', {
+    body: { action: 'getClientFreelancerAssignments', data: { registeredDateTimeAD } }
+  });
+  if (error) throw new Error('Failed to fetch freelancer assignments');
+  if (!data.success) throw new Error(data.error || 'Failed to fetch freelancer assignments');
+  return data.data || [];
 }
 ```
 
-Note: `bride.contactNumber` is required by HTML `required` attribute, so it will always be filled. The backup numbers and groom contact are optional — we only validate length if they are non-empty.
+**B) Fix `updateFreelancerAssignment` — write to Supabase first, Sheets in background:**
 
-## Behaviour Summary
+The current function only writes to Sheets. We need it to write to Supabase first, then push to Sheets in background. The function signature stays the same so no callers need updating.
 
-| Scenario | Before | After |
+```typescript
+export async function updateFreelancerAssignment(
+  registeredDateTimeAD: string,
+  eventName: string,
+  eventDateAD: string,
+  field: FreelancerField,
+  value: string
+): Promise<void> {
+  // STEP 1: Write to Supabase immediately (fast ~50ms)
+  await updateAssignmentInCache(registeredDateTimeAD, eventName, field, value, eventDateAD);
+  // marks synced_to_sheet: false automatically
+
+  // STEP 2: Push to Google Sheets in background (non-blocking)
+  supabase.functions.invoke('google-sheets', {
+    body: { action: 'updateFreelancerAssignment', data: { registeredDateTimeAD, eventName, eventDateAD, field, value } }
+  }).then(({ data, error }) => {
+    if (!error && data?.success) {
+      // Mark as synced in Supabase
+      updateAssignmentInCache(registeredDateTimeAD, eventName, field, value, eventDateAD);
+    } else {
+      console.warn('[BACKGROUND-SHEETS] Assignment sync to Sheets failed — will retry on next push:', error || data?.error);
+    }
+  }).catch(err => {
+    console.warn('[BACKGROUND-SHEETS] Assignment Sheets call failed:', err);
+  });
+}
+```
+
+**C) Fix `updateRequiredCrewCategories` — same pattern:**
+```typescript
+export async function updateRequiredCrewCategories(...): Promise<void> {
+  // STEP 1: Write to Supabase immediately
+  await updateCategoriesInCache(registeredDateTimeAD, eventName, categories, eventDateAD);
+
+  // STEP 2: Push to Sheets in background
+  supabase.functions.invoke('google-sheets', {
+    body: { action: 'updateRequiredCrewCategories', data: { ... } }
+  }).catch(err => console.warn('[BACKGROUND-SHEETS] Categories sync failed:', err));
+}
+```
+
+### 3. `src/hooks/useFreelancerAssignments.ts`
+
+**Simplify `updateAssignment`** — since `updateFreelancerAssignment` now handles Supabase write internally, remove the duplicate `updateAssignmentInCache` call and update local state BEFORE the async call (instant feedback):
+
+```typescript
+const updateAssignment = useCallback(async (eventName, eventDateAD, field, value) => {
+  if (!registeredDateTimeAD) return;
+  setIsUpdating(field);
+
+  // INSTANT: Update local state first (0ms)
+  setAssignments(prev => prev.map(a =>
+    a.event.trim() === eventName.trim() && a.eventDateAD.trim() === eventDateAD.trim()
+      ? { ...a, [field]: value }
+      : a
+  ));
+
+  try {
+    // Supabase write + background Sheets sync (handled inside updateFreelancerAssignment)
+    await updateFreelancerAssignment(registeredDateTimeAD, eventName, eventDateAD, field, value);
+  } catch (err) {
+    console.error('Failed to save assignment to Supabase:', err);
+    // Optionally revert local state on failure
+    toast({ title: "Error", description: "Failed to save assignment", variant: "destructive" });
+  } finally {
+    setIsUpdating(null);
+  }
+}, [registeredDateTimeAD]);
+```
+
+## Result After Fix
+
+| Action | Before | After |
 |---|---|---|
-| User types `+977-98XXXXXXXX` | Saved as-is | `+977` stripped → saved as `98XXXXXXXX` |
-| User types `9841234567890` (13 digits) | Saved as-is | Clamped at 10 digits → `9841234567` |
-| User types `984abc123` | Saved as-is | Letters stripped → `984123` (only 6 digits, fails submit validation) |
-| User pastes `+1 415 555 0123` | Saved as-is | Non-digits stripped, clamped → `1415555012` |
-| User types exactly `9841234567` | Saved correctly | Saved correctly ✅ |
-| Mobile keyboard | Alphanumeric keyboard | Number pad via `inputMode="numeric"` ✅ |
+| Open Freelancers tab (data in Supabase) | 2–5 seconds | ~50ms instant |
+| Assign a freelancer | 1–3 second spinner | Instant dropdown close, background sync |
+| Set required categories | 1–3 second wait | Instant, background sync |
+| Unsynced assignments | Pushed on next manual sync | Auto-pushed via existing `pushUnsyncedToSheets` mechanism |
 
-## Files Changed
-- `src/pages/ClientContactForm.tsx` — sanitiser helper + three input field updates + submit validation
-
-No backend changes, no new dependencies, no schema changes needed.
+## No Schema Changes
+The `freelancer_assignments` table already has `synced_to_sheet` column which acts as the background sync flag. The existing `pushUnsyncedToSheets()` and auto-sync in `AllClientsCrewTable` will pick up any rows that failed to sync to Sheets and push them on the next cycle.
