@@ -185,6 +185,9 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
     }));
   }, [expandCache]);
 
+
+
+
   const loadData = useCallback(async (fromSheets = false) => {
     setLoading(true);
     try {
@@ -283,6 +286,40 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
     if (filterClient) rows = rows.filter(a => a.clientName === filterClient);
     return rows;
   }, [assignments, selectedYear, selectedMonth, filterDay, filterClient]);
+
+  const allExpanded = useMemo(() =>
+    filteredRows.length > 0 && filteredRows.every(row => {
+      const rowKey = `${row.registeredDateTimeAD}-${row.event}-${row.eventDateAD}`;
+      return expandedRows.has(rowKey);
+    }),
+    [filteredRows, expandedRows]
+  );
+
+  const handleToggleExpandAll = useCallback(async () => {
+    if (allExpanded) { setExpandedRows(new Set()); return; }
+    const newKeys = new Set<string>();
+    for (const row of filteredRows) {
+      newKeys.add(`${row.registeredDateTimeAD}-${row.event}-${row.eventDateAD}`);
+    }
+    setExpandedRows(newKeys);
+    const toFetch = filteredRows.filter(row => !expandCache.has(`${row.registeredDateTimeAD}__${row.event}`));
+    setExpandCache(prev => {
+      const next = new Map(prev);
+      for (const row of toFetch) {
+        next.set(`${row.registeredDateTimeAD}__${row.event}`, { eventDetail: null, contactDetail: null, settings: [], loading: true });
+      }
+      return next;
+    });
+    await Promise.all(toFetch.map(async (row) => {
+      const cacheKey = `${row.registeredDateTimeAD}__${row.event}`;
+      const [edRes, cdRes, settingsRes] = await Promise.all([
+        supabase.from('event_details_cache').select('venue_name,venue_type,venue_city,venue_area,venue_map,parlour_name,parlour_type,parlour_city,parlour_area,parlour_map,event_start_time,event_end_time,parlour_start_time,parlour_end_time').eq('registered_date_time_ad', row.registeredDateTimeAD).ilike('event_name', row.event).maybeSingle(),
+        supabase.from('contact_details_cache').select('bride_full_name,bride_contact_number,bride_whatsapp_number,bride_home_city,bride_home_area,bride_home_map,groom_full_name,groom_contact_number,groom_whatsapp_number,groom_home_city,groom_home_area,groom_home_map').eq('registered_date_time_ad', row.registeredDateTimeAD).maybeSingle(),
+        supabase.from('freelancer_event_settings').select('show_bride_details,show_groom_details,show_venue_details,show_parlour_details,show_bride_location,show_groom_location,freelancer_name,role_code,personal_note').eq('registered_date_time_ad', row.registeredDateTimeAD).eq('event_name', row.event),
+      ]);
+      setExpandCache(prev => new Map(prev).set(cacheKey, { eventDetail: edRes.data || null, contactDetail: cdRes.data || null, settings: settingsRes.data || [], loading: false }));
+    }));
+  }, [allExpanded, filteredRows, expandCache]);
 
   const handleDownloadBackup = useCallback(() => {
     if (filteredRows.length === 0) {
@@ -549,6 +586,16 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
             >
               {isLockingSlots ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserCog className="w-3.5 h-3.5" />}
               {isLockingSlots ? "Locking..." : "Lock Empty Slots"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-white hover:bg-white/20 hover:text-white"
+              onClick={handleToggleExpandAll}
+              disabled={filteredRows.length === 0}
+            >
+              {allExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              {allExpanded ? "Collapse All" : "Expand All"}
             </Button>
           </>
         )}
