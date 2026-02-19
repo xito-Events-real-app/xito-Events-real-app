@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getFreelancers, addFreelancer, FreelancerData } from "./freelancer-api";
+import { updateAssignmentInCache, updateCategoriesInCache, rowToAssignment } from "./freelancer-assignment-cache";
 
 export interface FreelancerAssignment {
   rowNumber: number;
@@ -58,6 +59,24 @@ export const CATEGORY_CODE_TO_FIELD: Record<string, FreelancerField> = Object.fr
 export const ALL_CATEGORY_CODES = Object.values(CATEGORY_CODES);
 
 export async function getClientFreelancerAssignments(registeredDateTimeAD: string): Promise<FreelancerAssignment[]> {
+  // STEP 1: Read from Supabase first (~50ms)
+  try {
+    const { data: cached, error } = await supabase
+      .from('freelancer_assignments')
+      .select('*')
+      .eq('registered_date_time_ad', registeredDateTimeAD)
+      .order('event_year', { ascending: true })
+      .order('event_month', { ascending: true })
+      .order('event_day', { ascending: true });
+
+    if (!error && cached && cached.length > 0) {
+      return (cached as any[]).map(rowToAssignment);
+    }
+  } catch (err) {
+    console.warn('[assignments] Supabase read failed, falling back to Sheets:', err);
+  }
+
+  // STEP 2: Fallback to Google Sheets only if no data in Supabase
   const { data, error } = await supabase.functions.invoke('google-sheets', {
     body: { action: 'getClientFreelancerAssignments', data: { registeredDateTimeAD } }
   });
@@ -73,11 +92,19 @@ export async function updateFreelancerAssignment(
   field: FreelancerField,
   value: string
 ): Promise<void> {
-  const { data, error } = await supabase.functions.invoke('google-sheets', {
+  // STEP 1: Write to Supabase immediately (marks synced_to_sheet: false)
+  await updateAssignmentInCache(registeredDateTimeAD, eventName, field, value, eventDateAD);
+
+  // STEP 2: Push to Google Sheets in background (non-blocking)
+  supabase.functions.invoke('google-sheets', {
     body: { action: 'updateFreelancerAssignment', data: { registeredDateTimeAD, eventName, eventDateAD, field, value } }
+  }).then(({ data, error }) => {
+    if (error || !data?.success) {
+      console.warn('[BACKGROUND-SHEETS] Assignment sync failed — will retry on next push:', error || data?.error);
+    }
+  }).catch(err => {
+    console.warn('[BACKGROUND-SHEETS] Assignment Sheets call failed:', err);
   });
-  if (error) throw new Error('Failed to update freelancer assignment');
-  if (!data.success) throw new Error(data.error || 'Failed to update assignment');
 }
 
 export async function checkFreelancerAvailability(
@@ -107,11 +134,13 @@ export async function updateRequiredCrewCategories(
   eventDateAD: string,
   categories: string
 ): Promise<void> {
-  const { data, error } = await supabase.functions.invoke('google-sheets', {
+  // STEP 1: Write to Supabase immediately
+  await updateCategoriesInCache(registeredDateTimeAD, eventName, categories, eventDateAD);
+
+  // STEP 2: Push to Google Sheets in background (non-blocking)
+  supabase.functions.invoke('google-sheets', {
     body: { action: 'updateRequiredCrewCategories', data: { registeredDateTimeAD, eventName, eventDateAD, categories } }
-  });
-  if (error) throw new Error('Failed to update required crew categories');
-  if (!data.success) throw new Error(data.error || 'Failed to update required crew categories');
+  }).catch(err => console.warn('[BACKGROUND-SHEETS] Categories sync failed:', err));
 }
 
 export interface FreelancerBooking {

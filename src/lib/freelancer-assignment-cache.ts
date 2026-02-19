@@ -40,7 +40,7 @@ interface SupabaseAssignmentRow {
   updated_at: string;
 }
 
-function rowToAssignment(row: SupabaseAssignmentRow): FreelancerAssignment {
+export function rowToAssignment(row: SupabaseAssignmentRow): FreelancerAssignment {
   return {
     rowNumber: 0, // Not relevant for Supabase-backed data
     registeredDateTimeAD: row.registered_date_time_ad,
