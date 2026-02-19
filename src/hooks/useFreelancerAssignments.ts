@@ -8,7 +8,6 @@ import {
   FreelancerField,
   AvailabilityConflict,
 } from "@/lib/freelancer-assignment-api";
-import { updateAssignmentInCache } from "@/lib/freelancer-assignment-cache";
 import { toast } from "@/hooks/use-toast";
 
 // Cache freelancers across hook instances
@@ -59,22 +58,19 @@ export function useFreelancerAssignments(registeredDateTimeAD: string | undefine
   ) => {
     if (!registeredDateTimeAD) return;
     setIsUpdating(field);
+
+    // INSTANT: Update local state first (0ms feedback)
+    setAssignments(prev => prev.map(a =>
+      a.event.trim() === eventName.trim() && a.eventDateAD.trim() === eventDateAD.trim()
+        ? { ...a, [field]: value }
+        : a
+    ));
+
     try {
+      // Supabase write + background Sheets sync (handled inside updateFreelancerAssignment)
       await updateFreelancerAssignment(registeredDateTimeAD, eventName, eventDateAD, field, value);
-      // Also sync to Supabase cache so All Clients view reflects the change
-      try {
-        await updateAssignmentInCache(registeredDateTimeAD, eventName, field, value, eventDateAD);
-      } catch (cacheErr) {
-        console.warn('Failed to sync assignment to Supabase cache:', cacheErr);
-      }
-      // Update local state
-      setAssignments(prev => prev.map(a =>
-        a.event.trim() === eventName.trim() && a.eventDateAD.trim() === eventDateAD.trim()
-          ? { ...a, [field]: value }
-          : a
-      ));
     } catch (err) {
-      console.error('Failed to update assignment:', err);
+      console.error('Failed to save assignment to Supabase:', err);
       toast({ title: "Error", description: "Failed to save assignment", variant: "destructive" });
     } finally {
       setIsUpdating(null);
