@@ -1,165 +1,231 @@
 
-# Fix: Freelancer Rename — Duplicate Row Cleanup + Assignment Sweep
+# Expand Button on Date Circle — Inline Row Below Selected Row
 
-## What the Database Shows Right Now
+## What the User Wants
 
-Querying `freelancers_cache` for `row_number = 2` returns **two rows**:
+Clicking the expand button on a date in the Day column should open an **inline details panel immediately below that specific row** in the desktop table (and below the card on mobile). This panel shows event logistics — bride/groom contacts, venue, parlour — based on what visibility settings have been configured for that event's freelancers.
 
+---
+
+## Current Day Cell (lines 743–756)
+
+```tsx
+<td className="px-3 py-2 border-r border-gray-100 text-center">
+  <button onClick={() => setFilterDay(...)}>
+    {row.eventDay}
+  </button>
+</td>
 ```
-row_number: 2 | name: BIBEK BADDAS AKASH SIR        | updated_at: 2026-02-19 12:28  ← new name
-row_number: 2 | name: BIBEK ( BADDAS AKASH SIR )    | updated_at: 2026-02-19 12:10  ← stale old row
-```
 
-The old name was never deleted — so both names appear in the All Clients dropdown. This is the confirmed root cause.
+Currently just a single button for the day filter. No expand button exists yet.
 
-## Why It Happened
+---
 
-`updateFreelancer` uses `upsert({ onConflict: 'name' })`. When the name changes:
-- The upsert looks for a matching `name` — finds none (new name doesn't exist yet)
-- So it **inserts** a brand new row for the new name
-- The old name row (`BIBEK ( BADDAS AKASH SIR )`) is **never touched**
+## Implementation Plan
 
-Result: both names coexist in `freelancers_cache` indefinitely.
+### 1. New State Variables
 
-## What the User Confirmed
-
-- Google Sheets WTN FREELANCERS → FREELANCERS tab: only new name `BIBEK BADDAS AKASH SIR` ✓
-- BOOKED CLIENTS freelancer assignments: only new name ✓
-- Supabase `freelancers_cache`: still has BOTH names ✗ (this is the bug)
-
-So Sheets is already correct. We just need to fix `updateFreelancer` to clean up the old row in Supabase, and also sweep assignments in `freelancer_assignments` Supabase table in case any are stored under the old name.
-
-## The Two Changes
-
-### Change 1: Fix `updateFreelancer` in `src/lib/freelancer-api.ts`
-
-Change the upsert strategy from **conflict on `name`** to:
-
-1. Look up the existing record by `row_number` first
-2. If name changed → delete all rows for that `row_number` that have the old name
-3. Upsert the new record (by `row_number` conflict — or insert fresh after deletion)
-4. If name changed → sweep `freelancer_assignments` table and replace old name → new name in all 10 role columns
-5. Push to Google Sheets in background (unchanged)
+Add to the component state (after line 121):
 
 ```typescript
-export async function updateFreelancer(freelancerData: FreelancerData): Promise<void> {
-  let oldName: string | null = null;
+const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+const [expandCache, setExpandCache] = useState<Map<string, {
+  eventDetail: any | null;
+  contactDetail: any | null;
+  settings: any[];
+  loading: boolean;
+}>>(new Map());
+```
 
-  // STEP 0: Detect rename — find current names for this row_number
-  if (freelancerData.rowNumber) {
-    const { data: existing } = await supabase
-      .from('freelancers_cache')
-      .select('name')
-      .eq('row_number', freelancerData.rowNumber);
+### 2. New `toggleExpand` Function
 
-    if (existing && existing.length > 0) {
-      const staleRows = existing.filter(r => r.name !== freelancerData.name);
-      if (staleRows.length > 0) {
-        oldName = staleRows[0].name;
-        // Delete ALL stale rows for this row_number
-        await supabase
-          .from('freelancers_cache')
-          .delete()
-          .eq('row_number', freelancerData.rowNumber)
-          .neq('name', freelancerData.name);
-      }
-    }
-  }
+```typescript
+const toggleExpand = useCallback(async (rowKey: string, row: FreelancerAssignment) => {
+  setExpandedRows(prev => {
+    const next = new Set(prev);
+    if (next.has(rowKey)) { next.delete(rowKey); return next; }
+    next.add(rowKey);
+    return next;
+  });
 
-  // STEP 1: Upsert new data — Supabase first (~50ms)
-  await supabase.from('freelancers_cache').upsert({
-    row_number: freelancerData.rowNumber,
-    name: freelancerData.name,
-    ...all fields...,
-    synced_to_sheet: false,
-    updated_at: new Date().toISOString(),
-  } as any, { onConflict: 'name' });
+  // Only fetch if not already in cache
+  const cacheKey = `${row.registeredDateTimeAD}__${row.event}`;
+  if (expandCache.has(cacheKey)) return;
 
-  // STEP 2: If renamed, sweep freelancer_assignments in Supabase
-  if (oldName && oldName !== freelancerData.name) {
-    const assignmentColumns = [
-      'photographer_bride', 'photographer_groom',
-      'videographer_bride', 'videographer_groom',
-      'extra_photographer', 'extra_videographer',
-      'assistant', 'iphone_shooter',
-      'drone_operator', 'fpv_operator'
-    ];
-    for (const col of assignmentColumns) {
-      await supabase
-        .from('freelancer_assignments')
-        .update({ [col]: freelancerData.name, synced_to_sheet: false })
-        .eq(col, oldName);
-    }
-    console.log(`[freelancer-api] Renamed "${oldName}" → "${freelancerData.name}" in assignments`);
-  }
+  // Mark loading
+  setExpandCache(prev => new Map(prev).set(cacheKey, { eventDetail: null, contactDetail: null, settings: [], loading: true }));
 
-  // STEP 3: Push to Google Sheets in background (non-blocking)
-  supabase.functions.invoke('google-sheets', { ... }).then(...).catch(...);
+  const [edRes, cdRes, settingsRes] = await Promise.all([
+    supabase.from('event_details_cache')
+      .select('venue_name,venue_type,venue_city,venue_area,venue_map,parlour_name,parlour_type,parlour_city,parlour_area,parlour_map,event_start_time,event_end_time,parlour_start_time,parlour_end_time')
+      .eq('registered_date_time_ad', row.registeredDateTimeAD)
+      .ilike('event_name', row.event)
+      .maybeSingle(),
+    supabase.from('contact_details_cache')
+      .select('bride_full_name,bride_contact_number,bride_whatsapp_number,bride_home_city,bride_home_area,bride_home_map,groom_full_name,groom_contact_number,groom_whatsapp_number,groom_home_city,groom_home_area,groom_home_map')
+      .eq('registered_date_time_ad', row.registeredDateTimeAD)
+      .maybeSingle(),
+    supabase.from('freelancer_event_settings')
+      .select('show_bride_details,show_groom_details,show_venue_details,show_parlour_details,show_bride_location,show_groom_location')
+      .eq('registered_date_time_ad', row.registeredDateTimeAD)
+      .eq('event_name', row.event),
+  ]);
+
+  setExpandCache(prev => new Map(prev).set(cacheKey, {
+    eventDetail: edRes.data || null,
+    contactDetail: cdRes.data || null,
+    settings: settingsRes.data || [],
+    loading: false,
+  }));
+}, [expandCache]);
+```
+
+### 3. New `EventLogisticsPanel` Component
+
+Defined inside the file. Aggregates visibility via OR logic across all freelancer settings for the event:
+
+```typescript
+function EventLogisticsPanel({ eventDetail, contactDetail, settings, loading }: {
+  eventDetail: any | null;
+  contactDetail: any | null;
+  settings: any[];
+  loading: boolean;
+}) {
+  if (loading) return <div className="flex items-center gap-2 py-2 px-3 text-xs text-gray-400"><Loader2 className="w-3 h-3 animate-spin" /> Loading details...</div>;
+
+  const showBride = settings.some(s => s.show_bride_details);
+  const showBrideLocation = settings.some(s => s.show_bride_location);
+  const showGroom = settings.some(s => s.show_groom_details);
+  const showGroomLocation = settings.some(s => s.show_groom_location);
+  const showVenue = settings.some(s => s.show_venue_details);
+  const showParlour = settings.some(s => s.show_parlour_details);
+
+  // If nothing is visible at all, show a message
+  const hasAnything = showBride || showGroom || showVenue || showParlour || showBrideLocation || showGroomLocation;
+
+  // Render sections in a compact horizontal/vertical grid
+  // Each section: label chip + data rows
 }
 ```
 
-### Change 2: One-time cleanup in `getFreelancers` — deduplicate by `row_number`
+**Layout:** Horizontal grid of cards inside the expanded row — Bride card | Groom card | Venue card | Parlour card. Only renders cards where visibility is true. If no settings exist yet, shows a soft "No details configured for freelancers yet" message.
 
-Since the duplicate already exists right now in the database, add a deduplication step inside `getFreelancers` that runs once to clean up any rows where the same `row_number` has multiple entries. It keeps the most recently updated one and deletes the older ones.
+### 4. Desktop Table Row Change
 
-```typescript
-export async function getFreelancers(limit = 500): Promise<FreelancerData[]> {
-  const { data: cached } = await supabase
-    .from('freelancers_cache')
-    .select('*')
-    .order('row_number', { ascending: true })
-    .limit(limit);
+The core change: each event row becomes **two `<tr>` elements**. The `filteredRows.map(...)` currently returns a single `<tr>` (lines 738–840). It becomes:
 
-  if (cached && cached.length > 0) {
-    // Deduplicate: if same row_number appears twice, keep newest, delete rest
-    const seenRowNumbers = new Map<number, any>();
-    const toDelete: string[] = [];
+```tsx
+filteredRows.map((row, idx) => {
+  const rowKey = `${row.registeredDateTimeAD}-${row.event}-${row.eventDateAD}`;
+  const cacheKey = `${row.registeredDateTimeAD}__${row.event}`;
+  const isExpanded = expandedRows.has(rowKey);
+  const cached = expandCache.get(cacheKey);
+  // ... existing groupIdx, dayBg, reqCodes, hasUnassignedRequired
 
-    for (const row of cached) {
-      const rn = row.row_number;
-      if (rn && seenRowNumbers.has(rn)) {
-        const existing = seenRowNumbers.get(rn);
-        // Keep newer, delete older
-        if (new Date(row.updated_at) > new Date(existing.updated_at)) {
-          toDelete.push(existing.id);
-          seenRowNumbers.set(rn, row);
-        } else {
-          toDelete.push(row.id);
-        }
-      } else {
-        seenRowNumbers.set(rn, row);
-      }
-    }
+  return (
+    <>
+      {/* Existing main row — with expand icon added to Day cell */}
+      <tr key={`main-${rowKey}-${idx}`} ...>
+        <td className="px-3 py-2 border-r border-gray-100 text-center">
+          {/* Existing day filter button */}
+          <button onClick={() => setFilterDay(...)}>
+            {row.eventDay}
+          </button>
+          {/* NEW: Expand toggle below day circle */}
+          <button
+            onClick={() => toggleExpand(rowKey, row)}
+            className="mt-0.5 flex items-center justify-center w-full text-gray-300 hover:text-violet-500 transition-colors"
+            title={isExpanded ? "Collapse details" : "Expand details"}
+          >
+            {isExpanded
+              ? <ChevronUp className="w-3 h-3" />
+              : <ChevronDown className="w-3 h-3" />}
+          </button>
+        </td>
+        {/* ... all other existing cells unchanged ... */}
+      </tr>
 
-    if (toDelete.length > 0) {
-      await supabase.from('freelancers_cache').delete().in('id', toDelete);
-      // Return deduplicated list
-      return cached
-        .filter(r => !toDelete.includes(r.id))
-        .map(cacheRowToFreelancer);
-    }
-
-    return cached.map(cacheRowToFreelancer);
-  }
-  // ... fallback to Sheets
-}
+      {/* NEW: Expand panel row */}
+      {isExpanded && (
+        <tr key={`expand-${rowKey}-${idx}`} className="bg-slate-50 border-b border-violet-100">
+          <td colSpan={13} className="px-4 py-3">
+            <EventLogisticsPanel
+              eventDetail={cached?.eventDetail ?? null}
+              contactDetail={cached?.contactDetail ?? null}
+              settings={cached?.settings ?? []}
+              loading={cached?.loading ?? true}
+            />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+})
 ```
 
-This immediately fixes the existing `BIBEK ( BADDAS AKASH SIR )` stale row the next time `getFreelancers()` is called (which happens when the All Clients crew table or Freelancers module loads).
+**Important:** Wrap the fragment pairs in `<React.Fragment key={...}>` to avoid React key warnings.
 
-## Result After Fix
+### 5. Imports to Add
 
-| Problem | Before | After |
-|---|---|---|
-| Both old and new name in dropdown | Old row never deleted on rename | Detect rename by `row_number`, delete stale rows before upsert |
-| Existing duplicate `BIBEK (...)` row | Still in DB | Auto-cleaned on next `getFreelancers()` call |
-| Assignment goes empty | Old name in Supabase assignments causes Sheets pull to overwrite | Sweep all 10 role columns in `freelancer_assignments` with new name |
-| Future renames | Same bug repeats | Fixed — delete-then-upsert pattern is now permanent |
+Add to the lucide-react import on line 8:
+- `ChevronDown`
+- `ChevronUp`
+- `Phone`
+- `MapPin`
+- `ExternalLink`
+
+---
+
+## `EventLogisticsPanel` UI Design
+
+Compact inline section — horizontal cards side by side, dark-outlined boxes:
+
+```
+┌─────────────────┬─────────────────┬────────────────┬──────────────┐
+│ 🌸 BRIDE        │ 🤵 GROOM        │ 📍 VENUE       │ 💄 PARLOUR   │
+│ Sita Sharma     │ Ram Sharma      │ Taj Hall       │ Beauty Queen │
+│ 📞 9800000000   │ 📞 9811111111   │ Baneshwor      │ New Baneshwor│
+│ 📍 Lalitpur     │ 📍 Bhaktapur    │ [Map →]        │ [Map →]      │
+└─────────────────┴─────────────────┴────────────────┴──────────────┘
+```
+
+If `settings` is empty (no freelancers configured) → show:
+> "No visibility settings configured for this event's freelancers yet."
+
+If settings exist but all are `false` → show:
+> "All details are hidden for this event's freelancers."
+
+Phone numbers are `<a href="tel:...">` links. WhatsApp numbers open WhatsApp. Map links open in new tab.
+
+---
+
+## Mobile — Collapsible Section Below Card
+
+On mobile (the card-based layout), add the same expand chevron at the bottom of each day card header. When expanded, the `EventLogisticsPanel` renders below the crew assignment section inside the card.
+
+---
 
 ## Files Changed
 
-- `src/lib/freelancer-api.ts` — two changes:
-  1. `updateFreelancer`: delete old row by `row_number` before upsert + assignment sweep
-  2. `getFreelancers`: add deduplication pass to auto-clean any current stale rows
+### `src/components/suite/AllClientsCrewTable.tsx`
+
+- **New imports:** `ChevronDown`, `ChevronUp`, `Phone`, `MapPin`, `ExternalLink` from lucide-react
+- **New state:** `expandedRows: Set<string>`, `expandCache: Map<string, {...}>`
+- **New function:** `toggleExpand(rowKey, row)` — lazy fetches from 3 Supabase tables in parallel
+- **New component:** `EventLogisticsPanel` — renders bride/groom/venue/parlour based on aggregated visibility settings
+- **Desktop table:** Each row becomes a `<React.Fragment>` with 2 `<tr>` elements — existing row + optional expand row
+- **Day cell:** Add `ChevronDown`/`ChevronUp` toggle button below the day number circle
+- **Mobile:** Add expand toggle to mobile card header + `EventLogisticsPanel` below crew section
 
 No schema changes. No other files.
+
+---
+
+## Technical Notes
+
+- `Promise.all` runs all 3 Supabase queries in parallel — typical load time under 200ms
+- `expandCache` uses `registeredDateTimeAD + "__" + event` as key to distinguish multiple events on the same day for the same client
+- React keys use `React.Fragment key={rowKey}` to avoid duplicate key warnings from the two `<tr>` siblings
+- `colSpan={13}` covers all columns (Day + Client + Event + 10 crew columns)
+- The panel is styled `bg-slate-50` to visually distinguish it from the main table row
+- `ilike` used for the event detail query to handle case mismatch between Sheets data and stored values
