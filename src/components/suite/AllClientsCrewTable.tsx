@@ -35,6 +35,10 @@ import { QuickAddFreelancerDialog } from "./QuickAddFreelancerDialog";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { CrewCategorySelector } from "@/components/shared/CrewCategorySelector";
+import CrewScheduleEventSheet from "@/components/crew-schedule/CrewScheduleEventSheet";
+import { Calendar as CalendarIcon } from "lucide-react";
+import type { AssignmentRow } from "@/components/crew-schedule/types";
+import type { EventDetail } from "@/hooks/useEventDetails";
 
 const CREW_COLUMNS: { field: FreelancerField; label: string; short: string; group: 'photo' | 'video' | 'assist' | 'tech'; size: 'wide' | 'narrow' }[] = [
   { field: 'photographerBride', label: 'Photographer Bride', short: 'PB', group: 'photo', size: 'wide' },
@@ -972,6 +976,8 @@ function EventLogisticsPanel({ eventDetail, contactDetail, settings, loading, ro
   loading: boolean;
   row: FreelancerAssignment;
 }) {
+  const [calendarFor, setCalendarFor] = useState<string | null>(null);
+
   if (loading) {
     return (
       <div className="flex items-center gap-2 py-2 px-3 text-xs text-gray-400">
@@ -986,18 +992,6 @@ function EventLogisticsPanel({ eventDetail, contactDetail, settings, loading, ro
   const showGroomLocation = settings.some(s => s.show_groom_location);
   const showVenue = settings.some(s => s.show_venue_details);
   const showParlour = settings.some(s => s.show_parlour_details);
-  const hasAnything = showBride || showBrideLocation || showGroom || showGroomLocation || showVenue || showParlour;
-
-  if (settings.length === 0) {
-    return (
-      <p className="text-xs text-gray-400 italic py-1">No visibility settings configured for this event's freelancers yet.</p>
-    );
-  }
-  if (!hasAnything) {
-    return (
-      <p className="text-xs text-gray-400 italic py-1">All details are hidden for this event's freelancers.</p>
-    );
-  }
 
   const cards: React.ReactNode[] = [];
 
@@ -1061,25 +1055,32 @@ function EventLogisticsPanel({ eventDetail, contactDetail, settings, loading, ro
 
   if (showVenue) {
     cards.push(
-      <div key="venue" className="border border-amber-200 rounded-lg p-2.5 bg-amber-50/50 min-w-[150px]">
+      <div key="venue" className="border border-amber-200 rounded-lg p-2.5 bg-amber-50/50 min-w-[160px]">
         <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wide mb-1.5">📍 Venue</div>
-        {eventDetail?.venue_name && (
-          <p className="text-xs font-semibold text-gray-800 truncate">{eventDetail.venue_name}</p>
-        )}
+        {/* Venue name + Area on same line */}
+        <div className="flex items-baseline gap-1.5 flex-wrap">
+          {eventDetail?.venue_name && (
+            <span className="text-xs font-semibold text-gray-800">{eventDetail.venue_name}</span>
+          )}
+          {eventDetail?.venue_area && (
+            <span className="text-xs font-black text-amber-800 uppercase tracking-wide">· {eventDetail.venue_area}</span>
+          )}
+        </div>
         {eventDetail?.venue_city && (
           <p className="text-[10px] text-gray-500 mt-0.5">{eventDetail.venue_city}</p>
         )}
-        {eventDetail?.venue_area && (
-          <p className="text-xs font-bold text-gray-800 mt-0.5">{eventDetail.venue_area}</p>
-        )}
-        {eventDetail?.event_start_time && (
-          <p className="text-[10px] text-violet-600 mt-0.5">Starts at {eventDetail.event_start_time}</p>
-        )}
-        {eventDetail?.event_end_time && (
-          <p className="text-[10px] text-gray-400">Ends at {eventDetail.event_end_time}</p>
-        )}
         {eventDetail?.venue_map && (
           <a href={eventDetail.venue_map} target="_blank" rel="noopener noreferrer" className="text-[10px] text-violet-600 hover:underline mt-0.5 block">Map →</a>
+        )}
+        {/* Start time BIG */}
+        {eventDetail?.event_start_time && (
+          <div className="mt-1.5">
+            <p className="text-[9px] text-gray-400 uppercase tracking-wide">Starts at</p>
+            <p className="text-base font-black text-violet-700 leading-tight">{eventDetail.event_start_time}</p>
+          </div>
+        )}
+        {eventDetail?.event_end_time && (
+          <p className="text-[10px] text-gray-400 mt-0.5">Ends at {eventDetail.event_end_time}</p>
         )}
       </div>
     );
@@ -1087,74 +1088,133 @@ function EventLogisticsPanel({ eventDetail, contactDetail, settings, loading, ro
 
   if (showParlour) {
     cards.push(
-      <div key="parlour" className="border border-purple-200 rounded-lg p-2.5 bg-purple-50/50 min-w-[150px]">
+      <div key="parlour" className="border border-purple-200 rounded-lg p-2.5 bg-purple-50/50 min-w-[160px]">
         <div className="text-[10px] font-bold text-purple-600 uppercase tracking-wide mb-1.5">💄 Parlour</div>
-        {eventDetail?.parlour_name && (
-          <p className="text-xs font-semibold text-gray-800 truncate">{eventDetail.parlour_name}</p>
-        )}
+        {/* Parlour name + Area on same line */}
+        <div className="flex items-baseline gap-1.5 flex-wrap">
+          {eventDetail?.parlour_name && (
+            <span className="text-xs font-semibold text-gray-800">{eventDetail.parlour_name}</span>
+          )}
+          {eventDetail?.parlour_area && (
+            <span className="text-xs font-black text-purple-800 uppercase tracking-wide">· {eventDetail.parlour_area}</span>
+          )}
+        </div>
         {eventDetail?.parlour_city && (
           <p className="text-[10px] text-gray-500 mt-0.5">{eventDetail.parlour_city}</p>
         )}
-        {eventDetail?.parlour_area && (
-          <p className="text-xs font-bold text-gray-800 mt-0.5">{eventDetail.parlour_area}</p>
-        )}
-        {eventDetail?.parlour_start_time && (
-          <p className="text-[10px] text-violet-600 mt-0.5">Starts at {eventDetail.parlour_start_time}</p>
-        )}
-        {eventDetail?.parlour_end_time && (
-          <p className="text-[10px] text-gray-400">Ends at {eventDetail.parlour_end_time}</p>
-        )}
         {eventDetail?.parlour_map && (
           <a href={eventDetail.parlour_map} target="_blank" rel="noopener noreferrer" className="text-[10px] text-violet-600 hover:underline mt-0.5 block">Map →</a>
+        )}
+        {/* Start time BIG */}
+        {eventDetail?.parlour_start_time && (
+          <div className="mt-1.5">
+            <p className="text-[9px] text-gray-400 uppercase tracking-wide">Starts at</p>
+            <p className="text-base font-black text-purple-700 leading-tight">{eventDetail.parlour_start_time}</p>
+          </div>
+        )}
+        {eventDetail?.parlour_end_time && (
+          <p className="text-[10px] text-gray-400 mt-0.5">Ends at {eventDetail.parlour_end_time}</p>
         )}
       </div>
     );
   }
 
-  // Build assigned crew list
-  const assignedCrew: { name: string; shortCode: string; note: string }[] = [];
+  // Inline crew cards — same row as logistics cards
   for (const col of CREW_COLUMNS) {
     const name = (row[col.field] as string)?.trim();
     if (!name) continue;
     const setting = settings.find(s =>
       s.freelancer_name?.trim().toLowerCase() === name.toLowerCase()
     );
-    assignedCrew.push({ name, shortCode: col.short, note: setting?.personal_note?.trim() || '' });
+    const note = setting?.personal_note?.trim() || '';
+    cards.push(
+      <div key={`crew-${col.field}-${name}`} className="border border-gray-200 rounded-lg p-2.5 bg-white min-w-[120px]">
+        <span className="text-[10px] font-bold text-gray-400 uppercase">{col.short}</span>
+        <div className="flex items-center justify-between gap-1 mt-0.5">
+          <p className="text-xs font-semibold text-gray-800 truncate">{name}</p>
+          <button
+            onClick={() => setCalendarFor(name)}
+            className="shrink-0 p-1 rounded hover:bg-violet-100 text-violet-400 hover:text-violet-600 transition-colors"
+            title={`${name} — event details`}
+          >
+            <CalendarIcon className="w-3 h-3" />
+          </button>
+        </div>
+        {note && (
+          <p className="text-[10px] text-amber-700 bg-yellow-50 rounded px-1.5 py-0.5 mt-1 leading-relaxed whitespace-pre-line border border-yellow-100">{note}</p>
+        )}
+      </div>
+    );
   }
+
+  if (cards.length === 0) {
+    return (
+      <p className="text-xs text-gray-400 italic py-1">No details configured for this event's freelancers.</p>
+    );
+  }
+
+  // Map row → AssignmentRow for CrewScheduleEventSheet
+  const mappedAssignment: AssignmentRow = {
+    event_year: row.eventYear || null,
+    event_month: row.eventMonth || null,
+    event_day: row.eventDay || null,
+    event: row.event || '',
+    client_name: row.clientName || null,
+    registered_date_time_ad: row.registeredDateTimeAD,
+    photographer_bride: row.photographerBride || null,
+    photographer_groom: row.photographerGroom || null,
+    videographer_bride: row.videographerBride || null,
+    videographer_groom: row.videographerGroom || null,
+    extra_photographer: row.extraPhotographer || null,
+    extra_videographer: row.extraVideographer || null,
+    assistant: row.assistant || null,
+    iphone_shooter: row.iphoneShooter || null,
+    drone_operator: row.droneOperator || null,
+    fpv_operator: row.fpvOperator || null,
+  };
+
+  // Map eventDetail cache row → EventDetail shape for the sheet
+  const mappedEventDetail: EventDetail | undefined = eventDetail ? {
+    eventIndex: eventDetail.event_index ?? 0,
+    eventName: eventDetail.event_name || '',
+    eventYear: eventDetail.event_year || '',
+    eventMonth: eventDetail.event_month || '',
+    eventDay: eventDetail.event_day || '',
+    eventDateAD: eventDetail.event_date_ad || '',
+    venueType: eventDetail.venue_type || '',
+    venueName: eventDetail.venue_name || '',
+    venueCity: eventDetail.venue_city || '',
+    venueArea: eventDetail.venue_area || '',
+    venueMap: eventDetail.venue_map || '',
+    eventStartTime: eventDetail.event_start_time || '',
+    eventEndTime: eventDetail.event_end_time || '',
+    parlourType: eventDetail.parlour_type || '',
+    parlourName: eventDetail.parlour_name || '',
+    parlourCity: eventDetail.parlour_city || '',
+    parlourArea: eventDetail.parlour_area || '',
+    parlourMap: eventDetail.parlour_map || '',
+    parlourStartTime: eventDetail.parlour_start_time || '',
+    parlourEndTime: eventDetail.parlour_end_time || '',
+    doGroomComeInMehndi: eventDetail.do_groom_come_in_mehndi || '',
+    guestCount: eventDetail.guest_count || '',
+    eventDemands: [],
+    eventReferences: [],
+  } : undefined;
 
   return (
     <div>
       <div className="flex flex-wrap gap-2">
         {cards}
       </div>
-      {assignedCrew.length > 0 && (
-        <div className="mt-2.5 pt-2.5 border-t border-gray-200">
-          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1.5">👥 Crew</p>
-          <div className="flex flex-wrap gap-2">
-            {assignedCrew.map(({ name, shortCode, note }) => (
-              <div key={`${name}-${shortCode}`} className="bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 min-w-[130px] max-w-[220px]">
-                <div className="flex items-center justify-between gap-1">
-                  <div className="min-w-0">
-                    <span className="text-[10px] font-bold text-gray-500 uppercase">{shortCode}</span>
-                    <p className="text-xs font-semibold text-gray-800 truncate">{name}</p>
-                  </div>
-                  <a
-                    href={`/crew-schedule/${encodeURIComponent(name)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="shrink-0 p-1 rounded hover:bg-violet-100 text-violet-400 hover:text-violet-600 transition-colors"
-                    title={`Open ${name}'s booking calendar`}
-                  >
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-                {note && (
-                  <p className="text-[10px] text-amber-700 bg-yellow-50 rounded px-1.5 py-0.5 mt-1 leading-relaxed whitespace-pre-line border border-yellow-100">{note}</p>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+      {calendarFor && (
+        <CrewScheduleEventSheet
+          open={!!calendarFor}
+          onOpenChange={(open) => { if (!open) setCalendarFor(null); }}
+          assignment={mappedAssignment}
+          eventDetail={mappedEventDetail}
+          contactDetails={contactDetail}
+          freelancerName={calendarFor}
+        />
       )}
     </div>
   );
