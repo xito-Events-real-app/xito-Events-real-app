@@ -13,6 +13,10 @@ import { supabase } from "@/integrations/supabase/client";
 // Default fallback relation options (will be replaced with dynamic data from sheet)
 const DEFAULT_RELATION_OPTIONS = ["Mother", "Father", "Sister", "Brother", "Spouse", "Friend", "Other"];
 
+function sanitizePhone(raw: string): string {
+  return raw.replace(/\D/g, '').slice(0, 10);
+}
+
 interface PersonDetails {
   fullName: string;
   contactNumber: string;
@@ -160,6 +164,23 @@ export default function ClientContactForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+
+    // Validate phone numbers — must be exactly 10 digits if filled
+    const phoneFields = [
+      { value: bride.contactNumber, label: "Bride's Contact Number" },
+      { value: bride.backupNumber1, label: "Bride's Backup Number 1" },
+      { value: bride.backupNumber2, label: "Bride's Backup Number 2" },
+      { value: groom.contactNumber, label: "Groom's Contact Number" },
+      { value: groom.backupNumber1, label: "Groom's Backup Number 1" },
+      { value: groom.backupNumber2, label: "Groom's Backup Number 2" },
+    ];
+    for (const { value, label } of phoneFields) {
+      if (value && value.length !== 10) {
+        toast.error(`${label} must be exactly 10 digits`);
+        setIsSubmitting(false);
+        return;
+      }
+    }
 
     try {
       // Build updates object matching the sheet schema
@@ -482,11 +503,15 @@ function PersonForm({ person, onChange, accentColor, relationOptions }: PersonFo
           <Input
             required
             type="tel"
+            inputMode="numeric"
+            pattern="[0-9]{10}"
+            maxLength={10}
             placeholder="98XXXXXXXX"
             value={person.contactNumber}
-            onChange={(e) => onChange("contactNumber", e.target.value)}
+            onChange={(e) => onChange("contactNumber", sanitizePhone(e.target.value))}
             className={`h-12 bg-white border-gray-200 ${borderColor} ${ringColor}`}
           />
+          <p className="text-xs text-gray-400">10-digit Nepali number (e.g. 98XXXXXXXX)</p>
         </div>
         <div className="space-y-2">
           <Label className="text-sm font-medium text-gray-700">WhatsApp Number</Label>
@@ -506,11 +531,15 @@ function PersonForm({ person, onChange, accentColor, relationOptions }: PersonFo
           <Label className="text-sm font-medium text-gray-700">Backup Number 1</Label>
           <Input
             type="tel"
+            inputMode="numeric"
+            pattern="[0-9]{10}"
+            maxLength={10}
             placeholder="98XXXXXXXX"
             value={person.backupNumber1}
-            onChange={(e) => onChange("backupNumber1", e.target.value)}
+            onChange={(e) => onChange("backupNumber1", sanitizePhone(e.target.value))}
             className={`h-12 bg-white border-gray-200 ${borderColor} ${ringColor}`}
           />
+          <p className="text-xs text-gray-400">10-digit Nepali number (e.g. 98XXXXXXXX)</p>
         </div>
         <div className="space-y-2">
           <Label className="text-sm font-medium text-gray-700">Relation</Label>
@@ -535,11 +564,15 @@ function PersonForm({ person, onChange, accentColor, relationOptions }: PersonFo
           <Label className="text-sm font-medium text-gray-700">Backup Number 2</Label>
           <Input
             type="tel"
+            inputMode="numeric"
+            pattern="[0-9]{10}"
+            maxLength={10}
             placeholder="98XXXXXXXX"
             value={person.backupNumber2}
-            onChange={(e) => onChange("backupNumber2", e.target.value)}
+            onChange={(e) => onChange("backupNumber2", sanitizePhone(e.target.value))}
             className={`h-12 bg-white border-gray-200 ${borderColor} ${ringColor}`}
           />
+          <p className="text-xs text-gray-400">10-digit Nepali number (e.g. 98XXXXXXXX)</p>
         </div>
         <div className="space-y-2">
           <Label className="text-sm font-medium text-gray-700">Relation</Label>
