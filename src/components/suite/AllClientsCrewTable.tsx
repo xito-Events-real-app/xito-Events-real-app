@@ -1195,6 +1195,86 @@ function EventLogisticsPanel({ eventDetail, contactDetail, settings: settingsPro
     ));
   };
 
+  // Memoize mapped data BEFORE any early returns (React hooks rule)
+  const mappedAssignment = useMemo<AssignmentRow>(() => ({
+    event_year: row.eventYear || null,
+    event_month: row.eventMonth || null,
+    event_day: row.eventDay || null,
+    event: row.event || '',
+    client_name: row.clientName || null,
+    registered_date_time_ad: row.registeredDateTimeAD,
+    photographer_bride: row.photographerBride || null,
+    photographer_groom: row.photographerGroom || null,
+    videographer_bride: row.videographerBride || null,
+    videographer_groom: row.videographerGroom || null,
+    extra_photographer: row.extraPhotographer || null,
+    extra_videographer: row.extraVideographer || null,
+    assistant: row.assistant || null,
+    iphone_shooter: row.iphoneShooter || null,
+    drone_operator: row.droneOperator || null,
+    fpv_operator: row.fpvOperator || null,
+  }), [row]);
+
+  const mappedEventDetail = useMemo<EventDetail | undefined>(() => {
+    if (!eventDetail) return undefined;
+    return {
+      eventIndex: eventDetail.event_index ?? 0,
+      eventName: eventDetail.event_name || '',
+      eventYear: eventDetail.event_year || '',
+      eventMonth: eventDetail.event_month || '',
+      eventDay: eventDetail.event_day || '',
+      eventDateAD: eventDetail.event_date_ad || '',
+      venueType: eventDetail.venue_type || '',
+      venueName: eventDetail.venue_name || '',
+      venueCity: eventDetail.venue_city || '',
+      venueArea: eventDetail.venue_area || '',
+      venueMap: eventDetail.venue_map || '',
+      eventStartTime: eventDetail.event_start_time || '',
+      eventEndTime: eventDetail.event_end_time || '',
+      parlourType: eventDetail.parlour_type || '',
+      parlourName: eventDetail.parlour_name || '',
+      parlourCity: eventDetail.parlour_city || '',
+      parlourArea: eventDetail.parlour_area || '',
+      parlourMap: eventDetail.parlour_map || '',
+      parlourStartTime: eventDetail.parlour_start_time || '',
+      parlourEndTime: eventDetail.parlour_end_time || '',
+      doGroomComeInMehndi: eventDetail.do_groom_come_in_mehndi || '',
+      guestCount: eventDetail.guest_count || '',
+      eventDemands: [],
+      eventReferences: [],
+    };
+  }, [eventDetail]);
+
+  const mappedContactDetails = useMemo(() => {
+    if (!contactDetail) return null;
+    return {
+      brideFullName: contactDetail.bride_full_name || '',
+      brideContactNumber: contactDetail.bride_contact_number || '',
+      brideWhatsappNumber: contactDetail.bride_whatsapp_number || '',
+      brideHomeCity: contactDetail.bride_home_city || '',
+      brideHomeArea: contactDetail.bride_home_area || '',
+      brideHomeMap: contactDetail.bride_home_map || '',
+      brideHomeLandmark: contactDetail.bride_home_landmark || '',
+      brideBackupNumber: contactDetail.bride_backup_number || '',
+      brideBackupRelation: contactDetail.bride_backup_relation || '',
+      brideBackupNumber2: contactDetail.bride_backup_number2 || '',
+      brideBackupRelation2: contactDetail.bride_backup_relation2 || '',
+      brideInstagram: contactDetail.bride_instagram || '',
+      groomFullName: contactDetail.groom_full_name || '',
+      groomContactNumber: contactDetail.groom_contact_number || '',
+      groomWhatsappNumber: contactDetail.groom_whatsapp_number || '',
+      groomHomeCity: contactDetail.groom_home_city || '',
+      groomHomeArea: contactDetail.groom_home_area || '',
+      groomHomeMap: contactDetail.groom_home_map || '',
+      groomHomeLandmark: contactDetail.groom_home_landmark || '',
+      groomBackupNumber: contactDetail.groom_backup_number || '',
+      groomBackupRelation: contactDetail.groom_backup_relation || '',
+      groomBackupNumber2: contactDetail.groom_backup_number2 || '',
+      groomBackupRelation2: contactDetail.groom_backup_relation2 || '',
+      groomInstagram: contactDetail.groom_instagram || '',
+    } as ClientContactDetails;
+  }, [contactDetail]);
+
   if (loading) {
     return (
       <div className="flex items-center gap-2 py-2 px-3 text-xs text-gray-400">
@@ -1380,86 +1460,6 @@ function EventLogisticsPanel({ eventDetail, contactDetail, settings: settingsPro
     );
   }
 
-  // Map row → AssignmentRow for CrewScheduleEventSheet (memoized to prevent re-render loops)
-  // IMPORTANT: These hooks must be called before any early returns
-  const mappedAssignment = useMemo<AssignmentRow>(() => ({
-    event_year: row.eventYear || null,
-    event_month: row.eventMonth || null,
-    event_day: row.eventDay || null,
-    event: row.event || '',
-    client_name: row.clientName || null,
-    registered_date_time_ad: row.registeredDateTimeAD,
-    photographer_bride: row.photographerBride || null,
-    photographer_groom: row.photographerGroom || null,
-    videographer_bride: row.videographerBride || null,
-    videographer_groom: row.videographerGroom || null,
-    extra_photographer: row.extraPhotographer || null,
-    extra_videographer: row.extraVideographer || null,
-    assistant: row.assistant || null,
-    iphone_shooter: row.iphoneShooter || null,
-    drone_operator: row.droneOperator || null,
-    fpv_operator: row.fpvOperator || null,
-  }), [row]);
-
-  const mappedEventDetail = useMemo<EventDetail | undefined>(() => {
-    if (!eventDetail) return undefined;
-    return {
-      eventIndex: eventDetail.event_index ?? 0,
-      eventName: eventDetail.event_name || '',
-      eventYear: eventDetail.event_year || '',
-      eventMonth: eventDetail.event_month || '',
-      eventDay: eventDetail.event_day || '',
-      eventDateAD: eventDetail.event_date_ad || '',
-      venueType: eventDetail.venue_type || '',
-      venueName: eventDetail.venue_name || '',
-      venueCity: eventDetail.venue_city || '',
-      venueArea: eventDetail.venue_area || '',
-      venueMap: eventDetail.venue_map || '',
-      eventStartTime: eventDetail.event_start_time || '',
-      eventEndTime: eventDetail.event_end_time || '',
-      parlourType: eventDetail.parlour_type || '',
-      parlourName: eventDetail.parlour_name || '',
-      parlourCity: eventDetail.parlour_city || '',
-      parlourArea: eventDetail.parlour_area || '',
-      parlourMap: eventDetail.parlour_map || '',
-      parlourStartTime: eventDetail.parlour_start_time || '',
-      parlourEndTime: eventDetail.parlour_end_time || '',
-      doGroomComeInMehndi: eventDetail.do_groom_come_in_mehndi || '',
-      guestCount: eventDetail.guest_count || '',
-      eventDemands: [],
-      eventReferences: [],
-    };
-  }, [eventDetail]);
-
-  const mappedContactDetails = useMemo(() => {
-    if (!contactDetail) return null;
-    return {
-      brideFullName: contactDetail.bride_full_name || '',
-      brideContactNumber: contactDetail.bride_contact_number || '',
-      brideWhatsappNumber: contactDetail.bride_whatsapp_number || '',
-      brideHomeCity: contactDetail.bride_home_city || '',
-      brideHomeArea: contactDetail.bride_home_area || '',
-      brideHomeMap: contactDetail.bride_home_map || '',
-      brideHomeLandmark: contactDetail.bride_home_landmark || '',
-      brideBackupNumber: contactDetail.bride_backup_number || '',
-      brideBackupRelation: contactDetail.bride_backup_relation || '',
-      brideBackupNumber2: contactDetail.bride_backup_number2 || '',
-      brideBackupRelation2: contactDetail.bride_backup_relation2 || '',
-      brideInstagram: contactDetail.bride_instagram || '',
-      groomFullName: contactDetail.groom_full_name || '',
-      groomContactNumber: contactDetail.groom_contact_number || '',
-      groomWhatsappNumber: contactDetail.groom_whatsapp_number || '',
-      groomHomeCity: contactDetail.groom_home_city || '',
-      groomHomeArea: contactDetail.groom_home_area || '',
-      groomHomeMap: contactDetail.groom_home_map || '',
-      groomHomeLandmark: contactDetail.groom_home_landmark || '',
-      groomBackupNumber: contactDetail.groom_backup_number || '',
-      groomBackupRelation: contactDetail.groom_backup_relation || '',
-      groomBackupNumber2: contactDetail.groom_backup_number2 || '',
-      groomBackupRelation2: contactDetail.groom_backup_relation2 || '',
-      groomInstagram: contactDetail.groom_instagram || '',
-    } as ClientContactDetails;
-  }, [contactDetail]);
 
   if (cards.length === 0) {
     return (
