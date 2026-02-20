@@ -40,6 +40,7 @@ import CrewScheduleEventSheet from "@/components/crew-schedule/CrewScheduleEvent
 import { Calendar as CalendarIcon } from "lucide-react";
 import type { AssignmentRow } from "@/components/crew-schedule/types";
 import type { EventDetail } from "@/hooks/useEventDetails";
+import type { ClientContactDetails } from "@/lib/client-contact-api";
 
 const CREW_COLUMNS: { field: FreelancerField; label: string; short: string; group: 'photo' | 'video' | 'assist' | 'tech'; size: 'wide' | 'narrow' }[] = [
   { field: 'photographerBride', label: 'Photographer Bride', short: 'PB', group: 'photo', size: 'wide' },
@@ -1349,7 +1350,7 @@ function EventLogisticsPanel({ eventDetail, contactDetail, settings: settingsPro
         <div className="flex items-center justify-between gap-1 mt-0.5">
           <p className="text-xs font-semibold text-gray-800 truncate">{name}</p>
           <button
-            onClick={() => setCalendarFor(name)}
+            onClick={(e) => { e.stopPropagation(); setCalendarFor(name); }}
             className="shrink-0 p-1 rounded hover:bg-violet-100 text-violet-400 hover:text-violet-600 transition-colors"
             title={`${name} — event details`}
           >
@@ -1385,8 +1386,8 @@ function EventLogisticsPanel({ eventDetail, contactDetail, settings: settingsPro
     );
   }
 
-  // Map row → AssignmentRow for CrewScheduleEventSheet
-  const mappedAssignment: AssignmentRow = {
+  // Map row → AssignmentRow for CrewScheduleEventSheet (memoized to prevent re-render loops)
+  const mappedAssignment = useMemo<AssignmentRow>(() => ({
     event_year: row.eventYear || null,
     event_month: row.eventMonth || null,
     event_day: row.eventDay || null,
@@ -1403,35 +1404,69 @@ function EventLogisticsPanel({ eventDetail, contactDetail, settings: settingsPro
     iphone_shooter: row.iphoneShooter || null,
     drone_operator: row.droneOperator || null,
     fpv_operator: row.fpvOperator || null,
-  };
+  }), [row]);
 
-  // Map eventDetail cache row → EventDetail shape for the sheet
-  const mappedEventDetail: EventDetail | undefined = eventDetail ? {
-    eventIndex: eventDetail.event_index ?? 0,
-    eventName: eventDetail.event_name || '',
-    eventYear: eventDetail.event_year || '',
-    eventMonth: eventDetail.event_month || '',
-    eventDay: eventDetail.event_day || '',
-    eventDateAD: eventDetail.event_date_ad || '',
-    venueType: eventDetail.venue_type || '',
-    venueName: eventDetail.venue_name || '',
-    venueCity: eventDetail.venue_city || '',
-    venueArea: eventDetail.venue_area || '',
-    venueMap: eventDetail.venue_map || '',
-    eventStartTime: eventDetail.event_start_time || '',
-    eventEndTime: eventDetail.event_end_time || '',
-    parlourType: eventDetail.parlour_type || '',
-    parlourName: eventDetail.parlour_name || '',
-    parlourCity: eventDetail.parlour_city || '',
-    parlourArea: eventDetail.parlour_area || '',
-    parlourMap: eventDetail.parlour_map || '',
-    parlourStartTime: eventDetail.parlour_start_time || '',
-    parlourEndTime: eventDetail.parlour_end_time || '',
-    doGroomComeInMehndi: eventDetail.do_groom_come_in_mehndi || '',
-    guestCount: eventDetail.guest_count || '',
-    eventDemands: [],
-    eventReferences: [],
-  } : undefined;
+  // Map eventDetail cache row → EventDetail shape (memoized)
+  const mappedEventDetail = useMemo<EventDetail | undefined>(() => {
+    if (!eventDetail) return undefined;
+    return {
+      eventIndex: eventDetail.event_index ?? 0,
+      eventName: eventDetail.event_name || '',
+      eventYear: eventDetail.event_year || '',
+      eventMonth: eventDetail.event_month || '',
+      eventDay: eventDetail.event_day || '',
+      eventDateAD: eventDetail.event_date_ad || '',
+      venueType: eventDetail.venue_type || '',
+      venueName: eventDetail.venue_name || '',
+      venueCity: eventDetail.venue_city || '',
+      venueArea: eventDetail.venue_area || '',
+      venueMap: eventDetail.venue_map || '',
+      eventStartTime: eventDetail.event_start_time || '',
+      eventEndTime: eventDetail.event_end_time || '',
+      parlourType: eventDetail.parlour_type || '',
+      parlourName: eventDetail.parlour_name || '',
+      parlourCity: eventDetail.parlour_city || '',
+      parlourArea: eventDetail.parlour_area || '',
+      parlourMap: eventDetail.parlour_map || '',
+      parlourStartTime: eventDetail.parlour_start_time || '',
+      parlourEndTime: eventDetail.parlour_end_time || '',
+      doGroomComeInMehndi: eventDetail.do_groom_come_in_mehndi || '',
+      guestCount: eventDetail.guest_count || '',
+      eventDemands: [],
+      eventReferences: [],
+    };
+  }, [eventDetail]);
+
+  // Map snake_case contact details to camelCase for CrewScheduleEventSheet
+  const mappedContactDetails = useMemo(() => {
+    if (!contactDetail) return null;
+    return {
+      brideFullName: contactDetail.bride_full_name || '',
+      brideContactNumber: contactDetail.bride_contact_number || '',
+      brideWhatsappNumber: contactDetail.bride_whatsapp_number || '',
+      brideHomeCity: contactDetail.bride_home_city || '',
+      brideHomeArea: contactDetail.bride_home_area || '',
+      brideHomeMap: contactDetail.bride_home_map || '',
+      brideHomeLandmark: contactDetail.bride_home_landmark || '',
+      brideBackupNumber: contactDetail.bride_backup_number || '',
+      brideBackupRelation: contactDetail.bride_backup_relation || '',
+      brideBackupNumber2: contactDetail.bride_backup_number2 || '',
+      brideBackupRelation2: contactDetail.bride_backup_relation2 || '',
+      brideInstagram: contactDetail.bride_instagram || '',
+      groomFullName: contactDetail.groom_full_name || '',
+      groomContactNumber: contactDetail.groom_contact_number || '',
+      groomWhatsappNumber: contactDetail.groom_whatsapp_number || '',
+      groomHomeCity: contactDetail.groom_home_city || '',
+      groomHomeArea: contactDetail.groom_home_area || '',
+      groomHomeMap: contactDetail.groom_home_map || '',
+      groomHomeLandmark: contactDetail.groom_home_landmark || '',
+      groomBackupNumber: contactDetail.groom_backup_number || '',
+      groomBackupRelation: contactDetail.groom_backup_relation || '',
+      groomBackupNumber2: contactDetail.groom_backup_number2 || '',
+      groomBackupRelation2: contactDetail.groom_backup_relation2 || '',
+      groomInstagram: contactDetail.groom_instagram || '',
+    } as ClientContactDetails;
+  }, [contactDetail]);
 
   return (
     <div>
@@ -1444,7 +1479,7 @@ function EventLogisticsPanel({ eventDetail, contactDetail, settings: settingsPro
           onOpenChange={(open) => { if (!open) setCalendarFor(null); }}
           assignment={mappedAssignment}
           eventDetail={mappedEventDetail}
-          contactDetails={contactDetail}
+          contactDetails={mappedContactDetails}
           freelancerName={calendarFor}
         />
       )}
