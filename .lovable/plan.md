@@ -1,160 +1,77 @@
 
-# Fix: Crew Card Notes — Compact Height, Hover Popover with Edit
+# Fix: Booking Calendar Button Hangs When Clicked in Expanded Row
 
-## The Problem
+## Root Cause
 
-Lines 1143–1145 in `AllClientsCrewTable.tsx`:
-```tsx
-{note && (
-  <p className="text-[10px] text-amber-700 bg-yellow-50 rounded px-1.5 py-0.5 mt-1 leading-relaxed whitespace-pre-line border border-yellow-100">{note}</p>
-)}
-```
-`whitespace-pre-line` + multi-line notes = card grows tall → entire flex row wraps to 2 lines.
+When the calendar icon button is clicked next to a freelancer name in an expanded row, `setCalendarFor(name)` triggers a re-render of the entire `EventLogisticsPanel`. On every re-render, two large objects (`mappedAssignment` and `mappedEventDetail`) are recreated as brand-new references (lines 1389-1434). The `CrewScheduleEventSheet` receives these as props, its `useEffect` (line 134-156) fires because `assignment.event` is technically a new string reference each render, which triggers a Supabase query, which sets `visibility` state, which triggers another re-render of the Sheet, and so on -- creating a cascade of re-renders that locks up the UI.
 
-## The Fix — Single File, 3 Changes
+Additionally, the button click may bubble up through the table row's click handler (which navigates to client detail), causing competing navigation and state changes.
 
-### Change 1: Replace the note `<p>` with a compact hover popover trigger
+## The Fix (single file: AllClientsCrewTable.tsx)
 
-The note block (lines 1143–1145) becomes a single compact button — same height as one text line — that opens a Popover on click. The button is `overflow-hidden` + `truncate` so it never grows the card taller:
+### 1. Add `e.stopPropagation()` to the calendar button click
+
+On line 1352, the button's `onClick` should stop propagation so the click doesn't bubble up to the table row's click handler:
 
 ```tsx
-{note && (
-  <Popover>
-    <PopoverTrigger asChild>
-      <button className="flex items-center gap-1 mt-1 text-[9px] text-amber-600 bg-yellow-50 border border-yellow-100 rounded px-1.5 py-0.5 w-full text-left hover:bg-yellow-100 transition-colors overflow-hidden">
-        <StickyNote className="w-2.5 h-2.5 shrink-0" />
-        <span className="truncate block">{note}</span>
-      </button>
-    </PopoverTrigger>
-    <PopoverContent className="w-72 p-3 z-[300]" align="start" side="bottom">
-      <NoteEditPopover
-        name={name}
-        registeredDateTimeAD={row.registeredDateTimeAD}
-        eventName={row.event}
-        initialNote={note}
-        onSave={(newNote) => handleNoteSaved(name, newNote)}
-      />
-    </PopoverContent>
-  </Popover>
-)}
+<button
+  onClick={(e) => { e.stopPropagation(); setCalendarFor(name); }}
+  ...
 ```
 
-Key: the trigger button has `overflow-hidden` + `truncate` on the span — it occupies exactly one line height, regardless of how long the note is. The card height is now always equal to: role badge line + name line + (optional) note indicator line — same as Bride/Groom cards.
+### 2. Memoize `mappedAssignment` and `mappedEventDetail`
 
-### Change 2: Add `NoteEditPopover` sub-component (new function, ~25 lines)
-
-Defined just before `EventLogisticsPanel` (~line 970). Handles view/edit states + Supabase save:
+Move the object construction (lines 1388-1434) into `useMemo` hooks so they are stable references and don't trigger unnecessary re-renders in `CrewScheduleEventSheet`:
 
 ```tsx
-function NoteEditPopover({ name, registeredDateTimeAD, eventName, initialNote, onSave }: {
-  name: string;
-  registeredDateTimeAD: string;
-  eventName: string;
-  initialNote: string;
-  onSave: (note: string) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(initialNote);
-  const [saving, setSaving] = useState(false);
+const mappedAssignment = useMemo<AssignmentRow>(() => ({
+  event_year: row.eventYear || null,
+  // ...same fields...
+}), [row]);
 
-  const handleSave = async () => {
-    setSaving(true);
-    await supabase
-      .from('freelancer_event_settings')
-      .update({ personal_note: value })
-      .eq('registered_date_time_ad', registeredDateTimeAD)
-      .eq('event_name', eventName)
-      .eq('freelancer_name', name);
-    setSaving(false);
-    setEditing(false);
-    onSave(value);
-  };
-
-  return (
-    <div className="space-y-2">
-      <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wide">
-        📝 {name}
-      </p>
-      {editing ? (
-        <>
-          <Textarea
-            value={value}
-            onChange={e => setValue(e.target.value)}
-            className="text-xs min-h-[80px] resize-none"
-            autoFocus
-          />
-          <div className="flex gap-2 justify-end">
-            <button onClick={() => { setEditing(false); setValue(initialNote); }}
-              className="text-[10px] text-gray-500 hover:text-gray-700 px-2 py-1 rounded">
-              Cancel
-            </button>
-            <button onClick={handleSave} disabled={saving}
-              className="text-[10px] bg-amber-500 text-white px-2 py-1 rounded hover:bg-amber-600 flex items-center gap-1">
-              {saving && <Loader2 className="w-2.5 h-2.5 animate-spin" />} Save
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{value}</p>
-          <button onClick={() => setEditing(true)}
-            className="text-[10px] text-amber-600 hover:underline flex items-center gap-1 mt-1">
-            <Pencil className="w-2.5 h-2.5" /> Edit Note
-          </button>
-        </>
-      )}
-    </div>
-  );
-}
+const mappedEventDetail = useMemo<EventDetail | undefined>(() => {
+  if (!eventDetail) return undefined;
+  return { /* ...same mapping... */ };
+}, [eventDetail]);
 ```
 
-### Change 3: Local settings state + `handleNoteSaved` in `EventLogisticsPanel`
+### 3. Map `contactDetail` from snake_case to camelCase
 
-So saved edits are reflected immediately (no re-fetch), convert `EventLogisticsPanel` to keep a local copy of `settings`:
+The `CrewScheduleEventSheet` expects `ClientContactDetails` (camelCase: `brideFullName`) but receives raw Supabase cache data (snake_case: `bride_full_name`). Add a mapping:
 
 ```tsx
-function EventLogisticsPanel({ ..., settings: settingsProp, ... }) {
-  const [calendarFor, setCalendarFor] = useState<string | null>(null);
-  const [localSettings, setLocalSettings] = useState(settingsProp);
-  useEffect(() => { setLocalSettings(settingsProp); }, [settingsProp]);
-
-  const handleNoteSaved = (freelancerName: string, newNote: string) => {
-    setLocalSettings(prev => prev.map(s =>
-      s.freelancer_name?.toLowerCase() === freelancerName.toLowerCase()
-        ? { ...s, personal_note: newNote }
-        : s
-    ));
-  };
-  // ...use localSettings instead of settings everywhere below
-}
+const mappedContactDetails = useMemo(() => {
+  if (!contactDetail) return null;
+  return {
+    brideFullName: contactDetail.bride_full_name || '',
+    brideContactNumber: contactDetail.bride_contact_number || '',
+    brideWhatsappNumber: contactDetail.bride_whatsapp_number || '',
+    brideHomeCity: contactDetail.bride_home_city || '',
+    brideHomeArea: contactDetail.bride_home_area || '',
+    brideHomeMap: contactDetail.bride_home_map || '',
+    groomFullName: contactDetail.groom_full_name || '',
+    groomContactNumber: contactDetail.groom_contact_number || '',
+    groomWhatsappNumber: contactDetail.groom_whatsapp_number || '',
+    groomHomeCity: contactDetail.groom_home_city || '',
+    groomHomeArea: contactDetail.groom_home_area || '',
+    groomHomeMap: contactDetail.groom_home_map || '',
+  } as ClientContactDetails;
+}, [contactDetail]);
 ```
 
-The crew card loop on line 1126 changes `settings.find(...)` → `localSettings.find(...)`.
+### 4. Add `useMemo` to imports
 
-## New Imports Needed
+Ensure `useMemo` is imported from React at the top of the file.
 
-Add to the lucide-react import line:
-- `StickyNote` 
-- `Pencil`
+## Summary of Changes
 
-Add to UI imports:
-- `Textarea` from `@/components/ui/textarea`
+| Line(s) | What |
+|---------|------|
+| Import line | Add `useMemo` to React imports |
+| ~1352 | Add `e.stopPropagation()` to calendar button onClick |
+| ~1388-1406 | Wrap `mappedAssignment` in `useMemo` |
+| ~1408-1434 | Wrap `mappedEventDetail` in `useMemo` |
+| New (~1436) | Add `mappedContactDetails` with snake-to-camelCase mapping in `useMemo` |
+| ~1447 | Pass `mappedContactDetails` instead of raw `contactDetail` |
 
-`useEffect` — already imported (React is already used with hooks).
-
-`Popover`, `PopoverTrigger`, `PopoverContent` — already imported and used in this file (for the crew cell assignment popover). No new import needed.
-
-## Files Changed
-
-Only **`src/components/suite/AllClientsCrewTable.tsx`**:
-
-1. Lucide import line — add `StickyNote`, `Pencil`
-2. Add `import { Textarea } from "@/components/ui/textarea";`
-3. Add `NoteEditPopover` function (~line 970, before `EventLogisticsPanel`)
-4. `EventLogisticsPanel` — add `localSettings` state + `useEffect` sync + `handleNoteSaved`; change `settings.find` → `localSettings.find`; replace the note `<p>` block (lines 1143–1145) with the compact Popover trigger
-
-No schema changes. No other files. No new routes.
-
-## Result
-
-Every crew card is now the same max-height as the Bride/Groom/Venue cards. Notes show as a single amber truncated line. Clicking it opens a popover showing the full note with an Edit button. Saving updates Supabase and immediately reflects in the card without re-fetching.
+No schema changes. No new files. Only `AllClientsCrewTable.tsx` is modified.
