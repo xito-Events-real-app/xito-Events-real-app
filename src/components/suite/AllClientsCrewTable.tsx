@@ -6,7 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty, CommandGroup, CommandSeparator } from "@/components/ui/command";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Users, Plus, RefreshCw, X, ChevronLeft, Database, Trash2, Download, Upload, UserCog, Cloud, ExternalLink, ChevronDown, ChevronUp, Phone, MapPin, StickyNote, Pencil } from "lucide-react";
+import { Loader2, Users, Plus, RefreshCw, X, ChevronLeft, Database, Trash2, Download, Upload, UserCog, Cloud, ExternalLink, ChevronDown, ChevronUp, Phone, MapPin, StickyNote, Pencil, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -119,6 +119,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
   });
   const [filterDay, setFilterDay] = useState<string | null>(null);
   const [filterClient, setFilterClient] = useState<string | null>(null);
+  const [filterFreelancer, setFilterFreelancer] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
   const [isLockingSlots, setIsLockingSlots] = useState(false);
   const [pendingSyncs, setPendingSyncs] = useState(0);
@@ -286,8 +287,12 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
       .sort((a, b) => (parseInt(a.eventDay) || 0) - (parseInt(b.eventDay) || 0));
     if (filterDay) rows = rows.filter(a => a.eventDay === filterDay);
     if (filterClient) rows = rows.filter(a => a.clientName === filterClient);
+    if (filterFreelancer) {
+      const upper = filterFreelancer.trim().toUpperCase();
+      rows = rows.filter(a => CREW_COLUMNS.some(col => (a[col.field] as string)?.trim().toUpperCase() === upper));
+    }
     return rows;
-  }, [assignments, selectedYear, selectedMonth, filterDay, filterClient]);
+  }, [assignments, selectedYear, selectedMonth, filterDay, filterClient, filterFreelancer]);
 
   const allExpanded = useMemo(() =>
     filteredRows.length > 0 && filteredRows.every(row => {
@@ -655,7 +660,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
       </div>
 
       {/* Active Filter Bar */}
-      {(filterDay || filterClient) && (
+      {(filterDay || filterClient || filterFreelancer) && (
         <div className="bg-violet-50 border-b border-violet-200 px-4 py-2 flex items-center gap-2 shrink-0">
           <span className="text-xs font-medium text-violet-700">Filtered by:</span>
           {filterDay && (
@@ -668,7 +673,12 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
               {filterClient} <X className="w-3 h-3" />
             </button>
           )}
-          <button onClick={() => { setFilterDay(null); setFilterClient(null); }} className="text-xs text-violet-500 hover:text-violet-700 underline ml-2">
+          {filterFreelancer && (
+            <button onClick={() => setFilterFreelancer(null)} className="inline-flex items-center gap-1 bg-amber-200 text-amber-800 text-xs font-bold px-2.5 py-1 rounded-full hover:bg-amber-300 transition-colors">
+              👤 {filterFreelancer} <X className="w-3 h-3" />
+            </button>
+          )}
+          <button onClick={() => { setFilterDay(null); setFilterClient(null); setFilterFreelancer(null); }} className="text-xs text-violet-500 hover:text-violet-700 underline ml-2">
             Clear All
           </button>
         </div>
@@ -773,7 +783,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                                         </button>
                                       </HoverCardTrigger>
                                       <HoverCardContent className="w-72 p-3 z-[200]" side="bottom" avoidCollisions={true} collisionPadding={16}>
-                                        <FreelancerHoverInfo name={val} allAssignments={assignments} selectedYear={selectedYear} selectedMonth={selectedMonth} freelancers={freelancers} />
+                                        <FreelancerHoverInfo name={val} allAssignments={assignments} selectedYear={selectedYear} selectedMonth={selectedMonth} freelancers={freelancers} onFilterFreelancer={setFilterFreelancer} />
                                       </HoverCardContent>
                                     </HoverCard>
                                     {!readOnly && (
@@ -980,6 +990,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                                 isRequired={isRequired}
                                 isNextRequired={isNextRequired}
                                 readOnly={readOnly}
+                                onFilterFreelancer={setFilterFreelancer}
                               />
                             );
                           })}
@@ -1487,7 +1498,7 @@ function EventLogisticsPanel({ eventDetail, contactDetail, settings: settingsPro
 }
 
 /* ─── Shared Freelancer Hover Info ─── */
-function FreelancerHoverInfo({ name, allAssignments, selectedYear, selectedMonth, freelancers }: { name: string; allAssignments: FreelancerAssignment[]; selectedYear: string; selectedMonth: string; freelancers: FreelancerData[] }) {
+function FreelancerHoverInfo({ name, allAssignments, selectedYear, selectedMonth, freelancers, onFilterFreelancer }: { name: string; allAssignments: FreelancerAssignment[]; selectedYear: string; selectedMonth: string; freelancers: FreelancerData[]; onFilterFreelancer?: (name: string) => void }) {
   const navigate = useNavigate();
   const currentBS = getCurrentBSDate();
 
@@ -1560,9 +1571,18 @@ function FreelancerHoverInfo({ name, allAssignments, selectedYear, selectedMonth
       {upcomingEvents.length === 0 && monthEvents.length > 0 && (
         <p className="text-xs text-gray-400 italic">All events have passed</p>
       )}
+      {onFilterFreelancer && (
+        <button
+          onClick={() => onFilterFreelancer(name.trim())}
+          className="w-full mt-2 flex items-center justify-center gap-1.5 bg-violet-500 hover:bg-violet-600 text-white text-xs font-semibold py-1.5 px-3 rounded-lg transition-colors"
+        >
+          <Filter className="w-3.5 h-3.5" />
+          Show only {getFirstName(name)}'s rows
+        </button>
+      )}
       <button
         onClick={handleSendToWhatsApp}
-        className="w-full mt-2 flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold py-1.5 px-3 rounded-lg transition-colors"
+        className="w-full mt-1 flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold py-1.5 px-3 rounded-lg transition-colors"
       >
         <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-current"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.625.846 5.059 2.284 7.034L.789 23.492a.5.5 0 00.612.616l4.529-1.474A11.956 11.956 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-2.3 0-4.438-.768-6.152-2.063l-.43-.338-2.809.914.94-2.76-.37-.462A9.935 9.935 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
         Send Schedule to WhatsApp
@@ -1587,6 +1607,7 @@ function CrewCell({
   isRequired = true,
   isNextRequired = true,
   readOnly = false,
+  onFilterFreelancer,
 }: {
   value: string;
   field: FreelancerField;
@@ -1602,6 +1623,7 @@ function CrewCell({
   isRequired?: boolean;
   isNextRequired?: boolean;
   readOnly?: boolean;
+  onFilterFreelancer?: (name: string) => void;
 }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -1639,7 +1661,7 @@ function CrewCell({
               </span>
             </HoverCardTrigger>
             <HoverCardContent className="w-72 p-3 z-[200]" side="bottom" avoidCollisions={true} collisionPadding={16}>
-              <FreelancerHoverInfo name={value} allAssignments={allAssignments} selectedYear={selectedYear} selectedMonth={selectedMonth} freelancers={freelancers} />
+              <FreelancerHoverInfo name={value} allAssignments={allAssignments} selectedYear={selectedYear} selectedMonth={selectedMonth} freelancers={freelancers} onFilterFreelancer={onFilterFreelancer} />
             </HoverCardContent>
           </HoverCard>
 
