@@ -1380,13 +1380,8 @@ function EventLogisticsPanel({ eventDetail, contactDetail, settings: settingsPro
     );
   }
 
-  if (cards.length === 0) {
-    return (
-      <p className="text-xs text-gray-400 italic py-1">No details configured for this event's freelancers.</p>
-    );
-  }
-
   // Map row → AssignmentRow for CrewScheduleEventSheet (memoized to prevent re-render loops)
+  // IMPORTANT: These hooks must be called before any early returns
   const mappedAssignment = useMemo<AssignmentRow>(() => ({
     event_year: row.eventYear || null,
     event_month: row.eventMonth || null,
@@ -1406,7 +1401,6 @@ function EventLogisticsPanel({ eventDetail, contactDetail, settings: settingsPro
     fpv_operator: row.fpvOperator || null,
   }), [row]);
 
-  // Map eventDetail cache row → EventDetail shape (memoized)
   const mappedEventDetail = useMemo<EventDetail | undefined>(() => {
     if (!eventDetail) return undefined;
     return {
@@ -1437,7 +1431,6 @@ function EventLogisticsPanel({ eventDetail, contactDetail, settings: settingsPro
     };
   }, [eventDetail]);
 
-  // Map snake_case contact details to camelCase for CrewScheduleEventSheet
   const mappedContactDetails = useMemo(() => {
     if (!contactDetail) return null;
     return {
@@ -1467,6 +1460,12 @@ function EventLogisticsPanel({ eventDetail, contactDetail, settings: settingsPro
       groomInstagram: contactDetail.groom_instagram || '',
     } as ClientContactDetails;
   }, [contactDetail]);
+
+  if (cards.length === 0) {
+    return (
+      <p className="text-xs text-gray-400 italic py-1">No details configured for this event's freelancers.</p>
+    );
+  }
 
   return (
     <div>
