@@ -1,77 +1,33 @@
 
-# Fix: Booking Calendar Button Hangs When Clicked in Expanded Row
+# Fix: Upcoming Events Not Reflecting Updated Event Details Instantly
 
-## Root Cause
+## Problem
 
-When the calendar icon button is clicked next to a freelancer name in an expanded row, `setCalendarFor(name)` triggers a re-render of the entire `EventLogisticsPanel`. On every re-render, two large objects (`mappedAssignment` and `mappedEventDetail`) are recreated as brand-new references (lines 1389-1434). The `CrewScheduleEventSheet` receives these as props, its `useEffect` (line 134-156) fires because `assignment.event` is technically a new string reference each render, which triggers a Supabase query, which sets `visibility` state, which triggers another re-render of the Sheet, and so on -- creating a cascade of re-renders that locks up the UI.
+When you update event details (venue, timing, parlour, etc.) from the Client Detail page and then navigate back to the Suite landing page, the "Upcoming Events" section shows stale/old data. This happens because the event details are served from a 5-minute browser cache that never gets cleared when updates happen.
 
-Additionally, the button click may bubble up through the table row's click handler (which navigates to client detail), causing competing navigation and state changes.
+## Solution
 
-## The Fix (single file: AllClientsCrewTable.tsx)
+Two small changes to make the cache clear itself when event details are updated:
 
-### 1. Add `e.stopPropagation()` to the calendar button click
+### 1. Clear the stale cache when event details are saved (useEventDetails.ts)
 
-On line 1352, the button's `onClick` should stop propagation so the click doesn't bubble up to the table row's click handler:
+After successfully saving event details from the Client Detail page, dispatch a signal telling the rest of the app that event details have changed. This ensures any cached data is thrown away.
 
-```tsx
-<button
-  onClick={(e) => { e.stopPropagation(); setCalendarFor(name); }}
-  ...
-```
+### 2. Listen for that signal and refetch fresh data (useBulkEventDetails.ts)
 
-### 2. Memoize `mappedAssignment` and `mappedEventDetail`
+The Upcoming Events hook will listen for the "event details changed" signal. When it fires, it clears the 5-minute browser cache and re-fetches fresh data from the database, so the next time you visit the Suite page, you see updated information immediately.
 
-Move the object construction (lines 1388-1434) into `useMemo` hooks so they are stable references and don't trigger unnecessary re-renders in `CrewScheduleEventSheet`:
+---
 
-```tsx
-const mappedAssignment = useMemo<AssignmentRow>(() => ({
-  event_year: row.eventYear || null,
-  // ...same fields...
-}), [row]);
+## Technical Details
 
-const mappedEventDetail = useMemo<EventDetail | undefined>(() => {
-  if (!eventDetail) return undefined;
-  return { /* ...same mapping... */ };
-}, [eventDetail]);
-```
+**File 1: `src/hooks/useEventDetails.ts`**
+- In the `updateEventDetail` function, after a successful save, dispatch a `cache-updated` event with type `event-details-invalidate`.
+- Also clear the `bulk_event_details_cache` sessionStorage entry directly for immediate effect.
 
-### 3. Map `contactDetail` from snake_case to camelCase
+**File 2: `src/hooks/useBulkEventDetails.ts`**
+- Add a `window` event listener for `cache-updated` events where `type === 'event-details-invalidate'`.
+- When received: clear the sessionStorage cache and re-fetch from Supabase `event_details_cache` table.
+- Add a `refetch` counter state to trigger the `useEffect` to re-run.
 
-The `CrewScheduleEventSheet` expects `ClientContactDetails` (camelCase: `brideFullName`) but receives raw Supabase cache data (snake_case: `bride_full_name`). Add a mapping:
-
-```tsx
-const mappedContactDetails = useMemo(() => {
-  if (!contactDetail) return null;
-  return {
-    brideFullName: contactDetail.bride_full_name || '',
-    brideContactNumber: contactDetail.bride_contact_number || '',
-    brideWhatsappNumber: contactDetail.bride_whatsapp_number || '',
-    brideHomeCity: contactDetail.bride_home_city || '',
-    brideHomeArea: contactDetail.bride_home_area || '',
-    brideHomeMap: contactDetail.bride_home_map || '',
-    groomFullName: contactDetail.groom_full_name || '',
-    groomContactNumber: contactDetail.groom_contact_number || '',
-    groomWhatsappNumber: contactDetail.groom_whatsapp_number || '',
-    groomHomeCity: contactDetail.groom_home_city || '',
-    groomHomeArea: contactDetail.groom_home_area || '',
-    groomHomeMap: contactDetail.groom_home_map || '',
-  } as ClientContactDetails;
-}, [contactDetail]);
-```
-
-### 4. Add `useMemo` to imports
-
-Ensure `useMemo` is imported from React at the top of the file.
-
-## Summary of Changes
-
-| Line(s) | What |
-|---------|------|
-| Import line | Add `useMemo` to React imports |
-| ~1352 | Add `e.stopPropagation()` to calendar button onClick |
-| ~1388-1406 | Wrap `mappedAssignment` in `useMemo` |
-| ~1408-1434 | Wrap `mappedEventDetail` in `useMemo` |
-| New (~1436) | Add `mappedContactDetails` with snake-to-camelCase mapping in `useMemo` |
-| ~1447 | Pass `mappedContactDetails` instead of raw `contactDetail` |
-
-No schema changes. No new files. Only `AllClientsCrewTable.tsx` is modified.
+No database changes. No new files. Two small edits to existing hooks.
