@@ -34,6 +34,20 @@ export function useBulkEventDetails(clientIds: string[]): UseBulkEventDetailsRes
   const [eventDetailsMap, setEventDetailsMap] = useState<Record<string, BulkEventDetail[]>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refetchCounter, setRefetchCounter] = useState(0);
+
+  // Listen for cache invalidation from useEventDetails
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.type === 'event-details-invalidate') {
+        try { sessionStorage.removeItem(CACHE_KEY); } catch {}
+        setRefetchCounter(c => c + 1);
+      }
+    };
+    window.addEventListener('cache-updated', handler);
+    return () => window.removeEventListener('cache-updated', handler);
+  }, []);
 
   const stableClientIds = useMemo(() => {
     const uniqueIds = [...new Set(clientIds.filter(Boolean))];
@@ -136,7 +150,7 @@ export function useBulkEventDetails(clientIds: string[]): UseBulkEventDetailsRes
     return () => {
       cancelled = true;
     };
-  }, [stableClientIds]);
+  }, [stableClientIds, refetchCounter]);
 
   return { eventDetailsMap, isLoading, error };
 }

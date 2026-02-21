@@ -223,6 +223,10 @@ export function useEventDetails(registeredDateTimeAD: string | undefined) {
       // Refresh from Sheets after update
       await fetchFromSheets(false);
 
+      // Invalidate bulk event details cache so Upcoming Events shows fresh data
+      try { sessionStorage.removeItem('bulk_event_details_cache'); } catch {}
+      window.dispatchEvent(new CustomEvent('cache-updated', { detail: { type: 'event-details-invalidate' } }));
+
       toast({
         title: "Saved",
         description: "Event details updated successfully",
