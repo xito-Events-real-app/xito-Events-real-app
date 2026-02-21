@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { BulkEventDetail, getBulkEventDetails } from "@/lib/sheets-api";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -34,39 +34,28 @@ export function useBulkEventDetails(clientIds: string[]): UseBulkEventDetailsRes
   const [eventDetailsMap, setEventDetailsMap] = useState<Record<string, BulkEventDetail[]>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [refetchCounter, setRefetchCounter] = useState(0);
-
-  // Listen for cache invalidation from useEventDetails
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.type === 'event-details-invalidate') {
-        try { sessionStorage.removeItem(CACHE_KEY); } catch {}
-        setRefetchCounter(c => c + 1);
-      }
-    };
-    window.addEventListener('cache-updated', handler);
-    return () => window.removeEventListener('cache-updated', handler);
-  }, []);
 
   const stableClientIds = useMemo(() => {
     const uniqueIds = [...new Set(clientIds.filter(Boolean))];
     return uniqueIds.sort().join(',');
   }, [clientIds]);
 
-  useEffect(() => {
-    const idsArray = stableClientIds ? stableClientIds.split(',') : [];
-    
+  const stableClientIdsRef = useRef(stableClientIds);
+  stableClientIdsRef.current = stableClientIds;
+
+  const fetchData = useCallback((idsKey: string, skipCache = false) => {
+    const idsArray = idsKey ? idsKey.split(',') : [];
     if (idsArray.length === 0) {
       setEventDetailsMap({});
-      return;
+      return () => {};
     }
 
-    // Check session cache first
-    const cached = getSessionCache(stableClientIds);
-    if (cached) {
-      setEventDetailsMap(cached);
-      return;
+    if (!skipCache) {
+      const cached = getSessionCache(idsKey);
+      if (cached) {
+        setEventDetailsMap(cached);
+        return () => {};
+      }
     }
 
     let cancelled = false;
@@ -76,7 +65,6 @@ export function useBulkEventDetails(clientIds: string[]): UseBulkEventDetailsRes
       setError(null);
       
       try {
-        // Query event_details_cache directly from Supabase
         const { data: rows, error: fetchError } = await supabase
           .from('event_details_cache')
           .select('*')
@@ -85,7 +73,6 @@ export function useBulkEventDetails(clientIds: string[]): UseBulkEventDetailsRes
 
         if (fetchError) throw new Error(fetchError.message);
 
-        // If cache has data, use it
         if (rows && rows.length > 0) {
           const result: Record<string, BulkEventDetail[]> = {};
           for (const row of rows) {
@@ -115,19 +102,17 @@ export function useBulkEventDetails(clientIds: string[]): UseBulkEventDetailsRes
 
           if (!cancelled) {
             setEventDetailsMap(result);
-            setSessionCache(stableClientIds, result);
+            setSessionCache(idsKey, result);
           }
         } else {
-          // Fallback: cache is empty, fetch from Google Sheets
           console.log('[useBulkEventDetails] Cache empty, falling back to Google Sheets');
           const sheetsResult = await getBulkEventDetails(idsArray);
 
           if (!cancelled) {
             setEventDetailsMap(sheetsResult);
-            setSessionCache(stableClientIds, sheetsResult);
+            setSessionCache(idsKey, sheetsResult);
           }
 
-          // Background sync to populate cache for next time
           supabase.functions.invoke('sync-all-data', {
             body: { tables: ['event_details'] },
           }).catch(() => {});
@@ -147,10 +132,27 @@ export function useBulkEventDetails(clientIds: string[]): UseBulkEventDetailsRes
 
     fetchFromSupabase();
 
-    return () => {
-      cancelled = true;
+    return () => { cancelled = true; };
+  }, []);
+
+  // Main data fetch
+  useEffect(() => {
+    return fetchData(stableClientIds);
+  }, [stableClientIds, fetchData]);
+
+  // Listen for cache invalidation from useEventDetails
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.type === 'event-details-invalidate') {
+        try { sessionStorage.removeItem(CACHE_KEY); } catch {}
+        // Re-fetch with current client IDs, skipping cache
+        fetchData(stableClientIdsRef.current, true);
+      }
     };
-  }, [stableClientIds, refetchCounter]);
+    window.addEventListener('cache-updated', handler);
+    return () => window.removeEventListener('cache-updated', handler);
+  }, [fetchData]);
 
   return { eventDetailsMap, isLoading, error };
 }
