@@ -206,13 +206,19 @@ export function useEventDetails(registeredDateTimeAD: string | undefined) {
         eventReferences: updates.eventReferences ? serializeQuotedList(updates.eventReferences) : undefined,
       };
 
+      // Include event name for backend verification against wrong line writes
+      const currentEvent = data?.events.find(e => e.eventIndex === eventIndex);
+
       const { data: result, error: updateError } = await supabase.functions.invoke('google-sheets', {
         body: {
           action: 'updateClientEventDetails',
           data: { 
             registeredDateTimeAD,
             eventIndex,
-            updates: processedUpdates
+            updates: {
+              ...processedUpdates,
+              _eventName: currentEvent?.eventName || ''
+            }
           }
         }
       });

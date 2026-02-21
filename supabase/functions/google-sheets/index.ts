@@ -4884,6 +4884,26 @@ async function updateClientEventDetails(
 
   const existingRow = data.values[foundRowIndex];
 
+  // ===== EVENT NAME VERIFICATION: ensure eventIndex targets the correct event =====
+  let verifiedEventIndex = eventIndex;
+  if (updates._eventName) {
+    const eventNames = (existingRow[3] || '').split('\n');
+    const expectedName = updates._eventName.trim().toUpperCase();
+    const currentName = (eventNames[eventIndex] || '').trim().toUpperCase();
+    
+    if (currentName !== expectedName) {
+      console.warn(`[EVENT INDEX MISMATCH] Expected "${expectedName}" at index ${eventIndex}, found "${currentName}". Searching...`);
+      const correctIndex = eventNames.findIndex(n => n.trim().toUpperCase() === expectedName);
+      if (correctIndex >= 0) {
+        verifiedEventIndex = correctIndex;
+        console.log(`[EVENT INDEX MISMATCH] Found correct index: ${correctIndex}`);
+      } else {
+        console.error(`[EVENT INDEX MISMATCH] Event "${expectedName}" not found in any line`);
+      }
+    }
+    delete updates._eventName;
+  }
+
   // Helper to update a specific line in a multi-line value
   function updateLineAtIndex(existing: string, idx: number, newValue: string): string {
     const lines = existing ? existing.split('\n') : [];
@@ -4927,8 +4947,8 @@ async function updateClientEventDetails(
     const existingValue = existingRow[colIdx] || '';
     
     if (fieldName && updates[fieldName] !== undefined) {
-      // This field is being updated
-      updateValues.push(updateLineAtIndex(existingValue, eventIndex, updates[fieldName]));
+      // This field is being updated — use verifiedEventIndex
+      updateValues.push(updateLineAtIndex(existingValue, verifiedEventIndex, updates[fieldName]));
     } else {
       // Keep existing value
       updateValues.push(existingValue);
