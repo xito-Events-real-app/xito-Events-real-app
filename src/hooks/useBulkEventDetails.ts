@@ -146,8 +146,10 @@ export function useBulkEventDetails(clientIds: string[]): UseBulkEventDetailsRes
       const detail = (e as CustomEvent).detail;
       if (detail?.type === 'event-details-invalidate') {
         try { sessionStorage.removeItem(CACHE_KEY); } catch {}
-        // Re-fetch with current client IDs, skipping cache
-        fetchData(stableClientIdsRef.current, true);
+        // Defer to next tick to avoid calling setState during React's render phase
+        setTimeout(() => {
+          fetchData(stableClientIdsRef.current, true);
+        }, 0);
       }
     };
     window.addEventListener('cache-updated', handler);
