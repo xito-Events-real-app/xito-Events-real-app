@@ -131,20 +131,26 @@ export function useBookedCachedData(): UseBookedCachedDataResult {
 
   // Listen for cache updates and invalidation
   useEffect(() => {
-    const handleCacheUpdate = (e: CustomEvent<{ type: string; data: unknown }>) => {
-      if (e.detail.type === 'booked-clients' && Array.isArray(e.detail.data)) {
-        setClients(e.detail.data as BookedClientData[]);
-        setLastSyncedAt(new Date());
-        setIsFromCache(false);
+    const handleCacheUpdate = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.type === 'booked-clients' && Array.isArray(detail.data)) {
+        // Defer to avoid setState during React's render phase
+        setTimeout(() => {
+          setClients(detail.data as BookedClientData[]);
+          setLastSyncedAt(new Date());
+          setIsFromCache(false);
+        }, 0);
       }
-      if (e.detail.type === 'booked-clients-invalidate') {
+      if (detail?.type === 'booked-clients-invalidate') {
         fetchState.hasRefreshed = false;
-        refreshData();
+        setTimeout(() => {
+          refreshData();
+        }, 0);
       }
     };
 
-    window.addEventListener('cache-updated', handleCacheUpdate as EventListener);
-    return () => window.removeEventListener('cache-updated', handleCacheUpdate as EventListener);
+    window.addEventListener('cache-updated', handleCacheUpdate);
+    return () => window.removeEventListener('cache-updated', handleCacheUpdate);
   }, [refreshData]);
 
   return {
