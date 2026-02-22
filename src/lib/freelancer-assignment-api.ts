@@ -188,6 +188,23 @@ export function getFilteredFreelancersByRole(freelancers: FreelancerData[], fiel
 }
 
 export async function getAllFreelancerAssignments(): Promise<FreelancerAssignment[]> {
+  // STEP 1: Read from Supabase cache first (fast, ~50ms)
+  try {
+    const { data: cached, error } = await supabase
+      .from('freelancer_assignments')
+      .select('*')
+      .order('event_year', { ascending: true })
+      .order('event_month', { ascending: true })
+      .order('event_day', { ascending: true });
+
+    if (!error && cached && cached.length > 0) {
+      return (cached as any[]).map(rowToAssignment);
+    }
+  } catch (err) {
+    console.warn('[getAllAssignments] Supabase read failed, falling back:', err);
+  }
+
+  // STEP 2: Fallback to Google Sheets
   const { data, error } = await supabase.functions.invoke('google-sheets', {
     body: { action: 'getAllFreelancerAssignments' }
   });
