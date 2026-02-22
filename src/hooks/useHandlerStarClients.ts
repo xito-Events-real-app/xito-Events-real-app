@@ -22,8 +22,7 @@ export function useHandlerStarClients(handlerName: string) {
       .sort((a, b) => {
         // Sort by priority descending (5 star first)
         return parseInt(b.priority || '0') - parseInt(a.priority || '0');
-      })
-      .slice(0, 10); // Limit to top 10
+      });
   }, [clients, handlerName]);
   
   return { starClients, isLoading };
