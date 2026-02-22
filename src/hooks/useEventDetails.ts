@@ -249,7 +249,7 @@ export function useEventDetails(registeredDateTimeAD: string | undefined) {
       console.error('Error updating event details:', err);
       return false;
     }
-  }, [registeredDateTimeAD, fetchFromSheets]);
+  }, [registeredDateTimeAD, fetchFromSheets, data]);
 
   return {
     data,
