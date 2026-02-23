@@ -2105,7 +2105,7 @@ async function updateClientStatus(accessToken: string, spreadsheetId: string, ro
   const range = encodeURIComponent(`'CLIENT TRACKER'!W${actualRowNumber}`);
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
   
-  const response = await fetch(updateUrl, {
+  const response = await fetchWithRetry(updateUrl, {
     method: 'PUT',
     headers: {
       Authorization: `Bearer ${accessToken}`,
