@@ -1,51 +1,26 @@
 
 
-# Fix: Status Log Parsing Reads Oldest Status Instead of Newest
+# Fix: Move Elena Acharya Back to Client Tracker
 
-## The Problem
+## What Happened
 
-Beyond_true's status log looks like this (newest entry first):
+During the Beyond_true fix on 02/24/2026 at 00:12:14, the backend accidentally wrote a "BOOKED" status entry to **row 2** (Elena Acharya) of the BOOKED CLIENTS sheet. This caused the system to treat her as a booked client.
 
-```text
-Line 0: 02/24/2026, 00:05:34 - ADVANCE PENDING       <-- CURRENT (newest)
-Line 1: CALLED : QUOTATION PENDING [2026-02-12 22:45:07]
-Line 2: QUOTATION SENT : REVIEW PENDING - 02/12/2026  <-- oldest
-```
+## Data Correction Steps
 
-The `getCurrentStatus()` function uses `lines[lines.length - 1]` which grabs the **last line** (oldest entry: "QUOTATION SENT"). It should use `lines[0]` to get the **first line** (newest entry: "ADVANCE PENDING").
+1. **Remove the erroneous "BOOKED" entry** from Elena's status log in Google Sheets, restoring it to:
+   - `CALLED : QUOTATION PENDING [2026-02-12 22:45:07]`
+   - `QUOTATION SENT : REVIEW PENDING - 02/12/2026, 22:49:35`
 
-This bug exists in two files and affects **every client** with multiple status changes across the entire app -- status display, filtering, categorization, and status change actions all break.
+2. **Move Elena back to CLIENT TRACKER** -- Copy her row from BOOKED CLIENTS back to CLIENT TRACKER and delete it from BOOKED CLIENTS.
 
-## The Fix
+3. **Re-sync the Supabase cache** so the app reflects the corrected data.
 
-Two single-line changes:
+## Technical Details
 
-### 1. `src/lib/sheets-api.ts` (line 577)
+This will be done by:
+- Using the `google-sheets` edge function's `updateBookedClient` action to fix her status log (remove the fake BOOKED entry)
+- Then manually moving her row data back to CLIENT TRACKER using the edge function
+- Finally triggering a `sync-clients-to-sheets` pull to refresh the cache
 
-```
-// FROM:
-const lastLine = lines[lines.length - 1];
-
-// TO:
-const lastLine = lines[0];
-```
-
-### 2. `src/lib/client-card-utils.ts` (line 511)
-
-```
-// FROM:
-const lastLine = lines[lines.length - 1];
-
-// TO:
-const lastLine = lines[0];
-```
-
-## What This Fixes
-
-- Beyond_true will correctly show as "ADVANCE PENDING" instead of "QUOTATION SENT"
-- All clients with multiple status transitions will display their current status
-- Status-based filtering and page categorization (Fresh Clients, Booked, Dashboard) will work correctly
-- Status change actions will work properly since the app will recognize the correct current state
-
-Two lines changed, zero risk of side effects.
-
+No application code changes are needed -- this is purely a data correction.
