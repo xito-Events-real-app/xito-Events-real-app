@@ -707,7 +707,7 @@ function extractLatestStatus(statusLog: string): string {
   if (!statusLog) return '';
   const lines = statusLog.split('\n').filter(l => l.trim());
   if (lines.length === 0) return '';
-  const lastLine = lines[lines.length - 1].trim();
+  const lastLine = lines[0].trim();
   // Extract status before the timestamp bracket
   const bracketIdx = lastLine.indexOf(' [');
   return bracketIdx > 0 ? lastLine.substring(0, bracketIdx).trim() : lastLine;
@@ -3993,8 +3993,8 @@ function getCurrentStatusFromLog(statusLog: string): string {
   const lines = statusLog.split('\n').filter(Boolean);
   if (lines.length === 0) return 'UNTOUCHED';
   
-  // Get the last line for the current status
-  const lastLine = lines[lines.length - 1].trim().toUpperCase();
+  // Get the first line for the current status (newest entry is first)
+  const lastLine = lines[0].trim().toUpperCase();
   
   // Check for "BOOKED SOMEWHERE ELSE" first - this is NOT the same as "BOOKED"
   if (lastLine.startsWith('BOOKED SOMEWHERE ELSE')) {
