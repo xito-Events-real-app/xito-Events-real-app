@@ -183,7 +183,7 @@ export function getStatusTimeAgo(statusLog?: string): { displayText: string; tim
   const lines = statusLog.split('\n').filter(Boolean);
   if (lines.length === 0) return null;
   
-  const lastLine = lines[lines.length - 1];
+  const lastLine = lines[0];
   const timestamp = parseStatusTimestamp(lastLine);
   
   if (!timestamp) return null;
@@ -508,7 +508,7 @@ export function getCurrentStatus(statusLog?: string): string {
   const lines = statusLog.split('\n').filter(Boolean);
   if (lines.length === 0) return 'UNTOUCHED';
   
-  const lastLine = lines[lines.length - 1];
+  const lastLine = lines[0];
   let statusPart = lastLine.split(' [')[0];
   if (statusPart === lastLine) {
     statusPart = lastLine.split(' - ')[0];

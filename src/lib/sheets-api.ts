@@ -574,7 +574,7 @@ export function getCurrentStatus(statusLog: string): string {
   const lines = statusLog.split('\n').filter(Boolean);
   if (lines.length === 0) return 'UNTOUCHED';
   // Get the last line and extract status (format: "STATUS [timestamp]" or "STATUS - timestamp")
-  const lastLine = lines[lines.length - 1];
+  const lastLine = lines[0];
   // Handle both formats: "STATUS [timestamp]" and "STATUS - timestamp"
   let statusPart = lastLine.split(' [')[0]; // Try bracket format first
   if (statusPart === lastLine) {
