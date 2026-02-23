@@ -2072,8 +2072,23 @@ async function updateClientStatus(accessToken: string, spreadsheetId: string, ro
     throw new Error('Valid rowNumber is required for updating status');
   }
 
-  // Verify and correct row number using registeredDateTimeAD
-  const actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, registeredDateTimeAD);
+  // Intelligent sheet routing: search BOOKED CLIENTS first, then CLIENT TRACKER
+  let targetSheet = 'CLIENT TRACKER';
+  let actualRowNumber = rowNumber;
+
+  if (registeredDateTimeAD) {
+    const bookedRow = await verifyRowNumber(accessToken, spreadsheetId, 'BOOKED CLIENTS', -1, registeredDateTimeAD);
+    if (bookedRow !== -1) {
+      targetSheet = 'BOOKED CLIENTS';
+      actualRowNumber = bookedRow;
+      console.log(`updateClientStatus: Found client in BOOKED CLIENTS at row ${bookedRow}`);
+    } else {
+      actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, registeredDateTimeAD);
+      console.log(`updateClientStatus: Found client in CLIENT TRACKER at row ${actualRowNumber}`);
+    }
+  } else {
+    console.log(`updateClientStatus: No registeredDateTimeAD provided, using raw rowNumber ${rowNumber} on CLIENT TRACKER`);
+  }
 
   // Use client-provided timestamp if available, otherwise generate server timestamp
   let timestamp: string;
@@ -2102,7 +2117,7 @@ async function updateClientStatus(accessToken: string, spreadsheetId: string, ro
     ? `${existingStatusLog}\n${newLogEntry}` 
     : newLogEntry;
 
-  const range = encodeURIComponent(`'CLIENT TRACKER'!W${actualRowNumber}`);
+  const range = encodeURIComponent(`'${targetSheet}'!W${actualRowNumber}`);
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
   
   const response = await fetchWithRetry(updateUrl, {
@@ -2120,9 +2135,9 @@ async function updateClientStatus(accessToken: string, spreadsheetId: string, ro
     throw new Error(`Failed to update client status: ${response.status}`);
   }
 
-  // If status is BOOKED, MOVE to BOOKED CLIENTS sheet (copy then delete from tracker)
+  // If status is BOOKED and client is in CLIENT TRACKER, MOVE to BOOKED CLIENTS sheet
   let movedToBooked = false;
-  if (newStatus.toUpperCase() === 'BOOKED') {
+  if (newStatus.toUpperCase() === 'BOOKED' && targetSheet === 'CLIENT TRACKER') {
     // Fetch registeredDateTimeAD (Column A) for duplicate checking - this is the unique identifier
     const clientDataRange = encodeURIComponent(`'CLIENT TRACKER'!A${actualRowNumber}`);
     const clientDataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${clientDataRange}`;
@@ -2173,7 +2188,6 @@ async function updateClientStatus(accessToken: string, spreadsheetId: string, ro
       }
 
       // Log activity to BOOKED CLIENTS (the client was moved there)
-      // Find the new row in BOOKED CLIENTS
       const bookedRow = await findBookedClientRow(accessToken, spreadsheetId, fetchedRegisteredDateTime);
       if (bookedRow) {
         await appendActivityLog(accessToken, spreadsheetId, 'BOOKED CLIENTS', bookedRow, 'STATUS_CHANGE', newStatus);
@@ -2181,9 +2195,9 @@ async function updateClientStatus(accessToken: string, spreadsheetId: string, ro
     }
   }
   
-  // Log activity to CLIENT TRACKER if client is still there (not moved)
+  // Log activity to correct sheet if client is still there (not moved)
   if (!movedToBooked) {
-    await appendActivityLog(accessToken, spreadsheetId, 'CLIENT TRACKER', actualRowNumber, 'STATUS_CHANGE', newStatus);
+    await appendActivityLog(accessToken, spreadsheetId, targetSheet as 'CLIENT TRACKER' | 'BOOKED CLIENTS', actualRowNumber, 'STATUS_CHANGE', newStatus);
   }
 
   return { success: true, statusLog: updatedLog, copiedToBooked: movedToBooked, movedToBooked, actualRowNumber };
@@ -2484,8 +2498,23 @@ async function logCallAttempt(
     throw new Error('Valid rowNumber is required for logging call');
   }
 
-  // Verify and correct row number using registeredDateTimeAD
-  const actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, registeredDateTimeAD);
+  // Intelligent sheet routing: search BOOKED CLIENTS first, then CLIENT TRACKER
+  let targetSheet = 'CLIENT TRACKER';
+  let actualRowNumber = rowNumber;
+
+  if (registeredDateTimeAD) {
+    const bookedRow = await verifyRowNumber(accessToken, spreadsheetId, 'BOOKED CLIENTS', -1, registeredDateTimeAD);
+    if (bookedRow !== -1) {
+      targetSheet = 'BOOKED CLIENTS';
+      actualRowNumber = bookedRow;
+      console.log(`logCallAttempt: Found client in BOOKED CLIENTS at row ${bookedRow}`);
+    } else {
+      actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, registeredDateTimeAD);
+      console.log(`logCallAttempt: Found client in CLIENT TRACKER at row ${actualRowNumber}`);
+    }
+  } else {
+    console.log(`logCallAttempt: No registeredDateTimeAD provided, using raw rowNumber ${rowNumber} on CLIENT TRACKER`);
+  }
 
   // Count existing calls to determine ordinal
   const existingLines = existingCallLog ? existingCallLog.split('\n').filter(Boolean).length : 0;
@@ -2508,7 +2537,7 @@ async function logCallAttempt(
     ? `${existingCallLog}\n${newLogEntry}` 
     : newLogEntry;
 
-  const range = encodeURIComponent(`'CLIENT TRACKER'!Y${actualRowNumber}`);
+  const range = encodeURIComponent(`'${targetSheet}'!Y${actualRowNumber}`);
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
   
   const response = await fetch(updateUrl, {
@@ -2526,8 +2555,8 @@ async function logCallAttempt(
     throw new Error(`Failed to log call attempt: ${response.status}`);
   }
 
-  // Log activity to Column AJ
-  await appendActivityLog(accessToken, spreadsheetId, 'CLIENT TRACKER', actualRowNumber, 'CALL', newLogEntry);
+  // Log activity to correct sheet
+  await appendActivityLog(accessToken, spreadsheetId, targetSheet as 'CLIENT TRACKER' | 'BOOKED CLIENTS', actualRowNumber, 'CALL', newLogEntry);
 
   return { success: true, callLog: updatedLog, actualRowNumber };
 }
@@ -2895,10 +2924,25 @@ async function updateClientHandler(accessToken: string, spreadsheetId: string, r
     throw new Error('Valid rowNumber is required for updating handler');
   }
 
-  // Verify and correct row number using registeredDateTimeAD
-  const actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, registeredDateTimeAD);
+  // Intelligent sheet routing: search BOOKED CLIENTS first, then CLIENT TRACKER
+  let targetSheet = 'CLIENT TRACKER';
+  let actualRowNumber = rowNumber;
 
-  const range = encodeURIComponent(`'CLIENT TRACKER'!X${actualRowNumber}`);
+  if (registeredDateTimeAD) {
+    const bookedRow = await verifyRowNumber(accessToken, spreadsheetId, 'BOOKED CLIENTS', -1, registeredDateTimeAD);
+    if (bookedRow !== -1) {
+      targetSheet = 'BOOKED CLIENTS';
+      actualRowNumber = bookedRow;
+      console.log(`updateClientHandler: Found client in BOOKED CLIENTS at row ${bookedRow}`);
+    } else {
+      actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, registeredDateTimeAD);
+      console.log(`updateClientHandler: Found client in CLIENT TRACKER at row ${actualRowNumber}`);
+    }
+  } else {
+    console.log(`updateClientHandler: No registeredDateTimeAD provided, using raw rowNumber ${rowNumber} on CLIENT TRACKER`);
+  }
+
+  const range = encodeURIComponent(`'${targetSheet}'!X${actualRowNumber}`);
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
   
   const response = await fetch(updateUrl, {
@@ -2916,8 +2960,8 @@ async function updateClientHandler(accessToken: string, spreadsheetId: string, r
     throw new Error(`Failed to update client handler: ${response.status}`);
   }
 
-  // Log activity to Column AJ
-  await appendActivityLog(accessToken, spreadsheetId, 'CLIENT TRACKER', actualRowNumber, 'HANDLER_CHANGE', `Assigned to ${handler}`);
+  // Log activity to correct sheet
+  await appendActivityLog(accessToken, spreadsheetId, targetSheet as 'CLIENT TRACKER' | 'BOOKED CLIENTS', actualRowNumber, 'HANDLER_CHANGE', `Assigned to ${handler}`);
 
   return { success: true, actualRowNumber };
 }
@@ -2928,10 +2972,25 @@ async function updateClientQuotation(accessToken: string, spreadsheetId: string,
     throw new Error('Valid rowNumber is required for updating quotation');
   }
 
-  // Verify and correct row number using registeredDateTimeAD
-  const actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, registeredDateTimeAD);
+  // Intelligent sheet routing: search BOOKED CLIENTS first, then CLIENT TRACKER
+  let targetSheet = 'CLIENT TRACKER';
+  let actualRowNumber = rowNumber;
 
-  const range = encodeURIComponent(`'CLIENT TRACKER'!V${actualRowNumber}`);
+  if (registeredDateTimeAD) {
+    const bookedRow = await verifyRowNumber(accessToken, spreadsheetId, 'BOOKED CLIENTS', -1, registeredDateTimeAD);
+    if (bookedRow !== -1) {
+      targetSheet = 'BOOKED CLIENTS';
+      actualRowNumber = bookedRow;
+      console.log(`updateClientQuotation: Found client in BOOKED CLIENTS at row ${bookedRow}`);
+    } else {
+      actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, registeredDateTimeAD);
+      console.log(`updateClientQuotation: Found client in CLIENT TRACKER at row ${actualRowNumber}`);
+    }
+  } else {
+    console.log(`updateClientQuotation: No registeredDateTimeAD provided, using raw rowNumber ${rowNumber} on CLIENT TRACKER`);
+  }
+
+  const range = encodeURIComponent(`'${targetSheet}'!V${actualRowNumber}`);
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
   
   const response = await fetch(updateUrl, {
@@ -2949,10 +3008,10 @@ async function updateClientQuotation(accessToken: string, spreadsheetId: string,
     throw new Error(`Failed to update quotation: ${response.status}`);
   }
 
-  // Log activity to Column AJ - extract amount for summary
+  // Log activity to correct sheet
   const amountMatch = quotationData.match(/NPR\s*([\d,]+)/i);
   const amountSummary = amountMatch ? `NPR ${amountMatch[1]}` : 'Quotation updated';
-  await appendActivityLog(accessToken, spreadsheetId, 'CLIENT TRACKER', actualRowNumber, 'QUOTATION', amountSummary);
+  await appendActivityLog(accessToken, spreadsheetId, targetSheet as 'CLIENT TRACKER' | 'BOOKED CLIENTS', actualRowNumber, 'QUOTATION', amountSummary);
 
   return { success: true, actualRowNumber };
 }
@@ -2963,13 +3022,28 @@ async function updateClientMindset(accessToken: string, spreadsheetId: string, r
     throw new Error('Valid rowNumber is required for updating mindset');
   }
 
-  // Verify and correct row number using registeredDateTimeAD
-  const actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, registeredDateTimeAD);
+  // Intelligent sheet routing: search BOOKED CLIENTS first, then CLIENT TRACKER
+  let targetSheet = 'CLIENT TRACKER';
+  let actualRowNumber = rowNumber;
+
+  if (registeredDateTimeAD) {
+    const bookedRow = await verifyRowNumber(accessToken, spreadsheetId, 'BOOKED CLIENTS', -1, registeredDateTimeAD);
+    if (bookedRow !== -1) {
+      targetSheet = 'BOOKED CLIENTS';
+      actualRowNumber = bookedRow;
+      console.log(`updateClientMindset: Found client in BOOKED CLIENTS at row ${bookedRow}`);
+    } else {
+      actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, registeredDateTimeAD);
+      console.log(`updateClientMindset: Found client in CLIENT TRACKER at row ${actualRowNumber}`);
+    }
+  } else {
+    console.log(`updateClientMindset: No registeredDateTimeAD provided, using raw rowNumber ${rowNumber} on CLIENT TRACKER`);
+  }
 
   // Store as "MINDSET - MM/DD/YYYY, HH:MM:SS"
   const mindsetWithTimestamp = `${mindset} - ${clientTimestamp}`;
 
-  const range = encodeURIComponent(`'CLIENT TRACKER'!Z${actualRowNumber}`);
+  const range = encodeURIComponent(`'${targetSheet}'!Z${actualRowNumber}`);
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
   
   const response = await fetch(updateUrl, {
@@ -2987,8 +3061,8 @@ async function updateClientMindset(accessToken: string, spreadsheetId: string, r
     throw new Error(`Failed to update mindset: ${response.status}`);
   }
 
-  // Log activity to Column AJ
-  await appendActivityLog(accessToken, spreadsheetId, 'CLIENT TRACKER', actualRowNumber, 'MINDSET', mindset);
+  // Log activity to correct sheet
+  await appendActivityLog(accessToken, spreadsheetId, targetSheet as 'CLIENT TRACKER' | 'BOOKED CLIENTS', actualRowNumber, 'MINDSET', mindset);
 
   return { success: true, mindset: mindsetWithTimestamp, actualRowNumber };
 }
@@ -3162,11 +3236,26 @@ async function updateBargainingRates(
     throw new Error('Valid rowNumber is required for updating bargaining rates');
   }
 
-  // Verify and correct row number using registeredDateTimeAD
-  const actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, registeredDateTimeAD);
+  // Intelligent sheet routing: search BOOKED CLIENTS first, then CLIENT TRACKER
+  let targetSheet = 'CLIENT TRACKER';
+  let actualRowNumber = rowNumber;
+
+  if (registeredDateTimeAD) {
+    const bookedRow = await verifyRowNumber(accessToken, spreadsheetId, 'BOOKED CLIENTS', -1, registeredDateTimeAD);
+    if (bookedRow !== -1) {
+      targetSheet = 'BOOKED CLIENTS';
+      actualRowNumber = bookedRow;
+      console.log(`updateBargainingRates: Found client in BOOKED CLIENTS at row ${bookedRow}`);
+    } else {
+      actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, registeredDateTimeAD);
+      console.log(`updateBargainingRates: Found client in CLIENT TRACKER at row ${actualRowNumber}`);
+    }
+  } else {
+    console.log(`updateBargainingRates: No registeredDateTimeAD provided, using raw rowNumber ${rowNumber} on CLIENT TRACKER`);
+  }
 
   // Update both columns in one batch
-  const range = encodeURIComponent(`'CLIENT TRACKER'!AA${actualRowNumber}:AB${actualRowNumber}`);
+  const range = encodeURIComponent(`'${targetSheet}'!AA${actualRowNumber}:AB${actualRowNumber}`);
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
   
   const response = await fetch(updateUrl, {
@@ -3199,11 +3288,26 @@ async function updateClientBargainedRates(
     throw new Error('Valid rowNumber is required for updating client bargained rates');
   }
 
-  // Verify and correct row number using registeredDateTimeAD
-  const actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, registeredDateTimeAD);
+  // Intelligent sheet routing: search BOOKED CLIENTS first, then CLIENT TRACKER
+  let targetSheet = 'CLIENT TRACKER';
+  let actualRowNumber = rowNumber;
+
+  if (registeredDateTimeAD) {
+    const bookedRow = await verifyRowNumber(accessToken, spreadsheetId, 'BOOKED CLIENTS', -1, registeredDateTimeAD);
+    if (bookedRow !== -1) {
+      targetSheet = 'BOOKED CLIENTS';
+      actualRowNumber = bookedRow;
+      console.log(`updateClientBargainedRates: Found client in BOOKED CLIENTS at row ${bookedRow}`);
+    } else {
+      actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, registeredDateTimeAD);
+      console.log(`updateClientBargainedRates: Found client in CLIENT TRACKER at row ${actualRowNumber}`);
+    }
+  } else {
+    console.log(`updateClientBargainedRates: No registeredDateTimeAD provided, using raw rowNumber ${rowNumber} on CLIENT TRACKER`);
+  }
 
   // Update only Column AB
-  const range = encodeURIComponent(`'CLIENT TRACKER'!AB${actualRowNumber}`);
+  const range = encodeURIComponent(`'${targetSheet}'!AB${actualRowNumber}`);
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
   
   const response = await fetch(updateUrl, {
@@ -3236,11 +3340,26 @@ async function updateOurCounterRates(
     throw new Error('Valid rowNumber is required for updating our counter rates');
   }
 
-  // Verify and correct row number using registeredDateTimeAD
-  const actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, registeredDateTimeAD);
+  // Intelligent sheet routing: search BOOKED CLIENTS first, then CLIENT TRACKER
+  let targetSheet = 'CLIENT TRACKER';
+  let actualRowNumber = rowNumber;
+
+  if (registeredDateTimeAD) {
+    const bookedRow = await verifyRowNumber(accessToken, spreadsheetId, 'BOOKED CLIENTS', -1, registeredDateTimeAD);
+    if (bookedRow !== -1) {
+      targetSheet = 'BOOKED CLIENTS';
+      actualRowNumber = bookedRow;
+      console.log(`updateOurCounterRates: Found client in BOOKED CLIENTS at row ${bookedRow}`);
+    } else {
+      actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, registeredDateTimeAD);
+      console.log(`updateOurCounterRates: Found client in CLIENT TRACKER at row ${actualRowNumber}`);
+    }
+  } else {
+    console.log(`updateOurCounterRates: No registeredDateTimeAD provided, using raw rowNumber ${rowNumber} on CLIENT TRACKER`);
+  }
 
   // Update only Column AA
-  const range = encodeURIComponent(`'CLIENT TRACKER'!AA${actualRowNumber}`);
+  const range = encodeURIComponent(`'${targetSheet}'!AA${actualRowNumber}`);
   const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`;
   
   const response = await fetch(updateUrl, {
