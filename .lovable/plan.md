@@ -1,62 +1,51 @@
 
 
-# Fix: Stale Event Name Verification and Inefficient Crew Fetching
+# Fix: Status Log Parsing Reads Oldest Status Instead of Newest
 
-## Issues Found
+## The Problem
 
-### Issue 1: Event Name Verification Can Send Empty Name (Critical)
-In `src/hooks/useEventDetails.ts`, the `updateEventDetail` callback references `data` (the hook's state) on line 210, but `data` is **not listed in the useCallback dependency array** (line 252). This means the closure captures the initial `null` value of `data`, so `_eventName` is always sent as an empty string `''`. The backend verification we just added will never actually verify anything because it never receives the event name.
+Beyond_true's status log looks like this (newest entry first):
 
-**Fix:** Add `data` to the dependency array of `updateEventDetail`.
-
-```
-// Line 252: Change from
-}, [registeredDateTimeAD, fetchFromSheets]);
-// To
-}, [registeredDateTimeAD, fetchFromSheets, data]);
+```text
+Line 0: 02/24/2026, 00:05:34 - ADVANCE PENDING       <-- CURRENT (newest)
+Line 1: CALLED : QUOTATION PENDING [2026-02-12 22:45:07]
+Line 2: QUOTATION SENT : REVIEW PENDING - 02/12/2026  <-- oldest
 ```
 
-### Issue 2: `getAllFreelancerAssignments` Bypasses Supabase Cache
-In `src/lib/freelancer-assignment-api.ts` (lines 190-196), the `getAllFreelancerAssignments` function always calls the Google Sheets edge function directly instead of reading from the `freelancer_assignments` Supabase table. This is used by `TodayEventsHero` and is inconsistent with the Supabase-first architecture.
+The `getCurrentStatus()` function uses `lines[lines.length - 1]` which grabs the **last line** (oldest entry: "QUOTATION SENT"). It should use `lines[0]` to get the **first line** (newest entry: "ADVANCE PENDING").
 
-**Fix:** Change `getAllFreelancerAssignments` to read from Supabase first, falling back to Google Sheets only if the cache is empty.
+This bug exists in two files and affects **every client** with multiple status changes across the entire app -- status display, filtering, categorization, and status change actions all break.
+
+## The Fix
+
+Two single-line changes:
+
+### 1. `src/lib/sheets-api.ts` (line 577)
 
 ```
-export async function getAllFreelancerAssignments(): Promise<FreelancerAssignment[]> {
-  // STEP 1: Read from Supabase cache first (fast, ~50ms)
-  try {
-    const { data: cached, error } = await supabase
-      .from('freelancer_assignments')
-      .select('*')
-      .order('event_year', { ascending: true })
-      .order('event_month', { ascending: true })
-      .order('event_day', { ascending: true });
+// FROM:
+const lastLine = lines[lines.length - 1];
 
-    if (!error && cached && cached.length > 0) {
-      return (cached as any[]).map(rowToAssignment);
-    }
-  } catch (err) {
-    console.warn('[getAllAssignments] Supabase read failed, falling back:', err);
-  }
-
-  // STEP 2: Fallback to Google Sheets
-  const { data, error } = await supabase.functions.invoke('google-sheets', {
-    body: { action: 'getAllFreelancerAssignments' }
-  });
-  if (error) throw new Error('Failed to fetch all freelancer assignments');
-  if (!data.success) throw new Error(data.error || 'Failed');
-  return data.data || [];
-}
+// TO:
+const lastLine = lines[0];
 ```
 
-## Summary
+### 2. `src/lib/client-card-utils.ts` (line 511)
 
-| File | Issue | Fix |
-|------|-------|-----|
-| `src/hooks/useEventDetails.ts` | `data` missing from useCallback deps -- `_eventName` always empty | Add `data` to dependency array |
-| `src/lib/freelancer-assignment-api.ts` | `getAllFreelancerAssignments` always calls Sheets instead of Supabase | Read from Supabase first, Sheets fallback |
+```
+// FROM:
+const lastLine = lines[lines.length - 1];
 
-These two fixes ensure:
-1. The event name verification safety net actually works (prevents wrong-line writes)
-2. Crew assignments load instantly from Supabase instead of making slow Sheets API calls
+// TO:
+const lastLine = lines[0];
+```
+
+## What This Fixes
+
+- Beyond_true will correctly show as "ADVANCE PENDING" instead of "QUOTATION SENT"
+- All clients with multiple status transitions will display their current status
+- Status-based filtering and page categorization (Fresh Clients, Booked, Dashboard) will work correctly
+- Status change actions will work properly since the app will recognize the correct current state
+
+Two lines changed, zero risk of side effects.
 
