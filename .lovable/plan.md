@@ -1,37 +1,41 @@
 
 
-# Make Today's Date Glow on Crew Schedule Calendar
+# Make Today's Date Stand Out with Pink/Coral Glow and On-Off Animation
 
-## What Changes
-Today's date cell will have a bright emerald glow with a subtle pulsing animation, making it instantly recognizable.
+## Problem
+The current emerald green glow on today's date blends in with the other green calendar days. The animation is too subtle (smooth pulse) and not noticeable.
 
-## Technical Details
+## Solution
+Use a **pink/coral color** (matching the app's primary palette -- coral/orange at `hsl(15, 90%, 55%)`) and change the animation to a more dramatic **on-off blink pattern** instead of a smooth pulse.
 
-### 1. Add a glow keyframe animation in `src/index.css`
+## Changes
+
+### 1. Replace glow-pulse keyframes in `src/index.css`
+
+Replace the smooth glow-pulse with a sharp on-off pattern:
 
 ```css
 @keyframes glow-pulse {
-  0%, 100% { box-shadow: 0 0 8px rgba(52, 211, 153, 0.4); }
-  50% { box-shadow: 0 0 16px rgba(52, 211, 153, 0.7); }
+  0%, 100% { box-shadow: 0 0 6px rgba(251, 113, 133, 0.3); }
+  40% { box-shadow: 0 0 18px rgba(251, 113, 133, 0.9), 0 0 30px rgba(244, 63, 94, 0.4); }
+  50% { box-shadow: 0 0 18px rgba(251, 113, 133, 0.9), 0 0 30px rgba(244, 63, 94, 0.4); }
+  60% { box-shadow: 0 0 6px rgba(251, 113, 133, 0.3); }
 }
 ```
 
-### 2. Update today's date styling in `src/pages/CrewSchedule.tsx` (line 390)
+This creates a visible "flash on, hold, flash off" effect rather than a barely-perceptible smooth fade.
 
-Replace the current today style:
+### 2. Update today's styling in `src/pages/CrewSchedule.tsx` (line 390)
+
+Change from emerald to pink/rose:
+
 ```
-bg-emerald-500/40 text-emerald-200 ring-1 ring-emerald-400
+bg-rose-500 text-white font-bold ring-2 ring-rose-300 shadow-[0_0_14px_rgba(251,113,133,0.6)] animate-[glow-pulse_1.5s_ease-in-out_infinite]
 ```
 
-With a bold, glowing style:
-```
-bg-emerald-500 text-white font-bold ring-2 ring-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.5)]
-```
-Plus the `glow-pulse` animation class applied via inline style or a utility class (`animate-[glow-pulse_2s_ease-in-out_infinite]`).
-
-This makes today's date:
-- Solid emerald green background (not transparent)
-- White bold text
-- A glowing ring that gently pulses in and out
-- Clearly distinct from all other day types
+- **bg-rose-500**: Solid pink background -- completely different from all the green days
+- **ring-2 ring-rose-300**: Pink ring border
+- **shadow with rose color**: Pink glow shadow
+- **1.5s duration** (faster than 2s): More noticeable pulsing
+- The on-off keyframe pattern makes the glow visibly flash
 
