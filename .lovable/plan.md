@@ -1,105 +1,48 @@
 
 
-# Crew Schedule Welcome Popup -- Motion Poster with Today & Tomorrow Events
+# Add "View Full Details" Button to Welcome Popup
 
-## Overview
-When a freelancer opens their schedule link, a full-screen animated "motion poster" popup appears showing today's and tomorrow's events in a split-screen layout. It auto-dismisses after 12 hours using `localStorage`. Includes sound, countdown timers, crew list, venue/location info, and cinematic animations.
+## Problem
+Freelancers see the welcome popup but have no way to jump directly to the full event details sheet from it. They have to dismiss the popup, find the day on the calendar, and tap "Full Details" manually.
 
-## Layout (Split Screen)
+## Solution
+Add a large, flashing "View Full Details" button to each event card in the welcome popup. Tapping it dismisses the popup and immediately opens the `CrewScheduleEventSheet` for that specific assignment.
 
-```text
-+-------------------------------+
-|        TODAY'S EVENT          |
-|   (warm gradient - rose/amber)|
-|                               |
-|  Event: MEHNDI                |
-|  Venue: Hotel Yak & Yeti     |
-|  Area: Durbar Marg            |
-|  Time: 10:00 AM - 2:00 PM    |
-|  Countdown: Starts in 3h 20m |
-|  Crew: PB: Ram, VG: Shyam    |
-|                               |
-+-------------------------------+
-|      TOMORROW'S EVENT         |
-|  (cool gradient - violet/blue)|
-|                               |
-|  Event: WEDDING               |
-|  Venue: Soaltee Crowne        |
-|  Area: Tahachal                |
-|  Time: 8:00 AM - 6:00 PM     |
-|  Countdown: Starts in 27h 20m|
-|  Crew: PG: Hari, Drone: Sita |
-|                               |
-+-------------------------------+
-|     [Got It - Dismiss]        |
-+-------------------------------+
-```
+## Changes
 
-If only today has events, it takes the full screen. If only tomorrow, same. If neither, the popup doesn't show at all.
+### 1. Update `CrewWelcomePopup.tsx`
 
-## Technical Plan
+- Add a new prop: `onViewFullDetails: (assignment: AssignmentRow) => void`
+- Pass it through to `EventPosterCard`
+- In `EventPosterCard`, add a large button at the bottom of each card:
+  - Text: "View Full Details" with an arrow icon
+  - Styling: full-width, tall (py-4), bold white text on a bright gradient background
+  - A new CSS animation `crew-button-flash` that creates a visible on-off glow/pulse effect on the button (alternating opacity and shadow intensity)
+- On click: call `onViewFullDetails(assignment)` which will dismiss the popup and open the sheet
 
-### 1. New Component: `src/components/crew-schedule/CrewWelcomePopup.tsx`
-
-**Props:**
-- `assignments: AssignmentRow[]` -- all assignments for this freelancer
-- `eventDetailsCache: Map<string, { events: EventDetail[] }>` -- cached event details
-- `freelancerName: string` -- to exclude from crew list
-- `onDismiss: () => void`
-- `onRequestDetails: (regKey: string) => void` -- to trigger lazy-load of event details
-
-**Logic:**
-- Check `localStorage` for key `crew-welcome-{freelancerName}` with a timestamp. If less than 12 hours ago, don't show.
-- Filter assignments for today (BS date) and tomorrow (BS date + 1 day).
-- On mount, call `onRequestDetails` for each today/tomorrow assignment to trigger event details loading.
-- Show a live countdown timer (updates every second) showing "Starts in Xh Ym" based on `eventStartTime`.
-- Crew list: Parse all role columns, exclude the current freelancer's name, show remaining crew with role badges.
-
-**Animations (CSS in `src/index.css`):**
-- `@keyframes crew-poster-slide-up` -- each half slides up with stagger
-- `@keyframes crew-poster-glow` -- pulsing border glow on the event cards
-- `@keyframes crew-countdown-tick` -- subtle scale pulse on the countdown text every second
-- Entrance: full-screen fade-in with backdrop blur, cards slide up sequentially
-
-**Sound:**
-- Play the existing `/audio/meditation-music.mp3` at low volume (or a short chime portion) for 3-4 seconds on popup open.
-- Use `new Audio()` with `.play()` on mount, auto-pause on dismiss.
-
-### 2. CSS Additions in `src/index.css`
+### 2. Add flashing button animation in `src/index.css`
 
 ```css
-@keyframes crew-poster-slide-up {
-  from { opacity: 0; transform: translateY(40px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes crew-countdown-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
+@keyframes crew-button-flash {
+  0%, 100% { box-shadow: 0 0 8px rgba(255,255,255,0.2); opacity: 0.9; }
+  50% { box-shadow: 0 0 25px rgba(255,255,255,0.7), 0 0 50px rgba(168,85,247,0.4); opacity: 1; }
 }
 ```
 
-### 3. Integration in `src/pages/CrewSchedule.tsx`
+### 3. Update `CrewSchedule.tsx`
 
-- Add state `showWelcome` (boolean).
-- After assignments load, check localStorage and set `showWelcome = true` if eligible.
-- Render `<CrewWelcomePopup>` when `showWelcome` is true, passing assignments and cache data.
-- On dismiss: set localStorage timestamp, set `showWelcome = false`.
+- Add state: `welcomeDetailAssignment: AssignmentRow | null` and `welcomeSheetOpen: boolean`
+- Pass `onViewFullDetails` callback to `CrewWelcomePopup` that:
+  1. Sets the selected assignment in state
+  2. Triggers popup dismiss (sets localStorage timestamp, hides popup)
+  3. Opens the `CrewScheduleEventSheet`
+- Render a `CrewScheduleEventSheet` at the page level, driven by `welcomeDetailAssignment` state
+- The sheet receives the assignment plus any cached event/contact details
 
-### 4. Data Details Shown Per Event Card
-
-| Field | Source | Fallback |
-|-------|--------|----------|
-| Event Name | `assignment.event` | -- |
-| Venue Name | `eventDetail.venueName` | "Loading..." |
-| Area | `eventDetail.venueArea` | -- |
-| Timing | `eventDetail.eventStartTime - eventEndTime` | "Not set" |
-| Countdown | Calculated from start time vs now | "Today" / "Tomorrow" |
-| Crew (excluding self) | All role columns parsed, self removed | -- |
-
-### 5. Edge Cases
-- No events today or tomorrow: popup doesn't appear at all
-- Event details not yet loaded: show skeleton/shimmer for venue/time, auto-refresh when cache updates
-- Multiple events on same day: show first event prominently, mention "+X more" badge
-- Sound autoplay blocked by browser: wrapped in try/catch, fails silently
+### Button Design
+- Large size: `w-full py-4 text-base font-black uppercase tracking-wider`
+- Gradient: `bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500` (warm colors matching both today/tomorrow themes)
+- Flashing animation: `animate-[crew-button-flash_1.5s_ease-in-out_infinite]`
+- Rounded corners with ring: `rounded-xl ring-2 ring-white/30`
+- Icon: `ExternalLink` or `ChevronRight` from lucide-react
 
