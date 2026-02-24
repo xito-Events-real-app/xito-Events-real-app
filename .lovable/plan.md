@@ -1,31 +1,37 @@
 
 
-# Fix Calendar Day Colors for Better Visibility
+# Make Today's Date Glow on Crew Schedule Calendar
 
-## Problem
-On the dark purple background of the crew schedule, the current colors are too faint:
-- **Past non-booked days** (`text-gray-500`): Nearly invisible on the dark background
-- **Past booked days** (`opacity-40` + `bg-emerald-500/10`): Almost impossible to see
-- **Upcoming days** (`text-emerald-200/60`): Could be slightly brighter
-
-## Solution
-Use significantly brighter, higher-contrast colors:
-
-| Day Type | Current | New |
-|----------|---------|-----|
-| Past (non-booked) | `text-gray-500` | `text-gray-400` (brighter grey) |
-| Past (booked) | `bg-emerald-500/10 text-emerald-800/60 opacity-40` | `bg-emerald-500/15 text-emerald-400/50` (no opacity, visible green) |
-| Today (non-booked) | `bg-emerald-500/40 text-emerald-200 ring-1 ring-emerald-400` | Keep as-is (looks good) |
-| Upcoming (non-booked) | `text-emerald-200/60` | `text-emerald-300/80` (brighter light green) |
-| Upcoming (booked) | `bg-emerald-500/30 text-emerald-300` | Keep as-is (looks good) |
-| Past booked dot | `bg-emerald-700/50` | `bg-emerald-500/40` (more visible) |
+## What Changes
+Today's date cell will have a bright emerald glow with a subtle pulsing animation, making it instantly recognizable.
 
 ## Technical Details
 
-### File: `src/pages/CrewSchedule.tsx` (lines 382-404)
+### 1. Add a glow keyframe animation in `src/index.css`
 
-Update the className conditional and the dot color:
-- Line 387: Change past booked from `"bg-emerald-500/10 text-emerald-800/60 opacity-40"` to `"bg-emerald-500/15 text-emerald-400/50"`
-- Line 392: Change past non-booked from `"text-gray-500"` to `"text-gray-400"`
-- Line 393: Change upcoming non-booked from `"text-emerald-200/60"` to `"text-emerald-300/80"`
-- Line 403: Change past booked dot from `"bg-emerald-700/50"` to `"bg-emerald-500/40"`
+```css
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(52, 211, 153, 0.4); }
+  50% { box-shadow: 0 0 16px rgba(52, 211, 153, 0.7); }
+}
+```
+
+### 2. Update today's date styling in `src/pages/CrewSchedule.tsx` (line 390)
+
+Replace the current today style:
+```
+bg-emerald-500/40 text-emerald-200 ring-1 ring-emerald-400
+```
+
+With a bold, glowing style:
+```
+bg-emerald-500 text-white font-bold ring-2 ring-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.5)]
+```
+Plus the `glow-pulse` animation class applied via inline style or a utility class (`animate-[glow-pulse_2s_ease-in-out_infinite]`).
+
+This makes today's date:
+- Solid emerald green background (not transparent)
+- White bold text
+- A glowing ring that gently pulses in and out
+- Clearly distinct from all other day types
+
