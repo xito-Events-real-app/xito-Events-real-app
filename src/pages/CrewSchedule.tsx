@@ -384,13 +384,13 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
                           ? isSelected
                             ? "bg-emerald-500 text-white ring-2 ring-emerald-300 scale-105"
                             : isPast
-                              ? "bg-emerald-500/10 text-emerald-800/60 opacity-40"
+                              ? "bg-emerald-500/15 text-emerald-400/50"
                               : "bg-emerald-500/30 text-emerald-300 hover:bg-emerald-500/50"
                           : isToday
                             ? "bg-emerald-500/40 text-emerald-200 ring-1 ring-emerald-400"
                             : isPast
-                              ? "text-gray-500"
-                              : "text-emerald-200/60"
+                              ? "text-gray-400"
+                              : "text-emerald-300/80"
                         }`}
                     >
                       {day}
@@ -400,7 +400,7 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
                         </span>
                       )}
                       {isBooked && (
-                        <span className={`w-1 h-1 rounded-full mt-0.5 ${isPast ? "bg-emerald-700/50" : "bg-emerald-400"}`} />
+                        <span className={`w-1 h-1 rounded-full mt-0.5 ${isPast ? "bg-emerald-500/40" : "bg-emerald-400"}`} />
                       )}
                     </button>
                   );
