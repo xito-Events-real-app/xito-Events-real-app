@@ -9,6 +9,7 @@ import { getFreelancers } from "@/lib/freelancer-api";
 import { AssignmentRow } from "@/components/crew-schedule/types";
 import EventDetailCard from "@/components/crew-schedule/EventDetailCard";
 import UpcomingEventsSection from "@/components/crew-schedule/UpcomingEventsSection";
+import CrewWelcomePopup from "@/components/crew-schedule/CrewWelcomePopup";
 
 function parseQuotedList(value: string): string[] {
   if (!value || !value.trim()) return [];
@@ -53,6 +54,7 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<"calendar" | "upcoming">("calendar");
   const [freelancerPhones, setFreelancerPhones] = useState<Map<string, string>>(new Map());
+  const [showWelcome, setShowWelcome] = useState(false);
 
   // Caches for lazy-loaded details
   const [eventDetailsCache, setEventDetailsCache] = useState<Map<string, { events: EventDetail[] }>>(new Map());
@@ -100,6 +102,15 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
         }
       }
       setFreelancerPhones(phoneMap);
+      
+      // Check welcome popup eligibility (12hr localStorage gate)
+      const welcomeKey = `crew-welcome-${decodedName.toLowerCase().replace(/\s+/g, '-')}`;
+      const lastShown = localStorage.getItem(welcomeKey);
+      const twelveHours = 12 * 60 * 60 * 1000;
+      if (!lastShown || (Date.now() - parseInt(lastShown)) > twelveHours) {
+        setShowWelcome(true);
+      }
+      
       setLoading(false);
     }
     if (decodedName) fetch();
@@ -298,6 +309,21 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
 
   return (
     <div className="h-screen bg-gradient-to-br from-slate-900 via-violet-950 to-slate-900 text-white flex flex-col">
+      {/* Welcome Popup */}
+      {showWelcome && (
+        <CrewWelcomePopup
+          assignments={assignments}
+          eventDetailsCache={eventDetailsCache}
+          contactDetailsCache={contactDetailsCache}
+          freelancerName={decodedName}
+          onDismiss={() => {
+            const welcomeKey = `crew-welcome-${decodedName.toLowerCase().replace(/\s+/g, '-')}`;
+            localStorage.setItem(welcomeKey, String(Date.now()));
+            setShowWelcome(false);
+          }}
+          onRequestDetails={fetchDetailsForClient}
+        />
+      )}
       {/* Compact Header — 2 rows */}
       <div className="px-4 pt-4 pb-2 space-y-1.5 flex-shrink-0">
         <div className="flex items-center justify-between">
