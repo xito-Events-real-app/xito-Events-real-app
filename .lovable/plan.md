@@ -1,41 +1,105 @@
 
 
-# Make Today's Date Stand Out with Pink/Coral Glow and On-Off Animation
+# Crew Schedule Welcome Popup -- Motion Poster with Today & Tomorrow Events
 
-## Problem
-The current emerald green glow on today's date blends in with the other green calendar days. The animation is too subtle (smooth pulse) and not noticeable.
+## Overview
+When a freelancer opens their schedule link, a full-screen animated "motion poster" popup appears showing today's and tomorrow's events in a split-screen layout. It auto-dismisses after 12 hours using `localStorage`. Includes sound, countdown timers, crew list, venue/location info, and cinematic animations.
 
-## Solution
-Use a **pink/coral color** (matching the app's primary palette -- coral/orange at `hsl(15, 90%, 55%)`) and change the animation to a more dramatic **on-off blink pattern** instead of a smooth pulse.
+## Layout (Split Screen)
 
-## Changes
+```text
++-------------------------------+
+|        TODAY'S EVENT          |
+|   (warm gradient - rose/amber)|
+|                               |
+|  Event: MEHNDI                |
+|  Venue: Hotel Yak & Yeti     |
+|  Area: Durbar Marg            |
+|  Time: 10:00 AM - 2:00 PM    |
+|  Countdown: Starts in 3h 20m |
+|  Crew: PB: Ram, VG: Shyam    |
+|                               |
++-------------------------------+
+|      TOMORROW'S EVENT         |
+|  (cool gradient - violet/blue)|
+|                               |
+|  Event: WEDDING               |
+|  Venue: Soaltee Crowne        |
+|  Area: Tahachal                |
+|  Time: 8:00 AM - 6:00 PM     |
+|  Countdown: Starts in 27h 20m|
+|  Crew: PG: Hari, Drone: Sita |
+|                               |
++-------------------------------+
+|     [Got It - Dismiss]        |
++-------------------------------+
+```
 
-### 1. Replace glow-pulse keyframes in `src/index.css`
+If only today has events, it takes the full screen. If only tomorrow, same. If neither, the popup doesn't show at all.
 
-Replace the smooth glow-pulse with a sharp on-off pattern:
+## Technical Plan
+
+### 1. New Component: `src/components/crew-schedule/CrewWelcomePopup.tsx`
+
+**Props:**
+- `assignments: AssignmentRow[]` -- all assignments for this freelancer
+- `eventDetailsCache: Map<string, { events: EventDetail[] }>` -- cached event details
+- `freelancerName: string` -- to exclude from crew list
+- `onDismiss: () => void`
+- `onRequestDetails: (regKey: string) => void` -- to trigger lazy-load of event details
+
+**Logic:**
+- Check `localStorage` for key `crew-welcome-{freelancerName}` with a timestamp. If less than 12 hours ago, don't show.
+- Filter assignments for today (BS date) and tomorrow (BS date + 1 day).
+- On mount, call `onRequestDetails` for each today/tomorrow assignment to trigger event details loading.
+- Show a live countdown timer (updates every second) showing "Starts in Xh Ym" based on `eventStartTime`.
+- Crew list: Parse all role columns, exclude the current freelancer's name, show remaining crew with role badges.
+
+**Animations (CSS in `src/index.css`):**
+- `@keyframes crew-poster-slide-up` -- each half slides up with stagger
+- `@keyframes crew-poster-glow` -- pulsing border glow on the event cards
+- `@keyframes crew-countdown-tick` -- subtle scale pulse on the countdown text every second
+- Entrance: full-screen fade-in with backdrop blur, cards slide up sequentially
+
+**Sound:**
+- Play the existing `/audio/meditation-music.mp3` at low volume (or a short chime portion) for 3-4 seconds on popup open.
+- Use `new Audio()` with `.play()` on mount, auto-pause on dismiss.
+
+### 2. CSS Additions in `src/index.css`
 
 ```css
-@keyframes glow-pulse {
-  0%, 100% { box-shadow: 0 0 6px rgba(251, 113, 133, 0.3); }
-  40% { box-shadow: 0 0 18px rgba(251, 113, 133, 0.9), 0 0 30px rgba(244, 63, 94, 0.4); }
-  50% { box-shadow: 0 0 18px rgba(251, 113, 133, 0.9), 0 0 30px rgba(244, 63, 94, 0.4); }
-  60% { box-shadow: 0 0 6px rgba(251, 113, 133, 0.3); }
+@keyframes crew-poster-slide-up {
+  from { opacity: 0; transform: translateY(40px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes crew-countdown-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
 }
 ```
 
-This creates a visible "flash on, hold, flash off" effect rather than a barely-perceptible smooth fade.
+### 3. Integration in `src/pages/CrewSchedule.tsx`
 
-### 2. Update today's styling in `src/pages/CrewSchedule.tsx` (line 390)
+- Add state `showWelcome` (boolean).
+- After assignments load, check localStorage and set `showWelcome = true` if eligible.
+- Render `<CrewWelcomePopup>` when `showWelcome` is true, passing assignments and cache data.
+- On dismiss: set localStorage timestamp, set `showWelcome = false`.
 
-Change from emerald to pink/rose:
+### 4. Data Details Shown Per Event Card
 
-```
-bg-rose-500 text-white font-bold ring-2 ring-rose-300 shadow-[0_0_14px_rgba(251,113,133,0.6)] animate-[glow-pulse_1.5s_ease-in-out_infinite]
-```
+| Field | Source | Fallback |
+|-------|--------|----------|
+| Event Name | `assignment.event` | -- |
+| Venue Name | `eventDetail.venueName` | "Loading..." |
+| Area | `eventDetail.venueArea` | -- |
+| Timing | `eventDetail.eventStartTime - eventEndTime` | "Not set" |
+| Countdown | Calculated from start time vs now | "Today" / "Tomorrow" |
+| Crew (excluding self) | All role columns parsed, self removed | -- |
 
-- **bg-rose-500**: Solid pink background -- completely different from all the green days
-- **ring-2 ring-rose-300**: Pink ring border
-- **shadow with rose color**: Pink glow shadow
-- **1.5s duration** (faster than 2s): More noticeable pulsing
-- The on-off keyframe pattern makes the glow visibly flash
+### 5. Edge Cases
+- No events today or tomorrow: popup doesn't appear at all
+- Event details not yet loaded: show skeleton/shimmer for venue/time, auto-refresh when cache updates
+- Multiple events on same day: show first event prominently, mention "+X more" badge
+- Sound autoplay blocked by browser: wrapped in try/catch, fails silently
 
