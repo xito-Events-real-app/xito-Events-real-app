@@ -1,23 +1,31 @@
 
 
-# Improve Calendar Day Visibility on Crew Schedule
+# Fix Calendar Day Colors for Better Visibility
 
 ## Problem
-Non-booked dates on the freelancer's crew schedule calendar use `text-white/40` (very faint white), making them hard to read. Today's date blends in with a violet tint, and there's no visual distinction for upcoming dates.
+On the dark purple background of the crew schedule, the current colors are too faint:
+- **Past non-booked days** (`text-gray-500`): Nearly invisible on the dark background
+- **Past booked days** (`opacity-40` + `bg-emerald-500/10`): Almost impossible to see
+- **Upcoming days** (`text-emerald-200/60`): Could be slightly brighter
 
-## Changes
+## Solution
+Use significantly brighter, higher-contrast colors:
 
-### File: `src/pages/CrewSchedule.tsx` (lines 382-393)
+| Day Type | Current | New |
+|----------|---------|-----|
+| Past (non-booked) | `text-gray-500` | `text-gray-400` (brighter grey) |
+| Past (booked) | `bg-emerald-500/10 text-emerald-800/60 opacity-40` | `bg-emerald-500/15 text-emerald-400/50` (no opacity, visible green) |
+| Today (non-booked) | `bg-emerald-500/40 text-emerald-200 ring-1 ring-emerald-400` | Keep as-is (looks good) |
+| Upcoming (non-booked) | `text-emerald-200/60` | `text-emerald-300/80` (brighter light green) |
+| Upcoming (booked) | `bg-emerald-500/30 text-emerald-300` | Keep as-is (looks good) |
+| Past booked dot | `bg-emerald-700/50` | `bg-emerald-500/40` (more visible) |
 
-Update the calendar day color logic for **non-booked** days:
+## Technical Details
 
-| Day Type | Current Style | New Style |
-|----------|--------------|-----------|
-| Past (non-booked) | `text-white/40` + `opacity-40` | `text-gray-500` (readable grey) |
-| Today (non-booked) | `bg-violet-500/30 text-violet-200` | `bg-emerald-500/40 text-emerald-200 ring-1 ring-emerald-400` (green highlight) |
-| Upcoming (non-booked) | `text-white/40` | `text-emerald-200/60` (soft light green) |
+### File: `src/pages/CrewSchedule.tsx` (lines 382-404)
 
-For **booked** days, the existing emerald styling stays the same -- only the empty/non-booked day colors change.
-
-This keeps the overall dark theme palette consistent while making every date clearly readable.
-
+Update the className conditional and the dot color:
+- Line 387: Change past booked from `"bg-emerald-500/10 text-emerald-800/60 opacity-40"` to `"bg-emerald-500/15 text-emerald-400/50"`
+- Line 392: Change past non-booked from `"text-gray-500"` to `"text-gray-400"`
+- Line 393: Change upcoming non-booked from `"text-emerald-200/60"` to `"text-emerald-300/80"`
+- Line 403: Change past booked dot from `"bg-emerald-700/50"` to `"bg-emerald-500/40"`
