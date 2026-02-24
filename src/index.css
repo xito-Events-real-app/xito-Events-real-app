@@ -558,8 +558,10 @@
 
 /* Glow pulse for today's date */
 @keyframes glow-pulse {
-  0%, 100% { box-shadow: 0 0 8px rgba(52, 211, 153, 0.4); }
-  50% { box-shadow: 0 0 16px rgba(52, 211, 153, 0.7); }
+  0%, 100% { box-shadow: 0 0 6px rgba(251, 113, 133, 0.3); }
+  40% { box-shadow: 0 0 18px rgba(251, 113, 133, 0.9), 0 0 30px rgba(244, 63, 94, 0.4); }
+  50% { box-shadow: 0 0 18px rgba(251, 113, 133, 0.9), 0 0 30px rgba(244, 63, 94, 0.4); }
+  60% { box-shadow: 0 0 6px rgba(251, 113, 133, 0.3); }
 }
 
 /* Pulse red for unassigned required crew cells */
