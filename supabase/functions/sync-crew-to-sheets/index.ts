@@ -337,36 +337,8 @@ serve(async (req) => {
         return true;
       });
 
-      // Delete ONLY synced rows that will be replaced (not pending local changes)
-      // Only delete rows whose keys exist in safeRows
-      const safeKeys = new Set(safeRows.map((r: any) => `${r.registered_date_time_ad}|${r.event}|${r.event_date_ad}`));
-      const keysToDelete: string[] = [];
-      for (const [key, info] of existingMap.entries()) {
-        if (info.synced_to_sheet && safeKeys.has(key)) {
-          keysToDelete.push(key);
-        }
-      }
-
-      // Delete old synced rows that will be replaced, in batches
-      if (keysToDelete.length > 0) {
-        // We can't delete by composite key easily, so delete all synced=true 
-        // rows that are in safeRows set. Use individual deletes grouped.
-        await supabase
-          .from('freelancer_assignments')
-          .delete()
-          .eq('synced_to_sheet', true)
-          .not('synced_to_sheet', 'is', null);
-        
-        // Re-insert rows that were synced but NOT in safeRows (they were deleted above)
-        // These are rows where local was newer — we need to preserve them
-        const preserveRows: any[] = [];
-        for (const [key, info] of existingMap.entries()) {
-          if (info.synced_to_sheet && !safeKeys.has(key)) {
-            // This row was deleted but shouldn't have been — but we already 
-            // decided not to overwrite it. We need a different approach.
-          }
-        }
-      }
+      // No bulk delete needed — upsert with onConflict handles replacement.
+      // Rows filtered out by safeRows check are simply not upserted, preserving local data.
 
       // Upsert safe rows in batches of 500
       let count = 0;
