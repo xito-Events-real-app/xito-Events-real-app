@@ -1,34 +1,23 @@
 
 
-# Add Loading Indicator for Crew Schedule Detail Sheets
+# Improve Calendar Day Visibility on Crew Schedule
 
-## What's Happening
-When a freelancer taps "Full Details" or a client name on their crew schedule page, the venue/contact data takes 3-4 seconds to load from the database. Currently, the sheets open with empty/blank sections and no visual feedback, making freelancers think it's broken.
-
-## The Fix
-Add a loading spinner/skeleton state inside both the **CrewScheduleEventSheet** and **CrewScheduleClientSheet** components. The `isLoadingDetails` prop already exists and is passed through `EventDetailCard` -- we just need to forward it to the sheets and show a loader when data is being fetched.
+## Problem
+Non-booked dates on the freelancer's crew schedule calendar use `text-white/40` (very faint white), making them hard to read. Today's date blends in with a violet tint, and there's no visual distinction for upcoming dates.
 
 ## Changes
 
-### 1. EventDetailCard.tsx
-- Pass `isLoadingDetails` prop to both `CrewScheduleClientSheet` and `CrewScheduleEventSheet`
-- Show a subtle "Loading..." text on the "Full Details" button while loading
+### File: `src/pages/CrewSchedule.tsx` (lines 382-393)
 
-### 2. CrewScheduleEventSheet.tsx
-- Accept new `isLoading` prop
-- When `isLoading` is true and no `eventDetail`/`contactDetails` exist yet, show a centered spinner with "Loading event details..." message instead of the empty content area
+Update the calendar day color logic for **non-booked** days:
 
-### 3. CrewScheduleClientSheet.tsx
-- Accept new `isLoading` prop
-- When `isLoading` is true and no `contactDetails` exist yet, show a centered spinner with "Loading client details..." message
+| Day Type | Current Style | New Style |
+|----------|--------------|-----------|
+| Past (non-booked) | `text-white/40` + `opacity-40` | `text-gray-500` (readable grey) |
+| Today (non-booked) | `bg-violet-500/30 text-violet-200` | `bg-emerald-500/40 text-emerald-200 ring-1 ring-emerald-400` (green highlight) |
+| Upcoming (non-booked) | `text-white/40` | `text-emerald-200/60` (soft light green) |
 
-The spinner will use `Loader2` (already imported in the project) with a spin animation and a subtle text message, matching the existing dark theme of the crew schedule page.
+For **booked** days, the existing emerald styling stays the same -- only the empty/non-booked day colors change.
 
-## Technical Details
-
-| File | Change |
-|------|--------|
-| `src/components/crew-schedule/EventDetailCard.tsx` | Forward `isLoadingDetails` to both sheet components; show loading state on button |
-| `src/components/crew-schedule/CrewScheduleEventSheet.tsx` | Add `isLoading` prop; render spinner overlay when loading |
-| `src/components/crew-schedule/CrewScheduleClientSheet.tsx` | Add `isLoading` prop; render spinner overlay when loading |
+This keeps the overall dark theme palette consistent while making every date clearly readable.
 
