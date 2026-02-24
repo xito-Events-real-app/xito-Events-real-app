@@ -387,7 +387,7 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
                               ? "bg-emerald-500/15 text-emerald-400/50"
                               : "bg-emerald-500/30 text-emerald-300 hover:bg-emerald-500/50"
                           : isToday
-                            ? "bg-emerald-500/40 text-emerald-200 ring-1 ring-emerald-400"
+                            ? "bg-emerald-500 text-white font-bold ring-2 ring-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.5)] animate-[glow-pulse_2s_ease-in-out_infinite]"
                             : isPast
                               ? "text-gray-400"
                               : "text-emerald-300/80"
