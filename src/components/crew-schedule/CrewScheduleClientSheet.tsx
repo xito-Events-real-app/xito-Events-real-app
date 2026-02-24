@@ -1,4 +1,4 @@
-import { X, Phone, ExternalLink, MapPin, Instagram } from "lucide-react";
+import { X, Phone, ExternalLink, MapPin, Instagram, Loader2 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { EventDetail } from "@/hooks/useEventDetails";
 import { ClientContactDetails, formatInstagramLink } from "@/lib/client-contact-api";
@@ -10,6 +10,7 @@ interface Props {
   contactDetails?: ClientContactDetails | null;
   eventDetails?: EventDetail[];
   clientName?: string;
+  isLoading?: boolean;
 }
 
 function SectionHeader({ title, borderColor }: { title: string; borderColor: string }) {
@@ -93,7 +94,7 @@ function PersonSection({ title, borderColor, name, contact, whatsapp, backup, ba
   );
 }
 
-export default function CrewScheduleClientSheet({ open, onOpenChange, contactDetails, eventDetails, clientName }: Props) {
+export default function CrewScheduleClientSheet({ open, onOpenChange, contactDetails, eventDetails, clientName, isLoading }: Props) {
   const firstEvent = eventDetails?.[0];
 
   return (
@@ -107,6 +108,13 @@ export default function CrewScheduleClientSheet({ open, onOpenChange, contactDet
           </button>
         </div>
         <div className="overflow-y-auto h-full pb-20 px-4 pt-3 space-y-3">
+          {isLoading && !contactDetails && !eventDetails ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3">
+              <Loader2 className="w-6 h-6 text-violet-400 animate-spin" />
+              <p className="text-[11px] text-white/40">Loading client details...</p>
+            </div>
+          ) : (
+          <>
           <PersonSection
             title="Bride" borderColor="border-rose-400"
             name={contactDetails?.brideFullName} contact={contactDetails?.brideContactNumber}
@@ -180,6 +188,8 @@ export default function CrewScheduleClientSheet({ open, onOpenChange, contactDet
 
           {!contactDetails && (!eventDetails || eventDetails.length === 0) && (
             <p className="text-[10px] text-white/30 text-center py-4">No details available for this client</p>
+          )}
+          </>
           )}
         </div>
       </SheetContent>

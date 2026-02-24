@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Phone, ExternalLink, MapPin, Instagram, Clock, StickyNote } from "lucide-react";
+import { X, Phone, ExternalLink, MapPin, Instagram, Clock, StickyNote, Loader2 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { EventDetail } from "@/hooks/useEventDetails";
 import { ClientContactDetails, formatInstagramLink } from "@/lib/client-contact-api";
@@ -39,6 +39,7 @@ interface Props {
   contactDetails?: ClientContactDetails | null;
   freelancerPhones?: Map<string, string>;
   freelancerName?: string;
+  isLoading?: boolean;
 }
 
 function SectionHeader({ title, borderColor }: { title: string; borderColor: string }) {
@@ -122,7 +123,7 @@ function PersonSection({ title, borderColor, name, contact, whatsapp, backup, ba
   );
 }
 
-export default function CrewScheduleEventSheet({ open, onOpenChange, assignment, eventDetail, contactDetails, freelancerPhones, freelancerName }: Props) {
+export default function CrewScheduleEventSheet({ open, onOpenChange, assignment, eventDetail, contactDetails, freelancerPhones, freelancerName, isLoading }: Props) {
   const day = assignment.event_day || "";
   const month = parseInt(assignment.event_month || "0");
   const year = assignment.event_year || "";
@@ -187,6 +188,13 @@ export default function CrewScheduleEventSheet({ open, onOpenChange, assignment,
         </div>
 
         <div className="flex-1 overflow-y-auto pb-10 px-4 pt-3 space-y-3">
+          {isLoading && !eventDetail && !contactDetails ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3">
+              <Loader2 className="w-6 h-6 text-violet-400 animate-spin" />
+              <p className="text-[11px] text-white/40">Loading event details...</p>
+            </div>
+          ) : (
+          <>
           {/* Personal Note */}
           {personalNote && (
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 space-y-1">
@@ -341,6 +349,8 @@ export default function CrewScheduleEventSheet({ open, onOpenChange, assignment,
 
           {!contactDetails && !eventDetail && (
             <p className="text-[10px] text-white/30 text-center py-4">No details available</p>
+          )}
+          </>
           )}
         </div>
       </SheetContent>
