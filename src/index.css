@@ -597,3 +597,8 @@
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.08); }
 }
+
+@keyframes crew-button-flash {
+  0%, 100% { box-shadow: 0 0 8px rgba(255,255,255,0.2); opacity: 0.9; }
+  50% { box-shadow: 0 0 25px rgba(255,255,255,0.7), 0 0 50px rgba(168,85,247,0.4); opacity: 1; }
+}

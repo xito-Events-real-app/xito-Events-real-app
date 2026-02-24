@@ -10,6 +10,7 @@ import { AssignmentRow } from "@/components/crew-schedule/types";
 import EventDetailCard from "@/components/crew-schedule/EventDetailCard";
 import UpcomingEventsSection from "@/components/crew-schedule/UpcomingEventsSection";
 import CrewWelcomePopup from "@/components/crew-schedule/CrewWelcomePopup";
+import CrewScheduleEventSheet from "@/components/crew-schedule/CrewScheduleEventSheet";
 
 function parseQuotedList(value: string): string[] {
   if (!value || !value.trim()) return [];
@@ -55,6 +56,8 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
   const [activeTab, setActiveTab] = useState<"calendar" | "upcoming">("calendar");
   const [freelancerPhones, setFreelancerPhones] = useState<Map<string, string>>(new Map());
   const [showWelcome, setShowWelcome] = useState(false);
+  const [welcomeDetailAssignment, setWelcomeDetailAssignment] = useState<AssignmentRow | null>(null);
+  const [welcomeSheetOpen, setWelcomeSheetOpen] = useState(false);
 
   // Caches for lazy-loaded details
   const [eventDetailsCache, setEventDetailsCache] = useState<Map<string, { events: EventDetail[] }>>(new Map());
@@ -322,6 +325,13 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
             setShowWelcome(false);
           }}
           onRequestDetails={fetchDetailsForClient}
+          onViewFullDetails={(assignment) => {
+            const welcomeKey = `crew-welcome-${decodedName.toLowerCase().replace(/\s+/g, '-')}`;
+            localStorage.setItem(welcomeKey, String(Date.now()));
+            setShowWelcome(false);
+            setWelcomeDetailAssignment(assignment);
+            setWelcomeSheetOpen(true);
+          }}
         />
       )}
       {/* Compact Header — 2 rows */}
@@ -475,6 +485,27 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
 
       {/* Footer */}
       <p className="text-center text-[10px] text-violet-500 py-1 flex-shrink-0 bg-slate-900/95">Powered by Xito Business Suite</p>
+
+      {/* Welcome Detail Sheet */}
+      {welcomeDetailAssignment && (
+        <CrewScheduleEventSheet
+          open={welcomeSheetOpen}
+          onOpenChange={(open) => {
+            setWelcomeSheetOpen(open);
+            if (!open) setWelcomeDetailAssignment(null);
+          }}
+          assignment={welcomeDetailAssignment}
+          eventDetail={
+            eventDetailsCache.get(welcomeDetailAssignment.registered_date_time_ad)?.events.find(
+              e => e.eventName?.toLowerCase() === welcomeDetailAssignment.event?.toLowerCase()
+            ) || eventDetailsCache.get(welcomeDetailAssignment.registered_date_time_ad)?.events[0]
+          }
+          contactDetails={contactDetailsCache.get(welcomeDetailAssignment.registered_date_time_ad)}
+          freelancerPhones={freelancerPhones}
+          freelancerName={decodedName}
+          isLoading={loadingKeys.has(welcomeDetailAssignment.registered_date_time_ad)}
+        />
+      )}
     </div>
   );
 }

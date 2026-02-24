@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { X, MapPin, Clock, Users, Sparkles, CalendarDays } from "lucide-react";
+import { X, MapPin, Clock, Users, Sparkles, CalendarDays, ChevronRight } from "lucide-react";
 import { getCurrentBSDate, getDaysInBSMonth, nepaliMonthsEnglish, bsToAD } from "@/lib/nepali-date";
 import { AssignmentRow } from "./types";
 import { EventDetail } from "@/hooks/useEventDetails";
@@ -27,6 +27,7 @@ interface Props {
   freelancerName: string;
   onDismiss: () => void;
   onRequestDetails: (regKey: string) => void;
+  onViewFullDetails?: (assignment: AssignmentRow) => void;
 }
 
 function getNextBSDay(bs: { year: number; month: number; day: number | string }) {
@@ -87,7 +88,7 @@ function getCountdownText(eventStartTime: string, isToday: boolean, bsYear: numb
   }
 }
 
-export default function CrewWelcomePopup({ assignments, eventDetailsCache, freelancerName, onDismiss, onRequestDetails }: Props) {
+export default function CrewWelcomePopup({ assignments, eventDetailsCache, freelancerName, onDismiss, onRequestDetails, onViewFullDetails }: Props) {
   const [, setTick] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const currentBS = getCurrentBSDate();
@@ -159,6 +160,7 @@ export default function CrewWelcomePopup({ assignments, eventDetailsCache, freel
               eventDetailsCache={eventDetailsCache}
               freelancerName={freelancerName}
               isToday={true}
+              onViewFullDetails={onViewFullDetails}
             />
           </div>
         )}
@@ -178,6 +180,7 @@ export default function CrewWelcomePopup({ assignments, eventDetailsCache, freel
               eventDetailsCache={eventDetailsCache}
               freelancerName={freelancerName}
               isToday={false}
+              onViewFullDetails={onViewFullDetails}
             />
           </div>
         )}
@@ -200,11 +203,13 @@ function EventPosterCard({
   eventDetailsCache,
   freelancerName,
   isToday,
+  onViewFullDetails,
 }: {
   assignment: AssignmentRow;
   eventDetailsCache: Map<string, { events: EventDetail[] }>;
   freelancerName: string;
   isToday: boolean;
+  onViewFullDetails?: (assignment: AssignmentRow) => void;
 }) {
   const cached = eventDetailsCache.get(assignment.registered_date_time_ad);
   const matchingEvent = cached?.events.find(e =>
@@ -285,6 +290,17 @@ function EventPosterCard({
           <div className="w-3 h-3 border-2 border-white/30 border-t-white/70 rounded-full animate-spin" />
           Loading details...
         </div>
+      )}
+
+      {/* View Full Details Button */}
+      {onViewFullDetails && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onViewFullDetails(assignment); }}
+          className="w-full py-4 mt-2 text-base font-black uppercase tracking-wider text-white bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 rounded-xl ring-2 ring-white/30 flex items-center justify-center gap-2 active:scale-95 transition-transform animate-[crew-button-flash_1.5s_ease-in-out_infinite]"
+        >
+          View Full Details
+          <ChevronRight className="w-5 h-5" />
+        </button>
       )}
     </div>
   );
