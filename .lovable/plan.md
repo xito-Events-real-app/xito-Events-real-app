@@ -1,91 +1,75 @@
 
 
-# Fix: Make All Update Functions Sheet-Aware
+# Fix: Crew Schedule Page + Database Sync Integrity
 
-## The Core Problem
+## Three Issues Found
 
-Right now, **8 update functions** in the backend are hardcoded to write to the `CLIENT TRACKER` sheet. When you update a client who is actually in `BOOKED CLIENTS`, the system writes to the **same row number but in the wrong sheet**, corrupting a completely different client's data.
+### Issue 1: Parentheses in freelancer names break the crew schedule query
+The `or()` filter sends `AJAY ADHIKARI (SAFAL)` into PostgREST where parentheses are syntax delimiters, causing zero results.
 
-This is what happened:
-- Beyond_true is in BOOKED CLIENTS row 4
-- Status update wrote to CLIENT TRACKER row 4 (Elena Acharya)
-- Elena got a fake "BOOKED" status and was treated as a booked client
+### Issue 2: Event details on public crew page require authentication
+The crew schedule calls `google-sheets` edge functions (which need auth) to load event/contact details. The crew schedule is a public page -- no login. The data already exists in `event_details_cache` and `contact_details_cache` tables with open access.
 
-## The Fix
+### Issue 3: Google Sheets "pull" overwrites correct database data
+The user's rule: **All Clients is the heart of the system -- changes made there should be the database.** Currently, when `handleSync` or `handleRefresh` runs, it calls `populateCacheFromSheets()` which pulls from Google Sheets and **overwrites** the database. If the Google Sheets push failed or was delayed, the pull brings back stale data, destroying the correct local assignments.
 
-One function -- `addClientComment` -- already has the correct "sheet-aware" logic that searches both sheets. We apply the **exact same pattern** to all 8 broken functions.
+The NIMTO PURAUNE wrong data (AJAY as PG, SUDARSHAN as VG) is likely stale Google Sheets data that overwrote the correct database values during a sync/pull.
 
-### Pattern (already working in addClientComment):
+## The Fixes
+
+### Fix 1: Client-side filtering for parentheses (CrewSchedule.tsx)
+
+Remove the `or()` filter entirely. Fetch all assignments from the table and filter in JavaScript using the existing `normalize()` function.
 
 ```text
-1. If registeredDateTimeAD is provided:
-   a. Search BOOKED CLIENTS first
-   b. If found there, write to BOOKED CLIENTS
-   c. If not found, search CLIENT TRACKER and write there
-2. If no registeredDateTimeAD, fall back to CLIENT TRACKER (legacy)
+// Before (broken for parentheses):
+const orFilter = ROLE_COLUMNS.map(col => `${col}.ilike.%${decodedName}%`).join(",");
+supabase.from("freelancer_assignments").select("...").or(orFilter)
+
+// After (works for any name):
+supabase.from("freelancer_assignments").select("...")
+// Then filter in JavaScript using normalize()
 ```
 
-### Functions to fix (all in google-sheets/index.ts):
+### Fix 2: Read details from cache tables (CrewSchedule.tsx)
 
-| Function | Column | Currently | Fix |
-|----------|--------|-----------|-----|
-| `updateClientStatus` | W (status_log) | Hardcoded CLIENT TRACKER | Add sheet routing |
-| `updateClientHandler` | X (handler) | Hardcoded CLIENT TRACKER | Add sheet routing |
-| `updateClientQuotation` | V (quotation) | Hardcoded CLIENT TRACKER | Add sheet routing |
-| `updateClientMindset` | Z (mindset) | Hardcoded CLIENT TRACKER | Add sheet routing |
-| `updateBargainingRates` | AA+AB (rates) | Hardcoded CLIENT TRACKER | Add sheet routing |
-| `updateClientBargainedRates` | AB (client rates) | Hardcoded CLIENT TRACKER | Add sheet routing |
-| `updateOurCounterRates` | AA (our rates) | Hardcoded CLIENT TRACKER | Add sheet routing |
-| `updateFinalQuotation` | AD (final quote) | Hardcoded CLIENT TRACKER | Add sheet routing |
-| `logCallAttempt` | Y (call log) | Hardcoded CLIENT TRACKER | Add sheet routing |
+Replace the `google-sheets` edge function calls with direct reads from `event_details_cache` and `contact_details_cache` tables.
 
-### What changes in each function:
-
-Replace this pattern:
 ```text
-const actualRowNumber = await verifyRowNumber(
-  accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, registeredDateTimeAD
-);
-// ... writes to 'CLIENT TRACKER'!Column${actualRowNumber}
+// Before (requires auth):
+supabase.functions.invoke("google-sheets", { body: { action: "getClientEventDetails" } })
+
+// After (no auth needed, faster):
+supabase.from("event_details_cache").select("*").eq("registered_date_time_ad", regKey)
+supabase.from("contact_details_cache").select("*").eq("registered_date_time_ad", regKey)
 ```
 
-With this pattern (copied from addClientComment):
-```text
-let targetSheet = 'CLIENT TRACKER';
-let actualRowNumber = rowNumber;
+### Fix 3: Protect local database from stale Sheets overwrite (sync-crew-to-sheets)
 
-if (registeredDateTimeAD) {
-  const bookedRow = await verifyRowNumber(
-    accessToken, spreadsheetId, 'BOOKED CLIENTS', -1, registeredDateTimeAD
-  );
-  if (bookedRow !== -1) {
-    targetSheet = 'BOOKED CLIENTS';
-    actualRowNumber = bookedRow;
-  } else {
-    actualRowNumber = await verifyRowNumber(
-      accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, registeredDateTimeAD
-    );
-  }
-}
-// ... writes to '${targetSheet}'!Column${actualRowNumber}
-```
+During `pull`, preserve rows that have `synced_to_sheet = false` (pending local changes). Currently the pull deletes all `synced_to_sheet = true` rows then upserts from Sheets. But the upsert can overwrite a row that was locally changed and already pushed (marked `synced_to_sheet = true` after push). 
+
+The fix: during pull, **skip upsert for any row that already exists in the database with a more recent `updated_at` timestamp**. This ensures that local changes made from All Clients always win over stale Google Sheets data.
+
+### Fix 4: Correct the wrong NIMTO PURAUNE data
+
+After deploying the fixes, the user needs to:
+1. Open All Clients page
+2. Go to Abinash & Subekshya's NIMTO PURAUNE event
+3. Clear the wrong PG (AJAY) and VG (SUDARSHAN) assignments
+4. The auto-push will sync the corrections to both database and Google Sheets
+
+Alternatively, we can fix the database directly as part of this change.
 
 ## Files Changed
 
 | File | Change |
 |------|--------|
-| `supabase/functions/google-sheets/index.ts` | Apply sheet-aware routing to all 9 update functions listed above |
+| `src/pages/CrewSchedule.tsx` | Remove `or()` filter, use client-side filtering; read details from cache tables instead of edge functions |
+| `supabase/functions/sync-crew-to-sheets/index.ts` | During `pull`, skip overwriting rows that have a newer `updated_at` than the pull timestamp, preserving local changes |
 
-## What This Does NOT Change
+## What This Ensures
 
-- No frontend code changes
-- No new parameters needed (all functions already accept `registeredDateTimeAD`)
-- No database schema changes
-- The existing `addClientComment` function stays exactly as-is (it already works correctly)
-- Read operations (getClients, getSingleClient, etc.) are unaffected
-
-## After the Fix
-
-- Status changes, quotations, handler updates, mindset changes, bargaining rates, call logs, and final quotations will all correctly target whichever sheet the client is actually in
-- No more cross-contamination between clients in different sheets
-
+- All Clients page changes are the source of truth -- the database reflects what All Clients shows
+- Google Sheets pulls never overwrite more recent local changes
+- Freelancers with parentheses in names see their events on the crew schedule
+- Event details load on public crew schedule pages without login
