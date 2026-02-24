@@ -556,6 +556,12 @@
   animation: announcement-cta-glow 2s ease-in-out infinite;
 }
 
+/* Glow pulse for today's date */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(52, 211, 153, 0.4); }
+  50% { box-shadow: 0 0 16px rgba(52, 211, 153, 0.7); }
+}
+
 /* Pulse red for unassigned required crew cells */
 @keyframes pulse-red {
   0%, 100% { background-color: rgba(239, 68, 68, 0.08); }
