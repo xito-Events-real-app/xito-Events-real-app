@@ -582,3 +582,18 @@
 .announcement-sheet-fly {
   animation: announcement-sheet-fly 2.5s ease-in-out infinite;
 }
+
+@keyframes crew-poster-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes crew-poster-slide-up {
+  from { opacity: 0; transform: translateY(40px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes crew-countdown-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
