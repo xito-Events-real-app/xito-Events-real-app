@@ -63,7 +63,7 @@ export default function EventDetailCard({ assignment, eventDetails, contactDetai
             }}
             className="w-full mt-2 bg-violet-600 hover:bg-violet-700 text-white py-2 rounded-lg text-xs font-semibold transition-colors"
           >
-            Full Details
+            {isLoadingDetails ? "Loading..." : "Full Details"}
           </button>
         </div>
       </div>
@@ -74,6 +74,7 @@ export default function EventDetailCard({ assignment, eventDetails, contactDetai
         contactDetails={contactDetails}
         eventDetails={eventDetails}
         clientName={assignment.client_name || undefined}
+        isLoading={isLoadingDetails}
       />
 
       <CrewScheduleEventSheet
@@ -84,6 +85,7 @@ export default function EventDetailCard({ assignment, eventDetails, contactDetai
         contactDetails={contactDetails}
         freelancerPhones={freelancerPhones}
         freelancerName={freelancerName}
+        isLoading={isLoadingDetails}
       />
     </>
   );
