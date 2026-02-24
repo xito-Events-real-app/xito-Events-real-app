@@ -380,16 +380,17 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
                       key={day}
                       onClick={() => isBooked ? setSelectedDay(isSelected ? null : day) : undefined}
                       className={`aspect-square rounded-lg flex flex-col items-center justify-center text-sm font-medium transition-all relative
-                        ${isPast ? "opacity-40" : ""}
                         ${isBooked
                           ? isSelected
-                            ? "bg-emerald-500 text-white ring-2 ring-emerald-300 scale-105 opacity-100"
+                            ? "bg-emerald-500 text-white ring-2 ring-emerald-300 scale-105"
                             : isPast
-                              ? "bg-emerald-500/10 text-emerald-800/60"
+                              ? "bg-emerald-500/10 text-emerald-800/60 opacity-40"
                               : "bg-emerald-500/30 text-emerald-300 hover:bg-emerald-500/50"
                           : isToday
-                            ? "bg-violet-500/30 text-violet-200 ring-1 ring-violet-400 opacity-100"
-                            : "text-white/40"
+                            ? "bg-emerald-500/40 text-emerald-200 ring-1 ring-emerald-400"
+                            : isPast
+                              ? "text-gray-500"
+                              : "text-emerald-200/60"
                         }`}
                     >
                       {day}
