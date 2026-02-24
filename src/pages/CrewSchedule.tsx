@@ -10,6 +10,13 @@ import { AssignmentRow } from "@/components/crew-schedule/types";
 import EventDetailCard from "@/components/crew-schedule/EventDetailCard";
 import UpcomingEventsSection from "@/components/crew-schedule/UpcomingEventsSection";
 
+function parseQuotedList(value: string): string[] {
+  if (!value || !value.trim()) return [];
+  const matches = value.match(/"([^"]*)"/g);
+  if (matches) return matches.map(m => m.replace(/"/g, ''));
+  return value.split(',').map(s => s.trim()).filter(Boolean);
+}
+
 function getGreeting(): string {
   const hour = new Date().getHours();
   if (hour < 12) return "Good Morning";
@@ -52,20 +59,18 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
   const [contactDetailsCache, setContactDetailsCache] = useState<Map<string, ClientContactDetails>>(new Map());
   const [loadingKeys, setLoadingKeys] = useState<Set<string>>(new Set());
 
-  // Fetch all assignments + freelancer phone map
+  // Fetch ALL assignments (no or() filter — avoids PostgREST parentheses syntax issues)
+  // Then filter client-side using normalize()
   useEffect(() => {
     async function fetch() {
       setLoading(true);
-      const orFilter = ROLE_COLUMNS.map(col => `${col}.ilike.%${decodedName}%`).join(",");
       const [assignRes, flData] = await Promise.all([
         supabase
           .from("freelancer_assignments")
-          .select("event_year, event_month, event_day, event, client_name, registered_date_time_ad, photographer_bride, photographer_groom, videographer_bride, videographer_groom, extra_photographer, extra_videographer, assistant, iphone_shooter, drone_operator, fpv_operator")
-          .or(orFilter),
+          .select("event_year, event_month, event_day, event, client_name, registered_date_time_ad, photographer_bride, photographer_groom, videographer_bride, videographer_groom, extra_photographer, extra_videographer, assistant, iphone_shooter, drone_operator, fpv_operator"),
         getFreelancers(500).catch(() => []),
       ]);
       if (!assignRes.error && assignRes.data) {
-        // Normalize: collapse multiple spaces, trim — handles names with parens/extra spaces
         const normalize = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
         const target = normalize(decodedName);
         const exactFiltered = assignRes.data.filter(row =>
@@ -100,26 +105,86 @@ export default function CrewSchedule({ previewName }: { previewName?: string }) 
     if (decodedName) fetch();
   }, [decodedName]);
 
-  // Lazy fetch details for a registeredDateTimeAD
+  // Lazy fetch details from cache tables (no auth needed — public page)
   const fetchDetailsForClient = useCallback(async (regKey: string) => {
     if (eventDetailsCache.has(regKey) || loadingKeys.has(regKey)) return;
 
     setLoadingKeys(prev => new Set(prev).add(regKey));
     try {
       const [eventRes, contactRes] = await Promise.all([
-        supabase.functions.invoke("google-sheets", {
-          body: { action: "getClientEventDetails", data: { registeredDateTimeAD: regKey } },
-        }),
-        supabase.functions.invoke("google-sheets", {
-          body: { action: "getClientContactDetails", data: { registeredDateTimeAD: regKey } },
-        }),
+        supabase
+          .from("event_details_cache")
+          .select("*")
+          .eq("registered_date_time_ad", regKey),
+        supabase
+          .from("contact_details_cache")
+          .select("*")
+          .eq("registered_date_time_ad", regKey),
       ]);
 
-      if (eventRes.data?.success && eventRes.data.data?.events) {
-        setEventDetailsCache(prev => new Map(prev).set(regKey, { events: eventRes.data.data.events }));
+      if (eventRes.data && eventRes.data.length > 0) {
+        const events: EventDetail[] = eventRes.data.map((row: any) => ({
+          eventIndex: row.event_index ?? 0,
+          eventName: row.event_name || '',
+          eventYear: row.event_year || '',
+          eventMonth: row.event_month || '',
+          eventDay: row.event_day || '',
+          eventDateAD: row.event_date_ad || '',
+          venueType: row.venue_type || '',
+          venueName: row.venue_name || '',
+          venueCity: row.venue_city || '',
+          venueArea: row.venue_area || '',
+          venueMap: row.venue_map || '',
+          eventStartTime: row.event_start_time || '',
+          eventEndTime: row.event_end_time || '',
+          parlourType: row.parlour_type || '',
+          parlourName: row.parlour_name || '',
+          parlourCity: row.parlour_city || '',
+          parlourArea: row.parlour_area || '',
+          parlourMap: row.parlour_map || '',
+          parlourStartTime: row.parlour_start_time || '',
+          parlourEndTime: row.parlour_end_time || '',
+          doGroomComeInMehndi: row.do_groom_come_in_mehndi || '',
+          guestCount: row.guest_count || '',
+          eventDemands: parseQuotedList(row.event_demands || ''),
+          eventReferences: parseQuotedList(row.event_references || ''),
+        }));
+        setEventDetailsCache(prev => new Map(prev).set(regKey, { events }));
       }
-      if (contactRes.data?.success && contactRes.data.data) {
-        setContactDetailsCache(prev => new Map(prev).set(regKey, contactRes.data.data));
+      if (contactRes.data && contactRes.data.length > 0) {
+        const c = contactRes.data[0];
+        const contact: ClientContactDetails = {
+          rowNumber: c.row_number ?? 0,
+          registeredDateTimeAD: c.registered_date_time_ad,
+          registeredDateBS: c.registered_date_bs || '',
+          clientName: c.client_name || '',
+          brideFullName: c.bride_full_name || '',
+          brideContactNumber: c.bride_contact_number || '',
+          brideWhatsappNumber: c.bride_whatsapp_number || '',
+          brideBackupNumber: c.bride_backup_number || '',
+          brideBackupRelation: c.bride_backup_relation || '',
+          brideBackupNumber2: c.bride_backup_number2 || '',
+          brideBackupRelation2: c.bride_backup_relation2 || '',
+          brideInstagram: c.bride_instagram || '',
+          brideHomeCity: c.bride_home_city || '',
+          brideHomeArea: c.bride_home_area || '',
+          brideHomeMap: c.bride_home_map || '',
+          brideHomeLandmark: c.bride_home_landmark || '',
+          groomFullName: c.groom_full_name || '',
+          groomContactNumber: c.groom_contact_number || '',
+          groomWhatsappNumber: c.groom_whatsapp_number || '',
+          groomBackupNumber: c.groom_backup_number || '',
+          groomBackupRelation: c.groom_backup_relation || '',
+          groomBackupNumber2: c.groom_backup_number2 || '',
+          groomBackupRelation2: c.groom_backup_relation2 || '',
+          groomInstagram: c.groom_instagram || '',
+          groomHomeCity: c.groom_home_city || '',
+          groomHomeArea: c.groom_home_area || '',
+          groomHomeMap: c.groom_home_map || '',
+          groomHomeLandmark: c.groom_home_landmark || '',
+          formSentDate: c.form_sent_date || '',
+        };
+        setContactDetailsCache(prev => new Map(prev).set(regKey, contact));
       }
     } catch (err) {
       console.error("Failed to fetch details for", regKey, err);
