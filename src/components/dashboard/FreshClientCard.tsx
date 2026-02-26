@@ -5,7 +5,7 @@ import { ClientData, updateClientStatus, logCallAttempt, getCurrentStatus, updat
 import { getHandlerInitials, parseEventDetails, formatLocationDisplay } from "@/lib/nepali-months";
 import { getClientDetailPath } from "@/lib/client-navigation";
 import { cn } from "@/lib/utils";
-import { generateStatusLogEntry, computePaymentUpdate } from "@/lib/timestamp-utils";
+import { generateStatusLogEntry, generateCallLogEntry, computePaymentUpdate } from "@/lib/timestamp-utils";
 import { updateClientFieldInCache, migrateClientToBookedInCache } from "@/lib/clients-supabase-cache";
 import { StarRating } from "@/components/ui/star-rating";
 import {
@@ -1015,8 +1015,11 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
 
     setIsLoggingCall(true);
     try {
-      const result = await logCallAttempt(client.rowNumber, callType, currentCallLog);
-      setCurrentCallLog(result.callLog);
+      // Supabase-first: compute locally, write to cache, push scheduler handles Sheets
+      const newCallLog = generateCallLogEntry(callType, currentCallLog);
+      setCurrentCallLog(newCallLog);
+      
+      await updateClientFieldInCache(client.registeredDateTimeAD, 'callLog', newCallLog);
       toast.success(`${callType} call logged`);
       
       // Open the appropriate app
@@ -1044,9 +1047,11 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
 
     setIsLoggingCall(true);
     try {
-      // Log the call to Column Y
-      const result = await logCallAttempt(client.rowNumber, callType, currentCallLog);
-      setCurrentCallLog(result.callLog);
+      // Supabase-first: compute locally, write to cache, push scheduler handles Sheets
+      const newCallLog = generateCallLogEntry(callType, currentCallLog);
+      setCurrentCallLog(newCallLog);
+      
+      await updateClientFieldInCache(client.registeredDateTimeAD, 'callLog', newCallLog);
       toast.success(`${callType} call logged`);
       
       // Open the appropriate app

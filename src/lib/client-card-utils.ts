@@ -502,18 +502,83 @@ export function getDaysUntilEvent(
   }
 }
 
-// Get current status from status log
+/**
+ * Robust status parser: extracts the status from the line with the LATEST timestamp.
+ * Handles all 3 known formats:
+ *   1) STATUS [YYYY-MM-DD HH:mm:ss]
+ *   2) STATUS - MM/DD/YYYY, HH:mm:ss
+ *   3) MM/DD/YYYY, HH:mm:ss - STATUS
+ * Falls back to first non-empty line if no timestamps parse.
+ */
 export function getCurrentStatus(statusLog?: string): string {
   if (!statusLog) return 'UNTOUCHED';
   const lines = statusLog.split('\n').filter(Boolean);
   if (lines.length === 0) return 'UNTOUCHED';
-  
-  const lastLine = lines[0];
-  let statusPart = lastLine.split(' [')[0];
-  if (statusPart === lastLine) {
-    statusPart = lastLine.split(' - ')[0];
+
+  let bestStatus = '';
+  let bestTime = -1;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    let status = '';
+    let timestamp: Date | null = null;
+
+    // Format 1: STATUS [YYYY-MM-DD HH:mm:ss]
+    const bracketMatch = trimmed.match(/^(.+?)\s*\[(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\]$/);
+    if (bracketMatch) {
+      status = bracketMatch[1].trim();
+      timestamp = new Date(`${bracketMatch[2]}T${bracketMatch[3]}`);
+    }
+
+    // Format 2: STATUS - MM/DD/YYYY, HH:mm:ss
+    if (!timestamp || isNaN(timestamp.getTime())) {
+      const dashAfterStatus = trimmed.match(/^(.+?)\s*-\s*(\d{1,2}\/\d{1,2}\/\d{4}),?\s*(\d{2}:\d{2}:\d{2})$/);
+      if (dashAfterStatus) {
+        status = dashAfterStatus[1].trim();
+        const [m, d, y] = dashAfterStatus[2].split('/');
+        timestamp = new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T${dashAfterStatus[3]}`);
+      }
+    }
+
+    // Format 3: MM/DD/YYYY, HH:mm:ss - STATUS
+    if (!timestamp || isNaN(timestamp.getTime())) {
+      const dashBeforeStatus = trimmed.match(/^(\d{1,2}\/\d{1,2}\/\d{4}),?\s*(\d{2}:\d{2}:\d{2})\s*-\s*(.+)$/);
+      if (dashBeforeStatus) {
+        status = dashBeforeStatus[3].trim();
+        const [m, d, y] = dashBeforeStatus[1].split('/');
+        timestamp = new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T${dashBeforeStatus[2]}`);
+      }
+    }
+
+    if (timestamp && !isNaN(timestamp.getTime()) && status) {
+      const t = timestamp.getTime();
+      if (t > bestTime) {
+        bestTime = t;
+        bestStatus = status;
+      }
+    }
   }
-  return statusPart.trim().toUpperCase();
+
+  // Fallback: if no timestamps parsed, use first line with old logic
+  if (!bestStatus) {
+    const firstLine = lines[0];
+    let statusPart = firstLine.split(' [')[0];
+    if (statusPart === firstLine) {
+      statusPart = firstLine.split(' - ')[0];
+    }
+    // Also try reverse: timestamp - STATUS
+    if (statusPart === firstLine && /^\d{1,2}\//.test(firstLine)) {
+      const parts = firstLine.split(' - ');
+      if (parts.length >= 2) {
+        statusPart = parts.slice(1).join(' - ');
+      }
+    }
+    return statusPart.trim().toUpperCase();
+  }
+
+  return bestStatus.toUpperCase();
 }
 
 // Month color classes for inquiry month highlighting
