@@ -73,7 +73,6 @@ import {
   getDetailedEnquiryInfo,
 } from "@/lib/client-card-utils";
 import {
-  updateClientStatus,
   updateClientHandler,
   logCallAttempt,
   updateClientQuotation,
@@ -350,10 +349,7 @@ export function DesktopClientRow({
         updateClientFieldInCache(client.registeredDateTimeAD, 'statusLog', newStatusLog)
           .catch(err => console.warn('[BACKGROUND] [statusLog cache]', err));
       }
-      if (client.rowNumber) {
-        updateClientStatus(client.rowNumber, newStatus, currentStatusLog)
-          .catch(err => console.warn('[BACKGROUND-SHEETS] [updateClientStatus]', err));
-      }
+      // Background sync handled by push-sync process (synced_to_sheet: false)
     } catch (err) {
       console.error('Failed to update status:', err);
       toast.error('Failed to update status');
@@ -391,11 +387,7 @@ export function DesktopClientRow({
         updateClientFieldInCache(client.registeredDateTimeAD, 'statusLog', newStatusLog),
       ]).catch(err => console.warn('[BACKGROUND] [advancePending cache]', err));
 
-      if (client.rowNumber) {
-        updateFinalQuotation(client.rowNumber, finalData, client.registeredDateTimeAD)
-          .then(() => updateClientStatus(client.rowNumber!, pendingStatus, currentStatusLog))
-          .catch(err => console.warn('[BACKGROUND-SHEETS] [advancePending]', err));
-      }
+      // Background sync handled by push-sync process (synced_to_sheet: false)
     } catch (err) {
       console.error('Failed to save final quotation:', err);
       toast.error('Failed to save final quotation');
@@ -472,11 +464,7 @@ export function DesktopClientRow({
       const savedPendingStatus = pendingStatus;
       const savedStatusLog = currentStatusLog;
 
-      if (rowNum) {
-        updateClientStatus(rowNum, savedPendingStatus, savedStatusLog)
-          .then(() => addPayment(rowNum, data.amount, data.paymentType, data.nepaliDate, data.adDate, data.bank, existingPaid, existingDates, finalAmount, regId, clientName))
-          .catch(err => console.warn('[BACKGROUND-SHEETS] [BOOKED-migration]', err));
-      }
+      // Background sync handled by push-sync process (synced_to_sheet: false)
     } catch (err) {
       console.error('Failed to save payment:', err);
       toast.error('Failed to record payment');
@@ -552,11 +540,7 @@ export function DesktopClientRow({
           updateClientFieldInCache(client.registeredDateTimeAD, 'statusLog', newStatusLog),
         ]).catch(err => console.warn('[BACKGROUND] [quotation cache]', err));
       }
-      if (client.rowNumber) {
-        updateClientQuotation(client.rowNumber, quotationData, client.registeredDateTimeAD)
-          .then(() => updateClientStatus(client.rowNumber!, 'QUOTATION SENT', currentStatusLog))
-          .catch(err => console.warn('[BACKGROUND-SHEETS] [handleSaveQuotation]', err));
-      }
+      // Background sync handled by push-sync process (synced_to_sheet: false)
     } catch (err) {
       console.error('Failed to save quotation:', err);
       toast.error('Failed to save quotation');

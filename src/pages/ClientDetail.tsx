@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useCachedData } from "@/hooks/useCachedData";
 import { useDropdownData } from "@/hooks/useDropdownData";
-import { updateClient, ClientData, updateClientStatus, logCallAttempt, addPayment, updateClientQuotation, addClientComment, updateFinalQuotation, getSingleClient, updateClientPriority, updateBargainingRates, updateBenzoKeepNotes, deleteClient } from "@/lib/sheets-api";
+import { updateClient, ClientData, logCallAttempt, addClientComment, updateFinalQuotation, getSingleClient, updateClientPriority, updateBenzoKeepNotes, deleteClient } from "@/lib/sheets-api";
 import { generateCallLogEntry, generateStatusLogEntry, generateCommentEntry, computePaymentUpdate } from "@/lib/timestamp-utils";
 import { migrateClientToBookedInCache } from "@/lib/clients-supabase-cache";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -461,10 +461,7 @@ const ClientDetail = () => {
       
       toast({ title: "Success", description: `Status changed to ${newStatus}` });
 
-      // Background sync to Sheets
-      updateClientStatus(client.rowNumber, newStatus, existingLog).catch(err => {
-        console.warn('[STATUS] Background sheet sync failed:', err);
-      });
+      // Background sync handled by push-sync process (synced_to_sheet: false)
     } catch (err) {
       console.error('Failed to update status:', err);
       toast({ title: "Error", description: "Failed to update status", variant: "destructive" });
@@ -511,13 +508,7 @@ const ClientDetail = () => {
       setQuotationAmounts({});
       setPendingStatus("");
 
-      // Background: sync to Sheets
-      updateClientQuotation(client.rowNumber, quotationData, client.registeredDateTimeAD).catch(err => {
-        console.warn('[QUOTATION] Background sheet sync failed:', err);
-      });
-      updateClientStatus(client.rowNumber, 'QUOTATION SENT : REVIEW PENDING', existingLog).catch(err => {
-        console.warn('[QUOTATION STATUS] Background sheet sync failed:', err);
-      });
+      // Background sync handled by push-sync process (synced_to_sheet: false)
     } catch (err) {
       console.error('Failed to save quotation:', err);
       toast({ title: "Failed to save quotation", variant: "destructive" });
@@ -552,13 +543,7 @@ const ClientDetail = () => {
       setShowAdvancePendingDialog(false);
       setPendingStatus("");
 
-      // Background: sync to Sheets
-      updateFinalQuotation(client.rowNumber, finalData, client.registeredDateTimeAD).catch(err => {
-        console.warn('[ADVANCE PENDING QUOTATION] Background sheet sync failed:', err);
-      });
-      updateClientStatus(client.rowNumber, pendingStatus, existingLog).catch(err => {
-        console.warn('[ADVANCE PENDING STATUS] Background sheet sync failed:', err);
-      });
+      // Background sync handled by push-sync process (synced_to_sheet: false)
     } catch (err) {
       console.error('Failed to save final quotation:', err);
       toast({ title: "Failed to save final quotation", variant: "destructive" });
@@ -607,13 +592,7 @@ const ClientDetail = () => {
       setOurBargainRates({});
       setPendingStatus("");
 
-      // Background: sync to Sheets
-      updateBargainingRates(client.rowNumber, ourLines.join('\n'), clientLines.join('\n')).catch(err => {
-        console.warn('[BARGAINING RATES] Background sheet sync failed:', err);
-      });
-      updateClientStatus(client.rowNumber, pendingStatus, existingLog).catch(err => {
-        console.warn('[BARGAINING STATUS] Background sheet sync failed:', err);
-      });
+      // Background sync handled by push-sync process (synced_to_sheet: false)
     } catch (err) {
       console.error('Failed to save bargaining:', err);
       toast({ title: "Failed to save bargaining details", variant: "destructive" });
@@ -711,30 +690,7 @@ const ClientDetail = () => {
       setShowBookedPaymentDialog(false);
       setPendingStatus("");
 
-      // ── Step 5: Background Sheets sync (non-blocking) ──
-      const rowNum = client.rowNumber;
-      const regId = client.registeredDateTimeAD;
-      const clientName = client.clientName;
-      const existingPaymentsMade = currentPaymentsMade || client.paymentsMade || '';
-      const existingPaymentDatesAD = client.paymentDatesAD || '';
-
-      updateClientStatus(rowNum, pendingStatus, currentStatusLog || client.statusLog || '')
-        .then(() => addPayment(
-          rowNum,
-          data.amount,
-          data.paymentType,
-          data.nepaliDate,
-          data.adDate,
-          data.bank,
-          existingPaymentsMade,
-          existingPaymentDatesAD,
-          finalAmount,
-          regId,
-          clientName
-        ))
-        .catch(err => {
-          console.warn('[BACKGROUND-SHEETS] [BOOKED-migration] Sync failed, data safe in Supabase:', err);
-        });
+      // Background sync handled by push-sync process (synced_to_sheet: false)
     } catch (err) {
       console.error('Failed to save payment:', err);
       toast({ title: "Failed to record payment", variant: "destructive" });

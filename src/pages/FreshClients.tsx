@@ -172,7 +172,7 @@ export default function FreshClients() {
   const handleStatusChange = async (client: ClientData, newStatus: string, newStatusLog: string) => {
     // Update local state immediately
     setLocalClients(prev => prev.map(c => 
-      c.rowNumber === client.rowNumber 
+      c.registeredDateTimeAD === client.registeredDateTimeAD
         ? { ...c, statusLog: newStatusLog }
         : c
     ));
@@ -187,7 +187,7 @@ export default function FreshClients() {
   const handleHandlerChange = async (client: ClientData, handler: string) => {
     // Update local state immediately
     setLocalClients(prev => prev.map(c => 
-      c.rowNumber === client.rowNumber 
+      c.registeredDateTimeAD === client.registeredDateTimeAD
         ? { ...c, clientHandler: handler }
         : c
     ));
