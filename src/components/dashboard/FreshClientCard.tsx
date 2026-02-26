@@ -1,7 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
-import { ClientData, updateClientStatus, updateClientHandler, logCallAttempt, getCurrentStatus, updateClientQuotation, updateClientMindset, updateBargainingRates, updateClientBargainedRates, updateOurCounterRates, addClientComment, updateFinalQuotation, addPayment } from "@/lib/sheets-api";
+import { ClientData, updateClientStatus, logCallAttempt, getCurrentStatus, updateClientQuotation, updateClientMindset, updateBargainingRates, updateClientBargainedRates, updateOurCounterRates, addClientComment, updateFinalQuotation, addPayment } from "@/lib/sheets-api";
 import { getHandlerInitials, parseEventDetails, formatLocationDisplay } from "@/lib/nepali-months";
 import { getClientDetailPath } from "@/lib/client-navigation";
 import { cn } from "@/lib/utils";
@@ -421,6 +421,22 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
   // BOOKED interception state
   const [showBookedPaymentDialog, setShowBookedPaymentDialog] = useState(false);
   const [isSavingBookedPayment, setIsSavingBookedPayment] = useState(false);
+  // Sync props to local state when parent updates the client object
+  useEffect(() => {
+    setCurrentStatusLog(client.statusLog || '');
+    setCurrentHandler(client.clientHandler || '');
+    setCurrentCallLog(client.callLog || '');
+    setCurrentMindset(client.mindset || '');
+    setCurrentQuotationData(client.quotationData || '');
+    setCurrentOurBargainedRates(client.ourBargainedRates || '');
+    setCurrentClientBargainedRates(client.clientBargainedRates || '');
+    setCurrentComments(client.comments || '');
+    setCurrentFinalQuotation(client.finalQuotation || '');
+    setCurrentPaymentsMade(client.paymentsMade || '');
+    setCurrentPaymentDatesAD(client.paymentDatesAD || '');
+    setCurrentRemainingPayment(client.remainingPayment || '');
+  }, [client]);
+
   
   // Use handler initials if set, otherwise fall back to who added
   const displayInitials = getHandlerInitials(currentHandler || client.whoAdded || '');
@@ -522,9 +538,7 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
       // 3. Fast Supabase cache update
       await updateClientFieldInCache(client.registeredDateTimeAD, 'statusLog', newStatusLog);
 
-      // 4. Background Sheets sync (non-blocking)
-      updateClientStatus(client.rowNumber, pendingStatus, currentStatusLog)
-        .catch(err => console.error('[BG-SYNC] Status to Sheets failed:', err));
+      // 4. Background sync handled by push-sync process (synced_to_sheet: false)
     } catch (err) {
       console.error("Failed to update status:", err);
       toast.error("Failed to update status");
@@ -543,29 +557,24 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
   const handleHandlerChange = async (e: React.MouseEvent, handler: string) => {
     e.stopPropagation();
     
-    if (!client.rowNumber) {
-      toast.error("Cannot update: missing row number");
-      return;
-    }
-
     if (handler === currentHandler) {
       return; // Same handler, no update needed
     }
 
-    setIsUpdatingHandler(true);
+    // 1. Instant local state update
+    setCurrentHandler(handler);
+    toast.success(`Handler set to ${handler}`);
+    
+    if (onHandlerChange) {
+      onHandlerChange(client, handler);
+    }
+
+    // 2. Fast Supabase cache update
     try {
-      await updateClientHandler(client.rowNumber, handler);
-      setCurrentHandler(handler);
-      toast.success(`Handler set to ${handler}`);
-      
-      if (onHandlerChange) {
-        onHandlerChange(client, handler);
-      }
+      await updateClientFieldInCache(client.registeredDateTimeAD, 'clientHandler', handler);
     } catch (err) {
-      console.error("Failed to update handler:", err);
-      toast.error("Failed to update handler");
-    } finally {
-      setIsUpdatingHandler(false);
+      console.error("Failed to update handler in cache:", err);
+      toast.error("Failed to save handler");
     }
   };
 
@@ -1169,9 +1178,7 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
       // 2. Fast Supabase cache update
       await updateClientFieldInCache(client.registeredDateTimeAD, 'quotationData', quotationData);
 
-      // 3. Background Sheets sync (non-blocking)
-      updateClientQuotation(client.rowNumber, quotationData, client.registeredDateTimeAD)
-        .catch(err => console.error('[BG-SYNC] Quotation to Sheets failed:', err));
+      // 3. Background sync handled by push-sync process (synced_to_sheet: false)
     } catch (err) {
       console.error("Failed to save quotation:", err);
       toast.error("Failed to save quotation");
@@ -1208,11 +1215,7 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
         updateClientFieldInCache(client.registeredDateTimeAD, 'statusLog', newStatusLog),
       ]);
 
-      // 3. Background Sheets sync (non-blocking)
-      updateFinalQuotation(client.rowNumber, finalData, client.registeredDateTimeAD)
-        .catch(err => console.error('[BG-SYNC] Final quotation to Sheets failed:', err));
-      updateClientStatus(client.rowNumber, newStatus, currentStatusLog)
-        .catch(err => console.error('[BG-SYNC] Status to Sheets failed:', err));
+      // 3. Background sync handled by push-sync process (synced_to_sheet: false)
     } catch (err) {
       console.error('Failed to save final quotation:', err);
       toast.error('Failed to save final quotation');
@@ -1278,13 +1281,7 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
         paymentUpdate.remainingPayment,
       );
 
-      // 4. Background Sheets sync (non-blocking)
-      addPayment(
-        client.rowNumber, data.amount, data.paymentType, data.nepaliDate, data.adDate, data.bank,
-        currentPaymentsMade, currentPaymentDatesAD, finalAmount, client.registeredDateTimeAD, client.clientName
-      ).catch(err => console.error('[BG-SYNC] Payment to Sheets failed:', err));
-      updateClientStatus(client.rowNumber, newStatus, currentStatusLog)
-        .catch(err => console.error('[BG-SYNC] Status to Sheets failed:', err));
+      // 4. Background sync handled by push-sync process (synced_to_sheet: false)
     } catch (err) {
       console.error('Failed to save payment:', err);
       toast.error('Failed to record payment');
