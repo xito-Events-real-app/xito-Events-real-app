@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useCachedData } from "@/hooks/useCachedData";
 import { useDropdownData } from "@/hooks/useDropdownData";
-import { updateClient, ClientData, logCallAttempt, addClientComment, updateFinalQuotation, getSingleClient, updateClientPriority, updateBenzoKeepNotes, deleteClient } from "@/lib/sheets-api";
+import { updateClient, ClientData, logCallAttempt, addClientComment, updateFinalQuotation, updateClientPriority, updateBenzoKeepNotes, deleteClient } from "@/lib/sheets-api";
 import { generateCallLogEntry, generateStatusLogEntry, generateCommentEntry, computePaymentUpdate } from "@/lib/timestamp-utils";
 import { migrateClientToBookedInCache } from "@/lib/clients-supabase-cache";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -190,9 +190,6 @@ const ClientDetail = () => {
   const [showBenzoKeepDialog, setShowBenzoKeepDialog] = useState(false);
   const [isSavingKeepNotes, setIsSavingKeepNotes] = useState(false);
   const [currentKeepNotes, setCurrentKeepNotes] = useState("");
-
-  // Client sync state
-  const [isSyncingClient, setIsSyncingClient] = useState(false);
 
   // Delete client state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -695,36 +692,6 @@ const ClientDetail = () => {
     }
   };
 
-  // Handle syncing client data from sheets
-  const handleSyncClient = async () => {
-    if (!client?.registeredDateTimeAD) return;
-    
-    setIsSyncingClient(true);
-    try {
-      const freshClient = await getSingleClient(client.registeredDateTimeAD);
-      if (freshClient && updateClientCache) {
-        updateClientCache(freshClient);
-        // Update local state to reflect fresh data
-        setCurrentStatusLog(freshClient.statusLog || '');
-        setCurrentPaymentsMade(freshClient.paymentsMade || '');
-        setCurrentRemainingPayment(freshClient.remainingPayment || '');
-        setCurrentComments(freshClient.comments || '');
-        setCurrentQuotationData(freshClient.quotationData || '');
-        setCurrentFinalQuotation(freshClient.finalQuotation || '');
-      toast({ title: "Client data synced from sheets" });
-      } else if (!freshClient) {
-        toast({ title: "Client not found in sheets", variant: "destructive" });
-      }
-      // Also refresh event details from logistics sheet
-      await refetchEventDetails();
-    } catch (err) {
-      console.error('Failed to sync client:', err);
-      toast({ title: "Failed to sync client data", variant: "destructive" });
-    } finally {
-      setIsSyncingClient(false);
-    }
-  };
-
   // Handle deleting a client — Supabase-first
   const handleDeleteClient = async () => {
     if (!client?.registeredDateTimeAD) return;
@@ -1023,15 +990,6 @@ const ClientDetail = () => {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={handleSyncClient}
-                disabled={isSyncingClient}
-                className="rounded-full text-white/70 hover:text-white hover:bg-white/10"
-              >
-                <RefreshCw className={`h-4 w-4 ${isSyncingClient ? 'animate-spin' : ''}`} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
                 onClick={handleEdit}
                 className="rounded-full text-white/70 hover:text-white hover:bg-white/10"
               >
@@ -1090,7 +1048,6 @@ const ClientDetail = () => {
               onCall={handleCall}
               onStatusClick={() => setShowStatusDropdown(true)}
               onEdit={handleEdit}
-              onSync={handleSyncClient}
               onAddComment={async (comment) => {
                 await handleAddCommentDirect(comment);
               }}
@@ -1108,7 +1065,6 @@ const ClientDetail = () => {
               isLoggingCall={isLoggingCall}
               isChangingStatus={isChangingStatus}
               isAddingComment={isAddingComment}
-              isSyncing={isSyncingClient}
               isDeleting={isDeletingClient}
               isUpdatingPriority={isUpdatingPriority}
               eventDetailsData={eventDetailsData}

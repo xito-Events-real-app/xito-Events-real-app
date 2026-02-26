@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, RefreshCw, DollarSign, Users, TrendingUp, Clock, Percent, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { getBookedClients, resyncAllBookedClients, fullResyncAllBookedClients, BookedClientData, SyncDetail } from "@/lib/sheets-api";
+import { resyncAllBookedClients, fullResyncAllBookedClients, BookedClientData, SyncDetail } from "@/lib/sheets-api";
+import { useBookedCachedData } from "@/hooks/useBookedCachedData";
 import FinanceClientCard from "./FinanceClientCard";
 import NepaliDateFilter from "../booked/NepaliDateFilter";
 import { SyncReportSheet } from "../booked/SyncReportSheet";
@@ -15,8 +16,7 @@ import { GlobalModeToggle } from "@/components/layout/GlobalModeToggle";
 
 const MobileFinanceManager = () => {
   const navigate = useNavigate();
-  const [clients, setClients] = useState<BookedClientData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { clients, isLoading, refreshData, isSyncing } = useBookedCachedData();
   const [isResyncing, setIsResyncing] = useState(false);
   const [isFullResyncing, setIsFullResyncing] = useState(false);
   const [filterYear, setFilterYear] = useState<number | null>(null);
@@ -35,19 +35,6 @@ const MobileFinanceManager = () => {
     syncDetails?: SyncDetail[];
   } | null>(null);
 
-  const fetchClients = async () => {
-    try {
-      setIsLoading(true);
-      const data = await getBookedClients();
-      setClients(data);
-    } catch (error) {
-      console.error("Error fetching clients:", error);
-      toast.error("Failed to load clients");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleResyncAll = async () => {
     try {
       setIsResyncing(true);
@@ -57,7 +44,7 @@ const MobileFinanceManager = () => {
       } else {
         toast.info("All clients are up to date");
       }
-      await fetchClients();
+      await refreshData();
     } catch (error) {
       console.error("Error resyncing:", error);
       toast.error("Failed to resync");
@@ -81,7 +68,7 @@ const MobileFinanceManager = () => {
       });
       
       setSyncReportOpen(true);
-      await fetchClients();
+      await refreshData();
     } catch (error) {
       console.error("Error performing full resync:", error);
       toast.error("Failed to perform full resync");
@@ -89,10 +76,6 @@ const MobileFinanceManager = () => {
       setIsFullResyncing(false);
     }
   };
-
-  useEffect(() => {
-    fetchClients();
-  }, []);
 
   // Calculate summary stats
   const totalBookedValue = clients.reduce((sum, client) => {
@@ -147,21 +130,15 @@ const MobileFinanceManager = () => {
 
   // Filter clients
   const filteredClients = clients.filter(client => {
-    // Handler filter
     if (selectedHandler && client.clientHandler?.trim().toUpperCase() !== selectedHandler) {
       return false;
     }
-    
-    // Date filter
     if (filterYear && client.eventYear !== filterYear.toString()) return false;
     if (filterMonth && client.eventMonth !== filterMonth.toString()) return false;
-    
-    // Payment status filter
     if (paymentFilter !== 'all') {
       const status = getPaymentStatus(client);
       if (status !== paymentFilter) return false;
     }
-    
     return true;
   });
 
@@ -403,7 +380,7 @@ const MobileFinanceManager = () => {
                   <FinanceClientCard 
                     key={client.bookedRowNumber} 
                     client={client} 
-                    onRefresh={fetchClients} 
+                    onRefresh={refreshData} 
                   />
                 ))
               )}

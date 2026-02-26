@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { RefreshCw, DollarSign, Users, TrendingUp, Phone, MessageCircle, Clock, LayoutGrid, Table as TableIcon, Receipt, Database, History } from "lucide-react";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
@@ -10,7 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { toast } from "sonner";
-import { getBookedClients, resyncAllBookedClients, fullResyncAllBookedClients, BookedClientData, SyncDetail } from "@/lib/sheets-api";
+import { resyncAllBookedClients, fullResyncAllBookedClients, BookedClientData, SyncDetail } from "@/lib/sheets-api";
+import { useBookedCachedData } from "@/hooks/useBookedCachedData";
 import FinanceClientCard from "./FinanceClientCard";
 import PaymentHistorySheet from "./PaymentHistorySheet";
 import { SyncReportSheet } from "../booked/SyncReportSheet";
@@ -56,8 +57,7 @@ const parseClientEvents = (client: BookedClientData) => {
 
 const DesktopFinanceManager = () => {
   const navigate = useNavigate();
-  const [clients, setClients] = useState<BookedClientData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { clients, isLoading, refreshData, isSyncing } = useBookedCachedData();
   const [isResyncing, setIsResyncing] = useState(false);
   const [isFullResyncing, setIsFullResyncing] = useState(false);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
@@ -80,19 +80,6 @@ const DesktopFinanceManager = () => {
     syncDetails?: SyncDetail[];
   } | null>(null);
 
-  const fetchClients = async () => {
-    try {
-      setIsLoading(true);
-      const data = await getBookedClients();
-      setClients(data);
-    } catch (error) {
-      console.error("Error fetching clients:", error);
-      toast.error("Failed to load clients");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleResyncAll = async () => {
     try {
       setIsResyncing(true);
@@ -102,7 +89,7 @@ const DesktopFinanceManager = () => {
       } else {
         toast.info("All clients are up to date");
       }
-      await fetchClients();
+      await refreshData();
     } catch (error) {
       console.error("Error resyncing:", error);
       toast.error("Failed to resync");
@@ -126,7 +113,7 @@ const DesktopFinanceManager = () => {
       });
       
       setSyncReportOpen(true);
-      await fetchClients();
+      await refreshData();
     } catch (error) {
       console.error("Error performing full resync:", error);
       toast.error("Failed to perform full resync");
@@ -134,10 +121,6 @@ const DesktopFinanceManager = () => {
       setIsFullResyncing(false);
     }
   };
-
-  useEffect(() => {
-    fetchClients();
-  }, []);
 
   // Get payment status for a client - MUST be defined before useMemo that uses it
   const getPaymentStatus = (client: BookedClientData): 'fully-paid' | 'partial' | 'no-payment' => {
@@ -409,10 +392,10 @@ const DesktopFinanceManager = () => {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={fetchClients}
-                disabled={isLoading}
+                onClick={refreshData}
+                disabled={isLoading || isSyncing}
               >
-                <RefreshCw className={`h-4 w-4 text-slate-400 ${isLoading ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-4 w-4 text-slate-400 ${(isLoading || isSyncing) ? 'animate-spin' : ''}`} />
               </Button>
             </div>
           </div>
@@ -547,7 +530,7 @@ const DesktopFinanceManager = () => {
           ) : viewMode === 'cards' ? (
             <div className="grid grid-cols-3 gap-4">
               {sortedClients.map((client) => (
-                <FinanceClientCard key={client.bookedRowNumber} client={client} onRefresh={fetchClients} />
+                <FinanceClientCard key={client.bookedRowNumber} client={client} onRefresh={refreshData} />
               ))}
             </div>
           ) : (
@@ -726,7 +709,7 @@ const DesktopFinanceManager = () => {
             rowNumber={selectedClient.bookedRowNumber}
             registeredDateTimeAD={selectedClient.registeredDateTimeAD}
             paymentDatesAD={selectedClient.paymentDatesAD || ''}
-            onPaymentAdded={fetchClients}
+            onPaymentAdded={refreshData}
           />
         )}
         
