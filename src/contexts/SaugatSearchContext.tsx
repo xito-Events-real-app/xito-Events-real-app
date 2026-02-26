@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from "react";
 
 interface SaugatSearchContextType {
   isOpen: boolean;
@@ -32,6 +32,7 @@ function playSearchSound() {
 
 export function SaugatSearchProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
+  const lastSpaceTime = useRef<number>(0);
 
   const open = useCallback(() => {
     setIsOpen(true);
@@ -49,20 +50,38 @@ export function SaugatSearchProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // Global Ctrl+F / Cmd+F listener
+  // Double-space listener (only when not in input/textarea/contenteditable)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === " ") {
-        e.preventDefault();
-        toggle();
-      }
       if (e.key === "Escape" && isOpen) {
         close();
+        return;
+      }
+
+      if (e.key === " ") {
+        const el = document.activeElement;
+        if (
+          el instanceof HTMLInputElement ||
+          el instanceof HTMLTextAreaElement ||
+          (el instanceof HTMLElement && el.isContentEditable)
+        ) {
+          return;
+        }
+
+        const now = Date.now();
+        if (now - lastSpaceTime.current < 400) {
+          e.preventDefault();
+          toggle();
+          lastSpaceTime.current = 0;
+        } else {
+          lastSpaceTime.current = now;
+        }
       }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [toggle, close, isOpen]);
+
 
   return (
     <SaugatSearchContext.Provider value={{ isOpen, open, close, toggle }}>
