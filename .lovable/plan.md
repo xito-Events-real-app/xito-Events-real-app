@@ -1,48 +1,53 @@
 
 
-# Add "View Full Details" Button to Welcome Popup
+# Fix: Event Details Not Updating Instantly (Supabase-First Violation)
 
-## Problem
-Freelancers see the welcome popup but have no way to jump directly to the full event details sheet from it. They have to dismiss the popup, find the day on the calendar, and tap "Full Details" manually.
+## The Problem
 
-## Solution
-Add a large, flashing "View Full Details" button to each event card in the welcome popup. Tapping it dismisses the popup and immediately opens the `CrewScheduleEventSheet` for that specific assignment.
+When you save venue/event details, the data goes directly to Google Sheets, then re-reads from Sheets to update local state. But **the `event_details_cache` table in the database is never updated**. Every other module (Suite dashboard, Upcoming Events, Crew Schedule) reads from this database table, so they show stale data until Master Sync.
 
-## Changes
+## Where It Went Wrong -- 2 Violations
 
-### 1. Update `CrewWelcomePopup.tsx`
+### Violation 1: `updateEventDetail` (the write path)
+**File:** `src/hooks/useEventDetails.ts` lines 193-252
 
-- Add a new prop: `onViewFullDetails: (assignment: AssignmentRow) => void`
-- Pass it through to `EventPosterCard`
-- In `EventPosterCard`, add a large button at the bottom of each card:
-  - Text: "View Full Details" with an arrow icon
-  - Styling: full-width, tall (py-4), bold white text on a bright gradient background
-  - A new CSS animation `crew-button-flash` that creates a visible on-off glow/pulse effect on the button (alternating opacity and shadow intensity)
-- On click: call `onViewFullDetails(assignment)` which will dismiss the popup and open the sheet
+The Three-Layer Write Contract says:
+1. Instant local state update
+2. Fast database cache update (~50ms)  
+3. Background Google Sheets sync
 
-### 2. Add flashing button animation in `src/index.css`
+But `updateEventDetail` does the OPPOSITE:
+1. Writes to Google Sheets FIRST (slow, ~2-3s)
+2. Re-reads from Sheets to update local state
+3. **Never touches the database cache at all**
 
-```css
-@keyframes crew-button-flash {
-  0%, 100% { box-shadow: 0 0 8px rgba(255,255,255,0.2); opacity: 0.9; }
-  50% { box-shadow: 0 0 25px rgba(255,255,255,0.7), 0 0 50px rgba(168,85,247,0.4); opacity: 1; }
-}
-```
+### Violation 2: `fetchFromSheets` (the read-refresh path)
+**File:** `src/hooks/useEventDetails.ts` lines 116-156
 
-### 3. Update `CrewSchedule.tsx`
+When data is fetched from Sheets (either after an update or as a background refresh), the fresh data updates local React state but is **never written back to `event_details_cache`**. So the database stays stale even after a successful Sheets read.
 
-- Add state: `welcomeDetailAssignment: AssignmentRow | null` and `welcomeSheetOpen: boolean`
-- Pass `onViewFullDetails` callback to `CrewWelcomePopup` that:
-  1. Sets the selected assignment in state
-  2. Triggers popup dismiss (sets localStorage timestamp, hides popup)
-  3. Opens the `CrewScheduleEventSheet`
-- Render a `CrewScheduleEventSheet` at the page level, driven by `welcomeDetailAssignment` state
-- The sheet receives the assignment plus any cached event/contact details
+## The Fix
 
-### Button Design
-- Large size: `w-full py-4 text-base font-black uppercase tracking-wider`
-- Gradient: `bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500` (warm colors matching both today/tomorrow themes)
-- Flashing animation: `animate-[crew-button-flash_1.5s_ease-in-out_infinite]`
-- Rounded corners with ring: `rounded-xl ring-2 ring-white/30`
-- Icon: `ExternalLink` or `ChevronRight` from lucide-react
+### Change 1: Write to database FIRST in `updateEventDetail`
+
+After calling Google Sheets and getting success, immediately upsert the updated event into `event_details_cache` using the existing unique constraint `(registered_date_time_ad, event_index)`.
+
+The unique constraint already exists on the table, so upsert will work out of the box.
+
+### Change 2: Write back to database after `fetchFromSheets`
+
+When `fetchFromSheets` successfully loads fresh event data from Sheets, upsert ALL events for that client into `event_details_cache`. This ensures the database stays in sync whenever Sheets data is read.
+
+### Technical Details
+
+**In `updateEventDetail` (after line 230):** Add a database upsert using the fresh data that was just re-fetched from Sheets. The upsert maps each `EventDetail` object to the snake_case database columns and uses `onConflict: 'registered_date_time_ad,event_index'`.
+
+**In `fetchFromSheets` (after line 143):** After `setData(result.data)`, loop through `result.data.events` and upsert each event into `event_details_cache`. This covers both background refreshes and manual refetches.
+
+**Helper function:** Create a shared `upsertEventToCache(registeredDateTimeAD, event)` function to avoid duplicating the column mapping logic.
+
+### Result
+- Save venue details on Client Detail page --> database updates instantly
+- All other modules (Suite, Crew Schedule, Upcoming Events) see fresh data immediately
+- No Master Sync needed for event detail changes
 
