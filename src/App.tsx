@@ -85,58 +85,58 @@ function GlobalAutoSync() {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <BrowserRouter>
-        <AuthProvider>
-          <SaugatSearchProvider>
-          <SaugatSearch />
-          <Toaster />
-          <Sonner />
-          <Routes>
-            {/* Public routes - no auth required */}
-            <Route path="/client-form/:clientName/:clientId" element={<ClientContactForm />} />
-            <Route path="/crew-schedule/:freelancerName" element={<CrewSchedule />} />
-            <Route path="/login" element={<Login />} />
-            
-            {/* Protected routes */}
-            <Route path="/" element={
-              <ProtectedRoute>
-                <GlobalAutoSync />
-                <SuiteLanding />
-              </ProtectedRoute>
-            } />
-            
-            {/* Client Tracker Module */}
-            <Route path="/client-tracker" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/client-tracker/quick-add" element={<ProtectedRoute><QuickAdd /></ProtectedRoute>} />
-            <Route path="/client-tracker/search" element={<ProtectedRoute><Search /></ProtectedRoute>} />
-            <Route path="/client-tracker/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-            <Route path="/client-tracker/fresh-clients" element={<ProtectedRoute><FreshClients /></ProtectedRoute>} />
-            <Route path="/client-tracker/today" element={<ProtectedRoute><Today /></ProtectedRoute>} />
-            <Route path="/client-tracker/handler/:handlerName" element={<ProtectedRoute><HandlerClients /></ProtectedRoute>} />
-            <Route path="/client-tracker/client/:rowNumber" element={<ProtectedRoute><ClientDetail /></ProtectedRoute>} />
-            <Route path="/client-tracker/hot-dates" element={<ProtectedRoute><HotDates /></ProtectedRoute>} />
-            
-            {/* Booked Clients Module */}
-            <Route path="/booked-clients" element={<ProtectedRoute><BookedClients /></ProtectedRoute>} />
-            
-            {/* Other Modules */}
-            <Route path="/finance" element={<ProtectedRoute><FinanceManager /></ProtectedRoute>} />
-            <Route path="/tasks" element={<ProtectedRoute><DailyTasks /></ProtectedRoute>} />
-            <Route path="/video-edit" element={<ProtectedRoute><ComingSoon moduleId="video-edit-tracker" /></ProtectedRoute>} />
-            <Route path="/photo-edit" element={<ProtectedRoute><ComingSoon moduleId="photo-edit-tracker" /></ProtectedRoute>} />
-            <Route path="/files" element={<ProtectedRoute><FileManagement /></ProtectedRoute>} />
-            <Route path="/media" element={<ProtectedRoute><ComingSoon moduleId="album-media" /></ProtectedRoute>} />
-            <Route path="/vendors" element={<ProtectedRoute><Vendors /></ProtectedRoute>} />
-            <Route path="/my-accounts" element={<ProtectedRoute><MyAccounts /></ProtectedRoute>} />
-            <Route path="/benzo-keep" element={<ProtectedRoute><BenzoKeepPage /></ProtectedRoute>} />
-            <Route path="/freelancers" element={<ProtectedRoute><Freelancers /></ProtectedRoute>} />
-            <Route path="/freelancer/:freelancerName" element={<ProtectedRoute><FreelancerProfile /></ProtectedRoute>} />
-            
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </SaugatSearchProvider>
-        </AuthProvider>
-      </BrowserRouter>
+      <SaugatSearchProvider>
+        <BrowserRouter>
+          <AuthProvider>
+            <SaugatSearch />
+            <Toaster />
+            <Sonner />
+            <Routes>
+              {/* Public routes - no auth required */}
+              <Route path="/client-form/:clientName/:clientId" element={<ClientContactForm />} />
+              <Route path="/crew-schedule/:freelancerName" element={<CrewSchedule />} />
+              <Route path="/login" element={<Login />} />
+              
+              {/* Protected routes */}
+              <Route path="/" element={
+                <ProtectedRoute>
+                  <GlobalAutoSync />
+                  <SuiteLanding />
+                </ProtectedRoute>
+              } />
+              
+              {/* Client Tracker Module */}
+              <Route path="/client-tracker" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/client-tracker/quick-add" element={<ProtectedRoute><QuickAdd /></ProtectedRoute>} />
+              <Route path="/client-tracker/search" element={<ProtectedRoute><Search /></ProtectedRoute>} />
+              <Route path="/client-tracker/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+              <Route path="/client-tracker/fresh-clients" element={<ProtectedRoute><FreshClients /></ProtectedRoute>} />
+              <Route path="/client-tracker/today" element={<ProtectedRoute><Today /></ProtectedRoute>} />
+              <Route path="/client-tracker/handler/:handlerName" element={<ProtectedRoute><HandlerClients /></ProtectedRoute>} />
+              <Route path="/client-tracker/client/:rowNumber" element={<ProtectedRoute><ClientDetail /></ProtectedRoute>} />
+              <Route path="/client-tracker/hot-dates" element={<ProtectedRoute><HotDates /></ProtectedRoute>} />
+              
+              {/* Booked Clients Module */}
+              <Route path="/booked-clients" element={<ProtectedRoute><BookedClients /></ProtectedRoute>} />
+              
+              {/* Other Modules */}
+              <Route path="/finance" element={<ProtectedRoute><FinanceManager /></ProtectedRoute>} />
+              <Route path="/tasks" element={<ProtectedRoute><DailyTasks /></ProtectedRoute>} />
+              <Route path="/video-edit" element={<ProtectedRoute><ComingSoon moduleId="video-edit-tracker" /></ProtectedRoute>} />
+              <Route path="/photo-edit" element={<ProtectedRoute><ComingSoon moduleId="photo-edit-tracker" /></ProtectedRoute>} />
+              <Route path="/files" element={<ProtectedRoute><FileManagement /></ProtectedRoute>} />
+              <Route path="/media" element={<ProtectedRoute><ComingSoon moduleId="album-media" /></ProtectedRoute>} />
+              <Route path="/vendors" element={<ProtectedRoute><Vendors /></ProtectedRoute>} />
+              <Route path="/my-accounts" element={<ProtectedRoute><MyAccounts /></ProtectedRoute>} />
+              <Route path="/benzo-keep" element={<ProtectedRoute><BenzoKeepPage /></ProtectedRoute>} />
+              <Route path="/freelancers" element={<ProtectedRoute><Freelancers /></ProtectedRoute>} />
+              <Route path="/freelancer/:freelancerName" element={<ProtectedRoute><FreelancerProfile /></ProtectedRoute>} />
+              
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </AuthProvider>
+        </BrowserRouter>
+      </SaugatSearchProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );
