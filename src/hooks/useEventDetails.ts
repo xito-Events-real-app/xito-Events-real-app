@@ -9,25 +9,20 @@ export interface EventDetail {
   eventMonth: string;
   eventDay: string;
   eventDateAD: string;
-  // Venue (Columns J-N)
   venueType: string;
   venueName: string;
   venueCity: string;
   venueArea: string;
   venueMap: string;
-  // Event Timing (Columns O-P)
   eventStartTime: string;
   eventEndTime: string;
-  // Parlour (Columns Q-U)
   parlourType: string;
   parlourName: string;
   parlourCity: string;
   parlourArea: string;
   parlourMap: string;
-  // Parlour Timing (Columns V-W)
   parlourStartTime: string;
   parlourEndTime: string;
-  // Additional (Columns AE-AH, skipping X-AD)
   doGroomComeInMehndi: string;
   guestCount: string;
   eventDemands: string[];
@@ -79,6 +74,49 @@ function cacheRowToEventDetail(row: any): EventDetail {
     eventDemands: parseQuotedList(row.event_demands || ''),
     eventReferences: parseQuotedList(row.event_references || ''),
   };
+}
+
+// Upsert events into event_details_cache for instant cross-module sync
+async function upsertEventsToCache(registeredDateTimeAD: string, events: EventDetail[]) {
+  if (!events.length) return;
+
+  const rows = events.map(e => ({
+    registered_date_time_ad: registeredDateTimeAD,
+    event_index: e.eventIndex,
+    event_name: e.eventName,
+    event_year: e.eventYear,
+    event_month: e.eventMonth,
+    event_day: e.eventDay,
+    event_date_ad: e.eventDateAD,
+    venue_type: e.venueType,
+    venue_name: e.venueName,
+    venue_city: e.venueCity,
+    venue_area: e.venueArea,
+    venue_map: e.venueMap,
+    event_start_time: e.eventStartTime,
+    event_end_time: e.eventEndTime,
+    parlour_type: e.parlourType,
+    parlour_name: e.parlourName,
+    parlour_city: e.parlourCity,
+    parlour_area: e.parlourArea,
+    parlour_map: e.parlourMap,
+    parlour_start_time: e.parlourStartTime,
+    parlour_end_time: e.parlourEndTime,
+    do_groom_come_in_mehndi: e.doGroomComeInMehndi,
+    guest_count: e.guestCount,
+    event_demands: serializeQuotedList(e.eventDemands),
+    event_references: serializeQuotedList(e.eventReferences),
+    synced_to_sheet: true,
+    updated_at: new Date().toISOString(),
+  }));
+
+  const { error } = await supabase
+    .from('event_details_cache')
+    .upsert(rows, { onConflict: 'registered_date_time_ad,event_index' });
+
+  if (error) {
+    console.error('Failed to upsert event details to cache:', error);
+  }
 }
 
 // Background refresh cooldown: 5 minutes
@@ -142,6 +180,13 @@ export function useEventDetails(registeredDateTimeAD: string | undefined) {
 
       setData(result.data);
       lastRefreshMap.set(registeredDateTimeAD, Date.now());
+
+      // FIX Violation 2: Write fresh Sheets data back to database cache
+      if (result.data?.events?.length) {
+        upsertEventsToCache(registeredDateTimeAD, result.data.events).catch(err => {
+          console.error('Background cache upsert failed:', err);
+        });
+      }
     } catch (err) {
       if (!isBackground) {
         const message = err instanceof Error ? err.message : 'Failed to load event details';
@@ -229,6 +274,11 @@ export function useEventDetails(registeredDateTimeAD: string | undefined) {
       // Refresh from Sheets after update
       await fetchFromSheets(false);
 
+      // FIX Violation 1: Upsert ALL events for this client into database cache
+      // (fetchFromSheets already does this now via Violation 2 fix,
+      //  but we also do a targeted reload from cache to ensure consistency)
+      await loadFromCache();
+
       // Invalidate bulk event details cache so Upcoming Events shows fresh data
       try { sessionStorage.removeItem('bulk_event_details_cache'); } catch {}
       window.dispatchEvent(new CustomEvent('cache-updated', { detail: { type: 'event-details-invalidate' } }));
@@ -249,7 +299,7 @@ export function useEventDetails(registeredDateTimeAD: string | undefined) {
       console.error('Error updating event details:', err);
       return false;
     }
-  }, [registeredDateTimeAD, fetchFromSheets, data]);
+  }, [registeredDateTimeAD, fetchFromSheets, loadFromCache, data]);
 
   return {
     data,
