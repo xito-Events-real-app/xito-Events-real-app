@@ -1,4 +1,4 @@
-import { MessageCircle, Mail, MapPin, RefreshCw, Pencil, Clock, Trash2 } from "lucide-react";
+import { MessageCircle, Mail, MapPin, Pencil, Clock, Trash2, RefreshCw } from "lucide-react";
 import benzoAvatar from "@/assets/benzo-avatar.jpeg";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,6 @@ interface ClientHeroSectionProps {
   onCall: (type: 'DIRECT' | 'WHATSAPP') => void;
   onStatusClick: () => void;
   onEdit: () => void;
-  onSync: () => void;
   onAddComment: (comment: string) => Promise<void>;
   onAddQuotation: () => void;
   onAddFinalQuotation?: () => void;
@@ -29,7 +28,6 @@ interface ClientHeroSectionProps {
   isLoggingCall?: boolean;
   isChangingStatus?: boolean;
   isAddingComment?: boolean;
-  isSyncing?: boolean;
   isUpdatingPriority?: boolean;
   isDeleting?: boolean;
   eventDetailsData?: EventDetailsData | null;
@@ -74,7 +72,6 @@ const ClientHeroSection = ({
   onCall,
   onStatusClick,
   onEdit,
-  onSync,
   onAddComment,
   onAddQuotation,
   onAddFinalQuotation,
@@ -84,7 +81,6 @@ const ClientHeroSection = ({
   isLoggingCall = false,
   isChangingStatus = false,
   isAddingComment = false,
-  isSyncing = false,
   isUpdatingPriority = false,
   isDeleting = false,
   eventDetailsData,
@@ -154,15 +150,6 @@ const ClientHeroSection = ({
             <Badge className={`${getStatusColor(currentStatus)} text-xs px-3 py-1 shadow-lg`}>
               {currentStatus || 'UNTOUCHED'}
             </Badge>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onSync}
-              disabled={isSyncing}
-              className="rounded-full text-white/60 hover:text-white hover:bg-white/10 h-8 w-8"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-            </Button>
             <Button
               variant="ghost"
               size="icon"

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, RefreshCw, Calendar, Users, Bell, AlertTriangle, Phone, MessageCircle, LayoutGrid, Table as TableIcon, Database } from "lucide-react";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
@@ -9,7 +9,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { toast } from "sonner";
-import { getBookedClients, migrateExistingBookedClients, fullResyncAllBookedClients, BookedClientData } from "@/lib/sheets-api";
+import { migrateExistingBookedClients, fullResyncAllBookedClients, BookedClientData } from "@/lib/sheets-api";
+import { useBookedCachedData } from "@/hooks/useBookedCachedData";
 import EventClientCard from "./EventClientCard";
 import NepaliDateFilter from "./NepaliDateFilter";
 import { getMonthName, parseEventDetails } from "@/lib/nepali-months";
@@ -19,33 +20,19 @@ import NepaliDate from "nepali-date-converter";
 const DesktopBookedClients = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [clients, setClients] = useState<BookedClientData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { clients, isLoading, refreshData, isSyncing } = useBookedCachedData();
   const [isMigrating, setIsMigrating] = useState(false);
   const [isFullResyncing, setIsFullResyncing] = useState(false);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
 
-  const fetchClients = async () => {
-    try {
-      setIsLoading(true);
-      const data = await getBookedClients();
-      setClients(data);
-    } catch (error) {
-      console.error("Error fetching booked clients:", error);
-      toast.error("Failed to load booked clients");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleMigrate = async () => {
     try {
       setIsMigrating(true);
       const result = await migrateExistingBookedClients();
       toast.success(`Migrated ${result.migratedCount} clients`);
-      await fetchClients();
+      await refreshData();
     } catch (error) {
       console.error("Error migrating clients:", error);
       toast.error("Failed to migrate clients");
@@ -63,7 +50,7 @@ const DesktopBookedClients = () => {
       } else {
         toast.info("All data is already synchronized");
       }
-      await fetchClients();
+      await refreshData();
     } catch (error) {
       console.error("Error performing full resync:", error);
       toast.error("Failed to perform full resync");
@@ -71,8 +58,6 @@ const DesktopBookedClients = () => {
       setIsFullResyncing(false);
     }
   };
-
-  useEffect(() => { fetchClients(); }, []);
 
   const getDaysUntilEvent = (client: BookedClientData): number | null => {
     let eventDate: Date | null = null;
@@ -169,7 +154,7 @@ const DesktopBookedClients = () => {
               )}
             </Button>
             <Button variant="outline" onClick={handleMigrate} disabled={isMigrating}>{isMigrating ? "Migrating..." : "Migrate New"}</Button>
-            <Button variant="ghost" size="icon" onClick={fetchClients} disabled={isLoading}><RefreshCw className={`h-4 w-4 text-slate-400 ${isLoading ? 'animate-spin' : ''}`} /></Button>
+            <Button variant="ghost" size="icon" onClick={refreshData} disabled={isLoading || isSyncing}><RefreshCw className={`h-4 w-4 text-slate-400 ${(isLoading || isSyncing) ? 'animate-spin' : ''}`} /></Button>
           </div>
         </div>
       </div>
