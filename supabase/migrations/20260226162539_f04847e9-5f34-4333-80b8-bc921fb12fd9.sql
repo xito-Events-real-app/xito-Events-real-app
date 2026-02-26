@@ -1,0 +1,3 @@
+ALTER TABLE public.event_details_cache
+ADD CONSTRAINT event_details_cache_unique_event
+UNIQUE (registered_date_time_ad, event_index);
