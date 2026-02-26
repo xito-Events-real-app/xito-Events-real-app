@@ -49,17 +49,7 @@ function cacheRowToFreelancer(row: any): FreelancerData {
   };
 }
 
-// Trigger sync-all-data for freelancers if cache is empty
-async function triggerFreelancersSync(): Promise<void> {
-  try {
-    console.log('[freelancer-api] Cache empty, triggering sync-all-data for freelancers...');
-    await supabase.functions.invoke('sync-all-data', {
-      body: { tables: ['freelancers'] }
-    });
-  } catch (err) {
-    console.error('[freelancer-api] Failed to trigger sync:', err);
-  }
-}
+// triggerFreelancersSync removed — no more Sheets reads
 
 export async function getFreelancers(limit = 500): Promise<FreelancerData[]> {
   // Try Supabase cache first
@@ -105,26 +95,9 @@ export async function getFreelancers(limit = 500): Promise<FreelancerData[]> {
     console.warn('[freelancer-api] Cache read failed, falling back to Sheets:', err);
   }
 
-  // Fallback: original Google Sheets call
-  const { data, error } = await supabase.functions.invoke('google-sheets', {
-    body: { action: 'getFreelancers', limit }
-  });
-
-  if (error) {
-    console.error('Error fetching freelancers:', error);
-    throw new Error('Failed to fetch freelancers');
-  }
-
-  if (!data.success) {
-    throw new Error(data.error || 'Failed to fetch freelancers');
-  }
-
-  const freelancers = data.data || [];
-
-  // Background: populate cache for next time
-  triggerFreelancersSync().catch(() => {});
-
-  return freelancers;
+  // Cache empty — return empty array (no Sheets fallback)
+  console.log('[freelancer-api] Cache empty, returning empty array');
+  return [];
 }
 
 export async function addFreelancer(freelancerData: Partial<FreelancerData>): Promise<void> {
@@ -324,9 +297,6 @@ export async function syncFreelancerCategories(): Promise<{ mirrored: number }> 
   if (!data.success) {
     throw new Error(data.error || 'Failed to sync freelancer categories');
   }
-
-  // Re-sync cache after category sync
-  triggerFreelancersSync().catch(() => {});
 
   return data.data;
 }

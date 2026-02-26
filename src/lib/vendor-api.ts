@@ -46,16 +46,7 @@ function cacheRowToVendor(row: any): VendorData {
   };
 }
 
-async function triggerVendorsSync(): Promise<void> {
-  try {
-    console.log('[vendor-api] Cache empty, triggering sync-all-data for vendors...');
-    await supabase.functions.invoke('sync-all-data', {
-      body: { tables: ['vendors'] }
-    });
-  } catch (err) {
-    console.error('[vendor-api] Failed to trigger sync:', err);
-  }
-}
+// triggerVendorsSync removed — no more Sheets reads
 
 export async function getVendors(limit = 500): Promise<VendorData[]> {
   // Try Supabase cache first
@@ -74,24 +65,9 @@ export async function getVendors(limit = 500): Promise<VendorData[]> {
     console.warn('[vendor-api] Cache read failed, falling back to Sheets:', err);
   }
 
-  // Fallback: original Google Sheets call
-  const { data, error } = await supabase.functions.invoke('google-sheets', {
-    body: { action: 'getVendors', limit }
-  });
-
-  if (error) {
-    console.error('Error fetching vendors:', error);
-    throw new Error('Failed to fetch vendors');
-  }
-
-  if (!data.success) {
-    throw new Error(data.error || 'Failed to fetch vendors');
-  }
-
-  // Background: populate cache
-  triggerVendorsSync().catch(() => {});
-
-  return data.data || [];
+  // Cache empty — return empty array (no Sheets fallback)
+  console.log('[vendor-api] Cache empty, returning empty array');
+  return [];
 }
 
 export async function getVendorTypes(): Promise<string[]> {
@@ -112,21 +88,9 @@ export async function getVendorTypes(): Promise<string[]> {
     console.warn('[vendor-api] Cache read failed for types:', err);
   }
 
-  // Fallback
-  const { data, error } = await supabase.functions.invoke('google-sheets', {
-    body: { action: 'getVendorTypes' }
-  });
-
-  if (error) {
-    console.error('Error fetching vendor types:', error);
-    throw new Error('Failed to fetch vendor types');
-  }
-
-  if (!data.success) {
-    throw new Error(data.error || 'Failed to fetch vendor types');
-  }
-
-  return data.data || [];
+  // Cache empty — return empty array (no Sheets fallback)
+  console.log('[vendor-api] No vendor types in cache');
+  return [];
 }
 
 export async function addVendor(vendorData: Partial<VendorData>): Promise<void> {

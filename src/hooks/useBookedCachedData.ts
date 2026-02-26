@@ -1,14 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { BookedClientData } from "@/lib/sheets-api";
 import { 
-  getCachedBookedClients, 
-  setCachedBookedClients, 
   notifyCacheUpdate
 } from "@/lib/cache-manager";
 import {
   loadBookedClientsFromCache,
   isCachePopulated,
-  populateCacheFromSheets,
 } from "@/lib/clients-supabase-cache";
 import {
   getMemoryBookedClients,
@@ -26,10 +23,6 @@ interface UseBookedCachedDataResult {
   error: string | null;
 }
 
-const fetchState = {
-  hasRefreshed: false,
-};
-
 export function useBookedCachedData(): UseBookedCachedDataResult {
   const [clients, setClients] = useState<BookedClientData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -38,10 +31,10 @@ export function useBookedCachedData(): UseBookedCachedDataResult {
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const loadData = useCallback(async (forceRefresh = false) => {
+  const loadData = useCallback(async () => {
     try {
       // Step 0: Check in-memory cache first (0ms)
-      if (!forceRefresh && isBookedMemoryLoaded()) {
+      if (isBookedMemoryLoaded()) {
         const memBooked = getMemoryBookedClients()!;
         setClients(memBooked);
         setIsFromCache(true);
@@ -50,10 +43,10 @@ export function useBookedCachedData(): UseBookedCachedDataResult {
         return;
       }
 
-      // Step 1: Try Supabase cache first
+      // Step 1: Try Supabase cache
       const hasCache = await isCachePopulated();
 
-      if (hasCache && !forceRefresh) {
+      if (hasCache) {
         const cachedClients = await loadBookedClientsFromCache();
         setClients(cachedClients);
         setMemoryBookedClients(cachedClients);
@@ -61,35 +54,11 @@ export function useBookedCachedData(): UseBookedCachedDataResult {
         setIsLoading(false);
         setLastSyncedAt(new Date());
       } else {
-        // No cache - pull from Sheets
-        setIsLoading(true);
-        setIsSyncing(true);
-
-        try {
-          await populateCacheFromSheets();
-          const freshClients = await loadBookedClientsFromCache();
-          setClients(freshClients);
-          setMemoryBookedClients(freshClients);
-          await setCachedBookedClients(freshClients);
-
-          setLastSyncedAt(new Date());
-          setIsFromCache(false);
-          setError(null);
-        } catch (err) {
-          console.error('Failed to populate booked cache:', err);
-
-          // Fallback: try IndexedDB
-          const cached = await getCachedBookedClients();
-          if (cached?.clients && cached.clients.length > 0) {
-            setClients(cached.clients);
-            setIsFromCache(true);
-          } else {
-            setError(err instanceof Error ? err.message : 'Failed to load data');
-          }
-        } finally {
-          setIsLoading(false);
-          setIsSyncing(false);
-        }
+        // Cache empty — show empty state (no Sheets fallback)
+        console.log('[useBookedCachedData] Cache empty, showing empty state');
+        setClients([]);
+        setIsLoading(false);
+        setError('Cache is empty. Data needs to be populated.');
       }
     } catch (err) {
       console.error('Booked data loading error:', err);
@@ -98,29 +67,23 @@ export function useBookedCachedData(): UseBookedCachedDataResult {
     }
   }, []);
 
+  // Refresh: re-read from database cache only
   const refreshData = useCallback(async () => {
     setIsSyncing(true);
     setError(null);
 
-    const syncTimeout = setTimeout(() => {
-      setIsSyncing(false);
-    }, 60000);
-
     try {
-      await populateCacheFromSheets();
       const freshClients = await loadBookedClientsFromCache();
       setClients(freshClients);
       setMemoryBookedClients(freshClients);
-      await setCachedBookedClients(freshClients);
 
       setLastSyncedAt(new Date());
-      setIsFromCache(false);
+      setIsFromCache(true);
       notifyCacheUpdate('booked-clients', freshClients);
     } catch (err) {
       console.error('Booked refresh failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to refresh');
     } finally {
-      clearTimeout(syncTimeout);
       setIsSyncing(false);
     }
   }, []);
@@ -129,29 +92,23 @@ export function useBookedCachedData(): UseBookedCachedDataResult {
     loadData();
   }, [loadData]);
 
-  // Listen for cache updates and invalidation
+  // Listen for cache updates (but NOT invalidate events)
   useEffect(() => {
     const handleCacheUpdate = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (detail?.type === 'booked-clients' && Array.isArray(detail.data)) {
-        // Defer to avoid setState during React's render phase
         setTimeout(() => {
           setClients(detail.data as BookedClientData[]);
           setLastSyncedAt(new Date());
           setIsFromCache(false);
         }, 0);
       }
-      if (detail?.type === 'booked-clients-invalidate') {
-        fetchState.hasRefreshed = false;
-        setTimeout(() => {
-          refreshData();
-        }, 0);
-      }
+      // REMOVED: 'booked-clients-invalidate' listener — no more Sheets pulls
     };
 
     window.addEventListener('cache-updated', handleCacheUpdate);
     return () => window.removeEventListener('cache-updated', handleCacheUpdate);
-  }, [refreshData]);
+  }, []);
 
   return {
     clients,

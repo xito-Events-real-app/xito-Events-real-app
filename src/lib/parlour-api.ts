@@ -67,24 +67,9 @@ export async function getParlourTypes(): Promise<string[]> {
     console.warn('[parlour-api] Cache read failed for parlour types:', err);
   }
 
-  // Fallback
-  const { data, error } = await supabase.functions.invoke('google-sheets', {
-    body: { action: 'getParlourTypes' }
-  });
-
-  if (error) {
-    console.error('Error fetching parlour types:', error);
-    throw new Error('Failed to fetch parlour types');
-  }
-
-  if (!data.success) {
-    throw new Error(data.error || 'Failed to fetch parlour types');
-  }
-
-  // Background: populate cache
-  try { supabase.functions.invoke('sync-all-data', { body: { action: 'pull-logistics' } }).catch(() => {}); } catch { /* ignore */ }
-
-  return data.data || [];
+  // Cache empty — return empty array (no Sheets fallback)
+  console.log('[parlour-api] No parlour types in cache');
+  return [];
 }
 
 /**
@@ -109,25 +94,9 @@ export async function getParloursByType(parlourType: string): Promise<ParlourEnt
     console.warn('[parlour-api] Cache read failed for parlours:', err);
   }
 
-  // Fallback
-  const { data, error } = await supabase.functions.invoke('google-sheets', {
-    body: { action: 'getParloursByType', data: { parlourType } }
-  });
-
-  if (error) {
-    console.error('Error fetching parlours:', error);
-    throw new Error('Failed to fetch parlours');
-  }
-
-  if (!data.success) {
-    if (data.error?.includes('Unable to parse range') || data.error?.includes('sheet')) {
-      console.warn(`No sheet found for parlour type: ${parlourType}`);
-      return [];
-    }
-    throw new Error(data.error || 'Failed to fetch parlours');
-  }
-
-  return data.data || [];
+  // Cache empty — return empty array (no Sheets fallback)
+  console.log(`[parlour-api] No parlours for "${parlourType}" in cache`);
+  return [];
 }
 
 /**

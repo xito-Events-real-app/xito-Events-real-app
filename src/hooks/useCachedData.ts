@@ -2,18 +2,14 @@ import { useState, useEffect, useCallback } from "react";
 import { ClientData, DropdownData } from "@/lib/sheets-api";
 import { 
   getCachedData, 
-  setCachedClients, 
   setCachedDropdowns, 
-  CacheData,
   notifyCacheUpdate,
   updateClientInCache
 } from "@/lib/cache-manager";
 import { getQueueLength } from "@/lib/sync-queue";
-import { supabase } from "@/integrations/supabase/client";
 import {
   loadClientsFromCache,
   isCachePopulated,
-  populateCacheFromSheets,
   updateClientInCacheRecord,
 } from "@/lib/clients-supabase-cache";
 import {
@@ -38,48 +34,6 @@ interface UseCachedDataResult {
   error: string | null;
 }
 
-const fetchState = {
-  promise: null as Promise<{ clients: ClientData[]; dropdowns: DropdownData }> | null,
-  hasRefreshed: false,
-};
-
-// Fetch dropdowns from Google Sheets (with caching to avoid repeated API calls)
-let dropdownFetchPromise: Promise<DropdownData> | null = null;
-
-async function fetchDropdowns(): Promise<DropdownData> {
-  // Deduplicate concurrent calls
-  if (dropdownFetchPromise) return dropdownFetchPromise;
-
-  dropdownFetchPromise = (async () => {
-    try {
-      const [dropdownsResult, eventSetupResult] = await Promise.all([
-        supabase.functions.invoke("google-sheets", {
-          body: { action: "getDropdowns" },
-        }),
-        supabase.functions.invoke("google-sheets", {
-          body: { action: "getEventSetupData" },
-        }),
-      ]);
-
-      if (dropdownsResult.error) throw new Error(dropdownsResult.error.message);
-      if (!dropdownsResult.data?.success) throw new Error(dropdownsResult.data?.error || "Failed to fetch dropdowns");
-
-      const dropdowns = dropdownsResult.data.data as DropdownData;
-      if (eventSetupResult.data?.success) {
-        dropdowns.allEvents = eventSetupResult.data.data || [];
-      } else {
-        dropdowns.allEvents = [];
-      }
-
-      return dropdowns;
-    } finally {
-      dropdownFetchPromise = null;
-    }
-  })();
-
-  return dropdownFetchPromise;
-}
-
 export function useCachedData(): UseCachedDataResult {
   const [clients, setClients] = useState<ClientData[]>([]);
   const [dropdowns, setDropdowns] = useState<DropdownData | null>(null);
@@ -90,10 +44,10 @@ export function useCachedData(): UseCachedDataResult {
   const [pendingSyncs, setPendingSyncs] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  const loadData = useCallback(async (forceRefresh = false) => {
+  const loadData = useCallback(async () => {
     try {
       // Step 0: Check in-memory cache first (0ms, instant)
-      if (!forceRefresh && isMemoryLoaded()) {
+      if (isMemoryLoaded()) {
         const memClients = getMemoryClients()!;
         const memDD = getMemoryDropdowns();
         setClients(memClients);
@@ -104,10 +58,10 @@ export function useCachedData(): UseCachedDataResult {
         return;
       }
 
-      // Step 1: Try Supabase cache first (instant ~50ms)
+      // Step 1: Try Supabase cache (instant ~50ms)
       const hasCache = await isCachePopulated();
 
-      if (hasCache && !forceRefresh) {
+      if (hasCache) {
         const cachedClients = await loadClientsFromCache();
         setClients(cachedClients);
         setMemoryClients(cachedClients);
@@ -115,62 +69,18 @@ export function useCachedData(): UseCachedDataResult {
         setIsLoading(false);
         setLastSyncedAt(new Date());
 
-        // Load dropdowns from IndexedDB (small, static)
+        // Load dropdowns from IndexedDB
         const cached = await getCachedData();
         if (cached?.dropdowns) {
           setDropdowns(cached.dropdowns);
           setMemoryDropdowns(cached.dropdowns);
-        } else {
-          // Fetch dropdowns in background
-          try {
-            const dd = await fetchDropdowns();
-            setDropdowns(dd);
-            await setCachedDropdowns(dd);
-            setMemoryDropdowns(dd);
-          } catch (err) {
-            console.log('Dropdown fetch failed, continuing without:', err);
-          }
         }
       } else {
-        // No cache - pull from Google Sheets (one-time ~5s)
-        setIsLoading(true);
-        setIsSyncing(true);
-
-        try {
-          // Pull clients into Supabase cache
-          await populateCacheFromSheets();
-          const freshClients = await loadClientsFromCache();
-          setClients(freshClients);
-          setMemoryClients(freshClients);
-
-          // Also cache to IndexedDB for dropdowns
-          await setCachedClients(freshClients);
-
-          // Fetch dropdowns
-          const dd = await fetchDropdowns();
-          setDropdowns(dd);
-          await setCachedDropdowns(dd);
-          setMemoryDropdowns(dd);
-
-          setLastSyncedAt(new Date());
-          setIsFromCache(false);
-          setError(null);
-        } catch (err) {
-          console.error('Failed to populate cache:', err);
-          
-          // Fallback: try IndexedDB
-          const cached = await getCachedData();
-          if (cached?.clients && cached.clients.length > 0) {
-            setClients(cached.clients);
-            setDropdowns(cached.dropdowns);
-            setIsFromCache(true);
-          } else {
-            setError(err instanceof Error ? err.message : 'Failed to load data');
-          }
-        } finally {
-          setIsLoading(false);
-          setIsSyncing(false);
-        }
+        // Cache is empty — show empty state (no Sheets fallback)
+        console.log('[useCachedData] Cache empty, showing empty state');
+        setClients([]);
+        setIsLoading(false);
+        setError('Cache is empty. Data needs to be populated.');
       }
     } catch (err) {
       console.error('Data loading error:', err);
@@ -179,37 +89,29 @@ export function useCachedData(): UseCachedDataResult {
     }
   }, []);
 
-  // Force refresh: pull fresh from Google Sheets
+  // Refresh: re-read from database cache only
   const refreshData = useCallback(async () => {
     setIsSyncing(true);
     setError(null);
 
-    const syncTimeout = setTimeout(() => {
-      setIsSyncing(false);
-      console.warn('Sync timeout reached');
-    }, 60000);
-
     try {
-      await populateCacheFromSheets();
       const freshClients = await loadClientsFromCache();
       setClients(freshClients);
       setMemoryClients(freshClients);
-      await setCachedClients(freshClients);
 
-      // Also refresh dropdowns
-      const dd = await fetchDropdowns();
-      setDropdowns(dd);
-      await setCachedDropdowns(dd);
-      setMemoryDropdowns(dd);
+      // Reload dropdowns from IndexedDB
+      const cached = await getCachedData();
+      if (cached?.dropdowns) {
+        setDropdowns(cached.dropdowns);
+        setMemoryDropdowns(cached.dropdowns);
+      }
 
       setLastSyncedAt(new Date());
-      setIsFromCache(false);
-      notifyCacheUpdate('all', { clients: freshClients, dropdowns: dd });
+      setIsFromCache(true);
     } catch (err) {
       console.error('Refresh failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to refresh');
     } finally {
-      clearTimeout(syncTimeout);
       setIsSyncing(false);
     }
   }, []);
@@ -246,7 +148,7 @@ export function useCachedData(): UseCachedDataResult {
     loadData();
   }, [loadData]);
 
-  // Listen for cache updates from other operations
+  // Listen for cache updates from other operations (but NOT invalidate events)
   useEffect(() => {
     const handleCacheUpdate = (e: CustomEvent<{ type: string; data: unknown }>) => {
       if (e.detail.type === 'clients' && Array.isArray(e.detail.data)) {
@@ -255,15 +157,12 @@ export function useCachedData(): UseCachedDataResult {
       if (e.detail.type === 'dropdowns' && e.detail.data) {
         setDropdowns(e.detail.data as DropdownData);
       }
-      if (e.detail.type === 'clients-invalidate') {
-        fetchState.hasRefreshed = false;
-        refreshData();
-      }
+      // REMOVED: 'clients-invalidate' listener — no more Sheets pulls
     };
 
     window.addEventListener('cache-updated', handleCacheUpdate as EventListener);
     return () => window.removeEventListener('cache-updated', handleCacheUpdate as EventListener);
-  }, [refreshData]);
+  }, []);
 
   // Listen for queue changes
   useEffect(() => {

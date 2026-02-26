@@ -17,7 +17,6 @@ import {
   getFilteredFreelancersByRole,
   FreelancerAssignment,
   FreelancerField,
-  fullSyncFreelancerAssignments,
   updateRequiredCrewCategories,
   CATEGORY_CODES,
 } from "@/lib/freelancer-assignment-api";
@@ -28,7 +27,6 @@ import {
   isCachePopulated,
   getUnsyncedCount,
   pushUnsyncedToSheets,
-  populateCacheFromSheets,
 } from "@/lib/freelancer-assignment-cache";
 import { getFreelancers, FreelancerData } from "@/lib/freelancer-api";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
@@ -194,17 +192,9 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
   const loadData = useCallback(async (fromSheets = false) => {
     setLoading(true);
     try {
-      if (fromSheets) {
-        // Pull fresh data from Sheets into Supabase cache
-        await populateCacheFromSheets();
-      } else {
-        // Check if cache has data; if not, populate from sheets
-        const hasCache = await isCachePopulated();
-        if (!hasCache) {
-          await populateCacheFromSheets();
-        }
-      }
-      // Always load from Supabase (fast)
+      // Sheets fallback removed — database cache only.
+      // If cache is empty, it needs to be populated externally.
+      
       const [allAssignments, allFreelancers] = await Promise.all([
         loadAssignmentsFromCache(),
         getFreelancers(),
@@ -238,21 +228,15 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
     try {
       // First push any pending local changes to sheets
       await pushUnsyncedToSheets();
-      // Step 1: Sync EVENT DETAILS
-      await supabase.functions.invoke('google-sheets', {
-        body: { action: 'fullSyncEventDetails' }
-      });
-      // Step 2: Sync FREELANCERS
-      const result = await fullSyncFreelancerAssignments();
-      // Step 3: Sync CONTACT DETAILS
-      await supabase.functions.invoke('google-sheets', {
-        body: { action: 'fullSyncContactDetails' }
-      });
+      
+      // Removed fullSync calls — these were pulling from Sheets. 
+      // Sync is now push-only from here.
+      
       if (!silent) {
-        toast.success(`Synced! ${result.copiedCount} new, ${result.updatedCount} updated`);
+        toast.success(`Synced! Local changes pushed to spreadsheet.`);
       }
-      // Refresh Supabase cache from sheets
-      await loadData(true);
+      // Refresh Supabase cache (just re-read what's in DB)
+      await loadData(false);
     } catch (err) {
       if (!silent) toast.error("Sync failed");
     } finally {

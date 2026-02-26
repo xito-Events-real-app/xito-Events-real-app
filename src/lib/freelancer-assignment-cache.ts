@@ -162,11 +162,4 @@ export async function pushUnsyncedToSheets(): Promise<number> {
   return data?.syncedCount || 0;
 }
 
-/** Populate Supabase cache from Google Sheets (full pull) */
-export async function populateCacheFromSheets(): Promise<number> {
-  const { data, error } = await supabase.functions.invoke('sync-crew-to-sheets', {
-    body: { action: 'pull' }
-  });
-  if (error) throw error;
-  return data?.count || 0;
-}
+// populateCacheFromSheets REMOVED — database is the sole source of truth

@@ -67,24 +67,9 @@ export async function getVenueTypes(): Promise<string[]> {
     console.warn('[event-venue-api] Cache read failed for venue types:', err);
   }
 
-  // Fallback
-  const { data, error } = await supabase.functions.invoke('google-sheets', {
-    body: { action: 'getEventDetailsSetupData' }
-  });
-
-  if (error) {
-    console.error('Error fetching venue types:', error);
-    throw new Error('Failed to fetch venue types');
-  }
-
-  if (!data.success) {
-    throw new Error(data.error || 'Failed to fetch venue types');
-  }
-
-  // Background: populate cache
-  try { supabase.functions.invoke('sync-all-data', { body: { action: 'pull-logistics' } }).catch(() => {}); } catch { /* ignore */ }
-
-  return data.data || [];
+  // Cache empty — return empty array (no Sheets fallback)
+  console.log('[event-venue-api] No venue types in cache');
+  return [];
 }
 
 /**
@@ -109,25 +94,9 @@ export async function getVenuesByType(venueType: string): Promise<VenueEntry[]> 
     console.warn('[event-venue-api] Cache read failed for venues:', err);
   }
 
-  // Fallback
-  const { data, error } = await supabase.functions.invoke('google-sheets', {
-    body: { action: 'getVenuesByType', data: { venueType } }
-  });
-
-  if (error) {
-    console.error('Error fetching venues:', error);
-    throw new Error('Failed to fetch venues');
-  }
-
-  if (!data.success) {
-    if (data.error?.includes('Unable to parse range') || data.error?.includes('sheet')) {
-      console.warn(`No sheet found for venue type: ${venueType}`);
-      return [];
-    }
-    throw new Error(data.error || 'Failed to fetch venues');
-  }
-
-  return data.data || [];
+  // Cache empty — return empty array (no Sheets fallback)
+  console.log(`[event-venue-api] No venues for "${venueType}" in cache`);
+  return [];
 }
 
 /**
@@ -171,23 +140,4 @@ export async function addVenueEntry(
   }
 }
 
-/**
- * Refreshes client venue/parlour data from vendor sheets.
- */
-export async function refreshClientVendorData(registeredDateTimeAD: string): Promise<boolean> {
-  if (!registeredDateTimeAD) return false;
-  
-  const { data, error } = await supabase.functions.invoke('google-sheets', {
-    body: {
-      action: 'refreshClientVendorData',
-      data: { registeredDateTimeAD }
-    }
-  });
-
-  if (error) {
-    console.error('Error refreshing vendor data:', error);
-    return false;
-  }
-
-  return data?.success || false;
-}
+// refreshClientVendorData removed — no more Sheets reads
