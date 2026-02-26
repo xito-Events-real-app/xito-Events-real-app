@@ -5,6 +5,8 @@ import { ClientData, updateClientStatus, updateClientHandler, logCallAttempt, ge
 import { getHandlerInitials, parseEventDetails, formatLocationDisplay } from "@/lib/nepali-months";
 import { getClientDetailPath } from "@/lib/client-navigation";
 import { cn } from "@/lib/utils";
+import { generateStatusLogEntry, computePaymentUpdate } from "@/lib/timestamp-utils";
+import { updateClientFieldInCache, migrateClientToBookedInCache } from "@/lib/clients-supabase-cache";
 import { StarRating } from "@/components/ui/star-rating";
 import {
   DropdownMenu,
@@ -506,17 +508,23 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
 
     setIsUpdating(true);
     try {
-      const result = await updateClientStatus(
-        client.rowNumber,
-        pendingStatus,
-        currentStatusLog
-      );
-      setCurrentStatusLog(result.statusLog);
+      // 1. Compute new status log locally
+      const newStatusLog = generateStatusLogEntry(pendingStatus, currentStatusLog);
+
+      // 2. Instant local state update
+      setCurrentStatusLog(newStatusLog);
       toast.success(`Status updated to ${pendingStatus}`);
-      
+
       if (onStatusChange) {
-        onStatusChange(client, pendingStatus, result.statusLog);
+        onStatusChange(client, pendingStatus, newStatusLog);
       }
+
+      // 3. Fast Supabase cache update
+      await updateClientFieldInCache(client.registeredDateTimeAD, 'statusLog', newStatusLog);
+
+      // 4. Background Sheets sync (non-blocking)
+      updateClientStatus(client.rowNumber, pendingStatus, currentStatusLog)
+        .catch(err => console.error('[BG-SYNC] Status to Sheets failed:', err));
     } catch (err) {
       console.error("Failed to update status:", err);
       toast.error("Failed to update status");
@@ -1137,23 +1145,15 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
       
       const quotationData = lines.join('\n');
       
-      // Save to Column V
-      await updateClientQuotation(client.rowNumber, quotationData, client.registeredDateTimeAD);
-      
-      // Update local state
+      // 1. Instant local state update
       setCurrentQuotationData(quotationData);
-      
-      // Close dialog
       setShowQuotationDialog(false);
-      
-      // Reset form
       setQuotationBasic('');
       setQuotationStandard('');
       setQuotationPremium('');
       setQuotationWtnSpecial('');
       
       // If pendingStatus was set from handleStatusClick interception, show confirmation
-      // Otherwise find the QUOTATION SENT status
       if (pendingStatus) {
         setShowConfirmDialog(true);
       } else {
@@ -1165,6 +1165,13 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
       }
       
       toast.success("Quotation saved successfully");
+
+      // 2. Fast Supabase cache update
+      await updateClientFieldInCache(client.registeredDateTimeAD, 'quotationData', quotationData);
+
+      // 3. Background Sheets sync (non-blocking)
+      updateClientQuotation(client.rowNumber, quotationData, client.registeredDateTimeAD)
+        .catch(err => console.error('[BG-SYNC] Quotation to Sheets failed:', err));
     } catch (err) {
       console.error("Failed to save quotation:", err);
       toast.error("Failed to save quotation");
@@ -1178,24 +1185,34 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
     if (!client.rowNumber) return;
     
     const finalData = `${packageName}: NPR ${formatNPR(amount)}/-`;
+    const newStatus = pendingStatus || 'ADVANCE PENDING';
+    const newStatusLog = generateStatusLogEntry(newStatus, currentStatusLog);
     
     setIsSavingAdvancePending(true);
     try {
-      // Save final quotation
-      const quotationResult = await updateFinalQuotation(client.rowNumber, finalData, client.registeredDateTimeAD);
-      setCurrentFinalQuotation(quotationResult.finalQuotation);
-      
-      // Update status to ADVANCE PENDING
-      const statusResult = await updateClientStatus(client.rowNumber, pendingStatus || 'ADVANCE PENDING', currentStatusLog);
-      setCurrentStatusLog(statusResult.statusLog);
+      // 1. Instant local state update
+      setCurrentFinalQuotation(finalData);
+      setCurrentStatusLog(newStatusLog);
       
       if (onStatusChange) {
-        onStatusChange(client, pendingStatus || 'ADVANCE PENDING', statusResult.statusLog);
+        onStatusChange(client, newStatus, newStatusLog);
       }
       
       toast.success('Final quotation locked & status updated to ADVANCE PENDING');
       setShowAdvancePendingDialog(false);
       setPendingStatus(null);
+
+      // 2. Fast Supabase cache updates
+      await Promise.all([
+        updateClientFieldInCache(client.registeredDateTimeAD, 'finalQuotation', finalData),
+        updateClientFieldInCache(client.registeredDateTimeAD, 'statusLog', newStatusLog),
+      ]);
+
+      // 3. Background Sheets sync (non-blocking)
+      updateFinalQuotation(client.rowNumber, finalData, client.registeredDateTimeAD)
+        .catch(err => console.error('[BG-SYNC] Final quotation to Sheets failed:', err));
+      updateClientStatus(client.rowNumber, newStatus, currentStatusLog)
+        .catch(err => console.error('[BG-SYNC] Status to Sheets failed:', err));
     } catch (err) {
       console.error('Failed to save final quotation:', err);
       toast.error('Failed to save final quotation');
@@ -1216,45 +1233,58 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
     
     const parsedFinal = parseFinalQuotation(currentFinalQuotation);
     const finalAmount = parsedFinal ? parseInt(parsedFinal.amount.replace(/[^0-9]/g, '')) : 0;
+    const newStatus = pendingStatus || 'BOOKED';
+    const newStatusLog = generateStatusLogEntry(newStatus, currentStatusLog);
     
     setIsSavingBookedPayment(true);
     try {
-      // Add payment
-      const paymentResult = await addPayment(
-        client.rowNumber,
-        data.amount,
-        data.paymentType,
-        data.nepaliDate,
-        data.adDate,
-        data.bank,
-        currentPaymentsMade,
-        currentPaymentDatesAD,
-        finalAmount,
-        client.registeredDateTimeAD,
-        client.clientName
-      );
-      
-      setCurrentPaymentsMade(paymentResult.paymentsMade);
-      setCurrentRemainingPayment(paymentResult.remainingPayment);
-      
-      // Update status to BOOKED
-      const statusResult = await updateClientStatus(client.rowNumber, pendingStatus || 'BOOKED', currentStatusLog);
-      setCurrentStatusLog(statusResult.statusLog);
+      // 1. Compute payment locally
+      const paymentUpdate = computePaymentUpdate({
+        paymentAmount: data.amount,
+        paymentType: data.paymentType,
+        nepaliDate: data.nepaliDate,
+        nepaliDateAD: data.adDate,
+        bank: data.bank,
+        existingPaymentsMade: currentPaymentsMade,
+        existingPaymentDatesAD: currentPaymentDatesAD,
+        finalQuotationAmount: finalAmount,
+      });
+
+      // 2. Instant local state update
+      setCurrentPaymentsMade(paymentUpdate.updatedPaymentsMade);
+      setCurrentRemainingPayment(paymentUpdate.remainingPayment);
+      setCurrentStatusLog(newStatusLog);
       
       if (onStatusChange) {
-        onStatusChange(client, pendingStatus || 'BOOKED', statusResult.statusLog);
+        onStatusChange(client, newStatus, newStatusLog);
       }
       
       if (onPaymentAdded) {
-        onPaymentAdded(client, paymentResult.paymentsMade, paymentResult.remainingPayment);
+        onPaymentAdded(client, paymentUpdate.updatedPaymentsMade, paymentUpdate.remainingPayment);
       }
       
-      // Invalidate booked clients cache to force refresh on next access
       notifyCacheUpdate('booked-clients-invalidate');
       
       toast.success('Payment recorded & status updated to BOOKED');
       setShowBookedPaymentDialog(false);
       setPendingStatus(null);
+
+      // 3. Fast Supabase cache update — migrate to booked atomically
+      await migrateClientToBookedInCache(
+        client.registeredDateTimeAD,
+        newStatusLog,
+        paymentUpdate.updatedPaymentsMade,
+        paymentUpdate.updatedPaymentDatesAD,
+        paymentUpdate.remainingPayment,
+      );
+
+      // 4. Background Sheets sync (non-blocking)
+      addPayment(
+        client.rowNumber, data.amount, data.paymentType, data.nepaliDate, data.adDate, data.bank,
+        currentPaymentsMade, currentPaymentDatesAD, finalAmount, client.registeredDateTimeAD, client.clientName
+      ).catch(err => console.error('[BG-SYNC] Payment to Sheets failed:', err));
+      updateClientStatus(client.rowNumber, newStatus, currentStatusLog)
+        .catch(err => console.error('[BG-SYNC] Status to Sheets failed:', err));
     } catch (err) {
       console.error('Failed to save payment:', err);
       toast.error('Failed to record payment');
