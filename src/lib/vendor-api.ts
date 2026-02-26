@@ -185,6 +185,34 @@ export async function updateVendor(vendorData: VendorData): Promise<void> {
   if (!data.success) {
     throw new Error(data.error || 'Failed to update vendor');
   }
+
+  // Update cache instantly
+  try {
+    await supabase.from('vendors_cache').update({
+      vendor_name: vendorData.vendorName || '',
+      vendor_type: vendorData.vendorType || '',
+      company_contact_no: vendorData.companyContactNo || '',
+      owner1_name: vendorData.owner1Name || '',
+      owner1_contact_no: vendorData.owner1ContactNo || '',
+      owner1_whatsapp_no: vendorData.owner1WhatsappNo || '',
+      owner2_name: vendorData.owner2Name || '',
+      owner2_contact_no: vendorData.owner2ContactNo || '',
+      owner2_whatsapp_no: vendorData.owner2WhatsappNo || '',
+      city: vendorData.city || '',
+      area: vendorData.area || '',
+      google_map_link: vendorData.googleMapLink || '',
+      instagram_link: vendorData.instagramLink || '',
+      facebook_link: vendorData.facebookLink || '',
+      tiktok_link: vendorData.tiktokLink || '',
+      youtube_link: vendorData.youtubeLink || '',
+      website_link: vendorData.websiteLink || '',
+      email: vendorData.email || '',
+      synced_to_sheet: true,
+      updated_at: new Date().toISOString(),
+    } as any).eq('row_number', vendorData.rowNumber);
+  } catch (err) {
+    console.warn('[vendor-api] Cache update after edit failed:', err);
+  }
 }
 
 export async function deleteVendor(rowNumber: number): Promise<void> {
