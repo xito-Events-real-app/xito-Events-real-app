@@ -2,7 +2,6 @@ import { TodayEventsHero } from "./TodayEventsHero";
 import { HandlerActivitySection } from "./HandlerActivitySection";
 import { HandlerStarClients } from "./HandlerStarClients";
 import { StarClientDetailView } from "./StarClientDetailView";
-import { MasterSearchButton } from "./MasterSearchButton";
 import { AllClientsCrewTable } from "./AllClientsCrewTable";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -87,10 +86,6 @@ export function SuiteDashboardContent({ selectedStarHandler, onClearStarHandler,
         )}
       </ScrollArea>
 
-      {/* Master Search - Bottom Left Fixed */}
-      <div className="absolute bottom-6 left-6 w-[750px] max-w-[calc(100%-3rem)] z-10">
-        <MasterSearchButton />
-      </div>
     </div>
   );
 }

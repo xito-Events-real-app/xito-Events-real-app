@@ -6,6 +6,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import { AuthProvider } from "./contexts/AuthContext";
+import { SaugatSearchProvider } from "./contexts/SaugatSearchContext";
+import { SaugatSearch } from "./components/suite/SaugatSearch";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import Login from "./pages/Login";
 import SuiteLanding from "./pages/SuiteLanding";
@@ -85,6 +87,8 @@ const App = () => (
     <TooltipProvider>
       <BrowserRouter>
         <AuthProvider>
+          <SaugatSearchProvider>
+          <SaugatSearch />
           <Toaster />
           <Sonner />
           <Routes>
@@ -130,6 +134,7 @@ const App = () => (
             
             <Route path="*" element={<NotFound />} />
           </Routes>
+        </SaugatSearchProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

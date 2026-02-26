@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Smartphone, LogOut, Newspaper, RefreshCw } from "lucide-react";
+import { Smartphone, LogOut, Newspaper, RefreshCw, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useDesktopMode } from "@/hooks/useDesktopMode";
@@ -13,11 +13,13 @@ import { SuiteLeftSidebar } from "./SuiteLeftSidebar";
 import { SuiteQuickActionsBar } from "./SuiteQuickActionsBar";
 import { SuiteDashboardContent } from "./SuiteDashboardContent";
 import { AllClientsAnnouncementDialog } from "./AllClientsAnnouncementDialog";
+import { useSaugatSearch } from "@/contexts/SaugatSearchContext";
 
 export function DesktopSuiteLanding() {
   const navigate = useNavigate();
   const { toggleDesktopMode } = useDesktopMode();
   const { signOut } = useAuth();
+  const { open: openSearch } = useSaugatSearch();
   const { todayCount } = useActivityFeed();
   const [showNews, setShowNews] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -82,6 +84,22 @@ export function DesktopSuiteLanding() {
 
             {/* Right side actions */}
             <div className="flex items-center gap-2">
+              {/* Saugat Search Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={openSearch}
+                className="gap-2 font-bold uppercase tracking-wider"
+                style={{
+                  background: '#111',
+                  color: '#FFD700',
+                  borderColor: '#FFD700',
+                }}
+              >
+                <Search className="w-4 h-4" />
+                Search
+              </Button>
+
               {/* News Toggle */}
               <Button
                 variant={showNews ? "default" : "outline"}
