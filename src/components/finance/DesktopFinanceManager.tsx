@@ -538,8 +538,14 @@ const DesktopFinanceManager = () => {
         <PaymentHistorySheet
           isOpen={isPaymentHistoryOpen}
           onClose={() => setIsPaymentHistoryOpen(false)}
-          client={selectedClient}
-          onUpdate={refreshData}
+          clientName={selectedClient.clientName || ''}
+          paymentsMade={selectedClient.paymentsMade || ''}
+          finalQuotation={selectedClient.finalQuotation || ''}
+          remainingPayment={selectedClient.remainingPayment || ''}
+          rowNumber={selectedClient.rowNumber || 0}
+          registeredDateTimeAD={selectedClient.registeredDateTimeAD || ''}
+          paymentDatesAD={selectedClient.paymentDatesAD || ''}
+          onPaymentAdded={refreshData}
         />
       )}
     </div>
