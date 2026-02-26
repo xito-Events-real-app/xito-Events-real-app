@@ -568,19 +568,11 @@ export async function updatePayment(
   });
 }
 
-// Helper to get current status from status log
+// Helper to get current status from status log — robust, timestamp-aware parser
+// Re-exports the canonical implementation from client-card-utils
+import { getCurrentStatus as _getStatusImpl } from '@/lib/client-card-utils';
 export function getCurrentStatus(statusLog: string): string {
-  if (!statusLog) return 'UNTOUCHED';
-  const lines = statusLog.split('\n').filter(Boolean);
-  if (lines.length === 0) return 'UNTOUCHED';
-  // Get the last line and extract status (format: "STATUS [timestamp]" or "STATUS - timestamp")
-  const lastLine = lines[0];
-  // Handle both formats: "STATUS [timestamp]" and "STATUS - timestamp"
-  let statusPart = lastLine.split(' [')[0]; // Try bracket format first
-  if (statusPart === lastLine) {
-    statusPart = lastLine.split(' - ')[0]; // Fallback to dash format
-  }
-  return statusPart.trim().toUpperCase();
+  return _getStatusImpl(statusLog);
 }
 
 // ============= BOOKED CLIENTS EVENT DETAILS API =============

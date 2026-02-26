@@ -195,16 +195,35 @@ serve(async (req) => {
       }
       const deduped = Array.from(recordMap.values());
 
+      // Phase 3: Fetch IDs with pending local edits to protect them from overwrite
+      const unsyncedIds = new Set<string>();
+      let unsyncedFrom = 0;
+      while (true) {
+        const { data: unsyncedRows, error: unsyncedErr } = await supabase
+          .from('clients_cache')
+          .select('registered_date_time_ad')
+          .eq('synced_to_sheet', false)
+          .range(unsyncedFrom, unsyncedFrom + 999);
+        if (unsyncedErr || !unsyncedRows || unsyncedRows.length === 0) break;
+        for (const r of unsyncedRows) unsyncedIds.add(r.registered_date_time_ad);
+        if (unsyncedRows.length < 1000) break;
+        unsyncedFrom += 1000;
+      }
+      console.log(`[sync-clients] Protecting ${unsyncedIds.size} unsynced local rows from overwrite`);
+
+      // Filter out unsynced rows from the upsert set
+      const safeToUpsert = deduped.filter(r => !unsyncedIds.has(r.registered_date_time_ad));
+
       // Delete existing synced rows (preserve pending local changes)
       await supabase
         .from('clients_cache')
         .delete()
         .eq('synced_to_sheet', true);
 
-      // Upsert in batches of 500
+      // Upsert in batches of 500 (only safe rows)
       let count = 0;
-      for (let i = 0; i < deduped.length; i += 500) {
-        const batch = deduped.slice(i, i + 500);
+      for (let i = 0; i < safeToUpsert.length; i += 500) {
+        const batch = safeToUpsert.slice(i, i + 500);
         const { error: upsertError } = await supabase
           .from('clients_cache')
           .upsert(batch as any, { onConflict: 'registered_date_time_ad' });

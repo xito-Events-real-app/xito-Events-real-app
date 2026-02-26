@@ -368,11 +368,11 @@ const ClientDetail = () => {
     
     setIsLoggingCall(true);
     try {
-      // Step 1: Compute new call log locally and update state + cache instantly
-      const existingLog = currentStatusLog || client.callLog || '';
-      const newCallLog = generateCallLogEntry(type, existingLog);
-      setCurrentStatusLog(newCallLog);
+      // Step 1: Compute new call log locally — use callLog, NOT statusLog
+      const existingCallLog = client.callLog || '';
+      const newCallLog = generateCallLogEntry(type, existingCallLog);
       
+      // Update cache with call log (NOT status log) — push scheduler handles Sheets sync
       if (updateClientCache) {
         await updateClientCache({ ...client, callLog: newCallLog });
       }
@@ -386,11 +386,7 @@ const ClientDetail = () => {
       }
       
       toast({ title: "Success", description: `${type} call logged` });
-
-      // Step 2: Sync to Google Sheets in background (non-blocking)
-      logCallAttempt(client.rowNumber, type, existingLog).catch(err => {
-        console.warn('[CALL LOG] Background sheet sync failed:', err);
-      });
+      // No direct logCallAttempt() call — cache write + schedulePushToSheets handles it
     } catch (err) {
       console.error('Failed to log call:', err);
       toast({ title: "Error", description: "Failed to log call", variant: "destructive" });

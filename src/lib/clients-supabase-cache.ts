@@ -1,6 +1,33 @@
 import { supabase } from "@/integrations/supabase/client";
 import { ClientData, BookedClientData } from "@/lib/sheets-api";
 
+// ============= PUSH SCHEDULER (Phase 2) =============
+let pushTimer: ReturnType<typeof setTimeout> | null = null;
+let isPushing = false;
+
+/** Debounced push of unsynced rows to Google Sheets (3s, single-flight) */
+export function schedulePushToSheets(): void {
+  if (pushTimer) clearTimeout(pushTimer);
+  pushTimer = setTimeout(async () => {
+    if (isPushing) {
+      console.log('[PUSH] Already pushing, will reschedule');
+      schedulePushToSheets();
+      return;
+    }
+    isPushing = true;
+    try {
+      const count = await pushUnsyncedToSheets();
+      if (count > 0) {
+        console.log(`[PUSH] Auto-pushed ${count} rows to Sheets`);
+      }
+    } catch (err) {
+      console.warn('[PUSH] Auto-push failed, will retry on next edit:', err);
+    } finally {
+      isPushing = false;
+    }
+  }, 3000);
+}
+
 // Map DB snake_case columns to ClientData camelCase fields
 function rowToClientData(row: any): ClientData {
   return {
@@ -191,6 +218,7 @@ export async function updateClientFieldInCache(
     .eq('registered_date_time_ad', registeredDateTimeAD);
 
   if (error) throw error;
+  schedulePushToSheets();
 }
 
 /** Update a full client record in cache */
@@ -239,6 +267,7 @@ export async function updateClientInCacheRecord(client: ClientData): Promise<voi
     .eq('registered_date_time_ad', client.registeredDateTimeAD);
 
   if (error) throw error;
+  schedulePushToSheets();
 }
 
 /**
@@ -267,6 +296,7 @@ export async function migrateClientToBookedInCache(
     .eq('registered_date_time_ad', registeredDateTimeAD);
 
   if (error) throw error;
+  schedulePushToSheets();
 }
 
 /** Deduplicate concurrent populateCache calls */
