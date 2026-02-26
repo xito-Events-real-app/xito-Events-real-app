@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { BulkEventDetail, getBulkEventDetails } from "@/lib/sheets-api";
+import { BulkEventDetail } from "@/lib/sheets-api";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface UseBulkEventDetailsResult {
@@ -105,17 +105,11 @@ export function useBulkEventDetails(clientIds: string[]): UseBulkEventDetailsRes
             setSessionCache(idsKey, result);
           }
         } else {
-          console.log('[useBulkEventDetails] Cache empty, falling back to Google Sheets');
-          const sheetsResult = await getBulkEventDetails(idsArray);
-
+          // Cache empty — return empty result (no Sheets fallback)
+          console.log('[useBulkEventDetails] Cache empty, returning empty map');
           if (!cancelled) {
-            setEventDetailsMap(sheetsResult);
-            setSessionCache(idsKey, sheetsResult);
+            setEventDetailsMap({});
           }
-
-          supabase.functions.invoke('sync-all-data', {
-            body: { tables: ['event_details'] },
-          }).catch(() => {});
         }
       } catch (err) {
         console.error('[useBulkEventDetails] Error fetching:', err);

@@ -9,12 +9,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
-import { toast } from "sonner";
-import { resyncAllBookedClients, fullResyncAllBookedClients, BookedClientData, SyncDetail } from "@/lib/sheets-api";
+import { BookedClientData } from "@/lib/sheets-api";
 import { useBookedCachedData } from "@/hooks/useBookedCachedData";
 import FinanceClientCard from "./FinanceClientCard";
 import PaymentHistorySheet from "./PaymentHistorySheet";
-import { SyncReportSheet } from "../booked/SyncReportSheet";
 import { getMonthName } from "@/lib/nepali-months";
 import { DesktopFinanceSidebar, PaymentStatus } from "./DesktopFinanceSidebar";
 import { cn } from "@/lib/utils";
@@ -58,8 +56,6 @@ const parseClientEvents = (client: BookedClientData) => {
 const DesktopFinanceManager = () => {
   const navigate = useNavigate();
   const { clients, isLoading, refreshData, isSyncing } = useBookedCachedData();
-  const [isResyncing, setIsResyncing] = useState(false);
-  const [isFullResyncing, setIsFullResyncing] = useState(false);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
   const [paymentFilter, setPaymentFilter] = useState<PaymentStatus>('all');
   const [selectedClient, setSelectedClient] = useState<BookedClientData | null>(null);
@@ -69,59 +65,6 @@ const DesktopFinanceManager = () => {
   const [selectedHandler, setSelectedHandler] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   
-  // Sync report state
-  const [syncReportOpen, setSyncReportOpen] = useState(false);
-  const [syncReport, setSyncReport] = useState<{
-    copiedCount: number;
-    syncedCount: number;
-    skippedCount: number;
-    notFoundCount: number;
-    totalBooked: number;
-    syncDetails?: SyncDetail[];
-  } | null>(null);
-
-  const handleResyncAll = async () => {
-    try {
-      setIsResyncing(true);
-      const result = await resyncAllBookedClients();
-      if (result.syncedCount > 0) {
-        toast.success(`Synced ${result.syncedCount} clients`);
-      } else {
-        toast.info("All clients are up to date");
-      }
-      await refreshData();
-    } catch (error) {
-      console.error("Error resyncing:", error);
-      toast.error("Failed to resync");
-    } finally {
-      setIsResyncing(false);
-    }
-  };
-
-  const handleFullResync = async () => {
-    try {
-      setIsFullResyncing(true);
-      const result = await fullResyncAllBookedClients(true);
-      
-      setSyncReport({
-        copiedCount: result.copiedCount,
-        syncedCount: result.syncedCount,
-        skippedCount: result.skippedCount,
-        notFoundCount: result.notFoundCount,
-        totalBooked: result.totalBooked,
-        syncDetails: result.syncDetails
-      });
-      
-      setSyncReportOpen(true);
-      await refreshData();
-    } catch (error) {
-      console.error("Error performing full resync:", error);
-      toast.error("Failed to perform full resync");
-    } finally {
-      setIsFullResyncing(false);
-    }
-  };
-
   // Get payment status for a client - MUST be defined before useMemo that uses it
   const getPaymentStatus = (client: BookedClientData): 'fully-paid' | 'partial' | 'no-payment' => {
     const quotationMatch = client.finalQuotation?.match(/NPR\s*([\d,]+)/);
@@ -354,42 +297,6 @@ const DesktopFinanceManager = () => {
                 </Button>
               </div>
               <Button
-                variant="outline"
-                onClick={handleFullResync}
-                disabled={isFullResyncing}
-                className="border-emerald-600 text-emerald-400 hover:bg-emerald-600/20"
-              >
-                {isFullResyncing ? (
-                  <>
-                    <Database className="h-4 w-4 mr-2 animate-pulse" />
-                    Full Syncing...
-                  </>
-                ) : (
-                  <>
-                    <Database className="h-4 w-4 mr-2" />
-                    Full Resync
-                  </>
-                )}
-              </Button>
-              <Button
-                variant="default"
-                onClick={handleResyncAll}
-                disabled={isResyncing}
-                className="bg-emerald-600 hover:bg-emerald-700"
-              >
-                {isResyncing ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    Syncing...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Resync
-                  </>
-                )}
-              </Button>
-              <Button
                 variant="ghost"
                 size="icon"
                 onClick={refreshData}
@@ -454,7 +361,7 @@ const DesktopFinanceManager = () => {
                     <Clock className="h-5 w-5 text-amber-400" />
                   </div>
                   <div>
-                    <p className="text-xs text-amber-400">Pending ({collectionRate.toFixed(0)}%)</p>
+                    <p className="text-xs text-amber-400">Pending</p>
                     <p className="text-xl font-bold text-amber-300">
                       NPR {remainingValue.toLocaleString('en-IN')}
                     </p>
@@ -464,224 +371,156 @@ const DesktopFinanceManager = () => {
             </Card>
           </div>
 
-          {/* Active Filters Display */}
-          {hasActiveFilters && (
-            <Card className="bg-slate-800/50 border-slate-700/50 mb-6">
-              <CardContent className="p-3 flex items-center gap-3">
-                <span className="text-xs text-slate-400">Active Filters:</span>
-                {selectedHandler && (
-                  <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/50">
-                    Handler: {selectedHandler}
-                  </Badge>
-                )}
-                {paymentFilter !== 'all' && (
-                  <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/50">
-                    Status: {paymentFilter.replace('-', ' ')}
-                  </Badge>
-                )}
-                {selectedMonth && (
-                  <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/50">
-                    Month: {availableMonths.find(m => m.value === selectedMonth)?.label}
-                  </Badge>
-                )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="ml-auto text-slate-400 hover:text-white"
-                  onClick={() => {
-                    setSelectedHandler(null);
-                    setPaymentFilter('all');
-                    setSelectedMonth(null);
-                  }}
-                >
-                  Clear All
-                </Button>
-                <span className="text-sm text-slate-400">
-                  Showing {sortedClients.length} of {clients.length}
-                </span>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Client List */}
           {isLoading ? (
-            <div className="grid grid-cols-3 gap-4">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <Skeleton key={i} className="h-40 bg-slate-800/50" />
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-24 bg-slate-800/50" />
               ))}
             </div>
-          ) : sortedClients.length === 0 ? (
-            <Card className="bg-slate-800/50 border-slate-700/50">
-              <CardContent className="py-12 text-center">
-                <DollarSign className="h-16 w-16 text-slate-600 mx-auto mb-4" />
-                <p className="text-slate-400 mb-4 text-lg">No clients match your filters</p>
-                <Button 
-                  variant="outline" 
-                  onClick={() => {
-                    setSelectedHandler(null);
-                    setPaymentFilter('all');
-                    setSelectedMonth(null);
-                  }}
-                >
-                  Reset Filters
-                </Button>
-              </CardContent>
-            </Card>
           ) : viewMode === 'cards' ? (
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {sortedClients.map((client) => (
-                <FinanceClientCard key={client.bookedRowNumber} client={client} onRefresh={refreshData} />
+                <FinanceClientCard 
+                  key={client.bookedRowNumber} 
+                  client={client} 
+                  onRefresh={refreshData} 
+                />
               ))}
             </div>
           ) : (
-            <TooltipProvider>
-              <Card className="bg-slate-800/50 border-slate-700/50">
+            <Card className="bg-slate-800/50 border-slate-700/50 overflow-hidden">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-slate-700">
+                  <TableRow className="border-slate-700 hover:bg-transparent">
                     <TableHead className="text-slate-400">Client</TableHead>
+                    <TableHead className="text-slate-400">Handler</TableHead>
                     <TableHead className="text-slate-400">Event Date</TableHead>
                     <TableHead className="text-slate-400">Status</TableHead>
-                    <TableHead className="text-slate-400">Quote</TableHead>
-                    <TableHead className="text-slate-400">Paid</TableHead>
-                    <TableHead className="text-slate-400">Remaining</TableHead>
-                    <TableHead className="text-slate-400">Progress</TableHead>
-                    <TableHead className="text-slate-400">Actions</TableHead>
+                    <TableHead className="text-slate-400 text-right">Total</TableHead>
+                    <TableHead className="text-slate-400 text-right">Paid</TableHead>
+                    <TableHead className="text-slate-400 text-right">Pending</TableHead>
+                    <TableHead className="text-slate-400 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sortedClients.map((client) => {
                     const quotationMatch = client.finalQuotation?.match(/NPR\s*([\d,]+)/);
-                    const quotationAmount = quotationMatch ? parseInt(quotationMatch[1].replace(/,/g, '')) : 0;
+                    const quotation = quotationMatch ? parseInt(quotationMatch[1].replace(/,/g, '')) : 0;
                     
-                    let paidAmount = 0;
+                    let paid = 0;
                     if (client.paymentsMade) {
                       client.paymentsMade.split('\n').forEach(entry => {
                         const match = entry.match(/NPR\s*([\d,]+)/);
-                        if (match) paidAmount += parseInt(match[1].replace(/,/g, ''));
+                        if (match) paid += parseInt(match[1].replace(/,/g, ''));
                       });
                     }
                     
-                    const remaining = quotationAmount - paidAmount;
-                    const progress = quotationAmount > 0 ? (paidAmount / quotationAmount) * 100 : 0;
+                    const pending = quotation - paid;
                     const status = getPaymentStatus(client);
+                    const parsedEvents = parseClientEvents(client);
                     
+                    // Handler colors
+                    const handler = client.clientHandler?.trim().toUpperCase() || '';
+                    const colors = handlerColorMap.get(handler) || { text: 'text-slate-400', bg: 'bg-slate-500/20 border-slate-500/50' };
+
                     return (
                       <TableRow 
                         key={client.bookedRowNumber} 
-                        className="border-slate-700 hover:bg-slate-700/30 cursor-pointer"
+                        className="border-slate-700 hover:bg-slate-700/30 cursor-pointer group"
                         onClick={() => handleRowClick(client)}
                       >
-                        <TableCell>
-                          <div className="space-y-1">
-                            <p className="font-semibold text-white cursor-pointer hover:text-emerald-300">
-                              {client.clientName}
-                            </p>
-                            {client.clientHandler && (
-                              <Badge className={cn(
-                                "text-xs px-2 py-0.5 font-medium border",
-                                handlerColorMap.get(client.clientHandler.trim().toUpperCase())?.bg || 'bg-slate-500/20 border-slate-500/50'
-                              )}>
-                                <span className={handlerColorMap.get(client.clientHandler.trim().toUpperCase())?.text || 'text-slate-400'}>
-                                  {client.clientHandler}
-                                </span>
-                              </Badge>
-                            )}
-                          </div>
+                        <TableCell className="font-medium text-white group-hover:text-emerald-400 transition-colors">
+                          {client.clientName}
                         </TableCell>
-                        <TableCell className="text-slate-300">
-                          <div className="space-y-2">
-                            {parseClientEvents(client).length > 0 ? (
-                              parseClientEvents(client).map((event, idx) => (
-                                <div key={idx} className="flex items-center gap-1.5 flex-wrap">
-                                  {/* Event name in parenthesis - amber/orange */}
-                                  <span className="text-sm font-semibold text-amber-400">
-                                    ( {event.eventName.toUpperCase()} )
-                                  </span>
-                                  {/* Month and Day - emerald (finance theme) */}
-                                  <span className="text-sm font-medium text-emerald-400">
-                                    {event.monthName.toUpperCase()} {event.day}
-                                  </span>
-                                  {/* Year - small badge */}
-                                  {event.year && (
-                                    <span className="text-[10px] font-bold text-white bg-emerald-600/80 px-1.5 py-0.5 rounded">
-                                      {event.year}
-                                    </span>
-                                  )}
-                                </div>
-                              ))
-                            ) : (
-                              <span className="text-xs text-slate-500">
-                                {formatNepaliEventDate(client.eventYear, client.eventMonth, client.eventDay)}
-                              </span>
+                        <TableCell>
+                          {handler && (
+                            <Badge variant="outline" className={`${colors.bg} ${colors.text} border`}>
+                              {handler}
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-slate-300 text-xs">
+                          <div className="flex flex-col gap-1">
+                            {parsedEvents.slice(0, 2).map((event, idx) => (
+                              <div key={idx}>
+                                {formatNepaliEventDate(event.year, event.month, event.day)}
+                              </div>
+                            ))}
+                            {parsedEvents.length > 2 && (
+                              <div className="text-slate-500">+{parsedEvents.length - 2} more</div>
                             )}
                           </div>
                         </TableCell>
                         <TableCell>
                           {getPaymentStatusBadge(status)}
                         </TableCell>
-                        <TableCell className="text-emerald-400 font-medium whitespace-nowrap">
-                          NPR {quotationAmount.toLocaleString('en-IN')}
+                        <TableCell className="text-right text-slate-300">
+                          {quotation > 0 ? `₹${(quotation / 1000).toFixed(1)}K` : '-'}
                         </TableCell>
-                        <TableCell className="text-green-400 whitespace-nowrap">
-                          NPR {paidAmount.toLocaleString('en-IN')}
+                        <TableCell className="text-right text-emerald-400 font-medium">
+                          {paid > 0 ? `₹${(paid / 1000).toFixed(1)}K` : '-'}
                         </TableCell>
-                        <TableCell className="text-amber-400 whitespace-nowrap">
-                          NPR {remaining.toLocaleString('en-IN')}
+                        <TableCell className="text-right text-amber-400 font-medium">
+                          {pending > 0 ? `₹${(pending / 1000).toFixed(1)}K` : '-'}
                         </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2 min-w-[120px]">
-                            <Progress value={progress} className="h-2 flex-1" />
-                            <span className="text-xs text-slate-400 w-10">{progress.toFixed(0)}%</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  onClick={() => window.open(`tel:${client.contactNo}`, '_self')}
-                                >
-                                  <Phone className="h-4 w-4 text-blue-400" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>{client.contactNo || 'No number'}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  onClick={() => openWhatsApp(client.whatsappNo || '')}
-                                >
-                                  <MessageCircle className="h-4 w-4 text-green-400" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>{client.whatsappNo || client.contactNo || 'No number'}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  onClick={() => handleRowClick(client)}
-                                >
-                                  <History className="h-4 w-4 text-emerald-400" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>View/Edit Payment History</p>
-                              </TooltipContent>
-                            </Tooltip>
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex justify-end gap-1">
+                            {client.contactNo && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      className="h-8 w-8 text-slate-400 hover:text-blue-400 hover:bg-blue-400/10"
+                                      onClick={() => window.open(`tel:${client.contactNo}`)}
+                                    >
+                                      <Phone className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Call {client.contactNo}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                            {(client.whatsappNo || client.contactNo) && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      className="h-8 w-8 text-slate-400 hover:text-green-400 hover:bg-green-400/10"
+                                      onClick={() => openWhatsApp(client.whatsappNo || client.contactNo || '')}
+                                    >
+                                      <MessageCircle className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>WhatsApp</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8 text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10"
+                                    onClick={() => handleRowClick(client)}
+                                  >
+                                    <History className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>View History</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -690,36 +529,19 @@ const DesktopFinanceManager = () => {
                 </TableBody>
               </Table>
             </Card>
-            </TooltipProvider>
           )}
         </div>
-
-        {/* Payment History Sheet */}
-        {selectedClient && (
-          <PaymentHistorySheet
-            isOpen={isPaymentHistoryOpen}
-            onClose={() => {
-              setIsPaymentHistoryOpen(false);
-              setSelectedClient(null);
-            }}
-            clientName={selectedClient.clientName}
-            paymentsMade={selectedClient.paymentsMade || ''}
-            finalQuotation={selectedClient.finalQuotation || ''}
-            remainingPayment={selectedClient.remainingPayment || ''}
-            rowNumber={selectedClient.bookedRowNumber}
-            registeredDateTimeAD={selectedClient.registeredDateTimeAD}
-            paymentDatesAD={selectedClient.paymentDatesAD || ''}
-            onPaymentAdded={refreshData}
-          />
-        )}
-        
-        {/* Sync Report Sheet */}
-        <SyncReportSheet
-          open={syncReportOpen}
-          onOpenChange={setSyncReportOpen}
-          report={syncReport}
-        />
       </div>
+
+      {/* Payment History Sheet */}
+      {selectedClient && (
+        <PaymentHistorySheet
+          isOpen={isPaymentHistoryOpen}
+          onClose={() => setIsPaymentHistoryOpen(false)}
+          client={selectedClient}
+          onUpdate={refreshData}
+        />
+      )}
     </div>
   );
 };

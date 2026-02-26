@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { getDropdowns, DropdownData, isSheetsConfigured } from "@/lib/sheets-api";
+import { DropdownData, isSheetsConfigured } from "@/lib/sheets-api";
 import { mockDropdownData } from "@/lib/form-data";
 
 export function useDropdownData() {
@@ -35,7 +35,7 @@ export function useDropdownData() {
     }
 
     try {
-      // Try Supabase cache first
+      // Read from Supabase cache only — no Sheets fallback
       const { data: cachedRows, error: cacheError } = await supabase
         .from('dropdowns_cache')
         .select('category, values_json');
@@ -50,7 +50,6 @@ export function useDropdownData() {
           }
         }
 
-        // Check we have at least the core categories
         if (cached.sources && cached.sources.length > 0) {
           console.log(`[useDropdownData] Loaded ${cachedRows.length} categories from cache`);
           setData({
@@ -77,45 +76,31 @@ export function useDropdownData() {
         }
       }
     } catch (err) {
-      console.warn('[useDropdownData] Cache read failed, falling back to Sheets:', err);
+      console.warn('[useDropdownData] Cache read failed:', err);
     }
 
-    // Fallback: original Google Sheets call
-    try {
-      const dropdowns = await getDropdowns();
-      setData(dropdowns);
-      setIsUsingMock(false);
-
-      // Background: populate cache for next time
-      try {
-        supabase.functions.invoke('sync-all-data', { body: { action: 'pull-dropdowns' } }).catch(() => {});
-      } catch { /* ignore */ }
-    } catch (err) {
-      console.error("Failed to fetch dropdowns:", err);
-      setError(err instanceof Error ? err.message : "Failed to load dropdowns");
-      // Fallback to mock data
-      setData({
-        sources: mockDropdownData.sources,
-        clientLocations: mockDropdownData.clientLocations,
-        eventLocations: mockDropdownData.eventLocations,
-        preweddingEvents: mockDropdownData.eventTypes.prewedding,
-        weddingEvents: mockDropdownData.eventTypes.wedding,
-        postweddingEvents: mockDropdownData.eventTypes.postwedding,
-        oldClients: [],
-        whatsappOwners: mockDropdownData.whatsappOwners,
-        clientStatuses: ['UNTOUCHED', 'TEXTED : NOT CALLED', 'CALL NOT RECEIVED', 'CALLED : QUOTATION PENDING', 'QUOTATION SENT : REVIEW PENDING', 'BARGAINING IS ON', 'ADVANCE PENDING', 'BOOKED', 'CANCELLED', 'POSTPONED'],
-        mindsetOptions: ['NOT SEEN', 'IGNORED', 'BARGAINING', 'EXPENSIVE', 'READY TO PAY ADVANCE', 'NEED TIME', 'NEED MORE TIME', 'FAMILY DISCUSSION', 'OFFICE VISIT', 'DATE POSTPONED', 'BOOKED SOMEWHERE ELSE'],
-        paymentTypes: ['ADVANCE PAYMENT', 'PARTIAL PAYMENT', 'FULL PAYMENT'],
-        banks: ['MASTER BARUN', 'KRIPA SAVINGS', 'KRIPA CURRENT', 'ESEWA', 'KHALTI'],
-        relationOptions: ['Mother', 'Father', 'Sister', 'Brother', 'Other'],
-        companyNames: ['WEDDING TALES NEPAL', 'WEDDING PAPARAZZI', 'OTHER'],
-        serviceTypes: ['PHOTOGRAPHY', 'VIDEOGRAPHY', 'DRONE', 'LED', 'ALBUM', 'FRAME'],
-        allEvents: [],
-      });
-      setIsUsingMock(true);
-    } finally {
-      setIsLoading(false);
-    }
+    // Cache empty — fall back to mock data (no Sheets call)
+    console.log('[useDropdownData] Cache empty, using mock data');
+    setData({
+      sources: mockDropdownData.sources,
+      clientLocations: mockDropdownData.clientLocations,
+      eventLocations: mockDropdownData.eventLocations,
+      preweddingEvents: mockDropdownData.eventTypes.prewedding,
+      weddingEvents: mockDropdownData.eventTypes.wedding,
+      postweddingEvents: mockDropdownData.eventTypes.postwedding,
+      oldClients: [],
+      whatsappOwners: mockDropdownData.whatsappOwners,
+      clientStatuses: ['UNTOUCHED', 'TEXTED : NOT CALLED', 'CALL NOT RECEIVED', 'CALLED : QUOTATION PENDING', 'QUOTATION SENT : REVIEW PENDING', 'BARGAINING IS ON', 'ADVANCE PENDING', 'BOOKED', 'CANCELLED', 'POSTPONED'],
+      mindsetOptions: ['NOT SEEN', 'IGNORED', 'BARGAINING', 'EXPENSIVE', 'READY TO PAY ADVANCE', 'NEED TIME', 'NEED MORE TIME', 'FAMILY DISCUSSION', 'OFFICE VISIT', 'DATE POSTPONED', 'BOOKED SOMEWHERE ELSE'],
+      paymentTypes: ['ADVANCE PAYMENT', 'PARTIAL PAYMENT', 'FULL PAYMENT'],
+      banks: ['MASTER BARUN', 'KRIPA SAVINGS', 'KRIPA CURRENT', 'ESEWA', 'KHALTI'],
+      relationOptions: ['Mother', 'Father', 'Sister', 'Brother', 'Other'],
+      companyNames: ['WEDDING TALES NEPAL', 'WEDDING PAPARAZZI', 'OTHER'],
+      serviceTypes: ['PHOTOGRAPHY', 'VIDEOGRAPHY', 'DRONE', 'LED', 'ALBUM', 'FRAME'],
+      allEvents: [],
+    });
+    setIsUsingMock(true);
+    setIsLoading(false);
   }, []);
 
   useEffect(() => {

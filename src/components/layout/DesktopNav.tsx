@@ -1,12 +1,9 @@
-import { useState, useRef, useCallback } from "react";
-import { Home, Plus, Search, Users, RefreshCw, Settings } from "lucide-react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Home, Plus, Search, Users, Settings } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { getCachedData, setCachedClients, setCachedDropdowns, notifyCacheUpdate } from "@/lib/cache-manager";
-import { supabase } from "@/integrations/supabase/client";
 import { DateConverterDrawer } from "@/components/dashboard/DateConverterDrawer";
 import { Button } from "@/components/ui/button";
-
 
 interface NavItem {
   icon: typeof Home;
@@ -24,42 +21,7 @@ const navItems: NavItem[] = [
 
 export function DesktopNav() {
   const location = useLocation();
-  const navigate = useNavigate();
-  const [isSyncing, setIsSyncing] = useState(false);
   const [showDateConverter, setShowDateConverter] = useState(false);
-
-  // Handle sync
-  const handleSync = async () => {
-    if (isSyncing) return;
-    
-    setIsSyncing(true);
-    
-    try {
-      const [clientsResult, dropdownsResult] = await Promise.all([
-        supabase.functions.invoke("google-sheets", {
-          body: { action: "getClients", limit: 500 },
-        }),
-        supabase.functions.invoke("google-sheets", {
-          body: { action: "getDropdowns" },
-        }),
-      ]);
-
-      if (clientsResult.data?.success) {
-        await setCachedClients(clientsResult.data.data);
-        notifyCacheUpdate('clients', clientsResult.data.data);
-      }
-      
-      if (dropdownsResult.data?.success) {
-        await setCachedDropdowns(dropdownsResult.data.data);
-        notifyCacheUpdate('dropdowns', dropdownsResult.data.data);
-      }
-      
-    } catch (error) {
-      console.error("Sync failed:", error);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
 
   return (
     <>
@@ -104,22 +66,6 @@ export function DesktopNav() {
               className="border-purple-500/30 text-purple-600 hover:bg-purple-500/10"
             >
               🕉️ Date Converter
-            </Button>
-            
-            {/* Sync Button */}
-            <Button
-              onClick={handleSync}
-              disabled={isSyncing}
-              size="sm"
-              className="gradient-primary text-white"
-            >
-              <RefreshCw
-                className={cn(
-                  "w-4 h-4 mr-2",
-                  isSyncing && "animate-spin"
-                )}
-              />
-              {isSyncing ? "Syncing..." : "Sync Now"}
             </Button>
           </div>
         </div>

@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -36,52 +35,6 @@ import CrewSchedule from "./pages/CrewSchedule";
 
 const queryClient = new QueryClient();
 
-// Global auto-sync component for all data sources
-function GlobalAutoSync() {
-  useEffect(() => {
-    // Deferred background refresh - wait 30s to avoid 429 rate limits
-    // The Supabase cache serves data instantly on load, so no rush
-    const deferredRefresh = setTimeout(() => {
-      if (navigator.onLine) {
-        console.log('[GLOBAL-SYNC] Deferred background refresh triggered');
-        window.dispatchEvent(new CustomEvent('cache-updated', { 
-          detail: { type: 'clients-invalidate' } 
-        }));
-        
-        // Stagger booked invalidation by 15s to spread API calls
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('cache-updated', { 
-            detail: { type: 'booked-clients-invalidate' } 
-          }));
-        }, 15000);
-      }
-    }, 30000); // 30s delay after app open
-    
-    // Hourly auto-refresh
-    const syncInterval = setInterval(() => {
-      if (navigator.onLine) {
-        console.log('[GLOBAL-SYNC] Hourly refresh triggered');
-        window.dispatchEvent(new CustomEvent('cache-updated', { 
-          detail: { type: 'clients-invalidate' } 
-        }));
-        
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('cache-updated', { 
-            detail: { type: 'booked-clients-invalidate' } 
-          }));
-        }, 200);
-      }
-    }, 60 * 60 * 1000); // 1 hour
-    
-    return () => {
-      clearTimeout(deferredRefresh);
-      clearInterval(syncInterval);
-    };
-  }, []);
-  
-  return null;
-}
-
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -100,7 +53,6 @@ const App = () => (
               {/* Protected routes */}
               <Route path="/" element={
                 <ProtectedRoute>
-                  <GlobalAutoSync />
                   <SuiteLanding />
                 </ProtectedRoute>
               } />

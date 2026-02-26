@@ -58,31 +58,22 @@ export const CATEGORY_CODE_TO_FIELD: Record<string, FreelancerField> = Object.fr
 
 export const ALL_CATEGORY_CODES = Object.values(CATEGORY_CODES);
 
+// Database-only: read assignments from Supabase
 export async function getClientFreelancerAssignments(registeredDateTimeAD: string): Promise<FreelancerAssignment[]> {
-  // STEP 1: Read from Supabase first (~50ms)
-  try {
-    const { data: cached, error } = await supabase
-      .from('freelancer_assignments')
-      .select('*')
-      .eq('registered_date_time_ad', registeredDateTimeAD)
-      .order('event_year', { ascending: true })
-      .order('event_month', { ascending: true })
-      .order('event_day', { ascending: true });
+  const { data: cached, error } = await supabase
+    .from('freelancer_assignments')
+    .select('*')
+    .eq('registered_date_time_ad', registeredDateTimeAD)
+    .order('event_year', { ascending: true })
+    .order('event_month', { ascending: true })
+    .order('event_day', { ascending: true });
 
-    if (!error && cached && cached.length > 0) {
-      return (cached as any[]).map(rowToAssignment);
-    }
-  } catch (err) {
-    console.warn('[assignments] Supabase read failed, falling back to Sheets:', err);
+  if (error) {
+    console.error('[assignments] Supabase read failed:', error);
+    return [];
   }
 
-  // STEP 2: Fallback to Google Sheets only if no data in Supabase
-  const { data, error } = await supabase.functions.invoke('google-sheets', {
-    body: { action: 'getClientFreelancerAssignments', data: { registeredDateTimeAD } }
-  });
-  if (error) throw new Error('Failed to fetch freelancer assignments');
-  if (!data.success) throw new Error(data.error || 'Failed to fetch freelancer assignments');
-  return data.data || [];
+  return (cached as any[] || []).map(rowToAssignment);
 }
 
 export async function updateFreelancerAssignment(
@@ -107,25 +98,56 @@ export async function updateFreelancerAssignment(
   });
 }
 
+// Database-only: check availability by querying freelancer_assignments table directly
+const ROLE_COLUMNS: { field: FreelancerField; column: string; label: string }[] = [
+  { field: 'photographerBride', column: 'photographer_bride', label: 'Photographer Bride' },
+  { field: 'photographerGroom', column: 'photographer_groom', label: 'Photographer Groom' },
+  { field: 'videographerBride', column: 'videographer_bride', label: 'Videographer Bride' },
+  { field: 'videographerGroom', column: 'videographer_groom', label: 'Videographer Groom' },
+  { field: 'extraPhotographer', column: 'extra_photographer', label: 'Extra Photographer' },
+  { field: 'extraVideographer', column: 'extra_videographer', label: 'Extra Videographer' },
+  { field: 'assistant', column: 'assistant', label: 'Assistant' },
+  { field: 'iphoneShooter', column: 'iphone_shooter', label: 'iPhone Shooter' },
+  { field: 'droneOperator', column: 'drone_operator', label: 'Drone Operator' },
+  { field: 'fpvOperator', column: 'fpv_operator', label: 'FPV Operator' },
+];
+
 export async function checkFreelancerAvailability(
   freelancerName: string,
   eventDateAD: string
 ): Promise<AvailabilityConflict[]> {
-  const { data, error } = await supabase.functions.invoke('google-sheets', {
-    body: { action: 'checkFreelancerAvailability', data: { freelancerName, eventDateAD } }
-  });
-  if (error) return [];
-  if (!data.success) return [];
-  return data.data?.conflicts || [];
-}
+  if (!freelancerName || !eventDateAD) return [];
 
-export async function fullSyncFreelancerAssignments(): Promise<{ copiedCount: number; updatedCount: number; totalFreelancers: number }> {
-  const { data, error } = await supabase.functions.invoke('google-sheets', {
-    body: { action: 'fullSyncFreelancerAssignments' }
-  });
-  if (error) throw new Error('Failed to sync freelancer assignments');
-  if (!data.success) throw new Error(data.error || 'Failed to sync freelancer assignments');
-  return data.data;
+  try {
+    // Query all assignments on the given date
+    const { data: rows, error } = await supabase
+      .from('freelancer_assignments')
+      .select('*')
+      .eq('event_date_ad', eventDateAD);
+
+    if (error || !rows) return [];
+
+    const conflicts: AvailabilityConflict[] = [];
+    const upperName = freelancerName.trim().toUpperCase();
+
+    for (const row of rows) {
+      for (const { column, label } of ROLE_COLUMNS) {
+        const val = (row[column] || '').trim().toUpperCase();
+        if (val === upperName) {
+          conflicts.push({
+            clientName: row.client_name || '',
+            event: row.event || '',
+            role: label,
+          });
+        }
+      }
+    }
+
+    return conflicts;
+  } catch (err) {
+    console.error('[checkFreelancerAvailability] Query failed:', err);
+    return [];
+  }
 }
 
 export async function updateRequiredCrewCategories(
@@ -155,13 +177,47 @@ export interface FreelancerBooking {
   registeredDateTimeAD: string;
 }
 
+// Database-only: get freelancer bookings from Supabase
 export async function getFreelancerBookings(freelancerName: string): Promise<FreelancerBooking[]> {
-  const { data, error } = await supabase.functions.invoke('google-sheets', {
-    body: { action: 'getFreelancerBookings', data: { freelancerName } }
-  });
-  if (error) throw new Error('Failed to fetch freelancer bookings');
-  if (!data.success) throw new Error(data.error || 'Failed to fetch freelancer bookings');
-  return data.data || [];
+  if (!freelancerName) return [];
+
+  try {
+    const { data: rows, error } = await supabase
+      .from('freelancer_assignments')
+      .select('*')
+      .order('event_year', { ascending: true })
+      .order('event_month', { ascending: true })
+      .order('event_day', { ascending: true });
+
+    if (error || !rows) return [];
+
+    const bookings: FreelancerBooking[] = [];
+    const upperName = freelancerName.trim().toUpperCase();
+
+    for (const row of rows) {
+      for (const { field, column, label } of ROLE_COLUMNS) {
+        const val = (row[column] || '').trim().toUpperCase();
+        if (val === upperName) {
+          bookings.push({
+            clientName: row.client_name || '',
+            event: row.event || '',
+            eventYear: row.event_year || '',
+            eventMonth: row.event_month || '',
+            eventDay: row.event_day || '',
+            eventDateAD: row.event_date_ad || '',
+            role: field,
+            roleLabel: label,
+            registeredDateTimeAD: row.registered_date_time_ad || '',
+          });
+        }
+      }
+    }
+
+    return bookings;
+  } catch (err) {
+    console.error('[getFreelancerBookings] Query failed:', err);
+    return [];
+  }
 }
 
 // Role-based filtering from WTN FREELANCERS
@@ -187,30 +243,21 @@ export function getFilteredFreelancersByRole(freelancers: FreelancerData[], fiel
     .filter(Boolean);
 }
 
+// Database-only: read all assignments from Supabase
 export async function getAllFreelancerAssignments(): Promise<FreelancerAssignment[]> {
-  // STEP 1: Read from Supabase cache first (fast, ~50ms)
-  try {
-    const { data: cached, error } = await supabase
-      .from('freelancer_assignments')
-      .select('*')
-      .order('event_year', { ascending: true })
-      .order('event_month', { ascending: true })
-      .order('event_day', { ascending: true });
+  const { data: cached, error } = await supabase
+    .from('freelancer_assignments')
+    .select('*')
+    .order('event_year', { ascending: true })
+    .order('event_month', { ascending: true })
+    .order('event_day', { ascending: true });
 
-    if (!error && cached && cached.length > 0) {
-      return (cached as any[]).map(rowToAssignment);
-    }
-  } catch (err) {
-    console.warn('[getAllAssignments] Supabase read failed, falling back:', err);
+  if (error) {
+    console.error('[getAllAssignments] Supabase read failed:', error);
+    return [];
   }
 
-  // STEP 2: Fallback to Google Sheets
-  const { data, error } = await supabase.functions.invoke('google-sheets', {
-    body: { action: 'getAllFreelancerAssignments' }
-  });
-  if (error) throw new Error('Failed to fetch all freelancer assignments');
-  if (!data.success) throw new Error(data.error || 'Failed to fetch all freelancer assignments');
-  return data.data || [];
+  return (cached as any[] || []).map(rowToAssignment);
 }
 
 const JOB_PRIORITY: [string, string][] = [

@@ -299,31 +299,7 @@ export async function migrateClientToBookedInCache(
   schedulePushToSheets();
 }
 
-/** Deduplicate concurrent populateCache calls */
-let populatePromise: Promise<number> | null = null;
-
-/** Trigger pull from Google Sheets into cache (deduplicated) */
-export async function populateCacheFromSheets(): Promise<number> {
-  // If already running, return the existing promise
-  if (populatePromise) {
-    console.log('[CACHE] populateCacheFromSheets already running, reusing promise');
-    return populatePromise;
-  }
-
-  populatePromise = (async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke('sync-clients-to-sheets', {
-        body: { action: 'pull' }
-      });
-      if (error) throw error;
-      return data?.count || 0;
-    } finally {
-      populatePromise = null;
-    }
-  })();
-
-  return populatePromise;
-}
+// populateCacheFromSheets REMOVED — database is the sole source of truth
 
 /** Push unsynced rows to Google Sheets */
 export async function pushUnsyncedToSheets(): Promise<number> {
