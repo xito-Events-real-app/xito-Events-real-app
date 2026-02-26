@@ -1,53 +1,100 @@
 
 
-# Fix: Event Details Not Updating Instantly (Supabase-First Violation)
+# SAUGAT SEARCH -- Global Spotlight Search (Yellow Betting Theme)
 
-## The Problem
+## Overview
 
-When you save venue/event details, the data goes directly to Google Sheets, then re-reads from Sheets to update local state. But **the `event_details_cache` table in the database is never updated**. Every other module (Suite dashboard, Upcoming Events, Crew Schedule) reads from this database table, so they show stale data until Master Sync.
+Replace the bottom-left "Master Search" with **SAUGAT SEARCH** -- a global, centered spotlight overlay with a yellow/gold betting-app theme, triggered by `Ctrl+F` from any page or a header icon button. Features a 0.5s opening animation, a 2-second sound effect, and bold betting-game typography.
 
-## Where It Went Wrong -- 2 Violations
+---
 
-### Violation 1: `updateEventDetail` (the write path)
-**File:** `src/hooks/useEventDetails.ts` lines 193-252
+## Visual Theme
 
-The Three-Layer Write Contract says:
-1. Instant local state update
-2. Fast database cache update (~50ms)  
-3. Background Google Sheets sync
+- **Color palette**: Bright yellow (#FFD700 gold), dark black (#111) background panel, amber/orange accents -- inspired by betting/casino apps
+- **Font style**: Bold, uppercase, tight tracking -- "SAUGAT SEARCH" branding in gold gradient text with glow
+- **Input field**: Dark background with yellow/gold border, gold placeholder text
+- **Recent search chips**: Black background with gold text and gold border
+- **Results**: Dark cards with gold accents
+- **Close button**: Gold X icon, top-right of the panel
 
-But `updateEventDetail` does the OPPOSITE:
-1. Writes to Google Sheets FIRST (slow, ~2-3s)
-2. Re-reads from Sheets to update local state
-3. **Never touches the database cache at all**
+---
 
-### Violation 2: `fetchFromSheets` (the read-refresh path)
-**File:** `src/hooks/useEventDetails.ts` lines 116-156
+## Changes
 
-When data is fetched from Sheets (either after an update or as a background refresh), the fresh data updates local React state but is **never written back to `event_details_cache`**. So the database stays stale even after a successful Sheets read.
+### 1. New File: `src/contexts/SaugatSearchContext.tsx`
+Simple React context exposing `{ isOpen, open(), close(), toggle() }` so any component can trigger the search.
 
-## The Fix
+### 2. New File: `src/components/suite/SaugatSearch.tsx`
+The main overlay component, containing:
 
-### Change 1: Write to database FIRST in `updateEventDetail`
+- **Full-screen dark backdrop** (black 70% opacity) that closes on click
+- **Centered panel** (~700px wide) with dark background, gold border glow
+- **"SAUGAT SEARCH" title** in gold gradient, uppercase, bold, with text-shadow glow
+- **Search input** with gold styling
+- **Recent searches** row (migrated from MasterSearchButton) -- fix click bug by only treating as drag when pointer moves > 5px
+- **Results dropdown** below input (not above, since centered)
+- **Close button** (gold X) in top-right corner
+- **All existing search logic** preserved (client search, recent search save/load, result navigation)
 
-After calling Google Sheets and getting success, immediately upsert the updated event into `event_details_cache` using the existing unique constraint `(registered_date_time_ad, event_index)`.
+### 3. Animation (0.5 seconds)
+CSS keyframes added to `src/index.css`:
 
-The unique constraint already exists on the table, so upsert will work out of the box.
+```text
+@keyframes saugat-search-backdrop
+  0%: opacity 0
+  100%: opacity 1
+  Duration: 0.3s ease-out
 
-### Change 2: Write back to database after `fetchFromSheets`
+@keyframes saugat-search-panel
+  0%: scale(0.7), blur(12px), opacity(0)
+  60%: scale(1.03), blur(0), opacity(1)
+  100%: scale(1), blur(0), opacity(1)
+  Duration: 0.5s cubic-bezier spring
 
-When `fetchFromSheets` successfully loads fresh event data from Sheets, upsert ALL events for that client into `event_details_cache`. This ensures the database stays in sync whenever Sheets data is read.
+@keyframes saugat-search-glow
+  0%, 100%: box-shadow gold 20px
+  50%: box-shadow gold 40px + amber 60px
+  Duration: 2s infinite
+```
 
-### Technical Details
+### 4. Sound Effect
+- Play a short "power-up / slot machine" sound when search opens (one-shot, ~2 seconds)
+- Uses an `Audio` object, played once per open
+- Sound URL: a free CDN whoosh/power-up sound (same pattern as BottomNav sync sound)
 
-**In `updateEventDetail` (after line 230):** Add a database upsert using the fresh data that was just re-fetched from Sheets. The upsert maps each `EventDetail` object to the snake_case database columns and uses `onConflict: 'registered_date_time_ad,event_index'`.
+### 5. Keyboard Shortcut: `Ctrl+F` / `Cmd+F`
+- Global `keydown` listener registered in `App.tsx` via the `SaugatSearchProvider`
+- `Ctrl+F` opens the search if closed, **closes it if already open** (toggle behavior)
+- `Escape` also closes it
+- `e.preventDefault()` to block browser's native find
 
-**In `fetchFromSheets` (after line 143):** After `setData(result.data)`, loop through `result.data.events` and upsert each event into `event_details_cache`. This covers both background refreshes and manual refetches.
+### 6. Desktop Header: Search Icon Button
+In `DesktopSuiteLanding.tsx`, add a small gold-themed search icon button in the right-side header actions, positioned before the News toggle button. Clicking it opens SAUGAT SEARCH.
 
-**Helper function:** Create a shared `upsertEventToCache(registeredDateTimeAD, event)` function to avoid duplicating the column mapping logic.
+### 7. Remove Old Bottom-Left Search
+- `SuiteDashboardContent.tsx`: Remove the fixed bottom-left `MasterSearchButton` div (lines 90-93)
+- `SuiteQuickActionsBar.tsx`: Remove `MasterSearchButton` import if used in desktop variant
 
-### Result
-- Save venue details on Client Detail page --> database updates instantly
-- All other modules (Suite, Crew Schedule, Upcoming Events) see fresh data immediately
-- No Master Sync needed for event detail changes
+### 8. Fix Recent Search Clicks
+In the new `SaugatSearch.tsx`, the drag-to-scroll logic will be fixed:
+- `onPointerDown`: Record start coordinates, set `isDragging = false`
+- `onPointerMove`: Only set `isDragging = true` if distance > 5px, then capture pointer
+- `onClick` on chip: Only fire `handleRecentClick` if `isDragging` was never set to true
+
+### 9. `App.tsx` Changes
+- Wrap the app in `SaugatSearchProvider`
+- Render `<SaugatSearch />` globally (inside the provider, outside Routes)
+
+---
+
+## Files Summary
+
+| File | Action |
+|------|--------|
+| `src/contexts/SaugatSearchContext.tsx` | **Create** -- context with isOpen/open/close/toggle + Ctrl+F listener |
+| `src/components/suite/SaugatSearch.tsx` | **Create** -- full overlay component with yellow betting theme |
+| `src/index.css` | **Edit** -- add saugat-search keyframes |
+| `src/App.tsx` | **Edit** -- wrap in SaugatSearchProvider, render SaugatSearch globally |
+| `src/components/suite/DesktopSuiteLanding.tsx` | **Edit** -- add gold search icon button in header |
+| `src/components/suite/SuiteDashboardContent.tsx` | **Edit** -- remove bottom-left MasterSearchButton |
 
