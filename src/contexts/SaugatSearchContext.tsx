@@ -52,7 +52,7 @@ export function SaugatSearchProvider({ children }: { children: ReactNode }) {
   // Global Ctrl+F / Cmd+F listener
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "f") {
+      if ((e.ctrlKey || e.metaKey) && e.key === " ") {
         e.preventDefault();
         toggle();
       }
