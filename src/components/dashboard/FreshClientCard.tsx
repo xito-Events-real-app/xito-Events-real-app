@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
-import { ClientData, updateClientStatus, logCallAttempt, getCurrentStatus, updateClientQuotation, updateClientMindset, updateBargainingRates, updateClientBargainedRates, updateOurCounterRates, addClientComment, updateFinalQuotation, addPayment } from "@/lib/sheets-api";
+import { ClientData, getCurrentStatus } from "@/lib/sheets-api";
 import { getHandlerInitials, parseEventDetails, formatLocationDisplay } from "@/lib/nepali-months";
 import { getClientDetailPath } from "@/lib/client-navigation";
 import { cn } from "@/lib/utils";
-import { generateStatusLogEntry, generateCallLogEntry, computePaymentUpdate } from "@/lib/timestamp-utils";
+import { generateStatusLogEntry, generateCallLogEntry, generateCommentEntry, computePaymentUpdate } from "@/lib/timestamp-utils";
 import { updateClientFieldInCache, migrateClientToBookedInCache } from "@/lib/clients-supabase-cache";
 import { StarRating } from "@/components/ui/star-rating";
 import {
@@ -734,10 +734,11 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
 
     setIsUpdatingMindset(true);
     try {
-      const result = await updateClientMindset(client.rowNumber, newMindset);
-      setCurrentMindset(result.mindset);
+      // Cache-first: write to Supabase, push scheduler handles Sheets
+      await updateClientFieldInCache(client.registeredDateTimeAD, 'mindset', newMindset);
+      setCurrentMindset(newMindset);
       toast.success(`Mindset set to ${newMindset}`);
-      if (onMindsetChange) onMindsetChange(client, result.mindset);
+      if (onMindsetChange) onMindsetChange(client, newMindset);
     } catch (err) {
       console.error("Failed to update mindset:", err);
       toast.error("Failed to update mindset");
@@ -766,10 +767,12 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
         if (clientBargainRates[tier]) clientLines.push(`${tier}: NPR ${formatNPR(clientBargainRates[tier])}/-`);
       });
 
-      await updateBargainingRates(client.rowNumber, ourLines.join('\n'), clientLines.join('\n'));
-      const mindsetResult = await updateClientMindset(client.rowNumber, 'BARGAINING');
+      // Cache-first: write both rates + mindset to Supabase
+      await updateClientFieldInCache(client.registeredDateTimeAD, 'ourBargainedRates', ourLines.join('\n'));
+      await updateClientFieldInCache(client.registeredDateTimeAD, 'clientBargainedRates', clientLines.join('\n'));
+      await updateClientFieldInCache(client.registeredDateTimeAD, 'mindset', 'BARGAINING');
       
-      setCurrentMindset(mindsetResult.mindset);
+      setCurrentMindset('BARGAINING');
       setCurrentOurBargainedRates(ourLines.join('\n'));
       setCurrentClientBargainedRates(clientLines.join('\n'));
       setShowBargainingDialog(false);
@@ -835,7 +838,7 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
 
       const newClientRates = clientLines.join('\n');
 
-      await updateClientBargainedRates(client.rowNumber, newClientRates);
+      await updateClientFieldInCache(client.registeredDateTimeAD, 'clientBargainedRates', newClientRates);
       
       setCurrentClientBargainedRates(newClientRates);
       setShowClientBargainDialog(false);
@@ -894,7 +897,7 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
 
       const newOurRates = ourLines.join('\n');
 
-      await updateOurCounterRates(client.rowNumber, newOurRates);
+      await updateClientFieldInCache(client.registeredDateTimeAD, 'ourBargainedRates', newOurRates);
       
       setCurrentOurBargainedRates(newOurRates);
       setShowOurCounterRateDialog(false);
@@ -926,8 +929,10 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
 
     setIsAddingComment(true);
     try {
-      const result = await addClientComment(client.rowNumber, newComment.trim(), currentComments, client.registeredDateTimeAD);
-      setCurrentComments(result.comments);
+      // Cache-first: compute comment locally, write to cache
+      const newCommentEntry = generateCommentEntry(newComment.trim(), currentComments);
+      await updateClientFieldInCache(client.registeredDateTimeAD, 'comments', newCommentEntry);
+      setCurrentComments(newCommentEntry);
       setNewComment('');
       toast.success("Comment added");
     } catch (err) {
@@ -1396,8 +1401,8 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
       // Format: "PACKAGE: NPR X,XX,XXX/-"
       const formattedAmount = `${selectedFinalPackage}: NPR ${formatNPR(newFinalQuotation)}/-`;
       
-      // Save to Column AD
-      await updateFinalQuotation(client.rowNumber, formattedAmount, client.registeredDateTimeAD);
+      // Cache-first: write to Supabase, push scheduler handles Sheets
+      await updateClientFieldInCache(client.registeredDateTimeAD, 'finalQuotation', formattedAmount);
       
       // Update local state
       setCurrentFinalQuotation(formattedAmount);
@@ -3300,23 +3305,25 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
                   
                   setIsAddingPayment(true);
                   try {
-                    const result = await addPayment(
-                      client.rowNumber,
+                    // Cache-first: compute payment locally, write to cache
+                    const paymentResult = computePaymentUpdate({
                       paymentAmount,
-                      selectedPaymentType,
-                      formattedNepaliDate,
-                      formattedADDate,
-                      selectedBank,
-                      currentPaymentsMade,
-                      currentPaymentDatesAD,
-                      finalAmount,
-                      client.registeredDateTimeAD,
-                      'tracker'
-                    );
+                      paymentType: selectedPaymentType,
+                      nepaliDate: formattedNepaliDate,
+                      nepaliDateAD: formattedADDate,
+                      bank: selectedBank,
+                      existingPaymentsMade: currentPaymentsMade,
+                      existingPaymentDatesAD: currentPaymentDatesAD,
+                      finalQuotationAmount: finalAmount,
+                    });
                     
-                    setCurrentPaymentsMade(result.paymentsMade);
-                    setCurrentPaymentDatesAD(result.paymentDatesAD);
-                    setCurrentRemainingPayment(result.remainingPayment);
+                    await updateClientFieldInCache(client.registeredDateTimeAD, 'paymentsMade', paymentResult.updatedPaymentsMade);
+                    await updateClientFieldInCache(client.registeredDateTimeAD, 'paymentDatesAD', paymentResult.updatedPaymentDatesAD);
+                    await updateClientFieldInCache(client.registeredDateTimeAD, 'remainingPayment', paymentResult.remainingPayment);
+                    
+                    setCurrentPaymentsMade(paymentResult.updatedPaymentsMade);
+                    setCurrentPaymentDatesAD(paymentResult.updatedPaymentDatesAD);
+                    setCurrentRemainingPayment(paymentResult.remainingPayment);
                     
                     toast.success(`Payment of NPR ${parseInt(paymentAmount).toLocaleString('en-IN')}/- recorded!`);
                     
@@ -3329,7 +3336,7 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
                     setShowPaymentCalendar(false);
                     
                     if (onPaymentAdded) {
-                      onPaymentAdded(client, result.paymentsMade, result.remainingPayment);
+                      onPaymentAdded(client, paymentResult.updatedPaymentsMade, paymentResult.remainingPayment);
                     }
                   } catch (err) {
                     console.error("Failed to add payment:", err);
