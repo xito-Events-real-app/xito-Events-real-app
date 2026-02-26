@@ -1,46 +1,51 @@
 
 
-# Fix Status Change: Apply Supabase-First Pattern to FreshClientCard
+# Fix: Status Not Updating in UI + Double Sheet Entries
 
-## Problem Found
+## Two Root Causes
 
-After investigating all three status-change flows, here's the inconsistency:
+1. **UI stuck on old status**: `FreshClientCard` initializes local state from props once (`useState(client.statusLog || '')`). When the parent updates the client after a status change, the card ignores the new prop because React `useState` only reads the initial value on mount. No `useEffect` exists to sync prop changes back to local state.
 
-| Component | Pattern | Status Change Speed |
-|-----------|---------|-------------------|
-| `ClientDetail.tsx` | Supabase-first (correct) | Instant |
-| `DesktopClientRow.tsx` | Supabase-first (correct) | Instant |
-| **`FreshClientCard.tsx`** | **Google Sheets-first (WRONG)** | **3-10 seconds, often fails** |
+2. **Double Sheets entry**: `confirmStatusChange` writes to Supabase cache with `synced_to_sheet: false` AND fires a direct background `updateClientStatus()` to Sheets. The background sync process later finds the unsynced row and pushes it again -- resulting in two identical entries.
 
-`FreshClientCard.tsx` is used on the main Fresh Clients page and Handler Clients page -- the most frequently used views. Every status change there calls `await updateClientStatus(rowNumber, ...)` which hits Google Sheets directly and blocks the UI until it responds. If Sheets is slow or rate-limited, the change fails entirely.
-
-## What Needs to Change
+## Changes
 
 ### File: `src/components/dashboard/FreshClientCard.tsx`
 
-**1. `confirmStatusChange()` (normal status changes)**
-- Currently: `await updateClientStatus(...)` -- blocks on Sheets
-- Fix: Compute new status log locally with `generateStatusLogEntry()`, update local state instantly, write to Supabase cache via `updateClientFieldInCache()`, then fire Sheets sync in background with `.catch()`
+**1. Add useEffect to sync props to local state** (after the state declarations, around line 424)
 
-**2. `handleSaveQuotation()` (QUOTATION SENT flow)**
-- Currently: `await updateClientQuotation(...)` -- blocks on Sheets
-- Fix: Update local state + Supabase cache instantly, then sync quotation and status to Sheets in background
+```typescript
+useEffect(() => {
+  setCurrentStatusLog(client.statusLog || '');
+  setCurrentHandler(client.clientHandler || '');
+  setCurrentCallLog(client.callLog || '');
+  setCurrentMindset(client.mindset || '');
+  setCurrentQuotationData(client.quotationData || '');
+  setCurrentOurBargainedRates(client.ourBargainedRates || '');
+  setCurrentClientBargainedRates(client.clientBargainedRates || '');
+  setCurrentComments(client.comments || '');
+  setCurrentFinalQuotation(client.finalQuotation || '');
+  setCurrentPaymentsMade(client.paymentsMade || '');
+  setCurrentPaymentDatesAD(client.paymentDatesAD || '');
+  setCurrentRemainingPayment(client.remainingPayment || '');
+}, [client]);
+```
 
-**3. `handleSaveAdvancePendingQuotation()` (ADVANCE PENDING flow)**
-- Currently: `await updateFinalQuotation(...)` then `await updateClientStatus(...)` -- two sequential blocking calls
-- Fix: Update local state + Supabase cache for both finalQuotation and statusLog instantly, then sync both to Sheets in background
+**2. Remove direct Sheets calls** -- let background sync handle it (one write, not two)
 
-**4. `handleSaveBookedPayment()` (BOOKED flow)**
-- Currently: `await addPayment(...)` then `await updateClientStatus(...)` -- two sequential blocking calls
-- Fix: Compute payment update locally using `computePaymentUpdate()`, update local state + Supabase cache instantly, migrate to booked in cache, then sync to Sheets in background
+- `confirmStatusChange` (line 526-527): Remove `updateClientStatus(client.rowNumber, ...).catch(...)` 
+- `handleSaveQuotation`: Remove `updateClientQuotation(...)` background call
+- `handleSaveAdvancePendingQuotation`: Remove `updateFinalQuotation(...)` and `updateClientStatus(...)` background calls
+- `handleSaveBookedPayment`: Remove `addPayment(...)` and `updateClientStatus(...)` background calls
 
-### Imports to Add
-- `generateStatusLogEntry`, `computePaymentUpdate` from `@/lib/timestamp-utils`
-- `updateClientFieldInCache`, `migrateClientToBookedInCache` from `@/lib/clients-supabase-cache`
+All these already write to Supabase cache with `synced_to_sheet: false`, so the background push sync will handle Sheets updates exactly once.
+
+**3. Apply Supabase-first to `handleHandlerChange`** (line 543+)
+
+Currently still awaits `updateClientHandler()` (Sheets-first, blocking). Change to: update local state instantly, write to Supabase cache, no direct Sheets call.
 
 ## Expected Result
-- Status changes will feel **instant** (under 100ms) instead of waiting 3-10 seconds
-- No more "Failed to update status" errors from Sheets timeouts or rate limits
-- Sheets still gets updated in the background for data consistency
-- Matches the proven pattern already working in ClientDetail and DesktopClientRow
+- Status changes reflect in UI instantly (no stale state)
+- Only one entry appears in Google Sheets per status change
+- All writes flow: local state -> Supabase cache -> background sync to Sheets
 
