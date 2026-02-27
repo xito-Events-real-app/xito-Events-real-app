@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useCachedData } from "@/hooks/useCachedData";
 import { useDropdownData } from "@/hooks/useDropdownData";
-import { updateClient, ClientData, logCallAttempt, addClientComment, updateFinalQuotation, updateClientPriority, updateBenzoKeepNotes, deleteClient } from "@/lib/sheets-api";
+import { updateClient, ClientData, logCallAttempt, addClientComment, updateFinalQuotation, updateClientPriority, updateBenzoKeepNotes, deleteClient, addPayment } from "@/lib/sheets-api";
 import { generateCallLogEntry, generateStatusLogEntry, generateCommentEntry, computePaymentUpdate } from "@/lib/timestamp-utils";
 import { migrateClientToBookedInCache } from "@/lib/clients-supabase-cache";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -683,7 +683,16 @@ const ClientDetail = () => {
       setShowBookedPaymentDialog(false);
       setPendingStatus("");
 
-      // Background sync handled by push-sync process (synced_to_sheet: false)
+      // Background: call addPayment to trigger income sheet sync
+      if (client.rowNumber) {
+        addPayment(
+          client.rowNumber, data.amount, data.paymentType, data.nepaliDate, data.adDate, data.bank,
+          client.paymentsMade || '', client.paymentDatesAD || '', finalAmount,
+          client.registeredDateTimeAD, client.clientName || ''
+        ).catch(err => {
+          console.warn('[BACKGROUND] Income sync via addPayment failed:', err);
+        });
+      }
     } catch (err) {
       console.error('Failed to save payment:', err);
       toast({ title: "Failed to record payment", variant: "destructive" });
