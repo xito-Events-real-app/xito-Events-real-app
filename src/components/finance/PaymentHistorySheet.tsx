@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { Receipt, Banknote, Calendar, Plus, Edit, Loader2, AlertTriangle } from "lucide-react";
-import { getDropdowns } from "@/lib/sheets-api";
+import { useDropdownData } from "@/hooks/useDropdownData";
 import {
   Sheet,
   SheetContent,
@@ -23,6 +23,7 @@ import NepaliDate from "nepali-date-converter";
 import PaymentDrawer from "./PaymentDrawer";
 import { PaymentDatePicker } from "./PaymentDatePicker";
 import { updatePayment } from "@/lib/sheets-api";
+import { updateClientFieldInCache } from "@/lib/clients-supabase-cache";
 import { toast } from "sonner";
 
 interface ParsedPayment {
@@ -155,25 +156,13 @@ const PaymentHistorySheet = ({
   });
   const [editSelectedDate, setEditSelectedDate] = useState<Date | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [banks, setBanks] = useState<string[]>([]);
+  
+  // Dropdown data from Supabase cache
+  const { data: dropdownData } = useDropdownData();
+  const banks = dropdownData?.banks || ['ESEWA', 'KHALTI', 'BANK', 'CASH', 'FONEPAY'];
+  const paymentTypes = dropdownData?.paymentTypes || ['ADVANCE', 'PARTIAL', 'FINAL'];
   
   const payments = useMemo(() => parsePayments(paymentsMade), [paymentsMade]);
-
-  // Fetch banks when sheet opens
-  useEffect(() => {
-    const fetchBanks = async () => {
-      try {
-        const data = await getDropdowns();
-        setBanks(data.banks || ['ESEWA', 'KHALTI', 'BANK', 'CASH', 'FONEPAY']);
-      } catch (error) {
-        console.error("Error fetching banks:", error);
-        setBanks(['ESEWA', 'KHALTI', 'BANK', 'CASH', 'FONEPAY']);
-      }
-    };
-    if (isOpen) {
-      fetchBanks();
-    }
-  }, [isOpen]);
   
   // Initialize edit form when a payment is selected for editing
   useEffect(() => {
@@ -215,44 +204,67 @@ const PaymentHistorySheet = ({
     }
   }, [editingPaymentIndex, payments]);
   
-  // Handle edit payment submit
+  // Handle edit payment submit - Supabase-First (Three-Layer Write)
   const handleEditPaymentSubmit = async () => {
     if (editingPaymentIndex === null) return;
     
-    // Safety check: block if no final quotation
     if (!hasFinalQuotation) {
       toast.error("Final quotation not fixed. Cannot update payment.");
+      return;
+    }
+    
+    if (!editFormData.amount || !editFormData.type || !editFormData.year || !editFormData.month || !editFormData.day || !editFormData.bank) {
+      toast.error("Please fill in all fields");
       return;
     }
     
     try {
       setIsUpdating(true);
       
-      // Validate inputs
-      if (!editFormData.amount || !editFormData.type || !editFormData.year || !editFormData.month || !editFormData.day || !editFormData.bank) {
-        toast.error("Please fill in all fields");
-        return;
-      }
+      // Layer 1: Rebuild payment string locally
+      const lines = paymentsMade.split('\n').filter(line => line.trim());
       
-      const result = await updatePayment(
-        rowNumber,
-        editingPaymentIndex,
-        editFormData.amount,
-        editFormData.type,
-        editFormData.year,
-        editFormData.month,
-        editFormData.day,
-        editFormData.bank,
-        paymentsMade,
-        quotationAmount,
-        registeredDateTimeAD
-      );
+      // Get weekday from BS date
+      let weekday = 'SAT';
+      try {
+        const nepaliDate = new NepaliDate(parseInt(editFormData.year), parseInt(editFormData.month) - 1, parseInt(editFormData.day));
+        const adDate = nepaliDate.toJsDate();
+        weekday = adDate.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+      } catch {}
       
-      if (result.success) {
-        toast.success("Payment updated successfully");
-        setEditingPaymentIndex(null);
-        onPaymentAdded?.(); // Refresh data
+      const formattedAmount = parseInt(editFormData.amount).toLocaleString('en-IN');
+      const bsDateStr = `${editFormData.year}-${editFormData.month.padStart(2, '0')}-${editFormData.day.padStart(2, '0')}`;
+      const newLine = `NPR ${formattedAmount}/- AS ${editFormData.type} ON ${weekday} ${bsDateStr} IN ${editFormData.bank}`;
+      
+      lines[editingPaymentIndex] = newLine;
+      const updatedPaymentsMade = lines.join('\n');
+      
+      // Recalculate remaining
+      let totalPaid = 0;
+      for (const line of lines) {
+        const match = line.match(/NPR\s*([\d,]+)/i);
+        if (match) totalPaid += parseInt(match[1].replace(/,/g, ''));
       }
+      const updatedRemaining = `NPR ${(quotationAmount - totalPaid).toLocaleString('en-IN')}/-`;
+      
+      // Layer 2: Update Supabase cache immediately
+      await Promise.all([
+        updateClientFieldInCache(registeredDateTimeAD, 'paymentsMade', updatedPaymentsMade),
+        updateClientFieldInCache(registeredDateTimeAD, 'remainingPayment', updatedRemaining),
+      ]);
+      
+      toast.success("Payment updated successfully");
+      setEditingPaymentIndex(null);
+      onPaymentAdded?.(); // Refresh UI from DB
+      
+      // Layer 3: Background Sheets sync (non-blocking)
+      updatePayment(
+        rowNumber, editingPaymentIndex, editFormData.amount, editFormData.type,
+        editFormData.year, editFormData.month, editFormData.day, editFormData.bank,
+        paymentsMade, quotationAmount, registeredDateTimeAD
+      ).catch(err => {
+        console.warn('[BACKGROUND-SHEETS] [updatePayment] Sync failed, data safe in DB:', err);
+      });
     } catch (error) {
       console.error("Error updating payment:", error);
       toast.error("Failed to update payment");
@@ -504,9 +516,11 @@ const PaymentHistorySheet = ({
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-700">
-                  <SelectItem value="ADVANCE">ADVANCE</SelectItem>
-                  <SelectItem value="PARTIAL">PARTIAL</SelectItem>
-                  <SelectItem value="FINAL">FINAL</SelectItem>
+                  {paymentTypes.map((type) => (
+                    <SelectItem key={type} value={type} className="text-white">
+                      {type}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
