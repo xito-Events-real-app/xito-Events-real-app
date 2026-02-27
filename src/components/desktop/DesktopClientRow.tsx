@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
-import { ClientData } from "@/lib/sheets-api";
+import { ClientData, updateClientStatus } from "@/lib/sheets-api";
 import { getMonthName } from "@/lib/nepali-months";
 import { getClientDetailPath } from "@/lib/client-navigation";
 import { Button } from "@/components/ui/button";
@@ -455,14 +455,18 @@ export function DesktopClientRow({
       setShowBookedPaymentDialog(false);
       setPendingStatus('');
 
-      // ── Background: Sheets sync (sequential — status must precede payment in Sheets) ──
+      // ── Background: Sheets sync ──
       const rowNum = client.rowNumber;
       const regId = client.registeredDateTimeAD;
       const clientName = client.clientName;
       const existingPaid = currentPaymentsMade;
       const existingDates = currentPaymentDatesAD;
-      const savedPendingStatus = pendingStatus;
-      const savedStatusLog = currentStatusLog;
+
+      // Background: proper sheet MOVE (tracker -> booked + downstream syncs)
+      if (rowNum && regId) {
+        updateClientStatus(rowNum, pendingStatus, currentStatusLog)
+          .catch(err => console.warn('[BACKGROUND] Sheet MOVE failed:', err));
+      }
 
       // Background: call addPayment to trigger income sheet sync
       if (rowNum) {

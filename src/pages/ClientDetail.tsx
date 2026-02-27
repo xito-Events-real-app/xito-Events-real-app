@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useCachedData } from "@/hooks/useCachedData";
 import { useDropdownData } from "@/hooks/useDropdownData";
-import { updateClient, ClientData, logCallAttempt, addClientComment, updateFinalQuotation, updateClientPriority, updateBenzoKeepNotes, deleteClient, addPayment } from "@/lib/sheets-api";
+import { updateClient, ClientData, logCallAttempt, addClientComment, updateFinalQuotation, updateClientPriority, updateBenzoKeepNotes, deleteClient, addPayment, updateClientStatus } from "@/lib/sheets-api";
 import { generateCallLogEntry, generateStatusLogEntry, generateCommentEntry, computePaymentUpdate } from "@/lib/timestamp-utils";
 import { migrateClientToBookedInCache } from "@/lib/clients-supabase-cache";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -682,6 +682,12 @@ const ClientDetail = () => {
       toast({ title: `Payment recorded & status updated to BOOKED` });
       setShowBookedPaymentDialog(false);
       setPendingStatus("");
+
+      // Background: proper sheet MOVE (tracker -> booked + downstream syncs)
+      if (client.rowNumber && client.registeredDateTimeAD) {
+        updateClientStatus(client.rowNumber, pendingStatus, currentStatusLog || client.statusLog || '')
+          .catch(err => console.warn('[BACKGROUND] Sheet MOVE failed:', err));
+      }
 
       // Background: call addPayment to trigger income sheet sync
       if (client.rowNumber) {

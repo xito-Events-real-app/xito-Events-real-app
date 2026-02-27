@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
-import { ClientData, getCurrentStatus, addPayment } from "@/lib/sheets-api";
+import { ClientData, getCurrentStatus, addPayment, updateClientStatus } from "@/lib/sheets-api";
 import { getHandlerInitials, parseEventDetails, formatLocationDisplay } from "@/lib/nepali-months";
 import { getClientDetailPath } from "@/lib/client-navigation";
 import { cn } from "@/lib/utils";
@@ -1291,7 +1291,13 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
         paymentUpdate.remainingPayment,
       );
 
-      // 4. Background: call addPayment to trigger income sheet sync
+      // 4. Background: proper sheet MOVE (tracker -> booked + downstream syncs)
+      if (client.rowNumber && client.registeredDateTimeAD) {
+        updateClientStatus(client.rowNumber, newStatus, currentStatusLog)
+          .catch(err => console.warn('[BACKGROUND] Sheet MOVE failed:', err));
+      }
+
+      // 5. Background: call addPayment to trigger income sheet sync
       if (client.rowNumber) {
         addPayment(
           client.rowNumber, data.amount, data.paymentType, data.nepaliDate, data.adDate, data.bank,
