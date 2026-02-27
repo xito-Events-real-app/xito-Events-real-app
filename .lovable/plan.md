@@ -1,73 +1,71 @@
 
 
-# Audit: Payment Dropdowns Also Bypass Supabase-First
+# Fix: Unknown Date (`**`) Events Incorrectly Appearing in Upcoming Events
 
 ## Problem
 
-All three payment components fetch dropdown data (banks, payment types) via `getDropdowns()` from `sheets-api.ts`, which calls the Google Sheets edge function directly. This violates the Supabase-First architecture.
+Shakti Neupane has 5 events. The last one ("POST SHOOT") has date `CHAITRA **` (unknown day). In the database, `event_date_ad` is stored as `2026-03-**`.
 
-You already have `useDropdownData` hook that reads from the `dropdowns_cache` table -- but payment components don't use it.
+In the "Upcoming Events" hero on the Suite landing page, this event incorrectly shows as "in 2 days / Mar 1". This happens because `new Date("2026-03-**")` in some browser engines falls back to parsing as `March 1, 2026` instead of returning `Invalid Date`.
 
-## Affected Components (3 files)
-
-| File | What it fetches | How |
-|------|----------------|-----|
-| `PaymentHistorySheet.tsx` | `banks` | `getDropdowns()` (Sheets) |
-| `finance/PaymentDrawer.tsx` | `paymentTypes`, `banks` | `getDropdowns()` (Sheets) |
-| `booked/PaymentDrawer.tsx` | `paymentTypes`, `banks` | `getDropdowns()` (Sheets) |
-
-## Fix: Use Parent-Passed Dropdown Data
-
-The cleanest approach: pass `paymentTypes` and `banks` as props from the parent, which already has dropdown data from `useDropdownData` or `useCachedData`.
-
-### File 1: `src/components/finance/PaymentHistorySheet.tsx`
-- Add `paymentTypes` and `banks` to props interface
-- Remove `getDropdowns` import
-- Remove the `useEffect` that calls `getDropdowns()` (lines 162-176)
-- Remove local `banks` state -- use props directly
-- Add `paymentTypes` prop for the edit dialog's payment type selector
-
-### File 2: `src/components/finance/PaymentDrawer.tsx`
-- Add `paymentTypes` and `banks` to props interface (they're already partially there from parent)
-- Remove `getDropdowns` import and the `useEffect` that fetches them (lines 73-84)
-- Remove local `paymentTypes` and `banks` state -- use props directly
-
-### File 3: `src/components/booked/PaymentDrawer.tsx`
-- Same changes as File 2
-
-### File 4: Parent components that render these drawers
-- Pass `paymentTypes` and `banks` from the existing dropdown data
-- Parents like `FinanceClientCard`, `MobileFinanceManager`, `DesktopFinanceManager`, `BookedClientCard` already have access to dropdown data or can receive it as props
-
-### File 5: `src/components/finance/PaymentHistorySheet.tsx` -- Supabase-First Edit
-- Rewrite `handleEditPaymentSubmit` to follow Three-Layer Write Contract:
-  1. Rebuild the edited payment line locally
-  2. Recalculate remaining payment
-  3. Update `clients_cache` via `updateClientFieldInCache` (set `synced_to_sheet: false`)
-  4. Call `onPaymentAdded()` to refresh UI from DB
-  5. Background: call `updatePayment()` to Sheets (non-blocking)
-
-### File 6: `src/components/finance/PaymentDrawer.tsx` -- Supabase-First Add
-- After `computePaymentUpdate`, add `updateClientFieldInCache` calls for `payments_made`, `payment_dates_ad`, `remaining_payment` before `onPaymentAdded()`
-
-### File 7: `src/components/booked/PaymentDrawer.tsx` -- Supabase-First Add
-- Same DB cache writes as File 6
-
-## Summary of All Changes
+## Root Cause
 
 ```text
-DROPDOWN FIX (3 files):
-  - Remove getDropdowns() calls from 3 payment components
-  - Pass paymentTypes + banks as props from parent
-
-PAYMENT WRITE FIX (3 files):
-  - PaymentHistorySheet: DB-first edit
-  - Finance PaymentDrawer: DB-first add
-  - Booked PaymentDrawer: DB-first add
+event_date_ad = "2026-03-**"
+           |
+   new Date("2026-03-**")
+           |
+   Some browsers parse as March 1, 2026 (not NaN!)
+           |
+   isNaN check passes -> event appears as upcoming
+           |
+   Shows "2 days" countdown to Mar 1
 ```
 
-## Risk Assessment
-- Zero risk to leads/tracker: all changes in booked payment flows only
-- Dropdown fallback: if props are empty, use hardcoded defaults (same as current catch blocks)
-- No schema changes needed
+## Fix (2 files)
 
+### File 1: `src/components/suite/TodayEventsHero.tsx`
+
+In `getUpcomingEvents()`, add an early check to skip any `dateStr` containing `**` before attempting `new Date()` parsing.
+
+**Change in the `eventDates.forEach` loop (around line 42):**
+```typescript
+eventDates.forEach((dateStr: string, idx: number) => {
+  if (!dateStr?.trim()) return;
+  // Skip unknown-day dates (contain **)
+  if (dateStr.includes('**')) return;
+  
+  const eventDate = new Date(dateStr.trim());
+  // ... rest unchanged
+});
+```
+
+### File 2: `src/components/crew-schedule/UpcomingEventsSection.tsx`
+
+In the `useMemo` filter, skip assignments where `event_day` contains `**`. Currently `parseInt("**")` returns `NaN` which becomes `0`, potentially letting the event pass the date comparison.
+
+**Change in the filter (around line 27):**
+```typescript
+return assignments
+  .filter(a => {
+    // Skip unknown-day events
+    if (!a.event_day || a.event_day.includes('**')) return false;
+    
+    const y = parseInt(a.event_year || "0");
+    const m = parseInt(a.event_month || "0");
+    const d = parseInt(a.event_day || "0");
+    return y > tY || (y === tY && m > tM) || (y === tY && m === tM && d >= tD);
+  })
+```
+
+## What This Does NOT Change
+
+- Unknown-day events still appear correctly in the Booking Calendar (as orange `**` badges)
+- Unknown-day events still appear in the client detail page
+- No data is modified -- this is purely a display filter fix
+
+## Risk Assessment
+
+- Zero risk to data: read-only display filter
+- Zero risk to other modules: changes are isolated to 2 upcoming-events views
+- Unknown-day events are intentionally excluded from countdowns since there's no actual date to count down to
