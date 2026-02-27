@@ -272,8 +272,12 @@ export async function updateClientInCacheRecord(client: ClientData): Promise<voi
 
 /**
  * Atomically migrate a client from 'tracker' to 'booked' in Supabase cache.
- * Sets sheet_source = 'booked', writes all payment + status fields, marks synced_to_sheet = false.
- * This is the Supabase-first step for the BOOKED status migration — no Sheets await required.
+ * Sets sheet_source = 'booked', row_number = 0, synced_to_sheet = FALSE.
+ * 
+ * CRITICAL: synced_to_sheet MUST be false so that:
+ * 1. Pull sync protects this row from deletion (unsynced rows are never deleted during pull)
+ * 2. The row stays in the DB even if the sheet MOVE hasn't completed yet
+ * 3. Only after updateClientStatus confirms the sheet MOVE do we mark synced + set correct row_number
  */
 export async function migrateClientToBookedInCache(
   registeredDateTimeAD: string,
@@ -291,13 +295,42 @@ export async function migrateClientToBookedInCache(
       payments_made: newPaymentsMade,
       payment_dates_ad: newPaymentDatesAD,
       remaining_payment: newRemainingPayment,
-      synced_to_sheet: true,      // Let updateClientStatus handle the sheet MOVE properly
+      synced_to_sheet: false,     // CRITICAL: keep unsynced until sheet MOVE is confirmed
       updated_at: new Date().toISOString(),
     } as any)
     .eq('registered_date_time_ad', registeredDateTimeAD);
 
   if (error) throw error;
-  schedulePushToSheets();
+  // NOTE: Do NOT call schedulePushToSheets() here.
+  // The push scheduler would try to write this to sheets with row_number=0.
+  // Instead, updateClientStatus handles the proper sheet MOVE.
+}
+
+/**
+ * Mark a booked migration as synced after updateClientStatus confirms the sheet MOVE.
+ * Updates the row_number to the actual booked sheet row and sets synced_to_sheet = true.
+ */
+export async function confirmBookedMigrationSync(
+  registeredDateTimeAD: string,
+  bookedRowNumber?: number
+): Promise<void> {
+  const updateFields: Record<string, any> = {
+    synced_to_sheet: true,
+    updated_at: new Date().toISOString(),
+  };
+  if (bookedRowNumber && bookedRowNumber >= 2) {
+    updateFields.row_number = bookedRowNumber;
+  }
+  
+  const { error } = await supabase
+    .from('clients_cache')
+    .update(updateFields as any)
+    .eq('registered_date_time_ad', registeredDateTimeAD)
+    .eq('sheet_source', 'booked');
+
+  if (error) {
+    console.warn('[confirmBookedMigrationSync] Failed to confirm sync:', error);
+  }
 }
 
 // populateCacheFromSheets REMOVED — database is the sole source of truth
