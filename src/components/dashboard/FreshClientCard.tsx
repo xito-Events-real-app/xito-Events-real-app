@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
-import { ClientData, getCurrentStatus } from "@/lib/sheets-api";
+import { ClientData, getCurrentStatus, addPayment } from "@/lib/sheets-api";
 import { getHandlerInitials, parseEventDetails, formatLocationDisplay } from "@/lib/nepali-months";
 import { getClientDetailPath } from "@/lib/client-navigation";
 import { cn } from "@/lib/utils";
@@ -1291,7 +1291,16 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
         paymentUpdate.remainingPayment,
       );
 
-      // 4. Background sync handled by push-sync process (synced_to_sheet: false)
+      // 4. Background: call addPayment to trigger income sheet sync
+      if (client.rowNumber) {
+        addPayment(
+          client.rowNumber, data.amount, data.paymentType, data.nepaliDate, data.adDate, data.bank,
+          currentPaymentsMade, currentPaymentDatesAD, finalAmount,
+          client.registeredDateTimeAD, client.clientName || ''
+        ).catch(err => {
+          console.warn('[BACKGROUND] Income sync via addPayment failed:', err);
+        });
+      }
     } catch (err) {
       console.error('Failed to save payment:', err);
       toast.error('Failed to record payment');

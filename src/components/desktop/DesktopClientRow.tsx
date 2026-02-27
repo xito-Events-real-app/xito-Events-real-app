@@ -464,7 +464,15 @@ export function DesktopClientRow({
       const savedPendingStatus = pendingStatus;
       const savedStatusLog = currentStatusLog;
 
-      // Background sync handled by push-sync process (synced_to_sheet: false)
+      // Background: call addPayment to trigger income sheet sync
+      if (rowNum) {
+        addPayment(
+          rowNum, data.amount, data.paymentType, data.nepaliDate, data.adDate, data.bank,
+          existingPaid, existingDates, finalAmount, regId, clientName || ''
+        ).catch(err => {
+          console.warn('[BACKGROUND] Income sync via addPayment failed:', err);
+        });
+      }
     } catch (err) {
       console.error('Failed to save payment:', err);
       toast.error('Failed to record payment');
