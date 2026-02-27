@@ -1,71 +1,55 @@
 
+# Split All Clients Table into Upcoming and Completed Sections
 
-# Fix: Unknown Date (`**`) Events Incorrectly Appearing in Upcoming Events
+## What Changes
 
-## Problem
+The "All Clients" crew table currently shows events sorted by day from earliest to latest. This change splits the table into two sections:
 
-Shakti Neupane has 5 events. The last one ("POST SHOOT") has date `CHAITRA **` (unknown day). In the database, `event_date_ad` is stored as `2026-03-**`.
+1. **Upcoming Events** (top) -- events where the BS date has not yet passed, sorted by day ascending
+2. **Completed Events** (bottom) -- events where the BS date has passed, rendered with italic fonts
 
-In the "Upcoming Events" hero on the Suite landing page, this event incorrectly shows as "in 2 days / Mar 1". This happens because `new Date("2026-03-**")` in some browser engines falls back to parsing as `March 1, 2026` instead of returning `Invalid Date`.
+Both mobile card view and desktop table view will be updated.
 
-## Root Cause
+## Technical Plan
 
-```text
-event_date_ad = "2026-03-**"
-           |
-   new Date("2026-03-**")
-           |
-   Some browsers parse as March 1, 2026 (not NaN!)
-           |
-   isNaN check passes -> event appears as upcoming
-           |
-   Shows "2 days" countdown to Mar 1
-```
+### File: `src/components/suite/AllClientsCrewTable.tsx`
 
-## Fix (2 files)
+**1. Add two derived lists from `filteredRows`**
 
-### File 1: `src/components/suite/TodayEventsHero.tsx`
+Using the existing `isBSDatePast()` function (already imported), split `filteredRows` into:
+- `upcomingRows` -- events where `isBSDatePast(row.eventYear, row.eventMonth, row.eventDay)` is `false`
+- `completedRows` -- events where it returns `true`
 
-In `getUpcomingEvents()`, add an early check to skip any `dateStr` containing `**` before attempting `new Date()` parsing.
+Both keep the same day-ascending sort order.
 
-**Change in the `eventDates.forEach` loop (around line 42):**
-```typescript
-eventDates.forEach((dateStr: string, idx: number) => {
-  if (!dateStr?.trim()) return;
-  // Skip unknown-day dates (contain **)
-  if (dateStr.includes('**')) return;
-  
-  const eventDate = new Date(dateStr.trim());
-  // ... rest unchanged
-});
-```
+**2. Update the desktop table `<tbody>`**
 
-### File 2: `src/components/crew-schedule/UpcomingEventsSection.tsx`
+Instead of rendering `filteredRows.map(...)` once, render:
+- `upcomingRows.map(...)` with existing styling
+- A separator row: `<tr>` with a colspan cell showing "Completed Events" header with a muted style
+- `completedRows.map(...)` with an additional `italic` class on text elements (client name, event name, freelancer names)
 
-In the `useMemo` filter, skip assignments where `event_day` contains `**`. Currently `parseInt("**")` returns `NaN` which becomes `0`, potentially letting the event pass the date comparison.
+**3. Update the mobile card layout**
 
-**Change in the filter (around line 27):**
-```typescript
-return assignments
-  .filter(a => {
-    // Skip unknown-day events
-    if (!a.event_day || a.event_day.includes('**')) return false;
-    
-    const y = parseInt(a.event_year || "0");
-    const m = parseInt(a.event_month || "0");
-    const d = parseInt(a.event_day || "0");
-    return y > tY || (y === tY && m > tM) || (y === tY && m === tM && d >= tD);
-  })
-```
+Same split:
+- Render `upcomingRows` cards first, preceded by a small "Upcoming Events" label
+- A divider with "Completed Events" label
+- Render `completedRows` cards with italic styling
 
-## What This Does NOT Change
+**4. Apply italic styling to completed rows**
 
-- Unknown-day events still appear correctly in the Booking Calendar (as orange `**` badges)
-- Unknown-day events still appear in the client detail page
-- No data is modified -- this is purely a display filter fix
+For completed events, add `italic text-gray-500` classes to:
+- Client name
+- Event name
+- Freelancer names in crew cells
+- Day badge gets a muted/gray style instead of violet
 
-## Risk Assessment
+**5. Update stats calculations**
 
-- Zero risk to data: read-only display filter
-- Zero risk to other modules: changes are isolated to 2 upcoming-events views
-- Unknown-day events are intentionally excluded from countdowns since there's no actual date to count down to
+The `assignedCount`, `requiredCells`, `remainingCount` stats and `dayGroups`/`dayCounts` continue to use `filteredRows` (both sections combined) -- no change needed there.
+
+**6. Handle edge cases**
+
+- If all events are upcoming, no "Completed Events" section appears
+- If all events are completed, no "Upcoming Events" header needed, just show completed
+- Events with unknown days (`**`) treated as upcoming (cannot determine if past)
