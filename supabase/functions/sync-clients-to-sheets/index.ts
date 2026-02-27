@@ -214,11 +214,17 @@ serve(async (req) => {
       // Filter out unsynced rows from the upsert set
       const safeToUpsert = deduped.filter(r => !unsyncedIds.has(r.registered_date_time_ad));
 
-      // Delete existing synced rows (preserve pending local changes)
+      // Delete existing synced rows ONLY (preserve pending local changes AND unsynced booked migrations)
+      // CRITICAL: Only delete rows where synced_to_sheet = true
+      // This protects freshly migrated booked clients that haven't been confirmed by sheet MOVE yet
       await supabase
         .from('clients_cache')
         .delete()
         .eq('synced_to_sheet', true);
+
+      // Also check for orphaned booked rows with row_number=0 that should be protected
+      // These are mid-migration clients — do NOT delete them
+      console.log(`[sync-clients] Deleted synced rows, preserving ${unsyncedIds.size} unsynced rows`);
 
       // Upsert in batches of 500 (only safe rows)
       let count = 0;

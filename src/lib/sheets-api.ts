@@ -187,8 +187,9 @@ export async function getClientStatuses(): Promise<string[]> {
 export async function updateClientStatus(
   rowNumber: number,
   newStatus: string,
-  existingStatusLog: string
-): Promise<{ success: boolean; statusLog: string }> {
+  existingStatusLog: string,
+  registeredDateTimeAD?: string
+): Promise<{ success: boolean; statusLog: string; movedToBooked?: boolean; actualRowNumber?: number }> {
   // Generate timestamp on client side to ensure correct local time
   const now = new Date();
   const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -199,8 +200,8 @@ export async function updateClientStatus(
   const secs = String(now.getSeconds()).padStart(2, '0');
   const clientTimestamp = `${month}/${day}/${year}, ${hours}:${mins}:${secs}`;
   
-  return callSheetsFunction<{ success: boolean; statusLog: string }>("updateClientStatus", {
-    data: { rowNumber, newStatus, existingStatusLog, clientTimestamp },
+  return callSheetsFunction<{ success: boolean; statusLog: string; movedToBooked?: boolean; actualRowNumber?: number }>("updateClientStatus", {
+    data: { rowNumber, newStatus, existingStatusLog, clientTimestamp, registeredDateTimeAD },
   });
 }
 

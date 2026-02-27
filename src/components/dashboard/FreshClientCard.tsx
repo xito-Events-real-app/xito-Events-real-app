@@ -1292,9 +1292,20 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
       );
 
       // 4. Background: proper sheet MOVE (tracker -> booked + downstream syncs)
+      // CRITICAL: pass registeredDateTimeAD for identity-based routing
       if (client.rowNumber && client.registeredDateTimeAD) {
-        updateClientStatus(client.rowNumber, newStatus, currentStatusLog)
-          .catch(err => console.warn('[BACKGROUND] Sheet MOVE failed:', err));
+        updateClientStatus(client.rowNumber, newStatus, currentStatusLog, client.registeredDateTimeAD)
+          .then(async (result) => {
+            if (result?.movedToBooked || result?.success) {
+              const { confirmBookedMigrationSync } = await import('@/lib/clients-supabase-cache');
+              await confirmBookedMigrationSync(client.registeredDateTimeAD!, result.actualRowNumber);
+              console.log(`[BOOKED MOVE] Successfully moved ${client.clientName} to BOOKED CLIENTS row ${result.actualRowNumber}`);
+            }
+          })
+          .catch(async (err) => {
+            console.error('[BOOKED MOVE] Sheet MOVE FAILED:', err);
+            toast.error('⚠️ Sheet sync failed — client saved locally but may not appear in Google Sheets. Please run Master Sync.');
+          });
       }
 
       // 5. Background: call addPayment to trigger income sheet sync

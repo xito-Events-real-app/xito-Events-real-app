@@ -684,9 +684,20 @@ const ClientDetail = () => {
       setPendingStatus("");
 
       // Background: proper sheet MOVE (tracker -> booked + downstream syncs)
+      // CRITICAL: pass registeredDateTimeAD for identity-based routing
       if (client.rowNumber && client.registeredDateTimeAD) {
-        updateClientStatus(client.rowNumber, pendingStatus, currentStatusLog || client.statusLog || '')
-          .catch(err => console.warn('[BACKGROUND] Sheet MOVE failed:', err));
+        updateClientStatus(client.rowNumber, pendingStatus, currentStatusLog || client.statusLog || '', client.registeredDateTimeAD)
+          .then(async (result) => {
+            if (result?.movedToBooked || result?.success) {
+              const { confirmBookedMigrationSync } = await import('@/lib/clients-supabase-cache');
+              await confirmBookedMigrationSync(client.registeredDateTimeAD!, result.actualRowNumber);
+              console.log(`[BOOKED MOVE] Successfully moved to BOOKED CLIENTS row ${result.actualRowNumber}`);
+            }
+          })
+          .catch(async (err) => {
+            console.error('[BOOKED MOVE] Sheet MOVE FAILED:', err);
+            toast({ title: '⚠️ Sheet sync failed', description: 'Client saved locally but may not appear in Google Sheets. Please run Master Sync.', variant: 'destructive' });
+          });
       }
 
       // Background: call addPayment to trigger income sheet sync
