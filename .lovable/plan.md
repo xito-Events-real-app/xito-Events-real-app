@@ -1,52 +1,29 @@
 
-# Fix Two Finance Module Issues
+# Fix: Select Dropdowns Not Opening Inside Drawer
 
-## Issue 1: PaymentDrawer Faded/Unclickable in Finance Manager
+## Root Cause
 
-**Root Cause:** Z-index conflict. The `PaymentHistorySheet` uses the `Sheet` component which renders at `z-[150]` (both overlay and content). When "Add Payment" is clicked from within this Sheet, it opens a `PaymentDrawer` which uses the `Drawer` component rendered at `z-50`. The Drawer appears **behind** the Sheet overlay, making it visible but faded and unclickable.
+The previous fix raised the Drawer's z-index to `z-[200]` (to appear above the Sheet at `z-[150]`). However, the `SelectContent` component in `select.tsx` renders via a **Portal** at `z-50`. This means the dropdown list appears behind the Drawer's overlay, making it invisible and unclickable.
 
-The same issue affects the "Edit Payment" dialog inside `PaymentHistorySheet` -- the `Dialog` component also uses `z-50`.
+The same issue affects the Dialog component's Select dropdowns used in the PaymentHistorySheet edit form.
 
-**Fix:** Update the `Drawer` component's overlay and content z-index from `z-50` to `z-[200]`, so it renders above the Sheet's `z-[150]`. Similarly, ensure the Dialog component used for editing payments also has sufficient z-index.
+## Fix
 
-**Files to change:**
-- `src/components/ui/drawer.tsx` -- Change `z-50` to `z-[200]` on both `DrawerOverlay` and `DrawerContent`
+**File: `src/components/ui/select.tsx`**
+- Change `SelectContent`'s z-index from `z-50` to `z-[300]`
+- This ensures Select dropdowns always render above Drawers (`z-[200]`), Sheets (`z-[150]`), and Dialogs (`z-[200]`)
 
----
+This is a single-line change in the className of `SelectContent` (line 68), updating `z-50` to `z-[300]`.
 
-## Issue 2: Payment Not Written to INCOME WTN Sheet During BOOKED Transition
+## Z-Index Hierarchy After Fix
 
-**Root Cause:** When a client status is changed to BOOKED with an advance payment, the `handleSaveBookedPayment` function (in `DesktopClientRow.tsx`, `ClientDetail.tsx`, and `FreshClientCard.tsx`) was refactored to use the Supabase-first architecture. The background Sheets sync now relies on `pushUnsyncedToSheets`, which only pushes raw column data to the BOOKED CLIENTS sheet. It does **not** call the `addPayment` edge function action, which is the only path that triggers the income sync to the "INCOME WTN" sheet in the WTN INCOME & EXPENSES spreadsheet.
-
-The same issue applies when adding payments from the Finance Manager's `PaymentDrawer` -- that component **does** call `addPayment()` in the background (line 137), so payments added from the Finance module should sync to income. But the BOOKED transition path skips this entirely.
-
-**Fix:** In all three `handleSaveBookedPayment` implementations, add a background call to `addPayment()` after the Supabase cache write. This ensures the income sheet sync fires. The call is non-blocking (fire-and-forget with `.catch()`).
-
-**Files to change:**
-- `src/components/desktop/DesktopClientRow.tsx` -- Add background `addPayment()` call in `handleSaveBookedPayment`
-- `src/pages/ClientDetail.tsx` -- Same fix
-- `src/components/dashboard/FreshClientCard.tsx` -- Same fix
-
----
-
-## Technical Details
-
-### Drawer z-index fix (drawer.tsx)
-```
-DrawerOverlay: z-50 -> z-[200]
-DrawerContent: z-50 -> z-[200]
+```text
+z-50    -- Default overlays (tooltips, popovers)
+z-[150] -- Sheet overlay + content
+z-[200] -- Drawer overlay + content, Dialog overlay + content
+z-[300] -- Select dropdown content (always on top)
 ```
 
-### Income sync fix (all 3 handleSaveBookedPayment locations)
-After the Supabase cache write and local state update, add:
-```typescript
-// Background: call addPayment to trigger income sheet sync
-addPayment(
-  rowNum, data.amount, data.paymentType, data.nepaliDate, data.adDate, data.bank,
-  existingPaid, existingDates, finalAmount, regId, clientName
-).catch(err => {
-  console.warn('[BACKGROUND] Income sync via addPayment failed:', err);
-});
-```
+## Risk
 
-This preserves the Supabase-first instant update pattern while ensuring the INCOME WTN sheet sync still fires via the edge function's built-in income sync logic.
+Minimal. Select dropdowns should always be the topmost interactive element since they are transient and dismiss on selection. No other component needs to render above an open Select.
