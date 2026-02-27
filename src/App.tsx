@@ -6,7 +6,9 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import { AuthProvider } from "./contexts/AuthContext";
 import { SaugatSearchProvider } from "./contexts/SaugatSearchContext";
+import { BookingCalendarPopupProvider } from "./contexts/BookingCalendarPopupContext";
 import { SaugatSearch } from "./components/suite/SaugatSearch";
+import { FloatingBookingCalendar } from "./components/shared/FloatingBookingCalendar";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import Login from "./pages/Login";
 import SuiteLanding from "./pages/SuiteLanding";
@@ -39,11 +41,13 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <SaugatSearchProvider>
-        <BrowserRouter>
-          <AuthProvider>
-            <SaugatSearch />
-            <Toaster />
-            <Sonner />
+        <BookingCalendarPopupProvider>
+          <BrowserRouter>
+            <AuthProvider>
+              <SaugatSearch />
+              <FloatingBookingCalendar />
+              <Toaster />
+              <Sonner />
             <Routes>
               {/* Public routes - no auth required */}
               <Route path="/client-form/:clientName/:clientId" element={<ClientContactForm />} />
@@ -88,7 +92,8 @@ const App = () => (
             </Routes>
           </AuthProvider>
         </BrowserRouter>
-      </SaugatSearchProvider>
+      </BookingCalendarPopupProvider>
+    </SaugatSearchProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );
