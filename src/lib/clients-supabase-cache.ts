@@ -286,11 +286,12 @@ export async function migrateClientToBookedInCache(
     .from('clients_cache')
     .update({
       sheet_source: 'booked',
+      row_number: 0,              // Invalidate tracker row to prevent overwriting wrong booked row
       status_log: newStatusLog,
       payments_made: newPaymentsMade,
       payment_dates_ad: newPaymentDatesAD,
       remaining_payment: newRemainingPayment,
-      synced_to_sheet: false,
+      synced_to_sheet: true,      // Let updateClientStatus handle the sheet MOVE properly
       updated_at: new Date().toISOString(),
     } as any)
     .eq('registered_date_time_ad', registeredDateTimeAD);
