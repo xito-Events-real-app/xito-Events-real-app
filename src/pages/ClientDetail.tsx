@@ -684,7 +684,7 @@ const ClientDetail = () => {
       setPendingStatus("");
 
       // Background: proper sheet MOVE (tracker -> booked + downstream syncs)
-      // CRITICAL: pass registeredDateTimeAD for identity-based routing
+      // Then chain addPayment AFTER move completes with the correct booked row number
       if (client.rowNumber && client.registeredDateTimeAD) {
         updateClientStatus(client.rowNumber, pendingStatus, currentStatusLog || client.statusLog || '', client.registeredDateTimeAD)
           .then(async (result) => {
@@ -693,22 +693,21 @@ const ClientDetail = () => {
               await confirmBookedMigrationSync(client.registeredDateTimeAD!, result.actualRowNumber);
               console.log(`[BOOKED MOVE] Successfully moved to BOOKED CLIENTS row ${result.actualRowNumber}`);
             }
+
+            // SEQUENTIAL: call addPayment with the CORRECT booked row number
+            const targetRow = result?.actualRowNumber || client.rowNumber;
+            addPayment(
+              targetRow, data.amount, data.paymentType, data.nepaliDate, data.adDate, data.bank,
+              client.paymentsMade || '', client.paymentDatesAD || '', finalAmount,
+              client.registeredDateTimeAD, client.clientName || ''
+            ).catch(err => {
+              console.warn('[BACKGROUND] Income sync via addPayment failed:', err);
+            });
           })
           .catch(async (err) => {
             console.error('[BOOKED MOVE] Sheet MOVE FAILED:', err);
             toast({ title: '⚠️ Sheet sync failed', description: 'Client saved locally but may not appear in Google Sheets. Please run Master Sync.', variant: 'destructive' });
           });
-      }
-
-      // Background: call addPayment to trigger income sheet sync
-      if (client.rowNumber) {
-        addPayment(
-          client.rowNumber, data.amount, data.paymentType, data.nepaliDate, data.adDate, data.bank,
-          client.paymentsMade || '', client.paymentDatesAD || '', finalAmount,
-          client.registeredDateTimeAD, client.clientName || ''
-        ).catch(err => {
-          console.warn('[BACKGROUND] Income sync via addPayment failed:', err);
-        });
       }
     } catch (err) {
       console.error('Failed to save payment:', err);
