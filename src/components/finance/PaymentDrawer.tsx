@@ -20,10 +20,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { addPayment, getDropdowns } from "@/lib/sheets-api";
+import { addPayment } from "@/lib/sheets-api";
 import { toast } from "sonner";
 import { PaymentDatePicker } from "./PaymentDatePicker";
 import { computePaymentUpdate } from "@/lib/timestamp-utils";
+import { useDropdownData } from "@/hooks/useDropdownData";
+import { updateClientFieldInCache } from "@/lib/clients-supabase-cache";
 
 interface PaymentDrawerProps {
   isOpen: boolean;
@@ -54,8 +56,11 @@ const PaymentDrawer = ({
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedBSDate, setSelectedBSDate] = useState<{ year: number; month: number; day: number } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [paymentTypes, setPaymentTypes] = useState<string[]>([]);
-  const [banks, setBanks] = useState<string[]>([]);
+  
+  // Dropdown data from Supabase cache
+  const { data: dropdownData } = useDropdownData();
+  const paymentTypes = dropdownData?.paymentTypes || ["ADVANCE", "PARTIAL", "FINAL"];
+  const banks = dropdownData?.banks || [];
   
   // Check if final quotation is set
   const hasFinalQuotation = finalQuotationAmount > 0;
@@ -69,23 +74,6 @@ const PaymentDrawer = ({
       setSelectedBSDate({ year: bsDate.year, month: bsDate.month, day: bsDate.day as number });
     }
   }, [isOpen, selectedDate]);
-
-  // Fetch dropdown data
-  useEffect(() => {
-    const fetchDropdowns = async () => {
-      try {
-        const data = await getDropdowns();
-        setPaymentTypes(data.paymentTypes || ["ADVANCE", "PARTIAL", "FINAL"]);
-        setBanks(data.banks || []);
-      } catch (error) {
-        console.error("Error fetching dropdowns:", error);
-        setPaymentTypes(["ADVANCE", "PARTIAL", "FINAL"]);
-      }
-    };
-    if (isOpen) {
-      fetchDropdowns();
-    }
-  }, [isOpen]);
 
   const handleDateChange = (date: Date, bsDate: { year: number; month: number; day: number }) => {
     setSelectedDate(date);
@@ -124,6 +112,12 @@ const PaymentDrawer = ({
 
       toast.success(`Payment of NPR ${parseInt(paymentAmount).toLocaleString('en-IN')} recorded`);
       onPaymentAdded(updatedPaymentsMade, remainingPayment);
+
+      // Layer 2: Update Supabase cache immediately (non-blocking but fast)
+      Promise.all([
+        updateClientFieldInCache(registeredDateTimeAD, 'paymentsMade', updatedPaymentsMade),
+        updateClientFieldInCache(registeredDateTimeAD, 'remainingPayment', remainingPayment),
+      ]).catch(err => console.warn('[BACKGROUND] [payment cache/finance]', err));
 
       // Reset form and close immediately
       setPaymentAmount("");
