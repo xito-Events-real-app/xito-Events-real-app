@@ -1,55 +1,66 @@
 
-# Split All Clients Table into Upcoming and Completed Sections
 
-## What Changes
+# Floating Booking Calendar Popup (BB Shortcut)
 
-The "All Clients" crew table currently shows events sorted by day from earliest to latest. This change splits the table into two sections:
+## What It Does
 
-1. **Upcoming Events** (top) -- events where the BS date has not yet passed, sorted by day ascending
-2. **Completed Events** (bottom) -- events where the BS date has passed, rendered with italic fonts
+Press **B** twice quickly (like the space-space shortcut for search) to open a floating, draggable, resizable Booking Calendar popup. It stays on top of everything but does NOT block interaction with the background -- like a picture-in-picture window. Press **BB** again or click the X button to close it.
 
-Both mobile card view and desktop table view will be updated.
+## Architecture (3 new files + 1 edit)
 
-## Technical Plan
+### File 1: `src/contexts/BookingCalendarPopupContext.tsx` (NEW)
 
-### File: `src/components/suite/AllClientsCrewTable.tsx`
+A context provider following the exact same pattern as `SaugatSearchContext`:
+- Double-B keypress detection (400ms window between presses)
+- Skips when focus is in input/textarea/contenteditable
+- Exposes `isOpen`, `open`, `close`, `toggle`
+- Escape key also closes it
 
-**1. Add two derived lists from `filteredRows`**
+### File 2: `src/components/shared/FloatingBookingCalendar.tsx` (NEW)
 
-Using the existing `isBSDatePast()` function (already imported), split `filteredRows` into:
-- `upcomingRows` -- events where `isBSDatePast(row.eventYear, row.eventMonth, row.eventDay)` is `false`
-- `completedRows` -- events where it returns `true`
+A floating popup component that:
+- Renders when `isOpen` is true from the context
+- Uses a portal (renders at document body level) so it floats above everything
+- **Draggable**: mousedown on the header bar lets you drag it anywhere
+- **Resizable**: a drag handle in the bottom-right corner for resizing (min 320x300, max 800x700)
+- **Non-modal**: no overlay, no blocking -- you can click and work on background content
+- Has a close (X) button in the header
+- Contains the existing `BookingCalendarMini` component inside a scrollable area
+- Default position: bottom-right of the screen
+- Default size: 380x450px
+- z-index: 250 (above sheets at 200, below selects at 300)
 
-Both keep the same day-ascending sort order.
+### File 3: No third file needed -- the component is self-contained
 
-**2. Update the desktop table `<tbody>`**
+### File 4: `src/App.tsx` (EDIT)
 
-Instead of rendering `filteredRows.map(...)` once, render:
-- `upcomingRows.map(...)` with existing styling
-- A separator row: `<tr>` with a colspan cell showing "Completed Events" header with a muted style
-- `completedRows.map(...)` with an additional `italic` class on text elements (client name, event name, freelancer names)
+- Import and wrap with `BookingCalendarPopupProvider` (alongside existing `SaugatSearchProvider`)
+- Render `<FloatingBookingCalendar />` alongside `<SaugatSearch />`
 
-**3. Update the mobile card layout**
+## UI Layout of the Popup
 
-Same split:
-- Render `upcomingRows` cards first, preceded by a small "Upcoming Events" label
-- A divider with "Completed Events" label
-- Render `completedRows` cards with italic styling
+```text
++--[ Booking Calendar ]--------[X]--+
+|  (draggable header bar)           |
++-----------------------------------+
+|                                   |
+|   BookingCalendarMini content     |
+|   (scrollable)                    |
+|                                   |
+|                                   |
++-------------------------------[//]+
+        (resize handle)
+```
 
-**4. Apply italic styling to completed rows**
+## Technical Details
 
-For completed events, add `italic text-gray-500` classes to:
-- Client name
-- Event name
-- Freelancer names in crew cells
-- Day badge gets a muted/gray style instead of violet
+- Drag implementation: native `mousedown`/`mousemove`/`mouseup` events on the header, updating `top`/`left` CSS via state
+- Resize implementation: same mouse events on the corner handle, updating `width`/`height` via state
+- Position persisted in component state only (resets on page reload -- keeps it simple)
+- The popup uses `position: fixed` so it stays in place during scroll
 
-**5. Update stats calculations**
+## What Does NOT Change
 
-The `assignedCount`, `requiredCells`, `remainingCount` stats and `dayGroups`/`dayCounts` continue to use `filteredRows` (both sections combined) -- no change needed there.
-
-**6. Handle edge cases**
-
-- If all events are upcoming, no "Completed Events" section appears
-- If all events are completed, no "Upcoming Events" header needed, just show completed
-- Events with unknown days (`**`) treated as upcoming (cannot determine if past)
+- `BookingCalendarMini` component stays exactly the same
+- `SaugatSearchContext` (double-space) is untouched
+- No database or backend changes
