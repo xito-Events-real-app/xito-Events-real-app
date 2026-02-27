@@ -25,6 +25,9 @@ export default function UpcomingEventsSection({ assignments, eventDetailsCache, 
 
     return assignments
       .filter(a => {
+        // Skip unknown-day events
+        if (!a.event_day || a.event_day.includes('**')) return false;
+        
         const y = parseInt(a.event_year || "0");
         const m = parseInt(a.event_month || "0");
         const d = parseInt(a.event_day || "0");

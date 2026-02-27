@@ -40,6 +40,8 @@ function getUpcomingEvents(clients: any[]) {
     
     eventDates.forEach((dateStr: string, idx: number) => {
       if (!dateStr?.trim()) return;
+      // Skip unknown-day dates (contain **)
+      if (dateStr.includes('**')) return;
       
       const eventDate = new Date(dateStr.trim());
       if (isNaN(eventDate.getTime())) return;
