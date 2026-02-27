@@ -843,13 +843,28 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                         const cached = expandCache.get(cacheKey);
                         const groupIdx = dayGroups.get(rowKey) ?? 0;
                         const dayBg = DAY_COLORS[groupIdx % DAY_COLORS.length];
+                        const reqCodes = (row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
+                        const hasUnassignedRequired = CREW_COLUMNS.some(col => {
+                          const isReq = reqCodes.length === 0 || reqCodes.includes(col.short);
+                          return isReq && !(row[col.field] as string)?.trim();
+                        });
                         return (
-                          <div key={`${rowKey}-${idx}`} className={cn("rounded-xl border border-gray-200 shadow-sm overflow-hidden opacity-70", dayBg)}>
+                          <div key={`${rowKey}-${idx}`} className={cn("rounded-xl border border-gray-200 shadow-sm overflow-hidden", dayBg, hasUnassignedRequired && "border-red-300")}>
                             <div className="p-3">
                               <div className="flex items-center gap-2 mb-2">
-                                <div className="inline-flex items-center justify-center w-9 h-9 rounded-full font-bold text-sm shrink-0 bg-gray-200 text-gray-500 italic">
+                                <button
+                                  onClick={() => setFilterDay(filterDay === row.eventDay ? null : row.eventDay)}
+                                  className={cn(
+                                    "inline-flex items-center justify-center w-9 h-9 rounded-full font-bold text-sm shrink-0 transition-all",
+                                    filterDay === row.eventDay
+                                      ? "bg-violet-600 text-white ring-2 ring-violet-400"
+                                      : hasUnassignedRequired
+                                        ? "bg-red-100 text-red-700 ring-2 ring-red-400 animate-pulse-red"
+                                        : "bg-violet-100 text-violet-700"
+                                  )}
+                                >
                                   {row.eventDay}
-                                </div>
+                                </button>
                                 <div className="flex-1 min-w-0">
                                   <button
                                     onClick={() => setFilterClient(filterClient === row.clientName ? null : row.clientName)}
@@ -857,12 +872,12 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                                       "font-bold block truncate text-sm transition-colors italic",
                                       filterClient === row.clientName
                                         ? "text-violet-600 underline"
-                                        : "text-gray-500 hover:text-violet-600"
+                                        : "text-gray-900 hover:text-violet-600"
                                     )}
                                   >
                                     {row.clientName}
                                   </button>
-                                  <p className="text-gray-400 truncate text-xs italic">
+                                  <p className="text-gray-500 truncate text-xs italic">
                                     {row.event}
                                   </p>
                                 </div>
@@ -870,7 +885,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                                   onClick={() => toggleExpand(rowKey, row)}
                                   className={cn(
                                     "p-1.5 rounded-full transition-colors shrink-0",
-                                    isExpanded ? "bg-gray-200 text-gray-500" : "text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+                                    isExpanded ? "bg-violet-100 text-violet-600" : "text-gray-400 hover:text-violet-500 hover:bg-violet-50"
                                   )}
                                 >
                                   {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -888,9 +903,42 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                                         {col.short}
                                       </span>
                                       {val ? (
-                                        <span className="text-xs text-gray-500 truncate italic">{val}</span>
+                                        <div className="flex items-center gap-1 flex-1 min-w-0">
+                                          <HoverCard openDelay={200}>
+                                            <HoverCardTrigger asChild>
+                                              <button
+                                                onClick={() => navigate(`/freelancer/${encodeURIComponent(val)}`)}
+                                                className="text-xs text-gray-800 truncate hover:text-violet-600 transition-colors italic"
+                                              >
+                                                {val}
+                                              </button>
+                                            </HoverCardTrigger>
+                                            <HoverCardContent className="w-72 p-3 z-[200]" side="bottom" avoidCollisions={true} collisionPadding={16}>
+                                              <FreelancerHoverInfo name={val} allAssignments={assignments} selectedYear={selectedYear} selectedMonth={selectedMonth} freelancers={freelancers} onFilterFreelancer={setFilterFreelancer} />
+                                            </HoverCardContent>
+                                          </HoverCard>
+                                          {!readOnly && (
+                                            <button
+                                              onClick={() => handleAssign(row, col.field, '')}
+                                              className="p-0.5 rounded-full hover:bg-red-100 text-gray-400 hover:text-red-500 shrink-0"
+                                              title="Remove"
+                                            >
+                                              <X className="w-3 h-3" />
+                                            </button>
+                                          )}
+                                        </div>
+                                      ) : readOnly ? (
+                                        <span className="text-[10px] text-gray-400 animate-pulse-red px-1">---</span>
                                       ) : (
-                                        <span className="text-[10px] text-gray-300 px-1">---</span>
+                                        <div className="animate-pulse-red rounded">
+                                          <MobileCrewAssign
+                                            field={col.field}
+                                            label={col.label}
+                                            freelancers={freelancers}
+                                            onAssign={(name) => handleAssign(row, col.field, name)}
+                                            onQuickAdd={() => setQuickAddState({ open: true, field: col.field, label: col.label, row })}
+                                          />
+                                        </div>
                                       )}
                                     </div>
                                   );
@@ -898,7 +946,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                               </div>
                             </div>
                             {isExpanded && (
-                              <div className="border-t border-gray-200 bg-slate-50 px-3 py-2.5">
+                              <div className="border-t border-violet-200 bg-slate-50 px-3 py-2.5">
                                 <EventLogisticsPanel
                                   eventDetail={cached?.eventDetail ?? null}
                                   contactDetail={cached?.contactDetail ?? null}
@@ -1114,49 +1162,120 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                           const dayBg = DAY_COLORS[groupIdx % DAY_COLORS.length];
                           return (
                             <React.Fragment key={`frag-${rowKey}-${idx}`}>
-                              <tr className={cn("border-b border-gray-100 hover:bg-gray-50/40 transition-colors group opacity-70", dayBg, isExpanded && "border-b-0")}>
+                              <tr className={cn("border-b border-gray-100 hover:bg-violet-50/40 transition-colors group", dayBg, isExpanded && "border-b-0")}>
                                 <td className="px-3 py-2 border-r border-gray-100 text-center">
-                                  <div className="inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm bg-gray-200 text-gray-500 italic">
+                                  <button
+                                    onClick={() => setFilterDay(filterDay === row.eventDay ? null : row.eventDay)}
+                                    className={cn(
+                                      "inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm transition-all",
+                                      filterDay === row.eventDay
+                                        ? "bg-violet-600 text-white ring-2 ring-violet-400"
+                                        : "bg-violet-100 text-violet-700 hover:bg-violet-200 cursor-pointer"
+                                    )}
+                                  >
                                     {row.eventDay}
-                                  </div>
+                                  </button>
                                   <button
                                     onClick={() => toggleExpand(rowKey, row)}
                                     className={cn(
                                       "mt-0.5 flex items-center justify-center w-full transition-colors",
-                                      isExpanded ? "text-gray-500" : "text-gray-300 hover:text-gray-500"
+                                      isExpanded ? "text-violet-500" : "text-gray-300 hover:text-violet-500"
                                     )}
                                   >
                                     {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                                   </button>
                                 </td>
                                 <td className="px-3 py-2 border-r border-gray-100">
-                                  <button
-                                    onClick={() => setFilterClient(filterClient === row.clientName ? null : row.clientName)}
-                                    className={cn(
-                                      "font-semibold text-sm text-left leading-tight transition-colors italic",
-                                      filterClient === row.clientName ? "text-violet-600 underline" : "text-gray-500 hover:text-violet-600"
+                                  <HoverCard openDelay={400} closeDelay={100}>
+                                    <HoverCardTrigger asChild>
+                                      <button
+                                        onClick={(e) => {
+                                          if (e.ctrlKey || e.metaKey) {
+                                            navigate(`/client-tracker/client/${encodeURIComponent(row.registeredDateTimeAD)}`);
+                                          } else {
+                                            setFilterClient(filterClient === row.clientName ? null : row.clientName);
+                                          }
+                                        }}
+                                        className={cn(
+                                          "font-semibold text-sm text-left leading-tight transition-colors italic",
+                                          filterClient === row.clientName
+                                            ? "text-violet-600 underline"
+                                            : "text-gray-900 hover:text-violet-600"
+                                        )}
+                                      >
+                                        {row.clientName}
+                                      </button>
+                                    </HoverCardTrigger>
+                                    <HoverCardContent className="w-72 p-3 z-[300] shadow-xl border border-gray-200 bg-white rounded-xl" align="start" side="right">
+                                      <ClientHoverPreview
+                                        registeredDateTimeAD={row.registeredDateTimeAD}
+                                        clientName={row.clientName}
+                                        onOpenFull={() => navigate(`/client-tracker/client/${encodeURIComponent(row.registeredDateTimeAD)}`)}
+                                      />
+                                    </HoverCardContent>
+                                  </HoverCard>
+                                </td>
+                                <td className="px-3 py-2 border-r border-gray-100 text-gray-600 text-sm italic">
+                                  <div className="flex items-center gap-1">
+                                    <span className="block leading-tight flex-1">{row.event}</span>
+                                    {!readOnly && (
+                                      <Popover>
+                                        <PopoverTrigger asChild>
+                                          <button
+                                            className="p-0.5 rounded hover:bg-violet-100 text-gray-400 hover:text-violet-600 shrink-0"
+                                            title="Set required crew"
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
+                                            <UserCog className="w-3.5 h-3.5" />
+                                          </button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0 z-[200]" align="start">
+                                          <CrewCategorySelector
+                                            selected={(row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean)}
+                                            onChange={async (codes) => {
+                                              try {
+                                                await updateCategoriesInCache(row.registeredDateTimeAD, row.event, codes.join(','), row.eventDateAD);
+                                                setAssignments(prev => prev.map(a =>
+                                                  a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event
+                                                    ? { ...a, requiredCategories: codes.join(',') }
+                                                    : a
+                                                ));
+                                                setPendingSyncs(prev => prev + 1);
+                                                schedulePush();
+                                              } catch { toast.error("Failed to update categories"); }
+                                            }}
+                                          />
+                                        </PopoverContent>
+                                      </Popover>
                                     )}
-                                  >
-                                    {row.clientName}
-                                  </button>
+                                  </div>
                                 </td>
-                                <td className="px-3 py-2 border-r border-gray-100 text-gray-400 text-sm italic">
-                                  {row.event}
-                                </td>
-                                {CREW_COLUMNS.map(col => {
+                                {CREW_COLUMNS.map((col, colIdx) => {
                                   const reqCodes = (row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
                                   const isRequired = reqCodes.length === 0 || reqCodes.includes(col.short);
-                                  const val = (row[col.field] as string)?.trim();
+                                  const nextCol = CREW_COLUMNS[colIdx + 1];
+                                  const isNextRequired = nextCol
+                                    ? (reqCodes.length === 0 || reqCodes.includes(nextCol.short))
+                                    : true;
                                   return (
-                                    <td key={col.field} className="px-2 py-2 border-r border-gray-100 text-center" style={{ width: `${columnWidths[col.field]}px` }}>
-                                      {!isRequired ? (
-                                        <span className="text-gray-200">—</span>
-                                      ) : val ? (
-                                        <span className="text-xs text-gray-400 italic">{getFirstName(val)}</span>
-                                      ) : (
-                                        <span className="text-gray-300">—</span>
-                                      )}
-                                    </td>
+                                    <CrewCell
+                                      key={col.field}
+                                      value={row[col.field] as string}
+                                      field={col.field}
+                                      label={col.label}
+                                      group={col.group}
+                                      colWidth={columnWidths[col.field]}
+                                      freelancers={freelancers}
+                                      allAssignments={assignments}
+                                      selectedYear={selectedYear}
+                                      selectedMonth={selectedMonth}
+                                      onAssign={(name) => handleAssign(row, col.field, name)}
+                                      onQuickAdd={() => setQuickAddState({ open: true, field: col.field, label: col.label, row })}
+                                      isRequired={isRequired}
+                                      isNextRequired={isNextRequired}
+                                      readOnly={readOnly}
+                                      onFilterFreelancer={setFilterFreelancer}
+                                    />
                                   );
                                 })}
                               </tr>
