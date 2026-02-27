@@ -834,7 +834,7 @@ export function parsePayments(paymentsMade: string): ParsedPayment[] {
   
   lines.forEach(line => {
     // Pattern: NPR X,XXX/- AS TYPE ON WEEKDAY YYYY-MM-DD IN BANK
-    const match = line.match(/NPR\s*([\d,]+)\/?-?\s*AS\s+(\w+)\s+ON\s+(\w{3})\s+([\d-]+)\s+IN\s+(.+)/i);
+    const match = line.match(/NPR\s*([\d,]+)\/?-?\s*AS\s+(\w+)\s+ON\s+(\w+)\s+([\d-]+)\s+IN\s+(.+)/i);
     if (match) {
       const amount = match[1];
       const dateBS = match[4];
