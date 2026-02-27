@@ -463,36 +463,32 @@ export function DesktopClientRow({
       const existingDates = currentPaymentDatesAD;
 
       // Background: proper sheet MOVE (tracker -> booked + downstream syncs)
-      // CRITICAL: pass registeredDateTimeAD for identity-based routing
+      // Then chain addPayment AFTER move completes with the correct booked row number
       if (rowNum && regId) {
         updateClientStatus(rowNum, pendingStatus, currentStatusLog, regId)
           .then(async (result) => {
             if (result?.movedToBooked) {
-              // Confirm sync in DB — the sheet MOVE succeeded
               const { confirmBookedMigrationSync } = await import('@/lib/clients-supabase-cache');
               await confirmBookedMigrationSync(regId, result.actualRowNumber);
               console.log(`[BOOKED MOVE] Successfully moved ${clientName} to BOOKED CLIENTS row ${result.actualRowNumber}`);
             } else {
-              // Sheet move didn't happen (maybe already booked) — still confirm sync
               const { confirmBookedMigrationSync } = await import('@/lib/clients-supabase-cache');
               await confirmBookedMigrationSync(regId, result?.actualRowNumber);
             }
+
+            // SEQUENTIAL: call addPayment with the CORRECT booked row number
+            const targetRow = result?.actualRowNumber || rowNum;
+            addPayment(
+              targetRow, data.amount, data.paymentType, data.nepaliDate, data.adDate, data.bank,
+              existingPaid, existingDates, finalAmount, regId, clientName || ''
+            ).catch(err => {
+              console.warn('[BACKGROUND] Income sync via addPayment failed:', err);
+            });
           })
           .catch(async (err) => {
             console.error('[BOOKED MOVE] Sheet MOVE FAILED:', err);
             toast.error('⚠️ Sheet sync failed — client saved locally but may not appear in Google Sheets. Please run Master Sync.');
-            // Do NOT mark as synced — pull sync will protect this unsynced row
           });
-      }
-
-      // Background: call addPayment to trigger income sheet sync
-      if (rowNum) {
-        addPayment(
-          rowNum, data.amount, data.paymentType, data.nepaliDate, data.adDate, data.bank,
-          existingPaid, existingDates, finalAmount, regId, clientName || ''
-        ).catch(err => {
-          console.warn('[BACKGROUND] Income sync via addPayment failed:', err);
-        });
       }
     } catch (err) {
       console.error('Failed to save payment:', err);

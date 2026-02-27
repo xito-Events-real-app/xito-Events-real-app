@@ -222,9 +222,40 @@ serve(async (req) => {
         .delete()
         .eq('synced_to_sheet', true);
 
-      // Also check for orphaned booked rows with row_number=0 that should be protected
-      // These are mid-migration clients — do NOT delete them
       console.log(`[sync-clients] Deleted synced rows, preserving ${unsyncedIds.size} unsynced rows`);
+
+      // NON-DESTRUCTIVE PAYMENT MERGE: Before upserting, check if DB has payment data
+      // that the sheet doesn't have. If so, preserve DB payment values.
+      // This prevents the race condition where sheet MOVE copies empty payment columns
+      // and pull sync then overwrites the correct DB payment data with empties.
+      const paymentProtectedIds = new Set<string>();
+      for (const record of safeToUpsert) {
+        const paymentsMade = (record.payments_made || '').trim();
+        const paymentDates = (record.payment_dates_ad || '').trim();
+        const remaining = (record.remaining_payment || '').trim();
+
+        // If sheet has no payment data, check if DB had payment data before deletion
+        if (!paymentsMade && !paymentDates && !remaining) {
+          // Check unsynced rows (which weren't deleted) for payment data
+          const { data: unsyncedRow } = await supabase
+            .from('clients_cache')
+            .select('payments_made, payment_dates_ad, remaining_payment')
+            .eq('registered_date_time_ad', record.registered_date_time_ad)
+            .eq('synced_to_sheet', false)
+            .maybeSingle();
+
+          if (unsyncedRow && (unsyncedRow.payments_made || unsyncedRow.payment_dates_ad || unsyncedRow.remaining_payment)) {
+            // Preserve DB payment data — don't overwrite with empty sheet values
+            record.payments_made = unsyncedRow.payments_made || '';
+            record.payment_dates_ad = unsyncedRow.payment_dates_ad || '';
+            record.remaining_payment = unsyncedRow.remaining_payment || '';
+            paymentProtectedIds.add(record.registered_date_time_ad);
+          }
+        }
+      }
+      if (paymentProtectedIds.size > 0) {
+        console.log(`[sync-clients] Protected payment data for ${paymentProtectedIds.size} clients from empty sheet overwrite`);
+      }
 
       // Upsert in batches of 500 (only safe rows)
       let count = 0;

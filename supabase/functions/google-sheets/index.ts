@@ -2165,6 +2165,47 @@ async function updateClientStatus(accessToken: string, spreadsheetId: string, ro
       
       movedToBooked = true;
 
+      // --- CRITICAL: Patch payment columns (AE/AF/AG) on the new booked row from DB ---
+      // The tracker sheet has empty payment columns. The DB has the correct payment data
+      // written by migrateClientToBookedInCache. We MUST patch the booked sheet immediately.
+      try {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.49.2");
+        const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+        
+        const { data: dbRow } = await supabaseAdmin
+          .from('clients_cache')
+          .select('payments_made, payment_dates_ad, remaining_payment')
+          .eq('registered_date_time_ad', fetchedRegisteredDateTime)
+          .maybeSingle();
+
+        if (dbRow && (dbRow.payments_made || dbRow.payment_dates_ad || dbRow.remaining_payment)) {
+          const bookedRowForPatch = await findBookedClientRow(accessToken, spreadsheetId, fetchedRegisteredDateTime);
+          if (bookedRowForPatch) {
+            const patchRange = encodeURIComponent(`'BOOKED CLIENTS'!AE${bookedRowForPatch}:AG${bookedRowForPatch}`);
+            const patchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${patchRange}?valueInputOption=USER_ENTERED`;
+            await fetchWithRetry(patchUrl, {
+              method: 'PUT',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                values: [[
+                  dbRow.payments_made || '',
+                  dbRow.payment_dates_ad || '',
+                  dbRow.remaining_payment || '',
+                ]],
+              }),
+            });
+            console.log(`[BOOKED MOVE] Patched payment columns AE/AF/AG on booked row ${bookedRowForPatch} from DB`);
+          }
+        }
+      } catch (patchErr) {
+        console.warn(`[BOOKED MOVE] Payment patch failed (non-critical, DB has correct data):`, patchErr);
+      }
+
       // --- Trigger downstream sync to all 3 dependent sheets ---
       try {
         await syncToEventDetails(accessToken, spreadsheetId, fetchedRegisteredDateTime);
