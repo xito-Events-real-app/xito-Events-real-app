@@ -263,8 +263,8 @@ function parseCommentActivities(client: ClientData | BookedClientData): Activity
       clientName: client.clientName || 'Unknown',
       clientId: client.registeredDateTimeAD || '',
       handlerName: handlerName || undefined,
-      description: `New comment added`,
-      details: `"${truncatedText}"`,
+      description: `💬 "${truncatedText}"`,
+      details: undefined,
       timestamp: comment.timestamp,
       relativeTime: getRelativeTime(comment.timestamp),
     });
@@ -424,84 +424,68 @@ function parseClientAddedActivity(client: ClientData | BookedClientData): Activi
   }
 }
 
+// Deduplicate activities: same client + same type + timestamps within 60s = duplicate
+function deduplicateActivities(activities: ActivityItem[]): ActivityItem[] {
+  const result: ActivityItem[] = [];
+  
+  for (const activity of activities) {
+    const isDuplicate = result.some(existing => 
+      existing.clientId === activity.clientId &&
+      existing.type === activity.type &&
+      Math.abs(existing.timestamp.getTime() - activity.timestamp.getTime()) < 60000
+    );
+    if (!isDuplicate) {
+      result.push(activity);
+    }
+  }
+  
+  return result;
+}
+
 // Parse all activities from clients
-// PRIORITY: Use Column AJ (lastActivityLog) if available, fallback to legacy parsing
+// MERGE ALL SOURCES: Column AJ + statusLog + comments + callLog + payments
 export function parseActivities(
   clients: ClientData[],
   bookedClients: BookedClientData[]
 ): ActivityItem[] {
-  const activities: ActivityItem[] = [];
-  const seenIds = new Set<string>();
+  const allActivities: ActivityItem[] = [];
   
-  // Process regular clients
+  // Process regular clients - merge ALL sources
   clients.forEach(client => {
-    // PRIMARY: Try Column AJ first
-    const ajActivities = parseActivityLogColumn(client);
-    if (ajActivities.length > 0) {
-      ajActivities.forEach(a => {
-        if (!seenIds.has(a.id)) {
-          activities.push(a);
-          seenIds.add(a.id);
-        }
-      });
-    } else {
-      // FALLBACK: Parse from legacy columns
-      const addedActivity = parseClientAddedActivity(client);
-      if (addedActivity && !seenIds.has(addedActivity.id)) {
-        activities.push(addedActivity);
-        seenIds.add(addedActivity.id);
-      }
-      
-      parseStatusActivities(client).forEach(a => {
-        if (!seenIds.has(a.id)) { activities.push(a); seenIds.add(a.id); }
-      });
-      parseCommentActivities(client).forEach(a => {
-        if (!seenIds.has(a.id)) { activities.push(a); seenIds.add(a.id); }
-      });
-      parseCallActivities(client).forEach(a => {
-        if (!seenIds.has(a.id)) { activities.push(a); seenIds.add(a.id); }
-      });
-    }
+    // Column AJ entries
+    allActivities.push(...parseActivityLogColumn(client));
+    
+    // Individual column entries (always parsed now)
+    const addedActivity = parseClientAddedActivity(client);
+    if (addedActivity) allActivities.push(addedActivity);
+    
+    allActivities.push(...parseStatusActivities(client));
+    allActivities.push(...parseCommentActivities(client));
+    allActivities.push(...parseCallActivities(client));
   });
   
-  // Process booked clients
+  // Process booked clients - merge ALL sources
   bookedClients.forEach(client => {
-    // PRIMARY: Try Column AJ first
-    const ajActivities = parseActivityLogColumn(client);
-    if (ajActivities.length > 0) {
-      ajActivities.forEach(a => {
-        if (!seenIds.has(a.id)) {
-          activities.push(a);
-          seenIds.add(a.id);
-        }
-      });
-    } else {
-      // FALLBACK: Parse from legacy columns
-      const addedActivity = parseClientAddedActivity(client);
-      if (addedActivity && !seenIds.has(addedActivity.id)) {
-        activities.push(addedActivity);
-        seenIds.add(addedActivity.id);
-      }
-      
-      parseStatusActivities(client).forEach(a => {
-        if (!seenIds.has(a.id)) { activities.push(a); seenIds.add(a.id); }
-      });
-      parseCommentActivities(client).forEach(a => {
-        if (!seenIds.has(a.id)) { activities.push(a); seenIds.add(a.id); }
-      });
-      parseCallActivities(client).forEach(a => {
-        if (!seenIds.has(a.id)) { activities.push(a); seenIds.add(a.id); }
-      });
-      parsePaymentActivities(client).forEach(a => {
-        if (!seenIds.has(a.id)) { activities.push(a); seenIds.add(a.id); }
-      });
-    }
+    // Column AJ entries
+    allActivities.push(...parseActivityLogColumn(client));
+    
+    // Individual column entries (always parsed now)
+    const addedActivity = parseClientAddedActivity(client);
+    if (addedActivity) allActivities.push(addedActivity);
+    
+    allActivities.push(...parseStatusActivities(client));
+    allActivities.push(...parseCommentActivities(client));
+    allActivities.push(...parseCallActivities(client));
+    allActivities.push(...parsePaymentActivities(client));
   });
+  
+  // Deduplicate (Column AJ and individual columns may describe same event)
+  const deduplicated = deduplicateActivities(allActivities);
   
   // Sort by timestamp (most recent first)
-  activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  deduplicated.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
   
-  return activities;
+  return deduplicated;
 }
 
 // Format date for day grouping
@@ -543,8 +527,8 @@ export function groupActivitiesByDay(activities: ActivityItem[]): Map<string, Ac
   return groups;
 }
 
-// Get recent activities (last 14 days, max 100)
-export function getRecentActivities(activities: ActivityItem[], days = 14, limit = 100): ActivityItem[] {
+// Get recent activities (last 14 days, max 200)
+export function getRecentActivities(activities: ActivityItem[], days = 14, limit = 200): ActivityItem[] {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
   cutoff.setHours(0, 0, 0, 0);

@@ -8,7 +8,7 @@ import {
   ActivityItem 
 } from "@/lib/activity-utils";
 
-export function useActivityFeed(days = 14, limit = 100) {
+export function useActivityFeed(days = 14, limit = 200) {
   const { clients, isLoading: isLoadingClients } = useCachedData();
   const { clients: bookedClients, isLoading: isLoadingBooked } = useBookedCachedData();
   
