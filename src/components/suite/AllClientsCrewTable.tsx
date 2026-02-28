@@ -6,7 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty, CommandGroup, CommandSeparator } from "@/components/ui/command";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Users, Plus, RefreshCw, X, ChevronLeft, Database, Trash2, Download, Upload, UserCog, Cloud, ExternalLink, ChevronDown, ChevronUp, Phone, MapPin, StickyNote, Pencil, Filter } from "lucide-react";
+import { Loader2, Users, Plus, X, ChevronLeft, Database, Trash2, Download, Upload, UserCog, Cloud, ExternalLink, ChevronDown, ChevronUp, Phone, MapPin, StickyNote, Pencil, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -24,7 +24,6 @@ import {
   loadAssignmentsFromCache,
   updateAssignmentInCache,
   updateCategoriesInCache,
-  isCachePopulated,
   getUnsyncedCount,
   pushUnsyncedToSheets,
 } from "@/lib/freelancer-assignment-cache";
@@ -60,7 +59,7 @@ const GROUP_STYLES = {
   tech: 'bg-cyan-100 text-cyan-800 border-cyan-200',
 };
 
-const SYNC_INTERVAL = 30 * 60 * 1000;
+
 
 const DAY_COLORS = [
   "bg-white",
@@ -108,9 +107,6 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
   const [assignments, setAssignments] = useState<FreelancerAssignment[]>([]);
   const [freelancers, setFreelancers] = useState<FreelancerData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const hasSyncedOnMount = useRef(false);
   const isBusy = useRef(false);
    const [quickAddState, setQuickAddState] = useState<{ open: boolean; field: FreelancerField; label: string; row: FreelancerAssignment | null }>({
     open: false, field: 'photographerBride', label: '', row: null
@@ -189,22 +185,9 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
 
 
 
-  const reconcileRef = useRef(false);
-
-  const loadData = useCallback(async (fromSheets = false) => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // If explicitly requested, pull from Sheets first to backfill missing rows
-      if (fromSheets) {
-        try {
-          await supabase.functions.invoke('sync-crew-to-sheets', {
-            body: { action: 'pull' }
-          });
-        } catch (pullErr) {
-          console.warn('[CrewTable] Pull from sheets failed:', pullErr);
-        }
-      }
-
       const [allAssignments, allFreelancers] = await Promise.all([
         loadAssignmentsFromCache(),
         getFreelancers(),
@@ -213,28 +196,6 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
       setFreelancers(allFreelancers);
       const count = await getUnsyncedCount();
       setPendingSyncs(count);
-
-      // One-time reconciliation: detect booked clients missing from assignments
-      if (!reconcileRef.current && !fromSheets) {
-        reconcileRef.current = true;
-        const bookedClients = getMemoryClients()?.filter(c => (c as any)._source === 'booked') || [];
-        const assignmentKeys = new Set(allAssignments.map(a => a.registeredDateTimeAD));
-        const missingClients = bookedClients.filter(c => c.registeredDateTimeAD && !assignmentKeys.has(c.registeredDateTimeAD));
-        
-        if (missingClients.length > 0) {
-          console.log(`[CrewTable] ${missingClients.length} booked clients missing from assignments — triggering pull`);
-          try {
-            await supabase.functions.invoke('sync-crew-to-sheets', {
-              body: { action: 'pull' }
-            });
-            // Reload after pull
-            const refreshed = await loadAssignmentsFromCache();
-            setAssignments(refreshed);
-          } catch (err) {
-            console.warn('[CrewTable] Reconciliation pull failed:', err);
-          }
-        }
-      }
     } catch (err) {
       toast.error("Failed to load crew data");
     } finally {
@@ -242,57 +203,19 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
     }
   }, []);
 
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      await loadData(true); // Pull from sheets to backfill missing rows
-    } finally {
-      setRefreshing(false);
-    }
-  }, [loadData]);
-
-  const syncingRef = useRef(false);
-
-  const handleSync = useCallback(async (silent = false) => {
-    if (silent && syncingRef.current) return;
-    syncingRef.current = true;
-    if (!silent) setSyncing(true);
-    try {
-      // First push any pending local changes to sheets
-      await pushUnsyncedToSheets();
-      
-      if (!silent) {
-        toast.success(`Synced! Local changes pushed to spreadsheet.`);
-      }
-      // Refresh Supabase cache (just re-read what's in DB)
-      await loadData(false);
-    } catch (err) {
-      if (!silent) toast.error("Sync failed");
-    } finally {
-      syncingRef.current = false;
-      if (!silent) setSyncing(false);
-    }
-  }, [loadData]);
-
   useEffect(() => {
     loadData();
-    if (!hasSyncedOnMount.current) {
-      hasSyncedOnMount.current = true;
-      handleSync(true);
-    }
-    const interval = setInterval(() => handleSync(true), SYNC_INTERVAL);
 
     const handleClientChange = () => loadData();
     window.addEventListener('clients-invalidate', handleClientChange);
     window.addEventListener('booked-clients-invalidate', handleClientChange);
 
     return () => {
-      clearInterval(interval);
       if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
       window.removeEventListener('clients-invalidate', handleClientChange);
       window.removeEventListener('booked-clients-invalidate', handleClientChange);
     };
-  }, [handleSync, loadData]);
+  }, [loadData]);
 
   const filteredRows = useMemo(() => {
     let rows = assignments
@@ -582,14 +505,6 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
         </div>
         {!readOnly && (
           <>
-            <Button variant="ghost" size="sm" onClick={() => handleSync(false)} disabled={syncing} className="gap-1.5 text-white hover:bg-white/20 hover:text-white ml-1">
-              <Database className={cn("w-3.5 h-3.5", syncing && "animate-pulse")} />
-              {syncing ? "Syncing..." : "Sync Clients"}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={refreshing} className="gap-1.5 text-white hover:bg-white/20 hover:text-white">
-              <RefreshCw className={cn("w-3.5 h-3.5", refreshing && "animate-spin")} />
-              {refreshing ? "Refreshing..." : "Refresh"}
-            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -725,11 +640,11 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
       )}
 
       {/* Table Container */}
-      {(loading || syncing) && assignments.length === 0 ? (
+      {loading && assignments.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="flex flex-col items-center gap-3">
-            {syncing ? <Database className="w-10 h-10 animate-pulse text-violet-500" /> : <Loader2 className="w-10 h-10 animate-spin text-violet-500" />}
-            <p className="text-sm text-gray-500">{syncing ? "Syncing booked clients..." : "Loading crew data..."}</p>
+            <Loader2 className="w-10 h-10 animate-spin text-violet-500" />
+            <p className="text-sm text-gray-500">Loading crew data...</p>
           </div>
         </div>
       ) : (
