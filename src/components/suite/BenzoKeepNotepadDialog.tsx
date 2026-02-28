@@ -16,6 +16,8 @@ import { XitoSearchPanel } from "@/components/shared/XitoSearchPanel";
 import { BenzoDateConverter } from "@/components/shared/BenzoDateConverter";
 import { updateClientFieldInCache } from "@/lib/clients-supabase-cache";
 import { supabase } from "@/integrations/supabase/client";
+import { getMemoryClients, setMemoryClients } from "@/lib/memory-cache";
+import { notifyCacheUpdate } from "@/lib/cache-manager";
 import { BookingCalendarMini } from "@/components/shared/BookingCalendarMini";
 import { BenzoKeepClientPanel, QuickClientData } from "@/components/suite/BenzoKeepClientPanel";
 
@@ -209,6 +211,14 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
     try {
       const now = new Date();
       const registeredDateTimeAD = now.toISOString();
+
+      const noteData = {
+        content: content.trim(),
+        markerColor,
+        lastUpdated: new Date().toISOString(),
+      };
+      const benzoKeepNotesJson = JSON.stringify(noteData);
+
       const newClient: ClientData = {
         clientName: quickClientData.clientName.trim(),
         contactNo: quickClientData.contactNo.trim(),
@@ -221,16 +231,44 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
         eventMonth: quickClientData.eventMonth,
         eventDay: quickClientData.eventDay,
         registeredDateTimeAD,
+        benzoKeepNotes: benzoKeepNotesJson,
       };
 
-      await addClient(newClient);
+      // 1) Insert into database FIRST (cache-first architecture)
+      const { error: insertError } = await supabase.from('clients_cache').upsert({
+        registered_date_time_ad: registeredDateTimeAD,
+        client_name: quickClientData.clientName.trim(),
+        contact_no: quickClientData.contactNo.trim(),
+        whatsapp_no: quickClientData.whatsappNo.trim(),
+        source: quickClientData.source,
+        client_handler: quickClientData.clientHandler,
+        status_log: quickClientData.initialStatus
+          ? `${now.toLocaleString()} - ${quickClientData.initialStatus}`
+          : '',
+        events: quickClientData.events,
+        event_year: quickClientData.eventYear,
+        event_month: quickClientData.eventMonth,
+        event_day: quickClientData.eventDay,
+        benzo_keep_notes: benzoKeepNotesJson,
+        sheet_source: 'tracker',
+        synced_to_sheet: false,
+      } as any, { onConflict: 'registered_date_time_ad' } as any);
 
-      const noteData = {
-        content: content.trim(),
-        markerColor,
-        lastUpdated: new Date().toISOString(),
-      };
-      await assignBenzoKeepNoteToClient(registeredDateTimeAD, JSON.stringify(noteData));
+      if (insertError) {
+        console.error('Database insert failed:', insertError);
+        throw insertError;
+      }
+
+      // 2) Update memory cache + notify UI
+      const memClients = getMemoryClients();
+      if (memClients) {
+        setMemoryClients([newClient, ...memClients]);
+      }
+      notifyCacheUpdate('clients');
+
+      // 3) Sync to Sheets in background (non-blocking)
+      addClient(newClient).catch(err => console.warn('Sheet sync failed:', err));
+      assignBenzoKeepNoteToClient(registeredDateTimeAD, benzoKeepNotesJson).catch(err => console.warn('Sheet note sync failed:', err));
 
       toast.success(`Client "${quickClientData.clientName}" created & note assigned`);
       resetForm();
