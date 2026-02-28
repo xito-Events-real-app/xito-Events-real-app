@@ -189,12 +189,22 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
 
 
 
+  const reconcileRef = useRef(false);
+
   const loadData = useCallback(async (fromSheets = false) => {
     setLoading(true);
     try {
-      // Sheets fallback removed — database cache only.
-      // If cache is empty, it needs to be populated externally.
-      
+      // If explicitly requested, pull from Sheets first to backfill missing rows
+      if (fromSheets) {
+        try {
+          await supabase.functions.invoke('sync-crew-to-sheets', {
+            body: { action: 'pull' }
+          });
+        } catch (pullErr) {
+          console.warn('[CrewTable] Pull from sheets failed:', pullErr);
+        }
+      }
+
       const [allAssignments, allFreelancers] = await Promise.all([
         loadAssignmentsFromCache(),
         getFreelancers(),
@@ -203,6 +213,28 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
       setFreelancers(allFreelancers);
       const count = await getUnsyncedCount();
       setPendingSyncs(count);
+
+      // One-time reconciliation: detect booked clients missing from assignments
+      if (!reconcileRef.current && !fromSheets) {
+        reconcileRef.current = true;
+        const bookedClients = getMemoryClients()?.filter(c => (c as any)._source === 'booked') || [];
+        const assignmentKeys = new Set(allAssignments.map(a => a.registeredDateTimeAD));
+        const missingClients = bookedClients.filter(c => c.registeredDateTimeAD && !assignmentKeys.has(c.registeredDateTimeAD));
+        
+        if (missingClients.length > 0) {
+          console.log(`[CrewTable] ${missingClients.length} booked clients missing from assignments — triggering pull`);
+          try {
+            await supabase.functions.invoke('sync-crew-to-sheets', {
+              body: { action: 'pull' }
+            });
+            // Reload after pull
+            const refreshed = await loadAssignmentsFromCache();
+            setAssignments(refreshed);
+          } catch (err) {
+            console.warn('[CrewTable] Reconciliation pull failed:', err);
+          }
+        }
+      }
     } catch (err) {
       toast.error("Failed to load crew data");
     } finally {
@@ -213,7 +245,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await loadData(true); // Pull from sheets
+      await loadData(true); // Pull from sheets to backfill missing rows
     } finally {
       setRefreshing(false);
     }
@@ -228,9 +260,6 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
     try {
       // First push any pending local changes to sheets
       await pushUnsyncedToSheets();
-      
-      // Removed fullSync calls — these were pulling from Sheets. 
-      // Sync is now push-only from here.
       
       if (!silent) {
         toast.success(`Synced! Local changes pushed to spreadsheet.`);

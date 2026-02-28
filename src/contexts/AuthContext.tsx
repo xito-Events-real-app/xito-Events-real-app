@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -13,36 +13,62 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const AUTH_TIMEOUT_MS = 8000; // 8 seconds
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
+
+    // Defensive timeout — never stay loading forever
+    timeoutRef.current = setTimeout(() => {
+      if (isMounted && isLoading) {
+        console.warn('[Auth] Init timeout after', AUTH_TIMEOUT_MS, 'ms — forcing isLoading=false');
+        setIsLoading(false);
+      }
+    }, AUTH_TIMEOUT_MS);
+
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      (_event, session) => {
+        if (!isMounted) return;
         setSession(session);
         setUser(session?.user ?? null);
         setIsLoading(false);
+        if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
       }
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setIsLoading(false);
-    });
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (!isMounted) return;
+        setSession(session);
+        setUser(session?.user ?? null);
+      })
+      .catch((err) => {
+        console.error('[Auth] getSession failed:', err);
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false);
+          if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+        }
+      });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error: error ? new Error(error.message) : null };
   };
 
@@ -50,9 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        emailRedirectTo: window.location.origin,
-      },
+      options: { emailRedirectTo: window.location.origin },
     });
     return { error: error ? new Error(error.message) : null };
   };
