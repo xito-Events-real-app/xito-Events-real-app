@@ -91,14 +91,20 @@ export function ActivityCard({ activity }: ActivityCardProps) {
             {activity.clientName}
           </p>
           {activity.handlerName && (
-            <span className="text-[10px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full shrink-0">
+            <span className={cn(
+              "text-[10px] px-1.5 py-0.5 rounded-full shrink-0",
+              activity.handlerName.toUpperCase().includes('SAUGAT') ? 'bg-violet-100 text-violet-700' :
+              activity.handlerName.toUpperCase().includes('ROSHAN') ? 'bg-emerald-100 text-emerald-700' :
+              activity.handlerName.toUpperCase().includes('SANJOG') ? 'bg-blue-100 text-blue-700' :
+              'bg-gray-100 text-gray-700'
+            )}>
               {activity.handlerName}
             </span>
           )}
         </div>
         
         {/* Description */}
-        <p className="text-xs text-gray-600">
+        <p className="text-xs text-gray-600 truncate">
           {activity.description}
         </p>
         
