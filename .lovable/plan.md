@@ -1,48 +1,75 @@
 
 
-# Fix Silent Save Failures Across All Modules
+# Fix: Benzo Keep "Create Client" Not Saving to Database + Backfill 2 Missing Clients
 
-## What's Happening
+## The Problem
 
-You saved event details for Ashmita, got "Saved" confirmation, and the data went to Google Sheets -- but it never actually saved to the database. The same problem affects crew assignments, crew categories, and vendor edits.
+When you create a new client through Benzo Keep's "Create + Assign" button, the code only calls `addClient()` which sends data to Google Sheets. It **never inserts into the database**. Since the app reads only from the database, the client is invisible.
 
-The root cause: the code uses `.update()` which only works on rows that **already exist**. If the initial sync from Sheets never created the row in the database, the update silently does nothing (0 rows affected, no error thrown).
+The QuickAdd page does this correctly — it inserts into the database first, then syncs to Sheets in the background. Benzo Keep skips the database step entirely.
 
-## What Will Be Fixed
+## Two Things to Do
 
-| What you save | Where it breaks | Fix |
-|---|---|---|
-| Event details (venue, parlour, timing) | `useEventDetails.ts` | Switch to upsert |
-| Crew assignments (photographer, videographer, etc.) | `freelancer-assignment-cache.ts` | Switch to upsert |
-| Required crew categories | `freelancer-assignment-cache.ts` | Switch to upsert |
-| Vendor edits | `vendor-api.ts` | Switch to upsert |
+### 1. Fix the Code (Prevent Future Failures)
 
-## How It Gets Fixed
+In `src/components/suite/BenzoKeepNotepadDialog.tsx`, inside `handleSaveWithClient` (lines 208-244), add a database insert **before** the Sheets call. This mirrors exactly what QuickAdd does:
 
-**1. Event Details (`src/hooks/useEventDetails.ts`)**
-- Change `.update()` to `.upsert()` with conflict key `(registered_date_time_ad, event_index)`
-- Include identity fields (event name, year, month, day, date AD) from the current event data so new rows can be created
-- Add auto-backfill: when loading a client page with zero cached event rows, trigger a one-time sync from Sheets to populate the database, then retry loading
+- Insert into `clients_cache` via `.upsert()` with all available client fields
+- Set `sheet_source: 'tracker'` and `synced_to_sheet: false`
+- Update memory cache and dispatch `cache-updated` event
+- Then call `addClient()` in the background for Sheets sync (already exists)
+- Then assign the Benzo Keep note (already exists)
 
-**2. Freelancer Assignments (`src/lib/freelancer-assignment-cache.ts`)**
-- `updateAssignmentInCache`: change `.update()` to `.upsert()` with conflict key `(registered_date_time_ad, event, event_date_ad)`
-- `updateCategoriesInCache`: same change
-- Both need identity fields included in the payload so missing rows get created automatically
+### 2. Backfill the 2 Missing Clients (One-Time Database Fix)
 
-**3. Vendor Edits (`src/lib/vendor-api.ts`)**
-- Change `.update()` to `.upsert()` with conflict key on `row_number`
-- Include `row_number` in the upsert payload
+Since **Shreeish Bahadur Shrestha** and **Sushant Singh (Kafle)** already exist in the Google Sheet but not in the database, we need to manually insert them. We'll pull their data from the sheet via the existing sync edge function to populate their records in `clients_cache`.
 
-## What This Means For You
-
-- Ashmita's event details will appear on her client page (auto-backfilled from Sheets on first visit)
-- Booked clients will show in All Clients crew table (reconciliation pull already added in previous fix)
-- Any future client whose data wasn't synced will still save correctly -- no more silent failures
-- Existing clients with data already in the database are unaffected (upsert behaves identically to update when the row exists)
+This will be done by triggering a targeted pull sync that will pick up these missing rows from the CLIENT TRACKER sheet and insert them into the database.
 
 ## Files to Change
 
-1. `src/hooks/useEventDetails.ts` -- upsert + auto-backfill on empty cache
-2. `src/lib/freelancer-assignment-cache.ts` -- upsert for assignments and categories
-3. `src/lib/vendor-api.ts` -- upsert for vendor edits
+**`src/components/suite/BenzoKeepNotepadDialog.tsx`** — Add database insert before Sheets call in `handleSaveWithClient` (lines 208-226):
+
+```typescript
+// BEFORE calling addClient (Sheets sync), insert into database first
+const { error: insertError } = await supabase.from('clients_cache').upsert({
+  registered_date_time_ad: registeredDateTimeAD,
+  client_name: quickClientData.clientName.trim(),
+  contact_no: quickClientData.contactNo.trim(),
+  whatsapp_no: quickClientData.whatsappNo.trim(),
+  source: quickClientData.source,
+  client_handler: quickClientData.clientHandler,
+  status_log: quickClientData.initialStatus
+    ? `${now.toLocaleString()} - ${quickClientData.initialStatus}`
+    : '',
+  events: quickClientData.events,
+  event_year: quickClientData.eventYear,
+  event_month: quickClientData.eventMonth,
+  event_day: quickClientData.eventDay,
+  sheet_source: 'tracker',
+  synced_to_sheet: false,
+}, { onConflict: 'registered_date_time_ad' });
+
+if (insertError) {
+  console.error('Database insert failed:', insertError);
+  throw insertError;
+}
+
+// Update memory cache + notify UI
+import { getMemoryClients, setMemoryClients } from "@/lib/memory-cache";
+import { notifyCacheUpdate } from "@/lib/cache-manager";
+
+const memClients = getMemoryClients();
+if (memClients) {
+  setMemoryClients([newClient, ...memClients]);
+}
+notifyCacheUpdate('clients');
+
+// THEN sync to Sheets in background (existing code)
+addClient(newClient).catch(err => console.warn('Sheet sync failed:', err));
+```
+
+Also add the `benzo_keep_notes` field to the database insert so the note is saved atomically with the client record, rather than requiring a separate `assignBenzoKeepNoteToClient` call.
+
+**Database**: Run a one-time pull sync to backfill Shreeish Bahadur Shrestha and Sushant Singh (Kafle) from the CLIENT TRACKER sheet into `clients_cache`.
 
