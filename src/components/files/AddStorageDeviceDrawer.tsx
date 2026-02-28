@@ -4,11 +4,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { StorageDevice } from "@/lib/files-api";
 import { toast } from "@/hooks/use-toast";
 import { adToBS, bsToAD, formatBSDate, nepaliMonthsEnglish } from "@/lib/nepali-date";
-import { HardDrive, Calendar, DollarSign } from "lucide-react";
+import { HardDrive, Calendar as CalendarIcon, DollarSign, CalendarDays } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface Props {
   open: boolean;
@@ -68,6 +72,18 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
 
   const set = (key: string, val: string) => setForm((p) => ({ ...p, [key]: val }));
 
+  const handleADDatePick = (date: Date | undefined) => {
+    if (!date) return;
+    const val = format(date, "yyyy-MM-dd");
+    set("purchase_date_ad", val);
+    converting.current = true;
+    try {
+      const bs = adToBS(date);
+      set("purchase_date_bs", formatBSDate(bs));
+    } catch { /* ignore */ }
+    converting.current = false;
+  };
+
   const handleADChange = (val: string) => {
     set("purchase_date_ad", val);
     if (converting.current) return;
@@ -90,7 +106,6 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
     if (converting.current) return;
     converting.current = true;
     try {
-      // Parse "DD MonthName YYYY" e.g. "15 Magh 2082"
       const parts = val.trim().split(/\s+/);
       if (parts.length === 3) {
         const day = parseInt(parts[0]);
@@ -109,6 +124,9 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
     } catch { /* ignore */ }
     converting.current = false;
   };
+
+  const parsedADDate = form.purchase_date_ad ? new Date(form.purchase_date_ad) : undefined;
+  const validADDate = parsedADDate && !isNaN(parsedADDate.getTime()) ? parsedADDate : undefined;
 
   const handleSave = async () => {
     if (!form.device_name.trim()) {
@@ -218,13 +236,31 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
           {/* Purchase Details Section */}
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-              <Calendar className="w-4 h-4" />
+              <CalendarIcon className="w-4 h-4" />
               <span>Purchase Details</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Purchase Date (AD)</Label>
-                <Input className="h-10" value={form.purchase_date_ad} onChange={(e) => handleADChange(e.target.value)} placeholder="YYYY-MM-DD" />
+                <div className="flex gap-1.5">
+                  <Input className="h-10 flex-1" value={form.purchase_date_ad} onChange={(e) => handleADChange(e.target.value)} placeholder="YYYY-MM-DD" />
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="icon" className="h-10 w-10 shrink-0">
+                        <CalendarDays className="w-4 h-4" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="end">
+                      <CalendarComponent
+                        mode="single"
+                        selected={validADDate}
+                        onSelect={handleADDatePick}
+                        initialFocus
+                        className={cn("p-3 pointer-events-auto")}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Purchase Date (BS)</Label>
