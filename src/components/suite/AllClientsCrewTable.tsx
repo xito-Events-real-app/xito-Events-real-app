@@ -26,6 +26,7 @@ import {
   updateCategoriesInCache,
   getUnsyncedCount,
   pushUnsyncedToSheets,
+  rowToAssignment,
 } from "@/lib/freelancer-assignment-cache";
 import { getFreelancers, FreelancerData } from "@/lib/freelancer-api";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
@@ -203,6 +204,9 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
     }
   }, []);
 
+  // Track local update timestamps for anti-flicker guard
+  const localUpdateTimestamps = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     loadData();
 
@@ -210,10 +214,46 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
     window.addEventListener('clients-invalidate', handleClientChange);
     window.addEventListener('booked-clients-invalidate', handleClientChange);
 
+    // Realtime subscription for multi-device instant sync
+    const channel = supabase
+      .channel('crew-assignments-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'freelancer_assignments' },
+        (payload) => {
+          if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+            const row = payload.new as any;
+            // Anti-flicker: skip if this was a local update within last 2s
+            const updatedAt = row.updated_at;
+            if (updatedAt && localUpdateTimestamps.current.has(updatedAt)) {
+              return;
+            }
+            const mapped = rowToAssignment(row);
+            if (payload.eventType === 'UPDATE') {
+              setAssignments(prev => prev.map(a => a.id === mapped.id ? mapped : a));
+            } else {
+              setAssignments(prev => {
+                if (prev.some(a => a.id === mapped.id)) return prev;
+                return [...prev, mapped];
+              });
+            }
+          } else if (payload.eventType === 'DELETE') {
+            const oldId = (payload.old as any)?.id;
+            if (oldId) {
+              setAssignments(prev => prev.filter(a => a.id !== oldId));
+            }
+          }
+          // Also refresh pending sync count
+          getUnsyncedCount().then(c => setPendingSyncs(c));
+        }
+      )
+      .subscribe();
+
     return () => {
       if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
       window.removeEventListener('clients-invalidate', handleClientChange);
       window.removeEventListener('booked-clients-invalidate', handleClientChange);
+      supabase.removeChannel(channel);
     };
   }, [loadData]);
 
@@ -383,6 +423,11 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
 
   const handleAssign = async (row: FreelancerAssignment, field: FreelancerField, freelancerName: string) => {
     try {
+      // Register timestamp for anti-flicker guard
+      const ts = new Date().toISOString();
+      localUpdateTimestamps.current.add(ts);
+      setTimeout(() => localUpdateTimestamps.current.delete(ts), 2000);
+
       // Write to Supabase cache instantly
       await updateAssignmentInCache(row.registeredDateTimeAD, row.event, field, freelancerName, row.eventDateAD);
       setAssignments(prev => prev.map(a =>
