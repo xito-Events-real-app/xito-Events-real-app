@@ -365,6 +365,128 @@ export type Database = {
         }
         Relationships: []
       }
+      files_management: {
+        Row: {
+          card_label: string | null
+          category: string | null
+          client_folder_name: string | null
+          client_name: string | null
+          created_at: string
+          deleted_or_not: boolean | null
+          double_backup: boolean | null
+          double_backup_path: string | null
+          drive_upload: boolean | null
+          drive_upload_path: string | null
+          event_date_ad: string | null
+          event_day: string | null
+          event_folder_name: string | null
+          event_month: string | null
+          event_name: string | null
+          event_year: string | null
+          final_generated_path: string | null
+          format_type: string | null
+          freelancer_name: string | null
+          freelancer_type: string | null
+          id: string
+          number_of_items: number | null
+          reconfirmation: boolean | null
+          registered_date_bs: string | null
+          registered_date_time_ad: string
+          side: string | null
+          size_gb: number | null
+          storage_device_id: string | null
+          storage_type: string | null
+          synced_to_sheet: boolean | null
+          triple_backup: boolean | null
+          triple_backup_path: string | null
+          updated_at: string
+          who_copied: string | null
+          year_event_folder: string | null
+        }
+        Insert: {
+          card_label?: string | null
+          category?: string | null
+          client_folder_name?: string | null
+          client_name?: string | null
+          created_at?: string
+          deleted_or_not?: boolean | null
+          double_backup?: boolean | null
+          double_backup_path?: string | null
+          drive_upload?: boolean | null
+          drive_upload_path?: string | null
+          event_date_ad?: string | null
+          event_day?: string | null
+          event_folder_name?: string | null
+          event_month?: string | null
+          event_name?: string | null
+          event_year?: string | null
+          final_generated_path?: string | null
+          format_type?: string | null
+          freelancer_name?: string | null
+          freelancer_type?: string | null
+          id?: string
+          number_of_items?: number | null
+          reconfirmation?: boolean | null
+          registered_date_bs?: string | null
+          registered_date_time_ad?: string
+          side?: string | null
+          size_gb?: number | null
+          storage_device_id?: string | null
+          storage_type?: string | null
+          synced_to_sheet?: boolean | null
+          triple_backup?: boolean | null
+          triple_backup_path?: string | null
+          updated_at?: string
+          who_copied?: string | null
+          year_event_folder?: string | null
+        }
+        Update: {
+          card_label?: string | null
+          category?: string | null
+          client_folder_name?: string | null
+          client_name?: string | null
+          created_at?: string
+          deleted_or_not?: boolean | null
+          double_backup?: boolean | null
+          double_backup_path?: string | null
+          drive_upload?: boolean | null
+          drive_upload_path?: string | null
+          event_date_ad?: string | null
+          event_day?: string | null
+          event_folder_name?: string | null
+          event_month?: string | null
+          event_name?: string | null
+          event_year?: string | null
+          final_generated_path?: string | null
+          format_type?: string | null
+          freelancer_name?: string | null
+          freelancer_type?: string | null
+          id?: string
+          number_of_items?: number | null
+          reconfirmation?: boolean | null
+          registered_date_bs?: string | null
+          registered_date_time_ad?: string
+          side?: string | null
+          size_gb?: number | null
+          storage_device_id?: string | null
+          storage_type?: string | null
+          synced_to_sheet?: boolean | null
+          triple_backup?: boolean | null
+          triple_backup_path?: string | null
+          updated_at?: string
+          who_copied?: string | null
+          year_event_folder?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "files_management_storage_device_id_fkey"
+            columns: ["storage_device_id"]
+            isOneToOne: false
+            referencedRelation: "storage_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       freelancer_assignments: {
         Row: {
           assistant: string | null
@@ -668,6 +790,66 @@ export type Database = {
           vendor_type?: string
           website?: string | null
           youtube?: string | null
+        }
+        Relationships: []
+      }
+      storage_devices: {
+        Row: {
+          created_at: string
+          device_name: string
+          device_type: string
+          health_percent: number
+          id: string
+          pc_drive_letter: string | null
+          price_npr: number | null
+          purchase_date_ad: string | null
+          purchase_date_bs: string | null
+          purchased_from: string | null
+          remaining_storage_gb: number | null
+          safety_status: string
+          speed_rating: number
+          synced_to_sheet: boolean | null
+          total_storage_gb: number
+          updated_at: string
+          used_storage_gb: number
+        }
+        Insert: {
+          created_at?: string
+          device_name?: string
+          device_type?: string
+          health_percent?: number
+          id?: string
+          pc_drive_letter?: string | null
+          price_npr?: number | null
+          purchase_date_ad?: string | null
+          purchase_date_bs?: string | null
+          purchased_from?: string | null
+          remaining_storage_gb?: number | null
+          safety_status?: string
+          speed_rating?: number
+          synced_to_sheet?: boolean | null
+          total_storage_gb?: number
+          updated_at?: string
+          used_storage_gb?: number
+        }
+        Update: {
+          created_at?: string
+          device_name?: string
+          device_type?: string
+          health_percent?: number
+          id?: string
+          pc_drive_letter?: string | null
+          price_npr?: number | null
+          purchase_date_ad?: string | null
+          purchase_date_bs?: string | null
+          purchased_from?: string | null
+          remaining_storage_gb?: number | null
+          safety_status?: string
+          speed_rating?: number
+          synced_to_sheet?: boolean | null
+          total_storage_gb?: number
+          updated_at?: string
+          used_storage_gb?: number
         }
         Relationships: []
       }
