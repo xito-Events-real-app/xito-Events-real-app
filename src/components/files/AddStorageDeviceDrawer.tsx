@@ -28,7 +28,7 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
     device_type: "HARD_DRIVE",
     device_name: "",
     pc_drive_letter: "",
-    total_storage_gb: "",
+    total_storage_tb: "",
     health_percent: "100",
     safety_status: "SAFE",
     speed_rating: "3",
@@ -44,7 +44,7 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
         device_type: editDevice.device_type,
         device_name: editDevice.device_name,
         pc_drive_letter: editDevice.pc_drive_letter || "",
-        total_storage_gb: String(editDevice.total_storage_gb),
+        total_storage_tb: String(editDevice.total_storage_gb / 1024),
         health_percent: String(editDevice.health_percent),
         safety_status: editDevice.safety_status === "UNSAFE" || editDevice.safety_status === "SLOW" ? "RISKY" : editDevice.safety_status,
         speed_rating: String(editDevice.speed_rating),
@@ -58,7 +58,7 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
         device_type: "HARD_DRIVE",
         device_name: "",
         pc_drive_letter: "",
-        total_storage_gb: "",
+        total_storage_tb: "",
         health_percent: "100",
         safety_status: "SAFE",
         speed_rating: "3",
@@ -139,7 +139,7 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
         device_type: form.device_type,
         device_name: form.device_name,
         pc_drive_letter: form.device_type === "PC" ? form.pc_drive_letter : null,
-        total_storage_gb: Number(form.total_storage_gb) || 0,
+        total_storage_gb: (Number(form.total_storage_tb) || 0) * 1024,
         health_percent: Number(form.health_percent) || 100,
         safety_status: form.safety_status,
         speed_rating: Number(form.speed_rating) || 3,
@@ -199,8 +199,8 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">Total Storage (GB)</Label>
-                <Input className="h-10" type="number" value={form.total_storage_gb} onChange={(e) => set("total_storage_gb", e.target.value)} />
+                <Label className="text-xs">Total Storage (TB)</Label>
+                <Input className="h-10" type="number" step="0.5" value={form.total_storage_tb} onChange={(e) => set("total_storage_tb", e.target.value)} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Health %</Label>
