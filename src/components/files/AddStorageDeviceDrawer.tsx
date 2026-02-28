@@ -244,18 +244,17 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
                 <Label className="text-xs">Purchase Date (AD)</Label>
                 <div className="flex gap-1.5">
                   <Input className="h-10 flex-1" value={form.purchase_date_ad} onChange={(e) => handleADChange(e.target.value)} placeholder="YYYY-MM-DD" />
-                  <Popover>
+                  <Popover modal>
                     <PopoverTrigger asChild>
                       <Button variant="outline" size="icon" className="h-10 w-10 shrink-0">
                         <CalendarDays className="w-4 h-4" />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="end">
+                    <PopoverContent className="w-auto p-0 z-[300]" align="end">
                       <CalendarComponent
                         mode="single"
                         selected={validADDate}
-                        onSelect={handleADDatePick}
-                        initialFocus
+                        onSelect={(date) => { handleADDatePick(date); }}
                         className={cn("p-3 pointer-events-auto")}
                       />
                     </PopoverContent>
