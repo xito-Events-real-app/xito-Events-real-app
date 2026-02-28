@@ -1,66 +1,49 @@
 
 
-# Upgrade Add Device to Modern Dialog with Smart Date Conversion
+# Smart Storage Display: TB Input with GB Storage
 
 ## Overview
-Replace the bottom Drawer with a centered Dialog popup, modernize the UI, simplify Safety Status to SAFE/RISKY only, and add automatic AD-to-BS and BS-to-AD date conversion when entering purchase dates.
+Update the Add Device dialog to accept total storage in TB (since most devices are 1TB+), while continuing to store data in GB in the database (1 TB = 1024 GB). Display values smartly on device cards -- show remaining space in GB when it's less than 1 TB.
 
 ## Changes
 
-### 1. Rewrite `AddStorageDeviceDrawer.tsx` as a Dialog
-**File:** `src/components/files/AddStorageDeviceDrawer.tsx`
+### 1. Update Add Device Dialog (`AddStorageDeviceDrawer.tsx`)
+- Change the "Total Storage" label from "Total Storage (GB)" to "Total Storage (TB)"
+- On save, convert TB to GB: `total_storage_gb = Number(form.total_storage_tb) * 1024`
+- When editing, convert existing GB value back to TB for display: `total_storage_tb = String(device.total_storage_gb / 1024)`
+- Rename the form field from `total_storage_gb` to `total_storage_tb` (internal form state only)
 
-- Replace `Drawer`/`DrawerContent`/`DrawerHeader`/`DrawerTitle` with `Dialog`/`DialogContent`/`DialogHeader`/`DialogTitle` from `@/components/ui/dialog`
-- Modern centered popup with clean spacing, rounded corners, max-w-lg
-- Component name stays the same (no rename needed since all imports reference it)
+### 2. Update Device Cards Display (`StorageDevicesSection.tsx`)
+- Add a helper function `formatStorage(gb)` that:
+  - If `gb >= 1024`: display as `X.XX TB`
+  - If `gb < 1024`: display as `X GB`
+- Apply this to three display points on each card:
+  - "used" label: e.g. "0.5 TB used" or "800 GB used"
+  - "free" label: e.g. "1.5 TB free" or "200 GB free"  
+  - "total" label: e.g. "2 TB total"
+- The remaining space specifically shows in GB if under 1 TB (per user request)
 
-### 2. Safety Status: SAFE / RISKY only
-- Remove "SLOW" and "UNSAFE" options
-- Replace with just two options: `SAFE` and `RISKY`
-- Update default value to `"SAFE"`
+### Technical Details
 
-### 3. Auto-convert Purchase Date AD <-> BS
-- When user types a valid AD date (`YYYY-MM-DD`), auto-compute and fill the BS field using `adToBS()` + `formatBSDate()`
-- When user types a valid BS date (e.g. `2082 10 15` or changes the field), auto-compute and fill the AD field using `bsToAD()`
-- Use a flag to prevent infinite update loops between the two fields
-- Import `adToBS`, `bsToAD`, `formatBSDate` from `@/lib/nepali-date`
-
-### 4. Modern UI Polish
-- Subtle section groupings with light dividers
-- Icon accents next to section headers (HardDrive icon for device info, Calendar for dates, etc.)
-- Consistent input sizing with `h-10` inputs
-- Blue gradient save button matching the file management theme
-
-## Technical Details
-
-**Date conversion logic:**
-```
-// AD -> BS
-const handleADChange = (val: string) => {
-  set("purchase_date_ad", val);
-  // Try parse YYYY-MM-DD
-  const parts = val.split("-");
-  if (parts.length === 3 && parts[0].length === 4) {
-    const date = new Date(val);
-    if (!isNaN(date.getTime())) {
-      const bs = adToBS(date);
-      set("purchase_date_bs", formatBSDate(bs));
-    }
-  }
-};
-
-// BS -> AD (parse "DD MonthName YYYY" format)
-const handleBSChange = (val: string) => {
-  set("purchase_date_bs", val);
-  // Try parse "15 Magh 2082" format
-  // Extract day, month name, year -> bsToAD() -> format as YYYY-MM-DD
+**Conversion helper:**
+```typescript
+const formatStorage = (gb: number): string => {
+  if (gb >= 1024) return `${(gb / 1024).toFixed(2).replace(/\.?0+$/, '')} TB`;
+  return `${Math.round(gb)} GB`;
 };
 ```
 
-**Safety status mapping:** The existing `StorageDevicesSection` already handles badge display via `safetyBadge()`. We update:
-- `"SAFE"` stays as green badge
-- `"RISKY"` replaces both `"SLOW"` and `"UNSAFE"` -- rendered as red badge
+**Save conversion (dialog):**
+```typescript
+total_storage_gb: Number(form.total_storage_tb) * 1024
+```
+
+**Edit pre-fill (dialog):**
+```typescript
+total_storage_tb: String(editDevice.total_storage_gb / 1024)
+```
 
 **Files to update:**
-1. `src/components/files/AddStorageDeviceDrawer.tsx` -- main rewrite (Drawer -> Dialog, safety options, date auto-convert)
-2. `src/components/files/StorageDevicesSection.tsx` -- update `safetyBadge()` to handle `"RISKY"` instead of `"SLOW"`/`"UNSAFE"`, update `isUnsafe` check to `device.safety_status === "RISKY"`
+1. `src/components/files/AddStorageDeviceDrawer.tsx` -- TB input + conversion on save/edit
+2. `src/components/files/StorageDevicesSection.tsx` -- smart display formatting
+
