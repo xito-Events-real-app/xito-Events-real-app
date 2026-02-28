@@ -527,6 +527,22 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
     return widths;
   }, [filteredRows]);
 
+  const columnStats = useMemo(() => {
+    const stats: Record<string, { total: number; assigned: number; remaining: number }> = {};
+    for (const col of CREW_COLUMNS) {
+      const rolePool = getFilteredFreelancersByRole(freelancers, col.field);
+      const total = rolePool.length;
+      const assignedNames = new Set<string>();
+      for (const row of filteredRows) {
+        const val = (row[col.field] as string)?.trim();
+        if (val) assignedNames.add(val.toUpperCase());
+      }
+      const assigned = assignedNames.size;
+      stats[col.field] = { total, assigned, remaining: total - assigned };
+    }
+    return stats;
+  }, [freelancers, filteredRows]);
+
   return (
     <div className="fixed inset-0 z-[100] bg-gray-200 flex flex-col">
       {/* Header Bar */}
@@ -1001,15 +1017,22 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                   <th className="bg-gray-800 text-white text-xs font-semibold px-3 py-2.5 text-left border-r border-gray-700 w-[50px]">Day</th>
                   <th className="bg-gray-800 text-white text-xs font-semibold px-3 py-2.5 text-left border-r border-gray-700 w-[180px]">Client</th>
                   <th className="bg-gray-800 text-white text-xs font-semibold px-3 py-2.5 text-left border-r border-gray-700 w-[140px]">Event</th>
-                  {CREW_COLUMNS.map(col => (
-                    <th
-                      key={col.field}
-                      className={cn("text-xs font-bold px-2 py-2.5 text-center border-r last:border-r-0", GROUP_STYLES[col.group])}
-                      style={{ width: `${columnWidths[col.field]}px`, minWidth: `${columnWidths[col.field]}px` }}
-                    >
-                      {col.short}
-                    </th>
-                  ))}
+                  {CREW_COLUMNS.map(col => {
+                    const s = columnStats[col.field];
+                    return (
+                      <th
+                        key={col.field}
+                        className={cn("text-xs font-bold px-1 py-2.5 text-center border-r last:border-r-0", GROUP_STYLES[col.group])}
+                        style={{ width: `${columnWidths[col.field]}px`, minWidth: `${columnWidths[col.field]}px` }}
+                      >
+                        <span className="flex items-center justify-center gap-0.5 whitespace-nowrap">
+                          <span className="font-black text-sm">{s?.remaining ?? ''}</span>
+                          <span className="font-bold text-[10px]">{col.short}</span>
+                          <span className="text-[8px] opacity-50">{s?.assigned}/{s?.total}</span>
+                        </span>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
