@@ -11,7 +11,7 @@ import {
 import { useFilesManagement } from "@/hooks/useFilesManagement";
 import { useStorageDevices } from "@/hooks/useStorageDevices";
 import { FilePathBuilderDialog } from "./FilePathBuilderDialog";
-import { FileRecord } from "@/lib/files-api";
+import { FileRecord, getNextCardLabel } from "@/lib/files-api";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
@@ -79,6 +79,12 @@ export function FilesManagementTable() {
 
   const handleInlineUpdate = async (id: string, field: string, value: any) => {
     await update(id, { [field]: value, synced_to_sheet: false });
+  };
+
+  const handleFormatChange = async (file: FileRecord, newFormat: string) => {
+    // Auto-suggest next card label when format changes
+    const nextLabel = await getNextCardLabel(file.client_name, file.freelancer_name, newFormat);
+    await update(file.id, { format_type: newFormat, card_label: nextLabel, synced_to_sheet: false });
   };
 
   return (
@@ -191,7 +197,7 @@ export function FilesManagementTable() {
                     />
                   </TableCell>
                   <TableCell>
-                    <Select value={file.format_type || ""} onValueChange={(v) => handleInlineUpdate(file.id, "format_type", v)}>
+                    <Select value={file.format_type || ""} onValueChange={(v) => handleFormatChange(file, v)}>
                       <SelectTrigger className="h-7 text-xs border-0 bg-transparent p-0"><SelectValue placeholder="-" /></SelectTrigger>
                       <SelectContent>
                         {["RAW_ONLY", "JPEG_ONLY", "RAW_JPEG", "CF", "NORMAL", "CF_NORMAL"].map((f) => (

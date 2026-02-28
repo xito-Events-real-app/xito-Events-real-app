@@ -291,3 +291,65 @@ export async function getFileManagementStats(): Promise<{
     warningDevices,
   };
 }
+
+// ── Google Sheets Sync Helpers ───────────────────────────
+export async function syncStorageDevicesFromSheets(): Promise<{ upserted: number }> {
+  const { data, error } = await supabase.functions.invoke("google-sheets", {
+    body: { action: "pullStorageDevices" },
+  });
+  if (error) throw error;
+  if (!data?.success) throw new Error(data?.error || "Failed to pull storage devices");
+  return data.data;
+}
+
+export async function pushFilesToSheets(): Promise<{ pushed: number }> {
+  const { data, error } = await supabase.functions.invoke("google-sheets", {
+    body: { action: "pushFilesToSheet" },
+  });
+  if (error) throw error;
+  if (!data?.success) throw new Error(data?.error || "Failed to push files to sheet");
+  return data.data;
+}
+
+// ── Auto Card Increment ─────────────────────────────────
+export async function getNextCardLabel(
+  clientName: string,
+  freelancerName: string,
+  formatType: string
+): Promise<string> {
+  if (!formatType) return "";
+
+  // Derive prefix from format type
+  const prefixMap: Record<string, string> = {
+    RAW_ONLY: "RAW",
+    JPEG_ONLY: "JPEG",
+    RAW_JPEG: "RJ",
+    CF: "CF",
+    NORMAL: "N",
+    CF_NORMAL: "CFN",
+  };
+  const prefix = prefixMap[formatType] || formatType;
+
+  // Query existing rows for this combo
+  const { data } = await (supabase as any)
+    .from("files_management")
+    .select("card_label")
+    .eq("client_name", clientName)
+    .eq("freelancer_name", freelancerName)
+    .eq("deleted_or_not", false);
+
+  if (!data || data.length === 0) return `${prefix}1`;
+
+  // Extract highest numeric suffix for this prefix
+  let maxNum = 0;
+  const regex = new RegExp(`^${prefix}(\\d+)$`, "i");
+  for (const row of data) {
+    const match = (row.card_label || "").match(regex);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num > maxNum) maxNum = num;
+    }
+  }
+
+  return `${prefix}${maxNum + 1}`;
+}

@@ -1,14 +1,15 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, FolderOpen, HardDrive, FileText, BarChart3, AlertTriangle, Database } from "lucide-react";
+import { ArrowLeft, FolderOpen, HardDrive, FileText, BarChart3, AlertTriangle, Database, RefreshCw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { StorageDevicesSection } from "@/components/files/StorageDevicesSection";
 import { FilesManagementTable } from "@/components/files/FilesManagementTable";
-import { getFileManagementStats } from "@/lib/files-api";
+import { getFileManagementStats, syncStorageDevicesFromSheets, pushFilesToSheets } from "@/lib/files-api";
 import { cn } from "@/lib/utils";
+import { toast } from "@/hooks/use-toast";
 
 export default function FileManagement() {
   const navigate = useNavigate();
@@ -18,10 +19,37 @@ export default function FileManagement() {
     devicesCount: number;
     warningDevices: number;
   } | null>(null);
+  const [syncingStorage, setSyncingStorage] = useState(false);
+  const [pushingFiles, setPushingFiles] = useState(false);
 
   useEffect(() => {
     getFileManagementStats().then(setStats).catch(() => {});
   }, []);
+
+  const handleSyncStorage = async () => {
+    setSyncingStorage(true);
+    try {
+      const result = await syncStorageDevicesFromSheets();
+      toast({ title: `Synced ${result.upserted} storage devices from Sheets` });
+      getFileManagementStats().then(setStats).catch(() => {});
+    } catch (err: any) {
+      toast({ title: "Sync failed", description: err.message, variant: "destructive" });
+    } finally {
+      setSyncingStorage(false);
+    }
+  };
+
+  const handlePushFiles = async () => {
+    setPushingFiles(true);
+    try {
+      const result = await pushFilesToSheets();
+      toast({ title: result.pushed > 0 ? `Pushed ${result.pushed} files to Sheets` : "All files already synced" });
+    } catch (err: any) {
+      toast({ title: "Push failed", description: err.message, variant: "destructive" });
+    } finally {
+      setPushingFiles(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -157,12 +185,36 @@ export default function FileManagement() {
           </TabsContent>
 
           {/* Storage Devices Tab */}
-          <TabsContent value="storage">
+          <TabsContent value="storage" className="space-y-4">
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleSyncStorage}
+                disabled={syncingStorage}
+                className="gap-1.5"
+              >
+                <RefreshCw className={cn("w-4 h-4", syncingStorage && "animate-spin")} />
+                {syncingStorage ? "Syncing..." : "Sync from Sheets"}
+              </Button>
+            </div>
             <StorageDevicesSection />
           </TabsContent>
 
           {/* Files Tab */}
-          <TabsContent value="files">
+          <TabsContent value="files" className="space-y-4">
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handlePushFiles}
+                disabled={pushingFiles}
+                className="gap-1.5"
+              >
+                <Upload className={cn("w-4 h-4", pushingFiles && "animate-spin")} />
+                {pushingFiles ? "Pushing..." : "Push to Sheets"}
+              </Button>
+            </div>
             <FilesManagementTable />
           </TabsContent>
         </Tabs>
