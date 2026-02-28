@@ -1,30 +1,63 @@
 
 
-# Fix Recent Comments in Upcoming Events Section
+# Fix Breaking News to Show All Recent Changes
 
-## Problem
+## Root Cause
 
-In `TodayEventsHero.tsx` (the Upcoming Events section on the suite homepage), line 420 picks the **oldest** comment instead of the **newest**:
+The Breaking News feed uses a **priority system** that's causing data loss:
 
-```typescript
-// Current (wrong) - gets LAST element = oldest comment
-const lastComment = parsedComments[parsedComments.length - 1];
-```
-
-Since comments are now stored newest-first (after the format fix with `|||` delimiter), `parsedComments[0]` is the most recent comment, but the code grabs the last array element (oldest).
+1. If a client has `lastActivityLog` (Column AJ from Google Sheets), it ONLY shows activities from that column and **skips** parsing statusLog, comments, callLog, and payments entirely
+2. When you make local changes (add comment, change status, log call, add payment), those updates go to the individual columns (statusLog, comments, callLog, paymentsMade) but **NOT** to `lastActivityLog`
+3. Result: recent local changes are invisible in Breaking News because `lastActivityLog` takes priority and the fallback parsing is never reached
 
 ## Fix
 
-### File: `src/components/suite/TodayEventsHero.tsx`
+### File 1: `src/lib/activity-utils.ts` -- `parseActivities()` function
 
-**Line 420** -- Change from:
-```typescript
-const lastComment = parsedComments.length > 0 ? parsedComments[parsedComments.length - 1] : null;
+**Change the logic from "priority/fallback" to "merge all sources":**
+
+Currently (broken):
 ```
-To:
-```typescript
-const lastComment = parsedComments.length > 0 ? parsedComments[0] : null;
+if (lastActivityLog exists) {
+  use ONLY lastActivityLog  // <-- misses recent local changes
+} else {
+  parse statusLog, comments, callLog, payments
+}
 ```
 
-This is a one-line fix. The `parseComments()` function returns comments in the order they appear in the string, and since `generateCommentEntry()` now prepends new comments, index 0 is always the newest.
+Fixed (merge everything):
+```
+// Always parse from ALL available sources
+parse lastActivityLog entries (if any)
+parse statusLog entries
+parse commentActivities
+parse callActivities  
+parse paymentActivities (booked only)
+parse clientAdded
+
+// Deduplicate by content similarity (same client + same type + same timestamp window)
+// Sort newest first
+```
+
+The deduplication will prevent double-entries where `lastActivityLog` and individual columns describe the same event. Two activities are considered duplicates if they share the same client ID, same type, and timestamps within 60 seconds of each other.
+
+### File 2: `src/components/suite/ActivityCard.tsx` -- Better info display
+
+Improve the card to show more useful information:
+- Show the comment text preview for comment activities (currently says "New comment added" with details hidden)
+- Show payment amount more prominently
+- Show the actual status name for status changes
+- Add a handler badge color variation per handler
+
+### File 3: `src/hooks/useActivityFeed.ts` -- Increase limits
+
+- Increase default limit from 100 to 200 to show more activities
+- The 14-day window stays the same
+
+## What This Fixes
+
+- All recent local changes (status updates, comments, calls, payments) will immediately appear in Breaking News
+- No more "only few are showing" -- every activity from every source gets included
+- Better deduplication prevents double entries
+- More informative cards with actual content previews
 
