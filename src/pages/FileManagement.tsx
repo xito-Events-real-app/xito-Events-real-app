@@ -1,41 +1,33 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, FolderOpen, FileText, Users, CheckCircle2, AlertTriangle, BarChart3 } from "lucide-react";
+import { ArrowLeft, FolderOpen, HardDrive, FileText, BarChart3, AlertTriangle, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { AllClientsCrewTable, CrewStats } from "@/components/suite/AllClientsCrewTable";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { StorageDevicesSection } from "@/components/files/StorageDevicesSection";
+import { FilesManagementTable } from "@/components/files/FilesManagementTable";
+import { getFileManagementStats } from "@/lib/files-api";
 import { cn } from "@/lib/utils";
 
 export default function FileManagement() {
   const navigate = useNavigate();
-  const [stats, setStats] = useState<CrewStats | null>(null);
-  const [showTable, setShowTable] = useState(false);
+  const [stats, setStats] = useState<{
+    totalFiles: number;
+    totalSizeGB: number;
+    devicesCount: number;
+    warningDevices: number;
+  } | null>(null);
 
-  const completionPct = stats && stats.requiredCells > 0
-    ? Math.round((stats.assignedCount / stats.requiredCells) * 100)
-    : 0;
-
-  const progressColor = completionPct >= 70
-    ? "bg-emerald-500"
-    : completionPct >= 40
-      ? "bg-amber-500"
-      : "bg-red-500";
-
-  if (showTable) {
-    return (
-      <AllClientsCrewTable
-        readOnly
-        onClose={() => setShowTable(false)}
-        onStatsReady={setStats}
-      />
-    );
-  }
+  useEffect(() => {
+    getFileManagementStats().then(setStats).catch(() => {});
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Gradient Header */}
+      {/* Header */}
       <header className="bg-gradient-to-r from-cyan-600 via-blue-600 to-cyan-700 text-white px-4 sm:px-6 py-4 shadow-lg">
-        <div className="max-w-5xl mx-auto flex items-center gap-3">
+        <div className="max-w-6xl mx-auto flex items-center gap-3">
           <Button
             variant="ghost"
             size="icon"
@@ -48,131 +40,132 @@ export default function FileManagement() {
             <FolderOpen className="w-6 h-6" />
             <div>
               <h1 className="text-xl font-bold tracking-wide">File Management</h1>
-              <p className="text-cyan-100 text-xs">Central hub for viewing all event crew files & assignments</p>
+              <p className="text-cyan-100 text-xs">Storage devices, file tracking & path management</p>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* Stats Hero Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          {/* Total Events */}
-          <Card className="border-0 shadow-soft bg-card/80 backdrop-blur-sm">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-cyan-100 dark:bg-cyan-900/40">
-                <FileText className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground font-medium">Total Events</p>
-                <p className="text-2xl font-bold text-foreground">{stats?.totalEvents ?? "—"}</p>
-              </div>
-            </CardContent>
-          </Card>
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+        <Tabs defaultValue="dashboard" className="space-y-6">
+          <TabsList className="bg-muted/60 p-1">
+            <TabsTrigger value="dashboard" className="gap-1.5 text-xs sm:text-sm">
+              <BarChart3 className="w-4 h-4" /> Dashboard
+            </TabsTrigger>
+            <TabsTrigger value="storage" className="gap-1.5 text-xs sm:text-sm">
+              <HardDrive className="w-4 h-4" /> Storage Devices
+            </TabsTrigger>
+            <TabsTrigger value="files" className="gap-1.5 text-xs sm:text-sm">
+              <FileText className="w-4 h-4" /> Files
+            </TabsTrigger>
+          </TabsList>
 
-          {/* Assigned */}
-          <Card className="border-0 shadow-soft bg-card/80 backdrop-blur-sm">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-blue-100 dark:bg-blue-900/40">
-                <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground font-medium">Assigned Crew</p>
-                <p className="text-2xl font-bold text-foreground">
-                  {stats ? `${stats.assignedCount}/${stats.requiredCells}` : "—"}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Dashboard Tab */}
+          <TabsContent value="dashboard" className="space-y-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <Card className="border-0 shadow-sm bg-card/80 backdrop-blur-sm">
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-cyan-100 dark:bg-cyan-900/40">
+                    <FileText className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium">Total Files</p>
+                    <p className="text-2xl font-bold text-foreground">{stats?.totalFiles ?? "—"}</p>
+                  </div>
+                </CardContent>
+              </Card>
 
-          {/* Remaining */}
-          <Card className={cn(
-            "border-0 shadow-soft bg-card/80 backdrop-blur-sm",
-            stats && stats.remainingCount > 0 && "animate-pulse-red"
-          )}>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-red-100 dark:bg-red-900/40">
-                <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground font-medium">Remaining</p>
-                <p className={cn(
-                  "text-2xl font-bold",
-                  stats && stats.remainingCount > 0 ? "text-red-600 dark:text-red-400" : "text-foreground"
-                )}>
-                  {stats?.remainingCount ?? "—"}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+              <Card className="border-0 shadow-sm bg-card/80 backdrop-blur-sm">
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-blue-100 dark:bg-blue-900/40">
+                    <Database className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium">Total Size</p>
+                    <p className="text-2xl font-bold text-foreground">{stats ? `${stats.totalSizeGB} GB` : "—"}</p>
+                  </div>
+                </CardContent>
+              </Card>
 
-          {/* Completion */}
-          <Card className="border-0 shadow-soft bg-card/80 backdrop-blur-sm">
-            <CardContent className="p-4 space-y-2">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-900/40">
-                  <BarChart3 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Completion</p>
-                  <p className="text-2xl font-bold text-foreground">{stats ? `${completionPct}%` : "—"}</p>
-                </div>
-              </div>
-              {stats && (
-                <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
-                  <div
-                    className={cn("h-full rounded-full transition-all", progressColor)}
-                    style={{ width: `${completionPct}%` }}
-                  />
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+              <Card className="border-0 shadow-sm bg-card/80 backdrop-blur-sm">
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-900/40">
+                    <HardDrive className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium">Devices</p>
+                    <p className="text-2xl font-bold text-foreground">{stats?.devicesCount ?? "—"}</p>
+                  </div>
+                </CardContent>
+              </Card>
 
-        {/* All Files Section */}
-        <Card className="border-0 shadow-soft overflow-hidden">
-          <button
-            onClick={() => setShowTable(true)}
-            className="w-full text-left group"
-          >
-            <div className="p-5 sm:p-6 flex items-center justify-between bg-gradient-to-r from-cyan-50 to-blue-50 dark:from-cyan-950/30 dark:to-blue-950/30 border-b border-border">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-md">
-                  <FolderOpen className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-foreground group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
-                    All Files
-                  </h2>
-                  <p className="text-sm text-muted-foreground">Event Crew Assignments — View all crew files</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
-                <span className="text-sm hidden sm:inline">Open</span>
-                <CheckCircle2 className="w-5 h-5" />
-              </div>
+              <Card className={cn(
+                "border-0 shadow-sm bg-card/80 backdrop-blur-sm",
+                stats && stats.warningDevices > 0 && "ring-1 ring-red-300 dark:ring-red-800"
+              )}>
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-red-100 dark:bg-red-900/40">
+                    <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium">Warnings</p>
+                    <p className={cn(
+                      "text-2xl font-bold",
+                      stats && stats.warningDevices > 0 ? "text-red-600 dark:text-red-400" : "text-foreground"
+                    )}>
+                      {stats?.warningDevices ?? "—"}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-          </button>
-          <CardContent className="p-5 sm:p-6">
-            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                <span>{stats?.totalEvents ?? 0} event files this month</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4" />
-                <span>{stats?.assignedCount ?? 0} crew assigned</span>
-              </div>
-              {stats && stats.remainingCount > 0 && (
-                <div className="flex items-center gap-2 text-red-500">
-                  <AlertTriangle className="w-4 h-4" />
-                  <span>{stats.remainingCount} slots need attention</span>
-                </div>
-              )}
+
+            {/* Quick links */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Card className="border shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => {
+                  const el = document.querySelector('[data-value="storage"]') as HTMLElement;
+                  el?.click();
+                }}>
+                <CardContent className="p-5 flex items-center gap-4">
+                  <div className="p-3 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white">
+                    <HardDrive className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-foreground">Manage Storage Devices</h3>
+                    <p className="text-sm text-muted-foreground">Add, edit, monitor hard drives, SSDs & PCs</p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => {
+                  const el = document.querySelector('[data-value="files"]') as HTMLElement;
+                  el?.click();
+                }}>
+                <CardContent className="p-5 flex items-center gap-4">
+                  <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+                    <FolderOpen className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-foreground">File Management Table</h3>
+                    <p className="text-sm text-muted-foreground">Track file entries, paths & backup status</p>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
+          </TabsContent>
+
+          {/* Storage Devices Tab */}
+          <TabsContent value="storage">
+            <StorageDevicesSection />
+          </TabsContent>
+
+          {/* Files Tab */}
+          <TabsContent value="files">
+            <FilesManagementTable />
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );
