@@ -27,9 +27,21 @@ const safetyBadge = (status: string) => {
   return <Badge className="bg-red-500/20 text-red-600 border-0 text-xs"><ShieldAlert className="w-3 h-3 mr-1" />UNSAFE</Badge>;
 };
 
-export function StorageDevicesSection() {
+interface StorageDevicesSectionProps {
+  deviceTypeFilter?: string | null;
+  drawerOpen?: boolean;
+  onDrawerOpenChange?: (open: boolean) => void;
+}
+
+export function StorageDevicesSection({ deviceTypeFilter, drawerOpen: externalDrawerOpen, onDrawerOpenChange }: StorageDevicesSectionProps = {}) {
   const { devices, isLoading, add, update, remove } = useStorageDevices();
-  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const filteredDevices = deviceTypeFilter
+    ? devices.filter(d => d.device_type === deviceTypeFilter)
+    : devices;
+  const [internalDrawerOpen, setInternalDrawerOpen] = useState(false);
+  const drawerOpen = externalDrawerOpen ?? internalDrawerOpen;
+  const setDrawerOpen = onDrawerOpenChange ?? setInternalDrawerOpen;
   const [editDevice, setEditDevice] = useState<StorageDevice | null>(null);
 
   const handleEdit = (device: StorageDevice) => {
@@ -56,24 +68,24 @@ export function StorageDevicesSection() {
         <div className="flex items-center gap-2">
           <Database className="w-5 h-5 text-blue-500" />
           <h2 className="text-lg font-bold text-foreground">Storage Devices</h2>
-          <Badge variant="secondary" className="text-xs">{devices.length}</Badge>
+          <Badge variant="secondary" className="text-xs">{filteredDevices.length}</Badge>
         </div>
         <Button size="sm" onClick={handleAdd} className="bg-blue-600 hover:bg-blue-700 text-white">
           <Plus className="w-4 h-4 mr-1" /> Add Device
         </Button>
       </div>
 
-      {devices.length === 0 ? (
+      {filteredDevices.length === 0 ? (
         <Card className="border-dashed border-2">
           <CardContent className="p-8 text-center text-muted-foreground">
             <HardDrive className="w-10 h-10 mx-auto mb-3 opacity-40" />
-            <p className="font-medium">No storage devices added yet</p>
+            <p className="font-medium">{deviceTypeFilter ? `No ${deviceTypeFilter.replace("_", " ")} devices` : "No storage devices added yet"}</p>
             <p className="text-sm mt-1">Add your first hard drive, SSD, or PC</p>
           </CardContent>
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {devices.map((device) => {
+          {filteredDevices.map((device) => {
             const usedPct = device.total_storage_gb > 0
               ? Math.round((device.used_storage_gb / device.total_storage_gb) * 100)
               : 0;
