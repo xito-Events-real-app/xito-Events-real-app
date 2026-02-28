@@ -7512,8 +7512,20 @@ async function updateRequiredCrewCategories(
 // ============= STORAGE DEVICES & FILES SYNC =============
 
 async function pullStorageDevicesFromSheet(accessToken: string) {
-  const storageSpreadsheetId = Deno.env.get('WTN_STORAGE_SPREADSHEET_ID');
+  const storageSpreadsheetId = Deno.env.get('WTN_STORAGE_SPREADSHEET_ID')?.trim();
   if (!storageSpreadsheetId) throw new Error('WTN_STORAGE_SPREADSHEET_ID not configured');
+  
+  // First, get all sheet names for debugging
+  const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}?fields=sheets.properties.title`;
+  const metaRes = await fetchWithRetry(metaUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (metaRes.ok) {
+    const metaData = await metaRes.json();
+    const sheetNames = metaData.sheets?.map((s: any) => s.properties?.title) || [];
+    console.log(`[pullStorageDevices] Available sheets: ${JSON.stringify(sheetNames)}`);
+  } else {
+    console.warn(`[pullStorageDevices] Could not fetch sheet metadata: ${metaRes.status}`);
+  }
+
 
   const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -7534,15 +7546,16 @@ async function pullStorageDevicesFromSheet(accessToken: string) {
   let totalUpserted = 0;
 
   for (const config of sheetConfigs) {
-    const range = encodeURIComponent(`'${config.sheetName}'!A2:K500`);
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${range}`;
+    const rangeStr = `'${config.sheetName}'!A2:K500`;
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${encodeURIComponent(rangeStr)}`;
     
     const response = await fetchWithRetry(url, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 
     if (!response.ok) {
-      console.warn(`[pullStorageDevices] Failed to read sheet ${config.sheetName}: ${response.status}`);
+      const errBody = await response.text();
+      console.warn(`[pullStorageDevices] Failed to read sheet ${config.sheetName}: ${response.status} - ${errBody.substring(0, 300)}`);
       continue;
     }
 
