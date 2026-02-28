@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, FolderOpen, HardDrive, FileText, BarChart3, AlertTriangle, Database, RefreshCw, Upload } from "lucide-react";
+import { ArrowLeft, FolderOpen, HardDrive, FileText, BarChart3, AlertTriangle, Database, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { StorageDevicesSection } from "@/components/files/StorageDevicesSection";
 import { FilesManagementTable } from "@/components/files/FilesManagementTable";
-import { getFileManagementStats, syncStorageDevicesFromSheets, pushFilesToSheets } from "@/lib/files-api";
+import { getFileManagementStats, pushStorageDevicesToSheets, pushFilesToSheets } from "@/lib/files-api";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 
@@ -26,14 +26,14 @@ export default function FileManagement() {
     getFileManagementStats().then(setStats).catch(() => {});
   }, []);
 
-  const handleSyncStorage = async () => {
+  const handlePushStorageToSheets = async () => {
     setSyncingStorage(true);
     try {
-      const result = await syncStorageDevicesFromSheets();
-      toast({ title: `Synced ${result.upserted} storage devices from Sheets` });
+      const result = await pushStorageDevicesToSheets();
+      toast({ title: result.pushed > 0 ? `Pushed ${result.pushed} devices to Sheets` : "No devices to push" });
       getFileManagementStats().then(setStats).catch(() => {});
     } catch (err: any) {
-      toast({ title: "Sync failed", description: err.message, variant: "destructive" });
+      toast({ title: "Push failed", description: err.message, variant: "destructive" });
     } finally {
       setSyncingStorage(false);
     }
@@ -190,12 +190,12 @@ export default function FileManagement() {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={handleSyncStorage}
+                onClick={handlePushStorageToSheets}
                 disabled={syncingStorage}
                 className="gap-1.5"
               >
-                <RefreshCw className={cn("w-4 h-4", syncingStorage && "animate-spin")} />
-                {syncingStorage ? "Syncing..." : "Sync from Sheets"}
+                <Upload className={cn("w-4 h-4", syncingStorage && "animate-spin")} />
+                {syncingStorage ? "Pushing..." : "Push to Sheets"}
               </Button>
             </div>
             <StorageDevicesSection />

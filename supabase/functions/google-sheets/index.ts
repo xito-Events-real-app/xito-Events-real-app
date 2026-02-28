@@ -39,7 +39,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient' | 'getDailyTasks' | 'addDailyTask' | 'updateDailyTask' | 'updateDailyTaskStatus' | 'getDailyTaskSetupData' | 'getFreelancers' | 'addFreelancer' | 'updateFreelancer' | 'deleteFreelancer' | 'syncFreelancerCategories' | 'getClientFreelancerAssignments' | 'updateFreelancerAssignment' | 'checkFreelancerAvailability' | 'fullSyncFreelancerAssignments' | 'getFreelancerBookings' | 'getAllFreelancerAssignments' | 'restoreFreelancerAssignments' | 'updateRequiredCrewCategories' | 'deleteClient' | 'reconcileBookedClients' | 'pullStorageDevices' | 'pushFilesToSheet';
+  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient' | 'getDailyTasks' | 'addDailyTask' | 'updateDailyTask' | 'updateDailyTaskStatus' | 'getDailyTaskSetupData' | 'getFreelancers' | 'addFreelancer' | 'updateFreelancer' | 'deleteFreelancer' | 'syncFreelancerCategories' | 'getClientFreelancerAssignments' | 'updateFreelancerAssignment' | 'checkFreelancerAvailability' | 'fullSyncFreelancerAssignments' | 'getFreelancerBookings' | 'getAllFreelancerAssignments' | 'restoreFreelancerAssignments' | 'updateRequiredCrewCategories' | 'deleteClient' | 'reconcileBookedClients' | 'pullStorageDevices' | 'pushFilesToSheet' | 'pushStorageDevicesToSheet';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -7700,6 +7700,110 @@ async function pushFilesToSheetAction(accessToken: string) {
   return { pushed: unsyncedFiles.length };
 }
 
+async function pushStorageDevicesToSheetAction(accessToken: string) {
+  const storageSpreadsheetId = Deno.env.get('WTN_STORAGE_SPREADSHEET_ID')?.trim();
+  if (!storageSpreadsheetId) throw new Error('WTN_STORAGE_SPREADSHEET_ID not configured');
+
+  const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const sb = createClient(supabaseUrl, supabaseKey);
+
+  // Fetch all storage devices
+  const { data: allDevices, error } = await sb
+    .from('storage_devices')
+    .select('*')
+    .order('device_name', { ascending: true });
+  if (error) throw error;
+
+  const sheetConfigs = [
+    { sheetName: 'HARD DRIVE', deviceType: 'HARD_DRIVE', hasDriveLetter: false },
+    { sheetName: 'SSD', deviceType: 'SSD', hasDriveLetter: false },
+    { sheetName: 'PC', deviceType: 'PC', hasDriveLetter: true },
+  ];
+
+  let totalPushed = 0;
+
+  for (const config of sheetConfigs) {
+    const devices = (allDevices || []).filter((d: any) => d.device_type === config.deviceType);
+
+    // Clear existing data from row 2 onwards
+    const rangeCols = config.hasDriveLetter ? 'J' : 'I';
+    const clearRange = encodeURIComponent(`'${config.sheetName}'!A2:${rangeCols}500`);
+    const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${clearRange}:clear`;
+    await fetchWithRetry(clearUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (devices.length === 0) continue;
+
+    // Build rows matching sheet layout
+    const values = devices.map((d: any) => {
+      if (config.hasDriveLetter) {
+        // PC: A=PC Name, B=Drive Name, C=Total Storage, D=Remaining, E=Health, F=Safety, G=Speed, H=Purchase Date AD, I=Price, J=Purchased From
+        return [
+          d.device_name || '',
+          d.pc_drive_letter || '',
+          d.total_storage_gb?.toString() || '0',
+          d.remaining_storage_gb?.toString() || '0',
+          d.health_percent?.toString() || '100',
+          d.safety_status || 'SAFE',
+          d.speed_rating?.toString() || '3',
+          d.purchase_date_ad || '',
+          d.price_npr?.toString() || '0',
+          d.purchased_from || '',
+        ];
+      } else {
+        // HARD DRIVE / SSD: A=Name, B=Total Storage, C=Remaining, D=Health, E=Safety, F=Speed, G=Purchase Date AD, H=Price, I=Purchased From
+        return [
+          d.device_name || '',
+          d.total_storage_gb?.toString() || '0',
+          d.remaining_storage_gb?.toString() || '0',
+          d.health_percent?.toString() || '100',
+          d.safety_status || 'SAFE',
+          d.speed_rating?.toString() || '3',
+          d.purchase_date_ad || '',
+          d.price_npr?.toString() || '0',
+          d.purchased_from || '',
+        ];
+      }
+    });
+
+    // Write to sheet
+    const writeRange = encodeURIComponent(`'${config.sheetName}'!A2:${rangeCols}${1 + values.length}`);
+    const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${writeRange}?valueInputOption=USER_ENTERED`;
+    const writeRes = await fetchWithRetry(writeUrl, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ values }),
+    });
+
+    if (!writeRes.ok) {
+      const errText = await writeRes.text();
+      console.error(`[pushStorageDevices] Failed to write ${config.sheetName}: ${errText.substring(0, 200)}`);
+      continue;
+    }
+
+    totalPushed += devices.length;
+    console.log(`[pushStorageDevices] Wrote ${devices.length} devices to ${config.sheetName}`);
+  }
+
+  // Mark all devices as synced
+  if (totalPushed > 0) {
+    const ids = (allDevices || []).map((d: any) => d.id);
+    for (let i = 0; i < ids.length; i += 100) {
+      const batch = ids.slice(i, i + 100);
+      await sb.from('storage_devices').update({ synced_to_sheet: true }).in('id', batch);
+    }
+  }
+
+  return { pushed: totalPushed };
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -8325,6 +8429,10 @@ Deno.serve(async (req) => {
       }
       case 'pushFilesToSheet': {
         result = await pushFilesToSheetAction(accessToken);
+        break;
+      }
+      case 'pushStorageDevicesToSheet': {
+        result = await pushStorageDevicesToSheetAction(accessToken);
         break;
       }
       default:
