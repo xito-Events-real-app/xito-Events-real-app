@@ -39,7 +39,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient' | 'getDailyTasks' | 'addDailyTask' | 'updateDailyTask' | 'updateDailyTaskStatus' | 'getDailyTaskSetupData' | 'getFreelancers' | 'addFreelancer' | 'updateFreelancer' | 'deleteFreelancer' | 'syncFreelancerCategories' | 'getClientFreelancerAssignments' | 'updateFreelancerAssignment' | 'checkFreelancerAvailability' | 'fullSyncFreelancerAssignments' | 'getFreelancerBookings' | 'getAllFreelancerAssignments' | 'restoreFreelancerAssignments' | 'updateRequiredCrewCategories' | 'deleteClient' | 'reconcileBookedClients';
+  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient' | 'getDailyTasks' | 'addDailyTask' | 'updateDailyTask' | 'updateDailyTaskStatus' | 'getDailyTaskSetupData' | 'getFreelancers' | 'addFreelancer' | 'updateFreelancer' | 'deleteFreelancer' | 'syncFreelancerCategories' | 'getClientFreelancerAssignments' | 'updateFreelancerAssignment' | 'checkFreelancerAvailability' | 'fullSyncFreelancerAssignments' | 'getFreelancerBookings' | 'getAllFreelancerAssignments' | 'restoreFreelancerAssignments' | 'updateRequiredCrewCategories' | 'deleteClient' | 'reconcileBookedClients' | 'pullStorageDevices' | 'pushFilesToSheet';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -7509,6 +7509,159 @@ async function updateRequiredCrewCategories(
   return { success: true };
 }
 
+// ============= STORAGE DEVICES & FILES SYNC =============
+
+async function pullStorageDevicesFromSheet(accessToken: string) {
+  const storageSpreadsheetId = Deno.env.get('WTN_STORAGE_SPREADSHEET_ID');
+  if (!storageSpreadsheetId) throw new Error('WTN_STORAGE_SPREADSHEET_ID not configured');
+
+  const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const sb = createClient(supabaseUrl, supabaseKey);
+
+  const sheetConfigs = [
+    { sheetName: 'HARD DRIVE', deviceType: 'HARD_DRIVE' },
+    { sheetName: 'SSD', deviceType: 'SSD' },
+    { sheetName: 'PC', deviceType: 'PC' },
+  ];
+
+  // Column mapping for storage sheets (A-Q):
+  // A: device_name, B: pc_drive_letter (PC only), C: total_storage_gb, D: used_storage_gb
+  // E: health_percent, F: safety_status, G: speed_rating
+  // H: purchase_date_ad, I: purchase_date_bs, J: price_npr, K: purchased_from
+
+  let totalUpserted = 0;
+
+  for (const config of sheetConfigs) {
+    const range = encodeURIComponent(`'${config.sheetName}'!A2:K500`);
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${range}`;
+    
+    const response = await fetchWithRetry(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!response.ok) {
+      console.warn(`[pullStorageDevices] Failed to read sheet ${config.sheetName}: ${response.status}`);
+      continue;
+    }
+
+    const data = await response.json();
+    if (!data.values || data.values.length === 0) continue;
+
+    const devices = data.values
+      .filter((row: string[]) => row[0]?.trim())
+      .map((row: string[]) => ({
+        device_name: (row[0] || '').trim(),
+        device_type: config.deviceType,
+        pc_drive_letter: config.deviceType === 'PC' ? (row[1] || '').trim() || null : null,
+        total_storage_gb: parseFloat(row[2]) || 0,
+        used_storage_gb: parseFloat(row[3]) || 0,
+        health_percent: parseInt(row[4]) || 100,
+        safety_status: (row[5] || 'SAFE').trim().toUpperCase(),
+        speed_rating: parseInt(row[6]) || 3,
+        purchase_date_ad: (row[7] || '').trim(),
+        purchase_date_bs: (row[8] || '').trim(),
+        price_npr: parseFloat(row[9]) || 0,
+        purchased_from: (row[10] || '').trim(),
+        synced_to_sheet: true,
+      }));
+
+    if (devices.length === 0) continue;
+
+    // Upsert by device_name + device_type using a loop (no unique constraint)
+    for (const device of devices) {
+      const { data: existing } = await sb
+        .from('storage_devices')
+        .select('id')
+        .eq('device_name', device.device_name)
+        .eq('device_type', device.device_type)
+        .maybeSingle();
+
+      if (existing) {
+        await sb.from('storage_devices').update(device).eq('id', existing.id);
+      } else {
+        await sb.from('storage_devices').insert(device);
+      }
+      totalUpserted++;
+    }
+  }
+
+  return { upserted: totalUpserted };
+}
+
+async function pushFilesToSheetAction(accessToken: string) {
+  const storageSpreadsheetId = Deno.env.get('WTN_STORAGE_SPREADSHEET_ID');
+  if (!storageSpreadsheetId) throw new Error('WTN_STORAGE_SPREADSHEET_ID not configured');
+
+  const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const sb = createClient(supabaseUrl, supabaseKey);
+
+  // Get unsynced file rows
+  const { data: unsyncedFiles, error } = await sb
+    .from('files_management')
+    .select('*')
+    .eq('synced_to_sheet', false)
+    .eq('deleted_or_not', false);
+
+  if (error) throw error;
+  if (!unsyncedFiles || unsyncedFiles.length === 0) return { pushed: 0 };
+
+  // Map to sheet columns for "FILES MANAGEMENT" sheet
+  // Columns: A: client_name, B: event_name, C: event_date_ad, D: freelancer_type,
+  // E: freelancer_name, F: category, G: side, H: card_label, I: size_gb,
+  // J: format_type, K: who_copied, L: reconfirmation, M: double_backup,
+  // N: triple_backup, O: drive_upload, P: final_generated_path, Q: storage_type
+  const values = unsyncedFiles.map((f: any) => [
+    f.client_name || '',
+    f.event_name || '',
+    f.event_date_ad || '',
+    f.freelancer_type || '',
+    f.freelancer_name || '',
+    f.category || '',
+    f.side || '',
+    f.card_label || '',
+    f.size_gb?.toString() || '0',
+    f.format_type || '',
+    f.who_copied || '',
+    f.reconfirmation ? 'TRUE' : 'FALSE',
+    f.double_backup ? 'TRUE' : 'FALSE',
+    f.triple_backup ? 'TRUE' : 'FALSE',
+    f.drive_upload ? 'TRUE' : 'FALSE',
+    f.final_generated_path || '',
+    f.storage_type || '',
+  ]);
+
+  // Append to sheet
+  const range = encodeURIComponent("'FILES MANAGEMENT'!A:Q");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+
+  const response = await fetchWithRetry(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Failed to push files to sheet: ${response.status} - ${errText.substring(0, 200)}`);
+  }
+
+  // Mark as synced
+  const ids = unsyncedFiles.map((f: any) => f.id);
+  for (let i = 0; i < ids.length; i += 100) {
+    const batch = ids.slice(i, i + 100);
+    await sb.from('files_management').update({ synced_to_sheet: true }).in('id', batch);
+  }
+
+  return { pushed: unsyncedFiles.length };
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -8126,6 +8279,14 @@ Deno.serve(async (req) => {
       }
       case 'reconcileBookedClients': {
         result = await reconcileBookedClients(accessToken, spreadsheetId);
+        break;
+      }
+      case 'pullStorageDevices': {
+        result = await pullStorageDevicesFromSheet(accessToken);
+        break;
+      }
+      case 'pushFilesToSheet': {
+        result = await pushFilesToSheetAction(accessToken);
         break;
       }
       default:
