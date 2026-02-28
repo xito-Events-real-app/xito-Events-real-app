@@ -99,21 +99,17 @@ export async function updateAssignmentInCache(
   const column = FIELD_TO_COLUMN[field];
   if (!column) throw new Error(`Invalid field: ${field}`);
 
-  let query = supabase
+  const { error } = await supabase
     .from('freelancer_assignments')
-    .update({
+    .upsert({
       [column]: value,
       synced_to_sheet: false,
       updated_at: new Date().toISOString(),
-    } as any)
-    .eq('registered_date_time_ad', registeredDateTimeAD)
-    .eq('event', event);
+      registered_date_time_ad: registeredDateTimeAD,
+      event: event,
+      event_date_ad: eventDateAD || '',
+    } as any, { onConflict: 'registered_date_time_ad,event,event_date_ad' });
 
-  if (eventDateAD) {
-    query = query.eq('event_date_ad', eventDateAD);
-  }
-
-  const { error } = await query;
   if (error) throw error;
 }
 
@@ -124,21 +120,17 @@ export async function updateCategoriesInCache(
   categories: string,
   eventDateAD?: string
 ): Promise<void> {
-  let query = supabase
+  const { error } = await supabase
     .from('freelancer_assignments')
-    .update({
+    .upsert({
       required_categories: categories,
       synced_to_sheet: false,
       updated_at: new Date().toISOString(),
-    } as any)
-    .eq('registered_date_time_ad', registeredDateTimeAD)
-    .eq('event', event);
+      registered_date_time_ad: registeredDateTimeAD,
+      event: event,
+      event_date_ad: eventDateAD || '',
+    } as any, { onConflict: 'registered_date_time_ad,event,event_date_ad' });
 
-  if (eventDateAD) {
-    query = query.eq('event_date_ad', eventDateAD);
-  }
-
-  const { error } = await query;
   if (error) throw error;
 }
 
