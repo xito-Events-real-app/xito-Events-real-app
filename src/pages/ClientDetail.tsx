@@ -361,7 +361,7 @@ const ClientDetail = () => {
 
   // FAB handlers — Supabase-first: update local + cache instantly, Sheets in background
   const handleCall = async (type: 'DIRECT' | 'WHATSAPP') => {
-    if (!client?.rowNumber) return;
+    if (!client) return;
     
     setIsLoggingCall(true);
     try {
@@ -394,7 +394,7 @@ const ClientDetail = () => {
   };
 
   const handleStatusChange = async (newStatus: string) => {
-    if (!client?.rowNumber) return;
+    if (!client) return;
     
     // INTERCEPT: If moving to QUOTATION SENT, ALWAYS show quotation dialog first
     const isToQuotationSent = newStatus.toUpperCase().includes('QUOTATION SENT');
@@ -435,7 +435,7 @@ const ClientDetail = () => {
   };
 
   const performStatusChange = async (newStatus: string) => {
-    if (!client?.rowNumber) return;
+    if (!client) return;
     
     setIsChangingStatus(true);
     try {
@@ -466,7 +466,7 @@ const ClientDetail = () => {
 
   // Handle quotation save and status update — Supabase-first
   const handleSaveQuotation = async () => {
-    if (!client?.rowNumber) return;
+    if (!client) return;
     
     const tiers = ['BASIC', 'STANDARD', 'PREMIUM', 'WTN SPECIAL'];
     const filledQuotations = tiers
@@ -512,7 +512,7 @@ const ClientDetail = () => {
 
   // Handle ADVANCE PENDING final quotation save — Supabase-first
   const handleSaveAdvancePendingQuotation = async (packageName: string, amount: string) => {
-    if (!client?.rowNumber) return;
+    if (!client) return;
     
     const finalData = `${packageName}: NPR ${formatNPR(amount)}/-`;
     const existingLog = currentStatusLog || client.statusLog || '';
@@ -547,7 +547,7 @@ const ClientDetail = () => {
 
   // Handle BARGAINING IS ON — Supabase-first
   const handleSaveBargaining = async () => {
-    if (!client?.rowNumber) return;
+    if (!client) return;
     
     if (selectedBargainPackages.length === 0) {
       toast({ title: "Please select at least one package", variant: "destructive" });
@@ -596,7 +596,7 @@ const ClientDetail = () => {
 
   // Handle BOOKED client - Save ONLY final quotation — Supabase-first
   const handleSaveFinalQuotationOnly = async (packageName: string, amount: string) => {
-    if (!client?.rowNumber) return;
+    if (!client) return;
     
     const finalData = `${packageName}: NPR ${formatNPR(amount)}/-`;
     
@@ -761,7 +761,7 @@ const ClientDetail = () => {
 
   // Handle updating client priority (star rating) — Supabase-first
   const handlePriorityChange = async (priority: number) => {
-    if (!client?.rowNumber) return;
+    if (!client) return;
     
     setIsUpdatingPriority(true);
     try {
@@ -788,14 +788,14 @@ const ClientDetail = () => {
 
   // Handle adding a comment (from Comments tab)
   const handleAddComment = async () => {
-    if (!client?.rowNumber || !newComment.trim()) return;
+    if (!client || !newComment.trim()) return;
     await handleAddCommentDirect(newComment.trim());
     setNewComment('');
   };
 
   // Handle adding a comment directly — Supabase-first
   const handleAddCommentDirect = async (commentText: string) => {
-    if (!client?.rowNumber || !commentText.trim()) return;
+    if (!client || !commentText.trim()) return;
     
     setIsAddingComment(true);
     try {
