@@ -1,98 +1,39 @@
 
-
-# Global Real-Time Synchronization for All Core Tables
+# Filter Past Dates from Hot Dates and Cold Dates
 
 ## What This Does
-When a Manager changes a client status on their phone, the Desktop dashboard moves that client card instantly -- no refresh, no delay. Same for booked client updates, event detail changes, and crew assignments (already live).
+Events where the BS (Nepali) date has already passed will no longer appear in Hot Dates or Cold Dates sections anywhere in the app. This keeps these sections focused on actionable, future opportunities only. Counts will also update accordingly.
 
-## Changes
+## Files to Modify
 
-### 1. Database Migration
-Enable realtime on `clients_cache` and `event_details_cache`. (freelancer_assignments is already enabled; dropdowns_cache changes too rarely to warrant a live socket.)
+### 1. `src/pages/Dashboard.tsx` (Mobile Dashboard)
+- **Hot Dates** (line ~253): Add `isBSDatePast` check -- skip events where the date has passed. The `isCompleted` field is already computed but not used as a filter.
+- **Cold Dates** (line ~329): Add same `isBSDatePast` check -- skip past-date events from both booking counts and enquiry tracking.
 
-```sql
-ALTER PUBLICATION supabase_realtime ADD TABLE public.clients_cache, public.event_details_cache;
-```
+### 2. `src/components/desktop/DesktopDashboard.tsx` (Desktop Dashboard)
+- **Hot Dates** (line ~246): Add `isBSDatePast` filter to skip past events during grouping.
+- **Cold Dates** (line ~322): Add `isBSDatePast` filter to skip past events.
 
-### 2. Add realtime subscription to `useCachedData` hook
-**File:** `src/hooks/useCachedData.ts`
+### 3. `src/pages/HotDates.tsx` (Dedicated Hot Dates page)
+- **Hot Dates** (line ~63): Add `isBSDatePast` filter to skip past events. The `isCompleted` flag exists but isn't used to exclude -- add `.filter(d => !d.isCompleted)` or skip during grouping.
 
-- Import `supabase` and the `rowToClientData` mapper (needs to be exported from `clients-supabase-cache.ts`).
-- In the mount `useEffect`, subscribe to `postgres_changes` on `clients_cache` for `INSERT`, `UPDATE`, `DELETE`.
-- On `UPDATE`: map `payload.new` through `rowToClientData`, then `setClients(prev => prev.map(c => c.registeredDateTimeAD === mapped.registeredDateTimeAD ? mapped : c))`. Also update memory cache.
-- On `INSERT`: append the mapped row. Also update memory cache.
-- On `DELETE`: filter out by `registered_date_time_ad`. Also update memory cache.
-- Add a `localUpdateTimestamps` ref (same anti-flicker pattern as AllClientsCrewTable) -- skip patches where `updated_at` was generated locally within the last 2 seconds.
-- Cleanup: `supabase.removeChannel(channel)` in the effect return.
+### 4. `src/components/booked/DesktopBookedDashboard.tsx` (Booked Dashboard Hot Dates)
+- **Hot Dates** (line ~236): Already has `isCompleted` flag and pushes completed to end. Change to fully exclude past dates instead of just sorting them last.
 
-### 3. Add realtime subscription to `useBookedCachedData` hook
-**File:** `src/hooks/useBookedCachedData.ts`
+### 5. `src/lib/fresh-client-utils.ts` (`getColdDatesClients`)
+- **Cold Dates utility** (line ~94): Add `isBSDatePast` check to skip past-date events. This affects the Cold Dates count in the Suite mobile landing, Fresh Clients tabs, and Desktop Sidebar.
 
-- Same pattern as above, but filter the channel to only `sheet_source = 'booked'` rows using the realtime filter: `filter: 'sheet_source=eq.booked'`.
-- Map through `rowToBookedClientData` (also needs export).
-- Match by `registeredDateTimeAD` for updates, append for inserts, filter for deletes.
-- Same anti-flicker guard with `localUpdateTimestamps`.
+## Technical Approach
 
-### 4. Export row mappers from `clients-supabase-cache.ts`
-**File:** `src/lib/clients-supabase-cache.ts`
+In each location, within the `events.forEach` loop, add an early return for past dates:
 
-- Change `function rowToClientData` to `export function rowToClientData`
-- Change `function rowToBookedClientData` to `export function rowToBookedClientData`
-
-### 5. Keep existing `cache-updated` event listeners
-The window-based `cache-updated` events are still needed for same-tab communication (e.g., when `updateClient()` is called in `useCachedData`, other components on the same page need to know). Realtime handles cross-device; events handle cross-component on the same device. Both coexist safely since the anti-flicker guard prevents double-patches.
-
-## What stays unchanged
-- `AllClientsCrewTable.tsx` -- already has realtime on `freelancer_assignments` (done in previous task)
-- The `cache-updated` window events -- still needed for same-tab reactivity
-- The 3-second debounced push to Google Sheets
-- All optimistic local update flows
-- `dropdowns_cache` -- rarely changes, not worth a live socket
-
-## Technical Details
-
-**Anti-flicker pattern (reused from crew table):**
 ```typescript
-const localUpdateTimestamps = useRef<Set<string>>(new Set());
-
-// In updateClient(), before writing to DB:
-const ts = new Date().toISOString();
-localUpdateTimestamps.current.add(ts);
-setTimeout(() => localUpdateTimestamps.current.delete(ts), 2000);
-
-// In realtime handler:
-if (row.updated_at && localUpdateTimestamps.current.has(row.updated_at)) return;
+// Skip past dates
+if (isBSDatePast(event.year, event.month, event.day)) return;
 ```
 
-**Realtime channel for clients_cache:**
-```typescript
-const channel = supabase
-  .channel('clients-cache-realtime')
-  .on('postgres_changes', 
-    { event: '*', schema: 'public', table: 'clients_cache' },
-    (payload) => {
-      const row = payload.new as any;
-      if (row?.updated_at && localUpdateTimestamps.current.has(row.updated_at)) return;
-      // ... map and patch state
-    }
-  )
-  .subscribe();
-```
+This single line, added right after the existing `if (!event.year || !event.month || !event.day) return;` check in each loop, filters out all past events from both the grouping logic and the resulting counts.
 
-**Realtime channel for booked clients (filtered):**
-```typescript
-const channel = supabase
-  .channel('booked-clients-realtime')
-  .on('postgres_changes',
-    { event: '*', schema: 'public', table: 'clients_cache', filter: 'sheet_source=eq.booked' },
-    (payload) => { /* map and patch */ }
-  )
-  .subscribe();
-```
+For the Booked Dashboard (`DesktopBookedDashboard.tsx`), change the existing "push completed to end" sort to a hard filter: `result = result.filter(d => !d.isCompleted)`.
 
-## Files to modify
-1. New migration SQL (1 line)
-2. `src/lib/clients-supabase-cache.ts` -- export 2 existing functions
-3. `src/hooks/useCachedData.ts` -- add realtime channel + anti-flicker
-4. `src/hooks/useBookedCachedData.ts` -- add realtime channel + anti-flicker
-
+All 5 files already import or have access to `isBSDatePast` from `@/lib/nepali-date`.
