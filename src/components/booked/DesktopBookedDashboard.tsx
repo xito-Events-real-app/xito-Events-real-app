@@ -235,6 +235,7 @@ export function DesktopBookedDashboard({
 
       events.forEach(event => {
         if (!event.year || !event.month || !event.day) return;
+        if (isBSDatePast(event.year, event.month, event.day)) return;
         
         const dateKey = `${event.year}-${event.month.padStart(2, '0')}-${String(event.day).padStart(2, '0')}`;
         
@@ -260,7 +261,7 @@ export function DesktopBookedDashboard({
       });
     });
 
-    let result = Object.values(dateGroups).filter(d => d.events.length > 0);
+    let result = Object.values(dateGroups).filter(d => d.events.length > 0 && !d.isCompleted);
     
     // Apply month filter
     if (selectedMonth) {
