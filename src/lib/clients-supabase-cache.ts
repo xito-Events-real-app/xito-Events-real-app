@@ -29,7 +29,7 @@ export function schedulePushToSheets(): void {
 }
 
 // Map DB snake_case columns to ClientData camelCase fields
-function rowToClientData(row: any): ClientData {
+export function rowToClientData(row: any): ClientData {
   return {
     rowNumber: row.row_number || 0,
     registeredDateTimeAD: row.registered_date_time_ad || '',
@@ -74,7 +74,7 @@ function rowToClientData(row: any): ClientData {
   };
 }
 
-function rowToBookedClientData(row: any): BookedClientData {
+export function rowToBookedClientData(row: any): BookedClientData {
   const base = rowToClientData(row);
   return {
     ...base,

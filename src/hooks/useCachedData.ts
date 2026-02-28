@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { ClientData, DropdownData } from "@/lib/sheets-api";
 import { 
   getCachedData, 
@@ -10,6 +10,7 @@ import { getQueueLength } from "@/lib/sync-queue";
 import {
   loadClientsFromCache,
   updateClientInCacheRecord,
+  rowToClientData,
 } from "@/lib/clients-supabase-cache";
 import {
   getMemoryClients,
@@ -19,6 +20,7 @@ import {
   updateMemoryClient,
 } from "@/lib/memory-cache";
 import { loadAllClients, resetLoaderPromises } from "@/lib/data-loader-singleton";
+import { supabase } from "@/integrations/supabase/client";
 
 interface UseCachedDataResult {
   clients: ClientData[];
@@ -92,8 +94,16 @@ export function useCachedData(): UseCachedDataResult {
     }
   }, []);
 
+  // Track local update timestamps for anti-flicker guard
+  const localUpdateTimestamps = useRef<Set<string>>(new Set());
+
   // Update a single client in state + Supabase cache
   const updateClient = useCallback(async (updatedClient: ClientData) => {
+    // Register timestamp for anti-flicker guard
+    const ts = new Date().toISOString();
+    localUpdateTimestamps.current.add(ts);
+    setTimeout(() => localUpdateTimestamps.current.delete(ts), 2000);
+
     // 1. Update local state + memory cache immediately
     setClients(prev => prev.map(c => {
       if (updatedClient.registeredDateTimeAD && c.registeredDateTimeAD === updatedClient.registeredDateTimeAD) {
@@ -122,6 +132,44 @@ export function useCachedData(): UseCachedDataResult {
 
   useEffect(() => {
     loadData();
+
+    // Realtime subscription for multi-device instant sync
+    const channel = supabase
+      .channel('clients-cache-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'clients_cache' },
+        (payload) => {
+          if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+            const row = payload.new as any;
+            if (row?.updated_at && localUpdateTimestamps.current.has(row.updated_at)) return;
+            const mapped = rowToClientData(row);
+            if (payload.eventType === 'UPDATE') {
+              setClients(prev => prev.map(c => c.registeredDateTimeAD === mapped.registeredDateTimeAD ? mapped : c));
+              updateMemoryClient(mapped);
+            } else {
+              setClients(prev => {
+                if (prev.some(c => c.registeredDateTimeAD === mapped.registeredDateTimeAD)) return prev;
+                return [...prev, mapped];
+              });
+              const mem = getMemoryClients();
+              if (mem) setMemoryClients([...mem, mapped]);
+            }
+          } else if (payload.eventType === 'DELETE') {
+            const oldId = (payload.old as any)?.registered_date_time_ad;
+            if (oldId) {
+              setClients(prev => prev.filter(c => c.registeredDateTimeAD !== oldId));
+              const mem = getMemoryClients();
+              if (mem) setMemoryClients(mem.filter(c => c.registeredDateTimeAD !== oldId));
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [loadData]);
 
   // Listen for cache updates from other operations (but NOT invalidate events)
