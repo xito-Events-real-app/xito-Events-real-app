@@ -1,67 +1,65 @@
 
 
-# Fix: Auto-Sync freelancer_assignments with clients_cache
+# Add Freelancer Availability Stats to Crew Column Headers (Same Row)
 
-## Problem Summary
+## Layout
 
-| Client | Events in clients_cache | Rows in freelancer_assignments | Issue |
-|--------|------------------------|-------------------------------|-------|
-| SHREEISH BAHADUR SHRESTHA | 3 | 0 | Completely missing |
-| LAJJA UPRETY | 5 | 4 | Missing BRIDE'S MEHNDI (Baisakh 5) |
-| FUNNY BHUSAN | 0 | 3 | Orphan rows (no client record) |
+Each column header will show stats inline on a single row:
 
-**Root cause**: No code auto-inserts skeleton rows into `freelancer_assignments` when a client is booked or events are edited. The system relied on manual Google Sheets syncs that are now removed.
+```
+55 PB 5/60
+```
 
-## Solution (4 Parts)
+- **55** = remaining freelancers (bold, prominent)
+- **PB** = existing short code
+- **5/60** = assigned/total (small, muted)
 
-### Part 1: Shared helper function
+## File Changed
 
-**File: `src/lib/freelancer-assignment-cache.ts`**
+**`src/components/suite/AllClientsCrewTable.tsx`**
 
-Add a new exported function `ensureFreelancerAssignmentRows()` that:
-1. Parses newline-separated event fields from the client record
-2. Reads existing `freelancer_assignments` rows for the client
-3. Inserts skeleton rows (all crew fields empty, `synced_to_sheet: false`) for missing events using `upsert` with `onConflict: 'registered_date_time_ad,event,event_date_ad'`
-4. Deletes rows for events that no longer exist in the client record
+### 1. Add `columnStats` useMemo (after `columnWidths`, ~line 528)
 
-Parameters: `registeredDateTimeAD`, `clientName`, `registeredDateBS`, `events`, `eventYears`, `eventMonths`, `eventDays`, `eventDatesAD` (all newline-separated strings matching `clients_cache` format).
+Compute per-column stats using existing `freelancers` state and `filteredRows`:
 
-### Part 2: Hook into QuickAdd edit mode
+```typescript
+const columnStats = useMemo(() => {
+  const stats: Record<string, { total: number; assigned: number; remaining: number }> = {};
+  for (const col of CREW_COLUMNS) {
+    const rolePool = getFilteredFreelancersByRole(freelancers, col.field);
+    const total = rolePool.length;
+    const assignedNames = new Set<string>();
+    for (const row of filteredRows) {
+      const val = (row[col.field] as string)?.trim();
+      if (val) assignedNames.add(val.toUpperCase());
+    }
+    const assigned = assignedNames.size;
+    stats[col.field] = { total, assigned, remaining: total - assigned };
+  }
+  return stats;
+}, [freelancers, filteredRows]);
+```
 
-**File: `src/pages/QuickAdd.tsx`**
+### 2. Update desktop header cells (lines 1004-1012)
 
-After the existing `event_details_cache` sync block (around line 407), add a matching call to `ensureFreelancerAssignmentRows()` using the same parsed event data. This ensures that when events are added/removed via the edit form, the crew table stays in sync.
+Replace the current `{col.short}` with an inline layout:
 
-### Part 3: Hook into QuickAdd add mode (for BOOKED clients)
+```tsx
+{CREW_COLUMNS.map(col => {
+  const s = columnStats[col.field];
+  return (
+    <th key={col.field}
+      className={cn("text-xs font-bold px-1 py-2.5 text-center border-r last:border-r-0", GROUP_STYLES[col.group])}
+      style={{ width: `${columnWidths[col.field]}px`, minWidth: `${columnWidths[col.field]}px` }}>
+      <span className="flex items-center justify-center gap-0.5 whitespace-nowrap">
+        <span className="font-black text-sm">{s?.remaining ?? ''}</span>
+        <span className="font-bold text-[10px]">{col.short}</span>
+        <span className="text-[8px] opacity-50">{s?.assigned}/{s?.total}</span>
+      </span>
+    </th>
+  );
+})}
+```
 
-**File: `src/pages/QuickAdd.tsx`**
-
-After the Supabase insert (around line 525), if the client's initial status contains "BOOKED", call `ensureFreelancerAssignmentRows()` to pre-populate the crew table immediately.
-
-### Part 4: Hook into BOOKED migration flows
-
-When a client status changes to BOOKED, call `ensureFreelancerAssignmentRows()` right after `migrateClientToBookedInCache()` in these 3 files:
-- **`src/pages/ClientDetail.tsx`** (around line 713)
-- **`src/components/dashboard/FreshClientCard.tsx`** (around line 1287)
-- **`src/components/desktop/DesktopClientRow.tsx`** (around line 428)
-
-### Part 5: One-time data fix
-
-Execute database operations to fix the 3 existing issues:
-- **SHREEISH BAHADUR SHRESTHA** (`2026-02-27T08:06:02.276Z`): Insert 3 skeleton rows for BRIDE'S RECEPTION, WEDDING BS, PRE+RECEPTION
-- **LAJJA UPRETY** (`2026-01-26T05:56:54.428Z`): Insert 1 row for BRIDE'S MEHNDI (Baisakh 5, 2026-04-18). Also update the stale "HALDI+MEHNDI" row to "BRIDES HALDI" to match the current client record
-- **FUNNY BHUSAN** (`2026-01-26T06:13:50.728Z`): Delete 3 orphan rows
-
-## Architecture Confirmation
-
-This change ensures `freelancer_assignments` stays 1:1 with the events list in `clients_cache` without waiting for a Google Sheets round-trip. The helper uses `upsert` with the existing composite unique constraint `(registered_date_time_ad, event, event_date_ad)` to prevent duplicates.
-
-## Files Changed
-
-1. `src/lib/freelancer-assignment-cache.ts` -- New `ensureFreelancerAssignmentRows()` helper
-2. `src/pages/QuickAdd.tsx` -- Call helper in edit mode + add mode (BOOKED)
-3. `src/pages/ClientDetail.tsx` -- Call helper after booking migration
-4. `src/components/dashboard/FreshClientCard.tsx` -- Call helper after booking migration
-5. `src/components/desktop/DesktopClientRow.tsx` -- Call helper after booking migration
-6. One-time DB fix for 3 affected records
+The minimum column width of 55px is sufficient. No new dependencies or database changes needed.
 
