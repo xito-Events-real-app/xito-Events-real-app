@@ -141,7 +141,7 @@ const InlineComments = ({
             No comments yet
           </div>
         ) : (
-          [...parsedComments].reverse().map((comment, i) => (
+          parsedComments.map((comment, i) => (
             <div 
               key={i} 
               className="bg-white/5 rounded px-2 py-1.5"
