@@ -7533,20 +7533,24 @@ async function pullStorageDevicesFromSheet(accessToken: string) {
   const sb = createClient(supabaseUrl, supabaseKey);
 
   const sheetConfigs = [
-    { sheetName: 'HARD DRIVE', deviceType: 'HARD_DRIVE' },
-    { sheetName: 'SSD', deviceType: 'SSD' },
-    { sheetName: 'PC', deviceType: 'PC' },
+    { sheetName: 'HARD DRIVE', deviceType: 'HARD_DRIVE', hasDriveLetter: false },
+    { sheetName: 'SSD', deviceType: 'SSD', hasDriveLetter: false },
+    { sheetName: 'PC', deviceType: 'PC', hasDriveLetter: true },
   ];
 
-  // Column mapping for storage sheets (A-Q):
-  // A: device_name, B: pc_drive_letter (PC only), C: total_storage_gb, D: used_storage_gb
-  // E: health_percent, F: safety_status, G: speed_rating
-  // H: purchase_date_ad, I: purchase_date_bs, J: price_npr, K: purchased_from
+  // Column mapping for HARD DRIVE / SSD (A-I, 9 cols):
+  // A: device_name, B: total_storage_gb, C: used/remaining, D: health_percent,
+  // E: safety_status, F: speed_rating, G: purchase_date_ad, H: price_npr, I: purchased_from
+  //
+  // Column mapping for PC (A-J, 10 cols):
+  // A: pc_name, B: drive_name, C: total_storage_gb, D: used/remaining,
+  // E: health_percent, F: safety_status, G: speed_rating, H: purchase_date_ad, I: price_npr, J: purchased_from
 
   let totalUpserted = 0;
 
   for (const config of sheetConfigs) {
-    const rangeStr = `'${config.sheetName}'!A2:K500`;
+    const rangeCols = config.hasDriveLetter ? 'J' : 'I';
+    const rangeStr = `'${config.sheetName}'!A2:${rangeCols}500`;
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${encodeURIComponent(rangeStr)}`;
     
     const response = await fetchWithRetry(url, {
@@ -7565,21 +7569,41 @@ async function pullStorageDevicesFromSheet(accessToken: string) {
 
     const devices = data.values
       .filter((row: string[]) => row[0]?.trim())
-      .map((row: string[]) => ({
-        device_name: (row[0] || '').trim(),
-        device_type: config.deviceType,
-        pc_drive_letter: config.deviceType === 'PC' ? (row[1] || '').trim() || null : null,
-        total_storage_gb: parseFloat(row[2]) || 0,
-        used_storage_gb: parseFloat(row[3]) || 0,
-        health_percent: parseInt(row[4]) || 100,
-        safety_status: (row[5] || 'SAFE').trim().toUpperCase(),
-        speed_rating: parseInt(row[6]) || 3,
-        purchase_date_ad: (row[7] || '').trim(),
-        purchase_date_bs: (row[8] || '').trim(),
-        price_npr: parseFloat(row[9]) || 0,
-        purchased_from: (row[10] || '').trim(),
-        synced_to_sheet: true,
-      }));
+      .map((row: string[]) => {
+        if (config.hasDriveLetter) {
+          // PC: A=name, B=drive_letter, C=total, D=used_remaining, E=health, F=safety, G=speed, H=date, I=price, J=from
+          return {
+            device_name: (row[0] || '').trim(),
+            device_type: config.deviceType,
+            pc_drive_letter: (row[1] || '').trim() || null,
+            total_storage_gb: parseFloat(row[2]) || 0,
+            remaining_storage_gb: parseFloat(row[3]) || 0,
+            health_percent: parseInt(row[4]) || 100,
+            safety_status: (row[5] || 'SAFE').trim().toUpperCase(),
+            speed_rating: parseInt(row[6]) || 3,
+            purchase_date_ad: (row[7] || '').trim(),
+            price_npr: parseFloat(row[8]) || 0,
+            purchased_from: (row[9] || '').trim(),
+            synced_to_sheet: true,
+          };
+        } else {
+          // HARD DRIVE / SSD: A=name, B=total, C=used_remaining, D=health, E=safety, F=speed, G=date, H=price, I=from
+          return {
+            device_name: (row[0] || '').trim(),
+            device_type: config.deviceType,
+            pc_drive_letter: null,
+            total_storage_gb: parseFloat(row[1]) || 0,
+            remaining_storage_gb: parseFloat(row[2]) || 0,
+            health_percent: parseInt(row[3]) || 100,
+            safety_status: (row[4] || 'SAFE').trim().toUpperCase(),
+            speed_rating: parseInt(row[5]) || 3,
+            purchase_date_ad: (row[6] || '').trim(),
+            price_npr: parseFloat(row[7]) || 0,
+            purchased_from: (row[8] || '').trim(),
+            synced_to_sheet: true,
+          };
+        }
+      });
 
     if (devices.length === 0) continue;
 
