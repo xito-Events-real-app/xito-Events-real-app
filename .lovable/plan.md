@@ -1,31 +1,45 @@
 
 
-# Fix: Add Missing "USED" Column to Storage Device Push
+# Auto-Push Storage Devices & Files to Google Sheets
 
-## Problem
-The push-to-sheets code is missing the "USED" column. Currently it goes Name -> Total -> Remaining, but the sheet expects Name -> Total -> **Used** -> Remaining. This causes all columns after Total Storage to shift left by one.
+## Overview
+Remove the manual "Push to Sheets" buttons from the File Management page and instead implement automatic background push (same 3-second debounced pattern used by the client tracker).
 
-## Correct Column Layouts
-
-**HARD DRIVE / SSD (10 columns, A-J):**
-
-```text
-A: Name | B: Total Storage | C: Used | D: Remaining | E: Health | F: Safety | G: Speed | H: Purchase Date AD | I: Price | J: Purchased From
-```
-
-**PC (11 columns, A-K):**
-
-```text
-A: PC Name | B: Drive Name | C: Total Storage | D: Used | E: Remaining | F: Health | G: Safety | H: Speed | I: Purchase Date AD | J: Price | K: Purchased From
-```
+## How It Works (Same Pattern as Client Tracker)
+1. Every mutation (add/update/delete device or file) already sets `synced_to_sheet: false`
+2. After each mutation, call `scheduleFilesPush()` which debounces for 3 seconds
+3. The push function invokes the existing edge function actions (`pushStorageDevicesToSheet` and `pushFilesToSheet`) 
+4. On success, rows are marked `synced_to_sheet: true` by the edge function
 
 ## Changes
 
-**File:** `supabase/functions/google-sheets/index.ts` (pushStorageDevicesToSheetAction function, ~lines 7731-7769)
+### 1. Create push scheduler in `src/lib/files-push-scheduler.ts`
+- New file following the exact same pattern as `clients-supabase-cache.ts` push scheduler
+- `scheduleStoragePush()` -- 3-second debounced, single-flight guard, calls `pushStorageDevicesToSheets()`
+- `scheduleFilesPush()` -- 3-second debounced, single-flight guard, calls `pushFilesToSheets()`
+- Console logs for debugging (e.g. `[FILES-PUSH] Auto-pushed 5 files to Sheets`)
 
-1. **HARD DRIVE / SSD row** -- insert `d.used_storage_gb` at position C (after total, before remaining). Update clear range end column from `I` to `J`.
+### 2. Wire auto-push into `useStorageDevices.ts`
+- Import `scheduleStoragePush` from the new scheduler
+- Call `scheduleStoragePush()` after every `add()`, `update()`, and `remove()` call
+- Also set `synced_to_sheet: false` on add/update mutations in `files-api.ts`
 
-2. **PC row** -- insert `d.used_storage_gb` at position D (after total, before remaining). Update clear range end column from `J` to `K`.
+### 3. Wire auto-push into `useFilesManagement.ts`
+- Import `scheduleFilesPush` from the new scheduler
+- Call `scheduleFilesPush()` after every `add()`, `update()`, `remove()`, and `generateRows()` call
+- Files already set `synced_to_sheet: false` on inline edits (confirmed in FilesManagementTable)
 
-This is a ~10-line fix in one function.
+### 4. Update `src/lib/files-api.ts`
+- Ensure `addStorageDevice` and `updateStorageDevice` set `synced_to_sheet: false` 
+- Ensure `deleteStorageDevice` triggers a push (devices removed from DB = removed from sheet on next push)
+- Ensure `addFileRecord` sets `synced_to_sheet: false`
+
+### 5. Clean up `src/pages/FileManagement.tsx`
+- Remove the "Push to Sheets" buttons from both Storage and Files tabs
+- Remove `handlePushStorageToSheets` and `handlePushFiles` functions
+- Remove related state (`syncingStorage`, `pushingFiles`)
+- Remove unused imports (`pushStorageDevicesToSheets`, `pushFilesToSheets`, `Upload`)
+
+## Result
+Storage devices and files will auto-push to Google Sheets within 3 seconds of any change, just like the client tracker -- no manual buttons needed.
 
