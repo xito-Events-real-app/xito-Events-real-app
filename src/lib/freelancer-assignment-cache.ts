@@ -155,3 +155,76 @@ export async function pushUnsyncedToSheets(): Promise<number> {
 }
 
 // populateCacheFromSheets REMOVED — database is the sole source of truth
+
+/**
+ * Ensure freelancer_assignments rows are 1:1 with the events in clients_cache.
+ * Inserts skeleton rows for missing events, deletes rows for removed events.
+ */
+export async function ensureFreelancerAssignmentRows(
+  registeredDateTimeAD: string,
+  clientName: string,
+  registeredDateBS: string,
+  events: string,
+  eventYears: string,
+  eventMonths: string,
+  eventDays: string,
+  eventDatesAD: string
+): Promise<void> {
+  const names = events.split('\n').filter(Boolean);
+  if (names.length === 0) return;
+
+  const years = eventYears.split('\n');
+  const months = eventMonths.split('\n');
+  const days = eventDays.split('\n');
+  const datesAD = eventDatesAD.split('\n');
+
+  // Read existing rows
+  const { data: existing } = await supabase
+    .from('freelancer_assignments')
+    .select('id, event, event_date_ad, event_day')
+    .eq('registered_date_time_ad', registeredDateTimeAD);
+
+  // Build skeletons for missing events
+  const skeletons: any[] = [];
+  for (let i = 0; i < names.length; i++) {
+    const eventName = names[i];
+    const dateAD = datesAD[i] || '';
+    const day = days[i] || '';
+    const alreadyExists = existing?.some(
+      r => r.event === eventName && (r.event_date_ad === dateAD || r.event_day === day)
+    );
+    if (!alreadyExists) {
+      skeletons.push({
+        registered_date_time_ad: registeredDateTimeAD,
+        registered_date_bs: registeredDateBS,
+        client_name: clientName,
+        event: eventName,
+        event_year: years[i] || '',
+        event_month: months[i] || '',
+        event_day: day,
+        event_date_ad: dateAD,
+        synced_to_sheet: false,
+        updated_at: new Date().toISOString(),
+      });
+    }
+  }
+
+  if (skeletons.length > 0) {
+    await supabase.from('freelancer_assignments').upsert(skeletons as any, {
+      onConflict: 'registered_date_time_ad,event,event_date_ad',
+    });
+    console.log(`[CREW SYNC] Inserted ${skeletons.length} skeleton rows for ${clientName}`);
+  }
+
+  // Delete rows for events no longer in the client record
+  if (existing) {
+    const toDelete = existing.filter(row => {
+      return !names.some((name, i) => name === row.event && ((datesAD[i] || '') === (row.event_date_ad || '') || (days[i] || '') === (row.event_day || '')));
+    });
+    if (toDelete.length > 0) {
+      const ids = toDelete.map(r => r.id);
+      await supabase.from('freelancer_assignments').delete().in('id', ids);
+      console.log(`[CREW SYNC] Deleted ${toDelete.length} orphan rows for ${clientName}`);
+    }
+  }
+}

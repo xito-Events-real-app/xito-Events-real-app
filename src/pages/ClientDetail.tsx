@@ -712,6 +712,21 @@ const ClientDetail = () => {
         remainingPayment,
       );
 
+      // ── Step 3b: Ensure crew table rows exist ──
+      if (client.events && client.registeredDateTimeAD) {
+        const { ensureFreelancerAssignmentRows } = await import('@/lib/freelancer-assignment-cache');
+        await ensureFreelancerAssignmentRows(
+          client.registeredDateTimeAD,
+          client.clientName || '',
+          client.registeredDateBS || '',
+          client.events || '',
+          client.eventYear || '',
+          client.eventMonth || '',
+          client.eventDay || '',
+          client.eventDateAD || ''
+        );
+      }
+
       // ── Step 4: Update local React state instantly ──
       setCurrentStatusLog(newStatusLog);
       setCurrentPaymentsMade(updatedPaymentsMade);

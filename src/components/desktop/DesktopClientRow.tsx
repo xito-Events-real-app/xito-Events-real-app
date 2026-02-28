@@ -433,6 +433,21 @@ export function DesktopClientRow({
         remainingPayment,
       );
 
+      // Ensure crew table rows exist
+      if (client.events && client.registeredDateTimeAD) {
+        const { ensureFreelancerAssignmentRows } = await import('@/lib/freelancer-assignment-cache');
+        await ensureFreelancerAssignmentRows(
+          client.registeredDateTimeAD,
+          client.clientName || '',
+          client.registeredDateBS || '',
+          client.events || '',
+          client.eventYear || '',
+          client.eventMonth || '',
+          client.eventDay || '',
+          client.eventDateAD || ''
+        );
+      }
+
       setCurrentStatusLog(newStatusLog);
       setCurrentPaymentsMade(updatedPaymentsMade);
       setCurrentPaymentDatesAD(updatedPaymentDatesAD);
