@@ -23,14 +23,16 @@ interface Props {
 
 export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave }: Props) {
   const [saving, setSaving] = useState(false);
+  const [usedUnit, setUsedUnit] = useState<"TB" | "GB">("TB");
+  const [remainingUnit, setRemainingUnit] = useState<"TB" | "GB">("TB");
   const converting = useRef(false);
   const [form, setForm] = useState({
     device_type: "HARD_DRIVE",
     device_name: "",
     pc_drive_letter: "",
     total_storage_tb: "",
-    used_storage_tb: "",
-    remaining_storage_tb: "",
+    used_storage: "",
+    remaining_storage: "",
     health_percent: "100",
     safety_status: "SAFE",
     speed_rating: "3",
@@ -47,8 +49,8 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
         device_name: editDevice.device_name,
         pc_drive_letter: editDevice.pc_drive_letter || "",
         total_storage_tb: String(editDevice.total_storage_gb / 1024),
-        used_storage_tb: String((editDevice.used_storage_gb || 0) / 1024),
-        remaining_storage_tb: String((editDevice.remaining_storage_gb ?? 0) / 1024),
+        used_storage: String((editDevice.used_storage_gb || 0) / 1024),
+        remaining_storage: String((editDevice.remaining_storage_gb ?? 0) / 1024),
         health_percent: String(editDevice.health_percent),
         safety_status: editDevice.safety_status === "UNSAFE" || editDevice.safety_status === "SLOW" ? "RISKY" : editDevice.safety_status,
         speed_rating: String(editDevice.speed_rating),
@@ -57,14 +59,18 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
         price_npr: String(editDevice.price_npr || ""),
         purchased_from: editDevice.purchased_from || "",
       });
+      setUsedUnit("TB");
+      setRemainingUnit("TB");
     } else {
+      setUsedUnit("TB");
+      setRemainingUnit("TB");
       setForm({
         device_type: "HARD_DRIVE",
         device_name: "",
         pc_drive_letter: "",
         total_storage_tb: "",
-        used_storage_tb: "",
-        remaining_storage_tb: "",
+        used_storage: "",
+        remaining_storage: "",
         health_percent: "100",
         safety_status: "SAFE",
         speed_rating: "3",
@@ -146,8 +152,8 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
         device_name: form.device_name,
         pc_drive_letter: form.device_type === "PC" ? form.pc_drive_letter : null,
         total_storage_gb: (Number(form.total_storage_tb) || 0) * 1024,
-        used_storage_gb: (Number(form.used_storage_tb) || 0) * 1024,
-        remaining_storage_gb: (Number(form.remaining_storage_tb) || 0) * 1024,
+        used_storage_gb: usedUnit === "TB" ? (Number(form.used_storage) || 0) * 1024 : (Number(form.used_storage) || 0),
+        remaining_storage_gb: remainingUnit === "TB" ? (Number(form.remaining_storage) || 0) * 1024 : (Number(form.remaining_storage) || 0),
         health_percent: Number(form.health_percent) || 100,
         safety_status: form.safety_status,
         speed_rating: Number(form.speed_rating) || 3,
@@ -211,12 +217,36 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
                 <Input className="h-10" type="number" step="0.5" value={form.total_storage_tb} onChange={(e) => set("total_storage_tb", e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Used (TB)</Label>
-                <Input className="h-10" type="number" step="0.1" value={form.used_storage_tb} onChange={(e) => set("used_storage_tb", e.target.value)} />
+                <Label className="text-xs flex items-center justify-between">
+                  <span>Used ({usedUnit})</span>
+                  <button type="button" className="text-[10px] font-medium text-blue-500 hover:underline" onClick={() => {
+                    const val = Number(form.used_storage) || 0;
+                    if (usedUnit === "TB") {
+                      set("used_storage", String(val * 1024));
+                      setUsedUnit("GB");
+                    } else {
+                      set("used_storage", String(val / 1024));
+                      setUsedUnit("TB");
+                    }
+                  }}>Switch to {usedUnit === "TB" ? "GB" : "TB"}</button>
+                </Label>
+                <Input className="h-10" type="number" step={usedUnit === "TB" ? "0.1" : "1"} value={form.used_storage} onChange={(e) => set("used_storage", e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Remaining (TB)</Label>
-                <Input className="h-10" type="number" step="0.1" value={form.remaining_storage_tb} onChange={(e) => set("remaining_storage_tb", e.target.value)} />
+                <Label className="text-xs flex items-center justify-between">
+                  <span>Remaining ({remainingUnit})</span>
+                  <button type="button" className="text-[10px] font-medium text-blue-500 hover:underline" onClick={() => {
+                    const val = Number(form.remaining_storage) || 0;
+                    if (remainingUnit === "TB") {
+                      set("remaining_storage", String(val * 1024));
+                      setRemainingUnit("GB");
+                    } else {
+                      set("remaining_storage", String(val / 1024));
+                      setRemainingUnit("TB");
+                    }
+                  }}>Switch to {remainingUnit === "TB" ? "GB" : "TB"}</button>
+                </Label>
+                <Input className="h-10" type="number" step={remainingUnit === "TB" ? "0.1" : "1"} value={form.remaining_storage} onChange={(e) => set("remaining_storage", e.target.value)} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
