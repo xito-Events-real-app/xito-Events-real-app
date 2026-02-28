@@ -1,65 +1,76 @@
 
+Goal: fix the immediate blocker first (app sometimes stuck on Loading in both desktop/mobile), then fix Ashmita’s missing event date in the desktop “All Clients” crew view by restoring data consistency between Booked Clients and freelancer assignments.
 
-# Fix Slow App Loading with Singleton Data Loader
+What I found:
+1) Ashmita data exists with valid event date in booked clients cache
+- `clients_cache` has `ASHMITA POUDEL` with:
+  - `sheet_source = booked`
+  - `event_year = 2082`, `event_month = 11`, `event_day = 16`
+  - `event_date_ad = 2026-02-28`
+2) Ashmita is missing from the source used by desktop “All Clients” crew table
+- `freelancer_assignments` has no row for Ashmita.
+- `AllClientsCrewTable` renders date from assignment rows (`row.eventDay`), so if assignment row is missing, date cannot appear there.
+3) Regression identified in sync behavior
+- `AllClientsCrewTable` now does push-only sync (`handleSync`), and no longer triggers pull/backfill.
+- `handleRefresh` currently calls `loadData(true)` but `loadData` ignores `fromSheets`; this means refresh no longer backfills missing assignment rows.
+4) Startup Loading risk area
+- `ProtectedRoute` depends on `AuthContext.isLoading`.
+- In `AuthContext`, `getSession()` has no `.catch`, and there is no timeout/failsafe. If auth bootstrap hangs/rejects in a bad network state, app can remain on loading screen indefinitely.
 
-## Problem
-The app takes too long to load because 8-10 components independently query the database on startup before any single query finishes and populates the memory cache. This is NOT caused by the recent sync fixes -- those only changed status update logic, not data loading.
+Implementation plan (in order):
 
-## Root Cause
-When memory cache is empty (fresh app open / page refresh), every hook instance of `useCachedData()` and `useBookedCachedData()` independently runs:
-1. `isCachePopulated()` -- SELECT count query
-2. `loadClientsFromCache()` -- full SELECT * with pagination
+Phase 1 — Unblock startup loading first (highest priority)
+1. Harden auth bootstrap in `src/contexts/AuthContext.tsx`
+- Wrap `supabase.auth.getSession()` in `try/catch/finally`.
+- Add a defensive timeout (e.g. 8–10s) that forces `isLoading=false` and logs a warning if auth init stalls.
+- Ensure timeout is cleared when session resolves.
+- Keep existing listener-first pattern, but make it impossible to stay loading forever.
+2. Add lightweight safety logging for init path
+- Keep concise logs around auth init start/success/failure/timeout to diagnose future incidents without breaking UX.
+3. Keep behavior unchanged for successful auth
+- No route/auth UX redesign; just reliability.
 
-With 8-10 components mounting simultaneously, that's 16-20 database round-trips for the exact same data.
+Phase 2 — Fix missing event/date in desktop All Clients (Ashmita + future)
+4. Restore data backfill path for freelancer assignments
+- In `src/components/suite/AllClientsCrewTable.tsx`, make refresh/sync able to pull missing crew rows again (without overwriting local unsynced edits).
+- Re-enable a controlled pull call via backend function (`sync-crew-to-sheets`, `action: 'pull'`) in explicit refresh flow and optionally one guarded first-load reconciliation.
+- Keep regular auto-sync push-only for performance; use pull only when needed for reconciliation.
+5. Add “missing assignment reconciliation” check
+- Before/after loading assignments, detect booked clients that have no assignment rows (keyed by `registeredDateTimeAD` + per-event structure).
+- If missing rows are detected, trigger one pull/reconcile call, then reload assignments.
+- Guard with single-flight ref to avoid loops and duplicate calls.
+6. Preserve current “local DB wins” conflict behavior
+- Rely on existing pull protection in `sync-crew-to-sheets` (it already avoids replacing newer local unsynced data).
+- Do not change assignment update contract.
 
-## Solution: Singleton Promise Deduplication
+Phase 3 — Desktop-priority validation for Ashmita
+7. Verify on desktop suite flow specifically
+- Open desktop mode.
+- Navigate to All Clients crew table.
+- Confirm Ashmita appears with correct event day/month bucket and date visible.
+- Open Ashmita client detail and confirm consistency with upcoming events card.
+8. Validate startup stability
+- Hard refresh multiple times.
+- Verify app never stays indefinitely on global loading in both mobile and desktop mode.
 
-### Step 1: Create `src/lib/data-loader-singleton.ts`
+Files to modify (planned):
+- `src/contexts/AuthContext.tsx`
+  - Add robust init error handling + timeout failsafe.
+- `src/components/suite/AllClientsCrewTable.tsx`
+  - Reintroduce controlled pull/backfill path and missing-assignment reconciliation.
+- (Optional small helper) `src/lib/freelancer-assignment-cache.ts` or `src/lib/freelancer-assignment-api.ts`
+  - Add explicit `pullAssignmentsFromSheets()` wrapper if needed for clean call sites.
 
-A new module that stores a single in-flight Promise per data type. The first caller triggers the actual database fetch; all subsequent callers get the same Promise back.
+Risk and mitigation:
+- Risk: pull reconciliation could be heavy if called too often.
+  - Mitigation: trigger only on manual refresh and one guarded first-load check when missing rows detected.
+- Risk: accidental overwrite of local edits.
+  - Mitigation: keep existing backend conflict-protection logic (already implemented via updated_at + synced flags).
+- Risk: auth timeout could surface login screen during transient slowness.
+  - Mitigation: conservative timeout and clear fallback behavior; user can retry immediately.
 
-```text
-Current flow (8-10 parallel DB calls):
-  Hook 1 --> isCachePopulated() --> loadClientsFromCache() --> DB
-  Hook 2 --> isCachePopulated() --> loadClientsFromCache() --> DB
-  Hook 3 --> isCachePopulated() --> loadClientsFromCache() --> DB
-
-Fixed flow (1 DB call total):
-  Hook 1 --> loadAllClients() --> DB (single query)
-  Hook 2 --> loadAllClients() --> same Promise (no DB call)
-  Hook 3 --> loadAllClients() --> same Promise (no DB call)
-```
-
-Key functions:
-- `loadAllClients(): Promise<ClientData[]>` -- checks memory first, deduplicates in-flight fetches, populates memory on completion
-- `loadAllBookedClients(): Promise<BookedClientData[]>` -- same pattern for booked data
-- `resetLoaderPromises(): void` -- allows manual refresh to bypass deduplication
-
-### Step 2: Update `src/hooks/useCachedData.ts`
-
-Replace the `loadData` function body:
-- Remove direct calls to `isCachePopulated()` and `loadClientsFromCache()`
-- Call `loadAllClients()` from the singleton instead
-- Keep all other logic (dropdowns from IndexedDB, event listeners, queue tracking) unchanged
-
-### Step 3: Update `src/hooks/useBookedCachedData.ts`
-
-Same change:
-- Replace `isCachePopulated()` + `loadBookedClientsFromCache()` with `loadAllBookedClients()`
-- Keep event listeners and refresh logic unchanged
-
-### Step 4: Update `refreshData` in both hooks
-
-Call `resetLoaderPromises()` before fetching fresh data, so manual refresh bypasses the singleton cache and forces a real database read.
-
-## Expected Result
-- Cold start: 1 database query instead of 8-10 (load time drops from several seconds to under 1 second)
-- Warm navigation: still 0ms (memory cache unchanged)
-- Manual refresh: still works (resets singleton)
-- No UI changes, no data shape changes, no breaking changes
-
-## Files Changed
-1. **NEW**: `src/lib/data-loader-singleton.ts` -- singleton loader module
-2. **EDIT**: `src/hooks/useCachedData.ts` -- use singleton for initial load
-3. **EDIT**: `src/hooks/useBookedCachedData.ts` -- use singleton for initial load
-
+Success criteria:
+- App does not get stuck indefinitely on loading.
+- Ashmita appears in desktop All Clients crew table with event date visible.
+- Desktop “Upcoming Events” and All Clients/Client Detail show consistent event identity for the same client.
+- No regression in manual assignment edits or push-to-sheet flow.
