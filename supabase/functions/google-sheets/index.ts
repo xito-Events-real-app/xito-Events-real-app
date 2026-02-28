@@ -7728,7 +7728,7 @@ async function pushStorageDevicesToSheetAction(accessToken: string) {
     const devices = (allDevices || []).filter((d: any) => d.device_type === config.deviceType);
 
     // Clear existing data from row 2 onwards
-    const rangeCols = config.hasDriveLetter ? 'J' : 'I';
+    const rangeCols = config.hasDriveLetter ? 'K' : 'J';
     const clearRange = encodeURIComponent(`'${config.sheetName}'!A2:${rangeCols}500`);
     const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${clearRange}:clear`;
     await fetchWithRetry(clearUrl, {
@@ -7741,11 +7741,12 @@ async function pushStorageDevicesToSheetAction(accessToken: string) {
     // Build rows matching sheet layout
     const values = devices.map((d: any) => {
       if (config.hasDriveLetter) {
-        // PC: A=PC Name, B=Drive Name, C=Total Storage, D=Remaining, E=Health, F=Safety, G=Speed, H=Purchase Date AD, I=Price, J=Purchased From
+        // PC: A=PC Name, B=Drive Name, C=Total Storage, D=Used, E=Remaining, F=Health, G=Safety, H=Speed, I=Purchase Date AD, J=Price, K=Purchased From
         return [
           d.device_name || '',
           d.pc_drive_letter || '',
           d.total_storage_gb?.toString() || '0',
+          d.used_storage_gb?.toString() || '0',
           d.remaining_storage_gb?.toString() || '0',
           d.health_percent?.toString() || '100',
           d.safety_status || 'SAFE',
@@ -7755,10 +7756,11 @@ async function pushStorageDevicesToSheetAction(accessToken: string) {
           d.purchased_from || '',
         ];
       } else {
-        // HARD DRIVE / SSD: A=Name, B=Total Storage, C=Remaining, D=Health, E=Safety, F=Speed, G=Purchase Date AD, H=Price, I=Purchased From
+        // HARD DRIVE / SSD: A=Name, B=Total Storage, C=Used, D=Remaining, E=Health, F=Safety, G=Speed, H=Purchase Date AD, I=Price, J=Purchased From
         return [
           d.device_name || '',
           d.total_storage_gb?.toString() || '0',
+          d.used_storage_gb?.toString() || '0',
           d.remaining_storage_gb?.toString() || '0',
           d.health_percent?.toString() || '100',
           d.safety_status || 'SAFE',
