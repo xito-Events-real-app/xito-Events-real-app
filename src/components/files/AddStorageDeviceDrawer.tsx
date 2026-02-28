@@ -1,11 +1,14 @@
-import { useState, useEffect } from "react";
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import { useState, useEffect, useRef } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StorageDevice } from "@/lib/files-api";
 import { toast } from "@/hooks/use-toast";
+import { adToBS, bsToAD, formatBSDate, nepaliMonthsEnglish } from "@/lib/nepali-date";
+import { HardDrive, Calendar, DollarSign } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 
 interface Props {
   open: boolean;
@@ -16,6 +19,7 @@ interface Props {
 
 export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave }: Props) {
   const [saving, setSaving] = useState(false);
+  const converting = useRef(false);
   const [form, setForm] = useState({
     device_type: "HARD_DRIVE",
     device_name: "",
@@ -38,12 +42,12 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
         pc_drive_letter: editDevice.pc_drive_letter || "",
         total_storage_gb: String(editDevice.total_storage_gb),
         health_percent: String(editDevice.health_percent),
-        safety_status: editDevice.safety_status,
+        safety_status: editDevice.safety_status === "UNSAFE" || editDevice.safety_status === "SLOW" ? "RISKY" : editDevice.safety_status,
         speed_rating: String(editDevice.speed_rating),
-        purchase_date_ad: editDevice.purchase_date_ad,
-        purchase_date_bs: editDevice.purchase_date_bs,
+        purchase_date_ad: editDevice.purchase_date_ad || "",
+        purchase_date_bs: editDevice.purchase_date_bs || "",
         price_npr: String(editDevice.price_npr || ""),
-        purchased_from: editDevice.purchased_from,
+        purchased_from: editDevice.purchased_from || "",
       });
     } else {
       setForm({
@@ -61,6 +65,50 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
       });
     }
   }, [editDevice, open]);
+
+  const set = (key: string, val: string) => setForm((p) => ({ ...p, [key]: val }));
+
+  const handleADChange = (val: string) => {
+    set("purchase_date_ad", val);
+    if (converting.current) return;
+    converting.current = true;
+    try {
+      const parts = val.split("-");
+      if (parts.length === 3 && parts[0].length === 4) {
+        const date = new Date(val);
+        if (!isNaN(date.getTime())) {
+          const bs = adToBS(date);
+          set("purchase_date_bs", formatBSDate(bs));
+        }
+      }
+    } catch { /* ignore */ }
+    converting.current = false;
+  };
+
+  const handleBSChange = (val: string) => {
+    set("purchase_date_bs", val);
+    if (converting.current) return;
+    converting.current = true;
+    try {
+      // Parse "DD MonthName YYYY" e.g. "15 Magh 2082"
+      const parts = val.trim().split(/\s+/);
+      if (parts.length === 3) {
+        const day = parseInt(parts[0]);
+        const monthIdx = nepaliMonthsEnglish.findIndex(m => m.toLowerCase() === parts[1].toLowerCase());
+        const year = parseInt(parts[2]);
+        if (!isNaN(day) && monthIdx >= 0 && !isNaN(year)) {
+          const adResult = bsToAD(year, monthIdx + 1, day);
+          if (adResult instanceof Date) {
+            const y = adResult.getFullYear();
+            const m = String(adResult.getMonth() + 1).padStart(2, "0");
+            const d = String(adResult.getDate()).padStart(2, "0");
+            set("purchase_date_ad", `${y}-${m}-${d}`);
+          }
+        }
+      }
+    } catch { /* ignore */ }
+    converting.current = false;
+  };
 
   const handleSave = async () => {
     if (!form.device_name.trim()) {
@@ -90,101 +138,117 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
     }
   };
 
-  const set = (key: string, val: string) => setForm((p) => ({ ...p, [key]: val }));
-
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="max-h-[90vh]">
-        <DrawerHeader>
-          <DrawerTitle>{editDevice ? "Edit Device" : "Add Storage Device"}</DrawerTitle>
-        </DrawerHeader>
-        <div className="px-4 pb-6 space-y-4 overflow-y-auto">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Device Type</Label>
-              <Select value={form.device_type} onValueChange={(v) => set("device_type", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="HARD_DRIVE">Hard Drive</SelectItem>
-                  <SelectItem value="SSD">SSD</SelectItem>
-                  <SelectItem value="PC">PC</SelectItem>
-                </SelectContent>
-              </Select>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-bold">
+            {editDevice ? "Edit Device" : "Add Storage Device"}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-5 pt-2">
+          {/* Device Info Section */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+              <HardDrive className="w-4 h-4" />
+              <span>Device Information</span>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Device Name</Label>
-              <Input value={form.device_name} onChange={(e) => set("device_name", e.target.value)} placeholder="e.g. WD 2TB" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Device Type</Label>
+                <Select value={form.device_type} onValueChange={(v) => set("device_type", v)}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="HARD_DRIVE">Hard Drive</SelectItem>
+                    <SelectItem value="SSD">SSD</SelectItem>
+                    <SelectItem value="PC">PC</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Device Name</Label>
+                <Input className="h-10" value={form.device_name} onChange={(e) => set("device_name", e.target.value)} placeholder="e.g. WD 2TB" />
+              </div>
+            </div>
+
+            {form.device_type === "PC" && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Drive Letter</Label>
+                <Input className="h-10 w-24" value={form.pc_drive_letter} onChange={(e) => set("pc_drive_letter", e.target.value)} placeholder="e.g. D" />
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Total Storage (GB)</Label>
+                <Input className="h-10" type="number" value={form.total_storage_gb} onChange={(e) => set("total_storage_gb", e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Health %</Label>
+                <Input className="h-10" type="number" value={form.health_percent} onChange={(e) => set("health_percent", e.target.value)} min="0" max="100" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Safety Status</Label>
+                <Select value={form.safety_status} onValueChange={(v) => set("safety_status", v)}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SAFE">SAFE</SelectItem>
+                    <SelectItem value="RISKY">RISKY</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Speed Rating (1-5)</Label>
+                <Select value={form.speed_rating} onValueChange={(v) => set("speed_rating", v)}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 3, 4, 5].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
 
-          {form.device_type === "PC" && (
-            <div className="space-y-1.5">
-              <Label className="text-xs">Drive Letter</Label>
-              <Input value={form.pc_drive_letter} onChange={(e) => set("pc_drive_letter", e.target.value)} placeholder="e.g. D" className="w-24" />
-            </div>
-          )}
+          <Separator />
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Total Storage (GB)</Label>
-              <Input type="number" value={form.total_storage_gb} onChange={(e) => set("total_storage_gb", e.target.value)} />
+          {/* Purchase Details Section */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+              <Calendar className="w-4 h-4" />
+              <span>Purchase Details</span>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Health %</Label>
-              <Input type="number" value={form.health_percent} onChange={(e) => set("health_percent", e.target.value)} min="0" max="100" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Purchase Date (AD)</Label>
+                <Input className="h-10" value={form.purchase_date_ad} onChange={(e) => handleADChange(e.target.value)} placeholder="YYYY-MM-DD" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Purchase Date (BS)</Label>
+                <Input className="h-10" value={form.purchase_date_bs} onChange={(e) => handleBSChange(e.target.value)} placeholder="DD Month YYYY" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs flex items-center gap-1"><DollarSign className="w-3 h-3" /> Price (NPR)</Label>
+                <Input className="h-10" type="number" value={form.price_npr} onChange={(e) => set("price_npr", e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Purchased From</Label>
+                <Input className="h-10" value={form.purchased_from} onChange={(e) => set("purchased_from", e.target.value)} />
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Safety Status</Label>
-              <Select value={form.safety_status} onValueChange={(v) => set("safety_status", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="SAFE">SAFE</SelectItem>
-                  <SelectItem value="SLOW">SLOW</SelectItem>
-                  <SelectItem value="UNSAFE">UNSAFE</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Speed Rating (1-5)</Label>
-              <Select value={form.speed_rating} onValueChange={(v) => set("speed_rating", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {[1,2,3,4,5].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Purchase Date (AD)</Label>
-              <Input value={form.purchase_date_ad} onChange={(e) => set("purchase_date_ad", e.target.value)} placeholder="YYYY-MM-DD" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Purchase Date (BS)</Label>
-              <Input value={form.purchase_date_bs} onChange={(e) => set("purchase_date_bs", e.target.value)} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Price (NPR)</Label>
-              <Input type="number" value={form.price_npr} onChange={(e) => set("price_npr", e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Purchased From</Label>
-              <Input value={form.purchased_from} onChange={(e) => set("purchased_from", e.target.value)} />
-            </div>
-          </div>
-
-          <Button onClick={handleSave} disabled={saving} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+          <Button onClick={handleSave} disabled={saving} className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white font-medium">
             {saving ? "Saving..." : editDevice ? "Update Device" : "Add Device"}
           </Button>
         </div>
-      </DrawerContent>
-    </Drawer>
+      </DialogContent>
+    </Dialog>
   );
 }

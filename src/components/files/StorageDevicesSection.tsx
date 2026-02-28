@@ -23,8 +23,7 @@ const healthColor = (pct: number) => {
 
 const safetyBadge = (status: string) => {
   if (status === "SAFE") return <Badge className="bg-emerald-500/20 text-emerald-600 border-0 text-xs">SAFE</Badge>;
-  if (status === "SLOW") return <Badge className="bg-amber-500/20 text-amber-600 border-0 text-xs">SLOW</Badge>;
-  return <Badge className="bg-red-500/20 text-red-600 border-0 text-xs"><ShieldAlert className="w-3 h-3 mr-1" />UNSAFE</Badge>;
+  return <Badge className="bg-red-500/20 text-red-600 border-0 text-xs"><ShieldAlert className="w-3 h-3 mr-1" />RISKY</Badge>;
 };
 
 interface StorageDevicesSectionProps {
@@ -93,7 +92,7 @@ export function StorageDevicesSection({ deviceTypeFilter, drawerOpen: externalDr
               ? (device.remaining_storage_gb / device.total_storage_gb)
               : 1;
             const isLowStorage = remainingPct < 0.1;
-            const isUnsafe = device.safety_status === "UNSAFE";
+            const isUnsafe = device.safety_status === "RISKY";
 
             return (
               <Card key={device.id} className={cn(
@@ -164,7 +163,7 @@ export function StorageDevicesSection({ deviceTypeFilter, drawerOpen: externalDr
                       <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                       {isLowStorage && <span>Low storage (&lt;10% remaining)</span>}
                       {isLowStorage && isUnsafe && <span>•</span>}
-                      {isUnsafe && <span>Device marked UNSAFE</span>}
+                      {isUnsafe && <span>Device marked RISKY</span>}
                     </div>
                   )}
                 </CardContent>
