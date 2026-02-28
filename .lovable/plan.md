@@ -1,44 +1,63 @@
 
+Goal: fix header stats so each role counts only required assignment slots, and adjust header layout to show:
+- top-left: remaining
+- center: role code (PB/VB/...)
+- bottom-right: assigned/total
 
-# Fix: Column Stats Should Count Assignments (Rows), Not Unique Freelancers
+What I found
+- Current header stats in `src/components/suite/AllClientsCrewTable.tsx` (around lines 530+) use:
+  - `total = filteredRows.length`
+  - `assigned = rows with non-empty column value`
+- This ignores per-row `requiredCategories`, so roles are counted even when that role is not required on many rows.
+- The table already has required-role logic elsewhere:
+  - `isRequired = reqCodes.length === 0 || reqCodes.includes(col.short)` for row rendering.
+- Backend data for 2082 month 11 confirms your case:
+  - total rows: 44
+  - rows requiring PB: 29
+  - rows assigned PB: 29
+  - expected header: `0 PB 29/29`
 
-## Current Behavior (Wrong)
+Implementation plan
 
-The stats use `getFilteredFreelancersByRole` to get the **freelancer pool size** as `total`, and count **unique assigned names** as `assigned`. This answers "how many freelancers are available" -- not what you want.
+1) Update per-column stats logic to count required slots only
+- File: `src/components/suite/AllClientsCrewTable.tsx`
+- Replace `columnStats` computation with required-aware counting:
+  - For each crew column:
+    - `total` = number of `filteredRows` where this role is required for that row
+    - `assigned` = number of required rows where the cell has a non-empty value
+    - `remaining` = `Math.max(0, total - assigned)`
+- Required check per row/column will follow existing convention:
+  - parse `row.requiredCategories` into codes
+  - role required if `reqCodes.length === 0 || reqCodes.includes(col.short)`
+- Result for your example becomes `0 / PB / 29/29` instead of `15 / PB / 29/44`.
 
-## Correct Behavior
+2) Change header box layout to 3-position placement
+- In desktop `<th>` header rendering for crew columns (around lines 1018+), replace inline one-line flex with a positioned mini-box:
+  - container: `relative` with fixed height (enough room for corner labels), centered content
+  - remaining (`s.remaining`): absolute top-left, bold/prominent
+  - role short (`col.short`): centered
+  - assigned/total (`s.assigned/s.total`): absolute bottom-right, small muted text
+- Keep existing color group backgrounds and dynamic widths.
+- Ensure no wrapping and good alignment on narrow columns (`Drone`, `FPV`) by slightly tuning font sizes/offsets if needed.
 
-- **16 (total)** = total number of rows in `filteredRows` (i.e., total assignment slots for that column)
-- **4 (assigned)** = rows where that column is filled (non-empty value)
-- **12 (remaining)** = rows where that column is still empty (16 - 4)
+3) Keep existing row/cell behavior unchanged
+- No change to assignment editing, required-category popover, or lock-empty-slots flow.
+- No backend schema/function changes needed.
 
-## Change
+Technical notes
+- I will likely introduce a tiny local helper inside the component for consistency:
+  - `getRequiredCodes(row)` and/or `isRoleRequired(row, shortCode)`
+- `columnStats` dependencies remain `[filteredRows]`.
+- Defensive formatting:
+  - if `total === 0`, show `0` and `0/0` cleanly.
+  - clamp `remaining` at zero in case of legacy data anomalies.
 
-**File: `src/components/suite/AllClientsCrewTable.tsx`** (lines 530-544)
-
-Replace the `columnStats` useMemo with row-counting logic:
-
-```typescript
-const columnStats = useMemo(() => {
-  const stats: Record<string, { total: number; assigned: number; remaining: number }> = {};
-  for (const col of CREW_COLUMNS) {
-    const total = filteredRows.length;
-    let assigned = 0;
-    for (const row of filteredRows) {
-      const val = (row[col.field] as string)?.trim();
-      if (val) assigned++;
-    }
-    stats[col.field] = { total, assigned, remaining: total - assigned };
-  }
-  return stats;
-}, [filteredRows]);
-```
-
-Key differences:
-- `total` = `filteredRows.length` (number of assignment rows), not freelancer pool size
-- `assigned` = count of rows with a non-empty value in that column, not unique names
-- `remaining` = unassigned slots
-- Removes dependency on `freelancers` and `getFilteredFreelancersByRole`
-
-No other file changes needed.
-
+Validation checklist after implementation
+1) Reproduce your Falgun view and confirm PB header shows:
+   - top-left: `0`
+   - center: `PB`
+   - bottom-right: `29/29`
+2) Check a role with partial fill (e.g. `12/29`) to ensure:
+   - top-left equals `17`
+3) Change required crew on one row via the role selector and verify header stats update immediately.
+4) Run through desktop and mobile breakpoints to ensure header stays readable (desktop is primary for this header layout).
