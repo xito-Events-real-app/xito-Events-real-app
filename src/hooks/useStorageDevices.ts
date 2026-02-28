@@ -7,6 +7,7 @@ import {
   updateStorageDevice,
   deleteStorageDevice,
 } from "@/lib/files-api";
+import { scheduleStoragePush } from "@/lib/files-push-scheduler";
 import { toast } from "@/hooks/use-toast";
 
 export function useStorageDevices() {
@@ -39,20 +40,23 @@ export function useStorageDevices() {
   }, [loadDevices]);
 
   const add = async (device: Partial<StorageDevice>) => {
-    const result = await addStorageDevice(device);
+    const result = await addStorageDevice({ ...device, synced_to_sheet: false });
     setDevices((prev) => [...prev, result]);
+    scheduleStoragePush();
     return result;
   };
 
   const update = async (id: string, updates: Partial<StorageDevice>) => {
-    const result = await updateStorageDevice(id, updates);
+    const result = await updateStorageDevice(id, { ...updates, synced_to_sheet: false });
     setDevices((prev) => prev.map((d) => (d.id === id ? result : d)));
+    scheduleStoragePush();
     return result;
   };
 
   const remove = async (id: string) => {
     await deleteStorageDevice(id);
     setDevices((prev) => prev.filter((d) => d.id !== id));
+    scheduleStoragePush();
   };
 
   return { devices, isLoading, add, update, remove, refresh: loadDevices };
