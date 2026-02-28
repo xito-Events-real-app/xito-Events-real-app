@@ -1,4 +1,5 @@
 import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, Calendar, User, Clock, DollarSign, FileText, Activity, MessageSquare, Briefcase, Pencil, Loader2, Plus, CreditCard, RefreshCw, RotateCcw, Send } from "lucide-react";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
@@ -297,17 +298,63 @@ const ClientDetail = () => {
   } = useEventDetails(client?.registeredDateTimeAD);
 
   // Re-fetch event details when client event fields change (after edit) - skip initial mount
+  // Also ensures event_details_cache has skeleton rows for any new events
   const eventFieldsRef = useRef<string | null>(null);
   useEffect(() => {
     const key = `${client?.events}|${client?.eventYear}|${client?.eventMonth}|${client?.eventDay}`;
     if (eventFieldsRef.current === null) {
-      // First render — just record, don't refetch (hook already fetches on mount)
       eventFieldsRef.current = key;
       return;
     }
-    if (key !== eventFieldsRef.current && client?.events) {
+    if (key !== eventFieldsRef.current && client?.events && client?.registeredDateTimeAD) {
       eventFieldsRef.current = key;
-      refetchEventDetails();
+
+      // Insert any missing skeleton rows into event_details_cache before refetching
+      const syncMissingEvents = async () => {
+        const regId = client.registeredDateTimeAD;
+        const newEvents = (client.events || '').split('\n').filter(Boolean);
+        const newYears = (client.eventYear || '').split('\n');
+        const newMonths = (client.eventMonth || '').split('\n');
+        const newDays = (client.eventDay || '').split('\n');
+        const newDatesAD = (client.eventDateAD || '').split('\n');
+
+        const { data: existingRows } = await supabase
+          .from('event_details_cache')
+          .select('event_index, event_name, event_month, event_day')
+          .eq('registered_date_time_ad', regId);
+
+        const skeletons: any[] = [];
+        for (let i = 0; i < newEvents.length; i++) {
+          const exists = existingRows?.some(r =>
+            r.event_name === newEvents[i] && r.event_month === newMonths[i] && r.event_day === newDays[i]
+          );
+          if (!exists) {
+            skeletons.push({
+              registered_date_time_ad: regId,
+              event_index: i,
+              event_name: newEvents[i],
+              event_year: newYears[i] || '',
+              event_month: newMonths[i] || '',
+              event_day: newDays[i] || '',
+              event_date_ad: newDatesAD[i] || '',
+              synced_to_sheet: false,
+            });
+          }
+        }
+
+        if (skeletons.length > 0) {
+          await supabase.from('event_details_cache').upsert(skeletons, {
+            onConflict: 'registered_date_time_ad,event_index'
+          });
+        }
+
+        refetchEventDetails();
+      };
+
+      syncMissingEvents().catch(err => {
+        console.warn('[ClientDetail] Failed to sync missing event rows:', err);
+        refetchEventDetails();
+      });
     }
   }, [client?.events, client?.eventYear, client?.eventMonth, client?.eventDay]);
 

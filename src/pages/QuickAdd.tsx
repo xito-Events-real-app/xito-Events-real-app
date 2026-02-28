@@ -324,6 +324,8 @@ export default function QuickAdd() {
         const updatedClient: ClientData = {
           ...editClientData,
           clientName,
+          companyName,
+          serviceTypes: serviceTypes.join("/"),
           source: getSourceValue(),
           clientLocation,
           currentCountry: countryForSheet,
@@ -344,12 +346,70 @@ export default function QuickAdd() {
           inquiryTime,
         };
 
-        await updateClientApi(updatedClient);
-        
-        // Update local cache (must await so IndexedDB write completes before navigation)
+        // Step 1: Supabase cache FIRST (instant)
         if (updateClientCache) {
           await updateClientCache(updatedClient);
         }
+
+        // Step 2: Sync event_details_cache — insert missing, delete removed
+        const regId = editClientData.registeredDateTimeAD;
+        if (regId) {
+          const newEvents = eventsFormatted.split('\n').filter(Boolean);
+          const newYears = eventYears.split('\n');
+          const newMonths = eventMonths.split('\n');
+          const newDays = eventDays.split('\n');
+          const newDatesAD = eventADDates.split('\n');
+
+          // Read existing event_details_cache rows
+          const { data: existingRows } = await supabase
+            .from('event_details_cache')
+            .select('event_index, event_name, event_month, event_day')
+            .eq('registered_date_time_ad', regId);
+
+          // Insert skeleton rows for new events
+          const skeletons: any[] = [];
+          for (let i = 0; i < newEvents.length; i++) {
+            const exists = existingRows?.some(r =>
+              r.event_name === newEvents[i] && r.event_month === newMonths[i] && r.event_day === newDays[i]
+            );
+            if (!exists) {
+              skeletons.push({
+                registered_date_time_ad: regId,
+                event_index: i,
+                event_name: newEvents[i],
+                event_year: newYears[i] || '',
+                event_month: newMonths[i] || '',
+                event_day: newDays[i] || '',
+                event_date_ad: newDatesAD[i] || '',
+                synced_to_sheet: false,
+              });
+            }
+          }
+
+          if (skeletons.length > 0) {
+            await supabase.from('event_details_cache').upsert(skeletons, {
+              onConflict: 'registered_date_time_ad,event_index'
+            });
+          }
+
+          // Delete rows for events that were removed
+          if (existingRows) {
+            const toDelete = existingRows.filter(r => {
+              return !newEvents.some((name, i) => name === r.event_name && newMonths[i] === r.event_month && newDays[i] === r.event_day);
+            });
+            for (const row of toDelete) {
+              await supabase.from('event_details_cache')
+                .delete()
+                .eq('registered_date_time_ad', regId)
+                .eq('event_index', row.event_index);
+            }
+          }
+        }
+
+        // Step 3: Background Sheets sync (non-blocking)
+        updateClientApi(updatedClient).catch(err => {
+          console.warn('[EDIT] Background sheet sync failed:', err);
+        });
         
         // Trigger event details refetch
         window.dispatchEvent(new CustomEvent('booked-clients-invalidate'));
