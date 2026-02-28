@@ -23,6 +23,7 @@ import { getCurrentStatus, DropdownData } from "@/lib/sheets-api";
 import { CalendarDayPopup, CalendarClientInfo } from "@/components/shared/CalendarDayPopup";
 import { useBulkEventDetails } from "@/hooks/useBulkEventDetails";
 import { parseEventDetails, getMonthName, NEPALI_MONTHS } from "@/lib/nepali-months";
+import { isBSDatePast } from "@/lib/nepali-date";
 import { DesktopClientRow } from "./DesktopClientRow";
 import { ClientDetailSheet } from "@/components/dashboard/ClientDetailSheet";
 import { getStatusConfig, sortCategoriesByOrder, normalizeStatus } from "@/lib/status-config";
@@ -245,6 +246,7 @@ export function DesktopDashboard({
 
       events.forEach(event => {
         if (!event.year || !event.month || !event.day) return;
+        if (isBSDatePast(event.year, event.month, event.day)) return;
         
         const dateKey = `${event.year}-${event.month.padStart(2, '0')}-${String(event.day).padStart(2, '0')}`;
         
@@ -321,6 +323,7 @@ export function DesktopDashboard({
 
       events.forEach(event => {
         if (!event.year || !event.month || !event.day) return;
+        if (isBSDatePast(event.year, event.month, event.day)) return;
         
         const dateKey = `${event.year}-${event.month.padStart(2, '0')}-${String(event.day).padStart(2, '0')}`;
         
