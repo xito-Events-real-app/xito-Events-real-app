@@ -1,63 +1,43 @@
 
 
-# Fix Breaking News to Show All Recent Changes
+# Fix: Status Change (and all actions) Failing for Newly Added Clients
 
 ## Root Cause
 
-The Breaking News feed uses a **priority system** that's causing data loss:
+Every action handler in `src/pages/ClientDetail.tsx` starts with:
 
-1. If a client has `lastActivityLog` (Column AJ from Google Sheets), it ONLY shows activities from that column and **skips** parsing statusLog, comments, callLog, and payments entirely
-2. When you make local changes (add comment, change status, log call, add payment), those updates go to the individual columns (statusLog, comments, callLog, paymentsMade) but **NOT** to `lastActivityLog`
-3. Result: recent local changes are invisible in Breaking News because `lastActivityLog` takes priority and the fallback parsing is never reached
+```typescript
+if (!client?.rowNumber) return;
+```
+
+For newly added clients (like "Ashmita Poudel"), `rowNumber` is `0` (the default value when inserted into the database). In JavaScript, `!0` evaluates to `true`, so the function **silently exits** without doing anything -- no error, no toast, nothing happens.
+
+This affects **all 10+ handlers**: status change, call logging, quotation save, bargaining, advance pending, booked payment, comment add, priority change, final quotation, Benzo Keep notes, and delete.
 
 ## Fix
 
-### File 1: `src/lib/activity-utils.ts` -- `parseActivities()` function
+### File: `src/pages/ClientDetail.tsx`
 
-**Change the logic from "priority/fallback" to "merge all sources":**
+Replace all `if (!client?.rowNumber) return;` guards (approximately 10 occurrences) with:
 
-Currently (broken):
-```
-if (lastActivityLog exists) {
-  use ONLY lastActivityLog  // <-- misses recent local changes
-} else {
-  parse statusLog, comments, callLog, payments
-}
+```typescript
+if (!client) return;
 ```
 
-Fixed (merge everything):
-```
-// Always parse from ALL available sources
-parse lastActivityLog entries (if any)
-parse statusLog entries
-parse commentActivities
-parse callActivities  
-parse paymentActivities (booked only)
-parse clientAdded
+Since the system uses `registeredDateTimeAD` as the primary unique identifier (not `rowNumber`), the guard only needs to confirm the client object exists. The cache update functions already match by `registeredDateTimeAD` internally.
 
-// Deduplicate by content similarity (same client + same type + same timestamp window)
-// Sort newest first
-```
+**Affected handlers (all ~10):**
+- `handleCall` (line 364)
+- `handleStatusChange` (line 397)
+- `performStatusChange` (line 438)
+- `handleSaveQuotation` (line 469)
+- `handleSaveAdvancePendingQuotation` (line 515)
+- `handleSaveBargaining` (line 550)
+- `handleSaveFinalQuotationOnly` (line 599)
+- `handleSaveBookedPayment` (around line 630+)
+- `handlePriorityChange` (line 764)
+- `handleAddComment` (wherever it is)
+- `handleDeleteClient` (wherever it is)
 
-The deduplication will prevent double-entries where `lastActivityLog` and individual columns describe the same event. Two activities are considered duplicates if they share the same client ID, same type, and timestamps within 60 seconds of each other.
-
-### File 2: `src/components/suite/ActivityCard.tsx` -- Better info display
-
-Improve the card to show more useful information:
-- Show the comment text preview for comment activities (currently says "New comment added" with details hidden)
-- Show payment amount more prominently
-- Show the actual status name for status changes
-- Add a handler badge color variation per handler
-
-### File 3: `src/hooks/useActivityFeed.ts` -- Increase limits
-
-- Increase default limit from 100 to 200 to show more activities
-- The 14-day window stays the same
-
-## What This Fixes
-
-- All recent local changes (status updates, comments, calls, payments) will immediately appear in Breaking News
-- No more "only few are showing" -- every activity from every source gets included
-- Better deduplication prevents double entries
-- More informative cards with actual content previews
+This is the same class of bug -- `rowNumber` being `0` for new clients -- and the fix is a simple guard replacement across all handlers in the file.
 
