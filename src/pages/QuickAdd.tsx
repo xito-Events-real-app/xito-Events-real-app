@@ -406,6 +406,21 @@ export default function QuickAdd() {
           }
         }
 
+        // Step 2b: Sync freelancer_assignments — insert missing, delete removed
+        if (regId && editClientData.clientName) {
+          const { ensureFreelancerAssignmentRows } = await import('@/lib/freelancer-assignment-cache');
+          await ensureFreelancerAssignmentRows(
+            regId,
+            editClientData.clientName,
+            editClientData.registeredDateBS || '',
+            eventsFormatted,
+            eventYears,
+            eventMonths,
+            eventDays,
+            eventADDates
+          );
+        }
+
         // Step 3: Background Sheets sync (non-blocking)
         updateClientApi(updatedClient).catch(err => {
           console.warn('[EDIT] Background sheet sync failed:', err);
@@ -523,6 +538,21 @@ export default function QuickAdd() {
             setMemoryClients([clientData, ...memClients]);
           }
           notifyCacheUpdate('clients');
+
+          // Step 2b: For BOOKED clients, pre-populate crew table
+          if (isBookedStatus && eventsFormatted.trim()) {
+            const { ensureFreelancerAssignmentRows } = await import('@/lib/freelancer-assignment-cache');
+            await ensureFreelancerAssignmentRows(
+              registeredDateTimeAD,
+              clientName,
+              registeredBSFormatted,
+              eventsFormatted,
+              eventYears,
+              eventMonths,
+              eventDays,
+              eventADDates
+            );
+          }
 
           toast({ title: "Success!", description: "Client added instantly" });
 

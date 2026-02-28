@@ -1291,6 +1291,21 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
         paymentUpdate.remainingPayment,
       );
 
+      // 3b. Ensure crew table rows exist
+      if (client.events && client.registeredDateTimeAD) {
+        const { ensureFreelancerAssignmentRows } = await import('@/lib/freelancer-assignment-cache');
+        await ensureFreelancerAssignmentRows(
+          client.registeredDateTimeAD,
+          client.clientName || '',
+          client.registeredDateBS || '',
+          client.events || '',
+          client.eventYear || '',
+          client.eventMonth || '',
+          client.eventDay || '',
+          client.eventDateAD || ''
+        );
+      }
+
       // 4. Background: proper sheet MOVE (tracker -> booked + downstream syncs)
       // Then chain addPayment AFTER move completes with the correct booked row number
       if (client.rowNumber && client.registeredDateTimeAD) {
