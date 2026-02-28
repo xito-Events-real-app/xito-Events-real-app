@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
@@ -81,6 +81,8 @@ export function useEventDetails(registeredDateTimeAD: string | undefined) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const backfillAttemptedRef = useRef(false);
+
   // Load from Supabase cache only
   const loadFromCache = useCallback(async () => {
     if (!registeredDateTimeAD) return false;
@@ -102,17 +104,30 @@ export function useEventDetails(registeredDateTimeAD: string | undefined) {
     }
   }, [registeredDateTimeAD]);
 
-  // Load data: cache only, no Sheets fallback
+  // Load data: cache first, auto-backfill from Sheets if empty
   const loadData = useCallback(async () => {
     if (!registeredDateTimeAD) return;
 
     setIsLoading(true);
     setError(null);
 
-    const hadCache = await loadFromCache();
+    let hadCache = await loadFromCache();
+
+    if (!hadCache && !backfillAttemptedRef.current) {
+      // Auto-backfill: pull from Sheets once
+      backfillAttemptedRef.current = true;
+      console.log('[useEventDetails] No cache, attempting backfill from Sheets...');
+      try {
+        await supabase.functions.invoke('google-sheets', {
+          body: { action: 'syncToEventDetails', data: { registeredDateTimeAD } }
+        });
+        hadCache = await loadFromCache();
+      } catch (err) {
+        console.warn('[useEventDetails] Backfill failed:', err);
+      }
+    }
 
     if (!hadCache) {
-      // No cache — show empty state
       console.log('[useEventDetails] No cached data found');
       setError('No event details in cache');
     }
@@ -167,17 +182,24 @@ export function useEventDetails(registeredDateTimeAD: string | undefined) {
       if (updates.eventDemands !== undefined) updatePayload.event_demands = serializeQuotedList(updates.eventDemands);
       if (updates.eventReferences !== undefined) updatePayload.event_references = serializeQuotedList(updates.eventReferences);
 
-      // Write directly to event_details_cache
+      // Get identity fields from current event data
+      const currentEvent = data?.events.find(e => e.eventIndex === eventIndex);
+
+      // Write directly to event_details_cache using upsert
       const { error: updateError } = await supabase
         .from('event_details_cache')
-        .update(updatePayload)
-        .eq('registered_date_time_ad', registeredDateTimeAD)
-        .eq('event_index', eventIndex);
+        .upsert({
+          ...updatePayload,
+          registered_date_time_ad: registeredDateTimeAD,
+          event_index: eventIndex,
+          event_name: currentEvent?.eventName || '',
+          event_year: currentEvent?.eventYear || '',
+          event_month: currentEvent?.eventMonth || '',
+          event_day: currentEvent?.eventDay || '',
+          event_date_ad: currentEvent?.eventDateAD || '',
+        } as any, { onConflict: 'registered_date_time_ad,event_index' });
 
       if (updateError) throw new Error(updateError.message);
-
-      // Also push update to Sheets in background (non-blocking)
-      const currentEvent = data?.events.find(e => e.eventIndex === eventIndex);
       const processedUpdates = {
         ...updates,
         eventDemands: updates.eventDemands ? serializeQuotedList(updates.eventDemands) : undefined,

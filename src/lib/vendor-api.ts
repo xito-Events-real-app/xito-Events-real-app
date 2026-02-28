@@ -150,9 +150,10 @@ export async function updateVendor(vendorData: VendorData): Promise<void> {
     throw new Error(data.error || 'Failed to update vendor');
   }
 
-  // Update cache instantly
+  // Update cache instantly using upsert
   try {
-    await supabase.from('vendors_cache').update({
+    await supabase.from('vendors_cache').upsert({
+      row_number: vendorData.rowNumber,
       vendor_name: vendorData.vendorName || '',
       vendor_type: vendorData.vendorType || '',
       company_contact_no: vendorData.companyContactNo || '',
@@ -173,9 +174,9 @@ export async function updateVendor(vendorData: VendorData): Promise<void> {
       email: vendorData.email || '',
       synced_to_sheet: true,
       updated_at: new Date().toISOString(),
-    } as any).eq('row_number', vendorData.rowNumber);
+    } as any, { onConflict: 'row_number' });
   } catch (err) {
-    console.warn('[vendor-api] Cache update after edit failed:', err);
+    console.warn('[vendor-api] Cache upsert after edit failed:', err);
   }
 }
 
