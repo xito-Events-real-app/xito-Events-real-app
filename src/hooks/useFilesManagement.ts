@@ -8,6 +8,7 @@ import {
   deleteFileRecord,
   autoGenerateFileRows,
 } from "@/lib/files-api";
+import { scheduleFilesPush } from "@/lib/files-push-scheduler";
 import { toast } from "@/hooks/use-toast";
 
 export function useFilesManagement(filters?: {
@@ -45,21 +46,23 @@ export function useFilesManagement(filters?: {
   }, [loadFiles]);
 
   const add = async (record: Partial<FileRecord>) => {
-    const result = await addFileRecord(record);
+    const result = await addFileRecord({ ...record, synced_to_sheet: false });
     setFiles((prev) => [result, ...prev]);
+    scheduleFilesPush();
     return result;
   };
 
   const update = async (id: string, updates: Partial<FileRecord>) => {
-    // Optimistic
     setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, ...updates } : f)));
-    const result = await updateFileRecord(id, updates);
+    const result = await updateFileRecord(id, { ...updates, synced_to_sheet: false });
+    scheduleFilesPush();
     return result;
   };
 
   const remove = async (id: string) => {
     setFiles((prev) => prev.filter((f) => f.id !== id));
     await deleteFileRecord(id);
+    scheduleFilesPush();
   };
 
   const generateRows = async (registeredDateTimeAD: string) => {
@@ -71,6 +74,7 @@ export function useFilesManagement(filters?: {
       } else {
         toast({ title: `${newRows.length} rows generated`, description: "File rows created from crew assignments." });
         await loadFiles();
+        scheduleFilesPush();
       }
       return newRows;
     } catch (err: any) {
