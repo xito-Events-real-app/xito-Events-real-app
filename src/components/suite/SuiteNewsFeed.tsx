@@ -3,7 +3,7 @@ import { useActivityFeed } from "@/hooks/useActivityFeed";
 import { ActivityCard } from "./ActivityCard";
 
 export function SuiteNewsFeed() {
-  const { groupedByDay, isLoading, activities } = useActivityFeed(14, 100);
+  const { groupedByDay, isLoading, activities } = useActivityFeed(14, 200);
   
   if (isLoading) {
     return (

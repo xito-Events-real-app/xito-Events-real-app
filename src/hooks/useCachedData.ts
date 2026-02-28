@@ -151,8 +151,13 @@ export function useCachedData(): UseCachedDataResult {
   // Listen for cache updates from other operations (but NOT invalidate events)
   useEffect(() => {
     const handleCacheUpdate = (e: CustomEvent<{ type: string; data: unknown }>) => {
-      if (e.detail.type === 'clients' && Array.isArray(e.detail.data)) {
-        setClients(e.detail.data as ClientData[]);
+      if (e.detail.type === 'clients') {
+        if (Array.isArray(e.detail.data)) {
+          setClients(e.detail.data as ClientData[]);
+        } else {
+          const memClients = getMemoryClients();
+          if (memClients) setClients([...memClients]);
+        }
       }
       if (e.detail.type === 'dropdowns' && e.detail.data) {
         setDropdowns(e.detail.data as DropdownData);

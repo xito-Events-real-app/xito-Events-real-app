@@ -96,12 +96,22 @@ export function useBookedCachedData(): UseBookedCachedDataResult {
   useEffect(() => {
     const handleCacheUpdate = (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      if (detail?.type === 'booked-clients' && Array.isArray(detail.data)) {
-        setTimeout(() => {
-          setClients(detail.data as BookedClientData[]);
-          setLastSyncedAt(new Date());
-          setIsFromCache(false);
-        }, 0);
+      if (detail?.type === 'booked-clients') {
+        if (Array.isArray(detail.data)) {
+          setTimeout(() => {
+            setClients(detail.data as BookedClientData[]);
+            setLastSyncedAt(new Date());
+            setIsFromCache(false);
+          }, 0);
+        } else {
+          const memBooked = getMemoryBookedClients();
+          if (memBooked) {
+            setTimeout(() => {
+              setClients([...memBooked]);
+              setLastSyncedAt(new Date());
+            }, 0);
+          }
+        }
       }
       // REMOVED: 'booked-clients-invalidate' listener — no more Sheets pulls
     };
