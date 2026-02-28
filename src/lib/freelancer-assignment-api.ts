@@ -3,6 +3,7 @@ import { getFreelancers, addFreelancer, FreelancerData } from "./freelancer-api"
 import { updateAssignmentInCache, updateCategoriesInCache, rowToAssignment } from "./freelancer-assignment-cache";
 
 export interface FreelancerAssignment {
+  id?: string;
   rowNumber: number;
   registeredDateTimeAD: string;
   registeredDateBS: string;
