@@ -1,49 +1,56 @@
 
+# Mobile-Friendly File Management Module
 
-# Smart Storage Display: TB Input with GB Storage
+## Problem
+The File Management page (`/files`) currently renders a fixed 256px sidebar with `ml-64` on the main content area. On mobile, this makes the content invisible or severely clipped -- there's no responsive handling at all.
 
-## Overview
-Update the Add Device dialog to accept total storage in TB (since most devices are 1TB+), while continuing to store data in GB in the database (1 TB = 1024 GB). Display values smartly on device cards -- show remaining space in GB when it's less than 1 TB.
+## Solution
+Create a mobile layout that replaces the sidebar with a top tab bar and renders content full-width, similar to how other modules (Booked Clients, Finance, Vendors) handle mobile vs desktop.
 
 ## Changes
 
-### 1. Update Add Device Dialog (`AddStorageDeviceDrawer.tsx`)
-- Change the "Total Storage" label from "Total Storage (GB)" to "Total Storage (TB)"
-- On save, convert TB to GB: `total_storage_gb = Number(form.total_storage_tb) * 1024`
-- When editing, convert existing GB value back to TB for display: `total_storage_tb = String(device.total_storage_gb / 1024)`
-- Rename the form field from `total_storage_gb` to `total_storage_tb` (internal form state only)
+### 1. Update `FileManagement.tsx` (page)
+- Import and use `useIsMobile()` hook
+- Conditionally render:
+  - **Mobile**: A full-width layout with a sticky header (back button + title), horizontal tab pills (Dashboard / Storage / Files), and device type filter chips when on Storage tab. No sidebar.
+  - **Desktop**: Keep the existing sidebar layout as-is (no changes)
 
-### 2. Update Device Cards Display (`StorageDevicesSection.tsx`)
-- Add a helper function `formatStorage(gb)` that:
-  - If `gb >= 1024`: display as `X.XX TB`
-  - If `gb < 1024`: display as `X GB`
-- Apply this to three display points on each card:
-  - "used" label: e.g. "0.5 TB used" or "800 GB used"
-  - "free" label: e.g. "1.5 TB free" or "200 GB free"  
-  - "total" label: e.g. "2 TB total"
-- The remaining space specifically shows in GB if under 1 TB (per user request)
+### 2. Mobile Layout Structure
+```text
++----------------------------------+
+| <- Back    File Management       |
++----------------------------------+
+| [Dashboard] [Storage] [Files]    |  <- tab pills
++----------------------------------+
+| [All] [HDD] [SSD] [PC]          |  <- only on Storage tab
++----------------------------------+
+|                                  |
+|   (section content)              |
+|   Dashboard cards / Device       |
+|   cards / Files table            |
+|                                  |
++----------------------------------+
+| [+ Add Device] FAB               |  <- floating action button
++----------------------------------+
+```
+
+- **Header**: Back arrow navigating to `/`, module name, gradient icon
+- **Tab bar**: Horizontal scroll of pill buttons for Dashboard, Storage, Files
+- **Device filter chips**: Shown only when Storage tab is active (All / Hard Drive / SSD / PC)
+- **Content**: Full-width rendering of the same dashboard stats, StorageDevicesSection, and FilesManagementTable
+- **FAB**: Floating "Add Device" button at bottom-right
+
+### 3. No changes needed to:
+- `FileManagementSidebar.tsx` (desktop only, untouched)
+- `StorageDevicesSection.tsx` (already has responsive grid `grid-cols-1 md:grid-cols-2`)
+- `FilesManagementTable.tsx` (already works full-width)
 
 ### Technical Details
 
-**Conversion helper:**
-```typescript
-const formatStorage = (gb: number): string => {
-  if (gb >= 1024) return `${(gb / 1024).toFixed(2).replace(/\.?0+$/, '')} TB`;
-  return `${Math.round(gb)} GB`;
-};
-```
+**File modified**: `src/pages/FileManagement.tsx`
 
-**Save conversion (dialog):**
-```typescript
-total_storage_gb: Number(form.total_storage_tb) * 1024
-```
+The page will use `useIsMobile()` to branch:
+- Mobile path: renders inline header, tabs, filters, content, and FAB -- no sidebar
+- Desktop path: renders existing sidebar + `ml-64` content layout unchanged
 
-**Edit pre-fill (dialog):**
-```typescript
-total_storage_tb: String(editDevice.total_storage_gb / 1024)
-```
-
-**Files to update:**
-1. `src/components/files/AddStorageDeviceDrawer.tsx` -- TB input + conversion on save/edit
-2. `src/components/files/StorageDevicesSection.tsx` -- smart display formatting
-
+The mobile dashboard stats grid will use `grid-cols-2` for the 4 stat cards, and the quick-link cards will stack vertically. The storage device cards already handle `grid-cols-1` on small screens.
