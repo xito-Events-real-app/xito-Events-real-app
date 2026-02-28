@@ -39,7 +39,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient' | 'getDailyTasks' | 'addDailyTask' | 'updateDailyTask' | 'updateDailyTaskStatus' | 'getDailyTaskSetupData' | 'getFreelancers' | 'addFreelancer' | 'updateFreelancer' | 'deleteFreelancer' | 'syncFreelancerCategories' | 'getClientFreelancerAssignments' | 'updateFreelancerAssignment' | 'checkFreelancerAvailability' | 'fullSyncFreelancerAssignments' | 'getFreelancerBookings' | 'getAllFreelancerAssignments' | 'restoreFreelancerAssignments' | 'updateRequiredCrewCategories' | 'deleteClient';
+  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient' | 'getDailyTasks' | 'addDailyTask' | 'updateDailyTask' | 'updateDailyTaskStatus' | 'getDailyTaskSetupData' | 'getFreelancers' | 'addFreelancer' | 'updateFreelancer' | 'deleteFreelancer' | 'syncFreelancerCategories' | 'getClientFreelancerAssignments' | 'updateFreelancerAssignment' | 'checkFreelancerAvailability' | 'fullSyncFreelancerAssignments' | 'getFreelancerBookings' | 'getAllFreelancerAssignments' | 'restoreFreelancerAssignments' | 'updateRequiredCrewCategories' | 'deleteClient' | 'reconcileBookedClients';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -2068,8 +2068,9 @@ async function verifyRowNumber(
 
 // Update client status in Column W with timestamp log
 async function updateClientStatus(accessToken: string, spreadsheetId: string, rowNumber: number, newStatus: string, existingStatusLog: string, clientTimestamp?: string, registeredDateTimeAD?: string) {
-  if (!rowNumber || rowNumber < 2) {
-    throw new Error('Valid rowNumber is required for updating status');
+  // Allow ID-based resolution even when rowNumber is invalid
+  if ((!rowNumber || rowNumber < 2) && !registeredDateTimeAD) {
+    throw new Error('Valid rowNumber or registeredDateTimeAD is required for updating status');
   }
 
   // Intelligent sheet routing: search BOOKED CLIENTS first, then CLIENT TRACKER
@@ -2083,8 +2084,13 @@ async function updateClientStatus(accessToken: string, spreadsheetId: string, ro
       actualRowNumber = bookedRow;
       console.log(`updateClientStatus: Found client in BOOKED CLIENTS at row ${bookedRow}`);
     } else {
-      actualRowNumber = await verifyRowNumber(accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, registeredDateTimeAD);
-      console.log(`updateClientStatus: Found client in CLIENT TRACKER at row ${actualRowNumber}`);
+      const trackerRow = await verifyRowNumber(accessToken, spreadsheetId, 'CLIENT TRACKER', rowNumber, registeredDateTimeAD);
+      if (trackerRow >= 2) {
+        actualRowNumber = trackerRow;
+        console.log(`updateClientStatus: Found client in CLIENT TRACKER at row ${actualRowNumber}`);
+      } else {
+        throw new Error(`Client not found in any sheet by registeredDateTimeAD: ${registeredDateTimeAD}`);
+      }
     }
   } else {
     console.log(`updateClientStatus: No registeredDateTimeAD provided, using raw rowNumber ${rowNumber} on CLIENT TRACKER`);
@@ -5944,6 +5950,114 @@ async function deleteVendor(accessToken: string, spreadsheetId: string, rowNumbe
   return { success: true };
 }
 
+// ============= RECONCILE BOOKED CLIENTS =============
+// Finds clients marked as 'booked' in Supabase DB but still present in CLIENT TRACKER sheet,
+// and performs proper MOVE (copy to Booked, delete from Tracker).
+async function reconcileBookedClients(accessToken: string, spreadsheetId: string) {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.49.2");
+  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+  // Step 1: Get all DB records marked as booked
+  const { data: bookedInDb, error: dbErr } = await supabaseAdmin
+    .from('clients_cache')
+    .select('registered_date_time_ad, client_name, status_log, payments_made, payment_dates_ad, remaining_payment')
+    .eq('sheet_source', 'booked');
+
+  if (dbErr || !bookedInDb) {
+    throw new Error(`Failed to read booked clients from DB: ${dbErr?.message}`);
+  }
+
+  // Step 2: Read CLIENT TRACKER column A to find which booked clients are still there
+  const trackerRange = encodeURIComponent("'CLIENT TRACKER'!A2:A5000");
+  const trackerResp = await fetchWithRetry(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${trackerRange}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!trackerResp.ok) throw new Error('Failed to read CLIENT TRACKER');
+  const trackerData = await trackerResp.json();
+  const trackerIds = new Map<string, number>();
+  if (trackerData.values) {
+    for (let i = 0; i < trackerData.values.length; i++) {
+      const id = (trackerData.values[i][0] || '').trim();
+      if (id) trackerIds.set(id, i + 2); // row number = index + 2
+    }
+  }
+
+  // Step 3: Find stuck clients (booked in DB, still in tracker sheet)
+  const stuckClients: { id: string; name: string; trackerRow: number }[] = [];
+  for (const row of bookedInDb) {
+    const trackerRow = trackerIds.get(row.registered_date_time_ad);
+    if (trackerRow) {
+      stuckClients.push({
+        id: row.registered_date_time_ad,
+        name: row.client_name || 'Unknown',
+        trackerRow,
+      });
+    }
+  }
+
+  if (stuckClients.length === 0) {
+    return { success: true, reconciledCount: 0, message: 'No stuck clients found' };
+  }
+
+  console.log(`[RECONCILE] Found ${stuckClients.length} stuck booked clients in tracker`);
+
+  // Step 4: For each stuck client, check if already in BOOKED sheet, then MOVE
+  let movedCount = 0;
+  const reconciledClients: string[] = [];
+
+  for (const stuck of stuckClients) {
+    try {
+      const alreadyBooked = await checkIfAlreadyBooked(accessToken, spreadsheetId, stuck.id);
+
+      if (!alreadyBooked) {
+        // Copy to BOOKED CLIENTS first
+        await copyToBookedClients(accessToken, spreadsheetId, stuck.trackerRow);
+        console.log(`[RECONCILE] Copied ${stuck.name} to BOOKED CLIENTS from tracker row ${stuck.trackerRow}`);
+      }
+
+      // Delete from tracker regardless (the booked sheet has the record)
+      await deleteTrackerRow(accessToken, spreadsheetId, stuck.trackerRow);
+      console.log(`[RECONCILE] Deleted ${stuck.name} from CLIENT TRACKER row ${stuck.trackerRow}`);
+
+      // Patch payment columns on booked row from DB
+      const dbRow = bookedInDb.find(r => r.registered_date_time_ad === stuck.id);
+      if (dbRow && (dbRow.payments_made || dbRow.payment_dates_ad || dbRow.remaining_payment)) {
+        const bookedRowNum = await findBookedClientRow(accessToken, spreadsheetId, stuck.id);
+        if (bookedRowNum) {
+          const patchRange = encodeURIComponent(`'BOOKED CLIENTS'!AE${bookedRowNum}:AG${bookedRowNum}`);
+          const patchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${patchRange}?valueInputOption=USER_ENTERED`;
+          await fetchWithRetry(patchUrl, {
+            method: 'PUT',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ values: [[dbRow.payments_made || '', dbRow.payment_dates_ad || '', dbRow.remaining_payment || '']] }),
+          });
+          console.log(`[RECONCILE] Patched payment data for ${stuck.name} on booked row ${bookedRowNum}`);
+        }
+      }
+
+      // Trigger downstream syncs
+      try { await syncToEventDetails(accessToken, spreadsheetId, stuck.id); } catch (e) { console.warn(`[RECONCILE] Event sync failed for ${stuck.name}:`, e); }
+      try { await syncSingleClientToFreelancers(accessToken, spreadsheetId, stuck.id); } catch (e) { console.warn(`[RECONCILE] Freelancer sync failed for ${stuck.name}:`, e); }
+      try { await resyncClientContactDetails(accessToken, spreadsheetId, stuck.id); } catch (e) { console.warn(`[RECONCILE] Contact sync failed for ${stuck.name}:`, e); }
+
+      movedCount++;
+      reconciledClients.push(stuck.name);
+    } catch (err) {
+      console.error(`[RECONCILE] Failed to reconcile ${stuck.name}:`, err);
+    }
+  }
+
+  return {
+    success: true,
+    reconciledCount: movedCount,
+    reconciledClients,
+    totalStuck: stuckClients.length,
+  };
+}
+
 // ============= DELETE CLIENT FROM ALL SHEETS + SUPABASE =============
 async function deleteClientFromAll(
   accessToken: string,
@@ -8008,6 +8122,10 @@ Deno.serve(async (req) => {
       case 'deleteClient': {
         if (!data || !data.registeredDateTimeAD) throw new Error('registeredDateTimeAD is required for deleteClient');
         result = await deleteClientFromAll(accessToken, spreadsheetId, data.registeredDateTimeAD as string, (data.sheetSource as string) || 'tracker');
+        break;
+      }
+      case 'reconcileBookedClients': {
+        result = await reconcileBookedClients(accessToken, spreadsheetId);
         break;
       }
       default:

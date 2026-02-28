@@ -827,3 +827,8 @@ export async function deleteClient(
     data: { registeredDateTimeAD, sheetSource },
   });
 }
+
+// Reconcile booked clients stuck in tracker sheet
+export async function reconcileBookedClients(): Promise<{ success: boolean; reconciledCount: number; reconciledClients?: string[]; totalStuck?: number; message?: string }> {
+  return callSheetsFunction<{ success: boolean; reconciledCount: number; reconciledClients?: string[]; totalStuck?: number; message?: string }>("reconcileBookedClients", {});
+}
