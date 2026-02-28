@@ -170,9 +170,9 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
           lastUpdated: new Date().toISOString(),
         };
         await assignBenzoKeepNoteToClient(selectedClient.registeredDateTimeAD, JSON.stringify(noteData));
+        const noteJson = JSON.stringify(noteData);
         try {
           // Try exact match first, then fallback to client name match (handles date format differences)
-          const noteJson = JSON.stringify(noteData);
           const { data: updated } = await supabase
             .from('clients_cache')
             .update({ benzo_keep_notes: noteJson, synced_to_sheet: false, updated_at: new Date().toISOString() } as any)
@@ -188,7 +188,16 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
         } catch (cacheErr) {
           console.warn("Cache update failed (non-blocking):", cacheErr);
         }
-        window.dispatchEvent(new CustomEvent('cache-updated', { detail: { type: 'clients-invalidate' } }));
+        // Update memory cache so client detail page reflects the change immediately
+        const memClients = getMemoryClients();
+        if (memClients) {
+          setMemoryClients(memClients.map(c =>
+            c.registeredDateTimeAD === selectedClient.registeredDateTimeAD
+              ? { ...c, benzoKeepNotes: noteJson }
+              : c
+          ));
+        }
+        notifyCacheUpdate('clients');
         toast.success(`Note assigned to ${selectedClient.clientName}`);
         resetForm();
         onOpenChange(false);
@@ -283,8 +292,11 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
   };
 
   const hasClientTarget = selectedClient || quickClientData.clientName.trim();
+  const isUpdatingExistingNote = selectedClient && selectedClient.benzoKeepNotes;
   const assignButtonLabel = selectedClient
-    ? `Assign to ${selectedClient.clientName}`
+    ? isUpdatingExistingNote
+      ? `Save to ${selectedClient.clientName}`
+      : `Assign to ${selectedClient.clientName}`
     : quickClientData.clientName.trim()
       ? `Create "${quickClientData.clientName}" + Assign`
       : "Assign to Client";
@@ -423,21 +435,23 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
             Cancel
           </Button>
-          <Button
-            variant="secondary"
-            onClick={handleSaveUnassigned}
-            disabled={isSaving}
-            className="gap-2"
-          >
-            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <StickyNote className="w-4 h-4" />}
-            Save Unassigned
-          </Button>
+          {!selectedClient && (
+            <Button
+              variant="secondary"
+              onClick={handleSaveUnassigned}
+              disabled={isSaving}
+              className="gap-2"
+            >
+              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <StickyNote className="w-4 h-4" />}
+              Save Unassigned
+            </Button>
+          )}
           <Button
             onClick={handleSaveWithClient}
             disabled={isSaving || !hasClientTarget}
             className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
           >
-            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : isUpdatingExistingNote ? <StickyNote className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
             <span className="truncate max-w-[200px]">{assignButtonLabel}</span>
           </Button>
         </DialogFooter>
