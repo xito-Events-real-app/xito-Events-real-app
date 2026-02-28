@@ -23,13 +23,14 @@ interface Props {
 
 export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave }: Props) {
   const [saving, setSaving] = useState(false);
+  const [totalUnit, setTotalUnit] = useState<"TB" | "GB">("TB");
   const [usedUnit, setUsedUnit] = useState<"TB" | "GB">("TB");
   const converting = useRef(false);
   const [form, setForm] = useState({
     device_type: "HARD_DRIVE",
     device_name: "",
     pc_drive_letter: "",
-    total_storage_tb: "",
+    total_storage: "",
     used_storage: "",
     health_percent: "100",
     safety_status: "SAFE",
@@ -46,7 +47,7 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
         device_type: editDevice.device_type,
         device_name: editDevice.device_name,
         pc_drive_letter: editDevice.pc_drive_letter || "",
-        total_storage_tb: String(editDevice.total_storage_gb / 1024),
+        total_storage: String(editDevice.total_storage_gb / 1024),
         used_storage: String((editDevice.used_storage_gb || 0) / 1024),
         health_percent: String(editDevice.health_percent),
         safety_status: editDevice.safety_status === "UNSAFE" || editDevice.safety_status === "SLOW" ? "RISKY" : editDevice.safety_status,
@@ -56,14 +57,16 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
         price_npr: String(editDevice.price_npr || ""),
         purchased_from: editDevice.purchased_from || "",
       });
+      setTotalUnit("TB");
       setUsedUnit("TB");
     } else {
+      setTotalUnit("TB");
       setUsedUnit("TB");
       setForm({
         device_type: "HARD_DRIVE",
         device_name: "",
         pc_drive_letter: "",
-        total_storage_tb: "",
+        total_storage: "",
         used_storage: "",
         health_percent: "100",
         safety_status: "SAFE",
@@ -145,7 +148,7 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
         device_type: form.device_type,
         device_name: form.device_name,
         pc_drive_letter: form.device_type === "PC" ? form.pc_drive_letter : null,
-        total_storage_gb: (Number(form.total_storage_tb) || 0) * 1024,
+        total_storage_gb: totalUnit === "TB" ? (Number(form.total_storage) || 0) * 1024 : (Number(form.total_storage) || 0),
         used_storage_gb: usedUnit === "TB" ? (Number(form.used_storage) || 0) * 1024 : (Number(form.used_storage) || 0),
         // remaining_storage_gb is a generated column (total - used), not writable
         health_percent: Number(form.health_percent) || 100,
@@ -207,8 +210,20 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
 
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">Total Storage (TB)</Label>
-                <Input className="h-10" type="number" step="0.5" value={form.total_storage_tb} onChange={(e) => set("total_storage_tb", e.target.value)} />
+                <Label className="text-xs flex items-center justify-between">
+                  <span>Total ({totalUnit})</span>
+                  <button type="button" className="text-[10px] font-medium text-blue-500 hover:underline" onClick={() => {
+                    const val = Number(form.total_storage) || 0;
+                    if (totalUnit === "TB") {
+                      set("total_storage", String(val * 1024));
+                      setTotalUnit("GB");
+                    } else {
+                      set("total_storage", String(val / 1024));
+                      setTotalUnit("TB");
+                    }
+                  }}>Switch to {totalUnit === "TB" ? "GB" : "TB"}</button>
+                </Label>
+                <Input className="h-10" type="number" step={totalUnit === "TB" ? "0.5" : "1"} value={form.total_storage} onChange={(e) => set("total_storage", e.target.value)} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs flex items-center justify-between">
@@ -230,7 +245,7 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
                 <Label className="text-xs">Remaining</Label>
                 <div className="h-10 flex items-center px-3 rounded-md border bg-muted text-sm text-muted-foreground">
                   {(() => {
-                    const totalGb = (Number(form.total_storage_tb) || 0) * 1024;
+                    const totalGb = totalUnit === "TB" ? (Number(form.total_storage) || 0) * 1024 : (Number(form.total_storage) || 0);
                     const usedGb = usedUnit === "TB" ? (Number(form.used_storage) || 0) * 1024 : (Number(form.used_storage) || 0);
                     const remGb = Math.max(0, totalGb - usedGb);
                     if (remGb >= 1024) return `${(remGb / 1024).toFixed(2).replace(/\.?0+$/, '')} TB`;
