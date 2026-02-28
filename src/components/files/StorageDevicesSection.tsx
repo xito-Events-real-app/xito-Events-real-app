@@ -15,6 +15,11 @@ const deviceIcon = (type: string) => {
   return <HardDrive className="w-5 h-5" />;
 };
 
+const formatStorage = (gb: number): string => {
+  if (gb >= 1024) return `${(gb / 1024).toFixed(2).replace(/\.?0+$/, '')} TB`;
+  return `${Math.round(gb)} GB`;
+};
+
 const healthColor = (pct: number) => {
   if (pct > 70) return "text-emerald-500";
   if (pct > 40) return "text-amber-500";
@@ -126,15 +131,15 @@ export function StorageDevicesSection({ deviceTypeFilter, drawerOpen: externalDr
                   {/* Storage bar */}
                   <div className="space-y-1">
                     <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>{device.used_storage_gb} GB used</span>
-                      <span>{device.remaining_storage_gb} GB free</span>
+                      <span>{formatStorage(device.used_storage_gb)} used</span>
+                      <span>{formatStorage(device.remaining_storage_gb)} free</span>
                     </div>
                     <Progress
                       value={usedPct}
                       className={cn("h-2", isLowStorage ? "[&>div]:bg-red-500" : "[&>div]:bg-blue-500")}
                     />
                     <p className="text-xs text-right text-muted-foreground">
-                      {device.total_storage_gb} GB total
+                      {formatStorage(device.total_storage_gb)} total
                     </p>
                   </div>
 
