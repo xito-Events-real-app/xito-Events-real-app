@@ -1,43 +1,59 @@
 
 
-# Fix: Status Change (and all actions) Failing for Newly Added Clients
+# Fix Breaking News Not Reflecting Recent Changes
 
 ## Root Cause
 
-Every action handler in `src/pages/ClientDetail.tsx` starts with:
+When you add a client or change a status, the system calls `notifyCacheUpdate('clients')` **without passing the updated clients array**. The listener in `useCachedData` (line 154) checks:
 
-```typescript
-if (!client?.rowNumber) return;
+```text
+if (e.detail.type === 'clients' && Array.isArray(e.detail.data))
 ```
 
-For newly added clients (like "Ashmita Poudel"), `rowNumber` is `0` (the default value when inserted into the database). In JavaScript, `!0` evaluates to `true`, so the function **silently exits** without doing anything -- no error, no toast, nothing happens.
-
-This affects **all 10+ handlers**: status change, call logging, quotation save, bargaining, advance pending, booked payment, comment add, priority change, final quotation, Benzo Keep notes, and delete.
+Since `data` is `undefined`, `Array.isArray(undefined)` is `false`, so `setClients()` never fires. The Breaking News feed's `useMemo` still has the old `clients` array reference and never recomputes.
 
 ## Fix
 
-### File: `src/pages/ClientDetail.tsx`
+### File 1: `src/hooks/useCachedData.ts` (lines 152-165)
 
-Replace all `if (!client?.rowNumber) return;` guards (approximately 10 occurrences) with:
+Update the `cache-updated` event listener to re-read from memory cache when no data array is provided. This way, any `notifyCacheUpdate('clients')` call -- with or without data -- triggers a state refresh.
 
 ```typescript
-if (!client) return;
+// Current (broken):
+if (e.detail.type === 'clients' && Array.isArray(e.detail.data)) {
+  setClients(e.detail.data as ClientData[]);
+}
+
+// Fixed:
+if (e.detail.type === 'clients') {
+  if (Array.isArray(e.detail.data)) {
+    setClients(e.detail.data as ClientData[]);
+  } else {
+    // No data passed -- re-read from memory cache
+    const memClients = getMemoryClients();
+    if (memClients) setClients([...memClients]);
+  }
+}
 ```
 
-Since the system uses `registeredDateTimeAD` as the primary unique identifier (not `rowNumber`), the guard only needs to confirm the client object exists. The cache update functions already match by `registeredDateTimeAD` internally.
+The `[...memClients]` spread creates a new array reference so React detects the change and re-renders.
 
-**Affected handlers (all ~10):**
-- `handleCall` (line 364)
-- `handleStatusChange` (line 397)
-- `performStatusChange` (line 438)
-- `handleSaveQuotation` (line 469)
-- `handleSaveAdvancePendingQuotation` (line 515)
-- `handleSaveBargaining` (line 550)
-- `handleSaveFinalQuotationOnly` (line 599)
-- `handleSaveBookedPayment` (around line 630+)
-- `handlePriorityChange` (line 764)
-- `handleAddComment` (wherever it is)
-- `handleDeleteClient` (wherever it is)
+### File 2: `src/components/suite/SuiteNewsFeed.tsx` (line 6)
 
-This is the same class of bug -- `rowNumber` being `0` for new clients -- and the fix is a simple guard replacement across all handlers in the file.
+The component still passes `limit=100`, overriding our fix to 200. Update to match:
+
+```typescript
+// From:
+const { groupedByDay, isLoading, activities } = useActivityFeed(14, 100);
+// To:
+const { groupedByDay, isLoading, activities } = useActivityFeed(14, 200);
+```
+
+### File 3: `src/hooks/useBookedCachedData.ts`
+
+Apply the same fix for booked clients -- when the listener receives a `booked-clients` event without data, re-read from memory cache so booked client activities also update in real-time.
+
+## Result
+
+After these changes, any local mutation (add client, change status, add comment, log call, add payment) will immediately update the Breaking News feed because the `cache-updated` event will trigger a state refresh from the memory cache, causing `useActivityFeed`'s `useMemo` to recompute with the latest data.
 
