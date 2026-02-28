@@ -530,18 +530,16 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
   const columnStats = useMemo(() => {
     const stats: Record<string, { total: number; assigned: number; remaining: number }> = {};
     for (const col of CREW_COLUMNS) {
-      const rolePool = getFilteredFreelancersByRole(freelancers, col.field);
-      const total = rolePool.length;
-      const assignedNames = new Set<string>();
+      const total = filteredRows.length;
+      let assigned = 0;
       for (const row of filteredRows) {
         const val = (row[col.field] as string)?.trim();
-        if (val) assignedNames.add(val.toUpperCase());
+        if (val) assigned++;
       }
-      const assigned = assignedNames.size;
       stats[col.field] = { total, assigned, remaining: total - assigned };
     }
     return stats;
-  }, [freelancers, filteredRows]);
+  }, [filteredRows]);
 
   return (
     <div className="fixed inset-0 z-[100] bg-gray-200 flex flex-col">
