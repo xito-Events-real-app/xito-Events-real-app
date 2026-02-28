@@ -1,66 +1,68 @@
 
 
-# Floating Booking Calendar Popup (BB Shortcut)
+# Fix Comment System in Client Page + Show Recent Comment in Upcoming Events
 
-## What It Does
+## Problems Found
 
-Press **B** twice quickly (like the space-space shortcut for search) to open a floating, draggable, resizable Booking Calendar popup. It stays on top of everything but does NOT block interaction with the background -- like a picture-in-picture window. Press **BB** again or click the X button to close it.
-
-## Architecture (3 new files + 1 edit)
-
-### File 1: `src/contexts/BookingCalendarPopupContext.tsx` (NEW)
-
-A context provider following the exact same pattern as `SaugatSearchContext`:
-- Double-B keypress detection (400ms window between presses)
-- Skips when focus is in input/textarea/contenteditable
-- Exposes `isOpen`, `open`, `close`, `toggle`
-- Escape key also closes it
-
-### File 2: `src/components/shared/FloatingBookingCalendar.tsx` (NEW)
-
-A floating popup component that:
-- Renders when `isOpen` is true from the context
-- Uses a portal (renders at document body level) so it floats above everything
-- **Draggable**: mousedown on the header bar lets you drag it anywhere
-- **Resizable**: a drag handle in the bottom-right corner for resizing (min 320x300, max 800x700)
-- **Non-modal**: no overlay, no blocking -- you can click and work on background content
-- Has a close (X) button in the header
-- Contains the existing `BookingCalendarMini` component inside a scrollable area
-- Default position: bottom-right of the screen
-- Default size: 380x450px
-- z-index: 250 (above sheets at 200, below selects at 300)
-
-### File 3: No third file needed -- the component is self-contained
-
-### File 4: `src/App.tsx` (EDIT)
-
-- Import and wrap with `BookingCalendarPopupProvider` (alongside existing `SaugatSearchProvider`)
-- Render `<FloatingBookingCalendar />` alongside `<SaugatSearch />`
-
-## UI Layout of the Popup
+### 1. Comment Format Mismatch (Root Cause)
+The `generateCommentEntry()` function in `timestamp-utils.ts` creates comments in a format that `parseComments()` in `client-card-utils.ts` cannot parse:
 
 ```text
-+--[ Booking Calendar ]--------[X]--+
-|  (draggable header bar)           |
-+-----------------------------------+
-|                                   |
-|   BookingCalendarMini content     |
-|   (scrollable)                    |
-|                                   |
-|                                   |
-+-------------------------------[//]+
-        (resize handle)
+generateCommentEntry output:  "02/28/2026 10:15 - my comment\nold comment"
+                               ^^^ newline separator, dash format
+
+parseComments expects:         "my comment [02/28/2026 10:15]|||old comment"
+                               ^^^ triple-pipe separator, bracket timestamp
 ```
 
-## Technical Details
+This means after adding a comment optimistically (before the backend returns), the comment appears as raw unparsed text. It only works correctly after a page refresh (when the backend-formatted string replaces the local one).
 
-- Drag implementation: native `mousedown`/`mousemove`/`mouseup` events on the header, updating `top`/`left` CSS via state
-- Resize implementation: same mouse events on the corner handle, updating `width`/`height` via state
-- Position persisted in component state only (resets on page reload -- keeps it simple)
-- The popup uses `position: fixed` so it stays in place during scroll
+### 2. Comments Tab Disorganized
+The "Comments" sidebar tab in the client detail page shows comments oldest-first (no reverse), and the `ChatComments` component used in the hero section reverses but also tries to scroll-to-bottom, which conflicts with newest-first ordering.
 
-## What Does NOT Change
+### 3. Upcoming Events Already Shows Comments
+The `TodayEventsHero` component already parses and shows the last comment on each event card (line 420). But because of the format mismatch above, newly added comments from the drawer may not display correctly until the backend returns the properly formatted string.
 
-- `BookingCalendarMini` component stays exactly the same
-- `SaugatSearchContext` (double-space) is untouched
-- No database or backend changes
+## Fix Plan
+
+### File 1: `src/lib/timestamp-utils.ts`
+Fix `generateCommentEntry()` to match the format that `parseComments()` expects:
+- Change delimiter from `\n` to `|||`
+- Change timestamp format from `MM/DD/YYYY HH:MM - comment` to `comment [MM/DD/YYYY HH:MM]`
+
+```typescript
+export function generateCommentEntry(comment: string, existingComments: string): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const year = now.getFullYear();
+  const hours = String(now.getHours()).padStart(2, '0');
+  const mins = String(now.getMinutes()).padStart(2, '0');
+  const timestamp = `${month}/${day}/${year} ${hours}:${mins}`;
+
+  const newEntry = `${comment} [${timestamp}]`;
+  return existingComments ? `${newEntry}|||${existingComments}` : newEntry;
+}
+```
+
+### File 2: `src/components/client-detail/ChatComments.tsx`
+- Remove `.reverse()` since comments are already newest-first from the parser
+- Change scroll behavior to scroll-to-top (newest at top)
+- Always show the input (remove the hidden toggle -- make it always visible at the bottom like a real chat)
+
+### File 3: `src/pages/ClientDetail.tsx` (Comments tab)
+- Show comments newest-first (reverse the `parsedComments` array in the display)
+- The comment input and display are already fine structurally
+
+### File 4: `src/components/client-detail/QuotationDisplaySection.tsx`
+- Same fix for `InlineComments` -- remove `.reverse()` since data is already newest-first
+
+### File 5: No changes needed for Upcoming Events
+The `TodayEventsHero` already shows the last comment on each event card. Once the format mismatch is fixed (File 1), newly added comments will parse and display correctly in the upcoming events section too.
+
+## What This Fixes
+- Comments added from anywhere (client page, fresh client card, desktop row, upcoming events drawer) will immediately display correctly with proper timestamp parsing
+- Newest comments always appear at the top
+- The comment input is always accessible without needing to click a "+" button first
+- Upcoming events cards will correctly show the most recent comment after adding one
+
