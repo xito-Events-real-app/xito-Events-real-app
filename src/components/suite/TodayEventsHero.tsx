@@ -417,7 +417,7 @@ export function TodayEventsHero() {
                   
                   // Parse comments
                   const parsedComments = parseComments(event.client.comments);
-                  const lastComment = parsedComments.length > 0 ? parsedComments[parsedComments.length - 1] : null;
+                  const lastComment = parsedComments.length > 0 ? parsedComments[0] : null;
                   
                   const cardKey = `${event.client.clientName}-${event.dateStr}-${idx}`;
                   const isExpanded = expandedCards[cardKey] || false;
