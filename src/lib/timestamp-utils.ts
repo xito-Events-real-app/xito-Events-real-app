@@ -108,7 +108,7 @@ export function computePaymentUpdate(params: {
   return { updatedPaymentsMade, updatedPaymentDatesAD, remainingPayment, totalPaid };
 }
 
-/** Generate a comment entry: "MM/DD/YYYY HH:MM - comment" prepended to existing */
+/** Generate a comment entry: "comment [MM/DD/YYYY HH:MM]" prepended to existing, delimited by ||| */
 export function generateCommentEntry(comment: string, existingComments: string): string {
   const now = new Date();
   const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -118,6 +118,6 @@ export function generateCommentEntry(comment: string, existingComments: string):
   const mins = String(now.getMinutes()).padStart(2, '0');
   const timestamp = `${month}/${day}/${year} ${hours}:${mins}`;
   
-  const newEntry = `${timestamp} - ${comment}`;
-  return existingComments ? `${newEntry}\n${existingComments}` : newEntry;
+  const newEntry = `${comment} [${timestamp}]`;
+  return existingComments ? `${newEntry}|||${existingComments}` : newEntry;
 }
