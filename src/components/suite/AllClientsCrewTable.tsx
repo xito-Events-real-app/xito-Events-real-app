@@ -530,13 +530,16 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
   const columnStats = useMemo(() => {
     const stats: Record<string, { total: number; assigned: number; remaining: number }> = {};
     for (const col of CREW_COLUMNS) {
-      const total = filteredRows.length;
+      let total = 0;
       let assigned = 0;
       for (const row of filteredRows) {
-        const val = (row[col.field] as string)?.trim();
-        if (val) assigned++;
+        const reqCodes = (row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
+        const isRequired = reqCodes.length === 0 || reqCodes.includes(col.short);
+        if (!isRequired) continue;
+        total++;
+        if ((row[col.field] as string)?.trim()) assigned++;
       }
-      stats[col.field] = { total, assigned, remaining: total - assigned };
+      stats[col.field] = { total, assigned, remaining: Math.max(0, total - assigned) };
     }
     return stats;
   }, [filteredRows]);
@@ -1023,10 +1026,10 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                         className={cn("text-xs font-bold px-1 py-2.5 text-center border-r last:border-r-0", GROUP_STYLES[col.group])}
                         style={{ width: `${columnWidths[col.field]}px`, minWidth: `${columnWidths[col.field]}px` }}
                       >
-                        <span className="flex items-center justify-center gap-0.5 whitespace-nowrap">
-                          <span className="font-black text-sm">{s?.remaining ?? ''}</span>
-                          <span className="font-bold text-[10px]">{col.short}</span>
-                          <span className="text-[8px] opacity-50">{s?.assigned}/{s?.total}</span>
+                        <span className="relative flex items-center justify-center whitespace-nowrap" style={{ height: '36px' }}>
+                          <span className="absolute top-0 left-0 font-black text-sm leading-none">{s?.remaining ?? 0}</span>
+                          <span className="font-bold text-[11px]">{col.short}</span>
+                          <span className="absolute bottom-0 right-0 text-[8px] opacity-60 leading-none">{s?.assigned ?? 0}/{s?.total ?? 0}</span>
                         </span>
                       </th>
                     );
