@@ -454,7 +454,10 @@ const ClientDetail = () => {
       
       toast({ title: "Success", description: `Status changed to ${newStatus}` });
 
-      // Background sync handled by push-sync process (synced_to_sheet: false)
+      // Background: also trigger direct sheet status update (ID-first)
+      updateClientStatus(
+        client.rowNumber || 0, newStatus, existingLog, client.registeredDateTimeAD
+      ).catch(err => console.warn('[STATUS] Background sheet sync failed:', err));
     } catch (err) {
       console.error('Failed to update status:', err);
       toast({ title: "Error", description: "Failed to update status", variant: "destructive" });
@@ -685,8 +688,8 @@ const ClientDetail = () => {
 
       // Background: proper sheet MOVE (tracker -> booked + downstream syncs)
       // Then chain addPayment AFTER move completes with the correct booked row number
-      if (client.rowNumber && client.registeredDateTimeAD) {
-        updateClientStatus(client.rowNumber, pendingStatus, currentStatusLog || client.statusLog || '', client.registeredDateTimeAD)
+      if (client.registeredDateTimeAD) {
+        updateClientStatus(client.rowNumber || 0, pendingStatus, currentStatusLog || client.statusLog || '', client.registeredDateTimeAD)
           .then(async (result) => {
             if (result?.movedToBooked || result?.success) {
               const { confirmBookedMigrationSync } = await import('@/lib/clients-supabase-cache');
