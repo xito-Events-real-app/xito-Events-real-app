@@ -7560,6 +7560,7 @@ async function pullStorageDevicesFromSheet(accessToken: string) {
     }
 
     const data = await response.json();
+    console.log(`[pullStorageDevices] Sheet ${config.sheetName}: ${data.values?.length || 0} rows found`);
     if (!data.values || data.values.length === 0) continue;
 
     const devices = data.values
