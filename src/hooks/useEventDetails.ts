@@ -114,16 +114,27 @@ export function useEventDetails(registeredDateTimeAD: string | undefined) {
     let hadCache = await loadFromCache();
 
     if (!hadCache && !backfillAttemptedRef.current) {
-      // Auto-backfill: pull from Sheets once
       backfillAttemptedRef.current = true;
-      console.log('[useEventDetails] No cache, attempting backfill from Sheets...');
-      try {
-        await supabase.functions.invoke('google-sheets', {
-          body: { action: 'syncToEventDetails', data: { registeredDateTimeAD } }
-        });
-        hadCache = await loadFromCache();
-      } catch (err) {
-        console.warn('[useEventDetails] Backfill failed:', err);
+
+      // Only attempt Sheets backfill for booked clients (tracker clients have no event details)
+      const { data: clientRow } = await supabase
+        .from('clients_cache')
+        .select('sheet_source')
+        .eq('registered_date_time_ad', registeredDateTimeAD)
+        .maybeSingle();
+
+      if (clientRow?.sheet_source === 'booked') {
+        console.log('[useEventDetails] No cache, attempting backfill from Sheets...');
+        try {
+          await supabase.functions.invoke('google-sheets', {
+            body: { action: 'syncToEventDetails', data: { registeredDateTimeAD } }
+          });
+          hadCache = await loadFromCache();
+        } catch (err) {
+          console.warn('[useEventDetails] Backfill failed:', err);
+        }
+      } else {
+        console.log('[useEventDetails] Skipping backfill — client is not booked');
       }
     }
 
