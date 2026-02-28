@@ -1,45 +1,66 @@
 
 
-# Auto-Push Storage Devices & Files to Google Sheets
+# Upgrade Add Device to Modern Dialog with Smart Date Conversion
 
 ## Overview
-Remove the manual "Push to Sheets" buttons from the File Management page and instead implement automatic background push (same 3-second debounced pattern used by the client tracker).
-
-## How It Works (Same Pattern as Client Tracker)
-1. Every mutation (add/update/delete device or file) already sets `synced_to_sheet: false`
-2. After each mutation, call `scheduleFilesPush()` which debounces for 3 seconds
-3. The push function invokes the existing edge function actions (`pushStorageDevicesToSheet` and `pushFilesToSheet`) 
-4. On success, rows are marked `synced_to_sheet: true` by the edge function
+Replace the bottom Drawer with a centered Dialog popup, modernize the UI, simplify Safety Status to SAFE/RISKY only, and add automatic AD-to-BS and BS-to-AD date conversion when entering purchase dates.
 
 ## Changes
 
-### 1. Create push scheduler in `src/lib/files-push-scheduler.ts`
-- New file following the exact same pattern as `clients-supabase-cache.ts` push scheduler
-- `scheduleStoragePush()` -- 3-second debounced, single-flight guard, calls `pushStorageDevicesToSheets()`
-- `scheduleFilesPush()` -- 3-second debounced, single-flight guard, calls `pushFilesToSheets()`
-- Console logs for debugging (e.g. `[FILES-PUSH] Auto-pushed 5 files to Sheets`)
+### 1. Rewrite `AddStorageDeviceDrawer.tsx` as a Dialog
+**File:** `src/components/files/AddStorageDeviceDrawer.tsx`
 
-### 2. Wire auto-push into `useStorageDevices.ts`
-- Import `scheduleStoragePush` from the new scheduler
-- Call `scheduleStoragePush()` after every `add()`, `update()`, and `remove()` call
-- Also set `synced_to_sheet: false` on add/update mutations in `files-api.ts`
+- Replace `Drawer`/`DrawerContent`/`DrawerHeader`/`DrawerTitle` with `Dialog`/`DialogContent`/`DialogHeader`/`DialogTitle` from `@/components/ui/dialog`
+- Modern centered popup with clean spacing, rounded corners, max-w-lg
+- Component name stays the same (no rename needed since all imports reference it)
 
-### 3. Wire auto-push into `useFilesManagement.ts`
-- Import `scheduleFilesPush` from the new scheduler
-- Call `scheduleFilesPush()` after every `add()`, `update()`, `remove()`, and `generateRows()` call
-- Files already set `synced_to_sheet: false` on inline edits (confirmed in FilesManagementTable)
+### 2. Safety Status: SAFE / RISKY only
+- Remove "SLOW" and "UNSAFE" options
+- Replace with just two options: `SAFE` and `RISKY`
+- Update default value to `"SAFE"`
 
-### 4. Update `src/lib/files-api.ts`
-- Ensure `addStorageDevice` and `updateStorageDevice` set `synced_to_sheet: false` 
-- Ensure `deleteStorageDevice` triggers a push (devices removed from DB = removed from sheet on next push)
-- Ensure `addFileRecord` sets `synced_to_sheet: false`
+### 3. Auto-convert Purchase Date AD <-> BS
+- When user types a valid AD date (`YYYY-MM-DD`), auto-compute and fill the BS field using `adToBS()` + `formatBSDate()`
+- When user types a valid BS date (e.g. `2082 10 15` or changes the field), auto-compute and fill the AD field using `bsToAD()`
+- Use a flag to prevent infinite update loops between the two fields
+- Import `adToBS`, `bsToAD`, `formatBSDate` from `@/lib/nepali-date`
 
-### 5. Clean up `src/pages/FileManagement.tsx`
-- Remove the "Push to Sheets" buttons from both Storage and Files tabs
-- Remove `handlePushStorageToSheets` and `handlePushFiles` functions
-- Remove related state (`syncingStorage`, `pushingFiles`)
-- Remove unused imports (`pushStorageDevicesToSheets`, `pushFilesToSheets`, `Upload`)
+### 4. Modern UI Polish
+- Subtle section groupings with light dividers
+- Icon accents next to section headers (HardDrive icon for device info, Calendar for dates, etc.)
+- Consistent input sizing with `h-10` inputs
+- Blue gradient save button matching the file management theme
 
-## Result
-Storage devices and files will auto-push to Google Sheets within 3 seconds of any change, just like the client tracker -- no manual buttons needed.
+## Technical Details
 
+**Date conversion logic:**
+```
+// AD -> BS
+const handleADChange = (val: string) => {
+  set("purchase_date_ad", val);
+  // Try parse YYYY-MM-DD
+  const parts = val.split("-");
+  if (parts.length === 3 && parts[0].length === 4) {
+    const date = new Date(val);
+    if (!isNaN(date.getTime())) {
+      const bs = adToBS(date);
+      set("purchase_date_bs", formatBSDate(bs));
+    }
+  }
+};
+
+// BS -> AD (parse "DD MonthName YYYY" format)
+const handleBSChange = (val: string) => {
+  set("purchase_date_bs", val);
+  // Try parse "15 Magh 2082" format
+  // Extract day, month name, year -> bsToAD() -> format as YYYY-MM-DD
+};
+```
+
+**Safety status mapping:** The existing `StorageDevicesSection` already handles badge display via `safetyBadge()`. We update:
+- `"SAFE"` stays as green badge
+- `"RISKY"` replaces both `"SLOW"` and `"UNSAFE"` -- rendered as red badge
+
+**Files to update:**
+1. `src/components/files/AddStorageDeviceDrawer.tsx` -- main rewrite (Drawer -> Dialog, safety options, date auto-convert)
+2. `src/components/files/StorageDevicesSection.tsx` -- update `safetyBadge()` to handle `"RISKY"` instead of `"SLOW"`/`"UNSAFE"`, update `isUnsafe` check to `device.safety_status === "RISKY"`
