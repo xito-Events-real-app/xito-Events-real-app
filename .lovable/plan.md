@@ -1,65 +1,44 @@
 
 
-# Add Freelancer Availability Stats to Crew Column Headers (Same Row)
+# Fix: Column Stats Should Count Assignments (Rows), Not Unique Freelancers
 
-## Layout
+## Current Behavior (Wrong)
 
-Each column header will show stats inline on a single row:
+The stats use `getFilteredFreelancersByRole` to get the **freelancer pool size** as `total`, and count **unique assigned names** as `assigned`. This answers "how many freelancers are available" -- not what you want.
 
-```
-55 PB 5/60
-```
+## Correct Behavior
 
-- **55** = remaining freelancers (bold, prominent)
-- **PB** = existing short code
-- **5/60** = assigned/total (small, muted)
+- **16 (total)** = total number of rows in `filteredRows` (i.e., total assignment slots for that column)
+- **4 (assigned)** = rows where that column is filled (non-empty value)
+- **12 (remaining)** = rows where that column is still empty (16 - 4)
 
-## File Changed
+## Change
 
-**`src/components/suite/AllClientsCrewTable.tsx`**
+**File: `src/components/suite/AllClientsCrewTable.tsx`** (lines 530-544)
 
-### 1. Add `columnStats` useMemo (after `columnWidths`, ~line 528)
-
-Compute per-column stats using existing `freelancers` state and `filteredRows`:
+Replace the `columnStats` useMemo with row-counting logic:
 
 ```typescript
 const columnStats = useMemo(() => {
   const stats: Record<string, { total: number; assigned: number; remaining: number }> = {};
   for (const col of CREW_COLUMNS) {
-    const rolePool = getFilteredFreelancersByRole(freelancers, col.field);
-    const total = rolePool.length;
-    const assignedNames = new Set<string>();
+    const total = filteredRows.length;
+    let assigned = 0;
     for (const row of filteredRows) {
       const val = (row[col.field] as string)?.trim();
-      if (val) assignedNames.add(val.toUpperCase());
+      if (val) assigned++;
     }
-    const assigned = assignedNames.size;
     stats[col.field] = { total, assigned, remaining: total - assigned };
   }
   return stats;
-}, [freelancers, filteredRows]);
+}, [filteredRows]);
 ```
 
-### 2. Update desktop header cells (lines 1004-1012)
+Key differences:
+- `total` = `filteredRows.length` (number of assignment rows), not freelancer pool size
+- `assigned` = count of rows with a non-empty value in that column, not unique names
+- `remaining` = unassigned slots
+- Removes dependency on `freelancers` and `getFilteredFreelancersByRole`
 
-Replace the current `{col.short}` with an inline layout:
-
-```tsx
-{CREW_COLUMNS.map(col => {
-  const s = columnStats[col.field];
-  return (
-    <th key={col.field}
-      className={cn("text-xs font-bold px-1 py-2.5 text-center border-r last:border-r-0", GROUP_STYLES[col.group])}
-      style={{ width: `${columnWidths[col.field]}px`, minWidth: `${columnWidths[col.field]}px` }}>
-      <span className="flex items-center justify-center gap-0.5 whitespace-nowrap">
-        <span className="font-black text-sm">{s?.remaining ?? ''}</span>
-        <span className="font-bold text-[10px]">{col.short}</span>
-        <span className="text-[8px] opacity-50">{s?.assigned}/{s?.total}</span>
-      </span>
-    </th>
-  );
-})}
-```
-
-The minimum column width of 55px is sufficient. No new dependencies or database changes needed.
+No other file changes needed.
 
