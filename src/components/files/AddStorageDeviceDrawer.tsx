@@ -29,6 +29,8 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
     device_name: "",
     pc_drive_letter: "",
     total_storage_tb: "",
+    used_storage_gb: "",
+    remaining_storage_gb: "",
     health_percent: "100",
     safety_status: "SAFE",
     speed_rating: "3",
@@ -45,6 +47,8 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
         device_name: editDevice.device_name,
         pc_drive_letter: editDevice.pc_drive_letter || "",
         total_storage_tb: String(editDevice.total_storage_gb / 1024),
+        used_storage_gb: String(editDevice.used_storage_gb || ""),
+        remaining_storage_gb: String(editDevice.remaining_storage_gb ?? ""),
         health_percent: String(editDevice.health_percent),
         safety_status: editDevice.safety_status === "UNSAFE" || editDevice.safety_status === "SLOW" ? "RISKY" : editDevice.safety_status,
         speed_rating: String(editDevice.speed_rating),
@@ -59,6 +63,8 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
         device_name: "",
         pc_drive_letter: "",
         total_storage_tb: "",
+        used_storage_gb: "",
+        remaining_storage_gb: "",
         health_percent: "100",
         safety_status: "SAFE",
         speed_rating: "3",
@@ -140,6 +146,8 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
         device_name: form.device_name,
         pc_drive_letter: form.device_type === "PC" ? form.pc_drive_letter : null,
         total_storage_gb: (Number(form.total_storage_tb) || 0) * 1024,
+        used_storage_gb: Number(form.used_storage_gb) || 0,
+        remaining_storage_gb: Number(form.remaining_storage_gb) || 0,
         health_percent: Number(form.health_percent) || 100,
         safety_status: form.safety_status,
         speed_rating: Number(form.speed_rating) || 3,
@@ -197,11 +205,21 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Total Storage (TB)</Label>
                 <Input className="h-10" type="number" step="0.5" value={form.total_storage_tb} onChange={(e) => set("total_storage_tb", e.target.value)} />
               </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Used (GB)</Label>
+                <Input className="h-10" type="number" value={form.used_storage_gb} onChange={(e) => set("used_storage_gb", e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Remaining (GB)</Label>
+                <Input className="h-10" type="number" value={form.remaining_storage_gb} onChange={(e) => set("remaining_storage_gb", e.target.value)} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Health %</Label>
                 <Input className="h-10" type="number" value={form.health_percent} onChange={(e) => set("health_percent", e.target.value)} min="0" max="100" />
