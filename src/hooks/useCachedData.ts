@@ -9,7 +9,6 @@ import {
 import { getQueueLength } from "@/lib/sync-queue";
 import {
   loadClientsFromCache,
-  isCachePopulated,
   updateClientInCacheRecord,
 } from "@/lib/clients-supabase-cache";
 import {
@@ -17,9 +16,9 @@ import {
   setMemoryClients,
   getMemoryDropdowns,
   setMemoryDropdowns,
-  isMemoryLoaded,
   updateMemoryClient,
 } from "@/lib/memory-cache";
+import { loadAllClients, resetLoaderPromises } from "@/lib/data-loader-singleton";
 
 interface UseCachedDataResult {
   clients: ClientData[];
@@ -46,41 +45,17 @@ export function useCachedData(): UseCachedDataResult {
 
   const loadData = useCallback(async () => {
     try {
-      // Step 0: Check in-memory cache first (0ms, instant)
-      if (isMemoryLoaded()) {
-        const memClients = getMemoryClients()!;
-        const memDD = getMemoryDropdowns();
-        setClients(memClients);
-        if (memDD) setDropdowns(memDD);
-        setIsFromCache(true);
-        setIsLoading(false);
-        setLastSyncedAt(new Date());
-        return;
-      }
+      const cachedClients = await loadAllClients();
+      setClients(cachedClients);
+      setIsFromCache(true);
+      setIsLoading(false);
+      setLastSyncedAt(new Date());
 
-      // Step 1: Try Supabase cache (instant ~50ms)
-      const hasCache = await isCachePopulated();
-
-      if (hasCache) {
-        const cachedClients = await loadClientsFromCache();
-        setClients(cachedClients);
-        setMemoryClients(cachedClients);
-        setIsFromCache(true);
-        setIsLoading(false);
-        setLastSyncedAt(new Date());
-
-        // Load dropdowns from IndexedDB
-        const cached = await getCachedData();
-        if (cached?.dropdowns) {
-          setDropdowns(cached.dropdowns);
-          setMemoryDropdowns(cached.dropdowns);
-        }
-      } else {
-        // Cache is empty — show empty state (no Sheets fallback)
-        console.log('[useCachedData] Cache empty, showing empty state');
-        setClients([]);
-        setIsLoading(false);
-        setError('Cache is empty. Data needs to be populated.');
+      // Load dropdowns from IndexedDB
+      const cached = await getCachedData();
+      if (cached?.dropdowns) {
+        setDropdowns(cached.dropdowns);
+        setMemoryDropdowns(cached.dropdowns);
       }
     } catch (err) {
       console.error('Data loading error:', err);
@@ -91,6 +66,7 @@ export function useCachedData(): UseCachedDataResult {
 
   // Refresh: re-read from database cache only
   const refreshData = useCallback(async () => {
+    resetLoaderPromises();
     setIsSyncing(true);
     setError(null);
 
