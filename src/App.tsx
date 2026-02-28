@@ -7,8 +7,10 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { SaugatSearchProvider } from "./contexts/SaugatSearchContext";
 import { BookingCalendarPopupProvider } from "./contexts/BookingCalendarPopupContext";
+import { BenzoKeepPopupProvider } from "./contexts/BenzoKeepPopupContext";
 import { SaugatSearch } from "./components/suite/SaugatSearch";
 import { FloatingBookingCalendar } from "./components/shared/FloatingBookingCalendar";
+import { FloatingBenzoKeep } from "./components/shared/FloatingBenzoKeep";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import Login from "./pages/Login";
 import SuiteLanding from "./pages/SuiteLanding";
@@ -42,10 +44,12 @@ const App = () => (
     <TooltipProvider>
       <SaugatSearchProvider>
         <BookingCalendarPopupProvider>
+          <BenzoKeepPopupProvider>
           <BrowserRouter>
             <AuthProvider>
               <SaugatSearch />
               <FloatingBookingCalendar />
+              <FloatingBenzoKeep />
               <Toaster />
               <Sonner />
             <Routes>
@@ -91,10 +95,11 @@ const App = () => (
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AuthProvider>
-        </BrowserRouter>
-      </BookingCalendarPopupProvider>
-    </SaugatSearchProvider>
-    </TooltipProvider>
+          </BrowserRouter>
+          </BenzoKeepPopupProvider>
+        </BookingCalendarPopupProvider>
+      </SaugatSearchProvider>
+      </TooltipProvider>
   </QueryClientProvider>
 );
 
