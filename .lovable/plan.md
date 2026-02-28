@@ -1,48 +1,65 @@
 
-Short answer: not “perfectly” by itself. It will fix the core path, but to fully solve your exact Ashmita case we need one extra recovery step.
 
-What I verified right now:
-- In backend cache, Ashmita is marked as:
-  - `sheet_source = booked`
-  - `row_number = 42`
-  - `synced_to_sheet = true`
-- But in Google Sheet lookup, the same `registeredDateTimeAD` is still in:
-  - `CLIENT TRACKER` row 2
-  - status still old (`CALLED : QUOTATION PENDING`)
-- So this is a real data mismatch (app/backend state and sheet state diverged).
+# Fix Slow App Loading with Singleton Data Loader
 
-Why this happens:
-1) Client detail BOOKED flow still has this guard:
-   - `if (client.rowNumber && client.registeredDateTimeAD) { ... }`
-   - If `rowNumber` is 0/falsy at that moment, sheet MOVE call is skipped.
-2) Backend `updateClientStatus` still hard-fails early when `rowNumber < 2` before fully using ID-based recovery:
-   - `throw new Error('Valid rowNumber is required for updating status')`
-3) Non-BOOKED status flow in `performStatusChange` updates local/backend cache, but does not call sheet status update directly, so sheet can lag/drift for some paths.
+## Problem
+The app takes too long to load because 8-10 components independently query the database on startup before any single query finishes and populates the memory cache. This is NOT caused by the recent sync fixes -- those only changed status update logic, not data loading.
 
-What will fully fix your problem:
-1) Frontend guard fix (ClientDetail BOOKED path)
-   - Change condition to ID-first:
-   - from `if (client.rowNumber && client.registeredDateTimeAD)`
-   - to `if (client.registeredDateTimeAD)`
-2) Backend status update hardening (google-sheets function)
-   - Allow `updateClientStatus` to continue when `registeredDateTimeAD` exists even if row is <2.
-   - Resolve actual row via ID lookup first, then write.
-3) Ensure status sync is triggered for normal status changes too
-   - Add background `updateClientStatus(...)` call in `performStatusChange`.
-4) One-time reconciliation for already-stuck clients (including Ashmita)
-   - Detect records marked booked in backend but still present in tracker sheet.
-   - Execute proper MOVE (copy to Booked, delete from Tracker) for those records.
+## Root Cause
+When memory cache is empty (fresh app open / page refresh), every hook instance of `useCachedData()` and `useBookedCachedData()` independently runs:
+1. `isCachePopulated()` -- SELECT count query
+2. `loadClientsFromCache()` -- full SELECT * with pagination
 
-Timing expectation after fix:
-- Normally sheet update should appear in about 5–30 seconds.
-- If it takes more than 1–2 minutes, that indicates a sync error, not normal delay.
+With 8-10 components mounting simultaneously, that's 16-20 database round-trips for the exact same data.
 
-Acceptance test after implementation:
-1) Add a fresh client.
-2) Change status to BOOKED with payment.
-3) Confirm in under 30 seconds:
-   - row exists in BOOKED CLIENTS sheet
-   - same ID no longer exists in CLIENT TRACKER
-4) Confirm non-BOOKED status changes also reflect in sheet.
+## Solution: Singleton Promise Deduplication
 
-This gives a reliable fix for both future updates and the already-broken Ashmita record.
+### Step 1: Create `src/lib/data-loader-singleton.ts`
+
+A new module that stores a single in-flight Promise per data type. The first caller triggers the actual database fetch; all subsequent callers get the same Promise back.
+
+```text
+Current flow (8-10 parallel DB calls):
+  Hook 1 --> isCachePopulated() --> loadClientsFromCache() --> DB
+  Hook 2 --> isCachePopulated() --> loadClientsFromCache() --> DB
+  Hook 3 --> isCachePopulated() --> loadClientsFromCache() --> DB
+
+Fixed flow (1 DB call total):
+  Hook 1 --> loadAllClients() --> DB (single query)
+  Hook 2 --> loadAllClients() --> same Promise (no DB call)
+  Hook 3 --> loadAllClients() --> same Promise (no DB call)
+```
+
+Key functions:
+- `loadAllClients(): Promise<ClientData[]>` -- checks memory first, deduplicates in-flight fetches, populates memory on completion
+- `loadAllBookedClients(): Promise<BookedClientData[]>` -- same pattern for booked data
+- `resetLoaderPromises(): void` -- allows manual refresh to bypass deduplication
+
+### Step 2: Update `src/hooks/useCachedData.ts`
+
+Replace the `loadData` function body:
+- Remove direct calls to `isCachePopulated()` and `loadClientsFromCache()`
+- Call `loadAllClients()` from the singleton instead
+- Keep all other logic (dropdowns from IndexedDB, event listeners, queue tracking) unchanged
+
+### Step 3: Update `src/hooks/useBookedCachedData.ts`
+
+Same change:
+- Replace `isCachePopulated()` + `loadBookedClientsFromCache()` with `loadAllBookedClients()`
+- Keep event listeners and refresh logic unchanged
+
+### Step 4: Update `refreshData` in both hooks
+
+Call `resetLoaderPromises()` before fetching fresh data, so manual refresh bypasses the singleton cache and forces a real database read.
+
+## Expected Result
+- Cold start: 1 database query instead of 8-10 (load time drops from several seconds to under 1 second)
+- Warm navigation: still 0ms (memory cache unchanged)
+- Manual refresh: still works (resets singleton)
+- No UI changes, no data shape changes, no breaking changes
+
+## Files Changed
+1. **NEW**: `src/lib/data-loader-singleton.ts` -- singleton loader module
+2. **EDIT**: `src/hooks/useCachedData.ts` -- use singleton for initial load
+3. **EDIT**: `src/hooks/useBookedCachedData.ts` -- use singleton for initial load
+
