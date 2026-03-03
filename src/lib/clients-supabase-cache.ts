@@ -1,5 +1,11 @@
 import { supabase } from "@/integrations/supabase/client";
 import { ClientData, BookedClientData } from "@/lib/sheets-api";
+import {
+  getMemoryClients,
+  setMemoryClients,
+  getMemoryBookedClients,
+  setMemoryBookedClients,
+} from "@/lib/memory-cache";
 
 // ============= PUSH SCHEDULER (Phase 2) =============
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -218,6 +224,36 @@ export async function updateClientFieldInCache(
     .eq('registered_date_time_ad', registeredDateTimeAD);
 
   if (error) throw error;
+
+  // Keep in-memory caches in sync for instant cross-module updates
+  const memClients = getMemoryClients();
+  if (memClients) {
+    setMemoryClients(
+      memClients.map((c) =>
+        c.registeredDateTimeAD === registeredDateTimeAD
+          ? ({ ...c, [field]: value } as ClientData)
+          : c
+      )
+    );
+  }
+
+  const memBookedClients = getMemoryBookedClients();
+  if (memBookedClients) {
+    setMemoryBookedClients(
+      memBookedClients.map((c) =>
+        c.registeredDateTimeAD === registeredDateTimeAD
+          ? ({ ...c, [field]: value } as BookedClientData)
+          : c
+      )
+    );
+  }
+
+  // Broadcast immediately (avoid debounced single-type cancellation)
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('cache-updated', { detail: { type: 'clients' } }));
+    window.dispatchEvent(new CustomEvent('cache-updated', { detail: { type: 'booked-clients' } }));
+  }
+
   schedulePushToSheets();
 }
 
