@@ -103,7 +103,9 @@ export function useBookedCachedData(): UseBookedCachedDataResult {
             if (mem) {
               const updated = payload.eventType === 'UPDATE'
                 ? mem.map(c => c.registeredDateTimeAD === mapped.registeredDateTimeAD ? mapped : c)
-                : [...mem, mapped];
+                : mem.some(c => c.registeredDateTimeAD === mapped.registeredDateTimeAD)
+                  ? mem.map(c => c.registeredDateTimeAD === mapped.registeredDateTimeAD ? mapped : c)
+                  : [...mem, mapped];
               setMemoryBookedClients(updated);
             }
           } else if (payload.eventType === 'DELETE') {
