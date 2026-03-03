@@ -1,69 +1,92 @@
 
 
-# Fix: Duplicate Clients in Finance Manager (Definitive)
+# Redesign Files Section: Month Filters + Expandable Client Accordions (Past/Today Events Only)
 
-## Root Cause
+## Key Constraint
+Only show files for events where `event_date_ad <= today` (past and today). No future events.
 
-The previous fix only guarded the Realtime INSERT path. But duplicates can enter through multiple other paths:
+## Data Flow
 
-1. **Multiple hook instances** (~8 components mount `useBookedCachedData`) each create their own Realtime channel. When a DB change fires, all instances process it and update the shared memory singleton — potential for interleaved appends.
-2. **`cache-updated` event listeners** — all instances read from the same memory singleton and set local state. If memory was corrupted by a race between instances, the corruption propagates.
-3. **`loadData()` + Realtime race** — the subscription starts immediately in the same `useEffect` as `loadData()` (async). A Realtime INSERT can fire before load completes, then load resolves and sets a second copy.
-
-Since the exact race is timing-dependent (explaining the intermittent "sometimes 1, sometimes 2, sometimes 3"), the correct fix is a **defensive dedup at the output boundary** rather than trying to patch every possible input path.
-
-## Fix (2 changes)
-
-### 1. `src/hooks/useBookedCachedData.ts` — Dedup clients before returning
-
-Add a `useMemo` that deduplicates the `clients` array by `registeredDateTimeAD` before returning it to consumers. This is a zero-cost safety net that catches ALL duplication sources regardless of origin:
-
-```typescript
-const dedupedClients = useMemo(() => {
-  const seen = new Set<string>();
-  return clients.filter(c => {
-    if (seen.has(c.registeredDateTimeAD)) return false;
-    seen.add(c.registeredDateTimeAD);
-    return true;
-  });
-}, [clients]);
-
-return { clients: dedupedClients, ... };
+```text
+freelancer_assignments (event_date_ad ≤ today)
+  → group by event_year-event_month → month tabs
+  → group by client_name → expandable accordions
+  → auto-ensure file rows exist in files_management (idempotent)
 ```
 
-### 2. `src/hooks/useCachedData.ts` — Same dedup guard
+## UI Structure
 
-Apply the same defensive dedup on the `clients` array returned by `useCachedData` to prevent duplicates across Dashboard, FreshClients, and other views:
-
-```typescript
-const dedupedClients = useMemo(() => {
-  const seen = new Set<string>();
-  return clients.filter(c => {
-    if (seen.has(c.registeredDateTimeAD)) return false;
-    seen.add(c.registeredDateTimeAD);
-    return true;
-  });
-}, [clients]);
-
-return { clients: dedupedClients, ... };
+```text
+┌─────────────────────────────────────────────────┐
+│ Month Tabs (like Finance sidebar)               │
+│ [Falgun 2082] [Magh 2082] [Poush 2082] ...     │
+│                              [See More ▼]       │
+├─────────────────────────────────────────────────┤
+│ ▶ URUSHA GHIMIREY       1 event · 4 files       │
+│ ▶ PRAMILA BHUSAL        2 events · 8 files      │
+│ ▼ ASHMI KC              2 events · 6 files       │
+│   ┌─────────────────────────────────────────┐   │
+│   │ BRIDE HALDI MEHNDI (12 Falgun)          │   │
+│   │ [Crew][Freelancer][Side][Card][Size]... │   │
+│   │ PB   Ram       BRIDE  CF1   32GB       │   │
+│   ├─────────────────────────────────────────┤   │
+│   │ WEDDING(BOTH SIDES) (14 Falgun)         │   │
+│   │ PB   Ram       BRIDE  CF1   64GB       │   │
+│   └─────────────────────────────────────────┘   │
+│ ▶ SEWAK KHADKA          3 events · 12 files     │
+└─────────────────────────────────────────────────┘
 ```
 
-## Why this works
+## Technical Changes
 
-- Catches duplicates from ANY source (Realtime, cache-updated events, load races, memory singleton corruption)
-- `useMemo` ensures zero overhead when there are no duplicates (same reference returned)
-- Does not change any data flow — purely defensive filter at the output boundary
-- Keeps the first occurrence (which is the freshest from the initial load or most recent update)
+### 1. `src/lib/files-api.ts` — Two new functions
 
-## Impact
+**`getAvailableFileMonths()`**: Query `freelancer_assignments` for distinct `event_year + event_month` where `event_date_ad <= today`. Return sorted (most recent first), with labels like "Falgun 2082".
 
-| Risk | Assessment |
-|------|-----------|
-| Breaking existing behavior | None — removes only exact duplicates |
-| Performance | Negligible — single Set-based pass, O(n) |
-| Data loss | None — keeps first occurrence of each unique client |
+**`ensureFileRowsForMonth(eventYear, eventMonth)`**: 
+- Query all assignments for that month where `event_date_ad <= today` and at least one crew member is assigned
+- Check which combos (`registered_date_time_ad + event + freelancer field`) already have rows in `files_management`
+- Insert only missing rows (idempotent — safe to call repeatedly)
+- Uses the same `CREW_CODE_MAP` logic as existing `autoGenerateFileRows`
+
+### 2. `src/hooks/useFilesManagement.ts` — Refactor for month-based loading
+
+- Accept `selectedMonth: { year: string; month: string } | null` instead of client-name filter
+- On mount: call `getAvailableFileMonths()` to populate month tabs, default to current/most recent month
+- On month change: call `ensureFileRowsForMonth()` in background, then load file records filtered by that month
+- Remove `generateRows` from return (no longer manual)
+- Add `availableMonths` to return value
+
+### 3. `src/components/files/FilesManagementTable.tsx` — Full UI redesign
+
+**Remove**: Client search bar, "Auto-Generate Rows" button
+
+**Add**:
+- **Month tab bar** at top: current month first, 5 older months, "See More" toggle for rest. Uses same visual style as Finance sidebar month tabs but horizontal
+- **Client accordions**: Group files by `client_name`, each as a Collapsible
+  - Header: client name, event count badge, file count badge
+  - Expanded: sub-grouped by `event_name` with event date shown
+  - Each event group shows the existing inline-editable table (side, card, size, format, checkboxes, file path)
+- All existing inline editing stays intact
+
+### 4. `src/components/files/FileManagementSidebar.tsx` — Add month filter
+
+Add a "Filter by Month" section (same pattern as `DesktopFinanceSidebar`) showing available months as vertical buttons, synced with the table's month selection.
+
+### 5. `src/pages/FileManagement.tsx` — Wire month state
+
+Lift `selectedMonth` and `availableMonths` state to page level so both sidebar and table share it.
 
 ## Files Changed
-1. `src/hooks/useBookedCachedData.ts` — add output dedup
-2. `src/hooks/useCachedData.ts` — add output dedup
+1. `src/lib/files-api.ts` — add `getAvailableFileMonths`, `ensureFileRowsForMonth`
+2. `src/hooks/useFilesManagement.ts` — month-based loading, auto-ensure
+3. `src/components/files/FilesManagementTable.tsx` — month tabs + client accordions
+4. `src/components/files/FileManagementSidebar.tsx` — month filter section
+5. `src/pages/FileManagement.tsx` — wire shared month state
+
+## Safety
+- `ensureFileRowsForMonth` is idempotent — checks existing rows before inserting
+- Existing 48 file records remain untouched
+- Only past/today events shown (future excluded via `event_date_ad <= today`)
+- Sheet sync unchanged — new rows get `synced_to_sheet: false` and trigger push scheduler
 
