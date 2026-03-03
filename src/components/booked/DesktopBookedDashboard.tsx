@@ -570,8 +570,9 @@ export function DesktopBookedDashboard({
                           client.eventDay || ''
                         );
                         
+                        // BUGFIX: Using registeredDateTimeAD for stable React reconciliation; bookedRowNumber is not globally unique.
                         return (
-                          <TableRow key={client.bookedRowNumber} className="hover:bg-muted/30">
+                          <TableRow key={client.registeredDateTimeAD || `${client.bookedRowNumber}-${client.clientName}`} className="hover:bg-muted/30">
                             <TableCell>
                               <button 
                               onClick={() => navigate(getClientDetailPath(client), { state: { from: location.pathname } })}
