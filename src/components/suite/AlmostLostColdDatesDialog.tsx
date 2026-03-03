@@ -62,7 +62,7 @@ export function AlmostLostColdDatesDialog({
             <div className="space-y-2 pb-4">
               {clients.map((client, i) => (
                 <FreshClientCard
-                  key={client.rowNumber || i}
+                  key={client.registeredDateTimeAD || `${client.rowNumber}-${i}`}
                   client={client}
                   statusOptions={statusOptions}
                   handlerOptions={handlerOptions}

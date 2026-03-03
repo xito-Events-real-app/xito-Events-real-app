@@ -374,7 +374,7 @@ export default function FreshClients() {
                     <div className="space-y-2 overflow-y-auto flex-1">
                       {currentClients.map((client, i) => (
                         <FreshClientCard 
-                          key={client.rowNumber || i} 
+                          key={client.registeredDateTimeAD || `${client.rowNumber}-${i}`} 
                           client={client} 
                           onEditClick={setSelectedClient}
                           statusOptions={statusOptions}
