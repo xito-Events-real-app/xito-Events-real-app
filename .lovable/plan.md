@@ -1,47 +1,41 @@
 
 
-# Fix: Ensure New Booked Clients Get Full Data Pipeline Treatment
+# Fix: Duplicate Event Name Collision in All Clients Crew Table
 
-## Root Cause Analysis
+## Problem
+When two events share the same name (e.g., two "PRE+RECEPTION" events on different dates), changing the required crew categories or assigning a freelancer on one event also changes the other. This happens because the local state update uses only `registeredDateTimeAD + event` to match rows, which is not unique when event names repeat.
 
-When FUNNY BHUSAN was added via direct database INSERT, the normal app flow was bypassed. The app's "Add Client" flow (QuickAdd.tsx) does 3 things after inserting into `clients_cache`:
+## Root Cause
+In `AllClientsCrewTable.tsx`, every `setAssignments(prev => prev.map(...))` call matches rows like this:
 
-1. Creates **freelancer assignment skeleton rows** in `freelancer_assignments` (one per event)
-2. Triggers a **push to Google Sheets** via the sync engine
-3. Updates the **in-memory cache** so all views refresh instantly
+```text
+a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event
+```
 
-The direct SQL insert did step 0 (database row) but skipped steps 1-3. That's why:
-- **Freelancers section says "No event details found"** -- there are 0 rows in `freelancer_assignments` for this client
-- **Client is not in Google Sheets** -- `synced_to_sheet` is `false` and no push was triggered
-- **All Clients view may not show him** -- the in-memory singleton cache wasn't updated
+This matches **all** events with the same name for the same client. The fix is to add `a.eventDateAD === row.eventDateAD` to form a proper composite key, which is already how the Supabase upsert works (the unique constraint is on `registered_date_time_ad, event, event_date_ad`).
 
-## Fix Plan (2 steps)
+## Fix (1 file, ~15 occurrences)
 
-### Step 1: Insert freelancer assignment skeleton rows
+**File:** `src/components/suite/AllClientsCrewTable.tsx`
 
-Insert 3 rows into `freelancer_assignments` (one per event) with the client's metadata:
+Change every occurrence of:
+```typescript
+a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event
+```
+to:
+```typescript
+a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event && a.eventDateAD === row.eventDateAD
+```
 
-| event | event_date_ad | event_year | event_month | event_day |
-|-------|--------------|------------|-------------|-----------|
-| WEDDING(BOTH SIDES) | 2026-04-29 | 2083 | 1 | 16 |
-| PRE+RECEPTION | 2026-04-30 | 2083 | 1 | 17 |
-| PRE+RECEPTION | 2026-05-02 | 2083 | 1 | 19 |
+There are approximately 15 instances across three interaction types:
+1. **Crew member assignment** (handleAssign around line 434)
+2. **Required categories update** (desktop view around line 1103)
+3. **Required categories update** (mobile view around line 1252)
 
-Each row will include `registered_date_time_ad`, `client_name`, `registered_date_bs`, and `synced_to_sheet: false`.
+The Supabase writes are already correct (they pass `row.eventDateAD`), so this is purely a local state update bug -- the database has the right data, but the UI updates both rows visually.
 
-### Step 2: Trigger a push sync to Google Sheets
-
-Call the `sync-clients-to-sheets` edge function with `action: 'push'` to push the unsynced client row to Google Sheets. This will assign a real `row_number` and mark `synced_to_sheet: true`.
-
-After that, also call `sync-crew-to-sheets` with `action: 'push'` to push the freelancer assignment rows.
-
-### Why This Fixes Everything
-
-- **Freelancer section**: Will find 3 assignment rows and render the assignment cards instead of "No event details found"
-- **Google Sheets**: Client will be written to the BOOKED CLIENTS sheet with a proper row number
-- **All Clients / Booked Clients views**: Already have the database row; the realtime subscription or next page load will pick it up
-
-### No Code Changes Needed
-
-This is a data-only fix. The existing code paths (QuickAdd, ClientDetail) already handle this correctly when clients are added through the app. The loophole was the manual SQL insert bypassing the app's data pipeline.
+## No Other Files Affected
+- `useFreelancerAssignments.ts` already uses `eventDateAD` in its match (line 64)
+- `FreelancerAssignmentSection.tsx` passes `assignment.eventDateAD` correctly
+- The Supabase `updateAssignmentInCache` and `updateCategoriesInCache` both use `event_date_ad` in their upsert conflict key
 
