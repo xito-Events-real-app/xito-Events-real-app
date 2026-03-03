@@ -8,6 +8,7 @@ import { getCurrentBSDate, nepaliMonthsEnglish } from "@/lib/nepali-date";
 import { format } from "date-fns";
 import { parseComments } from "@/lib/client-card-utils";
 import { addBookedClientComment } from "@/lib/sheets-api";
+import { updateClientFieldInCache } from "@/lib/clients-supabase-cache";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -252,12 +253,22 @@ export function TodayEventsHero() {
     }));
     
     try {
-      await addBookedClientComment(
+      const result = await addBookedClientComment(
         selectedEventForComment.bookedRowNumber,
         optimisticComment,
         selectedEventForComment.existingComments,
         selectedEventForComment.registeredDateTimeAD
       );
+      
+      // Immediately sync to local cache → triggers Breaking News update
+      if (result.comments && selectedEventForComment.registeredDateTimeAD) {
+        await updateClientFieldInCache(
+          selectedEventForComment.registeredDateTimeAD,
+          'comments',
+          result.comments
+        );
+      }
+      
       setNewComment('');
       setCommentDrawerOpen(false);
       toast.success('Comment added');
