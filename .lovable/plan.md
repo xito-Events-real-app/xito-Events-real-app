@@ -1,49 +1,47 @@
 
 
-# Add Missing Booked Client: FUNNY BHUSAN
+# Fix: Ensure New Booked Clients Get Full Data Pipeline Treatment
 
-## What happened
-The client "FUNNY BHUSAN" is missing from the `clients_cache` table with `sheet_source = 'booked'`. This needs a direct database insert.
+## Root Cause Analysis
 
-## Action
-Insert one row into the `clients_cache` table with the following data:
+When FUNNY BHUSAN was added via direct database INSERT, the normal app flow was bypassed. The app's "Add Client" flow (QuickAdd.tsx) does 3 things after inserting into `clients_cache`:
 
-| Field | Value |
-|-------|-------|
-| registered_date_time_ad | 2026-01-26T06:13:50.728Z |
-| registered_date_bs | 2082-10-12 |
-| client_name | FUNNY BHUSAN |
-| source | INSTAGRAM |
-| client_location | INSIDE NEPAL |
-| current_country | Nepal |
-| contact_no | 9860833177 |
-| whatsapp_no | 9860833177 |
-| event_location | INSIDE VALLEY |
-| event_city | Kathmandu |
-| events | WEDDING(BOTH SIDES)\nPRE+RECEPTION\nPRE+RECEPTION |
-| event_year | 2083\n2083\n2083 |
-| event_month | 1\n1\n1 |
-| event_day | 16\n17\n19 |
-| event_date_ad | 2026-04-29\n2026-04-30\n2026-05-02 |
-| who_added | BENZO |
-| inquiry_date_ad | 2025-12-30 |
-| inquiry_date_bs | 2082-09-15 |
-| inquiry_time | 4:29 |
-| status_log | BOOKED [2026-01-26 11:58:50] |
-| client_handler | BENZO |
-| final_quotation | PREMIUM: NPR 225,000/- |
-| payments_made | NPR 51,000/- AS ADVANCE ON FRI 2082-10-09 IN MASTER BENZO |
-| payment_dates_ad | 2026-01-23 |
-| remaining_payment | NPR 1,74,000/- |
-| company_name | WEDDING TALES NEPAL |
-| service_types | PHOTOGRAPHY |
-| sheet_source | booked |
-| row_number | 0 |
-| synced_to_sheet | false |
+1. Creates **freelancer assignment skeleton rows** in `freelancer_assignments` (one per event)
+2. Triggers a **push to Google Sheets** via the sync engine
+3. Updates the **in-memory cache** so all views refresh instantly
 
-## Technical Details
-- Single SQL INSERT into the `clients_cache` table
-- `sheet_source` set to `booked` so the client appears in the Booked Clients module
-- `synced_to_sheet` set to `false` so the next push sync will write it to Google Sheets
-- `row_number` set to `0` since the actual sheet row will be assigned during sync
+The direct SQL insert did step 0 (database row) but skipped steps 1-3. That's why:
+- **Freelancers section says "No event details found"** -- there are 0 rows in `freelancer_assignments` for this client
+- **Client is not in Google Sheets** -- `synced_to_sheet` is `false` and no push was triggered
+- **All Clients view may not show him** -- the in-memory singleton cache wasn't updated
+
+## Fix Plan (2 steps)
+
+### Step 1: Insert freelancer assignment skeleton rows
+
+Insert 3 rows into `freelancer_assignments` (one per event) with the client's metadata:
+
+| event | event_date_ad | event_year | event_month | event_day |
+|-------|--------------|------------|-------------|-----------|
+| WEDDING(BOTH SIDES) | 2026-04-29 | 2083 | 1 | 16 |
+| PRE+RECEPTION | 2026-04-30 | 2083 | 1 | 17 |
+| PRE+RECEPTION | 2026-05-02 | 2083 | 1 | 19 |
+
+Each row will include `registered_date_time_ad`, `client_name`, `registered_date_bs`, and `synced_to_sheet: false`.
+
+### Step 2: Trigger a push sync to Google Sheets
+
+Call the `sync-clients-to-sheets` edge function with `action: 'push'` to push the unsynced client row to Google Sheets. This will assign a real `row_number` and mark `synced_to_sheet: true`.
+
+After that, also call `sync-crew-to-sheets` with `action: 'push'` to push the freelancer assignment rows.
+
+### Why This Fixes Everything
+
+- **Freelancer section**: Will find 3 assignment rows and render the assignment cards instead of "No event details found"
+- **Google Sheets**: Client will be written to the BOOKED CLIENTS sheet with a proper row number
+- **All Clients / Booked Clients views**: Already have the database row; the realtime subscription or next page load will pick it up
+
+### No Code Changes Needed
+
+This is a data-only fix. The existing code paths (QuickAdd, ClientDetail) already handle this correctly when clients are added through the app. The loophole was the manual SQL insert bypassing the app's data pipeline.
 
