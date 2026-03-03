@@ -431,7 +431,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
       // Write to Supabase cache instantly
       await updateAssignmentInCache(row.registeredDateTimeAD, row.event, field, freelancerName, row.eventDateAD);
       setAssignments(prev => prev.map(a =>
-        a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event
+        a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event && a.eventDateAD === row.eventDateAD
           ? { ...a, [field]: freelancerName }
           : a
       ));
@@ -1100,7 +1100,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                                           try {
                                             await updateCategoriesInCache(row.registeredDateTimeAD, row.event, codes.join(','), row.eventDateAD);
                                             setAssignments(prev => prev.map(a =>
-                                              a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event
+                                              a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event && a.eventDateAD === row.eventDateAD
                                                 ? { ...a, requiredCategories: codes.join(',') }
                                                 : a
                                             ));
@@ -1249,7 +1249,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                                               try {
                                                 await updateCategoriesInCache(row.registeredDateTimeAD, row.event, codes.join(','), row.eventDateAD);
                                                 setAssignments(prev => prev.map(a =>
-                                                  a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event
+                                                a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event && a.eventDateAD === row.eventDateAD
                                                     ? { ...a, requiredCategories: codes.join(',') }
                                                     : a
                                                 ));
