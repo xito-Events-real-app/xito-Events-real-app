@@ -120,7 +120,7 @@ const DesktopBookedClients = () => {
 
         {isLoading ? <div className="grid grid-cols-3 gap-4">{[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-40 bg-slate-800/50" />)}</div>
         : sortedClients.length === 0 ? <Card className="bg-slate-800/50"><CardContent className="py-12 text-center"><Calendar className="h-16 w-16 text-slate-600 mx-auto mb-4" /><p className="text-slate-400 text-lg">No events found</p></CardContent></Card>
-        : viewMode === 'cards' ? <div className="grid grid-cols-3 gap-4">{sortedClients.map(c => <EventClientCard key={c.bookedRowNumber} client={c} />)}</div>
+        : viewMode === 'cards' ? <div className="grid grid-cols-3 gap-4">{/* BUGFIX: Using registeredDateTimeAD for stable React reconciliation; bookedRowNumber is not globally unique. */sortedClients.map(c => <EventClientCard key={c.registeredDateTimeAD || `${c.bookedRowNumber}-${c.clientName}`} client={c} />)}</div>
         : <TooltipProvider>
             <Card className="bg-slate-800/50 border-slate-700/50">
               <Table>
@@ -147,7 +147,8 @@ const DesktopBookedClients = () => {
                     );
                     return (
                       <TableRow 
-                        key={client.bookedRowNumber} 
+                        // BUGFIX: Using registeredDateTimeAD for stable React reconciliation; bookedRowNumber is not globally unique.
+                        key={client.registeredDateTimeAD || `${client.bookedRowNumber}-${client.clientName}`} 
                         className="border-slate-700 hover:bg-slate-700/30"
                       >
                         <TableCell>

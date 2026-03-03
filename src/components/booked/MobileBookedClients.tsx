@@ -133,7 +133,8 @@ const MobileBookedClients = () => {
                   </CardContent>
                 </Card>
               ) : (
-                sortedClients.map((client) => <EventClientCard key={client.bookedRowNumber} client={client} />)
+                // BUGFIX: Using registeredDateTimeAD for stable React reconciliation; bookedRowNumber is not globally unique.
+                sortedClients.map((client) => <EventClientCard key={client.registeredDateTimeAD || `${client.bookedRowNumber}-${client.clientName}`} client={client} />)
               )}
             </div>
           </div>

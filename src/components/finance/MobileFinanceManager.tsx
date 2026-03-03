@@ -189,7 +189,8 @@ const MobileFinanceManager = () => {
                   </CardContent>
                 </Card>
               ) : (
-                sortedClients.map((client) => <FinanceClientCard key={client.bookedRowNumber} client={client} onRefresh={refreshData} />)
+                // BUGFIX: Using registeredDateTimeAD for stable React reconciliation; bookedRowNumber is not globally unique.
+                sortedClients.map((client) => <FinanceClientCard key={client.registeredDateTimeAD || `${client.bookedRowNumber}-${client.clientName}`} client={client} onRefresh={refreshData} />)
               )}
             </div>
           </div>

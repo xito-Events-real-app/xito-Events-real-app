@@ -382,8 +382,9 @@ const DesktopFinanceManager = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {sortedClients.map((client) => (
                 <FinanceClientCard 
-                  key={client.bookedRowNumber} 
-                  client={client} 
+                  // BUGFIX: Using registeredDateTimeAD for stable React reconciliation; bookedRowNumber is not globally unique.
+                  key={client.registeredDateTimeAD || `${client.bookedRowNumber}-${client.clientName}`} 
+                  client={client}
                   onRefresh={refreshData} 
                 />
               ))}
@@ -426,7 +427,8 @@ const DesktopFinanceManager = () => {
 
                     return (
                       <TableRow 
-                        key={client.bookedRowNumber} 
+                        // BUGFIX: Using registeredDateTimeAD for stable React reconciliation; bookedRowNumber is not globally unique.
+                        key={client.registeredDateTimeAD || `${client.bookedRowNumber}-${client.clientName}`} 
                         className="border-slate-700 hover:bg-slate-700/30 cursor-pointer group"
                         onClick={() => handleRowClick(client)}
                       >
