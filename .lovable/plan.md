@@ -1,41 +1,56 @@
 
 
-# Fix: Duplicate Event Name Collision in All Clients Crew Table
-
-## Problem
-When two events share the same name (e.g., two "PRE+RECEPTION" events on different dates), changing the required crew categories or assigning a freelancer on one event also changes the other. This happens because the local state update uses only `registeredDateTimeAD + event` to match rows, which is not unique when event names repeat.
+# Fix: Breaking News Not Updating in Real-Time
 
 ## Root Cause
-In `AllClientsCrewTable.tsx`, every `setAssignments(prev => prev.map(...))` call matches rows like this:
 
-```text
-a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event
-```
+The Breaking News feed uses `useActivityFeed` which internally calls `useCachedData()` and `useBookedCachedData()`. These hooks listen for `cache-updated` events with types `'clients'` and `'booked-clients'` respectively.
 
-This matches **all** events with the same name for the same client. The fix is to add `a.eventDateAD === row.eventDateAD` to form a proper composite key, which is already how the Supabase upsert works (the unique constraint is on `registered_date_time_ad, event, event_date_ad`).
+However, most parts of the app fire **`'clients-invalidate'`** and **`'booked-clients-invalidate'`** events when data changes. These `-invalidate` event types are **explicitly ignored** by both hooks (comments on lines 189 and 149 say "REMOVED: clients-invalidate listener -- no more Sheets pulls").
 
-## Fix (1 file, ~15 occurrences)
+This means:
+- **Refresh News button** fires `clients-invalidate` → ignored → nothing happens
+- **HandlerActivitySection refresh** fires `clients-invalidate` → ignored
+- **QuickAdd** fires `clients-invalidate` → ignored
+- **Client deletion** fires `clients-invalidate` → ignored
+- **Payment/booking flow** fires `booked-clients-invalidate` → ignored
 
-**File:** `src/components/suite/AllClientsCrewTable.tsx`
+The hooks DO have Supabase Realtime subscriptions, but those only fire when the **database row** actually changes. For actions happening in the same browser tab, the local state update only affects the hook instance that called `updateClient()`, not the news feed's separate instance. The `notifyCacheUpdate('clients')` call (without `-invalidate`) does work, but many code paths use the invalidate variant instead.
 
-Change every occurrence of:
+## Fix (2 files)
+
+### 1. `src/hooks/useCachedData.ts` -- Re-add `clients-invalidate` listener
+
+When `clients-invalidate` is received, re-read from Supabase (not Sheets). This is the same as calling `refreshData()` but lighter -- just re-read from the memory singleton or do a fresh database pull.
+
 ```typescript
-a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event
+// In the cache-updated event listener, add handling for 'clients-invalidate':
+if (e.detail.type === 'clients-invalidate') {
+  const memClients = getMemoryClients();
+  if (memClients) {
+    setTimeout(() => setClients([...memClients]), 0);
+  }
+}
 ```
-to:
+
+### 2. `src/hooks/useBookedCachedData.ts` -- Re-add `booked-clients-invalidate` listener
+
+Same pattern:
+
 ```typescript
-a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event && a.eventDateAD === row.eventDateAD
+// In the cache-updated event listener, add handling for 'booked-clients-invalidate':
+if (detail?.type === 'booked-clients-invalidate') {
+  const memBooked = getMemoryBookedClients();
+  if (memBooked) {
+    setTimeout(() => {
+      setClients([...memBooked]);
+      setLastSyncedAt(new Date());
+    }, 0);
+  }
+}
 ```
 
-There are approximately 15 instances across three interaction types:
-1. **Crew member assignment** (handleAssign around line 434)
-2. **Required categories update** (desktop view around line 1103)
-3. **Required categories update** (mobile view around line 1252)
+### Why This Is Safe
 
-The Supabase writes are already correct (they pass `row.eventDateAD`), so this is purely a local state update bug -- the database has the right data, but the UI updates both rows visually.
-
-## No Other Files Affected
-- `useFreelancerAssignments.ts` already uses `eventDateAD` in its match (line 64)
-- `FreelancerAssignmentSection.tsx` passes `assignment.eventDateAD` correctly
-- The Supabase `updateAssignmentInCache` and `updateCategoriesInCache` both use `event_date_ad` in their upsert conflict key
+The old invalidate listeners were removed because they triggered Google Sheets pulls. These new handlers only read from the **in-memory cache** (which is already populated from Supabase). No Sheets calls are made. The `setTimeout(..., 0)` prevents React render-phase collisions per the existing pattern.
 
