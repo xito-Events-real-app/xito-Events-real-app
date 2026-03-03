@@ -432,7 +432,9 @@ function deduplicateActivities(activities: ActivityItem[]): ActivityItem[] {
     const isDuplicate = result.some(existing => 
       existing.clientId === activity.clientId &&
       existing.type === activity.type &&
-      Math.abs(existing.timestamp.getTime() - activity.timestamp.getTime()) < 60000
+      (activity.type === 'comment'
+        ? existing.description === activity.description
+        : Math.abs(existing.timestamp.getTime() - activity.timestamp.getTime()) < 60000)
     );
     if (!isDuplicate) {
       result.push(activity);
