@@ -832,7 +832,7 @@ export default function Dashboard() {
                       
                       return (
                         <div 
-                          key={client.rowNumber}
+                          key={client.registeredDateTimeAD || `${client.rowNumber}-${client.clientName}`}
                           onClick={() => navigate(getClientDetailPath(client), { state: { from: location.pathname } })}
                           className={cn(
                             "flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] border",
@@ -1155,7 +1155,7 @@ export default function Dashboard() {
                   <div className="space-y-2 max-h-48 overflow-y-auto">
                     {urgentBookedClients.map((client) => (
                       <div 
-                        key={client.rowNumber}
+                        key={client.registeredDateTimeAD || `${client.rowNumber}-${client.clientName}`}
                         className={cn(
                           "flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99]",
                           client.daysRemaining <= 1 

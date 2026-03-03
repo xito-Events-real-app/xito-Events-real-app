@@ -542,7 +542,8 @@ export function DesktopDashboard({
                   ) : (
                     sortedClients.map((client) => (
                       <DesktopClientRow
-                        key={client.rowNumber}
+                        // BUGFIX: Using registeredDateTimeAD for stable React reconciliation; rowNumber is not globally unique.
+                        key={client.registeredDateTimeAD || `${client.rowNumber}-${client.clientName}`}
                         client={client}
                         category={selectedCategory || getCurrentStatus(client.statusLog)}
                         handlers={handlers}
@@ -1065,7 +1066,7 @@ export function DesktopDashboard({
                       </TableHeader>
                       <TableBody>
                         {urgentBookedClients.slice(0, 5).map((client) => (
-                          <TableRow key={client.rowNumber}>
+                          <TableRow key={client.registeredDateTimeAD || `${client.rowNumber}-${client.clientName}`}>
                             <TableCell className="font-medium">{client.clientName}</TableCell>
                             <TableCell>{client.events || "Event"}</TableCell>
                             <TableCell>{client.eventDateAD}</TableCell>
@@ -1107,7 +1108,7 @@ export function DesktopDashboard({
                   <div className="grid grid-cols-5 gap-3">
                     {todaysClients.slice(0, 10).map((client, idx) => (
                       <div
-                        key={client.rowNumber || idx}
+                        key={client.registeredDateTimeAD || `${client.rowNumber}-${idx}`}
                         className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border"
                       >
                         <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
