@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { BookedClientData } from "@/lib/sheets-api";
 import { 
   notifyCacheUpdate
@@ -163,8 +163,17 @@ export function useBookedCachedData(): UseBookedCachedDataResult {
     return () => window.removeEventListener('cache-updated', handleCacheUpdate);
   }, []);
 
+  const dedupedClients = useMemo(() => {
+    const seen = new Set<string>();
+    return clients.filter(c => {
+      if (seen.has(c.registeredDateTimeAD)) return false;
+      seen.add(c.registeredDateTimeAD);
+      return true;
+    });
+  }, [clients]);
+
   return {
-    clients,
+    clients: dedupedClients,
     isLoading,
     isFromCache,
     isSyncing,
