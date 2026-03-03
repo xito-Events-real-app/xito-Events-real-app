@@ -153,7 +153,13 @@ export function useCachedData(): UseCachedDataResult {
                 return [...prev, mapped];
               });
               const mem = getMemoryClients();
-              if (mem) setMemoryClients([...mem, mapped]);
+              if (mem) {
+                if (mem.some(c => c.registeredDateTimeAD === mapped.registeredDateTimeAD)) {
+                  setMemoryClients(mem.map(c => c.registeredDateTimeAD === mapped.registeredDateTimeAD ? mapped : c));
+                } else {
+                  setMemoryClients([...mem, mapped]);
+                }
+              }
             }
           } else if (payload.eventType === 'DELETE') {
             const oldId = (payload.old as any)?.registered_date_time_ad;
