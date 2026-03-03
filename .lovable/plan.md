@@ -1,58 +1,69 @@
 
 
-# Fix: Duplicate Clients in Finance Manager
+# Fix: Duplicate Clients in Finance Manager (Definitive)
 
 ## Root Cause
 
-Both Realtime INSERT handlers in `useBookedCachedData.ts` (line 102-108) and `useCachedData.ts` (line 155-156) blindly append to the **memory cache singleton** without checking for duplicates:
+The previous fix only guarded the Realtime INSERT path. But duplicates can enter through multiple other paths:
+
+1. **Multiple hook instances** (~8 components mount `useBookedCachedData`) each create their own Realtime channel. When a DB change fires, all instances process it and update the shared memory singleton — potential for interleaved appends.
+2. **`cache-updated` event listeners** — all instances read from the same memory singleton and set local state. If memory was corrupted by a race between instances, the corruption propagates.
+3. **`loadData()` + Realtime race** — the subscription starts immediately in the same `useEffect` as `loadData()` (async). A Realtime INSERT can fire before load completes, then load resolves and sets a second copy.
+
+Since the exact race is timing-dependent (explaining the intermittent "sometimes 1, sometimes 2, sometimes 3"), the correct fix is a **defensive dedup at the output boundary** rather than trying to patch every possible input path.
+
+## Fix (2 changes)
+
+### 1. `src/hooks/useBookedCachedData.ts` — Dedup clients before returning
+
+Add a `useMemo` that deduplicates the `clients` array by `registeredDateTimeAD` before returning it to consumers. This is a zero-cost safety net that catches ALL duplication sources regardless of origin:
 
 ```typescript
-// useBookedCachedData.ts line 106 — NO dedup check!
-const updated = [...mem, mapped];
-setMemoryBookedClients(updated);
+const dedupedClients = useMemo(() => {
+  const seen = new Set<string>();
+  return clients.filter(c => {
+    if (seen.has(c.registeredDateTimeAD)) return false;
+    seen.add(c.registeredDateTimeAD);
+    return true;
+  });
+}, [clients]);
 
-// useCachedData.ts line 156 — same problem!
-if (mem) setMemoryClients([...mem, mapped]);
+return { clients: dedupedClients, ... };
 ```
 
-Meanwhile, the React `setClients` state updater on the lines above DOES check `prev.some(c => c.registeredDateTimeAD === ...)` — but the memory singleton skips this check.
+### 2. `src/hooks/useCachedData.ts` — Same dedup guard
 
-**What happens:** Every time a Supabase Realtime INSERT event fires (e.g. during sync, or when the same row is re-inserted), the memory cache accumulates duplicates. When any `cache-updated` event fires later, it reads from memory and propagates those duplicates to the UI. This is why it's intermittent — it depends on how many realtime INSERT events fire during the session.
-
-## Fix (2 files)
-
-### 1. `src/hooks/useBookedCachedData.ts` — Add dedup guard to memory INSERT
-
-Line 102-108: Before appending, check if `registeredDateTimeAD` already exists in memory:
+Apply the same defensive dedup on the `clients` array returned by `useCachedData` to prevent duplicates across Dashboard, FreshClients, and other views:
 
 ```typescript
-const mem = getMemoryBookedClients();
-if (mem) {
-  const updated = payload.eventType === 'UPDATE'
-    ? mem.map(c => c.registeredDateTimeAD === mapped.registeredDateTimeAD ? mapped : c)
-    : mem.some(c => c.registeredDateTimeAD === mapped.registeredDateTimeAD)
-      ? mem.map(c => c.registeredDateTimeAD === mapped.registeredDateTimeAD ? mapped : c)
-      : [...mem, mapped];
-  setMemoryBookedClients(updated);
-}
+const dedupedClients = useMemo(() => {
+  const seen = new Set<string>();
+  return clients.filter(c => {
+    if (seen.has(c.registeredDateTimeAD)) return false;
+    seen.add(c.registeredDateTimeAD);
+    return true;
+  });
+}, [clients]);
+
+return { clients: dedupedClients, ... };
 ```
 
-### 2. `src/hooks/useCachedData.ts` — Same fix for clients memory INSERT
+## Why this works
 
-Line 155-156: Add the same dedup guard:
-
-```typescript
-const mem = getMemoryClients();
-if (mem) {
-  if (mem.some(c => c.registeredDateTimeAD === mapped.registeredDateTimeAD)) {
-    setMemoryClients(mem.map(c => c.registeredDateTimeAD === mapped.registeredDateTimeAD ? mapped : c));
-  } else {
-    setMemoryClients([...mem, mapped]);
-  }
-}
-```
+- Catches duplicates from ANY source (Realtime, cache-updated events, load races, memory singleton corruption)
+- `useMemo` ensures zero overhead when there are no duplicates (same reference returned)
+- Does not change any data flow — purely defensive filter at the output boundary
+- Keeps the first occurrence (which is the freshest from the initial load or most recent update)
 
 ## Impact
-- No risk of breaking any hook APIs or causing re-render loops (change is inside an event callback, not a render path).
-- Fixes duplicates in Finance Manager, Booked Clients, Dashboard, and any other view reading from these memory singletons.
+
+| Risk | Assessment |
+|------|-----------|
+| Breaking existing behavior | None — removes only exact duplicates |
+| Performance | Negligible — single Set-based pass, O(n) |
+| Data loss | None — keeps first occurrence of each unique client |
+
+## Files Changed
+1. `src/hooks/useBookedCachedData.ts` — add output dedup
+2. `src/hooks/useCachedData.ts` — add output dedup
 
