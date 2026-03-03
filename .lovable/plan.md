@@ -1,56 +1,49 @@
 
-# Mobile-Friendly File Management Module
 
-## Problem
-The File Management page (`/files`) currently renders a fixed 256px sidebar with `ml-64` on the main content area. On mobile, this makes the content invisible or severely clipped -- there's no responsive handling at all.
+# Add Missing Booked Client: FUNNY BHUSAN
 
-## Solution
-Create a mobile layout that replaces the sidebar with a top tab bar and renders content full-width, similar to how other modules (Booked Clients, Finance, Vendors) handle mobile vs desktop.
+## What happened
+The client "FUNNY BHUSAN" is missing from the `clients_cache` table with `sheet_source = 'booked'`. This needs a direct database insert.
 
-## Changes
+## Action
+Insert one row into the `clients_cache` table with the following data:
 
-### 1. Update `FileManagement.tsx` (page)
-- Import and use `useIsMobile()` hook
-- Conditionally render:
-  - **Mobile**: A full-width layout with a sticky header (back button + title), horizontal tab pills (Dashboard / Storage / Files), and device type filter chips when on Storage tab. No sidebar.
-  - **Desktop**: Keep the existing sidebar layout as-is (no changes)
+| Field | Value |
+|-------|-------|
+| registered_date_time_ad | 2026-01-26T06:13:50.728Z |
+| registered_date_bs | 2082-10-12 |
+| client_name | FUNNY BHUSAN |
+| source | INSTAGRAM |
+| client_location | INSIDE NEPAL |
+| current_country | Nepal |
+| contact_no | 9860833177 |
+| whatsapp_no | 9860833177 |
+| event_location | INSIDE VALLEY |
+| event_city | Kathmandu |
+| events | WEDDING(BOTH SIDES)\nPRE+RECEPTION\nPRE+RECEPTION |
+| event_year | 2083\n2083\n2083 |
+| event_month | 1\n1\n1 |
+| event_day | 16\n17\n19 |
+| event_date_ad | 2026-04-29\n2026-04-30\n2026-05-02 |
+| who_added | BENZO |
+| inquiry_date_ad | 2025-12-30 |
+| inquiry_date_bs | 2082-09-15 |
+| inquiry_time | 4:29 |
+| status_log | BOOKED [2026-01-26 11:58:50] |
+| client_handler | BENZO |
+| final_quotation | PREMIUM: NPR 225,000/- |
+| payments_made | NPR 51,000/- AS ADVANCE ON FRI 2082-10-09 IN MASTER BENZO |
+| payment_dates_ad | 2026-01-23 |
+| remaining_payment | NPR 1,74,000/- |
+| company_name | WEDDING TALES NEPAL |
+| service_types | PHOTOGRAPHY |
+| sheet_source | booked |
+| row_number | 0 |
+| synced_to_sheet | false |
 
-### 2. Mobile Layout Structure
-```text
-+----------------------------------+
-| <- Back    File Management       |
-+----------------------------------+
-| [Dashboard] [Storage] [Files]    |  <- tab pills
-+----------------------------------+
-| [All] [HDD] [SSD] [PC]          |  <- only on Storage tab
-+----------------------------------+
-|                                  |
-|   (section content)              |
-|   Dashboard cards / Device       |
-|   cards / Files table            |
-|                                  |
-+----------------------------------+
-| [+ Add Device] FAB               |  <- floating action button
-+----------------------------------+
-```
+## Technical Details
+- Single SQL INSERT into the `clients_cache` table
+- `sheet_source` set to `booked` so the client appears in the Booked Clients module
+- `synced_to_sheet` set to `false` so the next push sync will write it to Google Sheets
+- `row_number` set to `0` since the actual sheet row will be assigned during sync
 
-- **Header**: Back arrow navigating to `/`, module name, gradient icon
-- **Tab bar**: Horizontal scroll of pill buttons for Dashboard, Storage, Files
-- **Device filter chips**: Shown only when Storage tab is active (All / Hard Drive / SSD / PC)
-- **Content**: Full-width rendering of the same dashboard stats, StorageDevicesSection, and FilesManagementTable
-- **FAB**: Floating "Add Device" button at bottom-right
-
-### 3. No changes needed to:
-- `FileManagementSidebar.tsx` (desktop only, untouched)
-- `StorageDevicesSection.tsx` (already has responsive grid `grid-cols-1 md:grid-cols-2`)
-- `FilesManagementTable.tsx` (already works full-width)
-
-### Technical Details
-
-**File modified**: `src/pages/FileManagement.tsx`
-
-The page will use `useIsMobile()` to branch:
-- Mobile path: renders inline header, tabs, filters, content, and FAB -- no sidebar
-- Desktop path: renders existing sidebar + `ml-64` content layout unchanged
-
-The mobile dashboard stats grid will use `grid-cols-2` for the 4 stat cards, and the quick-link cards will stack vertically. The storage device cards already handle `grid-cols-1` on small screens.
