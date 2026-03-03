@@ -1,80 +1,79 @@
 import { useState, useMemo } from "react";
-import { Wand2, FolderOpen, Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { FolderOpen, ChevronDown, ChevronRight, Calendar } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useFilesManagement } from "@/hooks/useFilesManagement";
 import { useStorageDevices } from "@/hooks/useStorageDevices";
 import { FilePathBuilderDialog } from "./FilePathBuilderDialog";
-import { FileRecord, getNextCardLabel } from "@/lib/files-api";
-import { supabase } from "@/integrations/supabase/client";
+import { FileRecord, FileMonthData, getNextCardLabel } from "@/lib/files-api";
 import { cn } from "@/lib/utils";
-import { toast } from "@/hooks/use-toast";
 
-export function FilesManagementTable() {
-  const [selectedClient, setSelectedClient] = useState("");
-  const [clientSearch, setClientSearch] = useState("");
-  const [bookedClients, setBookedClients] = useState<{ registered_date_time_ad: string; client_name: string }[]>([]);
-  const [loadingClients, setLoadingClients] = useState(false);
+interface FilesManagementTableProps {
+  selectedMonth: { year: string; month: string } | null;
+  availableMonths: FileMonthData[];
+  onMonthChange: (month: { year: string; month: string }) => void;
+}
 
-  const filters = useMemo(() => selectedClient ? { clientName: selectedClient } : undefined, [selectedClient]);
-  const { files, isLoading, isGenerating, update, generateRows } = useFilesManagement(filters);
+interface ClientGroup {
+  clientName: string;
+  events: { eventName: string; eventDateAD: string; eventDay: string; files: FileRecord[] }[];
+  totalFiles: number;
+}
+
+export function FilesManagementTable({ selectedMonth, availableMonths, onMonthChange }: FilesManagementTableProps) {
+  const { files, isLoading, isEnsuring, update } = useFilesManagement(selectedMonth);
   const { devices } = useStorageDevices();
 
   const [pathDialogOpen, setPathDialogOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<FileRecord | null>(null);
+  const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
+  const [showAllMonths, setShowAllMonths] = useState(false);
 
-  // Search booked clients
-  const searchClients = async (query: string) => {
-    setClientSearch(query);
-    if (query.length < 2) { setBookedClients([]); return; }
-    setLoadingClients(true);
-    try {
-      const { data } = await (supabase as any)
-        .from("clients_cache")
-        .select("registered_date_time_ad, client_name")
-        .eq("sheet_source", "booked")
-        .ilike("client_name", `%${query}%`)
-        .limit(20);
-      setBookedClients(data ?? []);
-    } finally {
-      setLoadingClients(false);
+  // Group files by client -> event
+  const clientGroups: ClientGroup[] = useMemo(() => {
+    const map = new Map<string, Map<string, FileRecord[]>>();
+    for (const f of files) {
+      const cName = f.client_name || "Unknown";
+      if (!map.has(cName)) map.set(cName, new Map());
+      const eventKey = `${f.event_name}||${f.event_date_ad}`;
+      const eventMap = map.get(cName)!;
+      if (!eventMap.has(eventKey)) eventMap.set(eventKey, []);
+      eventMap.get(eventKey)!.push(f);
     }
-  };
 
-  const handleSelectClient = (client: { registered_date_time_ad: string; client_name: string }) => {
-    setSelectedClient(client.client_name);
-    setClientSearch(client.client_name);
-    setBookedClients([]);
-  };
-
-  const handleAutoGenerate = async () => {
-    if (!selectedClient) {
-      toast({ title: "Select a client first", variant: "destructive" });
-      return;
+    const groups: ClientGroup[] = [];
+    for (const [clientName, eventMap] of map) {
+      const events: ClientGroup["events"] = [];
+      for (const [key, fileList] of eventMap) {
+        const [eventName, eventDateAD] = key.split("||");
+        events.push({
+          eventName,
+          eventDateAD: eventDateAD || "",
+          eventDay: fileList[0]?.event_day || "",
+          files: fileList,
+        });
+      }
+      // Sort events by date
+      events.sort((a, b) => (a.eventDateAD || "").localeCompare(b.eventDateAD || ""));
+      groups.push({ clientName, events, totalFiles: events.reduce((s, e) => s + e.files.length, 0) });
     }
-    // Find registered_date_time_ad for this client
-    const { data } = await (supabase as any)
-      .from("clients_cache")
-      .select("registered_date_time_ad")
-      .eq("client_name", selectedClient)
-      .eq("sheet_source", "booked")
-      .single();
-    if (!data) {
-      toast({ title: "Client not found in booked", variant: "destructive" });
-      return;
-    }
-    await generateRows(data.registered_date_time_ad);
-  };
+    // Sort clients alphabetically
+    groups.sort((a, b) => a.clientName.localeCompare(b.clientName));
+    return groups;
+  }, [files]);
 
-  const openPathBuilder = (file: FileRecord) => {
-    setSelectedFile(file);
-    setPathDialogOpen(true);
+  const toggleClient = (name: string) => {
+    setExpandedClients((prev) => {
+      const next = new Set(prev);
+      next.has(name) ? next.delete(name) : next.add(name);
+      return next;
+    });
   };
 
   const handleInlineUpdate = async (id: string, field: string, value: any) => {
@@ -82,166 +81,211 @@ export function FilesManagementTable() {
   };
 
   const handleFormatChange = async (file: FileRecord, newFormat: string) => {
-    // Auto-suggest next card label when format changes
     const nextLabel = await getNextCardLabel(file.client_name, file.freelancer_name, newFormat);
     await update(file.id, { format_type: newFormat, card_label: nextLabel, synced_to_sheet: false });
   };
 
+  const openPathBuilder = (file: FileRecord) => {
+    setSelectedFile(file);
+    setPathDialogOpen(true);
+  };
+
+  // Month tabs - show 6 by default, rest behind "See More"
+  const visibleMonths = showAllMonths ? availableMonths : availableMonths.slice(0, 6);
+
   return (
     <div className="space-y-4">
-      {/* Client selector + actions */}
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
-        <div className="relative flex-1 w-full">
-          <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
-          <Input
-            value={clientSearch}
-            onChange={(e) => searchClients(e.target.value)}
-            placeholder="Search booked client..."
-            className="pl-8"
-          />
-          {bookedClients.length > 0 && (
-            <div className="absolute z-50 top-full left-0 right-0 bg-popover border rounded-md shadow-lg mt-1 max-h-48 overflow-y-auto">
-              {bookedClients.map((c) => (
-                <button
-                  key={c.registered_date_time_ad}
-                  className="w-full px-3 py-2 text-left text-sm hover:bg-accent"
-                  onClick={() => handleSelectClient(c)}
-                >
-                  {c.client_name}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <Button
-          size="sm"
-          onClick={handleAutoGenerate}
-          disabled={isGenerating || !selectedClient}
-          className="bg-blue-600 hover:bg-blue-700 text-white whitespace-nowrap"
-        >
-          <Wand2 className="w-4 h-4 mr-1" />
-          {isGenerating ? "Generating..." : "Auto-Generate Rows"}
-        </Button>
+      {/* Month Filter Tabs */}
+      <div className="flex flex-wrap gap-2 items-center">
+        {visibleMonths.map((m) => (
+          <button
+            key={m.value}
+            onClick={() => onMonthChange({ year: m.year, month: m.month })}
+            className={cn(
+              "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap",
+              selectedMonth && selectedMonth.year === m.year && selectedMonth.month === m.month
+                ? "bg-cyan-600 text-white shadow-sm"
+                : "bg-muted text-muted-foreground hover:bg-muted/80 border border-border"
+            )}
+          >
+            {m.label}
+          </button>
+        ))}
+        {availableMonths.length > 6 && (
+          <button
+            onClick={() => setShowAllMonths(!showAllMonths)}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {showAllMonths ? "Show Less" : `See More (${availableMonths.length - 6})`}
+          </button>
+        )}
       </div>
 
-      {selectedClient && (
-        <Badge variant="secondary" className="text-xs">
-          Showing files for: {selectedClient}
-          <button className="ml-2 text-muted-foreground hover:text-foreground" onClick={() => { setSelectedClient(""); setClientSearch(""); }}>✕</button>
-        </Badge>
+      {/* Loading / Ensuring */}
+      {(isLoading || isEnsuring) && (
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500" />
+          {isEnsuring && <span className="ml-3 text-sm text-muted-foreground">Preparing file rows...</span>}
+        </div>
       )}
 
-      {/* Table */}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
-        </div>
-      ) : files.length === 0 ? (
+      {/* Empty state */}
+      {!isLoading && !isEnsuring && !selectedMonth && (
         <div className="text-center py-12 text-muted-foreground">
-          <FolderOpen className="w-10 h-10 mx-auto mb-3 opacity-40" />
-          <p>{selectedClient ? "No files found for this client" : "Select a client to view files"}</p>
-        </div>
-      ) : (
-        <div className="overflow-x-auto border rounded-lg">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-blue-50 dark:bg-blue-950/20">
-                <TableHead className="text-xs w-24">Crew</TableHead>
-                <TableHead className="text-xs">Freelancer</TableHead>
-                <TableHead className="text-xs">Event</TableHead>
-                <TableHead className="text-xs w-20">Category</TableHead>
-                <TableHead className="text-xs w-24">Side</TableHead>
-                <TableHead className="text-xs w-20">Card</TableHead>
-                <TableHead className="text-xs w-20">Size GB</TableHead>
-                <TableHead className="text-xs w-24">Format</TableHead>
-                <TableHead className="text-xs w-24">Who Copied</TableHead>
-                <TableHead className="text-xs text-center w-10">✓</TableHead>
-                <TableHead className="text-xs text-center w-10">2x</TableHead>
-                <TableHead className="text-xs text-center w-10">3x</TableHead>
-                <TableHead className="text-xs text-center w-10">☁</TableHead>
-                <TableHead className="text-xs">File Path</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {files.map((file) => (
-                <TableRow key={file.id} className="text-xs">
-                  <TableCell>
-                    <Badge variant="outline" className="text-xs">{file.freelancer_type}</Badge>
-                  </TableCell>
-                  <TableCell className="font-medium">{file.freelancer_name}</TableCell>
-                  <TableCell>{file.event_name}</TableCell>
-                  <TableCell>{file.category}</TableCell>
-                  <TableCell>
-                    <Select value={file.side || ""} onValueChange={(v) => handleInlineUpdate(file.id, "side", v)}>
-                      <SelectTrigger className="h-7 text-xs border-0 bg-transparent p-0"><SelectValue placeholder="-" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="BRIDE SIDE">BRIDE</SelectItem>
-                        <SelectItem value="GROOM SIDE">GROOM</SelectItem>
-                        <SelectItem value="OTHER">OTHER</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      className="h-7 text-xs w-16 border-0 bg-transparent p-1"
-                      defaultValue={file.card_label}
-                      onBlur={(e) => { if (e.target.value !== file.card_label) handleInlineUpdate(file.id, "card_label", e.target.value); }}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      type="number"
-                      className="h-7 text-xs w-16 border-0 bg-transparent p-1"
-                      defaultValue={file.size_gb || ""}
-                      onBlur={(e) => { const v = Number(e.target.value); if (v !== file.size_gb) handleInlineUpdate(file.id, "size_gb", v); }}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Select value={file.format_type || ""} onValueChange={(v) => handleFormatChange(file, v)}>
-                      <SelectTrigger className="h-7 text-xs border-0 bg-transparent p-0"><SelectValue placeholder="-" /></SelectTrigger>
-                      <SelectContent>
-                        {["RAW_ONLY", "JPEG_ONLY", "RAW_JPEG", "CF", "NORMAL", "CF_NORMAL"].map((f) => (
-                          <SelectItem key={f} value={f}>{f}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      className="h-7 text-xs w-20 border-0 bg-transparent p-1"
-                      defaultValue={file.who_copied}
-                      onBlur={(e) => { if (e.target.value !== file.who_copied) handleInlineUpdate(file.id, "who_copied", e.target.value); }}
-                    />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Checkbox checked={file.reconfirmation} onCheckedChange={(v) => handleInlineUpdate(file.id, "reconfirmation", !!v)} />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Checkbox checked={file.double_backup} onCheckedChange={(v) => handleInlineUpdate(file.id, "double_backup", !!v)} />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Checkbox checked={file.triple_backup} onCheckedChange={(v) => handleInlineUpdate(file.id, "triple_backup", !!v)} />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Checkbox checked={file.drive_upload} onCheckedChange={(v) => handleInlineUpdate(file.id, "drive_upload", !!v)} />
-                  </TableCell>
-                  <TableCell>
-                    <button
-                      onClick={() => openPathBuilder(file)}
-                      className={cn(
-                        "text-xs truncate max-w-[180px] text-left hover:text-blue-600 transition-colors",
-                        file.final_generated_path ? "text-foreground underline decoration-dotted" : "text-muted-foreground italic"
-                      )}
-                    >
-                      {file.final_generated_path || "Set path..."}
-                    </button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <Calendar className="w-10 h-10 mx-auto mb-3 opacity-40" />
+          <p>Select a month to view files</p>
         </div>
       )}
+
+      {!isLoading && !isEnsuring && selectedMonth && clientGroups.length === 0 && (
+        <div className="text-center py-12 text-muted-foreground">
+          <FolderOpen className="w-10 h-10 mx-auto mb-3 opacity-40" />
+          <p>No files for this month</p>
+        </div>
+      )}
+
+      {/* Client Accordions */}
+      {!isLoading && !isEnsuring && clientGroups.map((group) => {
+        const isOpen = expandedClients.has(group.clientName);
+        return (
+          <Collapsible key={group.clientName} open={isOpen} onOpenChange={() => toggleClient(group.clientName)}>
+            <CollapsibleTrigger className="w-full">
+              <div className={cn(
+                "flex items-center gap-3 px-4 py-3 rounded-lg border transition-all cursor-pointer",
+                isOpen
+                  ? "bg-cyan-50 dark:bg-cyan-950/20 border-cyan-200 dark:border-cyan-800"
+                  : "bg-card hover:bg-muted/50 border-border"
+              )}>
+                {isOpen
+                  ? <ChevronDown className="w-4 h-4 text-cyan-600 shrink-0" />
+                  : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                }
+                <span className="font-semibold text-sm text-foreground flex-1 text-left">{group.clientName}</span>
+                <Badge variant="secondary" className="text-[10px]">
+                  {group.events.length} event{group.events.length !== 1 ? "s" : ""}
+                </Badge>
+                <Badge variant="outline" className="text-[10px]">
+                  {group.totalFiles} file{group.totalFiles !== 1 ? "s" : ""}
+                </Badge>
+              </div>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="ml-4 mt-2 space-y-3 mb-4">
+                {group.events.map((ev, ei) => (
+                  <div key={`${ev.eventName}-${ei}`} className="border rounded-lg overflow-hidden">
+                    {/* Event header */}
+                    <div className="px-3 py-2 bg-muted/50 border-b flex items-center gap-2">
+                      <span className="font-medium text-xs text-foreground">{ev.eventName}</span>
+                      {ev.eventDay && (
+                        <span className="text-[10px] text-muted-foreground">
+                          ({ev.eventDay} {selectedMonth ? availableMonths.find(m => m.year === selectedMonth.year && m.month === selectedMonth.month)?.label.split(" ")[0] : ""})
+                        </span>
+                      )}
+                      <span className="text-[10px] text-muted-foreground ml-auto">{ev.eventDateAD}</span>
+                    </div>
+                    {/* File rows table */}
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-blue-50/50 dark:bg-blue-950/10">
+                            <TableHead className="text-[10px] w-16">Crew</TableHead>
+                            <TableHead className="text-[10px]">Freelancer</TableHead>
+                            <TableHead className="text-[10px] w-20">Side</TableHead>
+                            <TableHead className="text-[10px] w-16">Card</TableHead>
+                            <TableHead className="text-[10px] w-16">Size</TableHead>
+                            <TableHead className="text-[10px] w-20">Format</TableHead>
+                            <TableHead className="text-[10px] w-20">Copied</TableHead>
+                            <TableHead className="text-[10px] text-center w-8">✓</TableHead>
+                            <TableHead className="text-[10px] text-center w-8">2x</TableHead>
+                            <TableHead className="text-[10px] text-center w-8">3x</TableHead>
+                            <TableHead className="text-[10px] text-center w-8">☁</TableHead>
+                            <TableHead className="text-[10px]">Path</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {ev.files.map((file) => (
+                            <TableRow key={file.id} className="text-xs">
+                              <TableCell>
+                                <Badge variant="outline" className="text-[10px] px-1.5">{file.freelancer_type}</Badge>
+                              </TableCell>
+                              <TableCell className="font-medium text-xs">{file.freelancer_name}</TableCell>
+                              <TableCell>
+                                <Select value={file.side || ""} onValueChange={(v) => handleInlineUpdate(file.id, "side", v)}>
+                                  <SelectTrigger className="h-6 text-[10px] border-0 bg-transparent p-0"><SelectValue placeholder="-" /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="BRIDE SIDE">BRIDE</SelectItem>
+                                    <SelectItem value="GROOM SIDE">GROOM</SelectItem>
+                                    <SelectItem value="OTHER">OTHER</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  className="h-6 text-[10px] w-14 border-0 bg-transparent p-0.5"
+                                  defaultValue={file.card_label}
+                                  onBlur={(e) => { if (e.target.value !== file.card_label) handleInlineUpdate(file.id, "card_label", e.target.value); }}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  className="h-6 text-[10px] w-14 border-0 bg-transparent p-0.5"
+                                  defaultValue={file.size_gb || ""}
+                                  onBlur={(e) => { const v = Number(e.target.value); if (v !== file.size_gb) handleInlineUpdate(file.id, "size_gb", v); }}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Select value={file.format_type || ""} onValueChange={(v) => handleFormatChange(file, v)}>
+                                  <SelectTrigger className="h-6 text-[10px] border-0 bg-transparent p-0"><SelectValue placeholder="-" /></SelectTrigger>
+                                  <SelectContent>
+                                    {["RAW_ONLY", "JPEG_ONLY", "RAW_JPEG", "CF", "NORMAL", "CF_NORMAL"].map((f) => (
+                                      <SelectItem key={f} value={f}>{f}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  className="h-6 text-[10px] w-16 border-0 bg-transparent p-0.5"
+                                  defaultValue={file.who_copied}
+                                  onBlur={(e) => { if (e.target.value !== file.who_copied) handleInlineUpdate(file.id, "who_copied", e.target.value); }}
+                                />
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Checkbox className="h-3.5 w-3.5" checked={file.reconfirmation} onCheckedChange={(v) => handleInlineUpdate(file.id, "reconfirmation", !!v)} />
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Checkbox className="h-3.5 w-3.5" checked={file.double_backup} onCheckedChange={(v) => handleInlineUpdate(file.id, "double_backup", !!v)} />
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Checkbox className="h-3.5 w-3.5" checked={file.triple_backup} onCheckedChange={(v) => handleInlineUpdate(file.id, "triple_backup", !!v)} />
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Checkbox className="h-3.5 w-3.5" checked={file.drive_upload} onCheckedChange={(v) => handleInlineUpdate(file.id, "drive_upload", !!v)} />
+                              </TableCell>
+                              <TableCell>
+                                <button
+                                  onClick={() => openPathBuilder(file)}
+                                  className={cn(
+                                    "text-[10px] truncate max-w-[140px] text-left hover:text-cyan-600 transition-colors",
+                                    file.final_generated_path ? "text-foreground underline decoration-dotted" : "text-muted-foreground italic"
+                                  )}
+                                >
+                                  {file.final_generated_path || "Set path..."}
+                                </button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        );
+      })}
 
       <FilePathBuilderDialog
         open={pathDialogOpen}

@@ -8,7 +8,7 @@ import { FilesManagementTable } from "@/components/files/FilesManagementTable";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FileText, HardDrive, FolderOpen, Database, AlertTriangle, BarChart3, ChevronLeft, Plus, Monitor, Disc } from "lucide-react";
-import { getFileManagementStats } from "@/lib/files-api";
+import { getFileManagementStats, getAvailableFileMonths, FileMonthData } from "@/lib/files-api";
 
 type ActiveSection = "dashboard" | "storage" | "files";
 
@@ -38,14 +38,28 @@ export default function FileManagement() {
     warningDevices: number;
   } | null>(null);
 
+  // Month state for files section
+  const [availableMonths, setAvailableMonths] = useState<FileMonthData[]>([]);
+  const [selectedMonth, setSelectedMonth] = useState<{ year: string; month: string } | null>(null);
+
   useEffect(() => {
     getFileManagementStats().then(setStats).catch(() => {});
+    getAvailableFileMonths().then((months) => {
+      setAvailableMonths(months);
+      if (months.length > 0 && !selectedMonth) {
+        setSelectedMonth({ year: months[0].year, month: months[0].month });
+      }
+    }).catch(() => {});
   }, []);
 
   const handleAddDevice = useCallback(() => {
     setActiveSection("storage");
     setAddDeviceDrawerOpen(true);
   }, []);
+
+  const handleMonthChange = (month: { year: string; month: string }) => {
+    setSelectedMonth(month);
+  };
 
   // ─── Mobile Layout ───
   if (isMobile) {
@@ -104,7 +118,6 @@ export default function FileManagement() {
 
         {/* Content */}
         <main className="p-4">
-          {/* Dashboard */}
           {activeSection === "dashboard" && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
@@ -119,7 +132,6 @@ export default function FileManagement() {
                     </div>
                   </CardContent>
                 </Card>
-
                 <Card className="border-0 shadow-sm bg-card/80">
                   <CardContent className="p-3 flex items-center gap-2.5">
                     <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/40">
@@ -131,7 +143,6 @@ export default function FileManagement() {
                     </div>
                   </CardContent>
                 </Card>
-
                 <Card className="border-0 shadow-sm bg-card/80">
                   <CardContent className="p-3 flex items-center gap-2.5">
                     <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/40">
@@ -143,29 +154,20 @@ export default function FileManagement() {
                     </div>
                   </CardContent>
                 </Card>
-
-                <Card className={cn(
-                  "border-0 shadow-sm bg-card/80",
-                  stats && stats.warningDevices > 0 && "ring-1 ring-red-300 dark:ring-red-800"
-                )}>
+                <Card className={cn("border-0 shadow-sm bg-card/80", stats && stats.warningDevices > 0 && "ring-1 ring-red-300 dark:ring-red-800")}>
                   <CardContent className="p-3 flex items-center gap-2.5">
                     <div className="p-2 rounded-xl bg-red-100 dark:bg-red-900/40">
                       <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400" />
                     </div>
                     <div>
                       <p className="text-[10px] text-muted-foreground font-medium">Warnings</p>
-                      <p className={cn(
-                        "text-xl font-bold",
-                        stats && stats.warningDevices > 0 ? "text-red-600 dark:text-red-400" : "text-foreground"
-                      )}>
+                      <p className={cn("text-xl font-bold", stats && stats.warningDevices > 0 ? "text-red-600 dark:text-red-400" : "text-foreground")}>
                         {stats?.warningDevices ?? "—"}
                       </p>
                     </div>
                   </CardContent>
                 </Card>
               </div>
-
-              {/* Quick links */}
               <Card className="border shadow-sm" onClick={() => setActiveSection("storage")}>
                 <CardContent className="p-4 flex items-center gap-3">
                   <div className="p-2.5 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white">
@@ -177,7 +179,6 @@ export default function FileManagement() {
                   </div>
                 </CardContent>
               </Card>
-
               <Card className="border shadow-sm" onClick={() => setActiveSection("files")}>
                 <CardContent className="p-4 flex items-center gap-3">
                   <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
@@ -201,11 +202,14 @@ export default function FileManagement() {
           )}
 
           {activeSection === "files" && (
-            <FilesManagementTable />
+            <FilesManagementTable
+              selectedMonth={selectedMonth}
+              availableMonths={availableMonths}
+              onMonthChange={handleMonthChange}
+            />
           )}
         </main>
 
-        {/* FAB */}
         {activeSection === "storage" && (
           <button
             onClick={handleAddDevice}
@@ -218,7 +222,7 @@ export default function FileManagement() {
     );
   }
 
-  // ─── Desktop Layout (unchanged) ───
+  // ─── Desktop Layout ───
   return (
     <div className="min-h-screen bg-muted/30">
       <FileManagementSidebar
@@ -227,6 +231,9 @@ export default function FileManagement() {
         deviceTypeFilter={deviceTypeFilter}
         onDeviceTypeFilter={setDeviceTypeFilter}
         onAddDevice={handleAddDevice}
+        selectedMonth={selectedMonth}
+        onMonthFilter={handleMonthChange}
+        availableMonths={availableMonths}
       />
 
       <div className="ml-64 min-h-screen transition-all duration-300">
@@ -258,7 +265,6 @@ export default function FileManagement() {
                     </div>
                   </CardContent>
                 </Card>
-
                 <Card className="border-0 shadow-sm bg-card/80 backdrop-blur-sm">
                   <CardContent className="p-4 flex items-center gap-3">
                     <div className="p-2.5 rounded-xl bg-blue-100 dark:bg-blue-900/40">
@@ -270,7 +276,6 @@ export default function FileManagement() {
                     </div>
                   </CardContent>
                 </Card>
-
                 <Card className="border-0 shadow-sm bg-card/80 backdrop-blur-sm">
                   <CardContent className="p-4 flex items-center gap-3">
                     <div className="p-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-900/40">
@@ -282,31 +287,22 @@ export default function FileManagement() {
                     </div>
                   </CardContent>
                 </Card>
-
-                <Card className={cn(
-                  "border-0 shadow-sm bg-card/80 backdrop-blur-sm",
-                  stats && stats.warningDevices > 0 && "ring-1 ring-red-300 dark:ring-red-800"
-                )}>
+                <Card className={cn("border-0 shadow-sm bg-card/80 backdrop-blur-sm", stats && stats.warningDevices > 0 && "ring-1 ring-red-300 dark:ring-red-800")}>
                   <CardContent className="p-4 flex items-center gap-3">
                     <div className="p-2.5 rounded-xl bg-red-100 dark:bg-red-900/40">
                       <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground font-medium">Warnings</p>
-                      <p className={cn(
-                        "text-2xl font-bold",
-                        stats && stats.warningDevices > 0 ? "text-red-600 dark:text-red-400" : "text-foreground"
-                      )}>
+                      <p className={cn("text-2xl font-bold", stats && stats.warningDevices > 0 ? "text-red-600 dark:text-red-400" : "text-foreground")}>
                         {stats?.warningDevices ?? "—"}
                       </p>
                     </div>
                   </CardContent>
                 </Card>
               </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Card className="border shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() => setActiveSection("storage")}>
+                <Card className="border shadow-sm cursor-pointer hover:shadow-md transition-shadow" onClick={() => setActiveSection("storage")}>
                   <CardContent className="p-5 flex items-center gap-4">
                     <div className="p-3 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white">
                       <HardDrive className="w-6 h-6" />
@@ -317,9 +313,7 @@ export default function FileManagement() {
                     </div>
                   </CardContent>
                 </Card>
-
-                <Card className="border shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() => setActiveSection("files")}>
+                <Card className="border shadow-sm cursor-pointer hover:shadow-md transition-shadow" onClick={() => setActiveSection("files")}>
                   <CardContent className="p-5 flex items-center gap-4">
                     <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
                       <FolderOpen className="w-6 h-6" />
@@ -343,7 +337,11 @@ export default function FileManagement() {
           )}
 
           {activeSection === "files" && (
-            <FilesManagementTable />
+            <FilesManagementTable
+              selectedMonth={selectedMonth}
+              availableMonths={availableMonths}
+              onMonthChange={handleMonthChange}
+            />
           )}
         </main>
       </div>

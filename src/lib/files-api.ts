@@ -320,6 +320,173 @@ export async function pushFilesToSheets(): Promise<{ pushed: number }> {
   return data.data;
 }
 
+// ── Month-based helpers for Files redesign ──────────────
+export interface FileMonthData {
+  year: string;
+  month: string;
+  label: string; // e.g. "FALGUN 2082"
+  value: string; // e.g. "2082-11"
+}
+
+export async function getAvailableFileMonths(): Promise<FileMonthData[]> {
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+  const { data, error } = await (supabase as any)
+    .from("freelancer_assignments")
+    .select("event_year, event_month, event_date_ad")
+    .neq("event_year", "")
+    .neq("event_month", "")
+    .neq("event_date_ad", "");
+
+  if (error) throw error;
+  if (!data || data.length === 0) return [];
+
+  // Filter to past/today only (exclude unknown-day dates with **)
+  const pastRows = data.filter((r: any) => {
+    const d = r.event_date_ad || "";
+    if (d.includes("**")) return false;
+    return d <= today;
+  });
+
+  // Distinct year-month combos
+  const seen = new Set<string>();
+  const months: FileMonthData[] = [];
+  for (const r of pastRows) {
+    const key = `${r.event_year}-${r.event_month}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const monthNum = parseInt(r.event_month, 10);
+    const NEPALI_MONTHS: Record<number, string> = {
+      1: "BAISAKH", 2: "JESTHA", 3: "ASHADH", 4: "SHRAWAN",
+      5: "BHADRA", 6: "ASHWIN", 7: "KARTIK", 8: "MANGSIR",
+      9: "POUSH", 10: "MAGH", 11: "FALGUN", 12: "CHAITRA",
+    };
+    months.push({
+      year: r.event_year,
+      month: r.event_month,
+      label: `${NEPALI_MONTHS[monthNum] || `Month ${monthNum}`} ${r.event_year}`,
+      value: key,
+    });
+  }
+
+  // Sort most recent first (by year desc, month desc)
+  months.sort((a, b) => {
+    const ya = parseInt(a.year), yb = parseInt(b.year);
+    if (ya !== yb) return yb - ya;
+    return parseInt(b.month) - parseInt(a.month);
+  });
+
+  return months;
+}
+
+export async function ensureFileRowsForMonth(eventYear: string, eventMonth: string): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Get all assignments for this month where event_date_ad <= today
+  const { data: assignments, error: aErr } = await (supabase as any)
+    .from("freelancer_assignments")
+    .select("*")
+    .eq("event_year", eventYear)
+    .eq("event_month", eventMonth)
+    .neq("event_date_ad", "");
+
+  if (aErr) throw aErr;
+  if (!assignments || assignments.length === 0) return;
+
+  // Filter to past/today
+  const pastAssignments = assignments.filter((a: any) => {
+    const d = a.event_date_ad || "";
+    if (d.includes("**")) return false;
+    return d <= today;
+  });
+
+  if (pastAssignments.length === 0) return;
+
+  // Get existing file rows for this month to avoid duplicates
+  const { data: existingFiles } = await (supabase as any)
+    .from("files_management")
+    .select("registered_date_time_ad, event_name, freelancer_type, freelancer_name")
+    .eq("event_year", eventYear)
+    .eq("event_month", eventMonth)
+    .eq("deleted_or_not", false);
+
+  const existingKeys = new Set(
+    (existingFiles || []).map((f: any) =>
+      `${f.registered_date_time_ad}||${f.event_name}||${f.freelancer_type}||${f.freelancer_name}`
+    )
+  );
+
+  // Get client info for all unique registered_date_time_ad
+  const uniqueRegDates = [...new Set(pastAssignments.map((a: any) => a.registered_date_time_ad))];
+  const { data: clientsData } = await (supabase as any)
+    .from("clients_cache")
+    .select("registered_date_time_ad, client_name, registered_date_bs")
+    .in("registered_date_time_ad", uniqueRegDates);
+
+  const clientMap = new Map<string, { client_name: string; registered_date_bs: string }>();
+  for (const c of clientsData || []) {
+    clientMap.set(c.registered_date_time_ad, { client_name: c.client_name || "", registered_date_bs: c.registered_date_bs || "" });
+  }
+
+  const newRows: Partial<FileRecord>[] = [];
+
+  for (const assignment of pastAssignments) {
+    const regDate = assignment.registered_date_time_ad;
+    const clientInfo = clientMap.get(regDate) || { client_name: assignment.client_name || "", registered_date_bs: "" };
+    const eventName = assignment.event || "";
+    const evYear = assignment.event_year || "";
+    const evMonth = assignment.event_month || "";
+    const evDay = assignment.event_day || "";
+    const eventDateAD = assignment.event_date_ad || "";
+    const yearEventFolder = evMonth && evYear
+      ? (() => {
+          const mn = parseInt(evMonth, 10);
+          const MONTHS: Record<number, string> = {1:"BAISAKH",2:"JESTHA",3:"ASHADH",4:"SHRAWAN",5:"BHADRA",6:"ASHWIN",7:"KARTIK",8:"MANGSIR",9:"POUSH",10:"MAGH",11:"FALGUN",12:"CHAITRA"};
+          return `${MONTHS[mn] || evMonth} EVENTS ${evYear}`;
+        })()
+      : "";
+
+    for (const [field, config] of Object.entries(CREW_CODE_MAP)) {
+      const freelancerName = assignment[field];
+      if (!freelancerName || freelancerName.trim() === "") continue;
+
+      const key = `${regDate}||${eventName}||${config.code}||${freelancerName}`;
+      if (existingKeys.has(key)) continue;
+      existingKeys.add(key); // prevent duplicates within this batch
+
+      newRows.push({
+        registered_date_time_ad: regDate,
+        registered_date_bs: clientInfo.registered_date_bs,
+        client_name: clientInfo.client_name,
+        event_name: eventName,
+        event_year: evYear,
+        event_month: evMonth,
+        event_day: evDay,
+        event_date_ad: eventDateAD,
+        freelancer_type: config.code,
+        freelancer_name: freelancerName,
+        year_event_folder: yearEventFolder,
+        category: config.category,
+        client_folder_name: clientInfo.client_name.toUpperCase(),
+        event_folder_name: eventName.toUpperCase(),
+        side: config.side,
+        synced_to_sheet: false,
+      });
+    }
+  }
+
+  if (newRows.length === 0) return;
+
+  // Insert in batches of 50
+  for (let i = 0; i < newRows.length; i += 50) {
+    const batch = newRows.slice(i, i + 50);
+    const { error } = await (supabase as any)
+      .from("files_management")
+      .insert(batch);
+    if (error) throw error;
+  }
+}
+
 // ── Auto Card Increment ─────────────────────────────────
 export async function getNextCardLabel(
   clientName: string,

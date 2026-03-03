@@ -17,8 +17,9 @@ import {
   AlertTriangle,
   Plus,
   Disc,
+  Calendar,
 } from "lucide-react";
-import { getFileManagementStats } from "@/lib/files-api";
+import { getFileManagementStats, FileMonthData } from "@/lib/files-api";
 
 type ActiveSection = "dashboard" | "storage" | "files";
 
@@ -28,6 +29,9 @@ interface FileManagementSidebarProps {
   deviceTypeFilter: string | null;
   onDeviceTypeFilter: (type: string | null) => void;
   onAddDevice: () => void;
+  selectedMonth: { year: string; month: string } | null;
+  onMonthFilter: (month: { year: string; month: string }) => void;
+  availableMonths: FileMonthData[];
 }
 
 const SECTIONS = [
@@ -49,6 +53,9 @@ export function FileManagementSidebar({
   deviceTypeFilter,
   onDeviceTypeFilter,
   onAddDevice,
+  selectedMonth,
+  onMonthFilter,
+  availableMonths,
 }: FileManagementSidebarProps) {
   const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -148,7 +155,6 @@ export function FileManagementSidebar({
           </div>
         )}
 
-        {/* Collapsed stats */}
         {isCollapsed && stats && stats.warningDevices > 0 && (
           <div className="px-2 mb-2">
             <div className="w-10 h-10 mx-auto rounded-lg bg-red-500/20 flex items-center justify-center">
@@ -194,6 +200,40 @@ export function FileManagementSidebar({
             })}
           </div>
         </div>
+
+        {/* Month Filter - Only when Files section is active */}
+        {activeSection === "files" && availableMonths.length > 0 && (
+          <>
+            <Separator className="my-3 bg-white/10 mx-3" />
+            <div className="px-3">
+              {!isCollapsed && (
+                <h3 className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-2 px-1">
+                  <Calendar className="w-3 h-3 inline mr-1" />
+                  Filter by Month
+                </h3>
+              )}
+              <div className="space-y-1">
+                {availableMonths.map((m) => {
+                  const isActive = selectedMonth?.year === m.year && selectedMonth?.month === m.month;
+                  return (
+                    <button
+                      key={m.value}
+                      onClick={() => onMonthFilter({ year: m.year, month: m.month })}
+                      className={cn(
+                        "w-full px-3 py-2 rounded-lg text-sm font-medium transition-all text-left",
+                        isActive
+                          ? "bg-gradient-to-r from-cyan-600 to-blue-600 text-white"
+                          : "text-white/70 hover:bg-white/10 hover:text-white border border-white/10"
+                      )}
+                    >
+                      {!isCollapsed ? m.label : m.month}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Device Type Filters - Only show when Storage section is active */}
         {activeSection === "storage" && (

@@ -2,55 +2,74 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   FileRecord,
+  FileMonthData,
   getFileRecords,
   addFileRecord,
   updateFileRecord,
   deleteFileRecord,
-  autoGenerateFileRows,
+  getAvailableFileMonths,
+  ensureFileRowsForMonth,
 } from "@/lib/files-api";
 import { scheduleFilesPush } from "@/lib/files-push-scheduler";
 import { toast } from "@/hooks/use-toast";
 
-export function useFilesManagement(filters?: {
-  clientName?: string;
-  eventMonth?: string;
-  eventYear?: string;
-}) {
+export function useFilesManagement(selectedMonth: { year: string; month: string } | null) {
   const [files, setFiles] = useState<FileRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [isEnsuring, setIsEnsuring] = useState(false);
+  const [availableMonths, setAvailableMonths] = useState<FileMonthData[]>([]);
+
+  // Load available months on mount
+  useEffect(() => {
+    getAvailableFileMonths()
+      .then(setAvailableMonths)
+      .catch((err) => toast({ title: "Error loading months", description: err.message, variant: "destructive" }));
+  }, []);
 
   const loadFiles = useCallback(async () => {
+    if (!selectedMonth) { setFiles([]); setIsLoading(false); return; }
     try {
       setIsLoading(true);
-      const data = await getFileRecords(filters);
+      const data = await getFileRecords({ eventMonth: selectedMonth.month, eventYear: selectedMonth.year });
       setFiles(data);
     } catch (err: any) {
       toast({ title: "Error loading files", description: err.message, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
-  }, [filters?.clientName, filters?.eventMonth, filters?.eventYear]);
+  }, [selectedMonth?.year, selectedMonth?.month]);
 
+  // When month changes: ensure rows exist, then load
   useEffect(() => {
-    loadFiles();
+    if (!selectedMonth) { setFiles([]); setIsLoading(false); return; }
 
+    let cancelled = false;
+    const run = async () => {
+      setIsEnsuring(true);
+      try {
+        await ensureFileRowsForMonth(selectedMonth.year, selectedMonth.month);
+      } catch (err: any) {
+        console.error("ensureFileRowsForMonth error:", err);
+      } finally {
+        if (!cancelled) setIsEnsuring(false);
+      }
+      if (!cancelled) await loadFiles();
+    };
+    run();
+
+    // Realtime subscription
     const channel = (supabase as any)
-      .channel("files_management_realtime")
+      .channel(`files_mgmt_${selectedMonth.year}_${selectedMonth.month}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "files_management" }, () => {
-        loadFiles();
+        if (!cancelled) loadFiles();
       })
       .subscribe();
 
-    return () => { (supabase as any).removeChannel(channel); };
-  }, [loadFiles]);
-
-  const add = async (record: Partial<FileRecord>) => {
-    const result = await addFileRecord({ ...record, synced_to_sheet: false });
-    setFiles((prev) => [result, ...prev]);
-    scheduleFilesPush();
-    return result;
-  };
+    return () => {
+      cancelled = true;
+      (supabase as any).removeChannel(channel);
+    };
+  }, [selectedMonth?.year, selectedMonth?.month]);
 
   const update = async (id: string, updates: Partial<FileRecord>) => {
     setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, ...updates } : f)));
@@ -65,25 +84,5 @@ export function useFilesManagement(filters?: {
     scheduleFilesPush();
   };
 
-  const generateRows = async (registeredDateTimeAD: string) => {
-    try {
-      setIsGenerating(true);
-      const newRows = await autoGenerateFileRows(registeredDateTimeAD);
-      if (newRows.length === 0) {
-        toast({ title: "No crew assigned", description: "No freelancer assignments found for this client." });
-      } else {
-        toast({ title: `${newRows.length} rows generated`, description: "File rows created from crew assignments." });
-        await loadFiles();
-        scheduleFilesPush();
-      }
-      return newRows;
-    } catch (err: any) {
-      toast({ title: "Error generating rows", description: err.message, variant: "destructive" });
-      return [];
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  return { files, isLoading, isGenerating, add, update, remove, generateRows, refresh: loadFiles };
+  return { files, isLoading, isEnsuring, availableMonths, update, remove, refresh: loadFiles };
 }
