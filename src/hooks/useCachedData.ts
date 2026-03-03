@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { ClientData, DropdownData } from "@/lib/sheets-api";
 import { 
   getCachedData, 
@@ -215,8 +215,17 @@ export function useCachedData(): UseCachedDataResult {
     return () => window.removeEventListener('queue-changed', handleQueueChange as EventListener);
   }, []);
 
+  const dedupedClients = useMemo(() => {
+    const seen = new Set<string>();
+    return clients.filter(c => {
+      if (seen.has(c.registeredDateTimeAD)) return false;
+      seen.add(c.registeredDateTimeAD);
+      return true;
+    });
+  }, [clients]);
+
   return {
-    clients,
+    clients: dedupedClients,
     dropdowns,
     isLoading,
     isFromCache,
