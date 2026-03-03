@@ -186,7 +186,12 @@ export function useCachedData(): UseCachedDataResult {
       if (e.detail.type === 'dropdowns' && e.detail.data) {
         setDropdowns(e.detail.data as DropdownData);
       }
-      // REMOVED: 'clients-invalidate' listener — no more Sheets pulls
+      if (e.detail.type === 'clients-invalidate') {
+        const memClients = getMemoryClients();
+        if (memClients) {
+          setTimeout(() => setClients([...memClients]), 0);
+        }
+      }
     };
 
     window.addEventListener('cache-updated', handleCacheUpdate as EventListener);

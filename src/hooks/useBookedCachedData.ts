@@ -146,7 +146,15 @@ export function useBookedCachedData(): UseBookedCachedDataResult {
           }
         }
       }
-      // REMOVED: 'booked-clients-invalidate' listener — no more Sheets pulls
+      if (detail?.type === 'booked-clients-invalidate') {
+        const memBooked = getMemoryBookedClients();
+        if (memBooked) {
+          setTimeout(() => {
+            setClients([...memBooked]);
+            setLastSyncedAt(new Date());
+          }, 0);
+        }
+      }
     };
 
     window.addEventListener('cache-updated', handleCacheUpdate);
