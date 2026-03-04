@@ -1,23 +1,26 @@
 
 
-## Plan: Rename columns and enhance confirmation toggle
+## Plan: Fix sheet sync row matching by using DB `id` as primary key
 
-### Changes
+### Root Cause
+The sheet sync uses a **composite key** (5 fields concatenated) to match DB rows to sheet rows. If any of those fields in the sheet are slightly different (empty, trimmed, or shifted), the wrong row gets updated — which is why PG SAFAL's backup history appears on EP BHAGWAN's sheet row.
 
-**1. `src/components/files/FullScreenFilesTable.tsx`**
+### Fix: Add `id` column to sheet and use it for matching
 
-- **Line 341**: Rename column header `Copied` → `Who Copied First?`
-- **Line 322**: Update colgroup comment from `Copied` to `Who Copied First?`
-- **Line 343**: Rename column header `✓` → `Reconfirmation`
-- **Lines 434-438**: Replace the small check/X icon toggle with a prominent text-based toggle:
-  - When `confirmed === false`: Show **"NOT CONFIRMED"** in bold red text
-  - When `confirmed === true`: Show **"CONFIRMED"** in bold green text
-  - Clicking toggles the value as before
-- Adjust the `✓` column width (currently 4%) to accommodate the text — increase to ~8%, reduce another column slightly
+**File: `supabase/functions/google-sheets/index.ts`** (pushFilesToSheetAction)
 
-**2. `src/components/files/FilePathBuilderDialog.tsx`**
+1. **Add `ID` as the first column** (Column A) in the header row, shifting all other columns right by one (A→Y, 25 columns total)
+2. **Update `HEADER_ROW`**: Prepend `'ID'` to the array
+3. **Update `mapRow`**: Prepend `f.id` to the row array
+4. **Update `makeKey`**: Simply use `row[0]` (the `id` column) instead of the composite key — this guarantees exact matching
+5. **Update all range references**: Change `A:X` → `A:Y` (25 columns) across header write, read, update, and append operations
 
-- **Line 747**: Rename label from `👤 Who Copied` → `👤 Who Copied First?`
+### Why this is better
+- The DB `id` is a UUID that uniquely identifies each file record — no collisions possible
+- Even if freelancer names, types, or card labels change, the row will always match correctly
+- Backup history, confirmations, and all other data will always go to the correct sheet row
 
-No database or backend changes needed — these are purely UI label/display changes.
+### Deployment
+- Redeploy the `google-sheets` edge function
+- On next sync, existing sheet rows without the ID column won't match, so they'll be re-appended with IDs. The user may need to clear old rows from the sheet once.
 
