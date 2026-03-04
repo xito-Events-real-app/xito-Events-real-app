@@ -1,58 +1,62 @@
 
 
-## Plan: Revamp Assignment Row Summary Display
+## Plan: WTN Files Full-Screen Announcement Popup
 
-### What Changes
-Replace the current collapsed row display from:
-`17 | ABHINASH & SUBEKSHYA | GROOM RECEPTION | 5 | 2026-03-01`
+### Behavior
+- Shows every time the app opens, for 48 hours from first deployment (expiry: `2026-03-06T23:59:59`)
+- After dismissing, won't show again for 2 hours (store timestamp in localStorage, re-show if 2hrs elapsed)
+- Plays celebration music (`/audio/meditation-music.mp3` — we'll reuse this or add a new audio file) while popup is open, stops on dismiss
+- Blue theme (file management branding)
+- Navigates to `/files` on CTA click
 
-To:
-`17 | ABHINASH & SUBEKSHA | PHOTO W-T-N 9, VIDEO W-T-N-17 | GROOM RECEPTION | 2 FILES REMAINING | 5`
+### New File: `src/components/files/WtnFilesAnnouncementDialog.tsx`
 
-Key changes:
-1. **Add 1st backup device summary** — grouped by PHOTO/VIDEO, showing unique device names used for 1st backup (`backup_1_device_name`)
-2. **Replace file count with "remaining" status** — count files missing 1st backup (`final_generated_path` is empty). Show "X FILES REMAINING" in red or "ALL FILES COPIED" in green
-3. **Remove the Date (AD) column** from both header and rows
-
-### Changes — `src/components/files/FullScreenFilesTable.tsx`
-
-**1. Desktop table header (lines 773-780)**
-- Remove the "Date (AD)" column
-- Change "Files" column to wider "Status" column
-- Add new "1st Backup Devices" column between Event and Status
-
-**2. Desktop row cells (lines 799-826)**
-- Remove `row.eventDateAD` cell
-- Add a new cell showing device summary: compute from `rowFiles` — group by PHOTO_ROLES/VIDEO_ROLES, get unique `backup_1_device_name` values, display as "PHOTO: W-T-N 9, VIDEO: W-T-N 17"
-- Replace files count badge with remaining status:
-  - Count files where `final_generated_path` is empty → remaining
-  - If remaining > 0: red bold "X FILES REMAINING"
-  - If remaining === 0: green bold "ALL FILES COPIED"
-
-**3. Mobile row (lines 559-582)**
-- Same changes: add device summary line, replace files badge with remaining status, remove date display
-
-**4. Helper function** (new, near line 320):
+**Timing logic:**
 ```typescript
-const getBackupDeviceSummary = (rowFiles: FileRecord[]): string => {
-  const photoDevices = [...new Set(
-    rowFiles.filter(f => PHOTO_ROLES.includes(f.freelancer_type) && f.backup_1_device_name)
-      .map(f => f.backup_1_device_name)
-  )];
-  const videoDevices = [...new Set(
-    rowFiles.filter(f => VIDEO_ROLES.includes(f.freelancer_type) && f.backup_1_device_name)
-      .map(f => f.backup_1_device_name)
-  )];
-  const parts: string[] = [];
-  if (photoDevices.length) parts.push(`PHOTO ${photoDevices.join(", ")}`);
-  if (videoDevices.length) parts.push(`VIDEO ${videoDevices.join(", ")}`);
-  return parts.join("  ·  ") || "—";
-};
+const ANNOUNCEMENT_KEY = "wtn-files-announcement-last-shown";
+const ANNOUNCEMENT_EXPIRY = new Date("2026-03-06T23:59:59").getTime();
+const SHOW_INTERVAL = 2 * 60 * 60 * 1000; // 2 hours
 
-const getRemainingCount = (rowFiles: FileRecord[]): number => {
-  return rowFiles.filter(f => !f.final_generated_path).length;
-};
+useEffect(() => {
+  if (Date.now() > ANNOUNCEMENT_EXPIRY) return;
+  const lastShown = localStorage.getItem(ANNOUNCEMENT_KEY);
+  if (lastShown && Date.now() - parseInt(lastShown) < SHOW_INTERVAL) return;
+  // show popup
+}, []);
 ```
 
-**5. Update `colSpan`** in expanded row (line 829) from 6 to match new column count (5 columns after removing Date, adding Devices)
+On dismiss/navigate: `localStorage.setItem(ANNOUNCEMENT_KEY, Date.now().toString())`
+
+**Audio:** Create an `Audio` object on open, play celebration music, pause+cleanup on dismiss.
+
+**UI (blue theme):**
+- Full-screen dark gradient: `from-slate-950 via-blue-950 to-cyan-950`
+- Confetti in blue tones: `#4D96FF`, `#00D2FF`, `#60A5FA`, `#38BDF8`, etc.
+- Dancing emojis: `📁`, `💾`, `🗂️`, `📂`, `🎊`, `🎉`, `🥳`, `💿`
+- Main icon: blue gradient circle with `FolderOpen` icon
+- Badge: `✨ NEW FEATURE ✨` in blue
+- Title: `"Oh Yes!! WTN FILES is finally here!"` then `"Check it out"`
+- Personal line: `"So Mr. Jeewan, Are you readdddyyyy ???"` 
+- CTA at mid-bottom: `"Open WTN Files Now 🚀"` button → navigates to `/files`
+- "Maybe later" ghost button
+
+### Changes to `src/App.tsx`
+- Import `WtnFilesAnnouncementDialog` 
+- Render it inside `<AuthProvider>` above `<Routes>`, passing `onNavigate` that uses `useNavigate` to go to `/files`
+- Since `App` doesn't have access to `useNavigate` directly (it's above `BrowserRouter`), we'll create a small wrapper component inside Routes or render the dialog inside a layout component
+
+Actually simpler: render it inside `BrowserRouter` block, create a small wrapper:
+```tsx
+function WtnFilesAnnouncement() {
+  const navigate = useNavigate();
+  return <WtnFilesAnnouncementDialog onNavigate={() => navigate('/files')} />;
+}
+```
+
+### CSS Additions to `src/index.css`
+- Reuse existing announcement animation classes (confetti, float, dance, flash, icon-pulse, cta-glow) — they're already defined
+- Add blue-themed glow variant if needed: `.wtn-files-cta-glow`
+
+### Audio
+- Use `/audio/meditation-music.mp3` as celebration music (already exists in public folder)
 
