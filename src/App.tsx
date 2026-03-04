@@ -2,9 +2,10 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
 
 import { AuthProvider } from "./contexts/AuthContext";
+import { WtnFilesAnnouncementDialog } from "./components/files/WtnFilesAnnouncementDialog";
 import { SaugatSearchProvider } from "./contexts/SaugatSearchContext";
 import { BookingCalendarPopupProvider } from "./contexts/BookingCalendarPopupContext";
 import { BenzoKeepPopupProvider } from "./contexts/BenzoKeepPopupContext";
@@ -39,6 +40,11 @@ import CrewSchedule from "./pages/CrewSchedule";
 
 const queryClient = new QueryClient();
 
+function WtnFilesAnnouncement() {
+  const navigate = useNavigate();
+  return <WtnFilesAnnouncementDialog onNavigate={() => navigate('/files')} />;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -47,6 +53,7 @@ const App = () => (
           <BenzoKeepPopupProvider>
           <BrowserRouter>
             <AuthProvider>
+              <WtnFilesAnnouncement />
               <SaugatSearch />
               <FloatingBookingCalendar />
               <FloatingBenzoKeep />
