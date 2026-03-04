@@ -7674,32 +7674,35 @@ async function pushFilesToSheetAction(accessToken: string) {
 
   // Ensure "FILES MANAGEMENT" tab exists
   const sheetTitle = 'FILES MANAGEMENT';
-  try {
-    const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}?fields=sheets.properties.title`;
-    const metaRes = await fetchWithRetry(metaUrl, {
-      headers: { Authorization: `Bearer ${accessToken}` },
+  const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}?fields=sheets.properties.title`;
+  const metaRes = await fetchWithRetry(metaUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const metaData = await metaRes.json();
+  console.log('Storage spreadsheet tabs:', JSON.stringify((metaData.sheets || []).map((s: any) => s.properties?.title)));
+  const tabExists = (metaData.sheets || []).some((s: any) => s.properties?.title === sheetTitle);
+  if (!tabExists) {
+    console.log('Creating FILES MANAGEMENT tab...');
+    // Create the tab
+    const addSheetUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}:batchUpdate`;
+    const addRes = await fetchWithRetry(addSheetUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests: [{ addSheet: { properties: { title: sheetTitle } } }] }),
     });
-    const metaData = await metaRes.json();
-    const tabExists = (metaData.sheets || []).some((s: any) => s.properties?.title === sheetTitle);
-    if (!tabExists) {
-      // Create the tab
-      const addSheetUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}:batchUpdate`;
-      await fetchWithRetry(addSheetUrl, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requests: [{ addSheet: { properties: { title: sheetTitle } } }] }),
-      });
-      // Add header row
-      const headerRange = encodeURIComponent(`'${sheetTitle}'!A1:Q1`);
-      const headerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${headerRange}?valueInputOption=USER_ENTERED`;
-      await fetchWithRetry(headerUrl, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ values: [['Client Name','Event Name','Event Date AD','Freelancer Type','Freelancer Name','Category','Side','Card Label','Size GB','Format Type','Who Copied','Reconfirmation','Double Backup','Triple Backup','Drive Upload','Final Path','Storage Type']] }),
-      });
+    if (!addRes.ok) {
+      const errText = await addRes.text();
+      throw new Error(`Failed to create FILES MANAGEMENT tab: ${addRes.status} - ${errText.substring(0, 200)}`);
     }
-  } catch (tabErr) {
-    console.error('Failed to ensure FILES MANAGEMENT tab:', tabErr);
+    // Add header row
+    const headerRange = encodeURIComponent(`'${sheetTitle}'!A1:Q1`);
+    const headerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${headerRange}?valueInputOption=USER_ENTERED`;
+    await fetchWithRetry(headerUrl, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: [['Client Name','Event Name','Event Date AD','Freelancer Type','Freelancer Name','Category','Side','Card Label','Size GB','Format Type','Who Copied','Reconfirmation','Double Backup','Triple Backup','Drive Upload','Final Path','Storage Type']] }),
+    });
+    console.log('FILES MANAGEMENT tab created successfully');
   }
 
   // Append to sheet
