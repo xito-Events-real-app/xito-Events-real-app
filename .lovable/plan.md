@@ -1,88 +1,32 @@
 
 
-# Redesign Files Expanded Mode & Path Builder Dialog
+## Confirmation: Both Sides Need the Same Fix
 
-## Summary
+You're right to ask. Currently there's a mismatch:
 
-Redesign the expanded file rows in `FullScreenFilesTable` and the `FilePathBuilderDialog` to match the user's exact requirements: bold/straight fonts (no italics), side auto-lock logic, card-based row duplication, and a restructured path builder popup with smart defaults and three sections.
+- **Database (`clients_cache`)**: Has all 38 columns (A through AL), including `company_name`, `service_types`, `last_activity_log`, `priority`, `benzo_keep_notes`
+- **`sync-clients-to-sheets` (pull/push)**: Already handles all 38 columns (A-AL) correctly
+- **`copyToBookedClients` in `google-sheets/index.ts`**: Only reads/writes A-AG (33 columns) -- **this is the broken part**
 
----
+So the database and the sync engine are already aligned. The only place that truncates data is `copyToBookedClients` (the MOVE operation when status changes to BOOKED).
 
-## Part 1: Remove Italics, Make Bold & Straight
+### What needs to change
 
-**Files**: `FullScreenFilesTable.tsx`
+**File: `supabase/functions/google-sheets/index.ts`**
 
-- Remove all `italic` and `text-muted-foreground` styling from client names, event names, and event row text (lines 296, 313, 318, 326, 496)
-- Make client names and event names `font-bold` instead of italic/muted
+1. **Line 4193** -- Change read range from `A:AG` to `A:AL` (read all 38 columns)
+2. **Lines 4247-4281** -- Add 5 missing columns to the `bookedValues` array:
+   - `clientRow[33]` → AH: Company Name
+   - `clientRow[34]` → AI: Service Types
+   - `clientRow[35]` → AJ: Last Activity Log
+   - `clientRow[36]` → AK: Priority
+   - `clientRow[37]` → AL: Benzo Keep Notes
+3. **Line 4284** -- Change write range from `A2:AG2` to `A2:AL2`
 
----
+**File: `supabase/functions/sync-clients-to-sheets/index.ts`**
 
-## Part 2: Expanded Row Redesign — Side & Card Logic
+4. **Push action (~line 299)** -- Skip booked-migrating rows (`sheet_source === 'booked'` AND `row_number < 2`) to prevent duplicate rows in the BOOKED CLIENTS sheet
+5. **Pull action (~line 227)** -- Add `benzo_keep_notes` protection (same pattern as existing payment protection) to prevent empty sheet values from overwriting DB notes
 
-**File**: `FullScreenFilesTable.tsx` (FileRowsTable component, lines 190-291)
-
-### Side Column
-- If `file.side` already has a value (set by `CREW_CODE_MAP` during generation — e.g., PB = "BRIDE SIDE", PG = "GROOM SIDE"), display it as a **read-only badge** (not a dropdown)
-- If `file.side` is empty (e.g., EP, EV, DRONE), show a Select dropdown. Once a value is selected and saved, it becomes **locked** (read-only) — we update the DB and mark it as set
-
-### Card Column
-- Default card value = `1` (set during file row generation in `ensureFileRowsForMonth`)
-- Replace the free-text input with a **number selector** (1, 2, 3, 4)
-- When card = 2, a **new duplicate row** is created for this freelancer for "Card 2" with the same metadata but `card_label = "2"`
-- Each card row is independently editable for file path, size, etc.
-
-**File**: `src/lib/files-api.ts`
-- Update `ensureFileRowsForMonth` to set `card_label: "1"` as default for all new rows
-- Add a helper function `duplicateFileRowForCard(fileId: string, cardNumber: number)` that clones the row with a new card number
-
----
-
-## Part 3: File Path Builder Dialog Redesign
-
-**File**: `FilePathBuilderDialog.tsx` — Complete restructure into 3 sections:
-
-### Section 1: Details Header (read-only info bar)
-```
-"CARD 1 - CLIENT NAME - EVENT NAME - FREELANCER NAME"
-```
-Displayed as a styled header/banner at the top of the dialog.
-
-### Section 2: Storage & Path Configuration
-
-1. **Storage Type** dropdown: PC / Hard Drive / Drive (existing)
-2. **Storage Device** dropdown: filtered by type (existing)
-3. **Drive Letter Path** — **only shown when Storage Type = PC**. Shows the `pc_drive_letter` from the selected device
-4. **Year Event Folder** — default: `"{EVENT_MONTH} EVENTS {EVENT_YEAR}"` (e.g., "FALGUN EVENTS 2082") derived from the file record's `event_month` and `event_year`. Editable.
-5. **Category** dropdown: PHOTOS / VIDEOS
-   - Default PHOTOS for PB, PG, EP
-   - Default VIDEOS for VB, VG, EV, DRONE, FPV, IPHONE
-6. **Client Folder** — default: client name (editable)
-7. **Event Folder** — default: event name (editable)
-8. **Side** — default: whatever was selected outside in the expanded row. Editable here.
-9. **Freelancer** — read-only, freelancer name
-10. **Card Label** dropdown:
-    - For **Photo roles** (PB, PG, EP): default = "RAW AND JPEG", options include RAW, JPEG, RAW AND JPEG, etc.
-    - For **Video roles** (VB, VG, EV, DRONE, FPV, IPHONE): default = "NORMAL", options include NORMAL, CF, CF_NORMAL, etc.
-
-### Section 3: File Info
-1. **File Size** — number input in GB
-2. **No. of Items** — number input
-3. **Save** button to save all data for this card
-
----
-
-## Part 4: Update `ensureFileRowsForMonth` Defaults
-
-**File**: `src/lib/files-api.ts`
-
-- Set `card_label: "1"` as default for all new rows (line 488 area)
-- Ensure `category` defaults are already correct (they are via `CREW_CODE_MAP`)
-
----
-
-## Files Changed
-
-1. `src/components/files/FullScreenFilesTable.tsx` — Remove italics, bold fonts, side lock logic, card number with row duplication
-2. `src/components/files/FilePathBuilderDialog.tsx` — Full restructure: 3-section layout, smart defaults, conditional drive letter, card label dropdowns by role
-3. `src/lib/files-api.ts` — Default card_label to "1", add `duplicateFileRowForCard` helper
+These 5 changes together ensure the Google Sheet MOVE copies all data, prevents duplicates, and protects notes during sync -- making both sides fully consistent.
 
