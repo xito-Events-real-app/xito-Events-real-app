@@ -351,7 +351,31 @@ const ClientDetail = () => {
         refetchEventDetails();
       };
 
-      syncMissingEvents().catch(err => {
+      syncMissingEvents().then(async () => {
+        // Also sync freelancer_assignments: insert new events, delete orphans
+        if (client.registeredDateTimeAD) {
+          const currentStatus = getCurrentStatus(client.statusLog || '').toUpperCase();
+          if (currentStatus === 'BOOKED') {
+            try {
+              const { ensureFreelancerAssignmentRows } = await import('@/lib/freelancer-assignment-cache');
+              await ensureFreelancerAssignmentRows(
+                client.registeredDateTimeAD,
+                client.clientName || '',
+                client.registeredDateBS || '',
+                client.events || '',
+                client.eventYear || '',
+                client.eventMonth || '',
+                client.eventDay || '',
+                client.eventDateAD || ''
+              );
+              window.dispatchEvent(new Event('clients-invalidate'));
+              window.dispatchEvent(new Event('booked-clients-invalidate'));
+            } catch (err) {
+              console.warn('[ClientDetail] Failed to sync freelancer assignments:', err);
+            }
+          }
+        }
+      }).catch(err => {
         console.warn('[ClientDetail] Failed to sync missing event rows:', err);
         refetchEventDetails();
       });

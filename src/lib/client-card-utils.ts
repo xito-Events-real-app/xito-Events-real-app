@@ -533,6 +533,18 @@ export function getCurrentStatus(statusLog?: string): string {
       timestamp = new Date(`${bracketMatch[2]}T${bracketMatch[3]}`);
     }
 
+    // Format 4: STATUS [MM/DD/YYYY, HH:mm:ss] (frontend bracket format)
+    if (!timestamp || isNaN(timestamp.getTime())) {
+      const usBracketMatch = trimmed.match(
+        /^(.+?)\s*\[(\d{1,2}\/\d{1,2}\/\d{4}),?\s*(\d{2}:\d{2}:\d{2})\]$/
+      );
+      if (usBracketMatch) {
+        status = usBracketMatch[1].trim();
+        const [m, d, y] = usBracketMatch[2].split('/');
+        timestamp = new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T${usBracketMatch[3]}`);
+      }
+    }
+
     // Format 2: STATUS - MM/DD/YYYY, HH:mm:ss
     if (!timestamp || isNaN(timestamp.getTime())) {
       const dashAfterStatus = trimmed.match(/^(.+?)\s*-\s*(\d{1,2}\/\d{1,2}\/\d{4}),?\s*(\d{2}:\d{2}:\d{2})$/);
