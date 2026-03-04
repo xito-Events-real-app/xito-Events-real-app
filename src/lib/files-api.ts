@@ -269,14 +269,11 @@ export function buildFilePath(params: {
 
   if (params.storageType === "PC") {
     const drive = params.pcDriveLetter ? `${params.pcDriveLetter}:` : "";
-    return `\\\\\\\\${params.deviceName}\\\\${drive}\\\\${segments.join("\\\\")}`;
-  } else if (params.storageType === "HARD_DRIVE") {
-    return `${params.deviceName}\\\\MAIN\\\\${segments.join("\\\\")}`;
-  } else if (params.storageType === "SSD") {
-    return `${params.deviceName}\\\\MAIN\\\\${segments.join("\\\\")}`;
+    return `\\\\${params.deviceName}\\${drive}\\${segments.join("\\")}`;
+  } else if (params.storageType === "HARD_DRIVE" || params.storageType === "SSD") {
+    return `${params.deviceName}\\${segments.join("\\")}`;
   } else {
-    // DRIVE (Google Drive etc.)
-    return `${params.deviceName}\\\\${segments.join("\\\\")}`;
+    return `${params.deviceName}\\${segments.join("\\")}`;
   }
 }
 
