@@ -79,6 +79,7 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
   const [notes, setNotes] = useState("");
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [removingBackup, setRemovingBackup] = useState(false);
   const [freelancerNames, setFreelancerNames] = useState<string[]>([]);
   const [newCopierName, setNewCopierName] = useState("");
 
@@ -306,6 +307,58 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
     toast.success(`${name} added to freelancers`);
   };
 
+  const handleRemoveBackup = async () => {
+    if (!fileRecord || initialBackupNumber === undefined || initialBackupNumber < 1 || initialBackupNumber > 3) return;
+    setRemovingBackup(true);
+    try {
+      const bn = initialBackupNumber;
+      const now = new Date();
+      const dateStr = `${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')}/${now.getFullYear()}, ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+
+      // Build history entry like Breaking News format
+      let oldPath = "";
+      let oldDevice = "";
+      if (bn === 1) { oldPath = fileRecord.final_generated_path || ""; oldDevice = fileRecord.backup_1_device_name || ""; }
+      else if (bn === 2) { oldPath = fileRecord.backup_2_path || ""; oldDevice = fileRecord.backup_2_device_name || ""; }
+      else if (bn === 3) { oldPath = fileRecord.backup_3_path || ""; oldDevice = fileRecord.backup_3_device_name || ""; }
+
+      const historyEntry = `BACKUP ${bn} REMOVED [${dateStr}] | Device: ${oldDevice} | Path: ${oldPath}`;
+      const existingHistory = fileRecord.backup_history || "";
+      const newHistory = existingHistory ? `${historyEntry}\n${existingHistory}` : historyEntry;
+
+      // Clear the backup fields
+      const clearUpdates: any = { backup_history: newHistory, synced_to_sheet: false };
+      if (bn === 1) {
+        clearUpdates.final_generated_path = "";
+        clearUpdates.backup_1_device_name = "";
+        clearUpdates.backup_1_recorded_at = null;
+        clearUpdates.storage_type = "";
+        clearUpdates.storage_device_id = null;
+      } else if (bn === 2) {
+        clearUpdates.backup_2_path = "";
+        clearUpdates.backup_2_device_name = "";
+        clearUpdates.backup_2_recorded_at = null;
+        clearUpdates.double_backup = false;
+      } else if (bn === 3) {
+        clearUpdates.backup_3_path = "";
+        clearUpdates.backup_3_device_name = "";
+        clearUpdates.backup_3_recorded_at = null;
+        clearUpdates.triple_backup = false;
+      }
+
+      await (supabase as any).from("files_management").update(clearUpdates).eq("id", fileRecord.id);
+
+      onOpenChange(false);
+      if (onRefresh) await onRefresh();
+      scheduleFilesPush();
+      toast.success(`Backup ${bn} removed. History saved.`);
+    } catch (err: any) {
+      toast.error("Failed to remove backup: " + (err.message || ""));
+    } finally {
+      setRemovingBackup(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!fileRecord || backupNumber === 0) return;
 
@@ -524,15 +577,29 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
           </div>
         )}
 
-        {/* Backup Number Indicator */}
+        {/* Backup Number Indicator + Remove Backup */}
         <div className={cn(
-          "p-2 rounded-lg text-center font-bold text-sm",
+          "p-2 rounded-lg font-bold text-sm flex items-center justify-between",
           backupNumber === 1 && "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
           backupNumber === 2 && "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
           backupNumber === 3 && "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
           backupNumber === 0 && "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
         )}>
-          {backupNumber > 0 ? `Setting ${backupLabel}` : "All 3 Backups Complete ✓"}
+          <span className="flex-1 text-center">
+            {backupNumber > 0 ? `Setting ${backupLabel}` : "All 3 Backups Complete ✓"}
+          </span>
+          {initialBackupNumber !== undefined && initialBackupNumber >= 1 && initialBackupNumber <= 3 && (
+            <Button
+              variant="destructive"
+              size="sm"
+              className="h-7 text-xs ml-2"
+              onClick={handleRemoveBackup}
+              disabled={removingBackup}
+            >
+              <Trash2 className="w-3 h-3 mr-1" />
+              {removingBackup ? "Removing..." : `Remove ${backupLabel}`}
+            </Button>
+          )}
         </div>
 
         {/* Details Header */}

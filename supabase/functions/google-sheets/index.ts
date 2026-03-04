@@ -7666,7 +7666,7 @@ async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = fals
     'FREELANCER TYPE', 'FREELANCER NAME', 'CARDS', 'FILE PATH',
     'SIZE IN GB', 'NO OF ITEMS', 'FORMAT', 'WHO COPIED FIRST?',
     'RECONFIRMATION', 'DOUBLE BACKUP PATH', 'TRIPLE BACKUP PATH', 'DRIVE UPLOAD',
-    'DRIVE LINK', 'DELETED OR NOT', 'NOTES',
+    'DRIVE LINK', 'DELETED OR NOT', 'NOTES', 'BACKUP HISTORY',
   ];
 
   // Helper: map a DB row to the 23-column sheet row
@@ -7694,6 +7694,7 @@ async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = fals
     f.drive_link || '',
     f.deleted_or_not ? 'TRUE' : 'FALSE',
     f.notes || '',
+    f.backup_history || '',
   ];
 
   // Helper: build composite dedup key from sheet row values (0-indexed cols)
