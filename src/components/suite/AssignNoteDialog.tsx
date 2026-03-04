@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { UnassignedBenzoNote } from "@/hooks/useUnassignedBenzoKeepNotes";
-import { getClientsForNoteAssignment, transferBenzoKeepNote, ClientData } from "@/lib/sheets-api";
+import { getClientsForNoteAssignmentFromCache, transferBenzoKeepNote, ClientData } from "@/lib/sheets-api";
 import { updateClientFieldInCache } from "@/lib/clients-supabase-cache";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -36,7 +36,7 @@ export function AssignNoteDialog({ open, onOpenChange, note, onSuccess }: Assign
   const loadClients = async () => {
     setIsLoading(true);
     try {
-      const data = await getClientsForNoteAssignment();
+      const data = await getClientsForNoteAssignmentFromCache();
       // Sort by registeredDateTimeAD descending (most recent first)
       const sorted = data.sort((a, b) => {
         const dateA = a.registeredDateTimeAD || '';
