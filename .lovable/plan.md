@@ -1,88 +1,88 @@
 
 
-# Fix: Duplicate File Rows from Concurrent `ensureFileRowsForMonth` Calls
+# Redesign Files Expanded Mode & Path Builder Dialog
 
-## Problem Confirmed
+## Summary
 
-All 7 duplicates belong to **PRASANSHA ADHIKARI** (`2026-01-25T13:22:14.887Z`). Two batches were inserted 86 seconds apart (21:34:18 and 21:35:44). The second call queried existing rows before the first batch's insert was visible, so it saw no existing keys and re-inserted identical rows.
+Redesign the expanded file rows in `FullScreenFilesTable` and the `FilePathBuilderDialog` to match the user's exact requirements: bold/straight fonts (no italics), side auto-lock logic, card-based row duplication, and a restructured path builder popup with smart defaults and three sections.
 
-No other clients are affected — yet. But this will happen again for any future month loads.
+---
 
-## Root Cause
+## Part 1: Remove Italics, Make Bold & Straight
 
-`ensureFileRowsForMonth` has no concurrency guard. When the realtime subscription fires (because new rows were just inserted), it calls `loadFiles()`, and if React re-renders trigger the effect again, a second `ensureFileRowsForMonth` runs concurrently with overlapping dedup queries.
+**Files**: `FullScreenFilesTable.tsx`
 
-## Fix (3 parts)
+- Remove all `italic` and `text-muted-foreground` styling from client names, event names, and event row text (lines 296, 313, 318, 326, 496)
+- Make client names and event names `font-bold` instead of italic/muted
 
-### Part 1: Add concurrency lock to `ensureFileRowsForMonth`
+---
 
-**File: `src/lib/files-api.ts`**
+## Part 2: Expanded Row Redesign — Side & Card Logic
 
-Add a module-level promise lock so only one `ensureFileRowsForMonth` can run at a time:
+**File**: `FullScreenFilesTable.tsx` (FileRowsTable component, lines 190-291)
 
-```typescript
-let _ensureLock: Promise<void> | null = null;
+### Side Column
+- If `file.side` already has a value (set by `CREW_CODE_MAP` during generation — e.g., PB = "BRIDE SIDE", PG = "GROOM SIDE"), display it as a **read-only badge** (not a dropdown)
+- If `file.side` is empty (e.g., EP, EV, DRONE), show a Select dropdown. Once a value is selected and saved, it becomes **locked** (read-only) — we update the DB and mark it as set
 
-export async function ensureFileRowsForMonth(eventYear, eventMonth) {
-  if (_ensureLock) await _ensureLock;
-  let resolve: () => void;
-  _ensureLock = new Promise(r => { resolve = r; });
-  try {
-    // ... existing logic (unchanged) ...
-  } finally {
-    resolve!();
-    _ensureLock = null;
-  }
-}
+### Card Column
+- Default card value = `1` (set during file row generation in `ensureFileRowsForMonth`)
+- Replace the free-text input with a **number selector** (1, 2, 3, 4)
+- When card = 2, a **new duplicate row** is created for this freelancer for "Card 2" with the same metadata but `card_label = "2"`
+- Each card row is independently editable for file path, size, etc.
+
+**File**: `src/lib/files-api.ts`
+- Update `ensureFileRowsForMonth` to set `card_label: "1"` as default for all new rows
+- Add a helper function `duplicateFileRowForCard(fileId: string, cardNumber: number)` that clones the row with a new card number
+
+---
+
+## Part 3: File Path Builder Dialog Redesign
+
+**File**: `FilePathBuilderDialog.tsx` — Complete restructure into 3 sections:
+
+### Section 1: Details Header (read-only info bar)
 ```
-
-### Part 2: Debounce the realtime handler in `useFilesManagement`
-
-**File: `src/hooks/useFilesManagement.ts`**
-
-The realtime subscription currently calls `loadFiles()` on every change event. When `ensureFileRowsForMonth` inserts 10 rows, that fires 10 realtime events. Add a simple debounce (500ms) to the handler:
-
-```typescript
-let realtimeTimer: ReturnType<typeof setTimeout>;
-// In the realtime handler:
-.on("postgres_changes", { ... }, () => {
-  clearTimeout(realtimeTimer);
-  realtimeTimer = setTimeout(() => {
-    if (!cancelled) loadFiles();
-  }, 500);
-})
+"CARD 1 - CLIENT NAME - EVENT NAME - FREELANCER NAME"
 ```
+Displayed as a styled header/banner at the top of the dialog.
 
-### Part 3: Delete existing duplicates
+### Section 2: Storage & Path Configuration
 
-**Database cleanup** — delete the later duplicate for each unique combination (keep the earliest `created_at`):
+1. **Storage Type** dropdown: PC / Hard Drive / Drive (existing)
+2. **Storage Device** dropdown: filtered by type (existing)
+3. **Drive Letter Path** — **only shown when Storage Type = PC**. Shows the `pc_drive_letter` from the selected device
+4. **Year Event Folder** — default: `"{EVENT_MONTH} EVENTS {EVENT_YEAR}"` (e.g., "FALGUN EVENTS 2082") derived from the file record's `event_month` and `event_year`. Editable.
+5. **Category** dropdown: PHOTOS / VIDEOS
+   - Default PHOTOS for PB, PG, EP
+   - Default VIDEOS for VB, VG, EV, DRONE, FPV, IPHONE
+6. **Client Folder** — default: client name (editable)
+7. **Event Folder** — default: event name (editable)
+8. **Side** — default: whatever was selected outside in the expanded row. Editable here.
+9. **Freelancer** — read-only, freelancer name
+10. **Card Label** dropdown:
+    - For **Photo roles** (PB, PG, EP): default = "RAW AND JPEG", options include RAW, JPEG, RAW AND JPEG, etc.
+    - For **Video roles** (VB, VG, EV, DRONE, FPV, IPHONE): default = "NORMAL", options include NORMAL, CF, CF_NORMAL, etc.
 
-```sql
-DELETE FROM files_management 
-WHERE id IN (
-  SELECT id FROM (
-    SELECT id, ROW_NUMBER() OVER (
-      PARTITION BY registered_date_time_ad, event_name, freelancer_type, freelancer_name 
-      ORDER BY created_at ASC
-    ) as rn
-    FROM files_management 
-    WHERE deleted_or_not = false
-  ) t WHERE rn > 1
-);
-```
+### Section 3: File Info
+1. **File Size** — number input in GB
+2. **No. of Items** — number input
+3. **Save** button to save all data for this card
 
-This deletes exactly the 7 duplicate rows for PRASANSHA ADHIKARI (the second batch from 21:35:44).
+---
 
-## Risk Assessment
+## Part 4: Update `ensureFileRowsForMonth` Defaults
 
-| Change | What could break | Mitigation |
-|--------|-----------------|------------|
-| Concurrency lock | If `ensureFileRowsForMonth` throws, lock could hang | `finally` block always releases the lock |
-| Debounce realtime | 500ms delay before UI updates after external edits | Acceptable tradeoff; local optimistic updates are instant |
-| Delete duplicates | Could delete rows with user edits | Query keeps the earliest row (which has the original data); the second batch was inserted 86s later with no user edits |
+**File**: `src/lib/files-api.ts`
+
+- Set `card_label: "1"` as default for all new rows (line 488 area)
+- Ensure `category` defaults are already correct (they are via `CREW_CODE_MAP`)
+
+---
 
 ## Files Changed
-1. `src/lib/files-api.ts` — Add concurrency lock around `ensureFileRowsForMonth`
-2. `src/hooks/useFilesManagement.ts` — Debounce realtime handler
-3. Database — Delete 7 duplicate rows
+
+1. `src/components/files/FullScreenFilesTable.tsx` — Remove italics, bold fonts, side lock logic, card number with row duplication
+2. `src/components/files/FilePathBuilderDialog.tsx` — Full restructure: 3-section layout, smart defaults, conditional drive letter, card label dropdowns by role
+3. `src/lib/files-api.ts` — Default card_label to "1", add `duplicateFileRowForCard` helper
 
