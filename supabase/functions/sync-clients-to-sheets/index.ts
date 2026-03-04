@@ -257,6 +257,29 @@ serve(async (req) => {
         console.log(`[sync-clients] Protected payment data for ${paymentProtectedIds.size} clients from empty sheet overwrite`);
       }
 
+      // NON-DESTRUCTIVE BENZO KEEP NOTES MERGE: Same pattern as payment protection
+      const notesProtectedIds = new Set<string>();
+      for (const record of safeToUpsert) {
+        const benzoKeepNotes = (record.benzo_keep_notes || '').trim();
+
+        if (!benzoKeepNotes) {
+          const { data: unsyncedRow } = await supabase
+            .from('clients_cache')
+            .select('benzo_keep_notes')
+            .eq('registered_date_time_ad', record.registered_date_time_ad)
+            .eq('synced_to_sheet', false)
+            .maybeSingle();
+
+          if (unsyncedRow && unsyncedRow.benzo_keep_notes) {
+            record.benzo_keep_notes = unsyncedRow.benzo_keep_notes;
+            notesProtectedIds.add(record.registered_date_time_ad);
+          }
+        }
+      }
+      if (notesProtectedIds.size > 0) {
+        console.log(`[sync-clients] Protected benzo_keep_notes for ${notesProtectedIds.size} clients from empty sheet overwrite`);
+      }
+
       // Upsert in batches of 500 (only safe rows)
       let count = 0;
       for (let i = 0; i < safeToUpsert.length; i += 500) {
@@ -300,8 +323,14 @@ serve(async (req) => {
         const sheetName = row.sheet_source === 'booked' ? 'BOOKED CLIENTS' : 'CLIENT TRACKER';
         const rowNum = row.row_number;
 
+        // Skip booked-migrating rows (handled by MOVE logic in updateClientStatus)
+        if (row.sheet_source === 'booked' && (!rowNum || rowNum < 2)) {
+          console.log(`[sync-clients] Skipping booked-migrating client ${row.client_name} (handled by MOVE logic)`);
+          continue;
+        }
+
         if (!rowNum || rowNum < 2) {
-          // Both tracker and booked clients with invalid row — needs append
+          // Tracker clients with invalid row — needs append
           appendRows.push(row);
           continue;
         }

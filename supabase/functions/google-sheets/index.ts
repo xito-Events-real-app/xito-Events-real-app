@@ -4190,7 +4190,7 @@ function getCurrentStatusFromLog(statusLog: string): string {
 // Copy a client from CLIENT TRACKER to BOOKED CLIENTS sheet (same column structure as CLIENT TRACKER)
 async function copyToBookedClients(accessToken: string, spreadsheetId: string, originalRowNumber: number) {
   // First, read the full client data from CLIENT TRACKER
-  const clientRange = encodeURIComponent(`'CLIENT TRACKER'!A${originalRowNumber}:AG${originalRowNumber}`);
+  const clientRange = encodeURIComponent(`'CLIENT TRACKER'!A${originalRowNumber}:AL${originalRowNumber}`);
   const clientUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${clientRange}`;
   
   const clientResponse = await fetch(clientUrl, {
@@ -4278,10 +4278,15 @@ async function copyToBookedClients(accessToken: string, spreadsheetId: string, o
     clientRow[30] || '',  // AE: Payments Made
     clientRow[31] || '',  // AF: Payment Dates AD
     clientRow[32] || '',  // AG: Remaining Payment
+    clientRow[33] || '',  // AH: Company Name
+    clientRow[34] || '',  // AI: Service Types
+    clientRow[35] || '',  // AJ: Last Activity Log
+    clientRow[36] || '',  // AK: Priority
+    clientRow[37] || '',  // AL: Benzo Keep Notes
   ]];
 
-  // Write the data to row 2 of BOOKED CLIENTS (same structure as CLIENT TRACKER: A-AG)
-  const writeRange = encodeURIComponent("'BOOKED CLIENTS'!A2:AG2");
+  // Write the data to row 2 of BOOKED CLIENTS (same structure as CLIENT TRACKER: A-AL)
+  const writeRange = encodeURIComponent("'BOOKED CLIENTS'!A2:AL2");
   const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${writeRange}?valueInputOption=USER_ENTERED`;
   
   const writeResponse = await fetch(writeUrl, {
