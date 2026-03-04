@@ -7666,7 +7666,7 @@ async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = fals
     'EVENT YEAR', 'EVENT MONTH', 'EVENT DAY', 'EVENT DATE IN AD',
     'FREELANCER TYPE', 'FREELANCER NAME', 'CARDS', 'FILE PATH',
     'SIZE IN GB', 'NO OF ITEMS', 'FORMAT', 'WHO COPIED FIRST?',
-    'RECONFIRMATION', 'DOUBLE BACKUP PATH', 'TRIPLE BACKUP PATH', 'DRIVE UPLOAD',
+    'RECONFIRMATION', 'DOUBLE BACKUP PATH', 'TRIPLE BACKUP PATH', 'CLOUD NAME',
     'DRIVE LINK', 'DELETED OR NOT', 'NOTES', 'BACKUP HISTORY',
   ];
 
@@ -7692,7 +7692,7 @@ async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = fals
     f.confirmed ? 'CONFIRMED' : 'NOT CONFIRMED',
     f.backup_2_path || '',
     f.backup_3_path || '',
-    f.drive_upload ? 'TRUE' : 'FALSE',
+    f.drive_upload_path || '',
     f.drive_link || '',
     f.deleted_or_not ? 'TRUE' : 'FALSE',
     f.notes || '',

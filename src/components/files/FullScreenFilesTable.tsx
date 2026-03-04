@@ -22,6 +22,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useFilesManagement } from "@/hooks/useFilesManagement";
 import { useStorageDevices } from "@/hooks/useStorageDevices";
 import { FilePathBuilderDialog } from "./FilePathBuilderDialog";
+import { CloudUploadDialog } from "./CloudUploadDialog";
 import { FileRecord, duplicateFileRowForCard } from "@/lib/files-api";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 
@@ -145,6 +146,10 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
   const [pathDialogOpen, setPathDialogOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<FileRecord | null>(null);
   const [editBackupNumber, setEditBackupNumber] = useState<number | null>(null);
+
+  // Cloud upload dialog
+  const [cloudDialogOpen, setCloudDialogOpen] = useState(false);
+  const [cloudFile, setCloudFile] = useState<FileRecord | null>(null);
 
   // Notes dialog
   const [notesDialogOpen, setNotesDialogOpen] = useState(false);
@@ -336,7 +341,7 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                   <th className="px-2 py-1.5 text-center font-bold whitespace-nowrap">1st</th>
                   <th className="px-2 py-1.5 text-center font-bold whitespace-nowrap">2nd</th>
                   <th className="px-2 py-1.5 text-center font-bold whitespace-nowrap">3rd</th>
-                  <th className="px-3 py-1.5 text-center font-bold whitespace-nowrap border-l border-border/40">Drive</th>
+                  <th className="px-3 py-1.5 text-center font-bold whitespace-nowrap border-l border-border/40">Cloud</th>
                   <th className="px-3 py-1.5 text-center font-bold whitespace-nowrap border-l border-border/40">Link</th>
                   <th className="px-3 py-1.5 text-left font-bold whitespace-nowrap border-l border-border/40">Who Copied First?</th>
                   <th className="px-2 py-1.5 text-center font-bold whitespace-nowrap">Reconfirmation</th>
@@ -407,12 +412,34 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                         )}
                       </div>
                     </td>
-                    {/* Drive Upload */}
+                    {/* Cloud */}
                     <td className="px-3 py-1.5 text-center border-l border-border/40">
                       <div className="flex items-center justify-center gap-0.5">
-                        {file.drive_upload ? <Check className="w-4 h-4 text-emerald-600" /> : <X className="w-4 h-4 text-red-500" />}
-                        {file.drive_upload && (
-                          <button onClick={() => openPathBuilder(file)} className="hover:text-blue-500 text-muted-foreground transition-colors">
+                        {file.drive_upload && file.drive_upload_path ? (
+                          <HoverCard openDelay={100} closeDelay={300}>
+                            <HoverCardTrigger asChild>
+                              <span
+                                className="inline-flex items-center text-[11px] px-1.5 py-0.5 bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400 font-bold truncate max-w-[90px] cursor-pointer rounded-md"
+                                onClick={() => { setCloudFile(file); setCloudDialogOpen(true); }}
+                              >
+                                {file.drive_upload_path}
+                              </span>
+                            </HoverCardTrigger>
+                            <HoverCardContent className="w-60 p-3 space-y-1 text-xs z-[200]" side="top">
+                              <div className="font-bold text-sm text-purple-700 dark:text-purple-400">{file.drive_upload_path}</div>
+                              {file.drive_link && <div className="text-[11px] break-all text-muted-foreground">{file.drive_link}</div>}
+                            </HoverCardContent>
+                          </HoverCard>
+                        ) : (
+                          <button
+                            onClick={() => { setCloudFile(file); setCloudDialogOpen(true); }}
+                            className="hover:text-purple-500 text-muted-foreground transition-colors"
+                          >
+                            <X className="w-4 h-4 text-red-500" />
+                          </button>
+                        )}
+                        {file.drive_upload && file.drive_upload_path && (
+                          <button onClick={() => { setCloudFile(file); setCloudDialogOpen(true); }} className="hover:text-purple-500 text-muted-foreground transition-colors">
                             <PenLine className="w-3 h-3" />
                           </button>
                         )}
@@ -560,10 +587,11 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-xs">Drive: {file.drive_upload ? "✓" : "✕"}</span>
-                      {file.drive_upload && (
-                        <button onClick={() => openPathBuilder(file)} className="hover:text-blue-500 text-muted-foreground"><PenLine className="w-3 h-3" /></button>
-                      )}
+                      <span className="text-xs cursor-pointer" onClick={() => { setCloudFile(file); setCloudDialogOpen(true); }}>
+                        Cloud: {file.drive_upload && file.drive_upload_path ? (
+                          <span className="text-purple-600 font-bold">{file.drive_upload_path}</span>
+                        ) : "✕"}
+                      </span>
                       {file.drive_link && <a href={file.drive_link} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 font-bold">OPEN</a>}
                       <span className="text-xs">{file.confirmed ? "✓ Confirmed" : ""}</span>
                       <div className="flex items-center gap-1 ml-auto">
@@ -769,6 +797,14 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
         allFiles={files}
         onRefresh={refresh}
         initialBackupNumber={editBackupNumber ?? undefined}
+      />
+
+      <CloudUploadDialog
+        open={cloudDialogOpen}
+        onOpenChange={setCloudDialogOpen}
+        fileRecord={cloudFile}
+        devices={devices}
+        onSave={async (id, updates) => { await update(id, updates); }}
       />
 
       {/* Notes Dialog */}
