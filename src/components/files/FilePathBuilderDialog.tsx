@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { Copy, Check, AlertTriangle, Plus } from "lucide-react";
+import { Copy, Check, AlertTriangle, Plus, Trash2 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -256,6 +256,42 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
     setActiveCard(newKey);
   };
 
+  const handleRemoveCard = async (cardNumber: string) => {
+    if (!fileRecord || !allFiles) return;
+    const cardFile = allFiles.find(f =>
+      f.registered_date_time_ad === fileRecord.registered_date_time_ad &&
+      f.event_name === fileRecord.event_name &&
+      f.freelancer_type === fileRecord.freelancer_type &&
+      f.freelancer_name === fileRecord.freelancer_name &&
+      f.card_label === cardNumber
+    );
+    if (!cardFile) {
+      toast.error(`Card ${cardNumber} not found in database`);
+      return;
+    }
+    try {
+      await (supabase as any).from("files_management").delete().eq("id", cardFile.id);
+      setCardForms(prev => {
+        const next = { ...prev };
+        delete next[cardNumber];
+        return next;
+      });
+      const remainingKeys = Object.keys(cardForms).filter(k => k !== cardNumber);
+      const newMax = remainingKeys.length > 0 ? Math.max(...remainingKeys.map(Number)) : 1;
+      setCardCount(newMax);
+      if (activeCard === cardNumber) {
+        setActiveCard(remainingKeys[0] || "1");
+      }
+      if (onRefresh) await onRefresh();
+      toast.success(`Card ${cardNumber} removed`);
+    } catch (err: any) {
+      toast.error("Failed to remove card");
+    }
+  };
+
+  const existingCardKeys = useMemo(() => {
+    return Object.keys(cardForms).sort((a, b) => Number(a) - Number(b));
+  }, [cardForms]);
   const handleAddNewCopier = async () => {
     if (!newCopierName.trim()) return;
     const name = newCopierName.trim().toUpperCase();
@@ -271,12 +307,12 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
     if (!fileRecord || backupNumber === 0) return;
 
     // Validate all cards have required fields
-    if (cardCount > 1) {
-      for (let c = 1; c <= cardCount; c++) {
-        const key = String(c);
+    const keys = Object.keys(cardForms);
+    if (keys.length > 1) {
+      for (const key of keys) {
         const cf = cardForms[key];
         if (!cf || !cf.storageType || !cf.deviceId) {
-          toast.error(`Please fill details for all cards before saving (Card ${c} is incomplete)`);
+          toast.error(`Please fill details for all cards before saving (Card ${key} is incomplete)`);
           setActiveCard(key);
           return;
         }
@@ -336,9 +372,8 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
       await onSave(updates);
 
       // Save other card forms if they exist
-      if (cardCount > 1 && allFiles) {
-        for (let c = 1; c <= cardCount; c++) {
-          const key = String(c);
+      if (Object.keys(cardForms).length > 1 && allFiles) {
+        for (const key of Object.keys(cardForms)) {
           if (key === (fileRecord.card_label || "1")) continue;
           const cardForm = cardForms[key];
           if (!cardForm) continue;
@@ -423,6 +458,44 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
           <DialogTitle className="text-blue-600 dark:text-blue-400">File Path Builder</DialogTitle>
           <DialogDescription>Build and preview the storage path for this file entry</DialogDescription>
         </DialogHeader>
+
+        {/* Top-Level Card Switcher */}
+        {existingCardKeys.length > 0 && (
+          <div className="flex items-center gap-2 p-2.5 rounded-lg bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-orange-950/30 dark:to-yellow-950/30 border border-orange-300 dark:border-orange-700">
+            <span className="text-xs font-bold text-orange-700 dark:text-orange-400 mr-1">🃏 Active Card:</span>
+            {existingCardKeys.map(key => (
+              <div key={key} className="flex items-center gap-0.5">
+                <Button
+                  variant={activeCard === key ? "default" : "outline"}
+                  size="sm"
+                  className={cn(
+                    "h-7 text-xs px-3 font-bold",
+                    activeCard === key
+                      ? "bg-orange-600 hover:bg-orange-700 text-white"
+                      : "border-orange-300 text-orange-700 hover:bg-orange-100 dark:border-orange-700 dark:text-orange-400 dark:hover:bg-orange-950/40"
+                  )}
+                  onClick={() => setActiveCard(key)}
+                >
+                  Card {key}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-950/40"
+                  onClick={() => handleRemoveCard(key)}
+                  title={`Remove Card ${key}`}
+                >
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              </div>
+            ))}
+            {cardCount < 4 && (
+              <Button variant="ghost" size="sm" className="h-7 text-xs text-orange-700 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-950/40" onClick={handleAddCard}>
+                <Plus className="w-3 h-3 mr-1" /> Add Card
+              </Button>
+            )}
+          </div>
+        )}
 
         {/* Backup Number Indicator */}
         <div className={cn(
@@ -572,23 +645,40 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <Label className="text-xs font-bold">Cards:</Label>
-                <Badge variant="outline" className="text-xs bg-white/60 dark:bg-white/5">{cardCount} card{cardCount > 1 ? "s" : ""}</Badge>
+                <Badge variant="outline" className="text-xs bg-white/60 dark:bg-white/5">{existingCardKeys.length} card{existingCardKeys.length > 1 ? "s" : ""}</Badge>
                 {cardCount < 4 && (
                   <Button variant="ghost" size="sm" className="h-6 text-xs text-emerald-700 dark:text-emerald-400" onClick={handleAddCard}>
                     <Plus className="w-3 h-3 mr-1" /> Add
                   </Button>
                 )}
               </div>
-              {cardCount > 1 && (
-                <Tabs value={activeCard} onValueChange={setActiveCard}>
-                  <TabsList className="h-7">
-                    {Array.from({ length: cardCount }, (_, i) => (
-                      <TabsTrigger key={i + 1} value={String(i + 1)} className="text-xs px-3 h-5">
-                        Card {i + 1}
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
-                </Tabs>
+              {existingCardKeys.length > 1 && (
+                <div className="flex flex-wrap gap-1">
+                  {existingCardKeys.map(key => (
+                    <div key={key} className="flex items-center gap-0.5">
+                      <Button
+                        variant={activeCard === key ? "default" : "outline"}
+                        size="sm"
+                        className={cn(
+                          "h-6 text-xs px-2",
+                          activeCard === key && "bg-emerald-600 hover:bg-emerald-700 text-white"
+                        )}
+                        onClick={() => setActiveCard(key)}
+                      >
+                        Card {key}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 w-5 p-0 text-red-500 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-950/40"
+                        onClick={() => handleRemoveCard(key)}
+                        title={`Remove Card ${key}`}
+                      >
+                        <Trash2 className="w-2.5 h-2.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
 
