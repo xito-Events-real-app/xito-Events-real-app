@@ -94,6 +94,13 @@ const BackupPill = ({ path, deviceName, file, backupNum }: { path: string; devic
       >
         <div className="font-bold text-sm text-emerald-700 dark:text-emerald-400">{label}</div>
         <div className="bg-muted/50 rounded px-2 py-1.5 font-mono text-[11px] break-all leading-relaxed">{path}</div>
+        {displayDate && (
+          <div className="text-[11px] font-bold text-foreground">
+            {new Date(displayDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+            {" "}
+            {new Date(displayDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+          </div>
+        )}
         <div className="flex items-center gap-1.5 text-muted-foreground">
           <Clock className="w-3.5 h-3.5" />
           <span className="font-bold">{timeAgo}</span>
