@@ -1,25 +1,29 @@
 
 
-## Add Edit Buttons Next to Backup Pills
+## Fix: Edit Button Should Open the Specific Backup Number
 
-### What
-Add a small edit (pencil) icon button next to each backup pill (1st, 2nd, 3rd) and Drive column. The button only appears when the backup data exists (path is present for backups, `drive_upload` is true for Drive).
+### Problem
+All edit buttons call `openPathBuilder(file)` without specifying which backup to edit. The dialog then auto-calculates `getNextBackupNumber(file)`, which always picks the *next empty* slot — so clicking edit on backup 1 opens backup 2 instead.
 
-### How
+### Solution
 
-**File: `src/components/files/FullScreenFilesTable.tsx`**
+**1. `FullScreenFilesTable.tsx`**
+- Add state: `editBackupNumber: number | null` (default `null`)
+- Change `openPathBuilder` to accept a second param: `openPathBuilder(file, backupNum)`
+- Pass `editBackupNumber` as a new prop to `FilePathBuilderDialog`
+- Update all edit button calls:
+  - 1st backup edit → `openPathBuilder(file, 1)`
+  - 2nd backup edit → `openPathBuilder(file, 2)`
+  - 3rd backup edit → `openPathBuilder(file, 3)`
+  - Drive edit → `openPathBuilder(file, 0)` (or keep as-is, drive doesn't use backup number)
+  - "SET PATH" button → `openPathBuilder(file)` (no override, uses auto-detect)
 
-1. **Desktop table rows (lines ~366-389)**: For each of the 4 cells (1st, 2nd, 3rd, Drive), wrap the existing content in a flex container and add a small `PenLine` icon button that calls `openPathBuilder(file)` — only rendered when the backup/drive data exists.
+**2. `FilePathBuilderDialog.tsx`**
+- Add optional prop: `initialBackupNumber?: number`
+- Change `backupNumber` logic: if `initialBackupNumber` is provided, use it directly instead of `getNextBackupNumber(file)`
+- Pre-populate the form fields from the existing backup data when editing (e.g., if editing backup 1, load `final_generated_path` and `backup_1_device_name` into the form)
 
-   - **1st backup cell**: Show edit button when `file.final_generated_path` is truthy
-   - **2nd backup cell**: Show edit button when `file.backup_2_path` is truthy
-   - **3rd backup cell**: Show edit button when `file.backup_3_path` is truthy
-   - **Drive cell**: Show edit button when `file.drive_upload` is true
-
-2. **Mobile card rows (lines ~496-511)**: Same logic — add a small edit icon next to each backup pill and drive status, only when data exists.
-
-The edit button will open the existing `FilePathBuilderDialog` via `openPathBuilder(file)`, which already supports editing all backup paths and drive settings.
-
-### Visual
-Each cell becomes: `[BackupPill] [✏️]` — the pencil icon is tiny (w-3 h-3), muted by default, blue on hover, keeping the table compact.
+### Files Changed
+- `src/components/files/FullScreenFilesTable.tsx` — pass backup number to dialog
+- `src/components/files/FilePathBuilderDialog.tsx` — accept and use `initialBackupNumber` prop
 
