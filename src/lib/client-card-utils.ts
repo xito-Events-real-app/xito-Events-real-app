@@ -163,7 +163,8 @@ export function parseStatusTimestamp(statusEntry: string): Date | null {
   const bracketMatch = statusEntry.match(/\[(\d{1,2}\/\d{1,2}\/\d{4}),\s*(\d{1,2}:\d{2}:\d{2})\]/);
   const dashMatch = statusEntry.match(/-\s*(\d{1,2}\/\d{1,2}\/\d{4}),\s*(\d{1,2}:\d{2}:\d{2})/);
   
-  const match = bracketMatch || dashMatch;
+  const reverseDashMatch = statusEntry.match(/(\d{1,2}\/\d{1,2}\/\d{4}),\s*(\d{1,2}:\d{2}:\d{2})\s*-/);
+  const match = bracketMatch || dashMatch || reverseDashMatch;
   if (!match) return null;
   
   const datePart = match[1];
