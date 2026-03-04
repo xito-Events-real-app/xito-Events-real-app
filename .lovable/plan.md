@@ -1,33 +1,43 @@
 
 
-## Fix File Path Format
+## Redesign FilePathBuilderDialog: Wide Horizontal Layout with Colorful Sections
 
-**Problem**: Two issues with `buildFilePath` in `src/lib/files-api.ts`:
-1. HARD_DRIVE and SSD paths include an unnecessary `\MAIN\` segment
-2. All paths use double-escaped backslashes (`\\\\`) instead of single Windows-style backslashes (`\`)
+**Goal**: Make the dialog wide enough to fit everything without scrolling, with visually distinct colored sections.
 
-**Current output**: `W-T-N- 17\\MAIN\\FALGUN EVENTS 2082\\PHOTOS\\...`
-**Expected output**: `W-T-N- 17\FALGUN EVENTS 2082\PHOTOS\...`
+### Layout Change
 
-### Fix in `src/lib/files-api.ts` (lines 260-280)
+Change `max-w-lg` to `max-w-6xl` (or `max-w-[95vw]`) and reorganize content into a **3-column grid** layout:
 
-Replace the path building logic:
+**Column 1 (Storage & Path)** — Blue theme
+- Storage Type, Device, Year Event Folder, Category
+- Client Folder, Event Folder
+- Side, Freelancer, Format
+- Generated Path preview
 
-```typescript
-// Use single backslash (Windows-style paths)
-const segments = [...].filter(Boolean);
+**Column 2 (File Info & Cards)** — Green/Amber theme  
+- Backup indicator + Header badge (top, full width above columns)
+- Card selector + Add Card
+- File Size, Number of Items
+- File Format Type
 
-if (params.storageType === "PC") {
-  const drive = params.pcDriveLetter ? `${params.pcDriveLetter}:` : "";
-  return `\\\\${params.deviceName}\\${drive}\\${segments.join("\\")}`;
-} else if (params.storageType === "HARD_DRIVE" || params.storageType === "SSD") {
-  return `${params.deviceName}\\${segments.join("\\")}`;  // No MAIN
-} else {
-  return `${params.deviceName}\\${segments.join("\\")}`;
-}
-```
+**Column 3 (Meta & Actions)** — Purple/Rose theme
+- Who Copied (dropdown + add new)
+- Drive Upload checkbox + link
+- Notes textarea
 
-Result: `W-T-N- 17\FALGUN EVENTS 2082\PHOTOS\ABHINASH & SUBEKSHYA\GROOM RECEPTION\BHAGWAN DANGAL\Card 1`
+### Color Scheme per Section
+- **Header/Backup**: Keep existing color-coded backup indicator
+- **Storage & Path**: `bg-blue-50 border-blue-200` container
+- **File Info**: `bg-emerald-50 border-emerald-200` container
+- **Who Copied**: `bg-amber-50 border-amber-200` container
+- **Drive Upload**: `bg-purple-50 border-purple-200` container
+- **Notes**: `bg-rose-50 border-rose-200` container
+- **Path Preview**: `bg-indigo-50 border-indigo-300` (standout)
 
-Single file, one location change.
+### File Changes
+Single file: `src/components/files/FilePathBuilderDialog.tsx` — lines 419-667 (the JSX return block)
+
+- Line 421: `max-w-lg max-h-[90vh] overflow-y-auto` → `max-w-6xl w-full max-h-[90vh]`
+- Restructure the form body into a 3-column grid with colored section cards
+- Keep all existing logic/state unchanged, only reorganize the JSX layout
 
