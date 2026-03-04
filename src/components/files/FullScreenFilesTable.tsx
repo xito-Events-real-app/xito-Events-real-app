@@ -425,9 +425,25 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                                 {file.drive_upload_path}
                               </span>
                             </HoverCardTrigger>
-                            <HoverCardContent className="w-60 p-3 space-y-1 text-xs z-[200]" side="top">
+                            <HoverCardContent
+                              className="w-80 p-3 space-y-2 text-xs z-[200]"
+                              side="top"
+                              onPointerDownOutside={(e) => e.preventDefault()}
+                              onInteractOutside={(e) => e.preventDefault()}
+                            >
                               <div className="font-bold text-sm text-purple-700 dark:text-purple-400">{file.drive_upload_path}</div>
-                              {file.drive_link && <div className="text-[11px] break-all text-muted-foreground">{file.drive_link}</div>}
+                              {file.drive_link && <div className="bg-muted/50 rounded px-2 py-1.5 font-mono text-[11px] break-all leading-relaxed">{file.drive_link}</div>}
+                              {file.updated_at && (
+                                <div className="text-[11px] font-bold text-foreground">
+                                  {new Date(file.updated_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+                                  {" "}
+                                  {new Date(file.updated_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+                                </div>
+                              )}
+                              <div className="flex items-center gap-1.5 text-muted-foreground">
+                                <Clock className="w-3.5 h-3.5" />
+                                <span className="font-bold">{getTimeAgo(file.updated_at)}</span>
+                              </div>
                             </HoverCardContent>
                           </HoverCard>
                         ) : (
