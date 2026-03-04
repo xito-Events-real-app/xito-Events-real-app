@@ -418,7 +418,7 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl w-full max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-blue-600 dark:text-blue-400">File Path Builder</DialogTitle>
           <DialogDescription>Build and preview the storage path for this file entry</DialogDescription>
@@ -440,219 +440,228 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
           <p className="text-xs font-bold text-cyan-700 dark:text-cyan-400 tracking-wide">{headerText}</p>
         </div>
 
-        {/* Card Selection */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <Label className="text-xs font-bold">Cards:</Label>
-            <Badge variant="outline" className="text-xs">{cardCount} card{cardCount > 1 ? "s" : ""}</Badge>
-            {cardCount < 4 && (
-              <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={handleAddCard}>
-                <Plus className="w-3 h-3 mr-1" /> Add Card
-              </Button>
+        {/* 3-Column Grid Layout */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+          {/* ===== COLUMN 1: Storage & Path (Blue) ===== */}
+          <div className="space-y-3 p-4 rounded-xl bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
+            <p className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
+              📂 Storage & Path
+            </p>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">Storage Type</Label>
+                <Select value={currentForm.storageType} onValueChange={(v) => updateCurrentForm({ storageType: v, deviceId: "" })}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PC">PC</SelectItem>
+                    <SelectItem value="HARD_DRIVE">Hard Drive</SelectItem>
+                    <SelectItem value="SSD">SSD</SelectItem>
+                    <SelectItem value="DRIVE">Drive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">Device</Label>
+                <Select value={currentForm.deviceId} onValueChange={(v) => updateCurrentForm({ deviceId: v })}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select..." /></SelectTrigger>
+                  <SelectContent>
+                    {filteredDevices.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>
+                        {d.device_name} ({d.remaining_storage_gb}GB)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {currentForm.storageType === "PC" && selectedDevice?.pc_drive_letter && (
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">Drive Letter</Label>
+                <Input value={`${selectedDevice.pc_drive_letter}:\\`} readOnly className="bg-white/60 dark:bg-white/5 font-bold h-8 text-xs" />
+              </div>
+            )}
+
+            {selectedDevice?.safety_status === "UNSAFE" && (
+              <div className="flex items-center gap-2 p-1.5 rounded bg-red-100 dark:bg-red-950/30 text-red-600 text-xs font-bold">
+                <AlertTriangle className="w-3.5 h-3.5" />
+                <span>UNSAFE device!</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">Year Event Folder</Label>
+                <Input value={currentForm.yearEventFolder} onChange={(e) => updateCurrentForm({ yearEventFolder: e.target.value })} className="h-8 text-xs" placeholder="e.g. FALGUN EVENTS 2082" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">Category</Label>
+                <Select value={currentForm.category} onValueChange={(v) => updateCurrentForm({ category: v })}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PHOTOS">PHOTOS</SelectItem>
+                    <SelectItem value="VIDEOS">VIDEOS</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">Client Folder</Label>
+                <Input value={currentForm.clientFolder} onChange={(e) => updateCurrentForm({ clientFolder: e.target.value })} className="h-8 text-xs" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">Event Folder</Label>
+                <Input value={currentForm.eventFolder} onChange={(e) => updateCurrentForm({ eventFolder: e.target.value })} className="h-8 text-xs" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">Side</Label>
+                <Select value={currentForm.side} onValueChange={(v) => updateCurrentForm({ side: v })}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Side" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="BRIDE SIDE">BRIDE</SelectItem>
+                    <SelectItem value="GROOM SIDE">GROOM</SelectItem>
+                    <SelectItem value="OTHER">OTHER</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">Freelancer</Label>
+                <Input value={currentForm.freelancerName} readOnly className="bg-white/60 dark:bg-white/5 font-bold h-8 text-xs" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">Format</Label>
+                <Select value={currentForm.formatType} onValueChange={(v) => updateCurrentForm({ formatType: v })}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Format" /></SelectTrigger>
+                  <SelectContent>
+                    {(isPhoto ? PHOTO_CARD_OPTIONS : VIDEO_CARD_OPTIONS).map((opt) => (
+                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Path Preview */}
+            {generatedPath && (
+              <div className="p-2.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-300 dark:border-indigo-700">
+                <div className="flex items-center justify-between mb-1">
+                  <Label className="text-xs text-indigo-600 dark:text-indigo-400 font-bold">Generated Path</Label>
+                  <Button variant="ghost" size="sm" onClick={handleCopy} className="h-5 text-[10px] text-indigo-600 px-1.5">
+                    {copied ? <><Check className="w-3 h-3 mr-1" /> Copied</> : <><Copy className="w-3 h-3 mr-1" /> Copy</>}
+                  </Button>
+                </div>
+                <p className="text-[11px] font-mono break-all text-foreground font-bold leading-tight">{generatedPath}</p>
+              </div>
             )}
           </div>
-          {cardCount > 1 && (
-            <Tabs value={activeCard} onValueChange={setActiveCard}>
-              <TabsList className="h-8">
-                {Array.from({ length: cardCount }, (_, i) => (
-                  <TabsTrigger key={i + 1} value={String(i + 1)} className="text-xs px-3 h-6">
-                    Card {i + 1}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-          )}
-        </div>
 
-        <Separator />
+          {/* ===== COLUMN 2: Cards & File Info (Emerald) ===== */}
+          <div className="space-y-3 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800">
+            <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+              💾 Cards & File Info
+            </p>
 
-        {/* Storage & Path Configuration */}
-        <div className="space-y-3">
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Storage & Path</p>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs font-bold">Storage Type</Label>
-              <Select value={currentForm.storageType} onValueChange={(v) => updateCurrentForm({ storageType: v, deviceId: "" })}>
-                <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="PC">PC</SelectItem>
-                  <SelectItem value="HARD_DRIVE">Hard Drive</SelectItem>
-                  <SelectItem value="SSD">SSD</SelectItem>
-                  <SelectItem value="DRIVE">Drive</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs font-bold">Storage Device</Label>
-              <Select value={currentForm.deviceId} onValueChange={(v) => updateCurrentForm({ deviceId: v })}>
-                <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
-                <SelectContent>
-                  {filteredDevices.map((d) => (
-                    <SelectItem key={d.id} value={d.id}>
-                      {d.device_name} ({d.remaining_storage_gb} GB free)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {currentForm.storageType === "PC" && selectedDevice?.pc_drive_letter && (
-            <div className="space-y-1">
-              <Label className="text-xs font-bold">Drive Letter Path</Label>
-              <Input value={`${selectedDevice.pc_drive_letter}:\\`} readOnly className="bg-muted font-bold" />
-            </div>
-          )}
-
-          {selectedDevice?.safety_status === "UNSAFE" && (
-            <div className="flex items-center gap-2 p-2 rounded bg-red-50 dark:bg-red-950/30 text-red-600 text-xs font-bold">
-              <AlertTriangle className="w-4 h-4" />
-              <span>Warning: This device is marked as UNSAFE</span>
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs font-bold">Year Event Folder</Label>
-              <Input value={currentForm.yearEventFolder} onChange={(e) => updateCurrentForm({ yearEventFolder: e.target.value })} placeholder="e.g. FALGUN EVENTS 2082" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs font-bold">Category</Label>
-              <Select value={currentForm.category} onValueChange={(v) => updateCurrentForm({ category: v })}>
-                <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="PHOTOS">PHOTOS</SelectItem>
-                  <SelectItem value="VIDEOS">VIDEOS</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs font-bold">Client Folder</Label>
-              <Input value={currentForm.clientFolder} onChange={(e) => updateCurrentForm({ clientFolder: e.target.value })} />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs font-bold">Event Folder</Label>
-              <Input value={currentForm.eventFolder} onChange={(e) => updateCurrentForm({ eventFolder: e.target.value })} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs font-bold">Side</Label>
-              <Select value={currentForm.side} onValueChange={(v) => updateCurrentForm({ side: v })}>
-                <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="BRIDE SIDE">BRIDE SIDE</SelectItem>
-                  <SelectItem value="GROOM SIDE">GROOM SIDE</SelectItem>
-                  <SelectItem value="OTHER">OTHER</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs font-bold">Freelancer</Label>
-              <Input value={currentForm.freelancerName} readOnly className="bg-muted font-bold" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs font-bold">File Format Type</Label>
-              <Select value={currentForm.formatType} onValueChange={(v) => updateCurrentForm({ formatType: v })}>
-                <SelectTrigger><SelectValue placeholder="Select format..." /></SelectTrigger>
-                <SelectContent>
-                  {(isPhoto ? PHOTO_CARD_OPTIONS : VIDEO_CARD_OPTIONS).map((opt) => (
-                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Path Preview */}
-          {generatedPath && (
-            <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
-              <div className="flex items-center justify-between mb-1">
-                <Label className="text-xs text-blue-600 dark:text-blue-400 font-bold">Generated Path</Label>
-                <Button variant="ghost" size="sm" onClick={handleCopy} className="h-6 text-xs text-blue-600">
-                  {copied ? <><Check className="w-3 h-3 mr-1" /> Copied</> : <><Copy className="w-3 h-3 mr-1" /> Copy</>}
-                </Button>
+            {/* Card Selection */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Label className="text-xs font-bold">Cards:</Label>
+                <Badge variant="outline" className="text-xs bg-white/60 dark:bg-white/5">{cardCount} card{cardCount > 1 ? "s" : ""}</Badge>
+                {cardCount < 4 && (
+                  <Button variant="ghost" size="sm" className="h-6 text-xs text-emerald-700 dark:text-emerald-400" onClick={handleAddCard}>
+                    <Plus className="w-3 h-3 mr-1" /> Add
+                  </Button>
+                )}
               </div>
-              <p className="text-xs font-mono break-all text-foreground font-bold">{generatedPath}</p>
+              {cardCount > 1 && (
+                <Tabs value={activeCard} onValueChange={setActiveCard}>
+                  <TabsList className="h-7">
+                    {Array.from({ length: cardCount }, (_, i) => (
+                      <TabsTrigger key={i + 1} value={String(i + 1)} className="text-xs px-3 h-5">
+                        Card {i + 1}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </Tabs>
+              )}
             </div>
-          )}
-        </div>
 
-        <Separator />
+            <Separator className="bg-emerald-200 dark:bg-emerald-800" />
 
-        {/* File Info */}
-        <div className="space-y-3">
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">File Info</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs font-bold">File Size (GB)</Label>
-              <Input type="number" value={currentForm.sizeGb} onChange={(e) => updateCurrentForm({ sizeGb: e.target.value })} placeholder="0" step="0.1" />
+            {/* File Size & Items */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">File Size (GB)</Label>
+                <Input type="number" value={currentForm.sizeGb} onChange={(e) => updateCurrentForm({ sizeGb: e.target.value })} placeholder="0" step="0.1" className="h-8 text-xs" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">No. of Items</Label>
+                <Input type="number" value={currentForm.numberOfItems} onChange={(e) => updateCurrentForm({ numberOfItems: e.target.value })} placeholder="0" className="h-8 text-xs" />
+              </div>
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs font-bold">No. of Items</Label>
-              <Input type="number" value={currentForm.numberOfItems} onChange={(e) => updateCurrentForm({ numberOfItems: e.target.value })} placeholder="0" />
+
+            <Separator className="bg-emerald-200 dark:bg-emerald-800" />
+
+            {/* Drive Upload (Purple sub-section) */}
+            <div className="p-3 rounded-lg bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 space-y-2">
+              <p className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">☁️ Drive Upload</p>
+              <div className="flex items-center gap-3">
+                <Checkbox checked={driveUpload} onCheckedChange={(v) => setDriveUpload(!!v)} />
+                <Label className="text-xs font-bold">Uploaded to Drive</Label>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">Drive Link</Label>
+                <Input value={driveLink} onChange={(e) => setDriveLink(e.target.value)} placeholder="https://drive.google.com/..." className="text-xs h-8" />
+              </div>
             </div>
           </div>
-        </div>
 
-        <Separator />
+          {/* ===== COLUMN 3: Meta & Notes (Amber/Rose) ===== */}
+          <div className="space-y-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+            <p className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+              👤 Who Copied
+            </p>
 
-        {/* Who Copied */}
-        <div className="space-y-2">
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Who Copied</p>
-          <Select value={whoCopied} onValueChange={setWhoCopied}>
-            <SelectTrigger><SelectValue placeholder="Select who copied..." /></SelectTrigger>
-            <SelectContent>
-              {copierOptions.priority.map(name => (
-                <SelectItem key={name} value={name}>
-                  <span className="font-bold">{name}</span> ⭐
-                </SelectItem>
-              ))}
-              <Separator className="my-1" />
-              {copierOptions.rest.map(name => (
-                <SelectItem key={name} value={name}>{name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="flex gap-2">
-            <Input
-              value={newCopierName}
-              onChange={(e) => setNewCopierName(e.target.value)}
-              placeholder="Add new name..."
-              className="h-8 text-xs"
-            />
-            <Button variant="outline" size="sm" className="h-8 text-xs shrink-0" onClick={handleAddNewCopier} disabled={!newCopierName.trim()}>
-              <Plus className="w-3 h-3 mr-1" /> Add
-            </Button>
+            <Select value={whoCopied} onValueChange={setWhoCopied}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select who copied..." /></SelectTrigger>
+              <SelectContent>
+                {copierOptions.priority.map(name => (
+                  <SelectItem key={name} value={name}>
+                    <span className="font-bold">{name}</span> ⭐
+                  </SelectItem>
+                ))}
+                <Separator className="my-1" />
+                {copierOptions.rest.map(name => (
+                  <SelectItem key={name} value={name}>{name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex gap-2">
+              <Input
+                value={newCopierName}
+                onChange={(e) => setNewCopierName(e.target.value)}
+                placeholder="Add new name..."
+                className="h-7 text-xs"
+              />
+              <Button variant="outline" size="sm" className="h-7 text-xs shrink-0" onClick={handleAddNewCopier} disabled={!newCopierName.trim()}>
+                <Plus className="w-3 h-3 mr-1" /> Add
+              </Button>
+            </div>
+
+            <Separator className="bg-amber-200 dark:bg-amber-800" />
+
+            {/* Notes (Rose sub-section) */}
+            <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800 space-y-2">
+              <p className="text-xs font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider">📝 Notes</p>
+              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Write notes about this file..." className="min-h-[80px] text-xs bg-white/60 dark:bg-white/5" />
+            </div>
           </div>
-        </div>
-
-        <Separator />
-
-        {/* Drive Upload & Link */}
-        <div className="space-y-3">
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Drive Upload</p>
-          <div className="flex items-center gap-3">
-            <Checkbox checked={driveUpload} onCheckedChange={(v) => setDriveUpload(!!v)} />
-            <Label className="text-xs font-bold">Uploaded to Drive</Label>
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs font-bold">Drive Link (URL)</Label>
-            <Input value={driveLink} onChange={(e) => setDriveLink(e.target.value)} placeholder="https://drive.google.com/..." className="text-xs" />
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* Notes */}
-        <div className="space-y-2">
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Notes</p>
-          <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Write notes about this file..." className="min-h-[60px] text-xs" />
         </div>
 
         <DialogFooter>
