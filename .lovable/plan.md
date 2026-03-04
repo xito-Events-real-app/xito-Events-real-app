@@ -1,37 +1,41 @@
 
 
-## Plan: Add CLOUD Device Type to Storage Devices
+## Plan: Move Drive Upload to Cloud Column with Cloud Device Selection
 
-### Database Migration
-Add `cloud_type` and `expiry_date_ad` columns to `storage_devices`:
-```sql
-ALTER TABLE public.storage_devices
-  ADD COLUMN cloud_type text DEFAULT '',
-  ADD COLUMN expiry_date_ad text DEFAULT '';
-```
+### Summary
+Remove the "Drive Upload" section from the FilePathBuilderDialog. Rename the "Drive" column to "Cloud" in the files table. Clicking "Cloud" opens a dedicated dialog for cloud backup with cloud device selection, drive link input, and remove cloud backup capability.
 
-### Files to Change
+### Changes
 
-**1. `src/lib/files-api.ts`** — Add `cloud_type` and `expiry_date_ad` to `StorageDevice` interface.
+**1. `src/components/files/FilePathBuilderDialog.tsx`**
+- Remove the entire "Drive Upload" purple sub-section (lines 795-806) — the checkbox and drive link input
+- Remove `driveUpload` and `driveLink` state variables and their usage in `handleSave`
+- No longer save `drive_upload` or `drive_link` from this dialog
 
-**2. `src/components/files/AddStorageDeviceDrawer.tsx`**
-- Add `"CLOUD"` to device type dropdown.
-- Add `cloud_type` and `expiry_date_ad` to form state.
-- When `device_type === "CLOUD"`: show Cloud Type dropdown (Google Drive, pCloud), hide health/safety/speed/purchase price/purchased from fields, show Expiry Date (AD) with calendar picker instead.
-- On save, pass `cloud_type` and `expiry_date_ad` fields.
+**2. New component: `src/components/files/CloudUploadDialog.tsx`**
+- A new dialog similar in style to FilePathBuilderDialog but simpler
+- Fields:
+  - **Storage Type**: Pre-set to "CLOUD" (read-only)
+  - **Cloud Name**: Dropdown of cloud devices from `storage_devices` where `device_type === "CLOUD"`, showing `device_name`
+  - **Drive Link**: Text input for the link URL
+- On save: updates `drive_upload = true`, `drive_link`, and a new field for the cloud device name (we'll use `drive_upload_path` to store the cloud device name since it exists and is unused)
+- Has a "Remove Cloud Backup" button when editing an existing cloud backup
+- On remove: clears `drive_upload`, `drive_link`, `drive_upload_path`
 
-**3. `src/components/files/StorageDevicesSection.tsx`**
-- Add Cloud icon import and mapping for `device_type === "CLOUD"`.
-- On cloud device cards: show cloud type label and expiry date instead of health/safety/speed badges.
-- Show expiry warning if date is past or within 30 days.
+**3. `src/components/files/FullScreenFilesTable.tsx`**
+- Rename "Drive" column header to "Cloud"
+- Change the Drive cell: instead of showing a checkmark, show the cloud device name (from `drive_upload_path`) as a pill similar to BackupPill, with hover showing details + edit icon
+- When clicked (or edit icon), open the new `CloudUploadDialog`
+- "Link" column stays the same (shows "OPEN" with the `drive_link`)
 
-**4. `src/pages/FileManagement.tsx`** — Add `{ key: "CLOUD", label: "Cloud", icon: Cloud }` to mobile `DEVICE_TYPES` chips.
+**4. `supabase/functions/google-sheets/index.ts`**
+- Rename header `'DRIVE UPLOAD'` → `'CLOUD NAME'`
+- Change `mapRow`: instead of `f.drive_upload ? 'TRUE' : 'FALSE'`, output `f.drive_upload_path || ''` (the cloud device name)
+- `DRIVE LINK` header stays the same
 
-**5. `src/components/files/FileManagementSidebar.tsx`** — Add `{ key: "CLOUD", label: "Cloud", icon: Cloud }` to sidebar `DEVICE_TYPES`.
-
-**6. `supabase/functions/google-sheets/index.ts`** — Add CLOUD config to `pushStorageDevicesToSheetAction`:
-- Add `{ sheetName: 'CLOUD', deviceType: 'CLOUD', hasDriveLetter: false }` to `sheetConfigs`.
-- For CLOUD devices, map columns: `A=Cloud Type, B=Cloud Name, C=Total Storage, D=Used, E=Remaining, F=Expiry Date AD` (6 columns, range `A:F`).
-- Use a separate mapping branch for CLOUD (like PC has its own branch).
-- Since the CLOUD sheet already exists, just clear+write like other device types.
+### Files to modify
+1. `src/components/files/FilePathBuilderDialog.tsx` — remove Drive Upload section
+2. `src/components/files/CloudUploadDialog.tsx` — new file
+3. `src/components/files/FullScreenFilesTable.tsx` — rename column, add cloud dialog integration
+4. `supabase/functions/google-sheets/index.ts` — update header and mapping
 
