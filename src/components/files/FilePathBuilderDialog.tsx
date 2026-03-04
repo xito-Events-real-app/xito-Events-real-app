@@ -744,7 +744,7 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
             {backupNumber === 1 && (
               <>
                 <p className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                  👤 Who Copied
+                  👤 Who Copied First?
                 </p>
 
                 <Select value={whoCopied} onValueChange={setWhoCopied}>

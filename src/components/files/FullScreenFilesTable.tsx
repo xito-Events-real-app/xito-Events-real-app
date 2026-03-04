@@ -319,8 +319,8 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                 <col style={{ width: '8%' }} />   {/* 3rd */}
                 <col style={{ width: '8%' }} />   {/* Drive */}
                 <col style={{ width: '10%' }} />  {/* Link */}
-                <col style={{ width: '10%' }} />  {/* Copied */}
-                <col style={{ width: '4%' }} />   {/* ✓ */}
+                <col style={{ width: '8%' }} />   {/* Who Copied First? */}
+                <col style={{ width: '8%' }} />   {/* Reconfirmation */}
                 <col style={{ width: '3%' }} />   {/* 📝 */}
                 <col style={{ width: '6%' }} />   {/* Action */}
               </colgroup>
@@ -338,8 +338,8 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                   <th className="px-2 py-1.5 text-center font-bold whitespace-nowrap">3rd</th>
                   <th className="px-3 py-1.5 text-center font-bold whitespace-nowrap border-l border-border/40">Drive</th>
                   <th className="px-3 py-1.5 text-center font-bold whitespace-nowrap border-l border-border/40">Link</th>
-                  <th className="px-3 py-1.5 text-left font-bold whitespace-nowrap border-l border-border/40">Copied</th>
-                  <th className="px-2 py-1.5 text-center font-bold whitespace-nowrap">✓</th>
+                  <th className="px-3 py-1.5 text-left font-bold whitespace-nowrap border-l border-border/40">Who Copied First?</th>
+                  <th className="px-2 py-1.5 text-center font-bold whitespace-nowrap">Reconfirmation</th>
                   <th className="px-2 py-1.5 text-center font-bold whitespace-nowrap">📝</th>
                   <th className="px-2 py-1.5 text-center font-bold whitespace-nowrap">Action</th>
                 </tr>
@@ -433,7 +433,11 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                     {/* Confirmed */}
                     <td className="px-2 py-1.5 text-center">
                       <button onClick={() => handleConfirmedToggle(file)} className="hover:scale-110 transition-transform">
-                        {file.confirmed ? <Check className="w-4 h-4 text-emerald-600 mx-auto" /> : <X className="w-4 h-4 text-red-500 mx-auto" />}
+                        {file.confirmed ? (
+                          <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wide">CONFIRMED</span>
+                        ) : (
+                          <span className="text-[10px] font-black text-red-600 uppercase tracking-wide">NOT CONFIRMED</span>
+                        )}
                       </button>
                     </td>
                     {/* Notes */}
