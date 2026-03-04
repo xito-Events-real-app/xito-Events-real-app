@@ -1,21 +1,28 @@
 
 
-## Plan: Auto-push files to sheet after backup is saved
+## Problem
 
-### Problem
-When a backup path is saved via `FilePathBuilderDialog`, it writes directly to Supabase but never calls `scheduleFilesPush()`. The push to Google Sheets only happens when using `useFilesManagement.update()` — but the dialog bypasses that for multi-card saves.
+All 107 file rows have `synced_to_sheet = true` — they were marked as synced by the old 17-column logic before the new "BOOKED CLIENTS WTN FILES" tab existed. The push function only selects rows where `synced_to_sheet = false`, so it finds 0 rows and pushes nothing.
 
-### Changes
+Only 2 rows have backup paths, so only those 2 should appear in the sheet.
 
-**1. `src/components/files/FilePathBuilderDialog.tsx`**
-- Import `scheduleFilesPush` from `@/lib/files-push-scheduler`
-- After the save completes (line ~454, after `onRefresh`), call `scheduleFilesPush()` to trigger the 3-second debounced push to "BOOKED CLIENTS WTN FILES" sheet
+## Fix
 
-**2. `src/lib/files-push-scheduler.ts`**
-- Update the `scheduleFilesPush` function to add a filter: only push files where at least one backup exists (`final_generated_path` is not empty). This is already handled at the edge function level (it pushes all unsynced rows), but we can add a pre-filter in the push API call itself.
+**File: `supabase/functions/google-sheets/index.ts`** — In `pushFilesToSheetAction`:
 
-**3. `src/lib/files-api.ts` — `pushFilesToSheets()`**
-- Update the query to only push rows where `final_generated_path` is not empty (i.e., at least one backup has been saved), so empty/unstarted file rows don't clutter the sheet.
+Add a one-time "force re-sync" mode: when the sheet tab is newly created (or empty with only a header row), reset `synced_to_sheet = false` for all qualifying rows before the push query runs. This ensures the initial population of the new tab.
 
-This ensures: every time a user saves a backup path → `synced_to_sheet` is set to `false` → `scheduleFilesPush()` fires after 3 seconds → only rows with at least one backup get pushed to the sheet.
+Concretely:
+1. After checking if the tab exists / reading existing rows, if the sheet has ≤1 row (just the header), run: `UPDATE files_management SET synced_to_sheet = false WHERE final_generated_path != '' AND final_generated_path IS NOT NULL`
+2. Then the existing query (`synced_to_sheet = false`) will pick up those rows and push them
+
+This is a safe one-time bootstrap — once rows are in the sheet, future edits set `synced_to_sheet = false` normally.
+
+### Alternative (simpler, immediate)
+Just reset the flag now via a migration or direct query, and the next push will populate the sheet. But adding the auto-bootstrap logic is more robust for future tab recreation.
+
+### Recommendation
+Do both:
+1. Add auto-bootstrap logic in the edge function (if sheet has ≤1 row, reset synced flag for rows with backups)
+2. This makes it self-healing — if the tab is ever deleted and recreated, it auto-populates
 
