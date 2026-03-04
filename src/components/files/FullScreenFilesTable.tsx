@@ -364,19 +364,47 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                     <td className="px-2 py-1.5 text-right text-xs">{file.number_of_items || "-"}</td>
                     {/* 1st Backup */}
                     <td className="px-2 py-1.5 text-center">
-                      <BackupPill path={file.final_generated_path || ""} deviceName={file.backup_1_device_name || ""} file={file} backupNum={1} />
+                      <div className="flex items-center justify-center gap-0.5">
+                        <BackupPill path={file.final_generated_path || ""} deviceName={file.backup_1_device_name || ""} file={file} backupNum={1} />
+                        {file.final_generated_path && (
+                          <button onClick={() => openPathBuilder(file)} className="hover:text-blue-500 text-muted-foreground transition-colors">
+                            <PenLine className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                     {/* 2nd Backup */}
                     <td className="px-2 py-1.5 text-center">
-                      <BackupPill path={file.backup_2_path || ""} deviceName={file.backup_2_device_name || ""} file={file} backupNum={2} />
+                      <div className="flex items-center justify-center gap-0.5">
+                        <BackupPill path={file.backup_2_path || ""} deviceName={file.backup_2_device_name || ""} file={file} backupNum={2} />
+                        {file.backup_2_path && (
+                          <button onClick={() => openPathBuilder(file)} className="hover:text-blue-500 text-muted-foreground transition-colors">
+                            <PenLine className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                     {/* 3rd Backup */}
                     <td className="px-2 py-1.5 text-center">
-                      <BackupPill path={file.backup_3_path || ""} deviceName={file.backup_3_device_name || ""} file={file} backupNum={3} />
+                      <div className="flex items-center justify-center gap-0.5">
+                        <BackupPill path={file.backup_3_path || ""} deviceName={file.backup_3_device_name || ""} file={file} backupNum={3} />
+                        {file.backup_3_path && (
+                          <button onClick={() => openPathBuilder(file)} className="hover:text-blue-500 text-muted-foreground transition-colors">
+                            <PenLine className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                     {/* Drive Upload */}
                     <td className="px-3 py-1.5 text-center border-l border-border/40">
-                      {file.drive_upload ? <Check className="w-4 h-4 text-emerald-600 mx-auto" /> : <X className="w-4 h-4 text-red-500 mx-auto" />}
+                      <div className="flex items-center justify-center gap-0.5">
+                        {file.drive_upload ? <Check className="w-4 h-4 text-emerald-600" /> : <X className="w-4 h-4 text-red-500" />}
+                        {file.drive_upload && (
+                          <button onClick={() => openPathBuilder(file)} className="hover:text-blue-500 text-muted-foreground transition-colors">
+                            <PenLine className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                     {/* Drive Link */}
                     <td className="px-3 py-1.5 text-center border-l border-border/40">
@@ -496,18 +524,30 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                       <div className="flex items-center gap-1">
                         <span className="text-[11px] text-muted-foreground">1st:</span>
                         <BackupPill path={file.final_generated_path || ""} deviceName={file.backup_1_device_name || ""} file={file} backupNum={1} />
+                        {file.final_generated_path && (
+                          <button onClick={() => openPathBuilder(file)} className="hover:text-blue-500 text-muted-foreground"><PenLine className="w-3 h-3" /></button>
+                        )}
                       </div>
                       <div className="flex items-center gap-1">
                         <span className="text-[11px] text-muted-foreground">2nd:</span>
                         <BackupPill path={file.backup_2_path || ""} deviceName={file.backup_2_device_name || ""} file={file} backupNum={2} />
+                        {file.backup_2_path && (
+                          <button onClick={() => openPathBuilder(file)} className="hover:text-blue-500 text-muted-foreground"><PenLine className="w-3 h-3" /></button>
+                        )}
                       </div>
                       <div className="flex items-center gap-1">
                         <span className="text-[11px] text-muted-foreground">3rd:</span>
                         <BackupPill path={file.backup_3_path || ""} deviceName={file.backup_3_device_name || ""} file={file} backupNum={3} />
+                        {file.backup_3_path && (
+                          <button onClick={() => openPathBuilder(file)} className="hover:text-blue-500 text-muted-foreground"><PenLine className="w-3 h-3" /></button>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-xs">Drive: {file.drive_upload ? "✓" : "✕"}</span>
+                      {file.drive_upload && (
+                        <button onClick={() => openPathBuilder(file)} className="hover:text-blue-500 text-muted-foreground"><PenLine className="w-3 h-3" /></button>
+                      )}
                       {file.drive_link && <a href={file.drive_link} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 font-bold">OPEN</a>}
                       <span className="text-xs">{file.confirmed ? "✓ Confirmed" : ""}</span>
                       <div className="flex items-center gap-1 ml-auto">
