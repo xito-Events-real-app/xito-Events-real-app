@@ -1,28 +1,17 @@
 
 
-## Fix: Year Event Folder Should Use Month Name, Not Number
+## Clear All File Management Data (Keep Storage Devices)
 
-**Problem**: When auto-generating file rows in `autoGenerateFileRows()` (line 204-205 of `src/lib/files-api.ts`), the year event folder is built as `${eventMonth.toUpperCase()} EVENTS ${eventYear}` — which produces "11 EVENTS 2082" because `eventMonth` is the raw number string "11".
+### What will happen
+- Delete all 199 rows from the `files_management` table
+- Storage devices (hard drives, SSDs, PCs) will NOT be touched
+- When you next visit a month in the Files section, `ensureFileRowsForMonth` will auto-regenerate fresh rows from your freelancer assignments with the corrected month names (e.g., "FALGUN EVENTS 2082")
 
-The second function `ensureFileRowsForMonth` (line 462-467) already correctly converts the month number to a name using a lookup table. The first function does not.
-
-**Fix**: In `src/lib/files-api.ts`, update lines 204-206 to convert the month number to a Nepali month name before building the folder string, matching the pattern already used at line 462-467.
-
-```typescript
-// Before (line 204-206):
-const yearEventFolder = eventMonth && eventYear
-  ? `${eventMonth.toUpperCase()} EVENTS ${eventYear}`
-  : "";
-
-// After:
-const yearEventFolder = eventMonth && eventYear
-  ? (() => {
-      const mn = parseInt(eventMonth, 10);
-      const MONTHS: Record<number, string> = {1:"BAISAKH",2:"JESTHA",3:"ASHADH",4:"SHRAWAN",5:"BHADRA",6:"ASHWIN",7:"KARTIK",8:"MANGSIR",9:"POUSH",10:"MAGH",11:"FALGUN",12:"CHAITRA"};
-      return `${MONTHS[mn] || eventMonth.toUpperCase()} EVENTS ${eventYear}`;
-    })()
-  : "";
+### How
+Run a single database operation:
+```sql
+DELETE FROM public.files_management;
 ```
 
-Single file change, one location.
+This gives you a clean slate — all file rows will be regenerated automatically with the fixed card labels ("1", "2") and correct year event folder names when you select a month.
 
