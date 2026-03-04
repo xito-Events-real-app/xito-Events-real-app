@@ -7672,8 +7672,38 @@ async function pushFilesToSheetAction(accessToken: string) {
     f.storage_type || '',
   ]);
 
+  // Ensure "FILES MANAGEMENT" tab exists
+  const sheetTitle = 'FILES MANAGEMENT';
+  try {
+    const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}?fields=sheets.properties.title`;
+    const metaRes = await fetchWithRetry(metaUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const metaData = await metaRes.json();
+    const tabExists = (metaData.sheets || []).some((s: any) => s.properties?.title === sheetTitle);
+    if (!tabExists) {
+      // Create the tab
+      const addSheetUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}:batchUpdate`;
+      await fetchWithRetry(addSheetUrl, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests: [{ addSheet: { properties: { title: sheetTitle } } }] }),
+      });
+      // Add header row
+      const headerRange = encodeURIComponent(`'${sheetTitle}'!A1:Q1`);
+      const headerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${headerRange}?valueInputOption=USER_ENTERED`;
+      await fetchWithRetry(headerUrl, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: [['Client Name','Event Name','Event Date AD','Freelancer Type','Freelancer Name','Category','Side','Card Label','Size GB','Format Type','Who Copied','Reconfirmation','Double Backup','Triple Backup','Drive Upload','Final Path','Storage Type']] }),
+      });
+    }
+  } catch (tabErr) {
+    console.error('Failed to ensure FILES MANAGEMENT tab:', tabErr);
+  }
+
   // Append to sheet
-  const range = encodeURIComponent("'FILES MANAGEMENT'!A:Q");
+  const range = encodeURIComponent(`'${sheetTitle}'!A:Q`);
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
 
   const response = await fetchWithRetry(url, {
