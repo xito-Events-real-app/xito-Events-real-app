@@ -8573,7 +8573,7 @@ Deno.serve(async (req) => {
         break;
       }
       case 'pushFilesToSheet': {
-        result = await pushFilesToSheetAction(accessToken, !!requestData.data?.onlyWithBackup);
+        result = await pushFilesToSheetAction(accessToken, !!data?.onlyWithBackup);
         break;
       }
       case 'pushStorageDevicesToSheet': {
