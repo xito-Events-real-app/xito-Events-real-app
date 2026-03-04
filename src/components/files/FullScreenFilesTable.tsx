@@ -320,6 +320,25 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
   // ─── Helper: first name only ───
   const getFirstName = (name: string) => (name || "").split(" ")[0];
 
+  // ─── Helper: backup device summary for collapsed row ───
+  const getBackupDeviceSummary = (rowFiles: FileRecord[]): string => {
+    const photoDevices = [...new Set(
+      rowFiles.filter(f => PHOTO_ROLES.includes(f.freelancer_type) && f.backup_1_device_name)
+        .map(f => f.backup_1_device_name)
+    )];
+    const videoDevices = [...new Set(
+      rowFiles.filter(f => VIDEO_ROLES.includes(f.freelancer_type) && f.backup_1_device_name)
+        .map(f => f.backup_1_device_name)
+    )];
+    const parts: string[] = [];
+    if (photoDevices.length) parts.push(`PHOTO ${photoDevices.join(", ")}`);
+    if (videoDevices.length) parts.push(`VIDEO ${videoDevices.join(", ")}`);
+    return parts.join("  ·  ") || "—";
+  };
+
+  const getRemainingCount = (rowFiles: FileRecord[]): number => {
+    return rowFiles.filter(f => !f.final_generated_path).length;
+  };
 
 
   // ─── File Rows Table (grouped by PHOTOS/VIDEOS) ───
@@ -575,9 +594,16 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
             >
               {row.clientName}
             </p>
+            <p className="text-[10px] text-muted-foreground truncate">{getBackupDeviceSummary(rowFiles)}</p>
             <p className="text-xs font-bold truncate">{row.event}</p>
           </div>
-          <Badge variant="outline" className="text-xs shrink-0 font-bold">{rowFiles.length} files</Badge>
+          {(() => {
+            const remaining = getRemainingCount(rowFiles);
+            return remaining > 0
+              ? <span className="text-[10px] font-bold text-red-600 shrink-0">{remaining} REMAINING</span>
+              : <span className="text-[10px] font-bold text-green-600 shrink-0">ALL COPIED</span>;
+          })()}
+          <Badge variant="outline" className="text-xs shrink-0 font-bold">{rowFiles.length}</Badge>
           {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
         </button>
         {isExpanded && (
@@ -774,9 +800,10 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                   <TableHead className="w-10 text-xs"></TableHead>
                   <TableHead className="w-14 text-xs text-center">Day</TableHead>
                   <TableHead className="text-xs">Client</TableHead>
+                  <TableHead className="text-xs">1st Backup Devices</TableHead>
                   <TableHead className="text-xs">Event</TableHead>
-                  <TableHead className="text-xs w-16 text-center">Files</TableHead>
-                  <TableHead className="text-xs w-20">Date (AD)</TableHead>
+                  <TableHead className="text-xs w-36 text-center">Status</TableHead>
+                  <TableHead className="text-xs w-12 text-center">Files</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -818,15 +845,23 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                             {row.clientName}
                           </span>
                         </TableCell>
+                        <TableCell className="py-1.5 text-xs text-muted-foreground">{getBackupDeviceSummary(rowFiles)}</TableCell>
                         <TableCell className="py-1.5 text-sm font-bold">{row.event}</TableCell>
+                        <TableCell className="py-1.5 text-center">
+                          {(() => {
+                            const remaining = getRemainingCount(rowFiles);
+                            return remaining > 0
+                              ? <span className="text-xs font-bold text-red-600">{remaining} FILES REMAINING</span>
+                              : <span className="text-xs font-bold text-green-600">ALL FILES COPIED</span>;
+                          })()}
+                        </TableCell>
                         <TableCell className="py-1.5 text-center">
                           <Badge variant="outline" className="text-xs font-bold">{rowFiles.length}</Badge>
                         </TableCell>
-                        <TableCell className="py-1.5 text-xs">{row.eventDateAD}</TableCell>
                       </TableRow>
                       {isExpanded && (
                         <TableRow>
-                          <TableCell colSpan={6} className="p-0 bg-muted/20">
+                          <TableCell colSpan={7} className="p-0 bg-muted/20">
                             <div className="border-l-2 border-cyan-400 ml-6">
                               <FileRowsTable fileRows={rowFiles} />
                             </div>
