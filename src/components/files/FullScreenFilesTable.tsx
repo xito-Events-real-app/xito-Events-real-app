@@ -240,25 +240,43 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
             {label} ({sectionFiles.length})
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-[11px]">
+            <table className="table-fixed w-full text-[11px]">
+              <colgroup>
+                <col style={{ width: '5%' }} />   {/* Role */}
+                <col style={{ width: '6%' }} />   {/* Name */}
+                <col style={{ width: '5%' }} />   {/* Side */}
+                <col style={{ width: '5%' }} />   {/* Card */}
+                <col style={{ width: '6%' }} />   {/* Format */}
+                <col style={{ width: '4%' }} />   {/* Size */}
+                <col style={{ width: '4%' }} />   {/* Items */}
+                <col style={{ width: '8%' }} />   {/* 1st */}
+                <col style={{ width: '8%' }} />   {/* 2nd */}
+                <col style={{ width: '8%' }} />   {/* 3rd */}
+                <col style={{ width: '8%' }} />   {/* Drive */}
+                <col style={{ width: '10%' }} />  {/* Link */}
+                <col style={{ width: '10%' }} />  {/* Copied */}
+                <col style={{ width: '4%' }} />   {/* ✓ */}
+                <col style={{ width: '3%' }} />   {/* 📝 */}
+                <col style={{ width: '6%' }} />   {/* Action */}
+              </colgroup>
               <thead>
                 <tr className={cn("border-b", bgClass)}>
-                  <th className="px-2 py-1.5 text-left font-bold w-10 whitespace-nowrap">Role</th>
-                  <th className="px-2 py-1.5 text-left font-bold w-16 whitespace-nowrap">Name</th>
-                  <th className="px-2 py-1.5 text-left font-bold w-12 whitespace-nowrap">Side</th>
-                  <th className="px-2 py-1.5 text-left font-bold w-14 whitespace-nowrap">Card</th>
-                  <th className="px-2 py-1.5 text-left font-bold w-20 whitespace-nowrap">Format</th>
-                  <th className="px-2 py-1.5 text-right font-bold w-12 whitespace-nowrap">Size</th>
-                  <th className="px-2 py-1.5 text-right font-bold w-12 whitespace-nowrap">Items</th>
-                  <th className="px-2 py-1.5 text-center font-bold w-20 whitespace-nowrap">1st</th>
-                  <th className="px-2 py-1.5 text-center font-bold w-20 whitespace-nowrap">2nd</th>
-                  <th className="px-2 py-1.5 text-center font-bold w-20 whitespace-nowrap">3rd</th>
-                  <th className="px-2 py-1.5 text-center font-bold w-10 whitespace-nowrap">Drive</th>
-                  <th className="px-2 py-1.5 text-center font-bold w-18 whitespace-nowrap">Link</th>
-                  <th className="px-2 py-1.5 text-left font-bold w-20 whitespace-nowrap">Copied</th>
-                  <th className="px-2 py-1.5 text-center font-bold w-10 whitespace-nowrap">✓</th>
-                  <th className="px-2 py-1.5 text-center font-bold w-8 whitespace-nowrap">📝</th>
-                  <th className="px-2 py-1.5 text-center font-bold w-20 whitespace-nowrap">Action</th>
+                  <th className="px-2 py-1.5 text-left font-bold whitespace-nowrap">Role</th>
+                  <th className="px-2 py-1.5 text-left font-bold whitespace-nowrap">Name</th>
+                  <th className="px-2 py-1.5 text-left font-bold whitespace-nowrap">Side</th>
+                  <th className="px-2 py-1.5 text-left font-bold whitespace-nowrap">Card</th>
+                  <th className="px-2 py-1.5 text-left font-bold whitespace-nowrap">Format</th>
+                  <th className="px-2 py-1.5 text-right font-bold whitespace-nowrap">Size</th>
+                  <th className="px-2 py-1.5 text-right font-bold whitespace-nowrap">Items</th>
+                  <th className="px-2 py-1.5 text-center font-bold whitespace-nowrap">1st</th>
+                  <th className="px-2 py-1.5 text-center font-bold whitespace-nowrap">2nd</th>
+                  <th className="px-2 py-1.5 text-center font-bold whitespace-nowrap">3rd</th>
+                  <th className="px-3 py-1.5 text-center font-bold whitespace-nowrap border-l border-border/40">Drive</th>
+                  <th className="px-3 py-1.5 text-center font-bold whitespace-nowrap border-l border-border/40">Link</th>
+                  <th className="px-3 py-1.5 text-left font-bold whitespace-nowrap border-l border-border/40">Copied</th>
+                  <th className="px-2 py-1.5 text-center font-bold whitespace-nowrap">✓</th>
+                  <th className="px-2 py-1.5 text-center font-bold whitespace-nowrap">📝</th>
+                  <th className="px-2 py-1.5 text-center font-bold whitespace-nowrap">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -304,11 +322,11 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                       <BackupPill path={file.backup_3_path || ""} deviceName={file.backup_3_device_name || ""} />
                     </td>
                     {/* Drive Upload */}
-                    <td className="px-2 py-1.5 text-center">
+                    <td className="px-3 py-1.5 text-center border-l border-border/40">
                       {file.drive_upload ? <Check className="w-4 h-4 text-emerald-600 mx-auto" /> : <X className="w-4 h-4 text-red-500 mx-auto" />}
                     </td>
                     {/* Drive Link */}
-                    <td className="px-2 py-1.5 text-center">
+                    <td className="px-3 py-1.5 text-center border-l border-border/40">
                       {file.drive_link ? (
                         <a href={file.drive_link} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 hover:text-blue-800 font-bold flex items-center justify-center gap-0.5">
                           OPEN <ExternalLink className="w-3 h-3" />
@@ -318,7 +336,7 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                       )}
                     </td>
                     {/* Who Copied (read-only) */}
-                    <td className="px-2 py-1.5 text-[10px] font-bold">{file.who_copied || "-"}</td>
+                    <td className="px-3 py-1.5 text-[10px] font-bold border-l border-border/40">{file.who_copied || "-"}</td>
                     {/* Confirmed */}
                     <td className="px-2 py-1.5 text-center">
                       <button onClick={() => handleConfirmedToggle(file)} className="hover:scale-110 transition-transform">
