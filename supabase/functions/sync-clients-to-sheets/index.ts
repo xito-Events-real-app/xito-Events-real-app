@@ -338,37 +338,39 @@ serve(async (req) => {
         }
 
         for (const [sheetName, rows] of Object.entries(groupedBySheet)) {
-          // Find next empty row in this sheet
-          const colARange = encodeURIComponent(`'${sheetName}'!A2:A5000`);
-          const colAResp = await fetchWithRetry(
-            `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${colARange}`,
-            { headers: { Authorization: `Bearer ${accessToken}` } }
-          );
-          const colAData = await colAResp.json();
-          const existingRows = colAData.values || [];
-          let nextRow = existingRows.length + 2; // +2 for header + 0-index
+          // Use APPEND API to add rows after the last row (handles gaps correctly)
+          const appendApiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(`'${sheetName}'!A:AL`)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
 
           for (const row of rows) {
             const sheetArray = dbRowToSheetArray(row);
-            const appendRange = `'${sheetName}'!A${nextRow}:AL${nextRow}`;
-            await fetchWithRetry(
-              `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(appendRange)}?valueInputOption=USER_ENTERED`,
-              {
-                method: 'PUT',
-                headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ range: appendRange, values: [sheetArray] }),
-              }
-            );
+            const appendResp = await fetchWithRetry(appendApiUrl, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ values: [sheetArray] }),
+            });
 
-            // Update DB with correct row number
+            if (!appendResp.ok) {
+              const errText = await appendResp.text();
+              console.error(`[sync-clients] Failed to append ${row.registered_date_time_ad} to '${sheetName}': ${appendResp.status} - ${errText.substring(0, 200)}`);
+              continue; // Skip this row, don't mark as synced
+            }
+
+            // Parse the response to get the actual row number where data was written
+            const appendResult = await appendResp.json();
+            const updatedRange = appendResult.updates?.updatedRange || '';
+            // Extract row number from range like "'CLIENT TRACKER'!A95:AL95"
+            const rowMatch = updatedRange.match(/!A(\d+):/);
+            const actualRow = rowMatch ? parseInt(rowMatch[1], 10) : 0;
+
+            // Update DB with correct row number but keep synced_to_sheet = false
+            // so the NEXT pull will confirm it exists and set it to true
             await supabase
               .from('clients_cache')
-              .update({ row_number: nextRow, synced_to_sheet: true, updated_at: new Date().toISOString() } as any)
+              .update({ row_number: actualRow || 0, synced_to_sheet: false, updated_at: new Date().toISOString() } as any)
               .eq('registered_date_time_ad', row.registered_date_time_ad);
 
-            console.log(`[sync-clients] Appended ${row.sheet_source} client ${row.registered_date_time_ad} to '${sheetName}' at row ${nextRow}`);
-            syncedIds.push(row.registered_date_time_ad);
-            nextRow++;
+            console.log(`[sync-clients] Appended ${row.sheet_source} client ${row.registered_date_time_ad} to '${sheetName}' at row ${actualRow} (kept unsynced for pull verification)`);
+            // Do NOT add to syncedIds — let the next pull confirm
           }
         }
       }
