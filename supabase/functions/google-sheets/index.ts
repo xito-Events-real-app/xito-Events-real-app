@@ -7642,53 +7642,65 @@ async function pushFilesToSheetAction(accessToken: string) {
   const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const sb = createClient(supabaseUrl, supabaseKey);
 
-  // Get unsynced file rows
+  // Get ALL unsynced file rows (including soft-deleted)
   const { data: unsyncedFiles, error } = await sb
     .from('files_management')
     .select('*')
-    .eq('synced_to_sheet', false)
-    .eq('deleted_or_not', false);
+    .eq('synced_to_sheet', false);
 
   if (error) throw error;
   if (!unsyncedFiles || unsyncedFiles.length === 0) return { pushed: 0 };
 
-  // Map to sheet columns for "FILES MANAGEMENT" sheet
-  // Columns: A: client_name, B: event_name, C: event_date_ad, D: freelancer_type,
-  // E: freelancer_name, F: category, G: side, H: card_label, I: size_gb,
-  // J: format_type, K: who_copied, L: reconfirmation, M: double_backup,
-  // N: triple_backup, O: drive_upload, P: final_generated_path, Q: storage_type
-  const values = unsyncedFiles.map((f: any) => [
+  const sheetTitle = 'BOOKED CLIENTS WTN FILES';
+  const HEADER_ROW = [
+    'REGISTERED DATE & TIME (AD)', 'REGISTERED DATE BS', 'CLIENT NAME', 'EVENT',
+    'EVENT YEAR', 'EVENT MONTH', 'EVENT DAY', 'EVENT DATE IN AD',
+    'FREELANCER TYPE', 'FREELANCER NAME', 'CARDS', 'FILE PATH',
+    'SIZE IN GB', 'NO OF ITEMS', 'FORMAT', 'WHO COPIED',
+    'RE-CONFIRMATION', 'DOUBLE BACKUP', 'TRIPLE BACKUP', 'DRIVE UPLOAD',
+    'DRIVE LINK', 'DELETED OR NOT',
+  ];
+
+  // Helper: map a DB row to the 22-column sheet row
+  const mapRow = (f: any) => [
+    f.registered_date_time_ad || '',
+    f.registered_date_bs || '',
     f.client_name || '',
     f.event_name || '',
+    f.event_year || '',
+    f.event_month || '',
+    f.event_day || '',
     f.event_date_ad || '',
     f.freelancer_type || '',
     f.freelancer_name || '',
-    f.category || '',
-    f.side || '',
     f.card_label || '',
+    f.final_generated_path || '',
     f.size_gb?.toString() || '0',
+    f.number_of_items?.toString() || '0',
     f.format_type || '',
     f.who_copied || '',
     f.reconfirmation ? 'TRUE' : 'FALSE',
     f.double_backup ? 'TRUE' : 'FALSE',
     f.triple_backup ? 'TRUE' : 'FALSE',
     f.drive_upload ? 'TRUE' : 'FALSE',
-    f.final_generated_path || '',
-    f.storage_type || '',
-  ]);
+    f.drive_link || '',
+    f.deleted_or_not ? 'TRUE' : 'FALSE',
+  ];
 
-  // Ensure "FILES MANAGEMENT" tab exists
-  const sheetTitle = 'FILES MANAGEMENT';
+  // Helper: build composite dedup key from sheet row values (0-indexed cols)
+  const makeKey = (row: string[]) =>
+    `${(row[0] || '').trim()}||${(row[3] || '').trim()}||${(row[8] || '').trim()}||${(row[9] || '').trim()}||${(row[10] || '').trim()}`;
+
+  // Ensure tab exists
   const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}?fields=sheets.properties.title`;
   const metaRes = await fetchWithRetry(metaUrl, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   const metaData = await metaRes.json();
-  console.log('Storage spreadsheet tabs:', JSON.stringify((metaData.sheets || []).map((s: any) => s.properties?.title)));
   const tabExists = (metaData.sheets || []).some((s: any) => s.properties?.title === sheetTitle);
+
   if (!tabExists) {
-    console.log('Creating FILES MANAGEMENT tab...');
-    // Create the tab
+    console.log('Creating BOOKED CLIENTS WTN FILES tab...');
     const addSheetUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}:batchUpdate`;
     const addRes = await fetchWithRetry(addSheetUrl, {
       method: 'POST',
@@ -7697,45 +7709,99 @@ async function pushFilesToSheetAction(accessToken: string) {
     });
     if (!addRes.ok) {
       const errText = await addRes.text();
-      throw new Error(`Failed to create FILES MANAGEMENT tab: ${addRes.status} - ${errText.substring(0, 200)}`);
+      throw new Error(`Failed to create tab: ${addRes.status} - ${errText.substring(0, 200)}`);
     }
-    // Add header row
-    const headerRange = encodeURIComponent(`'${sheetTitle}'!A1:Q1`);
+    // Write header
+    const headerRange = encodeURIComponent(`'${sheetTitle}'!A1:V1`);
     const headerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${headerRange}?valueInputOption=USER_ENTERED`;
     await fetchWithRetry(headerUrl, {
       method: 'PUT',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values: [['Client Name','Event Name','Event Date AD','Freelancer Type','Freelancer Name','Category','Side','Card Label','Size GB','Format Type','Who Copied','Reconfirmation','Double Backup','Triple Backup','Drive Upload','Final Path','Storage Type']] }),
+      body: JSON.stringify({ values: [HEADER_ROW] }),
     });
-    console.log('FILES MANAGEMENT tab created successfully');
+    console.log('BOOKED CLIENTS WTN FILES tab created with header');
   }
 
-  // Append to sheet
-  const range = encodeURIComponent(`'${sheetTitle}'!A:Q`);
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
-
-  const response = await fetchWithRetry(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ values }),
+  // Read existing sheet data for dedup
+  const readRange = encodeURIComponent(`'${sheetTitle}'!A:V`);
+  const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${readRange}`;
+  const readRes = await fetchWithRetry(readUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
+  const readData = await readRes.json();
+  const existingRows: string[][] = readData.values || [];
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Failed to push files to sheet: ${response.status} - ${errText.substring(0, 200)}`);
+  // Build key → sheet row number (1-indexed, skip header)
+  const keyToSheetRow = new Map<string, number>();
+  for (let i = 1; i < existingRows.length; i++) {
+    const key = makeKey(existingRows[i]);
+    keyToSheetRow.set(key, i + 1); // 1-indexed sheet row
   }
 
-  // Mark as synced
+  // Split into updates vs appends
+  const updateBatch: { range: string; values: string[][] }[] = [];
+  const appendRows: string[][] = [];
+
+  for (const f of unsyncedFiles) {
+    const row = mapRow(f);
+    const key = makeKey(row);
+    const existingSheetRow = keyToSheetRow.get(key);
+
+    if (existingSheetRow) {
+      // Update in-place
+      const range = `'${sheetTitle}'!A${existingSheetRow}:V${existingSheetRow}`;
+      updateBatch.push({ range, values: [row] });
+    } else {
+      appendRows.push(row);
+    }
+  }
+
+  // Batch update existing rows
+  if (updateBatch.length > 0) {
+    // Process in chunks of 100 to stay within API limits
+    for (let i = 0; i < updateBatch.length; i += 100) {
+      const chunk = updateBatch.slice(i, i + 100);
+      const batchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values:batchUpdate`;
+      const batchRes = await fetchWithRetry(batchUrl, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          valueInputOption: 'USER_ENTERED',
+          data: chunk,
+        }),
+      });
+      if (!batchRes.ok) {
+        const errText = await batchRes.text();
+        throw new Error(`Failed to batch update files: ${batchRes.status} - ${errText.substring(0, 200)}`);
+      }
+    }
+    console.log(`Updated ${updateBatch.length} existing rows in sheet`);
+  }
+
+  // Append new rows
+  if (appendRows.length > 0) {
+    const appendRange = encodeURIComponent(`'${sheetTitle}'!A:V`);
+    const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${appendRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+    const appendRes = await fetchWithRetry(appendUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: appendRows }),
+    });
+    if (!appendRes.ok) {
+      const errText = await appendRes.text();
+      throw new Error(`Failed to append files: ${appendRes.status} - ${errText.substring(0, 200)}`);
+    }
+    console.log(`Appended ${appendRows.length} new rows to sheet`);
+  }
+
+  // Mark all as synced
   const ids = unsyncedFiles.map((f: any) => f.id);
   for (let i = 0; i < ids.length; i += 100) {
     const batch = ids.slice(i, i + 100);
     await sb.from('files_management').update({ synced_to_sheet: true }).in('id', batch);
   }
 
-  return { pushed: unsyncedFiles.length };
+  return { pushed: unsyncedFiles.length, updated: updateBatch.length, appended: appendRows.length };
 }
 
 async function pushStorageDevicesToSheetAction(accessToken: string) {
