@@ -631,3 +631,47 @@
 .saugat-search-glow {
   animation: saugat-glow-pulse 2s ease-in-out infinite;
 }
+
+/* WTN Files World Cup Celebration Animations */
+@keyframes wtn-firework-burst {
+  0% { transform: scale(0); opacity: 1; border-width: 4px; }
+  50% { opacity: 0.6; border-width: 2px; }
+  100% { transform: scale(3); opacity: 0; border-width: 0px; }
+}
+
+@keyframes wtn-sparkle-rise {
+  0% { transform: translateY(0) scale(1); opacity: 0.8; }
+  50% { opacity: 1; transform: translateY(-40vh) scale(1.5); }
+  100% { transform: translateY(-90vh) scale(0.3); opacity: 0; }
+}
+
+@keyframes wtn-trophy-bounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  20% { transform: translateY(-30px) scale(1.15); }
+  40% { transform: translateY(-10px) scale(1.05); }
+  60% { transform: translateY(-20px) scale(1.1); }
+  80% { transform: translateY(-5px) scale(1.02); }
+}
+
+@keyframes wtn-streamer-fall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 0.9; }
+  100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+}
+
+.wtn-firework-burst {
+  border: 3px solid currentColor;
+  animation: wtn-firework-burst 2s ease-out infinite;
+}
+
+.wtn-sparkle-rise {
+  animation: wtn-sparkle-rise 4s ease-out infinite;
+}
+
+.wtn-trophy-bounce {
+  display: inline-block;
+  animation: wtn-trophy-bounce 1.5s ease-in-out infinite;
+}
+
+.wtn-streamer-fall {
+  animation: wtn-streamer-fall 5s linear infinite;
+}
