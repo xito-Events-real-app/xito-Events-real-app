@@ -333,10 +333,19 @@ export async function pushStorageDevicesToSheets(): Promise<{ pushed: number }> 
 
 export async function pushFilesToSheets(): Promise<{ pushed: number }> {
   const { data, error } = await supabase.functions.invoke("google-sheets", {
-    body: { action: "pushFilesToSheet", data: { onlyWithBackup: false } },
+    body: { action: "pushFilesToSheet" },
   });
   if (error) throw error;
   if (!data?.success) throw new Error(data?.error || "Failed to push files to sheet");
+  return data.data;
+}
+
+export async function cleanAndResyncFilesToSheets(): Promise<{ pushed: number }> {
+  const { data, error } = await supabase.functions.invoke("google-sheets", {
+    body: { action: "pushFilesToSheet", data: { fullClean: true } },
+  });
+  if (error) throw error;
+  if (!data?.success) throw new Error(data?.error || "Failed to clean and resync files to sheet");
   return data.data;
 }
 
