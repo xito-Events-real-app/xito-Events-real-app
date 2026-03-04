@@ -7722,7 +7722,7 @@ async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = fals
       throw new Error(`Failed to create tab: ${addRes.status} - ${errText.substring(0, 200)}`);
     }
     // Write header
-    const headerRange = encodeURIComponent(`'${sheetTitle}'!A1:W1`);
+    const headerRange = encodeURIComponent(`'${sheetTitle}'!A1:X1`);
     const headerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${headerRange}?valueInputOption=USER_ENTERED`;
     await fetchWithRetry(headerUrl, {
       method: 'PUT',
@@ -7733,7 +7733,7 @@ async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = fals
   }
 
   // Read existing sheet data for dedup
-  const readRange = encodeURIComponent(`'${sheetTitle}'!A:W`);
+  const readRange = encodeURIComponent(`'${sheetTitle}'!A:X`);
   const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${readRange}`;
   const readRes = await fetchWithRetry(readUrl, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -7790,7 +7790,7 @@ async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = fals
 
     if (existingSheetRow) {
       // Update in-place
-      const range = `'${sheetTitle}'!A${existingSheetRow}:W${existingSheetRow}`;
+      const range = `'${sheetTitle}'!A${existingSheetRow}:X${existingSheetRow}`;
       updateBatch.push({ range, values: [row] });
     } else {
       appendRows.push(row);
@@ -7821,7 +7821,7 @@ async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = fals
 
   // Append new rows
   if (appendRows.length > 0) {
-    const appendRange = encodeURIComponent(`'${sheetTitle}'!A:W`);
+    const appendRange = encodeURIComponent(`'${sheetTitle}'!A:X`);
     const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${appendRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
     const appendRes = await fetchWithRetry(appendUrl, {
       method: 'POST',
