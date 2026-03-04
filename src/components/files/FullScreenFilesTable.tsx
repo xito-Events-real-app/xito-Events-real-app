@@ -243,22 +243,22 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
             <table className="w-full text-[11px]">
               <thead>
                 <tr className={cn("border-b", bgClass)}>
-                  <th className="px-2 py-1.5 text-left font-bold w-10">Role</th>
-                  <th className="px-2 py-1.5 text-left font-bold">Name</th>
-                  <th className="px-2 py-1.5 text-left font-bold w-14">Side</th>
-                  <th className="px-2 py-1.5 text-left font-bold w-14">Card</th>
-                  <th className="px-2 py-1.5 text-left font-bold w-16">Format</th>
-                  <th className="px-2 py-1.5 text-right font-bold w-12">Size</th>
-                  <th className="px-2 py-1.5 text-right font-bold w-12">Items</th>
-                  <th className="px-2 py-1.5 text-center font-bold w-16">1st</th>
-                  <th className="px-2 py-1.5 text-center font-bold w-16">2nd</th>
-                  <th className="px-2 py-1.5 text-center font-bold w-16">3rd</th>
-                  <th className="px-2 py-1.5 text-center font-bold w-10">Drive</th>
-                  <th className="px-2 py-1.5 text-center font-bold w-16">Link</th>
-                  <th className="px-2 py-1.5 text-left font-bold w-16">Copied</th>
-                  <th className="px-2 py-1.5 text-center font-bold w-10">✓</th>
-                  <th className="px-2 py-1.5 text-center font-bold w-8">📝</th>
-                  <th className="px-2 py-1.5 text-center font-bold w-20">Action</th>
+                  <th className="px-2 py-1.5 text-left font-bold w-10 whitespace-nowrap">Role</th>
+                  <th className="px-2 py-1.5 text-left font-bold w-16 whitespace-nowrap">Name</th>
+                  <th className="px-2 py-1.5 text-left font-bold w-12 whitespace-nowrap">Side</th>
+                  <th className="px-2 py-1.5 text-left font-bold w-14 whitespace-nowrap">Card</th>
+                  <th className="px-2 py-1.5 text-left font-bold w-20 whitespace-nowrap">Format</th>
+                  <th className="px-2 py-1.5 text-right font-bold w-12 whitespace-nowrap">Size</th>
+                  <th className="px-2 py-1.5 text-right font-bold w-12 whitespace-nowrap">Items</th>
+                  <th className="px-2 py-1.5 text-center font-bold w-20 whitespace-nowrap">1st</th>
+                  <th className="px-2 py-1.5 text-center font-bold w-20 whitespace-nowrap">2nd</th>
+                  <th className="px-2 py-1.5 text-center font-bold w-20 whitespace-nowrap">3rd</th>
+                  <th className="px-2 py-1.5 text-center font-bold w-10 whitespace-nowrap">Drive</th>
+                  <th className="px-2 py-1.5 text-center font-bold w-18 whitespace-nowrap">Link</th>
+                  <th className="px-2 py-1.5 text-left font-bold w-20 whitespace-nowrap">Copied</th>
+                  <th className="px-2 py-1.5 text-center font-bold w-10 whitespace-nowrap">✓</th>
+                  <th className="px-2 py-1.5 text-center font-bold w-8 whitespace-nowrap">📝</th>
+                  <th className="px-2 py-1.5 text-center font-bold w-20 whitespace-nowrap">Action</th>
                 </tr>
               </thead>
               <tbody>
