@@ -19,7 +19,7 @@ export function generateStatusTimestamp(): string {
 /** Generate a new status log entry and prepend to existing log */
 export function generateStatusLogEntry(newStatus: string, existingLog: string): string {
   const timestamp = generateStatusTimestamp();
-  const newEntry = `${timestamp} - ${newStatus}`;
+  const newEntry = `${newStatus} [${timestamp}]`;
   return existingLog ? `${newEntry}\n${existingLog}` : newEntry;
 }
 
