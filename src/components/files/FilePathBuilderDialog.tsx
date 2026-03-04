@@ -357,18 +357,22 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
         notes,
       };
 
-      // Save path to the correct backup slot
+      // Save path to the correct backup slot with per-backup timestamp
+      const now = new Date().toISOString();
       if (backupNumber === 1) {
         updates.final_generated_path = path;
         updates.backup_1_device_name = dev?.device_name || "";
+        updates.backup_1_recorded_at = now;
       } else if (backupNumber === 2) {
         updates.backup_2_path = path;
         updates.backup_2_device_name = dev?.device_name || "";
         updates.double_backup = true;
+        updates.backup_2_recorded_at = now;
       } else if (backupNumber === 3) {
         updates.backup_3_path = path;
         updates.backup_3_device_name = dev?.device_name || "";
         updates.triple_backup = true;
+        updates.backup_3_recorded_at = now;
       }
 
       await onSave(updates);
@@ -422,17 +426,21 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
           };
 
           const cardBackup = getNextBackupNumber(cardFile);
+          const cardNow = new Date().toISOString();
           if (cardBackup === 1) {
             cardUpdates.final_generated_path = cardPath;
             cardUpdates.backup_1_device_name = cardDev?.device_name || "";
+            cardUpdates.backup_1_recorded_at = cardNow;
           } else if (cardBackup === 2) {
             cardUpdates.backup_2_path = cardPath;
             cardUpdates.backup_2_device_name = cardDev?.device_name || "";
             cardUpdates.double_backup = true;
+            cardUpdates.backup_2_recorded_at = cardNow;
           } else if (cardBackup === 3) {
             cardUpdates.backup_3_path = cardPath;
             cardUpdates.backup_3_device_name = cardDev?.device_name || "";
             cardUpdates.triple_backup = true;
+            cardUpdates.backup_3_recorded_at = cardNow;
           }
 
           await (supabase as any)

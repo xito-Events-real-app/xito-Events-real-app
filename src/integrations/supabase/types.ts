@@ -368,10 +368,13 @@ export type Database = {
       files_management: {
         Row: {
           backup_1_device_name: string | null
+          backup_1_recorded_at: string | null
           backup_2_device_name: string | null
           backup_2_path: string | null
+          backup_2_recorded_at: string | null
           backup_3_device_name: string | null
           backup_3_path: string | null
+          backup_3_recorded_at: string | null
           card_label: string | null
           category: string | null
           client_folder_name: string | null
@@ -413,10 +416,13 @@ export type Database = {
         }
         Insert: {
           backup_1_device_name?: string | null
+          backup_1_recorded_at?: string | null
           backup_2_device_name?: string | null
           backup_2_path?: string | null
+          backup_2_recorded_at?: string | null
           backup_3_device_name?: string | null
           backup_3_path?: string | null
+          backup_3_recorded_at?: string | null
           card_label?: string | null
           category?: string | null
           client_folder_name?: string | null
@@ -458,10 +464,13 @@ export type Database = {
         }
         Update: {
           backup_1_device_name?: string | null
+          backup_1_recorded_at?: string | null
           backup_2_device_name?: string | null
           backup_2_path?: string | null
+          backup_2_recorded_at?: string | null
           backup_3_device_name?: string | null
           backup_3_path?: string | null
+          backup_3_recorded_at?: string | null
           card_label?: string | null
           category?: string | null
           client_folder_name?: string | null

@@ -66,6 +66,9 @@ export interface FileRecord {
   drive_link: string;
   notes: string;
   confirmed: boolean;
+  backup_1_recorded_at: string;
+  backup_2_recorded_at: string;
+  backup_3_recorded_at: string;
 }
 
 // ── Storage Devices API ─────────────────────────────────
