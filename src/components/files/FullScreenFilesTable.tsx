@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Loader2, X, ChevronLeft, FolderOpen, ChevronDown, ChevronUp, Filter, Check, PenLine, ExternalLink } from "lucide-react";
+import { Loader2, X, ChevronLeft, FolderOpen, ChevronDown, ChevronUp, Filter, Check, PenLine, ExternalLink, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -23,6 +23,7 @@ import { useFilesManagement } from "@/hooks/useFilesManagement";
 import { useStorageDevices } from "@/hooks/useStorageDevices";
 import { FilePathBuilderDialog } from "./FilePathBuilderDialog";
 import { FileRecord, duplicateFileRowForCard } from "@/lib/files-api";
+import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 
 const DAY_COLORS = [
   "bg-white",
@@ -211,14 +212,61 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
   // ─── Helper: first name only ───
   const getFirstName = (name: string) => (name || "").split(" ")[0];
 
-  // ─── Helper: backup display ───
-  const BackupPill = ({ path, deviceName }: { path: string; deviceName: string }) => {
+  // ─── Helper: time ago ───
+  const NEPALI_MONTH_NAMES: Record<number, string> = {1:"BAISAKH",2:"JESTHA",3:"ASHADH",4:"SHRAWAN",5:"BHADRA",6:"ASHWIN",7:"KARTIK",8:"MANGSIR",9:"POUSH",10:"MAGH",11:"FALGUN",12:"CHAITRA"};
+
+  const getTimeAgo = (dateStr: string): string => {
+    if (!dateStr) return "";
+    const then = new Date(dateStr);
+    const now = new Date();
+    let diff = Math.floor((now.getTime() - then.getTime()) / 1000);
+    if (diff < 0) return "just now";
+    const days = Math.floor(diff / 86400); diff %= 86400;
+    const hrs = Math.floor(diff / 3600); diff %= 3600;
+    const mins = Math.floor(diff / 60);
+    const parts: string[] = [];
+    if (days > 0) parts.push(`${days} day${days > 1 ? "s" : ""}`);
+    if (hrs > 0) parts.push(`${hrs} hr${hrs > 1 ? "s" : ""}`);
+    parts.push(`${mins} min${mins > 1 ? "s" : ""}`);
+    return parts.join(" ") + " ago";
+  };
+
+  const getBackupTime = (dateStr: string): string => {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    let h = d.getHours();
+    const m = d.getMinutes().toString().padStart(2, "0");
+    const ampm = h >= 12 ? "PM" : "AM";
+    h = h % 12 || 12;
+    return `${h}:${m} ${ampm}`;
+  };
+
+  // ─── Helper: backup display with hover ───
+  const BackupPill = ({ path, deviceName, file, backupNum }: { path: string; deviceName: string; file: FileRecord; backupNum: number }) => {
     if (!path) return <X className="w-4 h-4 text-red-500 mx-auto" />;
     const label = deviceName || path.split("\\")[0] || "✓";
+    const monthNum = parseInt(file.event_month || "0");
+    const monthLabel = NEPALI_MONTH_NAMES[monthNum] || file.event_month || "";
+    const timeStr = getBackupTime(file.updated_at || file.created_at);
+    const headerLine = `${label} (${file.event_day || "?"} ${monthLabel} ${timeStr})`;
+    const timeAgo = getTimeAgo(file.updated_at || file.created_at);
+
     return (
-      <Badge variant="secondary" className="text-[9px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 font-bold truncate max-w-[80px]">
-        {label}
-      </Badge>
+      <HoverCard openDelay={200} closeDelay={100}>
+        <HoverCardTrigger asChild>
+          <Badge variant="secondary" className="text-[11px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 font-bold truncate max-w-[90px] cursor-pointer">
+            {label}
+          </Badge>
+        </HoverCardTrigger>
+        <HoverCardContent className="w-80 p-3 space-y-2 text-xs" side="top">
+          <div className="font-bold text-sm text-emerald-700 dark:text-emerald-400">{headerLine}</div>
+          <div className="bg-muted/50 rounded px-2 py-1.5 font-mono text-[11px] break-all leading-relaxed">{path}</div>
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <Clock className="w-3.5 h-3.5" />
+            <span className="font-bold">{timeAgo}</span>
+          </div>
+        </HoverCardContent>
+      </HoverCard>
     );
   };
 
@@ -236,11 +284,11 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
       if (sectionFiles.length === 0) return null;
       return (
         <div className="mb-1">
-          <div className={cn("px-3 py-1.5 font-bold text-xs uppercase tracking-wider", headerBg)}>
+          <div className={cn("px-3 py-1.5 font-bold text-sm uppercase tracking-wider", headerBg)}>
             {label} ({sectionFiles.length})
           </div>
           <div className="overflow-x-auto">
-            <table className="table-fixed w-full text-[11px]">
+            <table className="table-fixed w-full text-xs">
               <colgroup>
                 <col style={{ width: '5%' }} />   {/* Role */}
                 <col style={{ width: '6%' }} />   {/* Name */}
@@ -260,7 +308,7 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                 <col style={{ width: '6%' }} />   {/* Action */}
               </colgroup>
               <thead>
-                <tr className={cn("border-b", bgClass)}>
+                <tr className={cn("border-b text-xs", bgClass)}>
                   <th className="px-2 py-1.5 text-left font-bold whitespace-nowrap">Role</th>
                   <th className="px-2 py-1.5 text-left font-bold whitespace-nowrap">Name</th>
                   <th className="px-2 py-1.5 text-left font-bold whitespace-nowrap">Side</th>
@@ -284,7 +332,7 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                   <tr key={file.id} className={cn("border-b border-border/30 hover:bg-muted/30", bgClass)}>
                     {/* Role Badge */}
                     <td className="px-2 py-1.5">
-                      <Badge variant="outline" className="text-[9px] px-1.5 font-bold">{file.freelancer_type}</Badge>
+                      <Badge variant="outline" className="text-[11px] px-1.5 font-bold">{file.freelancer_type}</Badge>
                     </td>
                     {/* First Name with tooltip */}
                     <td className="px-2 py-1.5">
@@ -298,28 +346,28 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                       </TooltipProvider>
                     </td>
                     {/* Side (read-only) */}
-                    <td className="px-2 py-1.5 text-[10px]">
+                    <td className="px-2 py-1.5 text-xs">
                       {file.side === "BRIDE SIDE" ? "BRIDE" : file.side === "GROOM SIDE" ? "GROOM" : file.side || "-"}
                     </td>
                     {/* Card (read-only) */}
-                    <td className="px-2 py-1.5 text-[10px]">Card {parseInt(file.card_label || "1") || file.card_label || "1"}</td>
+                    <td className="px-2 py-1.5 text-xs">Card {parseInt(file.card_label || "1") || file.card_label || "1"}</td>
                     {/* Format (read-only) */}
-                    <td className="px-2 py-1.5 text-[10px]">{file.format_type || "-"}</td>
+                    <td className="px-2 py-1.5 text-xs">{file.format_type || "-"}</td>
                     {/* Size (read-only) */}
-                    <td className="px-2 py-1.5 text-right text-[10px]">{file.size_gb ? `${file.size_gb}GB` : "-"}</td>
+                    <td className="px-2 py-1.5 text-right text-xs">{file.size_gb ? `${file.size_gb}GB` : "-"}</td>
                     {/* Items (read-only) */}
-                    <td className="px-2 py-1.5 text-right text-[10px]">{file.number_of_items || "-"}</td>
+                    <td className="px-2 py-1.5 text-right text-xs">{file.number_of_items || "-"}</td>
                     {/* 1st Backup */}
                     <td className="px-2 py-1.5 text-center">
-                      <BackupPill path={file.final_generated_path || ""} deviceName={file.backup_1_device_name || ""} />
+                      <BackupPill path={file.final_generated_path || ""} deviceName={file.backup_1_device_name || ""} file={file} backupNum={1} />
                     </td>
                     {/* 2nd Backup */}
                     <td className="px-2 py-1.5 text-center">
-                      <BackupPill path={file.backup_2_path || ""} deviceName={file.backup_2_device_name || ""} />
+                      <BackupPill path={file.backup_2_path || ""} deviceName={file.backup_2_device_name || ""} file={file} backupNum={2} />
                     </td>
                     {/* 3rd Backup */}
                     <td className="px-2 py-1.5 text-center">
-                      <BackupPill path={file.backup_3_path || ""} deviceName={file.backup_3_device_name || ""} />
+                      <BackupPill path={file.backup_3_path || ""} deviceName={file.backup_3_device_name || ""} file={file} backupNum={3} />
                     </td>
                     {/* Drive Upload */}
                     <td className="px-3 py-1.5 text-center border-l border-border/40">
@@ -328,7 +376,7 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                     {/* Drive Link */}
                     <td className="px-3 py-1.5 text-center border-l border-border/40">
                       {file.drive_link ? (
-                        <a href={file.drive_link} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 hover:text-blue-800 font-bold flex items-center justify-center gap-0.5">
+                        <a href={file.drive_link} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:text-blue-800 font-bold flex items-center justify-center gap-0.5">
                           OPEN <ExternalLink className="w-3 h-3" />
                         </a>
                       ) : (
@@ -336,7 +384,7 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                       )}
                     </td>
                     {/* Who Copied (read-only) */}
-                    <td className="px-3 py-1.5 text-[10px] font-bold border-l border-border/40">{file.who_copied || "-"}</td>
+                    <td className="px-3 py-1.5 text-xs font-bold border-l border-border/40">{file.who_copied || "-"}</td>
                     {/* Confirmed */}
                     <td className="px-2 py-1.5 text-center">
                       <button onClick={() => handleConfirmedToggle(file)} className="hover:scale-110 transition-transform">
@@ -354,7 +402,7 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-6 text-[10px] px-2 font-bold"
+                        className="h-6 text-xs px-2 font-bold"
                         onClick={() => openPathBuilder(file)}
                       >
                         SET PATH
@@ -407,7 +455,7 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
             </p>
             <p className="text-xs font-bold truncate">{row.event}</p>
           </div>
-          <Badge variant="outline" className="text-[10px] shrink-0 font-bold">{rowFiles.length} files</Badge>
+          <Badge variant="outline" className="text-xs shrink-0 font-bold">{rowFiles.length} files</Badge>
           {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
         </button>
         {isExpanded && (
@@ -422,18 +470,18 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                     PHOTO_ROLES.includes(file.freelancer_type) ? "bg-emerald-50/50 dark:bg-emerald-950/10" : "bg-indigo-50/50 dark:bg-indigo-950/10"
                   )}>
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-[9px] px-1 font-bold">{file.freelancer_type}</Badge>
+                      <Badge variant="outline" className="text-[11px] px-1 font-bold">{file.freelancer_type}</Badge>
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="font-bold">{getFirstName(file.freelancer_name)}</span>
+                            <span className="font-bold text-xs">{getFirstName(file.freelancer_name)}</span>
                           </TooltipTrigger>
                           <TooltipContent><p className="font-bold">{file.freelancer_name}</p></TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
-                      <span className="ml-auto font-bold text-[10px]">{file.side === "BRIDE SIDE" ? "BRIDE" : file.side === "GROOM SIDE" ? "GROOM" : file.side || "-"}</span>
+                      <span className="ml-auto font-bold text-xs">{file.side === "BRIDE SIDE" ? "BRIDE" : file.side === "GROOM SIDE" ? "GROOM" : file.side || "-"}</span>
                     </div>
-                    <div className="flex items-center gap-3 text-[10px]">
+                    <div className="flex items-center gap-3 text-xs">
                       <span className="font-bold">Card {file.card_label || "1"}</span>
                       <span>{file.size_gb ? `${file.size_gb}GB` : "-"}</span>
                       <span>{file.format_type || "-"}</span>
@@ -441,27 +489,27 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="flex items-center gap-1">
-                        <span className="text-[9px] text-muted-foreground">1st:</span>
-                        <BackupPill path={file.final_generated_path || ""} deviceName={file.backup_1_device_name || ""} />
+                        <span className="text-[11px] text-muted-foreground">1st:</span>
+                        <BackupPill path={file.final_generated_path || ""} deviceName={file.backup_1_device_name || ""} file={file} backupNum={1} />
                       </div>
                       <div className="flex items-center gap-1">
-                        <span className="text-[9px] text-muted-foreground">2nd:</span>
-                        <BackupPill path={file.backup_2_path || ""} deviceName={file.backup_2_device_name || ""} />
+                        <span className="text-[11px] text-muted-foreground">2nd:</span>
+                        <BackupPill path={file.backup_2_path || ""} deviceName={file.backup_2_device_name || ""} file={file} backupNum={2} />
                       </div>
                       <div className="flex items-center gap-1">
-                        <span className="text-[9px] text-muted-foreground">3rd:</span>
-                        <BackupPill path={file.backup_3_path || ""} deviceName={file.backup_3_device_name || ""} />
+                        <span className="text-[11px] text-muted-foreground">3rd:</span>
+                        <BackupPill path={file.backup_3_path || ""} deviceName={file.backup_3_device_name || ""} file={file} backupNum={3} />
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-[9px]">Drive: {file.drive_upload ? "✓" : "✕"}</span>
-                      {file.drive_link && <a href={file.drive_link} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-600 font-bold">OPEN</a>}
-                      <span className="text-[9px]">{file.confirmed ? "✓ Confirmed" : ""}</span>
+                      <span className="text-xs">Drive: {file.drive_upload ? "✓" : "✕"}</span>
+                      {file.drive_link && <a href={file.drive_link} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 font-bold">OPEN</a>}
+                      <span className="text-xs">{file.confirmed ? "✓ Confirmed" : ""}</span>
                       <div className="flex items-center gap-1 ml-auto">
                         <button onClick={() => openNotesDialog(file)} className="hover:text-blue-600">
                           <PenLine className={cn("w-3 h-3", file.notes ? "text-blue-600" : "text-muted-foreground")} />
                         </button>
-                        <Button variant="outline" size="sm" className="h-5 text-[9px] px-1.5 font-bold" onClick={() => openPathBuilder(file)}>
+                        <Button variant="outline" size="sm" className="h-5 text-xs px-1.5 font-bold" onClick={() => openPathBuilder(file)}>
                           SET PATH
                         </Button>
                       </div>
@@ -533,16 +581,16 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
         <div className="px-4 py-2 bg-muted/50 border-b flex items-center gap-2 shrink-0">
           <Filter className="w-3.5 h-3.5 text-muted-foreground" />
           {filterDay && (
-            <Badge variant="secondary" className="text-[10px] cursor-pointer" onClick={() => setFilterDay(null)}>
+            <Badge variant="secondary" className="text-xs cursor-pointer" onClick={() => setFilterDay(null)}>
               Day: {filterDay} ✕
             </Badge>
           )}
           {filterClient && (
-            <Badge variant="secondary" className="text-[10px] cursor-pointer" onClick={() => setFilterClient(null)}>
+            <Badge variant="secondary" className="text-xs cursor-pointer" onClick={() => setFilterClient(null)}>
               Client: {filterClient} ✕
             </Badge>
           )}
-          <button className="text-[10px] text-muted-foreground hover:text-foreground ml-auto" onClick={() => { setFilterDay(null); setFilterClient(null); }}>
+          <button className="text-xs text-muted-foreground hover:text-foreground ml-auto" onClick={() => { setFilterDay(null); setFilterClient(null); }}>
             Clear all
           </button>
         </div>
@@ -578,12 +626,12 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
             <Table>
               <TableHeader>
                 <TableRow className="bg-cyan-50/50 dark:bg-cyan-950/20 sticky top-0 z-10">
-                  <TableHead className="w-10 text-[10px]"></TableHead>
-                  <TableHead className="w-14 text-[10px] text-center">Day</TableHead>
-                  <TableHead className="text-[10px]">Client</TableHead>
-                  <TableHead className="text-[10px]">Event</TableHead>
-                  <TableHead className="text-[10px] w-16 text-center">Files</TableHead>
-                  <TableHead className="text-[10px] w-20">Date (AD)</TableHead>
+                  <TableHead className="w-10 text-xs"></TableHead>
+                  <TableHead className="w-14 text-xs text-center">Day</TableHead>
+                  <TableHead className="text-xs">Client</TableHead>
+                  <TableHead className="text-xs">Event</TableHead>
+                  <TableHead className="text-xs w-16 text-center">Files</TableHead>
+                  <TableHead className="text-xs w-20">Date (AD)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -627,9 +675,9 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                         </TableCell>
                         <TableCell className="py-1.5 text-sm font-bold">{row.event}</TableCell>
                         <TableCell className="py-1.5 text-center">
-                          <Badge variant="outline" className="text-[10px] font-bold">{rowFiles.length}</Badge>
+                          <Badge variant="outline" className="text-xs font-bold">{rowFiles.length}</Badge>
                         </TableCell>
-                        <TableCell className="py-1.5 text-[10px]">{row.eventDateAD}</TableCell>
+                        <TableCell className="py-1.5 text-xs">{row.eventDateAD}</TableCell>
                       </TableRow>
                       {isExpanded && (
                         <TableRow>
