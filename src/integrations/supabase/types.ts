@@ -831,9 +831,11 @@ export type Database = {
       }
       storage_devices: {
         Row: {
+          cloud_type: string | null
           created_at: string
           device_name: string
           device_type: string
+          expiry_date_ad: string | null
           health_percent: number
           id: string
           pc_drive_letter: string | null
@@ -850,9 +852,11 @@ export type Database = {
           used_storage_gb: number
         }
         Insert: {
+          cloud_type?: string | null
           created_at?: string
           device_name?: string
           device_type?: string
+          expiry_date_ad?: string | null
           health_percent?: number
           id?: string
           pc_drive_letter?: string | null
@@ -869,9 +873,11 @@ export type Database = {
           used_storage_gb?: number
         }
         Update: {
+          cloud_type?: string | null
           created_at?: string
           device_name?: string
           device_type?: string
+          expiry_date_ad?: string | null
           health_percent?: number
           id?: string
           pc_drive_letter?: string | null

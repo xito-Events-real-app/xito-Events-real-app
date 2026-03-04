@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { HardDrive, Cpu, Database, Plus, AlertTriangle, Shield, ShieldAlert, Zap, Edit2, Trash2 } from "lucide-react";
+import { HardDrive, Cpu, Database, Plus, AlertTriangle, Shield, ShieldAlert, Zap, Edit2, Trash2, Cloud, CalendarClock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 const deviceIcon = (type: string) => {
   if (type === "PC") return <Cpu className="w-5 h-5" />;
   if (type === "SSD") return <Zap className="w-5 h-5" />;
+  if (type === "CLOUD") return <Cloud className="w-5 h-5" />;
   return <HardDrive className="w-5 h-5" />;
 };
 
@@ -29,6 +30,18 @@ const healthColor = (pct: number) => {
 const safetyBadge = (status: string) => {
   if (status === "SAFE") return <Badge className="bg-emerald-500/20 text-emerald-600 border-0 text-xs">SAFE</Badge>;
   return <Badge className="bg-red-500/20 text-red-600 border-0 text-xs"><ShieldAlert className="w-3 h-3 mr-1" />RISKY</Badge>;
+};
+
+const getExpiryStatus = (expiryDateAd: string) => {
+  if (!expiryDateAd) return null;
+  const expiry = new Date(expiryDateAd);
+  if (isNaN(expiry.getTime())) return null;
+  const now = new Date();
+  const diffMs = expiry.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) return { label: "Expired", color: "text-red-500", warning: true };
+  if (diffDays <= 30) return { label: `${diffDays}d left`, color: "text-amber-500", warning: true };
+  return { label: `${diffDays}d left`, color: "text-emerald-500", warning: false };
 };
 
 interface StorageDevicesSectionProps {
@@ -83,13 +96,14 @@ export function StorageDevicesSection({ deviceTypeFilter, drawerOpen: externalDr
         <Card className="border-dashed border-2">
           <CardContent className="p-8 text-center text-muted-foreground">
             <HardDrive className="w-10 h-10 mx-auto mb-3 opacity-40" />
-            <p className="font-medium">{deviceTypeFilter ? `No ${deviceTypeFilter.replace("_", " ")} devices` : "No storage devices added yet"}</p>
-            <p className="text-sm mt-1">Add your first hard drive, SSD, or PC</p>
+            <p className="font-medium">{deviceTypeFilter ? `No ${deviceTypeFilter === "CLOUD" ? "cloud storage" : deviceTypeFilter.replace("_", " ") + " devices"}` : "No storage devices added yet"}</p>
+            <p className="text-sm mt-1">Add your first hard drive, SSD, PC or cloud storage</p>
           </CardContent>
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredDevices.map((device) => {
+            const isCloudDevice = device.device_type === "CLOUD";
             const usedPct = device.total_storage_gb > 0
               ? Math.round((device.used_storage_gb / device.total_storage_gb) * 100)
               : 0;
@@ -97,24 +111,36 @@ export function StorageDevicesSection({ deviceTypeFilter, drawerOpen: externalDr
               ? (device.remaining_storage_gb / device.total_storage_gb)
               : 1;
             const isLowStorage = remainingPct < 0.1;
-            const isUnsafe = device.safety_status === "RISKY";
+            const isUnsafe = !isCloudDevice && device.safety_status === "RISKY";
+            const expiryStatus = isCloudDevice ? getExpiryStatus(device.expiry_date_ad) : null;
+            const hasWarning = isLowStorage || isUnsafe || (expiryStatus?.warning ?? false);
 
             return (
               <Card key={device.id} className={cn(
                 "border shadow-sm transition-all hover:shadow-md",
-                (isLowStorage || isUnsafe) && "border-red-300 dark:border-red-800"
+                hasWarning && "border-red-300 dark:border-red-800"
               )}>
                 <CardContent className="p-4 space-y-3">
                   {/* Header */}
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400">
+                      <div className={cn(
+                        "p-2 rounded-lg",
+                        isCloudDevice
+                          ? "bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400"
+                          : "bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
+                      )}>
                         {deviceIcon(device.device_type)}
                       </div>
                       <div>
                         <p className="font-semibold text-sm">{device.device_name}</p>
-                        <p className="text-xs text-muted-foreground">{device.device_type.replace("_", " ")}
-                          {device.pc_drive_letter ? ` (${device.pc_drive_letter}:)` : ""}
+                        <p className="text-xs text-muted-foreground">
+                          {isCloudDevice ? (device.cloud_type || "Cloud") : (
+                            <>
+                              {device.device_type.replace("_", " ")}
+                              {device.pc_drive_letter ? ` (${device.pc_drive_letter}:)` : ""}
+                            </>
+                          )}
                         </p>
                       </div>
                     </div>
@@ -145,30 +171,53 @@ export function StorageDevicesSection({ deviceTypeFilter, drawerOpen: externalDr
 
                   {/* Footer badges */}
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className={cn("text-xs font-medium", healthColor(device.health_percent))}>
-                        <Shield className="w-3 h-3 inline mr-0.5" />
-                        {device.health_percent}% Health
-                      </span>
-                      {safetyBadge(device.safety_status)}
-                    </div>
-                    <div className="flex gap-0.5">
-                      {Array.from({ length: 5 }).map((_, i) => (
-                        <div key={i} className={cn(
-                          "w-1.5 h-3 rounded-sm",
-                          i < device.speed_rating ? "bg-blue-500" : "bg-muted"
-                        )} />
-                      ))}
-                    </div>
+                    {isCloudDevice ? (
+                      <div className="flex items-center gap-2">
+                        {expiryStatus ? (
+                          <span className={cn("text-xs font-medium flex items-center gap-0.5", expiryStatus.color)}>
+                            <CalendarClock className="w-3 h-3" />
+                            {expiryStatus.label}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">No expiry set</span>
+                        )}
+                        {device.expiry_date_ad && (
+                          <span className="text-xs text-muted-foreground">{device.expiry_date_ad}</span>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <span className={cn("text-xs font-medium", healthColor(device.health_percent))}>
+                            <Shield className="w-3 h-3 inline mr-0.5" />
+                            {device.health_percent}% Health
+                          </span>
+                          {safetyBadge(device.safety_status)}
+                        </div>
+                        <div className="flex gap-0.5">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <div key={i} className={cn(
+                              "w-1.5 h-3 rounded-sm",
+                              i < device.speed_rating ? "bg-blue-500" : "bg-muted"
+                            )} />
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   {/* Warnings */}
-                  {(isLowStorage || isUnsafe) && (
+                  {hasWarning && (
                     <div className="flex items-center gap-1.5 p-2 rounded-md bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 text-xs">
                       <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                      {isLowStorage && <span>Low storage (&lt;10% remaining)</span>}
-                      {isLowStorage && isUnsafe && <span>•</span>}
-                      {isUnsafe && <span>Device marked RISKY</span>}
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {isLowStorage && <span>Low storage (&lt;10% remaining)</span>}
+                        {isLowStorage && isUnsafe && <span>•</span>}
+                        {isUnsafe && <span>Device marked RISKY</span>}
+                        {expiryStatus?.warning && (
+                          <span>{expiryStatus.label === "Expired" ? "Cloud storage expired!" : "Cloud expiring soon"}</span>
+                        )}
+                      </div>
                     </div>
                   )}
                 </CardContent>

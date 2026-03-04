@@ -16,6 +16,8 @@ export interface StorageDevice {
   purchase_date_bs: string;
   price_npr: number;
   purchased_from: string;
+  cloud_type: string;
+  expiry_date_ad: string;
   synced_to_sheet: boolean;
   created_at: string;
   updated_at: string;
