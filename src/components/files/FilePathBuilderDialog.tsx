@@ -322,6 +322,21 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
       }
     }
 
+    // Validate same-device for 2nd/3rd backups
+    if (backupNumber >= 2 && fileRecord) {
+      const form = cardForms[fileRecord.card_label || "1"] || currentForm;
+      const selectedDeviceName = devices.find(d => d.id === form.deviceId)?.device_name;
+      if (backupNumber === 2 && selectedDeviceName && selectedDeviceName === fileRecord.backup_1_device_name) {
+        toast.error("2nd backup cannot be on the same device as 1st backup!");
+        return;
+      }
+      if (backupNumber === 3 && selectedDeviceName &&
+          (selectedDeviceName === fileRecord.backup_1_device_name || selectedDeviceName === fileRecord.backup_2_device_name)) {
+        toast.error("3rd backup cannot be on the same device as 1st or 2nd backup!");
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       const currentCardKey = fileRecord.card_label || "1";
@@ -726,37 +741,41 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
 
           {/* ===== COLUMN 3: Meta & Notes (Amber/Rose) ===== */}
           <div className="space-y-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
-            <p className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-              👤 Who Copied
-            </p>
+            {backupNumber === 1 && (
+              <>
+                <p className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                  👤 Who Copied
+                </p>
 
-            <Select value={whoCopied} onValueChange={setWhoCopied}>
-              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select who copied..." /></SelectTrigger>
-              <SelectContent>
-                {copierOptions.priority.map(name => (
-                  <SelectItem key={name} value={name}>
-                    <span className="font-bold">{name}</span> ⭐
-                  </SelectItem>
-                ))}
-                <Separator className="my-1" />
-                {copierOptions.rest.map(name => (
-                  <SelectItem key={name} value={name}>{name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <div className="flex gap-2">
-              <Input
-                value={newCopierName}
-                onChange={(e) => setNewCopierName(e.target.value)}
-                placeholder="Add new name..."
-                className="h-7 text-xs"
-              />
-              <Button variant="outline" size="sm" className="h-7 text-xs shrink-0" onClick={handleAddNewCopier} disabled={!newCopierName.trim()}>
-                <Plus className="w-3 h-3 mr-1" /> Add
-              </Button>
-            </div>
+                <Select value={whoCopied} onValueChange={setWhoCopied}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select who copied..." /></SelectTrigger>
+                  <SelectContent>
+                    {copierOptions.priority.map(name => (
+                      <SelectItem key={name} value={name}>
+                        <span className="font-bold">{name}</span> ⭐
+                      </SelectItem>
+                    ))}
+                    <Separator className="my-1" />
+                    {copierOptions.rest.map(name => (
+                      <SelectItem key={name} value={name}>{name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="flex gap-2">
+                  <Input
+                    value={newCopierName}
+                    onChange={(e) => setNewCopierName(e.target.value)}
+                    placeholder="Add new name..."
+                    className="h-7 text-xs"
+                  />
+                  <Button variant="outline" size="sm" className="h-7 text-xs shrink-0" onClick={handleAddNewCopier} disabled={!newCopierName.trim()}>
+                    <Plus className="w-3 h-3 mr-1" /> Add
+                  </Button>
+                </div>
 
-            <Separator className="bg-amber-200 dark:bg-amber-800" />
+                <Separator className="bg-amber-200 dark:bg-amber-800" />
+              </>
+            )}
 
             {/* Notes (Rose sub-section) */}
             <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800 space-y-2">
