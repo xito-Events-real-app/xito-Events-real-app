@@ -367,14 +367,21 @@ export type Database = {
       }
       files_management: {
         Row: {
+          backup_1_device_name: string | null
+          backup_2_device_name: string | null
+          backup_2_path: string | null
+          backup_3_device_name: string | null
+          backup_3_path: string | null
           card_label: string | null
           category: string | null
           client_folder_name: string | null
           client_name: string | null
+          confirmed: boolean | null
           created_at: string
           deleted_or_not: boolean | null
           double_backup: boolean | null
           double_backup_path: string | null
+          drive_link: string | null
           drive_upload: boolean | null
           drive_upload_path: string | null
           event_date_ad: string | null
@@ -388,6 +395,7 @@ export type Database = {
           freelancer_name: string | null
           freelancer_type: string | null
           id: string
+          notes: string | null
           number_of_items: number | null
           reconfirmation: boolean | null
           registered_date_bs: string | null
@@ -404,14 +412,21 @@ export type Database = {
           year_event_folder: string | null
         }
         Insert: {
+          backup_1_device_name?: string | null
+          backup_2_device_name?: string | null
+          backup_2_path?: string | null
+          backup_3_device_name?: string | null
+          backup_3_path?: string | null
           card_label?: string | null
           category?: string | null
           client_folder_name?: string | null
           client_name?: string | null
+          confirmed?: boolean | null
           created_at?: string
           deleted_or_not?: boolean | null
           double_backup?: boolean | null
           double_backup_path?: string | null
+          drive_link?: string | null
           drive_upload?: boolean | null
           drive_upload_path?: string | null
           event_date_ad?: string | null
@@ -425,6 +440,7 @@ export type Database = {
           freelancer_name?: string | null
           freelancer_type?: string | null
           id?: string
+          notes?: string | null
           number_of_items?: number | null
           reconfirmation?: boolean | null
           registered_date_bs?: string | null
@@ -441,14 +457,21 @@ export type Database = {
           year_event_folder?: string | null
         }
         Update: {
+          backup_1_device_name?: string | null
+          backup_2_device_name?: string | null
+          backup_2_path?: string | null
+          backup_3_device_name?: string | null
+          backup_3_path?: string | null
           card_label?: string | null
           category?: string | null
           client_folder_name?: string | null
           client_name?: string | null
+          confirmed?: boolean | null
           created_at?: string
           deleted_or_not?: boolean | null
           double_backup?: boolean | null
           double_backup_path?: string | null
+          drive_link?: string | null
           drive_upload?: boolean | null
           drive_upload_path?: string | null
           event_date_ad?: string | null
@@ -462,6 +485,7 @@ export type Database = {
           freelancer_name?: string | null
           freelancer_type?: string | null
           id?: string
+          notes?: string | null
           number_of_items?: number | null
           reconfirmation?: boolean | null
           registered_date_bs?: string | null

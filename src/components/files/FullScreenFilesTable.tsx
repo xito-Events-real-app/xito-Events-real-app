@@ -2,12 +2,18 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Loader2, X, ChevronLeft, FolderOpen, ChevronDown, ChevronUp, Filter } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Loader2, X, ChevronLeft, FolderOpen, ChevronDown, ChevronUp, Filter, Check, PenLine, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -28,6 +34,9 @@ const DAY_COLORS = [
   "bg-cyan-200/70",
   "bg-orange-200/70",
 ];
+
+const PHOTO_ROLES = ["PB", "PG", "EP"];
+const VIDEO_ROLES = ["VB", "VG", "EV", "DRONE", "FPV", "IPHONE"];
 
 interface AssignmentRow {
   id: string;
@@ -63,6 +72,11 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
   // Path builder dialog
   const [pathDialogOpen, setPathDialogOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<FileRecord | null>(null);
+
+  // Notes dialog
+  const [notesDialogOpen, setNotesDialogOpen] = useState(false);
+  const [notesFile, setNotesFile] = useState<FileRecord | null>(null);
+  const [notesText, setNotesText] = useState("");
 
   // Load assignments for selected year/month
   const loadAssignments = useCallback(async () => {
@@ -165,47 +179,27 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
     }
   }, [allExpanded, filteredRows]);
 
-  // Inline edit handlers
-  const handleInlineUpdate = async (id: string, field: string, value: any) => {
-    await update(id, { [field]: value, synced_to_sheet: false });
-  };
-
-  // Side lock: once set, update DB and it becomes read-only
-  const handleSideChange = async (file: FileRecord, value: string) => {
-    await update(file.id, { side: value, synced_to_sheet: false });
-  };
-
-  // Card number change: duplicate row if needed
-  const handleCardChange = async (file: FileRecord, newCard: string) => {
-    const currentCard = file.card_label || "1";
-    if (newCard === currentCard) return;
-    
-    const newCardNum = parseInt(newCard);
-    if (newCardNum > 1) {
-      // Check if a row for this card already exists
-      const existingCardRow = files.find(f => 
-        f.registered_date_time_ad === file.registered_date_time_ad &&
-        f.event_name === file.event_name &&
-        f.freelancer_type === file.freelancer_type &&
-        f.freelancer_name === file.freelancer_name &&
-        f.card_label === newCard &&
-        f.id !== file.id
-      );
-      if (!existingCardRow) {
-        try {
-          await duplicateFileRowForCard(file.id, newCardNum);
-          toast.success(`Card ${newCard} row created`);
-          await refresh();
-        } catch (err: any) {
-          toast.error("Failed to create card row");
-        }
-      }
-    }
-  };
-
   const openPathBuilder = (file: FileRecord) => {
     setSelectedFile(file);
     setPathDialogOpen(true);
+  };
+
+  const openNotesDialog = (file: FileRecord) => {
+    setNotesFile(file);
+    setNotesText(file.notes || "");
+    setNotesDialogOpen(true);
+  };
+
+  const saveNotes = async () => {
+    if (!notesFile) return;
+    await update(notesFile.id, { notes: notesText, synced_to_sheet: false });
+    setNotesDialogOpen(false);
+    toast.success("Notes saved");
+  };
+
+  // Inline confirmed toggle
+  const handleConfirmedToggle = async (file: FileRecord) => {
+    await update(file.id, { confirmed: !file.confirmed, synced_to_sheet: false });
   };
 
   // Years/months
@@ -214,113 +208,156 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
 
   const isDataLoading = loading || filesLoading || isEnsuring;
 
-  // ─── File Rows Table (inline in expand) ───
+  // ─── Helper: first name only ───
+  const getFirstName = (name: string) => (name || "").split(" ")[0];
+
+  // ─── Helper: backup display ───
+  const BackupPill = ({ path, deviceName }: { path: string; deviceName: string }) => {
+    if (!path) return <X className="w-4 h-4 text-red-500 mx-auto" />;
+    const label = deviceName || path.split("\\")[0] || "✓";
+    return (
+      <Badge variant="secondary" className="text-[9px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 font-bold truncate max-w-[80px]">
+        {label}
+      </Badge>
+    );
+  };
+
+  // ─── File Rows Table (grouped by PHOTOS/VIDEOS) ───
   const FileRowsTable = ({ fileRows }: { fileRows: FileRecord[] }) => {
     if (fileRows.length === 0) {
       return <div className="px-4 py-3 text-xs text-muted-foreground">No file rows for this event</div>;
     }
 
-    // Determine if side is pre-set (from CREW_CODE_MAP)
-    const PHOTO_ROLES = ["PB", "PG", "EP"];
-    const isSideLocked = (file: FileRecord) => !!file.side && file.side.trim() !== "";
+    const photoFiles = fileRows.filter(f => PHOTO_ROLES.includes(f.freelancer_type));
+    const videoFiles = fileRows.filter(f => VIDEO_ROLES.includes(f.freelancer_type));
+    const otherFiles = fileRows.filter(f => !PHOTO_ROLES.includes(f.freelancer_type) && !VIDEO_ROLES.includes(f.freelancer_type));
+
+    const renderSection = (label: string, sectionFiles: FileRecord[], bgClass: string, headerBg: string) => {
+      if (sectionFiles.length === 0) return null;
+      return (
+        <div className="mb-1">
+          <div className={cn("px-3 py-1.5 font-bold text-xs uppercase tracking-wider", headerBg)}>
+            {label} ({sectionFiles.length})
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px]">
+              <thead>
+                <tr className={cn("border-b", bgClass)}>
+                  <th className="px-2 py-1.5 text-left font-bold w-10">Role</th>
+                  <th className="px-2 py-1.5 text-left font-bold">Name</th>
+                  <th className="px-2 py-1.5 text-left font-bold w-14">Side</th>
+                  <th className="px-2 py-1.5 text-left font-bold w-14">Card</th>
+                  <th className="px-2 py-1.5 text-left font-bold w-16">Format</th>
+                  <th className="px-2 py-1.5 text-right font-bold w-12">Size</th>
+                  <th className="px-2 py-1.5 text-right font-bold w-12">Items</th>
+                  <th className="px-2 py-1.5 text-center font-bold w-16">1st</th>
+                  <th className="px-2 py-1.5 text-center font-bold w-16">2nd</th>
+                  <th className="px-2 py-1.5 text-center font-bold w-16">3rd</th>
+                  <th className="px-2 py-1.5 text-center font-bold w-10">Drive</th>
+                  <th className="px-2 py-1.5 text-center font-bold w-16">Link</th>
+                  <th className="px-2 py-1.5 text-left font-bold w-16">Copied</th>
+                  <th className="px-2 py-1.5 text-center font-bold w-10">✓</th>
+                  <th className="px-2 py-1.5 text-center font-bold w-8">📝</th>
+                  <th className="px-2 py-1.5 text-center font-bold w-20">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sectionFiles.map((file) => (
+                  <tr key={file.id} className={cn("border-b border-border/30 hover:bg-muted/30", bgClass)}>
+                    {/* Role Badge */}
+                    <td className="px-2 py-1.5">
+                      <Badge variant="outline" className="text-[9px] px-1.5 font-bold">{file.freelancer_type}</Badge>
+                    </td>
+                    {/* First Name with tooltip */}
+                    <td className="px-2 py-1.5">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="font-bold cursor-default">{getFirstName(file.freelancer_name)}</span>
+                          </TooltipTrigger>
+                          <TooltipContent><p className="font-bold">{file.freelancer_name}</p></TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </td>
+                    {/* Side (read-only) */}
+                    <td className="px-2 py-1.5 text-[10px]">
+                      {file.side === "BRIDE SIDE" ? "BRIDE" : file.side === "GROOM SIDE" ? "GROOM" : file.side || "-"}
+                    </td>
+                    {/* Card (read-only) */}
+                    <td className="px-2 py-1.5 text-[10px]">Card {file.card_label || "1"}</td>
+                    {/* Format (read-only) */}
+                    <td className="px-2 py-1.5 text-[10px]">{file.format_type || "-"}</td>
+                    {/* Size (read-only) */}
+                    <td className="px-2 py-1.5 text-right text-[10px]">{file.size_gb ? `${file.size_gb}GB` : "-"}</td>
+                    {/* Items (read-only) */}
+                    <td className="px-2 py-1.5 text-right text-[10px]">{file.number_of_items || "-"}</td>
+                    {/* 1st Backup */}
+                    <td className="px-2 py-1.5 text-center">
+                      <BackupPill path={file.final_generated_path || ""} deviceName={file.backup_1_device_name || ""} />
+                    </td>
+                    {/* 2nd Backup */}
+                    <td className="px-2 py-1.5 text-center">
+                      <BackupPill path={file.backup_2_path || ""} deviceName={file.backup_2_device_name || ""} />
+                    </td>
+                    {/* 3rd Backup */}
+                    <td className="px-2 py-1.5 text-center">
+                      <BackupPill path={file.backup_3_path || ""} deviceName={file.backup_3_device_name || ""} />
+                    </td>
+                    {/* Drive Upload */}
+                    <td className="px-2 py-1.5 text-center">
+                      {file.drive_upload ? <Check className="w-4 h-4 text-emerald-600 mx-auto" /> : <X className="w-4 h-4 text-red-500 mx-auto" />}
+                    </td>
+                    {/* Drive Link */}
+                    <td className="px-2 py-1.5 text-center">
+                      {file.drive_link ? (
+                        <a href={file.drive_link} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 hover:text-blue-800 font-bold flex items-center justify-center gap-0.5">
+                          OPEN <ExternalLink className="w-3 h-3" />
+                        </a>
+                      ) : (
+                        <X className="w-4 h-4 text-red-500 mx-auto" />
+                      )}
+                    </td>
+                    {/* Who Copied (read-only) */}
+                    <td className="px-2 py-1.5 text-[10px] font-bold">{file.who_copied || "-"}</td>
+                    {/* Confirmed */}
+                    <td className="px-2 py-1.5 text-center">
+                      <button onClick={() => handleConfirmedToggle(file)} className="hover:scale-110 transition-transform">
+                        {file.confirmed ? <Check className="w-4 h-4 text-emerald-600 mx-auto" /> : <X className="w-4 h-4 text-red-500 mx-auto" />}
+                      </button>
+                    </td>
+                    {/* Notes */}
+                    <td className="px-2 py-1.5 text-center">
+                      <button onClick={() => openNotesDialog(file)} className="hover:text-blue-600 transition-colors">
+                        <PenLine className={cn("w-3.5 h-3.5 mx-auto", file.notes ? "text-blue-600" : "text-muted-foreground")} />
+                      </button>
+                    </td>
+                    {/* Set File Path */}
+                    <td className="px-2 py-1.5 text-center">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-6 text-[10px] px-2 font-bold"
+                        onClick={() => openPathBuilder(file)}
+                      >
+                        SET PATH
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    };
 
     return (
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-cyan-50/50 dark:bg-cyan-950/10">
-              <TableHead className="text-[10px] w-16">Crew</TableHead>
-              <TableHead className="text-[10px]">Freelancer</TableHead>
-              <TableHead className="text-[10px] w-24">Side</TableHead>
-              <TableHead className="text-[10px] w-16">Card</TableHead>
-              <TableHead className="text-[10px] w-20">Format</TableHead>
-              <TableHead className="text-[10px] w-20">Copied</TableHead>
-              <TableHead className="text-[10px] text-center w-8">✓</TableHead>
-              <TableHead className="text-[10px] text-center w-8">2x</TableHead>
-              <TableHead className="text-[10px] text-center w-8">3x</TableHead>
-              <TableHead className="text-[10px] text-center w-8">☁</TableHead>
-              <TableHead className="text-[10px]">Path</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {fileRows.map((file) => (
-              <TableRow key={file.id} className="text-xs">
-                <TableCell>
-                  <Badge variant="outline" className="text-[10px] px-1.5 font-bold">{file.freelancer_type}</Badge>
-                </TableCell>
-                <TableCell className="font-bold text-xs">{file.freelancer_name}</TableCell>
-                <TableCell>
-                  {isSideLocked(file) ? (
-                    <Badge variant="secondary" className="text-[10px] font-bold">
-                      {file.side === "BRIDE SIDE" ? "BRIDE" : file.side === "GROOM SIDE" ? "GROOM" : file.side}
-                    </Badge>
-                  ) : (
-                    <Select value={file.side || ""} onValueChange={(v) => handleSideChange(file, v)}>
-                      <SelectTrigger className="h-6 text-[10px] border-0 bg-transparent p-0"><SelectValue placeholder="Select..." /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="BRIDE SIDE">BRIDE</SelectItem>
-                        <SelectItem value="GROOM SIDE">GROOM</SelectItem>
-                        <SelectItem value="OTHER">OTHER</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <Select value={file.card_label || "1"} onValueChange={(v) => handleCardChange(file, v)}>
-                    <SelectTrigger className="h-6 text-[10px] border-0 bg-transparent p-0 w-12"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">1</SelectItem>
-                      <SelectItem value="2">2</SelectItem>
-                      <SelectItem value="3">3</SelectItem>
-                      <SelectItem value="4">4</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </TableCell>
-                <TableCell>
-                  <Select value={file.format_type || ""} onValueChange={(v) => handleInlineUpdate(file.id, "format_type", v)}>
-                    <SelectTrigger className="h-6 text-[10px] border-0 bg-transparent p-0"><SelectValue placeholder="-" /></SelectTrigger>
-                    <SelectContent>
-                      {PHOTO_ROLES.includes(file.freelancer_type)
-                        ? ["RAW", "JPEG", "RAW AND JPEG"].map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)
-                        : ["NORMAL", "CF", "CF_NORMAL"].map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)
-                      }
-                    </SelectContent>
-                  </Select>
-                </TableCell>
-                <TableCell>
-                  <Input
-                    className="h-6 text-[10px] w-16 border-0 bg-transparent p-0.5"
-                    defaultValue={file.who_copied}
-                    onBlur={(e) => { if (e.target.value !== file.who_copied) handleInlineUpdate(file.id, "who_copied", e.target.value); }}
-                  />
-                </TableCell>
-                <TableCell className="text-center">
-                  <Checkbox className="h-3.5 w-3.5" checked={file.reconfirmation} onCheckedChange={(v) => handleInlineUpdate(file.id, "reconfirmation", !!v)} />
-                </TableCell>
-                <TableCell className="text-center">
-                  <Checkbox className="h-3.5 w-3.5" checked={file.double_backup} onCheckedChange={(v) => handleInlineUpdate(file.id, "double_backup", !!v)} />
-                </TableCell>
-                <TableCell className="text-center">
-                  <Checkbox className="h-3.5 w-3.5" checked={file.triple_backup} onCheckedChange={(v) => handleInlineUpdate(file.id, "triple_backup", !!v)} />
-                </TableCell>
-                <TableCell className="text-center">
-                  <Checkbox className="h-3.5 w-3.5" checked={file.drive_upload} onCheckedChange={(v) => handleInlineUpdate(file.id, "drive_upload", !!v)} />
-                </TableCell>
-                <TableCell>
-                  <button
-                    onClick={() => openPathBuilder(file)}
-                    className={cn(
-                      "text-[10px] truncate max-w-[140px] text-left hover:text-cyan-600 transition-colors font-bold",
-                      file.final_generated_path ? "text-foreground underline decoration-dotted" : "text-muted-foreground"
-                    )}
-                  >
-                    {file.final_generated_path || "Set path..."}
-                  </button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+      <div>
+        {renderSection("PHOTOS", photoFiles, "bg-emerald-50/50 dark:bg-emerald-950/10", "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300")}
+        {photoFiles.length > 0 && videoFiles.length > 0 && <div className="h-1 bg-border" />}
+        {renderSection("VIDEOS", videoFiles, "bg-indigo-50/50 dark:bg-indigo-950/10", "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300")}
+        {otherFiles.length > 0 && <div className="h-1 bg-border" />}
+        {renderSection("OTHER", otherFiles, "bg-muted/30", "bg-muted text-muted-foreground")}
       </div>
     );
   };
@@ -362,35 +399,55 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
             ) : (
               <div className="p-2 space-y-2">
                 {rowFiles.map(file => (
-                  <div key={file.id} className="border rounded p-2 space-y-1 text-[11px]">
+                  <div key={file.id} className={cn(
+                    "border rounded p-2 space-y-1 text-[11px]",
+                    PHOTO_ROLES.includes(file.freelancer_type) ? "bg-emerald-50/50 dark:bg-emerald-950/10" : "bg-indigo-50/50 dark:bg-indigo-950/10"
+                  )}>
                     <div className="flex items-center gap-2">
                       <Badge variant="outline" className="text-[9px] px-1 font-bold">{file.freelancer_type}</Badge>
-                      <span className="font-bold">{file.freelancer_name}</span>
-                      <span className="ml-auto font-bold">{file.side || "-"}</span>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="font-bold">{getFirstName(file.freelancer_name)}</span>
+                          </TooltipTrigger>
+                          <TooltipContent><p className="font-bold">{file.freelancer_name}</p></TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      <span className="ml-auto font-bold text-[10px]">{file.side === "BRIDE SIDE" ? "BRIDE" : file.side === "GROOM SIDE" ? "GROOM" : file.side || "-"}</span>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="font-bold">Card: {file.card_label || "1"}</span>
-                      <span>Size: {file.size_gb || 0}GB</span>
-                      <span>Fmt: {file.format_type || "-"}</span>
+                    <div className="flex items-center gap-3 text-[10px]">
+                      <span className="font-bold">Card {file.card_label || "1"}</span>
+                      <span>{file.size_gb ? `${file.size_gb}GB` : "-"}</span>
+                      <span>{file.format_type || "-"}</span>
+                      <span>Copied: {file.who_copied || "-"}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span>Copied: {file.who_copied || "-"}</span>
-                      <div className="flex items-center gap-1 ml-auto">
-                        {file.reconfirmation && <Badge className="text-[8px] px-1 bg-emerald-100 text-emerald-700">✓</Badge>}
-                        {file.double_backup && <Badge className="text-[8px] px-1 bg-blue-100 text-blue-700">2x</Badge>}
-                        {file.triple_backup && <Badge className="text-[8px] px-1 bg-purple-100 text-purple-700">3x</Badge>}
-                        {file.drive_upload && <Badge className="text-[8px] px-1 bg-cyan-100 text-cyan-700">☁</Badge>}
+                      <div className="flex items-center gap-1">
+                        <span className="text-[9px] text-muted-foreground">1st:</span>
+                        <BackupPill path={file.final_generated_path || ""} deviceName={file.backup_1_device_name || ""} />
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[9px] text-muted-foreground">2nd:</span>
+                        <BackupPill path={file.backup_2_path || ""} deviceName={file.backup_2_device_name || ""} />
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[9px] text-muted-foreground">3rd:</span>
+                        <BackupPill path={file.backup_3_path || ""} deviceName={file.backup_3_device_name || ""} />
                       </div>
                     </div>
-                    <button
-                      onClick={() => openPathBuilder(file)}
-                      className={cn(
-                        "text-[10px] truncate w-full text-left hover:text-cyan-600 font-bold",
-                        file.final_generated_path ? "text-foreground underline decoration-dotted" : "text-muted-foreground"
-                      )}
-                    >
-                      {file.final_generated_path || "Set path..."}
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[9px]">Drive: {file.drive_upload ? "✓" : "✕"}</span>
+                      {file.drive_link && <a href={file.drive_link} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-600 font-bold">OPEN</a>}
+                      <span className="text-[9px]">{file.confirmed ? "✓ Confirmed" : ""}</span>
+                      <div className="flex items-center gap-1 ml-auto">
+                        <button onClick={() => openNotesDialog(file)} className="hover:text-blue-600">
+                          <PenLine className={cn("w-3 h-3", file.notes ? "text-blue-600" : "text-muted-foreground")} />
+                        </button>
+                        <Button variant="outline" size="sm" className="h-5 text-[9px] px-1.5 font-bold" onClick={() => openPathBuilder(file)}>
+                          SET PATH
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -413,7 +470,6 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
         </div>
         <h1 className="font-bold text-sm uppercase tracking-wide flex-1">File Management</h1>
 
-        {/* Year selector */}
         <Select value={selectedYear} onValueChange={setSelectedYear}>
           <SelectTrigger className="w-[80px] h-8 text-xs bg-white/10 border-white/20 text-white">
             <SelectValue />
@@ -423,7 +479,6 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
           </SelectContent>
         </Select>
 
-        {/* Month selector */}
         <Select value={selectedMonth} onValueChange={setSelectedMonth}>
           <SelectTrigger className="w-[110px] h-8 text-xs bg-white/10 border-white/20 text-white">
             <SelectValue>{monthName}</SelectValue>
@@ -433,7 +488,6 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
           </SelectContent>
         </Select>
 
-        {/* Stats */}
         <div className="hidden md:flex items-center gap-3 text-xs text-white/80">
           <span>{stats.totalEvents} events</span>
           <span>·</span>
@@ -442,7 +496,6 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
           <span>{stats.totalSizeGB} GB</span>
         </div>
 
-        {/* Expand/Collapse All */}
         <Button
           variant="ghost"
           size="sm"
@@ -497,7 +550,6 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
       {!isDataLoading && filteredRows.length > 0 && (
         <div className="flex-1 overflow-y-auto">
           {isMobile ? (
-            /* ─── Mobile Layout ─── */
             <div className="p-3 space-y-0">
               {filteredRows.map((row) => {
                 const rowKey = `${row.registeredDateTimeAD}-${row.event}-${row.eventDateAD}`;
@@ -505,7 +557,6 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
               })}
             </div>
           ) : (
-            /* ─── Desktop Table ─── */
             <Table>
               <TableHeader>
                 <TableRow className="bg-cyan-50/50 dark:bg-cyan-950/20 sticky top-0 z-10">
@@ -565,7 +616,7 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                       {isExpanded && (
                         <TableRow>
                           <TableCell colSpan={6} className="p-0 bg-muted/20">
-                            <div className="px-4 py-2 border-l-2 border-cyan-400 ml-6">
+                            <div className="border-l-2 border-cyan-400 ml-6">
                               <FileRowsTable fileRows={rowFiles} />
                             </div>
                           </TableCell>
@@ -588,7 +639,28 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
         onSave={async (updates) => {
           if (selectedFile) await update(selectedFile.id, { ...updates, synced_to_sheet: false });
         }}
+        allFiles={files}
+        onRefresh={refresh}
       />
+
+      {/* Notes Dialog */}
+      <Dialog open={notesDialogOpen} onOpenChange={setNotesDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold">Notes — {notesFile?.freelancer_name}</DialogTitle>
+          </DialogHeader>
+          <Textarea
+            value={notesText}
+            onChange={(e) => setNotesText(e.target.value)}
+            placeholder="Write notes about this file entry..."
+            className="min-h-[100px] text-sm"
+          />
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setNotesDialogOpen(false)}>Cancel</Button>
+            <Button size="sm" onClick={saveNotes} className="font-bold">Save Notes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

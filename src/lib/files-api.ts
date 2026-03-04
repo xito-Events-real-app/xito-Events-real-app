@@ -57,6 +57,15 @@ export interface FileRecord {
   synced_to_sheet: boolean;
   created_at: string;
   updated_at: string;
+  // New columns for redesign
+  backup_1_device_name: string;
+  backup_2_path: string;
+  backup_2_device_name: string;
+  backup_3_path: string;
+  backup_3_device_name: string;
+  drive_link: string;
+  notes: string;
+  confirmed: boolean;
 }
 
 // ── Storage Devices API ─────────────────────────────────
@@ -163,8 +172,11 @@ export const CREW_CODE_MAP: Record<string, { field: string; code: string; catego
   assistant: { field: "assistant", code: "ASST", category: "", side: "" },
 };
 
-export async function autoGenerateFileRows(registeredDateTimeAD: string): Promise<FileRecord[]> {
-  // Get assignments for this client
+export function autoGenerateFileRows(registeredDateTimeAD: string): Promise<FileRecord[]> {
+  return _autoGenerateFileRows(registeredDateTimeAD, 1);
+}
+
+async function _autoGenerateFileRows(registeredDateTimeAD: string, cardNum: number): Promise<FileRecord[]> {
   const { data: assignments, error: assignErr } = await (supabase as any)
     .from("freelancer_assignments")
     .select("*")
@@ -172,7 +184,6 @@ export async function autoGenerateFileRows(registeredDateTimeAD: string): Promis
   if (assignErr) throw assignErr;
   if (!assignments || assignments.length === 0) return [];
 
-  // Get client info
   const { data: clientData } = await (supabase as any)
     .from("clients_cache")
     .select("client_name, registered_date_bs")
@@ -254,12 +265,14 @@ export function buildFilePath(params: {
 
   if (params.storageType === "PC") {
     const drive = params.pcDriveLetter ? `${params.pcDriveLetter}:` : "";
-    return `\\\\${params.deviceName}\\${drive}\\${segments.join("\\")}`;
+    return `\\\\\\\\${params.deviceName}\\\\${drive}\\\\${segments.join("\\\\")}`;
   } else if (params.storageType === "HARD_DRIVE") {
-    return `${params.deviceName}\\MAIN\\${segments.join("\\")}`;
+    return `${params.deviceName}\\\\MAIN\\\\${segments.join("\\\\")}`;
+  } else if (params.storageType === "SSD") {
+    return `${params.deviceName}\\\\MAIN\\\\${segments.join("\\\\")}`;
   } else {
     // DRIVE (Google Drive etc.)
-    return `${params.deviceName}\\${segments.join("\\")}`;
+    return `${params.deviceName}\\\\${segments.join("\\\\")}`;
   }
 }
 
@@ -324,12 +337,12 @@ export async function pushFilesToSheets(): Promise<{ pushed: number }> {
 export interface FileMonthData {
   year: string;
   month: string;
-  label: string; // e.g. "FALGUN 2082"
-  value: string; // e.g. "2082-11"
+  label: string;
+  value: string;
 }
 
 export async function getAvailableFileMonths(): Promise<FileMonthData[]> {
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const today = new Date().toISOString().slice(0, 10);
 
   const { data, error } = await (supabase as any)
     .from("freelancer_assignments")
@@ -341,14 +354,12 @@ export async function getAvailableFileMonths(): Promise<FileMonthData[]> {
   if (error) throw error;
   if (!data || data.length === 0) return [];
 
-  // Filter to past/today only (exclude unknown-day dates with **)
   const pastRows = data.filter((r: any) => {
     const d = r.event_date_ad || "";
     if (d.includes("**")) return false;
     return d <= today;
   });
 
-  // Distinct year-month combos
   const seen = new Set<string>();
   const months: FileMonthData[] = [];
   for (const r of pastRows) {
@@ -369,7 +380,6 @@ export async function getAvailableFileMonths(): Promise<FileMonthData[]> {
     });
   }
 
-  // Sort most recent first (by year desc, month desc)
   months.sort((a, b) => {
     const ya = parseInt(a.year), yb = parseInt(b.year);
     if (ya !== yb) return yb - ya;
@@ -397,7 +407,6 @@ export async function ensureFileRowsForMonth(eventYear: string, eventMonth: stri
 async function _ensureFileRowsForMonthInner(eventYear: string, eventMonth: string): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
 
-  // Get all assignments for this month where event_date_ad <= today
   const { data: assignments, error: aErr } = await (supabase as any)
     .from("freelancer_assignments")
     .select("*")
@@ -408,7 +417,6 @@ async function _ensureFileRowsForMonthInner(eventYear: string, eventMonth: strin
   if (aErr) throw aErr;
   if (!assignments || assignments.length === 0) return;
 
-  // Filter to past/today
   const pastAssignments = assignments.filter((a: any) => {
     const d = a.event_date_ad || "";
     if (d.includes("**")) return false;
@@ -417,7 +425,6 @@ async function _ensureFileRowsForMonthInner(eventYear: string, eventMonth: strin
 
   if (pastAssignments.length === 0) return;
 
-  // Get existing file rows for this month to avoid duplicates
   const { data: existingFiles } = await (supabase as any)
     .from("files_management")
     .select("registered_date_time_ad, event_name, freelancer_type, freelancer_name")
@@ -431,7 +438,6 @@ async function _ensureFileRowsForMonthInner(eventYear: string, eventMonth: strin
     )
   );
 
-  // Get client info for all unique registered_date_time_ad
   const uniqueRegDates = [...new Set(pastAssignments.map((a: any) => a.registered_date_time_ad))];
   const { data: clientsData } = await (supabase as any)
     .from("clients_cache")
@@ -455,10 +461,10 @@ async function _ensureFileRowsForMonthInner(eventYear: string, eventMonth: strin
     const eventDateAD = assignment.event_date_ad || "";
     const yearEventFolder = evMonth && evYear
       ? (() => {
-          const mn = parseInt(evMonth, 10);
-          const MONTHS: Record<number, string> = {1:"BAISAKH",2:"JESTHA",3:"ASHADH",4:"SHRAWAN",5:"BHADRA",6:"ASHWIN",7:"KARTIK",8:"MANGSIR",9:"POUSH",10:"MAGH",11:"FALGUN",12:"CHAITRA"};
-          return `${MONTHS[mn] || evMonth} EVENTS ${evYear}`;
-        })()
+        const mn = parseInt(evMonth, 10);
+        const MONTHS: Record<number, string> = {1:"BAISAKH",2:"JESTHA",3:"ASHADH",4:"SHRAWAN",5:"BHADRA",6:"ASHWIN",7:"KARTIK",8:"MANGSIR",9:"POUSH",10:"MAGH",11:"FALGUN",12:"CHAITRA"};
+        return `${MONTHS[mn] || evMonth} EVENTS ${evYear}`;
+      })()
       : "";
 
     for (const [field, config] of Object.entries(CREW_CODE_MAP)) {
@@ -467,7 +473,7 @@ async function _ensureFileRowsForMonthInner(eventYear: string, eventMonth: strin
 
       const key = `${regDate}||${eventName}||${config.code}||${freelancerName}`;
       if (existingKeys.has(key)) continue;
-      existingKeys.add(key); // prevent duplicates within this batch
+      existingKeys.add(key);
 
       newRows.push({
         registered_date_time_ad: regDate,
@@ -493,7 +499,6 @@ async function _ensureFileRowsForMonthInner(eventYear: string, eventMonth: strin
 
   if (newRows.length === 0) return;
 
-  // Insert in batches of 50
   for (let i = 0; i < newRows.length; i += 50) {
     const batch = newRows.slice(i, i + 50);
     const { error } = await (supabase as any)
@@ -505,7 +510,6 @@ async function _ensureFileRowsForMonthInner(eventYear: string, eventMonth: strin
 
 // ── Duplicate file row for additional card ──────────────
 export async function duplicateFileRowForCard(fileId: string, cardNumber: number): Promise<FileRecord> {
-  // Get the original row
   const { data: original, error: fetchErr } = await (supabase as any)
     .from("files_management")
     .select("*")
@@ -513,7 +517,6 @@ export async function duplicateFileRowForCard(fileId: string, cardNumber: number
     .single();
   if (fetchErr) throw fetchErr;
 
-  // Clone with new card number, clear path/size fields
   const newRow: Partial<FileRecord> = {
     registered_date_time_ad: original.registered_date_time_ad,
     registered_date_bs: original.registered_date_bs,
@@ -557,7 +560,6 @@ export async function getNextCardLabel(
 ): Promise<string> {
   if (!formatType) return "";
 
-  // Derive prefix from format type
   const prefixMap: Record<string, string> = {
     RAW_ONLY: "RAW",
     JPEG_ONLY: "JPEG",
@@ -568,7 +570,6 @@ export async function getNextCardLabel(
   };
   const prefix = prefixMap[formatType] || formatType;
 
-  // Query existing rows for this combo
   const { data } = await (supabase as any)
     .from("files_management")
     .select("card_label")
@@ -578,7 +579,6 @@ export async function getNextCardLabel(
 
   if (!data || data.length === 0) return `${prefix}1`;
 
-  // Extract highest numeric suffix for this prefix
   let maxNum = 0;
   const regex = new RegExp(`^${prefix}(\\d+)$`, "i");
   for (const row of data) {
@@ -590,4 +590,12 @@ export async function getNextCardLabel(
   }
 
   return `${prefix}${maxNum + 1}`;
+}
+
+// ── Helper: determine which backup number to set next ───
+export function getNextBackupNumber(file: FileRecord): number {
+  if (!file.final_generated_path) return 1;
+  if (!file.backup_2_path) return 2;
+  if (!file.backup_3_path) return 3;
+  return 0; // all 3 filled
 }
