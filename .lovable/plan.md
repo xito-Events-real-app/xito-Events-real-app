@@ -1,29 +1,42 @@
 
 
-## Fix: Edit Button Should Open the Specific Backup Number
+## Fix Backup Hover Popup — Per-Backup Timestamps
 
 ### Problem
-All edit buttons call `openPathBuilder(file)` without specifying which backup to edit. The dialog then auto-calculates `getNextBackupNumber(file)`, which always picks the *next empty* slot — so clicking edit on backup 1 opens backup 2 instead.
+The hover popup on backup pills uses `file.updated_at` (row-level timestamp) for the "time ago" display. This means ALL backup pills show the same time — whenever any field on the row was last changed, not when that specific backup was recorded.
 
 ### Solution
 
-**1. `FullScreenFilesTable.tsx`**
-- Add state: `editBackupNumber: number | null` (default `null`)
-- Change `openPathBuilder` to accept a second param: `openPathBuilder(file, backupNum)`
-- Pass `editBackupNumber` as a new prop to `FilePathBuilderDialog`
-- Update all edit button calls:
-  - 1st backup edit → `openPathBuilder(file, 1)`
-  - 2nd backup edit → `openPathBuilder(file, 2)`
-  - 3rd backup edit → `openPathBuilder(file, 3)`
-  - Drive edit → `openPathBuilder(file, 0)` (or keep as-is, drive doesn't use backup number)
-  - "SET PATH" button → `openPathBuilder(file)` (no override, uses auto-detect)
+**1. Add per-backup timestamp columns (DB migration)**
 
-**2. `FilePathBuilderDialog.tsx`**
-- Add optional prop: `initialBackupNumber?: number`
-- Change `backupNumber` logic: if `initialBackupNumber` is provided, use it directly instead of `getNextBackupNumber(file)`
-- Pre-populate the form fields from the existing backup data when editing (e.g., if editing backup 1, load `final_generated_path` and `backup_1_device_name` into the form)
+Add 3 new columns to `files_management`:
+- `backup_1_recorded_at` (timestamptz, nullable)
+- `backup_2_recorded_at` (timestamptz, nullable)
+- `backup_3_recorded_at` (timestamptz, nullable)
+
+**2. Update `FilePathBuilderDialog.tsx`**
+
+When saving a backup path, also set the corresponding `backup_X_recorded_at = now()` timestamp. This records exactly when that specific backup was created/updated.
+
+**3. Update `BackupPill` in `FullScreenFilesTable.tsx`**
+
+- Accept `backupNum` and use it to pick the correct per-backup timestamp:
+  - Backup 1 → `file.backup_1_recorded_at`
+  - Backup 2 → `file.backup_2_recorded_at`
+  - Backup 3 → `file.backup_3_recorded_at`
+  - Falls back to `file.updated_at` if the per-backup timestamp is null
+- Show cleaner hover structure:
+  - **Line 1**: Device name (bold, emerald)
+  - **Line 2**: Full path in monospace box
+  - **Line 3**: Clock icon + "3 days 12 hrs 56 mins ago" (bold)
+
+**4. Update `files-api.ts`**
+
+Add the new timestamp fields to the `FileRecord` interface so TypeScript is happy.
 
 ### Files Changed
-- `src/components/files/FullScreenFilesTable.tsx` — pass backup number to dialog
-- `src/components/files/FilePathBuilderDialog.tsx` — accept and use `initialBackupNumber` prop
+- DB migration (3 new columns)
+- `src/components/files/FullScreenFilesTable.tsx` — use per-backup timestamp in `BackupPill`
+- `src/components/files/FilePathBuilderDialog.tsx` — set `backup_X_recorded_at` on save
+- `src/lib/files-api.ts` — add new fields to `FileRecord` type
 
