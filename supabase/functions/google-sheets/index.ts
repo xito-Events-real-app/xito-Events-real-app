@@ -7633,7 +7633,7 @@ async function pullStorageDevicesFromSheet(accessToken: string) {
   return { upserted: totalUpserted };
 }
 
-async function pushFilesToSheetAction(accessToken: string) {
+async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = false) {
   const storageSpreadsheetId = Deno.env.get('WTN_STORAGE_SPREADSHEET_ID');
   if (!storageSpreadsheetId) throw new Error('WTN_STORAGE_SPREADSHEET_ID not configured');
 
@@ -7643,10 +7643,17 @@ async function pushFilesToSheetAction(accessToken: string) {
   const sb = createClient(supabaseUrl, supabaseKey);
 
   // Get ALL unsynced file rows (including soft-deleted)
-  const { data: unsyncedFiles, error } = await sb
+  let query = sb
     .from('files_management')
     .select('*')
     .eq('synced_to_sheet', false);
+
+  // Only push files that have at least one backup saved
+  if (onlyWithBackup) {
+    query = query.neq('final_generated_path', '').not('final_generated_path', 'is', null);
+  }
+
+  const { data: unsyncedFiles, error } = await query;
 
   if (error) throw error;
   if (!unsyncedFiles || unsyncedFiles.length === 0) return { pushed: 0 };
@@ -8534,7 +8541,7 @@ Deno.serve(async (req) => {
         break;
       }
       case 'pushFilesToSheet': {
-        result = await pushFilesToSheetAction(accessToken);
+        result = await pushFilesToSheetAction(accessToken, !!requestData.data?.onlyWithBackup);
         break;
       }
       case 'pushStorageDevicesToSheet': {
