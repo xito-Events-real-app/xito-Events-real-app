@@ -1,42 +1,34 @@
 
 
-## Add Card Switcher at Top + Card Removal
+## Increase Text Size + Hover Popup on Backup Pills
 
-### Changes to `src/components/files/FilePathBuilderDialog.tsx`
+### 1. Increase Text Sizes (FullScreenFilesTable.tsx)
 
-**1. Top-level Card Switcher (above backup indicator, line ~428)**
-Add a tab bar / switch row at the very top of the dialog body (before the backup indicator) showing Card 1, Card 2, etc. Selecting one switches `activeCard` so all fields below reflect that card's data. Styled as prominent pill buttons spanning full width.
+Bump all tiny text throughout:
+- Table headers: `text-[10px]` → `text-xs` (12px)
+- Table body cells: `text-[11px]`/`text-[10px]` → `text-xs`/`text-sm`
+- Badge text: `text-[9px]`/`text-[10px]` → `text-[11px]`/`text-xs`
+- Section headers: `text-xs` → `text-sm`
+- BackupPill badge: `text-[9px]` → `text-[11px]`
+- Mobile card text similarly bumped
 
-**2. Card Removal**
-- Add a small "Remove" / trash button next to each card tab (both in the top switcher and in the Column 2 card section)
-- On remove: delete the corresponding `files_management` row from DB via supabase, remove from `cardForms` state, adjust `cardCount`, switch `activeCard` to remaining card
-- Allow removing any card (card 1 or card 2), not just the last one — cards can exist independently
+### 2. Hover Popup on Backup Pills
 
-**3. Logic additions**
-- New `handleRemoveCard(cardNumber)` function:
-  - Find the file row in `allFiles` matching this freelancer + event + card_label
-  - Delete it from DB
-  - Remove from `cardForms`
-  - Decrement `cardCount` or recalculate from remaining cards
-  - Switch `activeCard` to another existing card
-  - Call `onRefresh()`
-- Confirmation toast before deletion
+Replace the simple `BackupPill` badge with a `HoverCard` that shows on hover:
 
-**4. Layout structure (top to bottom)**
-```
-┌─────────────────────────────────────────┐
-│  [Card 1] [Card 2] [+ Add]             │  ← NEW top switcher with remove buttons
-├─────────────────────────────────────────┤
-│  Setting 1st Backup                     │  ← existing backup indicator
-├─────────────────────────────────────────┤
-│  CARD 1 — CLIENT — EVENT — FREELANCER   │  ← existing header
-├─────────────────────────────────────────┤
-│  Col1: Storage   Col2: Info   Col3: Meta│  ← existing 3-col grid
-└─────────────────────────────────────────┘
-```
+**Data shown in popup:**
+- **Device name + event date/time**: e.g. `W-T-N-19 (20 FALGUN 9:15 PM)`
+  - Day from `file.event_day`, month from `file.event_month` (mapped to Nepali name)
+  - Time from `file.updated_at` or `file.created_at`
+- **Full path**: the complete `final_generated_path` / `backup_2_path` / `backup_3_path`
+- **Time ago**: computed from `file.updated_at` using `date-fns` `formatDistanceToNow` or manual calculation showing `X days Y hrs Z mins ago`
 
-**5. Column 2 card section stays as-is** — keeps showing card count badge and the tab triggers, but also gets a remove button per card.
+**Implementation:**
+- Import `HoverCard, HoverCardTrigger, HoverCardContent` from ui
+- Modify `BackupPill` to accept additional props: `path`, `deviceName`, `eventDay`, `eventMonth`, `updatedAt`
+- Wrap the badge in `HoverCard` with a styled popup showing the 3 lines
+- Helper function `getTimeAgo(dateStr)` to compute days/hrs/mins format
 
-### Files changed
-Single file: `src/components/files/FilePathBuilderDialog.tsx`
+### Files Changed
+Single file: `src/components/files/FullScreenFilesTable.tsx`
 
