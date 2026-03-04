@@ -134,6 +134,7 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
   // Path builder dialog
   const [pathDialogOpen, setPathDialogOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<FileRecord | null>(null);
+  const [editBackupNumber, setEditBackupNumber] = useState<number | null>(null);
 
   // Notes dialog
   const [notesDialogOpen, setNotesDialogOpen] = useState(false);
@@ -241,8 +242,9 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
     }
   }, [allExpanded, filteredRows]);
 
-  const openPathBuilder = (file: FileRecord) => {
+  const openPathBuilder = (file: FileRecord, backupNum?: number) => {
     setSelectedFile(file);
+    setEditBackupNumber(backupNum ?? null);
     setPathDialogOpen(true);
   };
 
@@ -367,7 +369,7 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                       <div className="flex items-center justify-center gap-0.5">
                         <BackupPill path={file.final_generated_path || ""} deviceName={file.backup_1_device_name || ""} file={file} backupNum={1} />
                         {file.final_generated_path && (
-                          <button onClick={() => openPathBuilder(file)} className="hover:text-blue-500 text-muted-foreground transition-colors">
+                          <button onClick={() => openPathBuilder(file, 1)} className="hover:text-blue-500 text-muted-foreground transition-colors">
                             <PenLine className="w-3 h-3" />
                           </button>
                         )}
@@ -378,7 +380,7 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                       <div className="flex items-center justify-center gap-0.5">
                         <BackupPill path={file.backup_2_path || ""} deviceName={file.backup_2_device_name || ""} file={file} backupNum={2} />
                         {file.backup_2_path && (
-                          <button onClick={() => openPathBuilder(file)} className="hover:text-blue-500 text-muted-foreground transition-colors">
+                          <button onClick={() => openPathBuilder(file, 2)} className="hover:text-blue-500 text-muted-foreground transition-colors">
                             <PenLine className="w-3 h-3" />
                           </button>
                         )}
@@ -389,7 +391,7 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                       <div className="flex items-center justify-center gap-0.5">
                         <BackupPill path={file.backup_3_path || ""} deviceName={file.backup_3_device_name || ""} file={file} backupNum={3} />
                         {file.backup_3_path && (
-                          <button onClick={() => openPathBuilder(file)} className="hover:text-blue-500 text-muted-foreground transition-colors">
+                          <button onClick={() => openPathBuilder(file, 3)} className="hover:text-blue-500 text-muted-foreground transition-colors">
                             <PenLine className="w-3 h-3" />
                           </button>
                         )}
@@ -525,21 +527,21 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                         <span className="text-[11px] text-muted-foreground">1st:</span>
                         <BackupPill path={file.final_generated_path || ""} deviceName={file.backup_1_device_name || ""} file={file} backupNum={1} />
                         {file.final_generated_path && (
-                          <button onClick={() => openPathBuilder(file)} className="hover:text-blue-500 text-muted-foreground"><PenLine className="w-3 h-3" /></button>
+                          <button onClick={() => openPathBuilder(file, 1)} className="hover:text-blue-500 text-muted-foreground"><PenLine className="w-3 h-3" /></button>
                         )}
                       </div>
                       <div className="flex items-center gap-1">
                         <span className="text-[11px] text-muted-foreground">2nd:</span>
                         <BackupPill path={file.backup_2_path || ""} deviceName={file.backup_2_device_name || ""} file={file} backupNum={2} />
                         {file.backup_2_path && (
-                          <button onClick={() => openPathBuilder(file)} className="hover:text-blue-500 text-muted-foreground"><PenLine className="w-3 h-3" /></button>
+                          <button onClick={() => openPathBuilder(file, 2)} className="hover:text-blue-500 text-muted-foreground"><PenLine className="w-3 h-3" /></button>
                         )}
                       </div>
                       <div className="flex items-center gap-1">
                         <span className="text-[11px] text-muted-foreground">3rd:</span>
                         <BackupPill path={file.backup_3_path || ""} deviceName={file.backup_3_device_name || ""} file={file} backupNum={3} />
                         {file.backup_3_path && (
-                          <button onClick={() => openPathBuilder(file)} className="hover:text-blue-500 text-muted-foreground"><PenLine className="w-3 h-3" /></button>
+                          <button onClick={() => openPathBuilder(file, 3)} className="hover:text-blue-500 text-muted-foreground"><PenLine className="w-3 h-3" /></button>
                         )}
                       </div>
                     </div>
@@ -752,6 +754,7 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
         }}
         allFiles={files}
         onRefresh={refresh}
+        initialBackupNumber={editBackupNumber ?? undefined}
       />
 
       {/* Notes Dialog */}

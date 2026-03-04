@@ -65,9 +65,10 @@ interface Props {
   onSave: (updates: Partial<FileRecord>) => Promise<void>;
   allFiles?: FileRecord[];
   onRefresh?: () => Promise<void>;
+  initialBackupNumber?: number;
 }
 
-export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices, onSave, allFiles, onRefresh }: Props) {
+export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices, onSave, allFiles, onRefresh, initialBackupNumber }: Props) {
   const [cardCount, setCardCount] = useState(1);
   const [activeCard, setActiveCard] = useState("1");
   const [cardForms, setCardForms] = useState<Record<string, CardFormData>>({});
@@ -82,8 +83,9 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
 
   const backupNumber = useMemo(() => {
     if (!fileRecord) return 1;
+    if (initialBackupNumber !== undefined) return initialBackupNumber;
     return getNextBackupNumber(fileRecord);
-  }, [fileRecord]);
+  }, [fileRecord, initialBackupNumber]);
 
   const backupLabel = backupNumber === 1 ? "1st Backup" : backupNumber === 2 ? "2nd Backup" : backupNumber === 3 ? "3rd Backup" : "All Backups Set";
 
