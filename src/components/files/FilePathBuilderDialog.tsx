@@ -74,8 +74,6 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
   const [activeCard, setActiveCard] = useState("1");
   const [cardForms, setCardForms] = useState<Record<string, CardFormData>>({});
   const [whoCopied, setWhoCopied] = useState("");
-  const [driveUpload, setDriveUpload] = useState(false);
-  const [driveLink, setDriveLink] = useState("");
   const [notes, setNotes] = useState("");
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -176,8 +174,6 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
     }
 
     setWhoCopied(fileRecord.who_copied || "");
-    setDriveUpload(fileRecord.drive_upload || false);
-    setDriveLink(fileRecord.drive_link || "");
     setNotes(fileRecord.notes || "");
   }, [fileRecord, open, allFiles]);
 
@@ -421,8 +417,6 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
         size_gb: form.sizeGb ? Number(form.sizeGb) : 0,
         number_of_items: form.numberOfItems ? Number(form.numberOfItems) : 0,
         who_copied: whoCopied,
-        drive_upload: driveUpload,
-        drive_link: driveLink,
         notes,
       };
 
@@ -489,8 +483,6 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
             size_gb: cardForm.sizeGb ? Number(cardForm.sizeGb) : 0,
             number_of_items: cardForm.numberOfItems ? Number(cardForm.numberOfItems) : 0,
             who_copied: whoCopied,
-            drive_upload: driveUpload,
-            drive_link: driveLink,
             notes,
           };
 
@@ -792,18 +784,6 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
 
             <Separator className="bg-emerald-200 dark:bg-emerald-800" />
 
-            {/* Drive Upload (Purple sub-section) */}
-            <div className="p-3 rounded-lg bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 space-y-2">
-              <p className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">☁️ Drive Upload</p>
-              <div className="flex items-center gap-3">
-                <Checkbox checked={driveUpload} onCheckedChange={(v) => setDriveUpload(!!v)} />
-                <Label className="text-xs font-bold">Uploaded to Drive</Label>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-bold">Drive Link</Label>
-                <Input value={driveLink} onChange={(e) => setDriveLink(e.target.value)} placeholder="https://drive.google.com/..." className="text-xs h-8" />
-              </div>
-            </div>
           </div>
 
           {/* ===== COLUMN 3: Meta & Notes (Amber/Rose) ===== */}
