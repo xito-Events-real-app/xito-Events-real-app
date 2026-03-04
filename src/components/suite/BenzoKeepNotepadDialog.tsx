@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import { saveUnassignedBenzoKeepNote, assignBenzoKeepNoteToClient, getClientsForNoteAssignment, addClient, ClientData } from "@/lib/sheets-api";
+import { saveUnassignedBenzoKeepNote, assignBenzoKeepNoteToClient, getClientsForNoteAssignmentFromCache, addClient, ClientData } from "@/lib/sheets-api";
 import { parseBenzoKeepNotes } from "@/components/client-detail/BenzoKeepDialog";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -67,7 +67,7 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
   useEffect(() => {
     if (open && recentClients.length === 0) {
       setIsLoadingClients(true);
-      getClientsForNoteAssignment()
+      getClientsForNoteAssignmentFromCache()
         .then((data) => {
           const sorted = data.sort((a, b) => {
             const dateA = a.registeredDateTimeAD || '';
@@ -169,7 +169,9 @@ export function BenzoKeepNotepadDialog({ open, onOpenChange, onNoteSaved }: Benz
           markerColor,
           lastUpdated: new Date().toISOString(),
         };
-        await assignBenzoKeepNoteToClient(selectedClient.registeredDateTimeAD, JSON.stringify(noteData));
+        // Fire-and-forget: Sheet write is non-blocking; Supabase is source of truth
+        assignBenzoKeepNoteToClient(selectedClient.registeredDateTimeAD, JSON.stringify(noteData))
+          .catch(err => console.warn('[BenzoKeep] Sheet sync failed (non-blocking):', err));
         const noteJson = JSON.stringify(noteData);
         try {
           // Try exact match first, then fallback to client name match (handles date format differences)

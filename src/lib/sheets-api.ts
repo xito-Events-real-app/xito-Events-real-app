@@ -808,6 +808,30 @@ export async function getClientsForNoteAssignment(): Promise<ClientData[]> {
   return callSheetsFunction<ClientData[]>("getClientsForNoteAssignment");
 }
 
+// Supabase-first: fetch clients directly from clients_cache (paginated)
+export async function getClientsForNoteAssignmentFromCache(): Promise<ClientData[]> {
+  const { rowToClientData } = await import("@/lib/clients-supabase-cache");
+  const allRows: any[] = [];
+  let from = 0;
+  const batchSize = 1000;
+  while (true) {
+    const { data, error } = await supabase
+      .from('clients_cache')
+      .select('*')
+      .order('registered_date_time_ad', { ascending: false })
+      .range(from, from + batchSize - 1);
+    if (error) {
+      console.error('[getClientsForNoteAssignmentFromCache] Fetch failed:', error);
+      throw error;
+    }
+    if (!data || data.length === 0) break;
+    allRows.push(...data);
+    if (data.length < batchSize) break;
+    from += batchSize;
+  }
+  return allRows.map(rowToClientData);
+}
+
 // Assign a new Benzo Keep note directly to a client's Column AL
 export async function assignBenzoKeepNoteToClient(
   registeredDateTimeAD: string,
