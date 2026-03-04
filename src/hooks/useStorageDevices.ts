@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   StorageDevice,
@@ -13,6 +13,7 @@ import { toast } from "@/hooks/use-toast";
 export function useStorageDevices() {
   const [devices, setDevices] = useState<StorageDevice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const lastLocalUpdate = useRef<number>(0);
 
   const loadDevices = useCallback(async () => {
     try {
@@ -32,7 +33,9 @@ export function useStorageDevices() {
     const channel = (supabase as any)
       .channel("storage_devices_realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "storage_devices" }, () => {
-        loadDevices();
+        setTimeout(() => {
+          if (Date.now() - lastLocalUpdate.current > 2000) loadDevices();
+        }, 0);
       })
       .subscribe();
 
@@ -40,6 +43,7 @@ export function useStorageDevices() {
   }, [loadDevices]);
 
   const add = async (device: Partial<StorageDevice>) => {
+    lastLocalUpdate.current = Date.now();
     const result = await addStorageDevice({ ...device, synced_to_sheet: false });
     setDevices((prev) => [...prev, result]);
     scheduleStoragePush();
@@ -47,6 +51,7 @@ export function useStorageDevices() {
   };
 
   const update = async (id: string, updates: Partial<StorageDevice>) => {
+    lastLocalUpdate.current = Date.now();
     const result = await updateStorageDevice(id, { ...updates, synced_to_sheet: false });
     setDevices((prev) => prev.map((d) => (d.id === id ? result : d)));
     scheduleStoragePush();
@@ -54,6 +59,7 @@ export function useStorageDevices() {
   };
 
   const remove = async (id: string) => {
+    lastLocalUpdate.current = Date.now();
     await deleteStorageDevice(id);
     setDevices((prev) => prev.filter((d) => d.id !== id));
     scheduleStoragePush();
