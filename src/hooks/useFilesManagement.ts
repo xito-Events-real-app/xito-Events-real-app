@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   FileRecord,
@@ -18,6 +18,7 @@ export function useFilesManagement(selectedMonth: { year: string; month: string 
   const [isLoading, setIsLoading] = useState(true);
   const [isEnsuring, setIsEnsuring] = useState(false);
   const [availableMonths, setAvailableMonths] = useState<FileMonthData[]>([]);
+  const lastLocalUpdate = useRef<number>(0);
 
   // Load available months on mount
   useEffect(() => {
@@ -64,7 +65,7 @@ export function useFilesManagement(selectedMonth: { year: string; month: string 
       .on("postgres_changes", { event: "*", schema: "public", table: "files_management" }, () => {
         clearTimeout(realtimeTimer);
         realtimeTimer = setTimeout(() => {
-          if (!cancelled) loadFiles();
+          if (!cancelled && Date.now() - lastLocalUpdate.current > 2000) loadFiles();
         }, 500);
       })
       .subscribe();
@@ -77,6 +78,7 @@ export function useFilesManagement(selectedMonth: { year: string; month: string 
   }, [selectedMonth?.year, selectedMonth?.month]);
 
   const update = async (id: string, updates: Partial<FileRecord>) => {
+    lastLocalUpdate.current = Date.now();
     setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, ...updates } : f)));
     const result = await updateFileRecord(id, { ...updates, synced_to_sheet: false });
     scheduleFilesPush();
@@ -84,6 +86,7 @@ export function useFilesManagement(selectedMonth: { year: string; month: string 
   };
 
   const remove = async (id: string) => {
+    lastLocalUpdate.current = Date.now();
     setFiles((prev) => prev.filter((f) => f.id !== id));
     await deleteFileRecord(id);
     scheduleFilesPush();
