@@ -7664,8 +7664,8 @@ async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = fals
     'REGISTERED DATE & TIME (AD)', 'REGISTERED DATE BS', 'CLIENT NAME', 'EVENT',
     'EVENT YEAR', 'EVENT MONTH', 'EVENT DAY', 'EVENT DATE IN AD',
     'FREELANCER TYPE', 'FREELANCER NAME', 'CARDS', 'FILE PATH',
-    'SIZE IN GB', 'NO OF ITEMS', 'FORMAT', 'WHO COPIED',
-    'RE-CONFIRMATION', 'DOUBLE BACKUP PATH', 'TRIPLE BACKUP PATH', 'DRIVE UPLOAD',
+    'SIZE IN GB', 'NO OF ITEMS', 'FORMAT', 'WHO COPIED FIRST?',
+    'RECONFIRMATION', 'DOUBLE BACKUP PATH', 'TRIPLE BACKUP PATH', 'DRIVE UPLOAD',
     'DRIVE LINK', 'DELETED OR NOT', 'NOTES',
   ];
 
@@ -7687,7 +7687,7 @@ async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = fals
     f.number_of_items?.toString() || '0',
     f.format_type || '',
     f.who_copied || '',
-    f.reconfirmation ? 'TRUE' : 'FALSE',
+    f.confirmed ? 'CONFIRMED' : 'NOT CONFIRMED',
     f.backup_2_path || '',
     f.backup_3_path || '',
     f.drive_upload ? 'TRUE' : 'FALSE',
