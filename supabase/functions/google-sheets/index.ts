@@ -7653,10 +7653,11 @@ async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = fals
     query = query.neq('final_generated_path', '').not('final_generated_path', 'is', null);
   }
 
-  const { data: unsyncedFiles, error } = await query;
+  let { data: unsyncedFiles, error } = await query;
 
   if (error) throw error;
-  if (!unsyncedFiles || unsyncedFiles.length === 0) return { pushed: 0 };
+  // Don't return early — even with 0 unsynced, we may need to bootstrap if sheet is empty
+  if (!unsyncedFiles) unsyncedFiles = [];
 
   const sheetTitle = 'BOOKED CLIENTS WTN FILES';
   const HEADER_ROW = [
@@ -7738,12 +7739,43 @@ async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = fals
   const readData = await readRes.json();
   const existingRows: string[][] = readData.values || [];
 
+  // AUTO-BOOTSTRAP: If sheet is empty (only header or nothing), reset synced flag
+  // for all rows with backup paths so they get picked up by the push query
+  if (existingRows.length <= 1) {
+    console.log('[FILES-PUSH] Sheet is empty — bootstrapping: resetting synced_to_sheet for rows with backups');
+    const { error: resetErr } = await sb
+      .from('files_management')
+      .update({ synced_to_sheet: false })
+      .neq('final_generated_path', '')
+      .not('final_generated_path', 'is', null)
+      .eq('synced_to_sheet', true);
+    if (resetErr) {
+      console.error('[FILES-PUSH] Bootstrap reset error:', resetErr);
+    } else {
+      // Re-query unsynced files after reset
+      let reQuery = sb.from('files_management').select('*').eq('synced_to_sheet', false);
+      if (onlyWithBackup) {
+        reQuery = reQuery.neq('final_generated_path', '').not('final_generated_path', 'is', null);
+      }
+      const { data: freshFiles, error: freshErr } = await reQuery;
+      if (freshErr) throw freshErr;
+      if (!freshFiles || freshFiles.length === 0) return { pushed: 0, bootstrapped: true };
+      // Replace unsyncedFiles reference
+      unsyncedFiles.length = 0;
+      unsyncedFiles.push(...freshFiles);
+      console.log(`[FILES-PUSH] Bootstrap found ${freshFiles.length} rows to push`);
+    }
+  }
+
   // Build key → sheet row number (1-indexed, skip header)
   const keyToSheetRow = new Map<string, number>();
   for (let i = 1; i < existingRows.length; i++) {
     const key = makeKey(existingRows[i]);
     keyToSheetRow.set(key, i + 1); // 1-indexed sheet row
   }
+
+  // After bootstrap, if still no files to push, return early
+  if (unsyncedFiles.length === 0) return { pushed: 0 };
 
   // Split into updates vs appends
   const updateBatch: { range: string; values: string[][] }[] = [];
