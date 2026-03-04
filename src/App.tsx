@@ -42,7 +42,7 @@ const queryClient = new QueryClient();
 
 function WtnFilesAnnouncement() {
   const navigate = useNavigate();
-  return <WtnFilesAnnouncementDialog onNavigate={() => navigate('/files')} />;
+  return <WtnFilesAnnouncementDialog onNavigate={() => navigate('/files?section=files')} />;
 }
 
 const App = () => (
