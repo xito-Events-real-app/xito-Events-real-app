@@ -839,10 +839,12 @@ const ClientDetail = () => {
         title: priority > 0 ? `Priority set to ${priority} star${priority !== 1 ? 's' : ''}` : "Priority cleared"
       });
 
-      // Background: sync to Sheets
-      updateClientPriority(client.rowNumber, priority.toString(), client.registeredDateTimeAD).catch(err => {
-        console.warn('[PRIORITY] Background sheet sync failed:', err);
-      });
+      // Background: sync to Sheets (skip if rowNumber is invalid — push scheduler will handle it)
+      if (client.rowNumber && client.rowNumber >= 2) {
+        updateClientPriority(client.rowNumber, priority.toString(), client.registeredDateTimeAD).catch(err => {
+          console.warn('[PRIORITY] Background sheet sync failed:', err);
+        });
+      }
     } catch (err) {
       console.error('Failed to update priority:', err);
       toast({ title: "Failed to update priority", variant: "destructive" });
