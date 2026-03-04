@@ -7665,11 +7665,11 @@ async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = fals
     'EVENT YEAR', 'EVENT MONTH', 'EVENT DAY', 'EVENT DATE IN AD',
     'FREELANCER TYPE', 'FREELANCER NAME', 'CARDS', 'FILE PATH',
     'SIZE IN GB', 'NO OF ITEMS', 'FORMAT', 'WHO COPIED',
-    'RE-CONFIRMATION', 'DOUBLE BACKUP', 'TRIPLE BACKUP', 'DRIVE UPLOAD',
-    'DRIVE LINK', 'DELETED OR NOT',
+    'RE-CONFIRMATION', 'DOUBLE BACKUP PATH', 'TRIPLE BACKUP PATH', 'DRIVE UPLOAD',
+    'DRIVE LINK', 'DELETED OR NOT', 'NOTES',
   ];
 
-  // Helper: map a DB row to the 22-column sheet row
+  // Helper: map a DB row to the 23-column sheet row
   const mapRow = (f: any) => [
     f.registered_date_time_ad || '',
     f.registered_date_bs || '',
@@ -7688,11 +7688,12 @@ async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = fals
     f.format_type || '',
     f.who_copied || '',
     f.reconfirmation ? 'TRUE' : 'FALSE',
-    f.double_backup ? 'TRUE' : 'FALSE',
-    f.triple_backup ? 'TRUE' : 'FALSE',
+    f.backup_2_path || '',
+    f.backup_3_path || '',
     f.drive_upload ? 'TRUE' : 'FALSE',
     f.drive_link || '',
     f.deleted_or_not ? 'TRUE' : 'FALSE',
+    f.notes || '',
   ];
 
   // Helper: build composite dedup key from sheet row values (0-indexed cols)
@@ -7720,7 +7721,7 @@ async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = fals
       throw new Error(`Failed to create tab: ${addRes.status} - ${errText.substring(0, 200)}`);
     }
     // Write header
-    const headerRange = encodeURIComponent(`'${sheetTitle}'!A1:V1`);
+    const headerRange = encodeURIComponent(`'${sheetTitle}'!A1:W1`);
     const headerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${headerRange}?valueInputOption=USER_ENTERED`;
     await fetchWithRetry(headerUrl, {
       method: 'PUT',
@@ -7731,7 +7732,7 @@ async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = fals
   }
 
   // Read existing sheet data for dedup
-  const readRange = encodeURIComponent(`'${sheetTitle}'!A:V`);
+  const readRange = encodeURIComponent(`'${sheetTitle}'!A:W`);
   const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${readRange}`;
   const readRes = await fetchWithRetry(readUrl, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -7788,7 +7789,7 @@ async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = fals
 
     if (existingSheetRow) {
       // Update in-place
-      const range = `'${sheetTitle}'!A${existingSheetRow}:V${existingSheetRow}`;
+      const range = `'${sheetTitle}'!A${existingSheetRow}:W${existingSheetRow}`;
       updateBatch.push({ range, values: [row] });
     } else {
       appendRows.push(row);
@@ -7819,7 +7820,7 @@ async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = fals
 
   // Append new rows
   if (appendRows.length > 0) {
-    const appendRange = encodeURIComponent(`'${sheetTitle}'!A:V`);
+    const appendRange = encodeURIComponent(`'${sheetTitle}'!A:W`);
     const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${appendRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
     const appendRes = await fetchWithRetry(appendUrl, {
       method: 'POST',
