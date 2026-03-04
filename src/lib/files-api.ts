@@ -485,6 +485,7 @@ async function _ensureFileRowsForMonthInner(eventYear: string, eventMonth: strin
         client_folder_name: clientInfo.client_name.toUpperCase(),
         event_folder_name: eventName.toUpperCase(),
         side: config.side,
+        card_label: "1",
         synced_to_sheet: false,
       });
     }
@@ -500,6 +501,52 @@ async function _ensureFileRowsForMonthInner(eventYear: string, eventMonth: strin
       .insert(batch);
     if (error) throw error;
   }
+}
+
+// ── Duplicate file row for additional card ──────────────
+export async function duplicateFileRowForCard(fileId: string, cardNumber: number): Promise<FileRecord> {
+  // Get the original row
+  const { data: original, error: fetchErr } = await (supabase as any)
+    .from("files_management")
+    .select("*")
+    .eq("id", fileId)
+    .single();
+  if (fetchErr) throw fetchErr;
+
+  // Clone with new card number, clear path/size fields
+  const newRow: Partial<FileRecord> = {
+    registered_date_time_ad: original.registered_date_time_ad,
+    registered_date_bs: original.registered_date_bs,
+    client_name: original.client_name,
+    event_name: original.event_name,
+    event_year: original.event_year,
+    event_month: original.event_month,
+    event_day: original.event_day,
+    event_date_ad: original.event_date_ad,
+    freelancer_type: original.freelancer_type,
+    freelancer_name: original.freelancer_name,
+    year_event_folder: original.year_event_folder,
+    category: original.category,
+    client_folder_name: original.client_folder_name,
+    event_folder_name: original.event_folder_name,
+    side: original.side,
+    card_label: String(cardNumber),
+    format_type: original.format_type,
+    storage_type: "",
+    storage_device_id: null,
+    size_gb: 0,
+    number_of_items: 0,
+    final_generated_path: "",
+    synced_to_sheet: false,
+  };
+
+  const { data, error } = await (supabase as any)
+    .from("files_management")
+    .insert(newRow)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
 }
 
 // ── Auto Card Increment ─────────────────────────────────

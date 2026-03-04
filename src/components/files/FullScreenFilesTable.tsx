@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Loader2, X, ChevronLeft, FolderOpen, ChevronDown, ChevronUp, Filter, FileText, Database } from "lucide-react";
+import { Loader2, X, ChevronLeft, FolderOpen, ChevronDown, ChevronUp, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -16,7 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useFilesManagement } from "@/hooks/useFilesManagement";
 import { useStorageDevices } from "@/hooks/useStorageDevices";
 import { FilePathBuilderDialog } from "./FilePathBuilderDialog";
-import { FileRecord, getNextCardLabel } from "@/lib/files-api";
+import { FileRecord, duplicateFileRowForCard } from "@/lib/files-api";
 
 const DAY_COLORS = [
   "bg-white",
@@ -57,7 +57,7 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
 
   // Files management hook
   const monthObj = useMemo(() => ({ year: selectedYear, month: selectedMonth }), [selectedYear, selectedMonth]);
-  const { files, isLoading: filesLoading, isEnsuring, update } = useFilesManagement(monthObj);
+  const { files, isLoading: filesLoading, isEnsuring, update, refresh } = useFilesManagement(monthObj);
   const { devices } = useStorageDevices();
 
   // Path builder dialog
@@ -170,9 +170,37 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
     await update(id, { [field]: value, synced_to_sheet: false });
   };
 
-  const handleFormatChange = async (file: FileRecord, newFormat: string) => {
-    const nextLabel = await getNextCardLabel(file.client_name, file.freelancer_name, newFormat);
-    await update(file.id, { format_type: newFormat, card_label: nextLabel, synced_to_sheet: false });
+  // Side lock: once set, update DB and it becomes read-only
+  const handleSideChange = async (file: FileRecord, value: string) => {
+    await update(file.id, { side: value, synced_to_sheet: false });
+  };
+
+  // Card number change: duplicate row if needed
+  const handleCardChange = async (file: FileRecord, newCard: string) => {
+    const currentCard = file.card_label || "1";
+    if (newCard === currentCard) return;
+    
+    const newCardNum = parseInt(newCard);
+    if (newCardNum > 1) {
+      // Check if a row for this card already exists
+      const existingCardRow = files.find(f => 
+        f.registered_date_time_ad === file.registered_date_time_ad &&
+        f.event_name === file.event_name &&
+        f.freelancer_type === file.freelancer_type &&
+        f.freelancer_name === file.freelancer_name &&
+        f.card_label === newCard &&
+        f.id !== file.id
+      );
+      if (!existingCardRow) {
+        try {
+          await duplicateFileRowForCard(file.id, newCardNum);
+          toast.success(`Card ${newCard} row created`);
+          await refresh();
+        } catch (err: any) {
+          toast.error("Failed to create card row");
+        }
+      }
+    }
   };
 
   const openPathBuilder = (file: FileRecord) => {
@@ -189,8 +217,13 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
   // ─── File Rows Table (inline in expand) ───
   const FileRowsTable = ({ fileRows }: { fileRows: FileRecord[] }) => {
     if (fileRows.length === 0) {
-      return <div className="px-4 py-3 text-xs text-muted-foreground italic">No file rows for this event</div>;
+      return <div className="px-4 py-3 text-xs text-muted-foreground">No file rows for this event</div>;
     }
+
+    // Determine if side is pre-set (from CREW_CODE_MAP)
+    const PHOTO_ROLES = ["PB", "PG", "EP"];
+    const isSideLocked = (file: FileRecord) => !!file.side && file.side.trim() !== "";
+
     return (
       <div className="overflow-x-auto">
         <Table>
@@ -198,9 +231,8 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
             <TableRow className="bg-cyan-50/50 dark:bg-cyan-950/10">
               <TableHead className="text-[10px] w-16">Crew</TableHead>
               <TableHead className="text-[10px]">Freelancer</TableHead>
-              <TableHead className="text-[10px] w-20">Side</TableHead>
+              <TableHead className="text-[10px] w-24">Side</TableHead>
               <TableHead className="text-[10px] w-16">Card</TableHead>
-              <TableHead className="text-[10px] w-16">Size</TableHead>
               <TableHead className="text-[10px] w-20">Format</TableHead>
               <TableHead className="text-[10px] w-20">Copied</TableHead>
               <TableHead className="text-[10px] text-center w-8">✓</TableHead>
@@ -214,41 +246,44 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
             {fileRows.map((file) => (
               <TableRow key={file.id} className="text-xs">
                 <TableCell>
-                  <Badge variant="outline" className="text-[10px] px-1.5">{file.freelancer_type}</Badge>
+                  <Badge variant="outline" className="text-[10px] px-1.5 font-bold">{file.freelancer_type}</Badge>
                 </TableCell>
-                <TableCell className="font-medium text-xs">{file.freelancer_name}</TableCell>
+                <TableCell className="font-bold text-xs">{file.freelancer_name}</TableCell>
                 <TableCell>
-                  <Select value={file.side || ""} onValueChange={(v) => handleInlineUpdate(file.id, "side", v)}>
-                    <SelectTrigger className="h-6 text-[10px] border-0 bg-transparent p-0"><SelectValue placeholder="-" /></SelectTrigger>
+                  {isSideLocked(file) ? (
+                    <Badge variant="secondary" className="text-[10px] font-bold">
+                      {file.side === "BRIDE SIDE" ? "BRIDE" : file.side === "GROOM SIDE" ? "GROOM" : file.side}
+                    </Badge>
+                  ) : (
+                    <Select value={file.side || ""} onValueChange={(v) => handleSideChange(file, v)}>
+                      <SelectTrigger className="h-6 text-[10px] border-0 bg-transparent p-0"><SelectValue placeholder="Select..." /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="BRIDE SIDE">BRIDE</SelectItem>
+                        <SelectItem value="GROOM SIDE">GROOM</SelectItem>
+                        <SelectItem value="OTHER">OTHER</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <Select value={file.card_label || "1"} onValueChange={(v) => handleCardChange(file, v)}>
+                    <SelectTrigger className="h-6 text-[10px] border-0 bg-transparent p-0 w-12"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="BRIDE SIDE">BRIDE</SelectItem>
-                      <SelectItem value="GROOM SIDE">GROOM</SelectItem>
-                      <SelectItem value="OTHER">OTHER</SelectItem>
+                      <SelectItem value="1">1</SelectItem>
+                      <SelectItem value="2">2</SelectItem>
+                      <SelectItem value="3">3</SelectItem>
+                      <SelectItem value="4">4</SelectItem>
                     </SelectContent>
                   </Select>
                 </TableCell>
                 <TableCell>
-                  <Input
-                    className="h-6 text-[10px] w-14 border-0 bg-transparent p-0.5"
-                    defaultValue={file.card_label}
-                    onBlur={(e) => { if (e.target.value !== file.card_label) handleInlineUpdate(file.id, "card_label", e.target.value); }}
-                  />
-                </TableCell>
-                <TableCell>
-                  <Input
-                    type="number"
-                    className="h-6 text-[10px] w-14 border-0 bg-transparent p-0.5"
-                    defaultValue={file.size_gb || ""}
-                    onBlur={(e) => { const v = Number(e.target.value); if (v !== file.size_gb) handleInlineUpdate(file.id, "size_gb", v); }}
-                  />
-                </TableCell>
-                <TableCell>
-                  <Select value={file.format_type || ""} onValueChange={(v) => handleFormatChange(file, v)}>
+                  <Select value={file.format_type || ""} onValueChange={(v) => handleInlineUpdate(file.id, "format_type", v)}>
                     <SelectTrigger className="h-6 text-[10px] border-0 bg-transparent p-0"><SelectValue placeholder="-" /></SelectTrigger>
                     <SelectContent>
-                      {["RAW_ONLY", "JPEG_ONLY", "RAW_JPEG", "CF", "NORMAL", "CF_NORMAL"].map((f) => (
-                        <SelectItem key={f} value={f}>{f}</SelectItem>
-                      ))}
+                      {PHOTO_ROLES.includes(file.freelancer_type)
+                        ? ["RAW", "JPEG", "RAW AND JPEG"].map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)
+                        : ["NORMAL", "CF", "CF_NORMAL"].map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)
+                      }
                     </SelectContent>
                   </Select>
                 </TableCell>
@@ -275,8 +310,8 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                   <button
                     onClick={() => openPathBuilder(file)}
                     className={cn(
-                      "text-[10px] truncate max-w-[140px] text-left hover:text-cyan-600 transition-colors",
-                      file.final_generated_path ? "text-foreground underline decoration-dotted" : "text-muted-foreground italic"
+                      "text-[10px] truncate max-w-[140px] text-left hover:text-cyan-600 transition-colors font-bold",
+                      file.final_generated_path ? "text-foreground underline decoration-dotted" : "text-muted-foreground"
                     )}
                   >
                     {file.final_generated_path || "Set path..."}
@@ -310,36 +345,36 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
           </div>
           <div className="flex-1 min-w-0">
             <p
-              className="font-medium text-sm text-muted-foreground italic truncate cursor-pointer"
+              className="font-bold text-sm truncate cursor-pointer"
               onClick={(e) => { e.stopPropagation(); setFilterClient(filterClient === row.clientName ? null : row.clientName); }}
             >
               {row.clientName}
             </p>
-            <p className="text-xs text-muted-foreground/70 italic truncate">{row.event}</p>
+            <p className="text-xs font-bold truncate">{row.event}</p>
           </div>
-          <Badge variant="outline" className="text-[10px] shrink-0">{rowFiles.length} files</Badge>
+          <Badge variant="outline" className="text-[10px] shrink-0 font-bold">{rowFiles.length} files</Badge>
           {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
         </button>
         {isExpanded && (
           <div className="border-t bg-background">
             {rowFiles.length === 0 ? (
-              <div className="px-4 py-3 text-xs text-muted-foreground italic">No file rows</div>
+              <div className="px-4 py-3 text-xs text-muted-foreground">No file rows</div>
             ) : (
               <div className="p-2 space-y-2">
                 {rowFiles.map(file => (
                   <div key={file.id} className="border rounded p-2 space-y-1 text-[11px]">
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-[9px] px-1">{file.freelancer_type}</Badge>
-                      <span className="font-medium">{file.freelancer_name}</span>
-                      <span className="text-muted-foreground ml-auto">{file.side || "-"}</span>
+                      <Badge variant="outline" className="text-[9px] px-1 font-bold">{file.freelancer_type}</Badge>
+                      <span className="font-bold">{file.freelancer_name}</span>
+                      <span className="ml-auto font-bold">{file.side || "-"}</span>
                     </div>
-                    <div className="flex items-center gap-3 text-muted-foreground">
-                      <span>Card: {file.card_label || "-"}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="font-bold">Card: {file.card_label || "1"}</span>
                       <span>Size: {file.size_gb || 0}GB</span>
                       <span>Fmt: {file.format_type || "-"}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground">Copied: {file.who_copied || "-"}</span>
+                      <span>Copied: {file.who_copied || "-"}</span>
                       <div className="flex items-center gap-1 ml-auto">
                         {file.reconfirmation && <Badge className="text-[8px] px-1 bg-emerald-100 text-emerald-700">✓</Badge>}
                         {file.double_backup && <Badge className="text-[8px] px-1 bg-blue-100 text-blue-700">2x</Badge>}
@@ -350,8 +385,8 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                     <button
                       onClick={() => openPathBuilder(file)}
                       className={cn(
-                        "text-[10px] truncate w-full text-left hover:text-cyan-600",
-                        file.final_generated_path ? "text-foreground underline decoration-dotted" : "text-muted-foreground italic"
+                        "text-[10px] truncate w-full text-left hover:text-cyan-600 font-bold",
+                        file.final_generated_path ? "text-foreground underline decoration-dotted" : "text-muted-foreground"
                       )}
                     >
                       {file.final_generated_path || "Set path..."}
@@ -493,7 +528,7 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                     <React.Fragment key={rowKey}>
                       <TableRow
                         className={cn(
-                          "cursor-pointer transition-colors text-muted-foreground italic",
+                          "cursor-pointer transition-colors font-bold",
                           dayColor,
                           isExpanded && "ring-1 ring-cyan-300"
                         )}
@@ -515,17 +550,17 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                         </TableCell>
                         <TableCell className="py-1.5">
                           <span
-                            className="font-medium text-sm cursor-pointer hover:text-cyan-600 transition-colors"
+                            className="font-bold text-sm cursor-pointer hover:text-cyan-600 transition-colors"
                             onClick={(e) => { e.stopPropagation(); setFilterClient(filterClient === row.clientName ? null : row.clientName); }}
                           >
                             {row.clientName}
                           </span>
                         </TableCell>
-                        <TableCell className="py-1.5 text-sm">{row.event}</TableCell>
+                        <TableCell className="py-1.5 text-sm font-bold">{row.event}</TableCell>
                         <TableCell className="py-1.5 text-center">
-                          <Badge variant="outline" className="text-[10px]">{rowFiles.length}</Badge>
+                          <Badge variant="outline" className="text-[10px] font-bold">{rowFiles.length}</Badge>
                         </TableCell>
-                        <TableCell className="py-1.5 text-[10px] text-muted-foreground/60">{row.eventDateAD}</TableCell>
+                        <TableCell className="py-1.5 text-[10px]">{row.eventDateAD}</TableCell>
                       </TableRow>
                       {isExpanded && (
                         <TableRow>
