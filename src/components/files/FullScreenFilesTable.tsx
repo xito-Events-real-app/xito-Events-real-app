@@ -82,9 +82,9 @@ const BackupPill = ({ path, deviceName, file, backupNum }: { path: string; devic
   return (
     <HoverCard openDelay={100} closeDelay={300}>
       <HoverCardTrigger asChild>
-        <Badge variant="secondary" className="text-[11px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 font-bold truncate max-w-[90px] cursor-pointer">
+        <span className="inline-flex items-center text-[11px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 font-bold truncate max-w-[90px] cursor-pointer rounded-md border border-transparent">
           {label}
-        </Badge>
+        </span>
       </HoverCardTrigger>
       <HoverCardContent
         className="w-80 p-3 space-y-2 text-xs z-[200]"
