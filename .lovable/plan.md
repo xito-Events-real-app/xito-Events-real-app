@@ -1,32 +1,31 @@
 
 
-## Plan: Add Device Name Filter to Files Table
-
-### What
-Click any storage device name pill (e.g., "W-T-N 17") in backup columns (1st, 2nd, 3rd) or Cloud column to filter and show only rows where that device is used. Same chip pattern as existing Day/Client filters.
+## Plan: Toggle Filters + Add Freelancer Name Filter
 
 ### Changes — `src/components/files/FullScreenFilesTable.tsx`
 
-1. **New state**: `const [filterDevice, setFilterDevice] = useState<string | null>(null)`
+**1. Toggle device filter (click again to remove)**
 
-2. **Update `BackupPill`**: Add `onDeviceClick?: (name: string) => void` prop. On the device label `<span>`, add `onClick` with `e.stopPropagation()` that calls `onDeviceClick(deviceName)`.
+Currently `BackupPill` calls `onDeviceClick(deviceName)` which always sets. Change it to toggle:
+- Line 88: `onDeviceClick(deviceName)` → `onDeviceClick(prev => prev === deviceName ? null : deviceName)` — but since `onDeviceClick` is `setFilterDevice`, we need to change the call pattern.
+- Instead, update `BackupPill`'s onClick to pass a toggle-aware callback. Simplest: change `onDeviceClick` prop type or wrap at call site.
+- Solution: Replace `onDeviceClick={setFilterDevice}` with `onDeviceClick={(name) => setFilterDevice(prev => prev === name ? null : name)}` at all 6 call sites.
+- Same for the cloud pill inline onClick (line 436).
 
-3. **Update Cloud pill**: Same clickable behavior on the `drive_upload_path` span — clicking sets `setFilterDevice(drive_upload_path)`.
+**2. Add freelancer name filter**
 
-4. **Filter logic in `filteredRows`**: After day/client filters, when `filterDevice` is set, filter assignment rows to only those whose file records contain the device in any of: `backup_1_device_name`, `backup_2_device_name`, `backup_3_device_name`, or `drive_upload_path`. Uses `getFilesForRow(row)` to check.
+- New state: `const [filterFreelancer, setFilterFreelancer] = useState<string | null>(null)`
+- Filter logic (after device filter ~line 219): filter assignment rows where any file's `freelancer_name` matches `filterFreelancer`.
+- Add to `filteredRows` deps.
 
-5. **Filter chip in UI** (lines 684-701): Add device chip alongside Day/Client:
-   ```
-   {filterDevice && (
-     <Badge variant="secondary" className="text-xs cursor-pointer" onClick={() => setFilterDevice(null)}>
-       Device: {filterDevice} ✕
-     </Badge>
-   )}
-   ```
+**3. Make freelancer names clickable (toggle filter)**
 
-6. **Update condition** on line 685: `(filterDay || filterClient || filterDevice)`
+- Desktop table (line 377): Change `<span className="font-bold cursor-default">` to clickable with `onClick` that toggles `filterFreelancer`.
+- Mobile view (line 582): Same treatment.
 
-7. **Update "Clear all"** on line 698: add `setFilterDevice(null)`
+**4. Add filter chip for freelancer**
 
-8. **Pass `onDeviceClick={setFilterDevice}`** to all `BackupPill` instances (1st, 2nd, 3rd backup columns) and the Cloud pill.
+- In filter chips section (line 698): add `filterFreelancer` to condition.
+- Add badge: `Freelancer: {filterFreelancer} ✕`
+- Add to "Clear all" handler (line 716).
 
