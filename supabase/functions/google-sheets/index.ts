@@ -7633,7 +7633,7 @@ async function pullStorageDevicesFromSheet(accessToken: string) {
   return { upserted: totalUpserted };
 }
 
-async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = false) {
+async function pushFilesToSheetAction(accessToken: string, fullClean = false) {
   const storageSpreadsheetId = Deno.env.get('WTN_STORAGE_SPREADSHEET_ID');
   if (!storageSpreadsheetId) throw new Error('WTN_STORAGE_SPREADSHEET_ID not configured');
 
@@ -7642,16 +7642,30 @@ async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = fals
   const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const sb = createClient(supabaseUrl, supabaseKey);
 
-  // Get ALL unsynced file rows (including soft-deleted)
+  // Helper: format ISO timestamps to readable dates like "Mar 4, 2026 2:30 PM"
+  const formatTs = (ts: string | null): string => {
+    if (!ts) return '';
+    try {
+      const d = new Date(ts);
+      if (isNaN(d.getTime())) return ts;
+      const month = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+      const day = d.getDate();
+      const year = d.getFullYear();
+      let hours = d.getHours();
+      const mins = d.getMinutes().toString().padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12;
+      return `${month} ${day}, ${year} ${hours}:${mins} ${ampm}`;
+    } catch { return ts; }
+  };
+
+  // Always only push files that have at least first backup
   let query = sb
     .from('files_management')
     .select('*')
-    .eq('synced_to_sheet', false);
-
-  // Only push files that have at least one backup saved
-  if (onlyWithBackup) {
-    query = query.neq('final_generated_path', '').not('final_generated_path', 'is', null);
-  }
+    .eq('synced_to_sheet', false)
+    .neq('final_generated_path', '')
+    .not('final_generated_path', 'is', null);
 
   let { data: unsyncedFiles, error } = await query;
 
@@ -7673,7 +7687,7 @@ async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = fals
   // Helper: map a DB row to the 25-column sheet row (ID first)
   const mapRow = (f: any) => [
     f.id || '',
-    f.registered_date_time_ad || '',
+    formatTs(f.registered_date_time_ad),
     f.registered_date_bs || '',
     f.client_name || '',
     f.event_name || '',
@@ -7733,6 +7747,69 @@ async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = fals
     console.log('BOOKED CLIENTS WTN FILES tab created with header');
   }
 
+  // ── FULL CLEAN MODE: clear all data, rewrite header, reset synced flags ──
+  if (fullClean) {
+    console.log('[FILES-PUSH] Full clean mode — clearing sheet and rewriting header');
+    // 1. Clear all rows below header
+    const clearRange = encodeURIComponent(`'${sheetTitle}'!A2:Y10000`);
+    const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${clearRange}:clear`;
+    await fetchWithRetry(clearUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    // 2. Rewrite header row with corrected columns T/U
+    const headerRange = encodeURIComponent(`'${sheetTitle}'!A1:Y1`);
+    const headerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${headerRange}?valueInputOption=USER_ENTERED`;
+    await fetchWithRetry(headerUrl, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: [HEADER_ROW] }),
+    });
+    // 3. Reset synced_to_sheet for all files with backup
+    await sb
+      .from('files_management')
+      .update({ synced_to_sheet: false })
+      .neq('final_generated_path', '')
+      .not('final_generated_path', 'is', null);
+    // 4. Re-query all unsynced files with backup
+    const { data: freshFiles, error: freshErr } = await sb
+      .from('files_management')
+      .select('*')
+      .eq('synced_to_sheet', false)
+      .neq('final_generated_path', '')
+      .not('final_generated_path', 'is', null);
+    if (freshErr) throw freshErr;
+    if (!freshFiles || freshFiles.length === 0) return { pushed: 0, fullClean: true };
+    unsyncedFiles.length = 0;
+    unsyncedFiles.push(...freshFiles);
+    console.log(`[FILES-PUSH] Full clean: ${freshFiles.length} rows to push`);
+    // Skip dedup — sheet is empty, go straight to append
+    const allRows = unsyncedFiles.map((f: any) => mapRow(f));
+    // Append in batches of 500
+    for (let i = 0; i < allRows.length; i += 500) {
+      const batch = allRows.slice(i, i + 500);
+      const appendRange = encodeURIComponent(`'${sheetTitle}'!A:Y`);
+      const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${appendRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+      const appendRes = await fetchWithRetry(appendUrl, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: batch }),
+      });
+      if (!appendRes.ok) {
+        const errText = await appendRes.text();
+        throw new Error(`Failed to append files: ${appendRes.status} - ${errText.substring(0, 200)}`);
+      }
+    }
+    console.log(`[FILES-PUSH] Full clean: appended ${allRows.length} rows`);
+    // Mark all as synced
+    const ids = unsyncedFiles.map((f: any) => f.id);
+    for (let i = 0; i < ids.length; i += 100) {
+      const batch = ids.slice(i, i + 100);
+      await sb.from('files_management').update({ synced_to_sheet: true }).in('id', batch);
+    }
+    return { pushed: allRows.length, fullClean: true };
+  }
+
   // Read existing sheet data for dedup
   const readRange = encodeURIComponent(`'${sheetTitle}'!A:Y`);
   const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${storageSpreadsheetId}/values/${readRange}`;
@@ -7743,7 +7820,6 @@ async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = fals
   const existingRows: string[][] = readData.values || [];
 
   // AUTO-BOOTSTRAP: If sheet is empty (only header or nothing), reset synced flag
-  // for all rows with backup paths so they get picked up by the push query
   if (existingRows.length <= 1) {
     console.log('[FILES-PUSH] Sheet is empty — bootstrapping: resetting synced_to_sheet for rows with backups');
     const { error: resetErr } = await sb
@@ -7755,15 +7831,14 @@ async function pushFilesToSheetAction(accessToken: string, onlyWithBackup = fals
     if (resetErr) {
       console.error('[FILES-PUSH] Bootstrap reset error:', resetErr);
     } else {
-      // Re-query unsynced files after reset
-      let reQuery = sb.from('files_management').select('*').eq('synced_to_sheet', false);
-      if (onlyWithBackup) {
-        reQuery = reQuery.neq('final_generated_path', '').not('final_generated_path', 'is', null);
-      }
-      const { data: freshFiles, error: freshErr } = await reQuery;
+      const { data: freshFiles, error: freshErr } = await sb
+        .from('files_management')
+        .select('*')
+        .eq('synced_to_sheet', false)
+        .neq('final_generated_path', '')
+        .not('final_generated_path', 'is', null);
       if (freshErr) throw freshErr;
       if (!freshFiles || freshFiles.length === 0) return { pushed: 0, bootstrapped: true };
-      // Replace unsyncedFiles reference
       unsyncedFiles.length = 0;
       unsyncedFiles.push(...freshFiles);
       console.log(`[FILES-PUSH] Bootstrap found ${freshFiles.length} rows to push`);
@@ -8587,7 +8662,7 @@ Deno.serve(async (req) => {
         break;
       }
       case 'pushFilesToSheet': {
-        result = await pushFilesToSheetAction(accessToken, !!data?.onlyWithBackup);
+        result = await pushFilesToSheetAction(accessToken, !!data?.fullClean);
         break;
       }
       case 'pushStorageDevicesToSheet': {
