@@ -410,20 +410,26 @@ export default function QuickAdd() {
         if (regId && editClientData.clientName) {
           const { getCurrentStatus } = await import('@/lib/client-card-utils');
           const currentStatus = getCurrentStatus(updatedClient.statusLog || '').toUpperCase();
-          if (currentStatus === 'BOOKED' && eventsFormatted.trim()) {
-            const { ensureFreelancerAssignmentRows } = await import('@/lib/freelancer-assignment-cache');
-            await ensureFreelancerAssignmentRows(
-              regId,
-              editClientData.clientName,
-              editClientData.registeredDateBS || '',
-              eventsFormatted,
-              eventYears,
-              eventMonths,
-              eventDays,
-              eventADDates
-            );
-          } else if (currentStatus !== 'BOOKED') {
-            // Clean up any orphan assignment rows for non-booked clients
+          if (currentStatus === 'BOOKED') {
+            if (eventsFormatted.trim()) {
+              const { ensureFreelancerAssignmentRows } = await import('@/lib/freelancer-assignment-cache');
+              await ensureFreelancerAssignmentRows(
+                regId,
+                editClientData.clientName,
+                editClientData.registeredDateBS || '',
+                eventsFormatted,
+                eventYears,
+                eventMonths,
+                eventDays,
+                eventADDates
+              );
+            } else {
+              // BOOKED client with no events: remove all stale crew rows
+              const { supabase } = await import('@/integrations/supabase/client');
+              await supabase.from('freelancer_assignments').delete().eq('registered_date_time_ad', regId);
+            }
+          } else {
+            // Non-booked clients should never have crew rows
             const { supabase } = await import('@/integrations/supabase/client');
             await supabase.from('freelancer_assignments').delete().eq('registered_date_time_ad', regId);
           }
