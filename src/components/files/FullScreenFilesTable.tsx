@@ -39,6 +39,67 @@ const DAY_COLORS = [
 const PHOTO_ROLES = ["PB", "PG", "EP"];
 const VIDEO_ROLES = ["VB", "VG", "EV", "DRONE", "FPV", "IPHONE"];
 
+const NEPALI_MONTH_NAMES: Record<number, string> = {1:"BAISAKH",2:"JESTHA",3:"ASHADH",4:"SHRAWAN",5:"BHADRA",6:"ASHWIN",7:"KARTIK",8:"MANGSIR",9:"POUSH",10:"MAGH",11:"FALGUN",12:"CHAITRA"};
+
+const getTimeAgo = (dateStr: string): string => {
+  if (!dateStr) return "";
+  const then = new Date(dateStr);
+  const now = new Date();
+  let diff = Math.floor((now.getTime() - then.getTime()) / 1000);
+  if (diff < 0) return "just now";
+  const days = Math.floor(diff / 86400); diff %= 86400;
+  const hrs = Math.floor(diff / 3600); diff %= 3600;
+  const mins = Math.floor(diff / 60);
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days} day${days > 1 ? "s" : ""}`);
+  if (hrs > 0) parts.push(`${hrs} hr${hrs > 1 ? "s" : ""}`);
+  parts.push(`${mins} min${mins > 1 ? "s" : ""}`);
+  return parts.join(" ") + " ago";
+};
+
+const getBackupTime = (dateStr: string): string => {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  let h = d.getHours();
+  const m = d.getMinutes().toString().padStart(2, "0");
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  return `${h}:${m} ${ampm}`;
+};
+
+const BackupPill = ({ path, deviceName, file }: { path: string; deviceName: string; file: FileRecord; backupNum?: number }) => {
+  if (!path) return <X className="w-4 h-4 text-red-500 mx-auto" />;
+  const label = deviceName || path.split("\\")[0] || "✓";
+  const monthNum = parseInt(file.event_month || "0");
+  const monthLabel = NEPALI_MONTH_NAMES[monthNum] || file.event_month || "";
+  const timeStr = getBackupTime(file.updated_at || file.created_at);
+  const headerLine = `${label} (${file.event_day || "?"} ${monthLabel} ${timeStr})`;
+  const timeAgo = getTimeAgo(file.updated_at || file.created_at);
+
+  return (
+    <HoverCard openDelay={100} closeDelay={300}>
+      <HoverCardTrigger asChild>
+        <Badge variant="secondary" className="text-[11px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 font-bold truncate max-w-[90px] cursor-pointer">
+          {label}
+        </Badge>
+      </HoverCardTrigger>
+      <HoverCardContent
+        className="w-80 p-3 space-y-2 text-xs z-[200]"
+        side="top"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
+        <div className="font-bold text-sm text-emerald-700 dark:text-emerald-400">{headerLine}</div>
+        <div className="bg-muted/50 rounded px-2 py-1.5 font-mono text-[11px] break-all leading-relaxed">{path}</div>
+        <div className="flex items-center gap-1.5 text-muted-foreground">
+          <Clock className="w-3.5 h-3.5" />
+          <span className="font-bold">{timeAgo}</span>
+        </div>
+      </HoverCardContent>
+    </HoverCard>
+  );
+};
+
 interface AssignmentRow {
   id: string;
   registeredDateTimeAD: string;
@@ -212,68 +273,7 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
   // ─── Helper: first name only ───
   const getFirstName = (name: string) => (name || "").split(" ")[0];
 
-  // ─── Helper: time ago ───
-  const NEPALI_MONTH_NAMES: Record<number, string> = {1:"BAISAKH",2:"JESTHA",3:"ASHADH",4:"SHRAWAN",5:"BHADRA",6:"ASHWIN",7:"KARTIK",8:"MANGSIR",9:"POUSH",10:"MAGH",11:"FALGUN",12:"CHAITRA"};
 
-  const getTimeAgo = (dateStr: string): string => {
-    if (!dateStr) return "";
-    const then = new Date(dateStr);
-    const now = new Date();
-    let diff = Math.floor((now.getTime() - then.getTime()) / 1000);
-    if (diff < 0) return "just now";
-    const days = Math.floor(diff / 86400); diff %= 86400;
-    const hrs = Math.floor(diff / 3600); diff %= 3600;
-    const mins = Math.floor(diff / 60);
-    const parts: string[] = [];
-    if (days > 0) parts.push(`${days} day${days > 1 ? "s" : ""}`);
-    if (hrs > 0) parts.push(`${hrs} hr${hrs > 1 ? "s" : ""}`);
-    parts.push(`${mins} min${mins > 1 ? "s" : ""}`);
-    return parts.join(" ") + " ago";
-  };
-
-  const getBackupTime = (dateStr: string): string => {
-    if (!dateStr) return "";
-    const d = new Date(dateStr);
-    let h = d.getHours();
-    const m = d.getMinutes().toString().padStart(2, "0");
-    const ampm = h >= 12 ? "PM" : "AM";
-    h = h % 12 || 12;
-    return `${h}:${m} ${ampm}`;
-  };
-
-  // ─── Helper: backup display with hover ───
-  const BackupPill = ({ path, deviceName, file, backupNum }: { path: string; deviceName: string; file: FileRecord; backupNum: number }) => {
-    if (!path) return <X className="w-4 h-4 text-red-500 mx-auto" />;
-    const label = deviceName || path.split("\\")[0] || "✓";
-    const monthNum = parseInt(file.event_month || "0");
-    const monthLabel = NEPALI_MONTH_NAMES[monthNum] || file.event_month || "";
-    const timeStr = getBackupTime(file.updated_at || file.created_at);
-    const headerLine = `${label} (${file.event_day || "?"} ${monthLabel} ${timeStr})`;
-    const timeAgo = getTimeAgo(file.updated_at || file.created_at);
-
-    return (
-      <HoverCard openDelay={100} closeDelay={300}>
-        <HoverCardTrigger asChild>
-          <Badge variant="secondary" className="text-[11px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 font-bold truncate max-w-[90px] cursor-pointer">
-            {label}
-          </Badge>
-        </HoverCardTrigger>
-        <HoverCardContent
-          className="w-80 p-3 space-y-2 text-xs z-[200]"
-          side="top"
-          onPointerDownOutside={(e) => e.preventDefault()}
-          onInteractOutside={(e) => e.preventDefault()}
-        >
-          <div className="font-bold text-sm text-emerald-700 dark:text-emerald-400">{headerLine}</div>
-          <div className="bg-muted/50 rounded px-2 py-1.5 font-mono text-[11px] break-all leading-relaxed">{path}</div>
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <Clock className="w-3.5 h-3.5" />
-            <span className="font-bold">{timeAgo}</span>
-          </div>
-        </HoverCardContent>
-      </HoverCard>
-    );
-  };
 
   // ─── File Rows Table (grouped by PHOTOS/VIDEOS) ───
   const FileRowsTable = ({ fileRows }: { fileRows: FileRecord[] }) => {
