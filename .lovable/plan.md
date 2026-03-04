@@ -1,22 +1,25 @@
 
 
-## Fix: HoverCard Popup on Backup Pills
+## Add Edit Buttons Next to Backup Pills
 
-### Root Cause
-`BackupPill` is defined as a **nested function component** inside the main `FullScreenFilesTable` component (line ~245). Every render creates a new component reference, causing React to **unmount and remount** the HoverCard before the popup has a chance to appear.
+### What
+Add a small edit (pencil) icon button next to each backup pill (1st, 2nd, 3rd) and Drive column. The button only appears when the backup data exists (path is present for backups, `drive_upload` is true for Drive).
 
-### Fix
-Extract `BackupPill` as a **standalone component outside** `FullScreenFilesTable`, passing the needed helpers (`getTimeAgo`, `getBackupTime`, `NEPALI_MONTH_NAMES`) as props or moving them outside the component too.
+### How
 
-Specifically:
-1. Move `getTimeAgo` and `getBackupTime` helper functions **outside** the component (they have no dependencies on component state)
-2. Move `NEPALI_MONTH_NAMES` constant outside (it's already likely outside)
-3. Extract `BackupPill` as a standalone `React.FC` defined **before** `FullScreenFilesTable`
-4. Keep the same HoverCard JSX, just stable component identity
+**File: `src/components/files/FullScreenFilesTable.tsx`**
 
-### File Changed
-`src/components/files/FullScreenFilesTable.tsx`
-- Move `getTimeAgo` (lines ~219-232) outside component
-- Move `getBackupTime` (lines ~234-242) outside component  
-- Move `BackupPill` (lines ~245-276) outside component as a standalone component
+1. **Desktop table rows (lines ~366-389)**: For each of the 4 cells (1st, 2nd, 3rd, Drive), wrap the existing content in a flex container and add a small `PenLine` icon button that calls `openPathBuilder(file)` — only rendered when the backup/drive data exists.
+
+   - **1st backup cell**: Show edit button when `file.final_generated_path` is truthy
+   - **2nd backup cell**: Show edit button when `file.backup_2_path` is truthy
+   - **3rd backup cell**: Show edit button when `file.backup_3_path` is truthy
+   - **Drive cell**: Show edit button when `file.drive_upload` is true
+
+2. **Mobile card rows (lines ~496-511)**: Same logic — add a small edit icon next to each backup pill and drive status, only when data exists.
+
+The edit button will open the existing `FilePathBuilderDialog` via `openPathBuilder(file)`, which already supports editing all backup paths and drive settings.
+
+### Visual
+Each cell becomes: `[BackupPill] [✏️]` — the pencil icon is tiny (w-3 h-3), muted by default, blue on hover, keeping the table compact.
 
