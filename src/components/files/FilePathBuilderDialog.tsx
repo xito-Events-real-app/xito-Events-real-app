@@ -40,7 +40,6 @@ interface CardFormData {
   eventFolder: string;
   side: string;
   freelancerName: string;
-  cardLabel: string;
   sizeGb: string;
   numberOfItems: string;
   formatType: string;
@@ -131,10 +130,9 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
       eventFolder: fileRecord.event_folder_name || fileRecord.event_name?.toUpperCase() || "",
       side: fileRecord.side || "",
       freelancerName: fileRecord.freelancer_name || "",
-      cardLabel: fileRecord.card_label || (isPhotoRole ? "RAW AND JPEG" : "NORMAL"),
       sizeGb: fileRecord.size_gb ? String(fileRecord.size_gb) : "",
       numberOfItems: fileRecord.number_of_items ? String(fileRecord.number_of_items) : "",
-      formatType: fileRecord.format_type || "",
+      formatType: fileRecord.format_type || (isPhotoRole ? "RAW AND JPEG" : "NORMAL"),
     };
     setCardForms({ [fileRecord.card_label || "1"]: formData });
 
@@ -152,10 +150,9 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
             eventFolder: card.event_folder_name || card.event_name?.toUpperCase() || "",
             side: card.side || "",
             freelancerName: card.freelancer_name || "",
-            cardLabel: card.card_label || (isPhotoRole ? "RAW AND JPEG" : "NORMAL"),
             sizeGb: card.size_gb ? String(card.size_gb) : "",
             numberOfItems: card.number_of_items ? String(card.number_of_items) : "",
-            formatType: card.format_type || "",
+            formatType: card.format_type || (isPhotoRole ? "RAW AND JPEG" : "NORMAL"),
           },
         }));
       }
@@ -169,7 +166,7 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
 
   const currentForm = cardForms[activeCard] || {
     storageType: "", deviceId: "", yearEventFolder: "", category: "", clientFolder: "", eventFolder: "",
-    side: "", freelancerName: "", cardLabel: "", sizeGb: "", numberOfItems: "", formatType: "",
+    side: "", freelancerName: "", sizeGb: "", numberOfItems: "", formatType: "",
   };
 
   const updateCurrentForm = useCallback((updates: Partial<CardFormData>) => {
@@ -199,7 +196,7 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
       eventFolderName: currentForm.eventFolder,
       side: currentForm.side,
       freelancerName: currentForm.freelancerName,
-      cardLabel: currentForm.cardLabel,
+      cardLabel: `Card ${activeCard}`,
     });
   }, [currentForm, selectedDevice]);
 
@@ -229,7 +226,6 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
         eventFolder: currentForm.eventFolder,
         side: currentForm.side,
         freelancerName: currentForm.freelancerName,
-        cardLabel: isPhoto ? "RAW AND JPEG" : "NORMAL",
         sizeGb: "",
         numberOfItems: "",
         formatType: currentForm.formatType,
@@ -260,9 +256,24 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
 
   const handleSave = async () => {
     if (!fileRecord || backupNumber === 0) return;
+
+    // Validate all cards have required fields
+    if (cardCount > 1) {
+      for (let c = 1; c <= cardCount; c++) {
+        const key = String(c);
+        const cf = cardForms[key];
+        if (!cf || !cf.storageType || !cf.deviceId) {
+          toast.error(`Please fill details for all cards before saving (Card ${c} is incomplete)`);
+          setActiveCard(key);
+          return;
+        }
+      }
+    }
+
     setSaving(true);
     try {
-      const form = cardForms[fileRecord.card_label || "1"] || currentForm;
+      const currentCardKey = fileRecord.card_label || "1";
+      const form = cardForms[currentCardKey] || currentForm;
       const dev = devices.find(d => d.id === form.deviceId);
       const path = !form.storageType || !dev ? "" : buildFilePath({
         storageType: form.storageType,
@@ -274,7 +285,7 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
         eventFolderName: form.eventFolder,
         side: form.side,
         freelancerName: form.freelancerName,
-        cardLabel: form.cardLabel,
+        cardLabel: `Card ${currentCardKey}`,
       });
 
       const updates: Partial<FileRecord> = {
@@ -285,7 +296,7 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
         client_folder_name: form.clientFolder,
         event_folder_name: form.eventFolder,
         side: form.side,
-        card_label: form.cardLabel,
+        card_label: currentCardKey,
         format_type: form.formatType,
         size_gb: form.sizeGb ? Number(form.sizeGb) : 0,
         number_of_items: form.numberOfItems ? Number(form.numberOfItems) : 0,
@@ -339,7 +350,7 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
             eventFolderName: cardForm.eventFolder,
             side: cardForm.side,
             freelancerName: cardForm.freelancerName,
-            cardLabel: cardForm.cardLabel,
+            cardLabel: `Card ${key}`,
           });
 
           const cardUpdates: Partial<FileRecord> = {
@@ -350,7 +361,7 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
             client_folder_name: cardForm.clientFolder,
             event_folder_name: cardForm.eventFolder,
             side: cardForm.side,
-            card_label: cardForm.cardLabel,
+            card_label: key,
             format_type: cardForm.formatType,
             size_gb: cardForm.sizeGb ? Number(cardForm.sizeGb) : 0,
             number_of_items: cardForm.numberOfItems ? Number(cardForm.numberOfItems) : 0,
@@ -389,8 +400,8 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
     }
   };
 
-  const cardNum = fileRecord?.card_label || "1";
-  const headerText = `CARD ${cardNum} — ${fileRecord?.client_name || ""} — ${fileRecord?.event_name || ""} — ${fileRecord?.freelancer_name || ""}`;
+  const headerCardNum = fileRecord?.card_label || "1";
+  const headerText = `CARD ${headerCardNum} — ${fileRecord?.client_name || ""} — ${fileRecord?.event_name || ""} — ${fileRecord?.freelancer_name || ""}`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
