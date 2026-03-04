@@ -45,6 +45,18 @@ interface CardFormData {
   formatType: string;
 }
 
+function getNormalizedYearEventFolder(existingFolder: string | null | undefined, eventMonth: string | null | undefined, eventYear: string | null | undefined): string {
+  const existing = (existingFolder || "").trim();
+  if (existing && !/^\d+\s+EVENTS\s+\d+$/i.test(existing)) return existing;
+
+  const monthNum = parseInt(eventMonth || "0", 10);
+  if (monthNum && eventYear) {
+    return `${NEPALI_MONTHS[monthNum] || eventMonth} EVENTS ${eventYear}`;
+  }
+
+  return existing;
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -104,10 +116,11 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
 
     const role = fileRecord.freelancer_type || "";
     const isPhotoRole = PHOTO_ROLES.includes(role);
-    const monthNum = parseInt(fileRecord.event_month || "0", 10);
-    const defaultYearFolder = monthNum && fileRecord.event_year
-      ? `${NEPALI_MONTHS[monthNum] || fileRecord.event_month} EVENTS ${fileRecord.event_year}`
-      : "";
+    const defaultYearFolder = getNormalizedYearEventFolder(
+      fileRecord.year_event_folder,
+      fileRecord.event_month,
+      fileRecord.event_year
+    );
 
     // Find how many cards exist for this freelancer in this event
     const existingCards = (allFiles || []).filter(f =>
@@ -124,7 +137,7 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
     const formData: CardFormData = {
       storageType: fileRecord.storage_type || "",
       deviceId: fileRecord.storage_device_id || "",
-      yearEventFolder: fileRecord.year_event_folder || defaultYearFolder,
+      yearEventFolder: defaultYearFolder,
       category: fileRecord.category || (isPhotoRole ? "PHOTOS" : "VIDEOS"),
       clientFolder: fileRecord.client_folder_name || fileRecord.client_name?.toUpperCase() || "",
       eventFolder: fileRecord.event_folder_name || fileRecord.event_name?.toUpperCase() || "",
@@ -144,7 +157,7 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
           [card.card_label || "1"]: {
             storageType: card.storage_type || "",
             deviceId: card.storage_device_id || "",
-            yearEventFolder: card.year_event_folder || defaultYearFolder,
+            yearEventFolder: getNormalizedYearEventFolder(card.year_event_folder, card.event_month, card.event_year),
             category: card.category || (isPhotoRole ? "PHOTOS" : "VIDEOS"),
             clientFolder: card.client_folder_name || card.client_name?.toUpperCase() || "",
             eventFolder: card.event_folder_name || card.event_name?.toUpperCase() || "",
