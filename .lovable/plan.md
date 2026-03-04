@@ -1,43 +1,42 @@
 
 
-## Redesign FilePathBuilderDialog: Wide Horizontal Layout with Colorful Sections
+## Add Card Switcher at Top + Card Removal
 
-**Goal**: Make the dialog wide enough to fit everything without scrolling, with visually distinct colored sections.
+### Changes to `src/components/files/FilePathBuilderDialog.tsx`
 
-### Layout Change
+**1. Top-level Card Switcher (above backup indicator, line ~428)**
+Add a tab bar / switch row at the very top of the dialog body (before the backup indicator) showing Card 1, Card 2, etc. Selecting one switches `activeCard` so all fields below reflect that card's data. Styled as prominent pill buttons spanning full width.
 
-Change `max-w-lg` to `max-w-6xl` (or `max-w-[95vw]`) and reorganize content into a **3-column grid** layout:
+**2. Card Removal**
+- Add a small "Remove" / trash button next to each card tab (both in the top switcher and in the Column 2 card section)
+- On remove: delete the corresponding `files_management` row from DB via supabase, remove from `cardForms` state, adjust `cardCount`, switch `activeCard` to remaining card
+- Allow removing any card (card 1 or card 2), not just the last one — cards can exist independently
 
-**Column 1 (Storage & Path)** — Blue theme
-- Storage Type, Device, Year Event Folder, Category
-- Client Folder, Event Folder
-- Side, Freelancer, Format
-- Generated Path preview
+**3. Logic additions**
+- New `handleRemoveCard(cardNumber)` function:
+  - Find the file row in `allFiles` matching this freelancer + event + card_label
+  - Delete it from DB
+  - Remove from `cardForms`
+  - Decrement `cardCount` or recalculate from remaining cards
+  - Switch `activeCard` to another existing card
+  - Call `onRefresh()`
+- Confirmation toast before deletion
 
-**Column 2 (File Info & Cards)** — Green/Amber theme  
-- Backup indicator + Header badge (top, full width above columns)
-- Card selector + Add Card
-- File Size, Number of Items
-- File Format Type
+**4. Layout structure (top to bottom)**
+```
+┌─────────────────────────────────────────┐
+│  [Card 1] [Card 2] [+ Add]             │  ← NEW top switcher with remove buttons
+├─────────────────────────────────────────┤
+│  Setting 1st Backup                     │  ← existing backup indicator
+├─────────────────────────────────────────┤
+│  CARD 1 — CLIENT — EVENT — FREELANCER   │  ← existing header
+├─────────────────────────────────────────┤
+│  Col1: Storage   Col2: Info   Col3: Meta│  ← existing 3-col grid
+└─────────────────────────────────────────┘
+```
 
-**Column 3 (Meta & Actions)** — Purple/Rose theme
-- Who Copied (dropdown + add new)
-- Drive Upload checkbox + link
-- Notes textarea
+**5. Column 2 card section stays as-is** — keeps showing card count badge and the tab triggers, but also gets a remove button per card.
 
-### Color Scheme per Section
-- **Header/Backup**: Keep existing color-coded backup indicator
-- **Storage & Path**: `bg-blue-50 border-blue-200` container
-- **File Info**: `bg-emerald-50 border-emerald-200` container
-- **Who Copied**: `bg-amber-50 border-amber-200` container
-- **Drive Upload**: `bg-purple-50 border-purple-200` container
-- **Notes**: `bg-rose-50 border-rose-200` container
-- **Path Preview**: `bg-indigo-50 border-indigo-300` (standout)
-
-### File Changes
-Single file: `src/components/files/FilePathBuilderDialog.tsx` — lines 419-667 (the JSX return block)
-
-- Line 421: `max-w-lg max-h-[90vh] overflow-y-auto` → `max-w-6xl w-full max-h-[90vh]`
-- Restructure the form body into a 3-column grid with colored section cards
-- Keep all existing logic/state unchanged, only reorganize the JSX layout
+### Files changed
+Single file: `src/components/files/FilePathBuilderDialog.tsx`
 
