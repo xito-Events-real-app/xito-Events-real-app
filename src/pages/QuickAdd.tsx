@@ -406,19 +406,27 @@ export default function QuickAdd() {
           }
         }
 
-        // Step 2b: Sync freelancer_assignments — insert missing, delete removed
+        // Step 2b: Sync freelancer_assignments — ONLY for BOOKED clients
         if (regId && editClientData.clientName) {
-          const { ensureFreelancerAssignmentRows } = await import('@/lib/freelancer-assignment-cache');
-          await ensureFreelancerAssignmentRows(
-            regId,
-            editClientData.clientName,
-            editClientData.registeredDateBS || '',
-            eventsFormatted,
-            eventYears,
-            eventMonths,
-            eventDays,
-            eventADDates
-          );
+          const { getCurrentStatus } = await import('@/lib/client-card-utils');
+          const currentStatus = getCurrentStatus(updatedClient.statusLog || '').toUpperCase();
+          if (currentStatus === 'BOOKED' && eventsFormatted.trim()) {
+            const { ensureFreelancerAssignmentRows } = await import('@/lib/freelancer-assignment-cache');
+            await ensureFreelancerAssignmentRows(
+              regId,
+              editClientData.clientName,
+              editClientData.registeredDateBS || '',
+              eventsFormatted,
+              eventYears,
+              eventMonths,
+              eventDays,
+              eventADDates
+            );
+          } else if (currentStatus !== 'BOOKED') {
+            // Clean up any orphan assignment rows for non-booked clients
+            const { supabase } = await import('@/integrations/supabase/client');
+            await supabase.from('freelancer_assignments').delete().eq('registered_date_time_ad', regId);
+          }
         }
 
         // Step 3: Background Sheets sync (non-blocking)

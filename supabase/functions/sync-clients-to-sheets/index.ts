@@ -301,13 +301,8 @@ serve(async (req) => {
         const rowNum = row.row_number;
 
         if (!rowNum || rowNum < 2) {
-          if (row.sheet_source === 'booked') {
-            // Booked client with invalid row — needs append, handle separately
-            appendRows.push(row);
-          } else {
-            console.log(`[sync-clients] Invalid row_number for tracker ${row.registered_date_time_ad}, skipping`);
-            syncedIds.push(row.registered_date_time_ad);
-          }
+          // Both tracker and booked clients with invalid row — needs append
+          appendRows.push(row);
           continue;
         }
 
@@ -333,39 +328,48 @@ serve(async (req) => {
         });
       }
 
-      // Append booked clients with invalid row numbers (newly migrated)
+      // Append clients with invalid row numbers (newly added) — grouped by sheet
       if (appendRows.length > 0) {
-        // Find next empty row in BOOKED CLIENTS
-        const bookedColA = encodeURIComponent("'BOOKED CLIENTS'!A2:A5000");
-        const colAResp = await fetchWithRetry(
-          `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${bookedColA}`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
-        const colAData = await colAResp.json();
-        const existingRows = colAData.values || [];
-        let nextRow = existingRows.length + 2; // +2 for header + 0-index
-
+        const groupedBySheet: Record<string, any[]> = {};
         for (const row of appendRows) {
-          const sheetArray = dbRowToSheetArray(row);
-          const appendRange = `'BOOKED CLIENTS'!A${nextRow}:AL${nextRow}`;
-          await fetchWithRetry(
-            `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(appendRange)}?valueInputOption=USER_ENTERED`,
-            {
-              method: 'PUT',
-              headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ range: appendRange, values: [sheetArray] }),
-            }
+          const sheetName = row.sheet_source === 'booked' ? 'BOOKED CLIENTS' : 'CLIENT TRACKER';
+          if (!groupedBySheet[sheetName]) groupedBySheet[sheetName] = [];
+          groupedBySheet[sheetName].push(row);
+        }
+
+        for (const [sheetName, rows] of Object.entries(groupedBySheet)) {
+          // Find next empty row in this sheet
+          const colARange = encodeURIComponent(`'${sheetName}'!A2:A5000`);
+          const colAResp = await fetchWithRetry(
+            `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${colARange}`,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
           );
+          const colAData = await colAResp.json();
+          const existingRows = colAData.values || [];
+          let nextRow = existingRows.length + 2; // +2 for header + 0-index
 
-          // Update DB with correct row number
-          await supabase
-            .from('clients_cache')
-            .update({ row_number: nextRow, synced_to_sheet: true, updated_at: new Date().toISOString() } as any)
-            .eq('registered_date_time_ad', row.registered_date_time_ad);
+          for (const row of rows) {
+            const sheetArray = dbRowToSheetArray(row);
+            const appendRange = `'${sheetName}'!A${nextRow}:AL${nextRow}`;
+            await fetchWithRetry(
+              `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(appendRange)}?valueInputOption=USER_ENTERED`,
+              {
+                method: 'PUT',
+                headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ range: appendRange, values: [sheetArray] }),
+              }
+            );
 
-          console.log(`[sync-clients] Appended booked client ${row.registered_date_time_ad} at row ${nextRow}`);
-          syncedIds.push(row.registered_date_time_ad);
-          nextRow++;
+            // Update DB with correct row number
+            await supabase
+              .from('clients_cache')
+              .update({ row_number: nextRow, synced_to_sheet: true, updated_at: new Date().toISOString() } as any)
+              .eq('registered_date_time_ad', row.registered_date_time_ad);
+
+            console.log(`[sync-clients] Appended ${row.sheet_source} client ${row.registered_date_time_ad} to '${sheetName}' at row ${nextRow}`);
+            syncedIds.push(row.registered_date_time_ad);
+            nextRow++;
+          }
         }
       }
 
