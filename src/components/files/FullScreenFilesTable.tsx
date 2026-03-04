@@ -67,14 +67,17 @@ const getBackupTime = (dateStr: string): string => {
   return `${h}:${m} ${ampm}`;
 };
 
-const BackupPill = ({ path, deviceName, file }: { path: string; deviceName: string; file: FileRecord; backupNum?: number }) => {
+const BackupPill = ({ path, deviceName, file, backupNum }: { path: string; deviceName: string; file: FileRecord; backupNum?: number }) => {
   if (!path) return <X className="w-4 h-4 text-red-500 mx-auto" />;
   const label = deviceName || path.split("\\")[0] || "✓";
-  const monthNum = parseInt(file.event_month || "0");
-  const monthLabel = NEPALI_MONTH_NAMES[monthNum] || file.event_month || "";
-  const timeStr = getBackupTime(file.updated_at || file.created_at);
-  const headerLine = `${label} (${file.event_day || "?"} ${monthLabel} ${timeStr})`;
-  const timeAgo = getTimeAgo(file.updated_at || file.created_at);
+
+  // Pick per-backup timestamp, fallback to updated_at
+  const backupTimestamp = backupNum === 1 ? file.backup_1_recorded_at
+    : backupNum === 2 ? file.backup_2_recorded_at
+    : backupNum === 3 ? file.backup_3_recorded_at
+    : null;
+  const displayDate = backupTimestamp || file.updated_at || file.created_at;
+  const timeAgo = getTimeAgo(displayDate);
 
   return (
     <HoverCard openDelay={100} closeDelay={300}>
@@ -89,7 +92,7 @@ const BackupPill = ({ path, deviceName, file }: { path: string; deviceName: stri
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
       >
-        <div className="font-bold text-sm text-emerald-700 dark:text-emerald-400">{headerLine}</div>
+        <div className="font-bold text-sm text-emerald-700 dark:text-emerald-400">{label}</div>
         <div className="bg-muted/50 rounded px-2 py-1.5 font-mono text-[11px] break-all leading-relaxed">{path}</div>
         <div className="flex items-center gap-1.5 text-muted-foreground">
           <Clock className="w-3.5 h-3.5" />
