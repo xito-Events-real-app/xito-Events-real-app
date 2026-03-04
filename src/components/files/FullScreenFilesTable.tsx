@@ -68,7 +68,7 @@ const getBackupTime = (dateStr: string): string => {
   return `${h}:${m} ${ampm}`;
 };
 
-const BackupPill = ({ path, deviceName, file, backupNum }: { path: string; deviceName: string; file: FileRecord; backupNum?: number }) => {
+const BackupPill = ({ path, deviceName, file, backupNum, onDeviceClick }: { path: string; deviceName: string; file: FileRecord; backupNum?: number; onDeviceClick?: (name: string) => void }) => {
   if (!path) return <X className="w-4 h-4 text-red-500 mx-auto" />;
   const label = deviceName || path.split("\\")[0] || "✓";
 
@@ -83,7 +83,10 @@ const BackupPill = ({ path, deviceName, file, backupNum }: { path: string; devic
   return (
     <HoverCard openDelay={100} closeDelay={300}>
       <HoverCardTrigger asChild>
-        <span className="inline-flex items-center text-[11px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 font-bold truncate max-w-[90px] cursor-pointer rounded-md border border-transparent">
+        <span
+          className="inline-flex items-center text-[11px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 font-bold truncate max-w-[90px] cursor-pointer rounded-md border border-transparent hover:ring-1 hover:ring-emerald-400"
+          onClick={(e) => { if (onDeviceClick && deviceName) { e.stopPropagation(); onDeviceClick(deviceName); } }}
+        >
           {label}
         </span>
       </HoverCardTrigger>
@@ -135,6 +138,7 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
   const [loading, setLoading] = useState(true);
   const [filterDay, setFilterDay] = useState<string | null>(null);
   const [filterClient, setFilterClient] = useState<string | null>(null);
+  const [filterDevice, setFilterDevice] = useState<string | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   // Files management hook
@@ -204,8 +208,17 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
     let rows = [...assignments].sort((a, b) => (parseInt(b.eventDay) || 0) - (parseInt(a.eventDay) || 0));
     if (filterDay) rows = rows.filter(a => a.eventDay === filterDay);
     if (filterClient) rows = rows.filter(a => a.clientName === filterClient);
+    if (filterDevice) rows = rows.filter(a => {
+      const rowFiles = files.filter(f => f.registered_date_time_ad === a.registeredDateTimeAD && f.event_name === a.event);
+      return rowFiles.some(f =>
+        f.backup_1_device_name === filterDevice ||
+        f.backup_2_device_name === filterDevice ||
+        f.backup_3_device_name === filterDevice ||
+        f.drive_upload_path === filterDevice
+      );
+    });
     return rows;
-  }, [assignments, filterDay, filterClient]);
+  }, [assignments, filterDay, filterClient, filterDevice, files]);
 
   // Day color mapping
   const dayColorMap = useMemo(() => {
@@ -382,7 +395,7 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                     {/* 1st Backup */}
                     <td className="px-2 py-1.5 text-center">
                       <div className="flex items-center justify-center gap-0.5">
-                        <BackupPill path={file.final_generated_path || ""} deviceName={file.backup_1_device_name || ""} file={file} backupNum={1} />
+                        <BackupPill path={file.final_generated_path || ""} deviceName={file.backup_1_device_name || ""} file={file} backupNum={1} onDeviceClick={setFilterDevice} />
                         {file.final_generated_path && (
                           <button onClick={() => openPathBuilder(file, 1)} className="hover:text-blue-500 text-muted-foreground transition-colors">
                             <PenLine className="w-3 h-3" />
@@ -393,7 +406,7 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                     {/* 2nd Backup */}
                     <td className="px-2 py-1.5 text-center">
                       <div className="flex items-center justify-center gap-0.5">
-                        <BackupPill path={file.backup_2_path || ""} deviceName={file.backup_2_device_name || ""} file={file} backupNum={2} />
+                        <BackupPill path={file.backup_2_path || ""} deviceName={file.backup_2_device_name || ""} file={file} backupNum={2} onDeviceClick={setFilterDevice} />
                         {file.backup_2_path && (
                           <button onClick={() => openPathBuilder(file, 2)} className="hover:text-blue-500 text-muted-foreground transition-colors">
                             <PenLine className="w-3 h-3" />
@@ -404,7 +417,7 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                     {/* 3rd Backup */}
                     <td className="px-2 py-1.5 text-center">
                       <div className="flex items-center justify-center gap-0.5">
-                        <BackupPill path={file.backup_3_path || ""} deviceName={file.backup_3_device_name || ""} file={file} backupNum={3} />
+                        <BackupPill path={file.backup_3_path || ""} deviceName={file.backup_3_device_name || ""} file={file} backupNum={3} onDeviceClick={setFilterDevice} />
                         {file.backup_3_path && (
                           <button onClick={() => openPathBuilder(file, 3)} className="hover:text-blue-500 text-muted-foreground transition-colors">
                             <PenLine className="w-3 h-3" />
@@ -419,8 +432,8 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                           <HoverCard openDelay={100} closeDelay={300}>
                             <HoverCardTrigger asChild>
                               <span
-                                className="inline-flex items-center text-[11px] px-1.5 py-0.5 bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400 font-bold truncate max-w-[90px] cursor-pointer rounded-md"
-                                onClick={() => { setCloudFile(file); setCloudDialogOpen(true); }}
+                                className="inline-flex items-center text-[11px] px-1.5 py-0.5 bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400 font-bold truncate max-w-[90px] cursor-pointer rounded-md hover:ring-1 hover:ring-purple-400"
+                                onClick={(e) => { e.stopPropagation(); if (file.drive_upload_path) setFilterDevice(file.drive_upload_path); }}
                               >
                                 {file.drive_upload_path}
                               </span>
@@ -582,21 +595,21 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                     <div className="flex items-center gap-2">
                       <div className="flex items-center gap-1">
                         <span className="text-[11px] text-muted-foreground">1st:</span>
-                        <BackupPill path={file.final_generated_path || ""} deviceName={file.backup_1_device_name || ""} file={file} backupNum={1} />
+                        <BackupPill path={file.final_generated_path || ""} deviceName={file.backup_1_device_name || ""} file={file} backupNum={1} onDeviceClick={setFilterDevice} />
                         {file.final_generated_path && (
                           <button onClick={() => openPathBuilder(file, 1)} className="hover:text-blue-500 text-muted-foreground"><PenLine className="w-3 h-3" /></button>
                         )}
                       </div>
                       <div className="flex items-center gap-1">
                         <span className="text-[11px] text-muted-foreground">2nd:</span>
-                        <BackupPill path={file.backup_2_path || ""} deviceName={file.backup_2_device_name || ""} file={file} backupNum={2} />
+                        <BackupPill path={file.backup_2_path || ""} deviceName={file.backup_2_device_name || ""} file={file} backupNum={2} onDeviceClick={setFilterDevice} />
                         {file.backup_2_path && (
                           <button onClick={() => openPathBuilder(file, 2)} className="hover:text-blue-500 text-muted-foreground"><PenLine className="w-3 h-3" /></button>
                         )}
                       </div>
                       <div className="flex items-center gap-1">
                         <span className="text-[11px] text-muted-foreground">3rd:</span>
-                        <BackupPill path={file.backup_3_path || ""} deviceName={file.backup_3_device_name || ""} file={file} backupNum={3} />
+                        <BackupPill path={file.backup_3_path || ""} deviceName={file.backup_3_device_name || ""} file={file} backupNum={3} onDeviceClick={setFilterDevice} />
                         {file.backup_3_path && (
                           <button onClick={() => openPathBuilder(file, 3)} className="hover:text-blue-500 text-muted-foreground"><PenLine className="w-3 h-3" /></button>
                         )}
@@ -682,7 +695,7 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
       </div>
 
       {/* ─── Filter Chips ─── */}
-      {(filterDay || filterClient) && (
+      {(filterDay || filterClient || filterDevice) && (
         <div className="px-4 py-2 bg-muted/50 border-b flex items-center gap-2 shrink-0">
           <Filter className="w-3.5 h-3.5 text-muted-foreground" />
           {filterDay && (
@@ -695,7 +708,12 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
               Client: {filterClient} ✕
             </Badge>
           )}
-          <button className="text-xs text-muted-foreground hover:text-foreground ml-auto" onClick={() => { setFilterDay(null); setFilterClient(null); }}>
+          {filterDevice && (
+            <Badge variant="secondary" className="text-xs cursor-pointer" onClick={() => setFilterDevice(null)}>
+              Device: {filterDevice} ✕
+            </Badge>
+          )}
+          <button className="text-xs text-muted-foreground hover:text-foreground ml-auto" onClick={() => { setFilterDay(null); setFilterClient(null); setFilterDevice(null); }}>
             Clear all
           </button>
         </div>
