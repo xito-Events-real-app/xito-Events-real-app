@@ -533,9 +533,9 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
               <Input value={currentForm.freelancerName} readOnly className="bg-muted font-bold" />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs font-bold">Card Label</Label>
-              <Select value={currentForm.cardLabel} onValueChange={(v) => updateCurrentForm({ cardLabel: v })}>
-                <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+              <Label className="text-xs font-bold">File Format Type</Label>
+              <Select value={currentForm.formatType} onValueChange={(v) => updateCurrentForm({ formatType: v })}>
+                <SelectTrigger><SelectValue placeholder="Select format..." /></SelectTrigger>
                 <SelectContent>
                   {(isPhoto ? PHOTO_CARD_OPTIONS : VIDEO_CARD_OPTIONS).map((opt) => (
                     <SelectItem key={opt} value={opt}>{opt}</SelectItem>
@@ -543,19 +543,6 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
                 </SelectContent>
               </Select>
             </div>
-          </div>
-
-          {/* Format Type */}
-          <div className="space-y-1">
-            <Label className="text-xs font-bold">Format Type</Label>
-            <Select value={currentForm.formatType} onValueChange={(v) => updateCurrentForm({ formatType: v })}>
-              <SelectTrigger><SelectValue placeholder="Select format..." /></SelectTrigger>
-              <SelectContent>
-                {(isPhoto ? PHOTO_CARD_OPTIONS : VIDEO_CARD_OPTIONS).map((opt) => (
-                  <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
 
           {/* Path Preview */}
