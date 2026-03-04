@@ -252,13 +252,18 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
     const timeAgo = getTimeAgo(file.updated_at || file.created_at);
 
     return (
-      <HoverCard openDelay={200} closeDelay={100}>
+      <HoverCard openDelay={100} closeDelay={300}>
         <HoverCardTrigger asChild>
           <Badge variant="secondary" className="text-[11px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 font-bold truncate max-w-[90px] cursor-pointer">
             {label}
           </Badge>
         </HoverCardTrigger>
-        <HoverCardContent className="w-80 p-3 space-y-2 text-xs" side="top">
+        <HoverCardContent
+          className="w-80 p-3 space-y-2 text-xs z-[200]"
+          side="top"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+        >
           <div className="font-bold text-sm text-emerald-700 dark:text-emerald-400">{headerLine}</div>
           <div className="bg-muted/50 rounded px-2 py-1.5 font-mono text-[11px] break-all leading-relaxed">{path}</div>
           <div className="flex items-center gap-1.5 text-muted-foreground">
