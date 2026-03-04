@@ -8,7 +8,7 @@ import { FilesManagementTable } from "@/components/files/FilesManagementTable";
 import { FullScreenFilesTable } from "@/components/files/FullScreenFilesTable";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, HardDrive, FolderOpen, Database, AlertTriangle, BarChart3, ChevronLeft, Plus, Monitor, Disc } from "lucide-react";
+import { FileText, HardDrive, FolderOpen, Database, AlertTriangle, BarChart3, ChevronLeft, Plus, Monitor, Disc, Cloud } from "lucide-react";
 import { getFileManagementStats, getAvailableFileMonths, FileMonthData } from "@/lib/files-api";
 
 type ActiveSection = "dashboard" | "storage" | "files";
@@ -24,6 +24,7 @@ const DEVICE_TYPES: { key: string | null; label: string; icon: React.ElementType
   { key: "HARD_DRIVE", label: "HDD", icon: HardDrive },
   { key: "SSD", label: "SSD", icon: Disc },
   { key: "PC", label: "PC", icon: Monitor },
+  { key: "CLOUD", label: "Cloud", icon: Cloud },
 ];
 
 export default function FileManagement() {

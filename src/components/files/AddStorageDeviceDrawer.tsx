@@ -9,7 +9,7 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { StorageDevice } from "@/lib/files-api";
 import { toast } from "@/hooks/use-toast";
 import { adToBS, bsToAD, formatBSDate, nepaliMonthsEnglish } from "@/lib/nepali-date";
-import { HardDrive, Calendar as CalendarIcon, DollarSign, CalendarDays } from "lucide-react";
+import { HardDrive, Calendar as CalendarIcon, DollarSign, CalendarDays, Cloud } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -39,7 +39,11 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
     purchase_date_bs: "",
     price_npr: "",
     purchased_from: "",
+    cloud_type: "",
+    expiry_date_ad: "",
   });
+
+  const isCloud = form.device_type === "CLOUD";
 
   useEffect(() => {
     if (editDevice) {
@@ -56,6 +60,8 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
         purchase_date_bs: editDevice.purchase_date_bs || "",
         price_npr: String(editDevice.price_npr || ""),
         purchased_from: editDevice.purchased_from || "",
+        cloud_type: editDevice.cloud_type || "",
+        expiry_date_ad: editDevice.expiry_date_ad || "",
       });
       setTotalUnit("TB");
       setUsedUnit("TB");
@@ -75,6 +81,8 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
         purchase_date_bs: "",
         price_npr: "",
         purchased_from: "",
+        cloud_type: "",
+        expiry_date_ad: "",
       });
     }
   }, [editDevice, open]);
@@ -134,12 +142,24 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
     converting.current = false;
   };
 
+  const handleExpiryDatePick = (date: Date | undefined) => {
+    if (!date) return;
+    set("expiry_date_ad", format(date, "yyyy-MM-dd"));
+  };
+
   const parsedADDate = form.purchase_date_ad ? new Date(form.purchase_date_ad) : undefined;
   const validADDate = parsedADDate && !isNaN(parsedADDate.getTime()) ? parsedADDate : undefined;
 
+  const parsedExpiryDate = form.expiry_date_ad ? new Date(form.expiry_date_ad) : undefined;
+  const validExpiryDate = parsedExpiryDate && !isNaN(parsedExpiryDate.getTime()) ? parsedExpiryDate : undefined;
+
   const handleSave = async () => {
     if (!form.device_name.trim()) {
-      toast({ title: "Device name required", variant: "destructive" });
+      toast({ title: isCloud ? "Cloud name required" : "Device name required", variant: "destructive" });
+      return;
+    }
+    if (isCloud && !form.cloud_type) {
+      toast({ title: "Cloud type required", variant: "destructive" });
       return;
     }
     try {
@@ -150,14 +170,15 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
         pc_drive_letter: form.device_type === "PC" ? form.pc_drive_letter : null,
         total_storage_gb: totalUnit === "TB" ? (Number(form.total_storage) || 0) * 1024 : (Number(form.total_storage) || 0),
         used_storage_gb: usedUnit === "TB" ? (Number(form.used_storage) || 0) * 1024 : (Number(form.used_storage) || 0),
-        // remaining_storage_gb is a generated column (total - used), not writable
-        health_percent: Number(form.health_percent) || 100,
-        safety_status: form.safety_status,
-        speed_rating: Number(form.speed_rating) || 3,
-        purchase_date_ad: form.purchase_date_ad,
-        purchase_date_bs: form.purchase_date_bs,
-        price_npr: Number(form.price_npr) || 0,
-        purchased_from: form.purchased_from,
+        health_percent: isCloud ? 100 : (Number(form.health_percent) || 100),
+        safety_status: isCloud ? "SAFE" : form.safety_status,
+        speed_rating: isCloud ? 3 : (Number(form.speed_rating) || 3),
+        purchase_date_ad: isCloud ? "" : form.purchase_date_ad,
+        purchase_date_bs: isCloud ? "" : form.purchase_date_bs,
+        price_npr: isCloud ? 0 : (Number(form.price_npr) || 0),
+        purchased_from: isCloud ? "" : form.purchased_from,
+        cloud_type: isCloud ? form.cloud_type : "",
+        expiry_date_ad: isCloud ? form.expiry_date_ad : "",
       });
       toast({ title: editDevice ? "Device updated" : "Device added" });
     } catch (err: any) {
@@ -172,7 +193,7 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-lg font-bold">
-            {editDevice ? "Edit Device" : "Add Storage Device"}
+            {editDevice ? (isCloud ? "Edit Cloud Storage" : "Edit Device") : (isCloud ? "Add Cloud Storage" : "Add Storage Device")}
           </DialogTitle>
         </DialogHeader>
 
@@ -180,8 +201,8 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
           {/* Device Info Section */}
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-              <HardDrive className="w-4 h-4" />
-              <span>Device Information</span>
+              {isCloud ? <Cloud className="w-4 h-4" /> : <HardDrive className="w-4 h-4" />}
+              <span>{isCloud ? "Cloud Information" : "Device Information"}</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -192,14 +213,35 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
                     <SelectItem value="HARD_DRIVE">Hard Drive</SelectItem>
                     <SelectItem value="SSD">SSD</SelectItem>
                     <SelectItem value="PC">PC</SelectItem>
+                    <SelectItem value="CLOUD">Cloud</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Device Name</Label>
-                <Input className="h-10" value={form.device_name} onChange={(e) => set("device_name", e.target.value)} placeholder="e.g. WD 2TB" />
-              </div>
+              {isCloud ? (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Cloud Type</Label>
+                  <Select value={form.cloud_type} onValueChange={(v) => set("cloud_type", v)}>
+                    <SelectTrigger className="h-10"><SelectValue placeholder="Select..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Google Drive">Google Drive</SelectItem>
+                      <SelectItem value="pCloud">pCloud</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Device Name</Label>
+                  <Input className="h-10" value={form.device_name} onChange={(e) => set("device_name", e.target.value)} placeholder="e.g. WD 2TB" />
+                </div>
+              )}
             </div>
+
+            {isCloud && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Cloud Name</Label>
+                <Input className="h-10" value={form.device_name} onChange={(e) => set("device_name", e.target.value)} placeholder="e.g. WTN Main Drive" />
+              </div>
+            )}
 
             {form.device_type === "PC" && (
               <div className="space-y-1.5">
@@ -254,49 +296,13 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Health %</Label>
-                <Input className="h-10" type="number" value={form.health_percent} onChange={(e) => set("health_percent", e.target.value)} min="0" max="100" />
-              </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            {/* Expiry Date for Cloud */}
+            {isCloud && (
               <div className="space-y-1.5">
-                <Label className="text-xs">Safety Status</Label>
-                <Select value={form.safety_status} onValueChange={(v) => set("safety_status", v)}>
-                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="SAFE">SAFE</SelectItem>
-                    <SelectItem value="RISKY">RISKY</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Speed Rating (1-5)</Label>
-                <Select value={form.speed_rating} onValueChange={(v) => set("speed_rating", v)}>
-                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {[1, 2, 3, 4, 5].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Purchase Details Section */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-              <CalendarIcon className="w-4 h-4" />
-              <span>Purchase Details</span>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Purchase Date (AD)</Label>
+                <Label className="text-xs">Expiry Date (AD)</Label>
                 <div className="flex gap-1.5">
-                  <Input className="h-10 flex-1" value={form.purchase_date_ad} onChange={(e) => handleADChange(e.target.value)} placeholder="YYYY-MM-DD" />
+                  <Input className="h-10 flex-1" value={form.expiry_date_ad} onChange={(e) => set("expiry_date_ad", e.target.value)} placeholder="YYYY-MM-DD" />
                   <Popover modal>
                     <PopoverTrigger asChild>
                       <Button variant="outline" size="icon" className="h-10 w-10 shrink-0">
@@ -306,34 +312,104 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
                     <PopoverContent className="w-auto p-0 z-[300]" align="end">
                       <CalendarComponent
                         mode="single"
-                        selected={validADDate}
-                        onSelect={(date) => { handleADDatePick(date); }}
+                        selected={validExpiryDate}
+                        onSelect={handleExpiryDatePick}
                         className={cn("p-3 pointer-events-auto")}
                       />
                     </PopoverContent>
                   </Popover>
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Purchase Date (BS)</Label>
-                <Input className="h-10" value={form.purchase_date_bs} onChange={(e) => handleBSChange(e.target.value)} placeholder="DD Month YYYY" />
-              </div>
-            </div>
+            )}
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs flex items-center gap-1"><DollarSign className="w-3 h-3" /> Price (NPR)</Label>
-                <Input className="h-10" type="number" value={form.price_npr} onChange={(e) => set("price_npr", e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Purchased From</Label>
-                <Input className="h-10" value={form.purchased_from} onChange={(e) => set("purchased_from", e.target.value)} />
-              </div>
-            </div>
+            {/* Health/Safety/Speed - hide for CLOUD */}
+            {!isCloud && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Health %</Label>
+                    <Input className="h-10" type="number" value={form.health_percent} onChange={(e) => set("health_percent", e.target.value)} min="0" max="100" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Safety Status</Label>
+                    <Select value={form.safety_status} onValueChange={(v) => set("safety_status", v)}>
+                      <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="SAFE">SAFE</SelectItem>
+                        <SelectItem value="RISKY">RISKY</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Speed Rating (1-5)</Label>
+                    <Select value={form.speed_rating} onValueChange={(v) => set("speed_rating", v)}>
+                      <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {[1, 2, 3, 4, 5].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
+          {/* Purchase Details - hide for CLOUD */}
+          {!isCloud && (
+            <>
+              <Separator />
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+                  <CalendarIcon className="w-4 h-4" />
+                  <span>Purchase Details</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Purchase Date (AD)</Label>
+                    <div className="flex gap-1.5">
+                      <Input className="h-10 flex-1" value={form.purchase_date_ad} onChange={(e) => handleADChange(e.target.value)} placeholder="YYYY-MM-DD" />
+                      <Popover modal>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" size="icon" className="h-10 w-10 shrink-0">
+                            <CalendarDays className="w-4 h-4" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0 z-[300]" align="end">
+                          <CalendarComponent
+                            mode="single"
+                            selected={validADDate}
+                            onSelect={(date) => { handleADDatePick(date); }}
+                            className={cn("p-3 pointer-events-auto")}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Purchase Date (BS)</Label>
+                    <Input className="h-10" value={form.purchase_date_bs} onChange={(e) => handleBSChange(e.target.value)} placeholder="DD Month YYYY" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs flex items-center gap-1"><DollarSign className="w-3 h-3" /> Price (NPR)</Label>
+                    <Input className="h-10" type="number" value={form.price_npr} onChange={(e) => set("price_npr", e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Purchased From</Label>
+                    <Input className="h-10" value={form.purchased_from} onChange={(e) => set("purchased_from", e.target.value)} />
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
           <Button onClick={handleSave} disabled={saving} className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white font-medium">
-            {saving ? "Saving..." : editDevice ? "Update Device" : "Add Device"}
+            {saving ? "Saving..." : editDevice ? "Update Device" : (isCloud ? "Add Cloud Storage" : "Add Device")}
           </Button>
         </div>
       </DialogContent>

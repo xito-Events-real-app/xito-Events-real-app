@@ -18,6 +18,7 @@ import {
   Plus,
   Disc,
   Calendar,
+  Cloud,
 } from "lucide-react";
 import { getFileManagementStats, FileMonthData } from "@/lib/files-api";
 
@@ -45,6 +46,7 @@ const DEVICE_TYPES = [
   { key: "HARD_DRIVE", label: "Hard Drive", icon: HardDrive },
   { key: "SSD", label: "SSD", icon: Disc },
   { key: "PC", label: "PC", icon: Monitor },
+  { key: "CLOUD", label: "Cloud", icon: Cloud },
 ];
 
 export function FileManagementSidebar({
