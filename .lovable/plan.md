@@ -1,44 +1,38 @@
 
 
-## Changes to FilePathBuilderDialog
+## Changes to `supabase/functions/google-sheets/index.ts` — `pushFilesToSheetAction`
 
-Three modifications in `src/components/files/FilePathBuilderDialog.tsx`:
+### Problem
+1. Columns R (DOUBLE BACKUP) and S (TRIPLE BACKUP) currently output `TRUE`/`FALSE` booleans. They should output the actual backup path values instead.
+2. There's no NOTES column in the sheet.
 
-### 1. Hide "Who Copied" section for 2nd and 3rd backups
-The "Who Copied" dropdown and "Add new name" input in Column 3 (Amber section, lines 728-757) should only render when `backupNumber === 1`. For backup 2 and 3, hide the entire who-copied UI since only the first person's name matters.
+### Fix
 
-### 2. Clear storage type and device for 2nd backup
-When `backupNumber === 2`, the Storage Type and Device fields in Column 1 should start empty (they already do from the reset logic). No pre-population from the first backup's values.
+**1. Add NOTES column to header (line 7663-7670)**
 
-This is already the behavior since the dialog opens fresh per backup slot. No change needed here.
+Update `HEADER_ROW` to add `'NOTES'` at the end — making it 23 columns (A:W):
+```
+'RE-CONFIRMATION', 'DOUBLE BACKUP PATH', 'TRIPLE BACKUP PATH', 'DRIVE UPLOAD',
+'DRIVE LINK', 'DELETED OR NOT', 'NOTES',
+```
 
-### 3. Add same-device validation warning
-Add a validation check: when saving backup 2 or 3, compare the selected device against the device used in prior backups (from `fileRecord`). If the same device is selected, show a toast error and block the save.
+**2. Update `mapRow` to output paths instead of booleans, and add notes (lines 7690-7695)**
 
-Specifically in `handleSave`:
-- For backup 2: check if selected `deviceId` matches the device from `final_generated_path` / `backup_1_device_name`
-- For backup 3: check if selected `deviceId` matches backup 1 or backup 2 devices
+```
+f.reconfirmation ? 'TRUE' : 'FALSE',
+f.backup_2_path || '',          // was: f.double_backup ? 'TRUE' : 'FALSE'
+f.backup_3_path || '',          // was: f.triple_backup ? 'TRUE' : 'FALSE'
+f.drive_upload ? 'TRUE' : 'FALSE',
+f.drive_link || '',
+f.deleted_or_not ? 'TRUE' : 'FALSE',
+f.notes || '',
+```
 
-To do device comparison, look up device name from `devices` array using the selected `deviceId` and compare against `fileRecord.backup_1_device_name` and `fileRecord.backup_2_device_name`.
+**3. Update all range references from `V` to `W`** (23 columns):
+- Line 7723: header range `A1:V1` → `A1:W1`
+- Line 7734: read range `A:V` → `A:W`
+- Line 7791: update range `A${row}:V${row}` → `A${row}:W${row}`
+- Line 7822: append range `A:V` → `A:W`
 
-### Technical details
-
-**File**: `src/components/files/FilePathBuilderDialog.tsx`
-
-1. **Lines 728-757**: Wrap the "Who Copied" section in a `{backupNumber === 1 && (...)}` conditional
-2. **Lines 309-324 (handleSave)**: Add device duplicate check before proceeding:
-   ```typescript
-   if (backupNumber >= 2) {
-     const selectedDeviceName = devices.find(d => d.id === form.deviceId)?.device_name;
-     if (backupNumber === 2 && selectedDeviceName && selectedDeviceName === fileRecord.backup_1_device_name) {
-       toast.error("2nd backup cannot be on the same device as 1st backup!");
-       return;
-     }
-     if (backupNumber === 3 && selectedDeviceName && 
-         (selectedDeviceName === fileRecord.backup_1_device_name || selectedDeviceName === fileRecord.backup_2_device_name)) {
-       toast.error("3rd backup cannot be on the same device as 1st or 2nd backup!");
-       return;
-     }
-   }
-   ```
+**4. Force re-sync** — Since the header changed, all existing rows with backups should be re-pushed. The bootstrap logic handles this automatically if the sheet is cleared, but we should also reset `synced_to_sheet` for all rows so the new columns get populated. This will happen naturally on next push since the column mapping changed — but to be safe, we can suggest the user triggers a manual re-sync after deployment.
 
