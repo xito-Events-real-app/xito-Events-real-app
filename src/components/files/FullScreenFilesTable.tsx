@@ -302,7 +302,7 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                       {file.side === "BRIDE SIDE" ? "BRIDE" : file.side === "GROOM SIDE" ? "GROOM" : file.side || "-"}
                     </td>
                     {/* Card (read-only) */}
-                    <td className="px-2 py-1.5 text-[10px]">Card {file.card_label || "1"}</td>
+                    <td className="px-2 py-1.5 text-[10px]">Card {parseInt(file.card_label || "1") || file.card_label || "1"}</td>
                     {/* Format (read-only) */}
                     <td className="px-2 py-1.5 text-[10px]">{file.format_type || "-"}</td>
                     {/* Size (read-only) */}
