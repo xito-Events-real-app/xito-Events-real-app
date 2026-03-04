@@ -235,11 +235,23 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
 
   // Get files for a specific assignment row
   const getFilesForRow = useCallback((row: AssignmentRow): FileRecord[] => {
-    return files.filter(f =>
+    let rowFiles = files.filter(f =>
       f.registered_date_time_ad === row.registeredDateTimeAD &&
       f.event_name === row.event
     );
-  }, [files]);
+    if (filterDevice) {
+      rowFiles = rowFiles.filter(f =>
+        f.backup_1_device_name === filterDevice ||
+        f.backup_2_device_name === filterDevice ||
+        f.backup_3_device_name === filterDevice ||
+        f.drive_upload_path === filterDevice
+      );
+    }
+    if (filterFreelancer) {
+      rowFiles = rowFiles.filter(f => f.freelancer_name === filterFreelancer);
+    }
+    return rowFiles;
+  }, [files, filterDevice, filterFreelancer]);
 
   // Stats
   const stats = useMemo(() => {
