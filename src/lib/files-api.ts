@@ -202,7 +202,11 @@ async function _autoGenerateFileRows(registeredDateTimeAD: string, cardNum: numb
     const eventDay = assignment.event_day || "";
     const eventDateAD = assignment.event_date_ad || "";
     const yearEventFolder = eventMonth && eventYear
-      ? `${eventMonth.toUpperCase()} EVENTS ${eventYear}`
+      ? (() => {
+          const mn = parseInt(eventMonth, 10);
+          const MONTHS: Record<number, string> = {1:"BAISAKH",2:"JESTHA",3:"ASHADH",4:"SHRAWAN",5:"BHADRA",6:"ASHWIN",7:"KARTIK",8:"MANGSIR",9:"POUSH",10:"MAGH",11:"FALGUN",12:"CHAITRA"};
+          return `${MONTHS[mn] || eventMonth.toUpperCase()} EVENTS ${eventYear}`;
+        })()
       : "";
 
     for (const [field, config] of Object.entries(CREW_CODE_MAP)) {
