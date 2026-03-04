@@ -306,7 +306,7 @@ const ClientDetail = () => {
       eventFieldsRef.current = key;
       return;
     }
-    if (key !== eventFieldsRef.current && client?.events && client?.registeredDateTimeAD) {
+    if (key !== eventFieldsRef.current && client?.registeredDateTimeAD) {
       eventFieldsRef.current = key;
 
       // Insert any missing skeleton rows into event_details_cache before refetching
@@ -357,17 +357,25 @@ const ClientDetail = () => {
           const currentStatus = getCurrentStatus(client.statusLog || '').toUpperCase();
           if (currentStatus === 'BOOKED') {
             try {
-              const { ensureFreelancerAssignmentRows } = await import('@/lib/freelancer-assignment-cache');
-              await ensureFreelancerAssignmentRows(
-                client.registeredDateTimeAD,
-                client.clientName || '',
-                client.registeredDateBS || '',
-                client.events || '',
-                client.eventYear || '',
-                client.eventMonth || '',
-                client.eventDay || '',
-                client.eventDateAD || ''
-              );
+              if ((client.events || '').trim()) {
+                const { ensureFreelancerAssignmentRows } = await import('@/lib/freelancer-assignment-cache');
+                await ensureFreelancerAssignmentRows(
+                  client.registeredDateTimeAD,
+                  client.clientName || '',
+                  client.registeredDateBS || '',
+                  client.events || '',
+                  client.eventYear || '',
+                  client.eventMonth || '',
+                  client.eventDay || '',
+                  client.eventDateAD || ''
+                );
+              } else {
+                // BOOKED client with no events: remove stale assignment rows
+                await supabase
+                  .from('freelancer_assignments')
+                  .delete()
+                  .eq('registered_date_time_ad', client.registeredDateTimeAD);
+              }
               window.dispatchEvent(new Event('clients-invalidate'));
               window.dispatchEvent(new Event('booked-clients-invalidate'));
             } catch (err) {
