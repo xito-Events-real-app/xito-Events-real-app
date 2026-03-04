@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { FileManagementSidebar } from "@/components/files/FileManagementSidebar";
@@ -30,7 +30,9 @@ const DEVICE_TYPES: { key: string | null; label: string; icon: React.ElementType
 export default function FileManagement() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
-  const [activeSection, setActiveSection] = useState<ActiveSection>("dashboard");
+  const [searchParams] = useSearchParams();
+  const initialSection = (searchParams.get("section") as ActiveSection) || "dashboard";
+  const [activeSection, setActiveSection] = useState<ActiveSection>(initialSection);
   const [deviceTypeFilter, setDeviceTypeFilter] = useState<string | null>(null);
   const [addDeviceDrawerOpen, setAddDeviceDrawerOpen] = useState(false);
   const [stats, setStats] = useState<{
