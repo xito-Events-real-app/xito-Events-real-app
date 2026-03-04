@@ -379,7 +379,22 @@ export async function getAvailableFileMonths(): Promise<FileMonthData[]> {
   return months;
 }
 
+// Module-level lock to prevent concurrent ensure calls
+let _ensureLock: Promise<void> | null = null;
+
 export async function ensureFileRowsForMonth(eventYear: string, eventMonth: string): Promise<void> {
+  if (_ensureLock) await _ensureLock;
+  let resolve!: () => void;
+  _ensureLock = new Promise(r => { resolve = r; });
+  try {
+    await _ensureFileRowsForMonthInner(eventYear, eventMonth);
+  } finally {
+    resolve();
+    _ensureLock = null;
+  }
+}
+
+async function _ensureFileRowsForMonthInner(eventYear: string, eventMonth: string): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
 
   // Get all assignments for this month where event_date_ad <= today
