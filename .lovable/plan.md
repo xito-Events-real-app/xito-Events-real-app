@@ -1,31 +1,40 @@
 
 
-## Plan: Toggle Filters + Add Freelancer Name Filter
+## Plan: Filter Individual File Rows (Not Just Assignment Rows)
 
-### Changes — `src/components/files/FullScreenFilesTable.tsx`
+### Problem
+Currently, device/freelancer filters only filter at the **assignment row** (client+event) level. If any file in that event matches, ALL files for that event are shown. The user wants to see **only the specific file rows** where the device or freelancer is used.
 
-**1. Toggle device filter (click again to remove)**
+### Fix — `src/components/files/FullScreenFilesTable.tsx`
 
-Currently `BackupPill` calls `onDeviceClick(deviceName)` which always sets. Change it to toggle:
-- Line 88: `onDeviceClick(deviceName)` → `onDeviceClick(prev => prev === deviceName ? null : deviceName)` — but since `onDeviceClick` is `setFilterDevice`, we need to change the call pattern.
-- Instead, update `BackupPill`'s onClick to pass a toggle-aware callback. Simplest: change `onDeviceClick` prop type or wrap at call site.
-- Solution: Replace `onDeviceClick={setFilterDevice}` with `onDeviceClick={(name) => setFilterDevice(prev => prev === name ? null : name)}` at all 6 call sites.
-- Same for the cloud pill inline onClick (line 436).
+**1. Update `getFilesForRow`** to apply device/freelancer filters on the individual file records:
 
-**2. Add freelancer name filter**
+Change `getFilesForRow` (~line 237) to also filter by `filterDevice` and `filterFreelancer` when active:
 
-- New state: `const [filterFreelancer, setFilterFreelancer] = useState<string | null>(null)`
-- Filter logic (after device filter ~line 219): filter assignment rows where any file's `freelancer_name` matches `filterFreelancer`.
-- Add to `filteredRows` deps.
+```typescript
+const getFilesForRow = useCallback((row: AssignmentRow): FileRecord[] => {
+  let rowFiles = files.filter(f =>
+    f.registered_date_time_ad === row.registeredDateTimeAD &&
+    f.event_name === row.event
+  );
+  if (filterDevice) {
+    rowFiles = rowFiles.filter(f =>
+      f.backup_1_device_name === filterDevice ||
+      f.backup_2_device_name === filterDevice ||
+      f.backup_3_device_name === filterDevice ||
+      f.drive_upload_path === filterDevice
+    );
+  }
+  if (filterFreelancer) {
+    rowFiles = rowFiles.filter(f => f.freelancer_name === filterFreelancer);
+  }
+  return rowFiles;
+}, [files, filterDevice, filterFreelancer]);
+```
 
-**3. Make freelancer names clickable (toggle filter)**
-
-- Desktop table (line 377): Change `<span className="font-bold cursor-default">` to clickable with `onClick` that toggles `filterFreelancer`.
-- Mobile view (line 582): Same treatment.
-
-**4. Add filter chip for freelancer**
-
-- In filter chips section (line 698): add `filterFreelancer` to condition.
-- Add badge: `Freelancer: {filterFreelancer} ✕`
-- Add to "Clear all" handler (line 716).
+This single change ensures:
+- When a device filter is active, only file rows using that device are shown
+- When a freelancer filter is active, only that freelancer's file rows are shown
+- Both filters can combine
+- No other changes needed — the assignment-level filter in `filteredRows` already ensures only relevant events appear
 
