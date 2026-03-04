@@ -1,23 +1,32 @@
 
 
-## Plan: Add Self-Update Guard to Prevent Refresh Flash
+## Plan: Add Device Name Filter to Files Table
 
-### Problem
-Every local update (backup, cloud, notes) triggers a realtime event which calls `loadFiles()` — causing a full refetch and visible UI flash. The optimistic state is already correct but gets overwritten.
+### What
+Click any storage device name pill (e.g., "W-T-N 17") in backup columns (1st, 2nd, 3rd) or Cloud column to filter and show only rows where that device is used. Same chip pattern as existing Day/Client filters.
 
-### Solution
-Add a `useRef` timestamp guard (same pattern used in other hooks per project conventions). Skip realtime refetches that arrive within 2 seconds of a local update.
+### Changes — `src/components/files/FullScreenFilesTable.tsx`
 
-### Changes
+1. **New state**: `const [filterDevice, setFilterDevice] = useState<string | null>(null)`
 
-**`src/hooks/useFilesManagement.ts`**:
-1. Add `import { useRef }` 
-2. Add `const lastLocalUpdate = useRef<number>(0)`
-3. In `update()` and `remove()`: set `lastLocalUpdate.current = Date.now()` before the optimistic state update
-4. In the realtime callback (line 66-68): add guard `if (Date.now() - lastLocalUpdate.current < 2000) return;` before calling `loadFiles()`
+2. **Update `BackupPill`**: Add `onDeviceClick?: (name: string) => void` prop. On the device label `<span>`, add `onClick` with `e.stopPropagation()` that calls `onDeviceClick(deviceName)`.
 
-This preserves realtime sync for external changes while preventing the flash from self-triggered events.
+3. **Update Cloud pill**: Same clickable behavior on the `drive_upload_path` span — clicking sets `setFilterDevice(drive_upload_path)`.
 
-### Files to modify
-1. `src/hooks/useFilesManagement.ts` — 4 small edits
+4. **Filter logic in `filteredRows`**: After day/client filters, when `filterDevice` is set, filter assignment rows to only those whose file records contain the device in any of: `backup_1_device_name`, `backup_2_device_name`, `backup_3_device_name`, or `drive_upload_path`. Uses `getFilesForRow(row)` to check.
+
+5. **Filter chip in UI** (lines 684-701): Add device chip alongside Day/Client:
+   ```
+   {filterDevice && (
+     <Badge variant="secondary" className="text-xs cursor-pointer" onClick={() => setFilterDevice(null)}>
+       Device: {filterDevice} ✕
+     </Badge>
+   )}
+   ```
+
+6. **Update condition** on line 685: `(filterDay || filterClient || filterDevice)`
+
+7. **Update "Clear all"** on line 698: add `setFilterDevice(null)`
+
+8. **Pass `onDeviceClick={setFilterDevice}`** to all `BackupPill` instances (1st, 2nd, 3rd backup columns) and the Cloud pill.
 
