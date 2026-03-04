@@ -16,6 +16,7 @@ import { buildFilePath, StorageDevice, FileRecord, getNextBackupNumber, duplicat
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { scheduleFilesPush } from "@/lib/files-push-scheduler";
 
 const PHOTO_ROLES = ["PB", "PG", "EP"];
 const VIDEO_ROLES = ["VB", "VG", "EV", "DRONE", "FPV", "IPHONE"];
@@ -452,6 +453,7 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
 
       onOpenChange(false);
       if (onRefresh) await onRefresh();
+      scheduleFilesPush();
       toast.success("File path saved");
     } finally {
       setSaving(false);
