@@ -57,16 +57,21 @@ export function useFilesManagement(selectedMonth: { year: string; month: string 
     };
     run();
 
-    // Realtime subscription
+    // Realtime subscription with debounce to prevent duplicate ensure calls
+    let realtimeTimer: ReturnType<typeof setTimeout>;
     const channel = (supabase as any)
       .channel(`files_mgmt_${selectedMonth.year}_${selectedMonth.month}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "files_management" }, () => {
-        if (!cancelled) loadFiles();
+        clearTimeout(realtimeTimer);
+        realtimeTimer = setTimeout(() => {
+          if (!cancelled) loadFiles();
+        }, 500);
       })
       .subscribe();
 
     return () => {
       cancelled = true;
+      clearTimeout(realtimeTimer);
       (supabase as any).removeChannel(channel);
     };
   }, [selectedMonth?.year, selectedMonth?.month]);
