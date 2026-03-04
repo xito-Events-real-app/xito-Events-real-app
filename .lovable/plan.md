@@ -1,34 +1,22 @@
 
 
-## Increase Text Size + Hover Popup on Backup Pills
+## Fix: HoverCard Popup on Backup Pills
 
-### 1. Increase Text Sizes (FullScreenFilesTable.tsx)
+### Root Cause
+`BackupPill` is defined as a **nested function component** inside the main `FullScreenFilesTable` component (line ~245). Every render creates a new component reference, causing React to **unmount and remount** the HoverCard before the popup has a chance to appear.
 
-Bump all tiny text throughout:
-- Table headers: `text-[10px]` → `text-xs` (12px)
-- Table body cells: `text-[11px]`/`text-[10px]` → `text-xs`/`text-sm`
-- Badge text: `text-[9px]`/`text-[10px]` → `text-[11px]`/`text-xs`
-- Section headers: `text-xs` → `text-sm`
-- BackupPill badge: `text-[9px]` → `text-[11px]`
-- Mobile card text similarly bumped
+### Fix
+Extract `BackupPill` as a **standalone component outside** `FullScreenFilesTable`, passing the needed helpers (`getTimeAgo`, `getBackupTime`, `NEPALI_MONTH_NAMES`) as props or moving them outside the component too.
 
-### 2. Hover Popup on Backup Pills
+Specifically:
+1. Move `getTimeAgo` and `getBackupTime` helper functions **outside** the component (they have no dependencies on component state)
+2. Move `NEPALI_MONTH_NAMES` constant outside (it's already likely outside)
+3. Extract `BackupPill` as a standalone `React.FC` defined **before** `FullScreenFilesTable`
+4. Keep the same HoverCard JSX, just stable component identity
 
-Replace the simple `BackupPill` badge with a `HoverCard` that shows on hover:
-
-**Data shown in popup:**
-- **Device name + event date/time**: e.g. `W-T-N-19 (20 FALGUN 9:15 PM)`
-  - Day from `file.event_day`, month from `file.event_month` (mapped to Nepali name)
-  - Time from `file.updated_at` or `file.created_at`
-- **Full path**: the complete `final_generated_path` / `backup_2_path` / `backup_3_path`
-- **Time ago**: computed from `file.updated_at` using `date-fns` `formatDistanceToNow` or manual calculation showing `X days Y hrs Z mins ago`
-
-**Implementation:**
-- Import `HoverCard, HoverCardTrigger, HoverCardContent` from ui
-- Modify `BackupPill` to accept additional props: `path`, `deviceName`, `eventDay`, `eventMonth`, `updatedAt`
-- Wrap the badge in `HoverCard` with a styled popup showing the 3 lines
-- Helper function `getTimeAgo(dateStr)` to compute days/hrs/mins format
-
-### Files Changed
-Single file: `src/components/files/FullScreenFilesTable.tsx`
+### File Changed
+`src/components/files/FullScreenFilesTable.tsx`
+- Move `getTimeAgo` (lines ~219-232) outside component
+- Move `getBackupTime` (lines ~234-242) outside component  
+- Move `BackupPill` (lines ~245-276) outside component as a standalone component
 
