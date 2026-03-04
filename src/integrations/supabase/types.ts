@@ -375,6 +375,7 @@ export type Database = {
           backup_3_device_name: string | null
           backup_3_path: string | null
           backup_3_recorded_at: string | null
+          backup_history: string | null
           card_label: string | null
           category: string | null
           client_folder_name: string | null
@@ -423,6 +424,7 @@ export type Database = {
           backup_3_device_name?: string | null
           backup_3_path?: string | null
           backup_3_recorded_at?: string | null
+          backup_history?: string | null
           card_label?: string | null
           category?: string | null
           client_folder_name?: string | null
@@ -471,6 +473,7 @@ export type Database = {
           backup_3_device_name?: string | null
           backup_3_path?: string | null
           backup_3_recorded_at?: string | null
+          backup_history?: string | null
           card_label?: string | null
           category?: string | null
           client_folder_name?: string | null

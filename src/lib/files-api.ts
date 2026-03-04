@@ -69,6 +69,7 @@ export interface FileRecord {
   backup_1_recorded_at: string;
   backup_2_recorded_at: string;
   backup_3_recorded_at: string;
+  backup_history: string;
 }
 
 // ── Storage Devices API ─────────────────────────────────

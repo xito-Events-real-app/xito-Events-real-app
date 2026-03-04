@@ -1,0 +1,1 @@
+ALTER TABLE public.files_management ADD COLUMN IF NOT EXISTS backup_history text DEFAULT '';
