@@ -81,6 +81,7 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
   const [freelancerNames, setFreelancerNames] = useState<string[]>([]);
   const [newCopierName, setNewCopierName] = useState("");
   const [pcName, setPcName] = useState("");
+  const [localCardIds, setLocalCardIds] = useState<Record<string, string>>({});  // card_label -> row id for newly created cards
 
   const backupNumber = useMemo(() => {
     if (!fileRecord) return 1;
@@ -116,7 +117,7 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
   // Reset all fields when dialog opens
   useEffect(() => {
     if (!fileRecord || !open) return;
-
+    setLocalCardIds({});
     const role = fileRecord.freelancer_type || "";
     const isPhotoRole = PHOTO_ROLES.includes(role);
     const defaultYearFolder = getNormalizedYearEventFolder(
@@ -267,10 +268,10 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
       },
     }));
 
-    // Create the duplicate row in DB
+    // Create the duplicate row in DB and track its ID locally
     try {
-      await duplicateFileRowForCard(fileRecord.id, newCardNum);
-      // Don't call onRefresh here — it resets form state via allFiles prop change
+      const newRow = await duplicateFileRowForCard(fileRecord.id, newCardNum);
+      setLocalCardIds(prev => ({ ...prev, [newKey]: newRow.id }));
     } catch (err: any) {
       toast.error("Failed to create card row");
     }
@@ -470,14 +471,16 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
           const cardForm = cardForms[key];
           if (!cardForm) continue;
 
-          const cardFile = allFiles.find(f =>
+          // Try allFiles first, then fall back to locally tracked card IDs
+          let cardFile = allFiles?.find(f =>
             f.registered_date_time_ad === fileRecord.registered_date_time_ad &&
             f.event_name === fileRecord.event_name &&
             f.freelancer_type === fileRecord.freelancer_type &&
             f.freelancer_name === fileRecord.freelancer_name &&
             f.card_label === key
           );
-          if (!cardFile) continue;
+          const cardFileId = cardFile?.id || localCardIds[key];
+          if (!cardFileId) continue;
 
           const cardDev = devices.find(d => d.id === cardForm.deviceId);
           const cardPath = !cardForm.storageType || !cardDev ? "" : buildFilePath({
@@ -509,7 +512,7 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
             notes,
           };
 
-          const cardBackup = getNextBackupNumber(cardFile);
+          const cardBackup = cardFile ? getNextBackupNumber(cardFile) : 1;
           const cardNow = new Date().toISOString();
           if (cardBackup === 1) {
             cardUpdates.final_generated_path = cardPath;
@@ -530,7 +533,7 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
           await (supabase as any)
             .from("files_management")
             .update({ ...cardUpdates, synced_to_sheet: false })
-            .eq("id", cardFile.id);
+            .eq("id", cardFileId);
         }
       }
 
