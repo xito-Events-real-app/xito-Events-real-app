@@ -53,7 +53,7 @@ import { nepaliMonthsEnglish, NepaliDateObject, bsToAD, isUnknownDay, getDayForS
 import { getMonthName } from "@/lib/nepali-months";
 import NepaliDate from "nepali-date-converter";
 import PaymentDrawer from "@/components/finance/PaymentDrawer";
-import { ClientDetailSidebar, ClientHeroSection, SectionType, EventDetailsSummaryCard, FullScreenEventCard, ClientDetailsCard, BenzoKeepDialog, BenzoKeepViewer, DeleteClientDialog } from "@/components/client-detail";
+import { ClientDetailSidebar, ClientHeroSection, SectionType, EventDetailsSummaryCard, FullScreenEventCard, ClientDetailsCard, BenzoKeepDialog, BenzoKeepViewer, DeleteClientDialog, ClientFilesSection } from "@/components/client-detail";
 import FreelancerAssignmentSection from "@/components/client-detail/FreelancerAssignmentSection";
 import { updateRequiredCrewCategories } from "@/lib/freelancer-assignment-api";
 import { EventDetailCard } from "@/components/client-detail/EventDetailCard";
@@ -1138,6 +1138,8 @@ const ClientDetail = () => {
                   { id: 'activity', label: 'Activity' },
                   { id: 'comments', label: 'Comments' },
                   { id: 'financials', label: 'Financials' },
+                  { id: 'keepNotes', label: 'Keep' },
+                  { id: 'files', label: 'Files' },
                 ] as { id: SectionType; label: string }[]).map((section) => (
                   <Button
                     key={section.id}
@@ -1714,6 +1716,14 @@ const ClientDetail = () => {
             <BenzoKeepViewer 
               notesData={currentKeepNotes || client.benzoKeepNotes}
               onEdit={() => setShowBenzoKeepDialog(true)}
+            />
+          )}
+
+          {/* Files Section */}
+          {activeSection === 'files' && client?.registeredDateTimeAD && (
+            <ClientFilesSection
+              registeredDateTimeAD={client.registeredDateTimeAD}
+              clientName={client.clientName}
             />
           )}
 
