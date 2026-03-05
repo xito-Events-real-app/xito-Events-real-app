@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Loader2, ChevronDown, ChevronUp, PenLine, ExternalLink, Clock, X, FolderOpen, HardDrive } from "lucide-react";
+import { Loader2, ChevronDown, ChevronUp, PenLine, ExternalLink, Clock, X, FolderOpen, HardDrive, Camera, Video } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,7 +39,7 @@ const getTimeAgo = (dateStr: string): string => {
 };
 
 const BackupPill = ({ path, deviceName, file, backupNum, onDeviceClick }: { path: string; deviceName: string; file: FileRecord; backupNum?: number; onDeviceClick?: (name: string) => void }) => {
-  if (!path) return <X className="w-4 h-4 text-red-500 mx-auto" />;
+  if (!path) return <X className="w-4 h-4 text-destructive mx-auto" />;
   const label = deviceName || path.split("\\")[0] || "✓";
   const backupTimestamp = backupNum === 1 ? file.backup_1_recorded_at
     : backupNum === 2 ? file.backup_2_recorded_at
@@ -77,6 +77,20 @@ const BackupPill = ({ path, deviceName, file, backupNum, onDeviceClick }: { path
   );
 };
 
+/** Build a compact summary string for collapsed event view */
+const buildEventSummary = (eventFiles: FileRecord[]) => {
+  const photoFiles = eventFiles.filter(f => PHOTO_ROLES.includes(f.freelancer_type));
+  const videoFiles = eventFiles.filter(f => VIDEO_ROLES.includes(f.freelancer_type));
+  const backedUp = eventFiles.filter(f => f.final_generated_path).length;
+  const cloudCount = eventFiles.filter(f => f.drive_upload).length;
+  const totalSize = eventFiles.reduce((s, f) => s + (Number(f.size_gb) || 0), 0);
+
+  const uniquePhotoNames = [...new Set(photoFiles.map(f => (f.freelancer_name || "").split(" ")[0]).filter(Boolean))];
+  const uniqueVideoNames = [...new Set(videoFiles.map(f => (f.freelancer_name || "").split(" ")[0]).filter(Boolean))];
+
+  return { uniquePhotoNames, uniqueVideoNames, backedUp, cloudCount, totalSize: Math.round(totalSize * 100) / 100, total: eventFiles.length };
+};
+
 interface EventGroup {
   eventName: string;
   eventDateAD: string;
@@ -97,7 +111,6 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
   const { devices } = useStorageDevices();
 
-  // Dialogs
   const [pathDialogOpen, setPathDialogOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<FileRecord | null>(null);
   const [editBackupNumber, setEditBackupNumber] = useState<number | null>(null);
@@ -107,16 +120,13 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
   const [notesFile, setNotesFile] = useState<FileRecord | null>(null);
   const [notesText, setNotesText] = useState("");
 
-  // Load all files for this client
   const loadFiles = useCallback(async () => {
     setIsLoading(true);
     try {
       const data = await getFileRecords({ clientName: undefined });
-      // Filter by registered_date_time_ad since getFileRecords doesn't support that filter directly
       const clientFiles = data.filter(f => f.registered_date_time_ad === registeredDateTimeAD);
       setFiles(clientFiles);
     } catch {
-      // Fallback: query directly
       const { data, error } = await (supabase as any)
         .from("files_management")
         .select("*")
@@ -132,7 +142,6 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
 
   useEffect(() => { loadFiles(); }, [loadFiles]);
 
-  // Group files by event
   const eventGroups = useMemo((): EventGroup[] => {
     const map = new Map<string, EventGroup>();
     for (const f of files) {
@@ -152,7 +161,6 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
     return Array.from(map.values()).sort((a, b) => (a.eventDateAD || "").localeCompare(b.eventDateAD || ""));
   }, [files]);
 
-  // Stats
   const stats = useMemo(() => {
     const total = files.length;
     const remaining = files.filter(f => !f.final_generated_path).length;
@@ -160,7 +168,6 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
     return { total, remaining, totalSize: Math.round(totalSize * 100) / 100 };
   }, [files]);
 
-  // Update handler
   const update = useCallback(async (id: string, updates: Partial<FileRecord>) => {
     setFiles(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f));
     await updateFileRecord(id, { ...updates, synced_to_sheet: false });
@@ -199,12 +206,10 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
   };
 
   const getFirstName = (name: string) => (name || "").split(" ")[0];
-
   const getRemainingCount = (eventFiles: FileRecord[]) => eventFiles.filter(f => !f.final_generated_path).length;
 
-  // File rows table for an event group
   const FileRowsTable = ({ fileRows }: { fileRows: FileRecord[] }) => {
-    if (fileRows.length === 0) return <div className="px-4 py-3 text-xs text-white/40">No file rows</div>;
+    if (fileRows.length === 0) return <div className="px-4 py-3 text-xs text-muted-foreground">No file rows</div>;
     const photoFiles = fileRows.filter(f => PHOTO_ROLES.includes(f.freelancer_type));
     const videoFiles = fileRows.filter(f => VIDEO_ROLES.includes(f.freelancer_type));
     const otherFiles = fileRows.filter(f => !PHOTO_ROLES.includes(f.freelancer_type) && !VIDEO_ROLES.includes(f.freelancer_type));
@@ -235,7 +240,7 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
                 <col style={{ width: '4%' }} />
               </colgroup>
               <thead>
-                <tr className="border-b border-white/10 text-white/50">
+                <tr className="border-b border-border text-muted-foreground">
                   <th className="px-2 py-1 text-left font-bold">Role</th>
                   <th className="px-2 py-1 text-left font-bold">Name</th>
                   <th className="px-2 py-1 text-left font-bold">Side</th>
@@ -254,30 +259,30 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
               </thead>
               <tbody>
                 {sectionFiles.map(file => (
-                  <tr key={file.id} className="border-b border-white/5 hover:bg-white/5 text-white/80">
+                  <tr key={file.id} className="border-b border-border/50 hover:bg-muted/40 text-foreground">
                     <td className="px-2 py-1.5">
-                      <Badge variant="outline" className="text-[11px] px-1.5 font-bold border-white/20 text-white/80">{file.freelancer_type}</Badge>
+                      <Badge variant="outline" className="text-[11px] px-1.5 font-bold">{file.freelancer_type}</Badge>
                     </td>
                     <td className="px-2 py-1.5">
                       <TooltipProvider><Tooltip>
                         <TooltipTrigger asChild>
-                          <span className="font-bold cursor-pointer hover:underline text-white/90">{getFirstName(file.freelancer_name)}</span>
+                          <span className="font-bold cursor-pointer hover:underline">{getFirstName(file.freelancer_name)}</span>
                         </TooltipTrigger>
                         <TooltipContent><p className="font-bold">{file.freelancer_name}</p></TooltipContent>
                       </Tooltip></TooltipProvider>
                     </td>
-                    <td className="px-2 py-1.5 text-xs text-white/60">
+                    <td className="px-2 py-1.5 text-xs text-muted-foreground">
                       {file.side === "BRIDE SIDE" ? "BRIDE" : file.side === "GROOM SIDE" ? "GROOM" : file.side || "-"}
                     </td>
-                    <td className="px-2 py-1.5 text-xs text-white/60">Card {parseInt(file.card_label || "1") || 1}</td>
-                    <td className="px-2 py-1.5 text-xs text-white/60">{file.format_type || "-"}</td>
-                    <td className="px-2 py-1.5 text-right text-xs text-white/60">{file.size_gb ? `${file.size_gb}GB` : "-"}</td>
+                    <td className="px-2 py-1.5 text-xs text-muted-foreground">Card {parseInt(file.card_label || "1") || 1}</td>
+                    <td className="px-2 py-1.5 text-xs text-muted-foreground">{file.format_type || "-"}</td>
+                    <td className="px-2 py-1.5 text-right text-xs text-muted-foreground">{file.size_gb ? `${file.size_gb}GB` : "-"}</td>
                     {/* 1st Backup */}
                     <td className="px-2 py-1.5 text-center">
                       <div className="flex items-center justify-center gap-0.5">
                         <BackupPill path={file.final_generated_path || ""} deviceName={file.backup_1_device_name || ""} file={file} backupNum={1} />
                         {file.final_generated_path && (
-                          <button onClick={() => openPathBuilder(file, 1)} className="hover:text-blue-400 text-white/30"><PenLine className="w-3 h-3" /></button>
+                          <button onClick={() => openPathBuilder(file, 1)} className="hover:text-primary text-muted-foreground"><PenLine className="w-3 h-3" /></button>
                         )}
                       </div>
                     </td>
@@ -286,7 +291,7 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
                       <div className="flex items-center justify-center gap-0.5">
                         <BackupPill path={file.backup_2_path || ""} deviceName={file.backup_2_device_name || ""} file={file} backupNum={2} />
                         {file.backup_2_path && (
-                          <button onClick={() => openPathBuilder(file, 2)} className="hover:text-blue-400 text-white/30"><PenLine className="w-3 h-3" /></button>
+                          <button onClick={() => openPathBuilder(file, 2)} className="hover:text-primary text-muted-foreground"><PenLine className="w-3 h-3" /></button>
                         )}
                       </div>
                     </td>
@@ -295,7 +300,7 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
                       <div className="flex items-center justify-center gap-0.5">
                         <BackupPill path={file.backup_3_path || ""} deviceName={file.backup_3_device_name || ""} file={file} backupNum={3} />
                         {file.backup_3_path && (
-                          <button onClick={() => openPathBuilder(file, 3)} className="hover:text-blue-400 text-white/30"><PenLine className="w-3 h-3" /></button>
+                          <button onClick={() => openPathBuilder(file, 3)} className="hover:text-primary text-muted-foreground"><PenLine className="w-3 h-3" /></button>
                         )}
                       </div>
                     </td>
@@ -303,39 +308,39 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
                     <td className="px-2 py-1.5 text-center">
                       <div className="flex items-center justify-center gap-0.5">
                         {file.drive_upload && file.drive_upload_path ? (
-                          <span className="inline-flex items-center text-[11px] px-1.5 py-0.5 bg-purple-900/40 text-purple-400 font-bold truncate max-w-[90px] cursor-pointer rounded-md hover:ring-1 hover:ring-purple-400"
+                          <span className="inline-flex items-center text-[11px] px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400 font-bold truncate max-w-[90px] cursor-pointer rounded-md hover:ring-1 hover:ring-purple-400"
                             onClick={() => { setCloudFile(file); setCloudDialogOpen(true); }}>
                             {file.drive_upload_path}
                           </span>
                         ) : (
-                          <button onClick={() => { setCloudFile(file); setCloudDialogOpen(true); }} className="hover:text-purple-400 text-white/30">
-                            <X className="w-4 h-4 text-red-500" />
+                          <button onClick={() => { setCloudFile(file); setCloudDialogOpen(true); }} className="hover:text-purple-500 text-muted-foreground">
+                            <X className="w-4 h-4 text-destructive" />
                           </button>
                         )}
                       </div>
                     </td>
                     {/* Who Copied */}
-                    <td className="px-2 py-1.5 text-xs font-bold text-white/60">{file.who_copied || "-"}</td>
+                    <td className="px-2 py-1.5 text-xs font-bold text-muted-foreground">{file.who_copied || "-"}</td>
                     {/* Confirmed */}
                     <td className="px-2 py-1.5 text-center">
                       <button onClick={() => handleConfirmedToggle(file)} className="hover:scale-110 transition-transform">
                         {file.confirmed ? (
-                          <span className="text-[10px] font-black text-emerald-400 uppercase">CONFIRMED</span>
+                          <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase">CONFIRMED</span>
                         ) : (
-                          <span className="text-[10px] font-black text-red-400 uppercase">NOT CONFIRMED</span>
+                          <span className="text-[10px] font-black text-destructive uppercase">NOT CONFIRMED</span>
                         )}
                       </button>
                     </td>
                     {/* Action */}
                     <td className="px-2 py-1.5 text-center">
-                      <Button variant="outline" size="sm" className="h-6 text-xs px-2 font-bold border-white/20 text-white/80 hover:bg-white/10" onClick={() => openPathBuilder(file)}>
+                      <Button variant="outline" size="sm" className="h-6 text-xs px-2 font-bold" onClick={() => openPathBuilder(file)}>
                         SET PATH
                       </Button>
                     </td>
                     {/* Notes */}
                     <td className="px-2 py-1.5 text-center">
-                      <button onClick={() => openNotesDialog(file)} className="hover:text-blue-400 transition-colors">
-                        <PenLine className={cn("w-3.5 h-3.5 mx-auto", file.notes ? "text-blue-400" : "text-white/30")} />
+                      <button onClick={() => openNotesDialog(file)} className="hover:text-primary transition-colors">
+                        <PenLine className={cn("w-3.5 h-3.5 mx-auto", file.notes ? "text-primary" : "text-muted-foreground")} />
                       </button>
                     </td>
                   </tr>
@@ -349,11 +354,11 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
 
     return (
       <div>
-        {renderSection("PHOTOS", photoFiles, "bg-emerald-900/30 text-emerald-300")}
-        {photoFiles.length > 0 && videoFiles.length > 0 && <div className="h-px bg-white/10" />}
-        {renderSection("VIDEOS", videoFiles, "bg-indigo-900/30 text-indigo-300")}
-        {otherFiles.length > 0 && <div className="h-px bg-white/10" />}
-        {renderSection("OTHER", otherFiles, "bg-white/5 text-white/50")}
+        {renderSection("PHOTOS", photoFiles, "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300")}
+        {photoFiles.length > 0 && videoFiles.length > 0 && <div className="h-px bg-border" />}
+        {renderSection("VIDEOS", videoFiles, "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300")}
+        {otherFiles.length > 0 && <div className="h-px bg-border" />}
+        {renderSection("OTHER", otherFiles, "bg-muted text-muted-foreground")}
       </div>
     );
   };
@@ -361,7 +366,7 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-6 h-6 animate-spin text-white/40" />
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -370,32 +375,32 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <FolderOpen className="w-6 h-6 text-cyan-400" />
-        <h2 className="text-xl font-bold text-white">Files</h2>
-        <Badge variant="outline" className="border-white/20 text-white/60 font-bold">{stats.total} files</Badge>
+        <FolderOpen className="w-6 h-6 text-cyan-500" />
+        <h2 className="text-xl font-bold text-foreground">Files</h2>
+        <Badge variant="outline" className="font-bold">{stats.total} files</Badge>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="bg-white/5 rounded-lg p-3 border border-white/10">
-          <div className="text-xs text-white/40 mb-1">Total Files</div>
-          <div className="text-lg font-bold text-white">{stats.total}</div>
+        <div className="bg-muted/60 rounded-lg p-3 border border-border">
+          <div className="text-xs text-muted-foreground mb-1">Total Files</div>
+          <div className="text-lg font-bold text-foreground">{stats.total}</div>
         </div>
-        <div className="bg-white/5 rounded-lg p-3 border border-white/10">
-          <div className="text-xs text-white/40 mb-1">Remaining</div>
-          <div className={cn("text-lg font-bold", stats.remaining > 0 ? "text-red-400" : "text-emerald-400")}>
+        <div className="bg-muted/60 rounded-lg p-3 border border-border">
+          <div className="text-xs text-muted-foreground mb-1">Remaining</div>
+          <div className={cn("text-lg font-bold", stats.remaining > 0 ? "text-destructive" : "text-emerald-600 dark:text-emerald-400")}>
             {stats.remaining}
           </div>
         </div>
-        <div className="bg-white/5 rounded-lg p-3 border border-white/10">
-          <div className="text-xs text-white/40 mb-1">Total Size</div>
-          <div className="text-lg font-bold text-white">{stats.totalSize} GB</div>
+        <div className="bg-muted/60 rounded-lg p-3 border border-border">
+          <div className="text-xs text-muted-foreground mb-1">Total Size</div>
+          <div className="text-lg font-bold text-foreground">{stats.totalSize} GB</div>
         </div>
       </div>
 
       {/* Event Groups */}
       {eventGroups.length === 0 ? (
-        <div className="text-center py-12 text-white/40">
+        <div className="text-center py-12 text-muted-foreground">
           <HardDrive className="w-10 h-10 mx-auto mb-3 opacity-40" />
           <p className="font-bold">No file records yet</p>
           <p className="text-sm mt-1">Files will appear here once events are processed</p>
@@ -406,29 +411,52 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
             const key = `${group.eventName}-${group.eventDateAD}`;
             const isExpanded = expandedEvents.has(key);
             const remaining = getRemainingCount(group.files);
+            const summary = buildEventSummary(group.files);
             return (
-              <div key={key} className={cn("border rounded-lg overflow-hidden", isExpanded ? "border-cyan-500/30" : "border-white/10")}>
+              <div key={key} className={cn("border rounded-lg overflow-hidden", isExpanded ? "border-cyan-500/50" : "border-border")}>
                 <button
-                  className="w-full flex items-center gap-3 px-4 py-3 text-left bg-white/5 hover:bg-white/10 transition-colors"
+                  className="w-full flex flex-col px-4 py-3 text-left bg-muted/50 hover:bg-muted/80 transition-colors"
                   onClick={() => toggleEvent(key)}
                 >
-                  <div className="w-8 h-8 rounded-full bg-cyan-600 text-white flex items-center justify-center text-xs font-bold shrink-0">
-                    {group.eventDay || "?"}
+                  <div className="flex items-center gap-3 w-full">
+                    <div className="w-8 h-8 rounded-full bg-cyan-600 text-white flex items-center justify-center text-xs font-bold shrink-0">
+                      {group.eventDay || "?"}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-sm text-foreground truncate">{group.eventName}</p>
+                      <p className="text-[11px] text-muted-foreground">{group.eventDateAD}</p>
+                    </div>
+                    {remaining > 0 ? (
+                      <span className="text-[11px] font-bold text-destructive shrink-0">{remaining} REMAINING</span>
+                    ) : (
+                      <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 shrink-0">ALL COPIED</span>
+                    )}
+                    <Badge variant="outline" className="text-xs shrink-0 font-bold">{group.files.length}</Badge>
+                    {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-sm text-white truncate">{group.eventName}</p>
-                    <p className="text-[11px] text-white/40">{group.eventDateAD}</p>
-                  </div>
-                  {remaining > 0 ? (
-                    <span className="text-[11px] font-bold text-red-400 shrink-0">{remaining} REMAINING</span>
-                  ) : (
-                    <span className="text-[11px] font-bold text-emerald-400 shrink-0">ALL COPIED</span>
+                  {/* Pre-expand summary */}
+                  {!isExpanded && (
+                    <div className="flex items-center gap-3 mt-2 ml-11 flex-wrap text-[11px] text-muted-foreground">
+                      {summary.uniquePhotoNames.length > 0 && (
+                        <span className="flex items-center gap-1">
+                          <Camera className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                          <span className="font-semibold">{summary.uniquePhotoNames.join(", ")}</span>
+                        </span>
+                      )}
+                      {summary.uniqueVideoNames.length > 0 && (
+                        <span className="flex items-center gap-1">
+                          <Video className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+                          <span className="font-semibold">{summary.uniqueVideoNames.join(", ")}</span>
+                        </span>
+                      )}
+                      <span className="font-semibold">💾 {summary.backedUp}/{summary.total}</span>
+                      {summary.cloudCount > 0 && <span className="font-semibold">☁ {summary.cloudCount}/{summary.total}</span>}
+                      {summary.totalSize > 0 && <span className="font-semibold">{summary.totalSize} GB</span>}
+                    </div>
                   )}
-                  <Badge variant="outline" className="text-xs shrink-0 font-bold border-white/20 text-white/60">{group.files.length}</Badge>
-                  {isExpanded ? <ChevronUp className="w-4 h-4 text-white/40" /> : <ChevronDown className="w-4 h-4 text-white/40" />}
                 </button>
                 {isExpanded && (
-                  <div className="border-t border-white/10">
+                  <div className="border-t border-border">
                     <FileRowsTable fileRows={group.files} />
                   </div>
                 )}
