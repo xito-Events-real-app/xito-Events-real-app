@@ -1,22 +1,30 @@
 
 
-## Plan: Smart PC Name & Drive Letter Dropdowns
+## Plan: PC Name + Drive Letter Selection in FilePathBuilderDialog
 
-### Changes to `src/components/files/AddStorageDeviceDrawer.tsx`
+### Current Behavior
+When storage type is "PC", the Device dropdown shows all PC devices (e.g., "SABIN PC (500GB)", "SAUGAT PC (200GB)"). The drive letter is shown read-only after selection.
 
-**1. Fetch existing PC names from `storage_devices` table**
-- Query `storage_devices` where `device_type = 'PC'` to get distinct `device_name` values (e.g., "SABIN PC", "SAUGAT PC")
-- Load on mount via `useEffect` with supabase query
+### Desired Behavior
+When storage type is "PC", replace the single Device dropdown with:
+1. **PC Name** dropdown — shows distinct PC names (SABIN PC, SAUGAT PC, etc.) from `filteredDevices`
+2. **Drive Letter** dropdown — shows drive letters available for the selected PC name, picking the actual device
 
-**2. When device_type is "PC", replace Device Name input with a combobox**
-- Label changes to "PC Name"
-- Dropdown shows existing PC names from the database
-- Also allows typing a new name manually (combobox pattern using `FormCombobox` or a custom Popover+Command)
+### Changes to `src/components/files/FilePathBuilderDialog.tsx`
 
-**3. Replace Drive Letter text input with a combobox dropdown**
-- Options: C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, A, B
-- Also allows typing manually for edge cases
-- Use same combobox pattern
+**Add state:**
+- `pcName` state to track selected PC name (derived from existing devices, not a new query)
 
-**Implementation**: Use the existing `FormCombobox` component from `src/components/form/FormCombobox.tsx` which already supports dropdown + manual entry. Import it and wire up both fields when `device_type === "PC"`.
+**Modify the Storage & Path column (lines 611-643):**
+- When `storageType === "PC"`, render a 3-field layout: Storage Type | PC Name | Drive Letter
+- PC Name: `<Select>` with unique PC names extracted from `filteredDevices` (deduplicated by `device_name`)
+- Drive Letter: `<Select>` with drive letters from devices matching the selected PC name; selecting a letter sets `deviceId` to the matching device
+- When `storageType !== "PC"`, keep existing Device dropdown as-is
+
+**Reset logic:**
+- When `storageType` changes to PC, clear `deviceId` and `pcName`
+- When `pcName` changes, clear `deviceId` (so user must pick drive letter)
+- When dialog opens with existing PC device, derive `pcName` from the selected device
+
+**Remove the separate read-only drive letter section** (lines 639-644) since it's now integrated into the selection flow.
 
