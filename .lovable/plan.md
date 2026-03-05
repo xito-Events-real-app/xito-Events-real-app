@@ -1,29 +1,35 @@
 
 
-## Plan: Tweaks to Client Files Section
+## Plan: Propagate Client Name Changes to Freelancer Assignments
 
-### Changes to `src/components/client-detail/ClientFilesSection.tsx`
+### Problem
+When a client name is edited (e.g., "Abhilasha & Bishnu" → "Abhilasha & Bhanu"), it updates `clients_cache.client_name` but does NOT update `freelancer_assignments.client_name`. The "All Clients" crew table reads from `freelancer_assignments`, so it keeps showing the old name.
 
-**1. Event Header — centered layout with new format (lines 421-435)**
-Restructure the collapsed event header to display as a single centered line:
-`MAGH 17 - WEDDING - 2 FILES COPIED - 1 REMAINING     TOTAL: 3 FILES`
-- Use `text-base font-black text-white` for the entire line
-- Center-align the content with `justify-center`
-- Remove the small circle with day number; integrate the day into the text
-- Use the BS month (`eventMonth`) + day + event name + computed copied/remaining counts
+### Root Cause
+`updateClientInCacheRecord()` in `src/lib/clients-supabase-cache.ts` only updates the `clients_cache` table. There is no cascading update to `freelancer_assignments` rows that share the same `registered_date_time_ad`.
 
-**2. Table Headers — white background strip (lines 243-258)**
-- Change the `<tr>` to have `bg-white dark:bg-white/10` background
-- Change header text from `text-cyan-400` to `text-slate-900 dark:text-white` so they read clearly on the white bg
-- Keep `font-bold text-sm uppercase tracking-wider`
+### Fix
+After the `clients_cache` update in `updateClientInCacheRecord()`, add a secondary update to `freelancer_assignments` to sync the `client_name` for all rows matching the same `registered_date_time_ad`.
 
-**3. NOT CONFIRMED — single line (line 330)**
-- Add `whitespace-nowrap` to the NOT CONFIRMED span so it never wraps
+### Changes
 
-**4. Card label — uppercase (line 277)**
-- Change `Card {n}` to `CARD {n}` (uppercase string)
+**File: `src/lib/clients-supabase-cache.ts`** (lines 261-307)
 
-**5. Notes pen icon — white bg + shadow (line 342-343)**
-- Wrap the PenLine icon in a styled container: `bg-white dark:bg-white/20 rounded-md shadow-md p-1`
-- Keep the existing color logic (primary if has notes, muted-foreground if not)
+Inside `updateClientInCacheRecord()`, after the existing `clients_cache` update succeeds (line 305), add:
+
+```typescript
+// Propagate client_name change to freelancer_assignments
+if (client.clientName) {
+  await supabase
+    .from('freelancer_assignments')
+    .update({ client_name: client.clientName })
+    .eq('registered_date_time_ad', client.registeredDateTimeAD);
+}
+```
+
+This ensures that whenever a client record is saved (from the Client Detail sheet or any other edit path), the freelancer assignments table stays in sync. The realtime subscription in `AllClientsCrewTable` will automatically pick up the change since it already listens for `postgres_changes` on `freelancer_assignments`.
+
+### Scope
+- Single file change: `src/lib/clients-supabase-cache.ts`
+- No UI changes needed -- the All Clients table already has realtime listeners
 
