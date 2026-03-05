@@ -176,7 +176,7 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
 
     setWhoCopied(fileRecord.who_copied || "");
     setNotes(fileRecord.notes || "");
-  }, [fileRecord, open, allFiles]);
+  }, [fileRecord, open]);
 
   const currentForm = cardForms[activeCard] || {
     storageType: "", deviceId: "", yearEventFolder: "", category: "", clientFolder: "", eventFolder: "",
@@ -270,7 +270,7 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
     // Create the duplicate row in DB
     try {
       await duplicateFileRowForCard(fileRecord.id, newCardNum);
-      if (onRefresh) await onRefresh();
+      // Don't call onRefresh here — it resets form state via allFiles prop change
     } catch (err: any) {
       toast.error("Failed to create card row");
     }
