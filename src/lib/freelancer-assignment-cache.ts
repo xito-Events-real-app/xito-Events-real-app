@@ -159,7 +159,8 @@ export async function pushUnsyncedToSheets(): Promise<number> {
 
 /**
  * Ensure freelancer_assignments rows are 1:1 with the events in clients_cache.
- * Inserts skeleton rows for missing events, deletes rows for removed events.
+ * Uses positional matching to detect renames and update in-place (preserving crew assignments).
+ * Also propagates renames to freelancer_event_settings and files_management.
  */
 export async function ensureFreelancerAssignmentRows(
   registeredDateTimeAD: string,
@@ -179,53 +180,89 @@ export async function ensureFreelancerAssignmentRows(
   const days = eventDays.split('\n');
   const datesAD = eventDatesAD.split('\n');
 
-  // Read existing rows
+  // Read existing rows ordered by a stable key to establish positional mapping
   const { data: existing } = await supabase
     .from('freelancer_assignments')
-    .select('id, event, event_date_ad, event_day')
-    .eq('registered_date_time_ad', registeredDateTimeAD);
+    .select('id, event, event_year, event_month, event_day, event_date_ad')
+    .eq('registered_date_time_ad', registeredDateTimeAD)
+    .order('event_date_ad', { ascending: true })
+    .order('event', { ascending: true });
 
-  // Build skeletons for missing events
-  const skeletons: any[] = [];
+  const existingList = existing || [];
+
+  // Build positional mapping: index i → existing row at position i
   for (let i = 0; i < names.length; i++) {
     const eventName = names[i];
-    const dateAD = datesAD[i] || '';
+    const year = years[i] || '';
+    const month = months[i] || '';
     const day = days[i] || '';
-    const alreadyExists = existing?.some(
-      r => r.event === eventName && (r.event_date_ad === dateAD || r.event_day === day)
-    );
-    if (!alreadyExists) {
-      skeletons.push({
+    const dateAD = datesAD[i] || '';
+
+    if (i < existingList.length) {
+      const oldRow = existingList[i];
+      // Check if this position's event identity changed (rename detected)
+      if (oldRow.event !== eventName || oldRow.event_month !== month || oldRow.event_day !== day) {
+        const oldEventName = oldRow.event;
+
+        // Update the assignment row in-place (preserves all crew picks)
+        await supabase.from('freelancer_assignments')
+          .update({
+            event: eventName,
+            event_year: year,
+            event_month: month,
+            event_day: day,
+            event_date_ad: dateAD,
+            client_name: clientName,
+            synced_to_sheet: false,
+            updated_at: new Date().toISOString(),
+          } as any)
+          .eq('id', oldRow.id);
+
+        console.log(`[CREW SYNC] Renamed event "${oldEventName}" → "${eventName}" for ${clientName}`);
+
+        // Propagate rename to freelancer_event_settings
+        await supabase.from('freelancer_event_settings')
+          .update({ event_name: eventName } as any)
+          .eq('registered_date_time_ad', registeredDateTimeAD)
+          .eq('event_name', oldEventName);
+
+        // Propagate rename to files_management
+        await supabase.from('files_management')
+          .update({
+            event_name: eventName,
+            event_year: year,
+            event_month: month,
+            event_day: day,
+            event_date_ad: dateAD,
+            synced_to_sheet: false,
+            updated_at: new Date().toISOString(),
+          } as any)
+          .eq('registered_date_time_ad', registeredDateTimeAD)
+          .eq('event_name', oldEventName);
+      }
+    } else {
+      // New event at a position beyond existing list — insert skeleton
+      await supabase.from('freelancer_assignments').upsert({
         registered_date_time_ad: registeredDateTimeAD,
         registered_date_bs: registeredDateBS,
         client_name: clientName,
         event: eventName,
-        event_year: years[i] || '',
-        event_month: months[i] || '',
+        event_year: year,
+        event_month: month,
         event_day: day,
         event_date_ad: dateAD,
         synced_to_sheet: false,
         updated_at: new Date().toISOString(),
-      });
+      } as any, { onConflict: 'registered_date_time_ad,event,event_date_ad' });
+      console.log(`[CREW SYNC] Inserted skeleton row for "${eventName}" for ${clientName}`);
     }
   }
 
-  if (skeletons.length > 0) {
-    await supabase.from('freelancer_assignments').upsert(skeletons as any, {
-      onConflict: 'registered_date_time_ad,event,event_date_ad',
-    });
-    console.log(`[CREW SYNC] Inserted ${skeletons.length} skeleton rows for ${clientName}`);
-  }
-
-  // Delete rows for events no longer in the client record
-  if (existing) {
-    const toDelete = existing.filter(row => {
-      return !names.some((name, i) => name === row.event && ((datesAD[i] || '') === (row.event_date_ad || '') || (days[i] || '') === (row.event_day || '')));
-    });
-    if (toDelete.length > 0) {
-      const ids = toDelete.map(r => r.id);
-      await supabase.from('freelancer_assignments').delete().in('id', ids);
-      console.log(`[CREW SYNC] Deleted ${toDelete.length} orphan rows for ${clientName}`);
-    }
+  // Delete rows beyond the new event count (events truly removed)
+  if (existingList.length > names.length) {
+    const toDelete = existingList.slice(names.length);
+    const ids = toDelete.map(r => r.id);
+    await supabase.from('freelancer_assignments').delete().in('id', ids);
+    console.log(`[CREW SYNC] Deleted ${toDelete.length} removed event rows for ${clientName}`);
   }
 }

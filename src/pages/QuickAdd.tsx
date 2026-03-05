@@ -351,7 +351,7 @@ export default function QuickAdd() {
           await updateClientCache(updatedClient);
         }
 
-        // Step 2: Sync event_details_cache — insert missing, delete removed
+        // Step 2: Sync event_details_cache — positional (event_index) update to preserve logistics on rename
         const regId = editClientData.registeredDateTimeAD;
         if (regId) {
           const newEvents = eventsFormatted.split('\n').filter(Boolean);
@@ -360,20 +360,35 @@ export default function QuickAdd() {
           const newDays = eventDays.split('\n');
           const newDatesAD = eventADDates.split('\n');
 
-          // Read existing event_details_cache rows
+          // Read existing event_details_cache rows by event_index
           const { data: existingRows } = await supabase
             .from('event_details_cache')
             .select('event_index, event_name, event_month, event_day')
-            .eq('registered_date_time_ad', regId);
+            .eq('registered_date_time_ad', regId)
+            .order('event_index', { ascending: true });
 
-          // Insert skeleton rows for new events
-          const skeletons: any[] = [];
+          // 1) Update existing rows in-place (preserves venue/parlour/timing/demands/references)
           for (let i = 0; i < newEvents.length; i++) {
-            const exists = existingRows?.some(r =>
-              r.event_name === newEvents[i] && r.event_month === newMonths[i] && r.event_day === newDays[i]
-            );
-            if (!exists) {
-              skeletons.push({
+            const existing = existingRows?.find(r => r.event_index === i);
+            if (existing) {
+              // Only update if event identity changed
+              if (existing.event_name !== newEvents[i] || existing.event_month !== newMonths[i] || existing.event_day !== newDays[i]) {
+                await supabase.from('event_details_cache')
+                  .update({
+                    event_name: newEvents[i],
+                    event_year: newYears[i] || '',
+                    event_month: newMonths[i] || '',
+                    event_day: newDays[i] || '',
+                    event_date_ad: newDatesAD[i] || '',
+                    synced_to_sheet: false,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq('registered_date_time_ad', regId)
+                  .eq('event_index', i);
+              }
+            } else {
+              // 2) Insert skeleton for truly new event indices
+              await supabase.from('event_details_cache').upsert({
                 registered_date_time_ad: regId,
                 event_index: i,
                 event_name: newEvents[i],
@@ -382,26 +397,21 @@ export default function QuickAdd() {
                 event_day: newDays[i] || '',
                 event_date_ad: newDatesAD[i] || '',
                 synced_to_sheet: false,
-              });
+              }, { onConflict: 'registered_date_time_ad,event_index' });
             }
           }
 
-          if (skeletons.length > 0) {
-            await supabase.from('event_details_cache').upsert(skeletons, {
-              onConflict: 'registered_date_time_ad,event_index'
-            });
-          }
-
-          // Delete rows for events that were removed
+          // 3) Delete rows where event_index >= newEvents.length (events truly removed)
           if (existingRows) {
-            const toDelete = existingRows.filter(r => {
-              return !newEvents.some((name, i) => name === r.event_name && newMonths[i] === r.event_month && newDays[i] === r.event_day);
-            });
-            for (const row of toDelete) {
-              await supabase.from('event_details_cache')
-                .delete()
-                .eq('registered_date_time_ad', regId)
-                .eq('event_index', row.event_index);
+            const toDelete = existingRows.filter(r => r.event_index >= newEvents.length);
+            if (toDelete.length > 0) {
+              const indices = toDelete.map(r => r.event_index);
+              for (const idx of indices) {
+                await supabase.from('event_details_cache')
+                  .delete()
+                  .eq('registered_date_time_ad', regId)
+                  .eq('event_index', idx);
+              }
             }
           }
         }
