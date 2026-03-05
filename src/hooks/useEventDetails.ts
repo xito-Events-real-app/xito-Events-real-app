@@ -133,6 +133,44 @@ export function useEventDetails(registeredDateTimeAD: string | undefined) {
         } catch (err) {
           console.warn('[useEventDetails] Backfill failed:', err);
         }
+
+        // If Sheets backfill failed (client not in sheet yet), create skeleton from clients_cache
+        if (!hadCache) {
+          console.log('[useEventDetails] Creating skeleton event details from cache...');
+          try {
+            const { data: clientData } = await supabase
+              .from('clients_cache')
+              .select('events, event_year, event_month, event_day, event_date_ad')
+              .eq('registered_date_time_ad', registeredDateTimeAD)
+              .maybeSingle();
+
+            if (clientData?.events) {
+              const eventNames = clientData.events.split('\n').filter(Boolean);
+              const eventYears = (clientData.event_year || '').split('\n');
+              const eventMonths = (clientData.event_month || '').split('\n');
+              const eventDays = (clientData.event_day || '').split('\n');
+              const eventDatesAD = (clientData.event_date_ad || '').split('\n');
+
+              for (let i = 0; i < eventNames.length; i++) {
+                await supabase.from('event_details_cache').upsert({
+                  registered_date_time_ad: registeredDateTimeAD,
+                  event_index: i,
+                  event_name: eventNames[i] || '',
+                  event_year: eventYears[i] || '',
+                  event_month: eventMonths[i] || '',
+                  event_day: eventDays[i] || '',
+                  event_date_ad: eventDatesAD[i] || '',
+                  synced_to_sheet: false,
+                  updated_at: new Date().toISOString(),
+                } as any, { onConflict: 'registered_date_time_ad,event_index' });
+              }
+              hadCache = await loadFromCache();
+              console.log('[useEventDetails] Skeleton created from cache data');
+            }
+          } catch (skeletonErr) {
+            console.warn('[useEventDetails] Skeleton creation failed:', skeletonErr);
+          }
+        }
       } else {
         console.log('[useEventDetails] Skipping backfill — client is not booked');
       }
