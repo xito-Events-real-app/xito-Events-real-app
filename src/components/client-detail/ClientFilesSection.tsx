@@ -11,6 +11,7 @@ import {
 import { Loader2, ChevronDown, ChevronUp, PenLine, ExternalLink, Clock, X, FolderOpen, HardDrive, Camera, Video } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { getMonthName } from "@/lib/nepali-months";
 import { supabase } from "@/integrations/supabase/client";
 import { useStorageDevices } from "@/hooks/useStorageDevices";
 import { FilePathBuilderDialog } from "@/components/files/FilePathBuilderDialog";
@@ -108,7 +109,7 @@ interface ClientFilesSectionProps {
 export default function ClientFilesSection({ registeredDateTimeAD, clientName }: ClientFilesSectionProps) {
   const [files, setFiles] = useState<FileRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
+  const [expandedEvents, setExpandedEvents] = useState<Set<string> | null>(null);
   const { devices } = useStorageDevices();
 
   const [pathDialogOpen, setPathDialogOpen] = useState(false);
@@ -158,8 +159,17 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
       }
       map.get(key)!.files.push(f);
     }
-    return Array.from(map.values()).sort((a, b) => (a.eventDateAD || "").localeCompare(b.eventDateAD || ""));
+    const groups = Array.from(map.values()).sort((a, b) => (a.eventDateAD || "").localeCompare(b.eventDateAD || ""));
+    return groups;
   }, [files]);
+
+  // Auto-expand all events on load
+  useEffect(() => {
+    if (eventGroups.length > 0 && expandedEvents === null) {
+      const allKeys = new Set(eventGroups.map(g => `${g.eventName}-${g.eventDateAD}`));
+      setExpandedEvents(allKeys);
+    }
+  }, [eventGroups, expandedEvents]);
 
   const stats = useMemo(() => {
     const total = files.length;
@@ -176,7 +186,7 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
 
   const toggleEvent = useCallback((key: string) => {
     setExpandedEvents(prev => {
-      const next = new Set(prev);
+      const next = new Set(prev || []);
       next.has(key) ? next.delete(key) : next.add(key);
       return next;
     });
@@ -327,7 +337,7 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
                         {file.confirmed ? (
                           <span className="text-sm font-black text-emerald-400 uppercase bg-emerald-900/60 px-3 py-1 rounded-full">CONFIRMED</span>
                         ) : (
-                          <span className="text-sm font-black text-red-400 uppercase bg-red-900/60 px-3 py-1 rounded-full whitespace-nowrap">NOT CONFIRMED</span>
+                          <span className="text-[10px] font-black text-red-400 uppercase bg-red-900/60 px-2 py-0.5 rounded-full whitespace-nowrap">NOT CONFIRMED</span>
                         )}
                       </button>
                     </td>
@@ -411,19 +421,19 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
         <div className="space-y-2">
           {eventGroups.map(group => {
             const key = `${group.eventName}-${group.eventDateAD}`;
-            const isExpanded = expandedEvents.has(key);
+            const isExpanded = expandedEvents?.has(key) ?? false;
             const remaining = getRemainingCount(group.files);
             const copied = group.files.length - remaining;
             const summary = buildEventSummary(group.files);
             return (
               <div key={key} className={cn("border rounded-lg overflow-hidden", isExpanded ? "border-cyan-500/50" : "border-border")}>
                 <button
-                  className="w-full flex flex-col px-4 py-3 text-left bg-muted/50 hover:bg-muted/80 transition-colors"
+                  className="w-full flex flex-col px-4 py-3 text-left bg-red-900/70 hover:bg-red-900/60 transition-colors"
                   onClick={() => toggleEvent(key)}
                 >
                   <div className="flex items-center justify-center gap-2 w-full">
                     <span className="text-base font-black text-white uppercase tracking-wide">
-                      {group.eventMonth} {group.eventDay || "?"} - {group.eventName} - {copied} FILES COPIED - {remaining} REMAINING
+                      {getMonthName(group.eventMonth)} {group.eventDay || "?"} - {group.eventName} - {copied} FILES COPIED - {remaining} REMAINING
                     </span>
                     <span className="ml-6 text-base font-black text-amber-200 uppercase tracking-wide shrink-0">
                       TOTAL: {group.files.length} FILES
