@@ -335,9 +335,9 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
                     <td className="px-2 py-3 text-center">
                       <button onClick={() => handleConfirmedToggle(file)} className="hover:scale-110 transition-transform">
                         {file.confirmed ? (
-                          <span className="text-sm font-black text-emerald-400 uppercase bg-emerald-900/60 px-3 py-1 rounded-full">CONFIRMED</span>
+                          <span className="text-sm font-black text-emerald-500 uppercase bg-white dark:bg-white/90 px-3 py-1 rounded-full">CONFIRMED</span>
                         ) : (
-                          <span className="text-[10px] font-black text-red-400 uppercase bg-red-900/60 px-2 py-0.5 rounded-full whitespace-nowrap">NOT CONFIRMED</span>
+                          <span className="text-[10px] font-black text-red-500 uppercase bg-white dark:bg-white/90 px-2 py-0.5 rounded-full whitespace-nowrap">NOT CONFIRMED</span>
                         )}
                       </button>
                     </td>
