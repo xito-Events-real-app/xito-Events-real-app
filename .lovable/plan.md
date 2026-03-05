@@ -1,30 +1,36 @@
 
 
-## Plan: Fix Files Section Visibility in Client Detail Page
+## Plan: Typography & Contrast Overhaul for Client Files Table
 
-### Problems
-1. **Graphics blend with background** — The component uses `bg-white/5`, `text-white/80`, `border-white/10` (transparent white on dark) which becomes invisible on light/mixed backgrounds
-2. **SET PATH button invisible** — Uses `border-white/20 text-white/80` which doesn't show on light mode
-3. **No file details visible before expanding** — Currently the collapsed event header only shows event name, date, count, and remaining status — no per-file info
+### Problem
+Text is too small, uses gray-on-gray (`text-muted-foreground` on dark backgrounds), and lacks visual hierarchy. The "SET PATH" button is hard to see.
 
 ### Changes to `src/components/client-detail/ClientFilesSection.tsx`
 
-**1. Fix contrast — replace transparent white colors with theme-aware tokens**
-- Stats cards: `bg-white/5 border-white/10` → `bg-muted/60 border-border`
-- Text colors: `text-white/40` → `text-muted-foreground`, `text-white` → `text-foreground`
-- Event group borders: `border-white/10` → `border-border`
-- Event header: `bg-white/5` → `bg-muted/50`
-- Table header text: `text-white/50` → `text-muted-foreground`
-- Table row text: `text-white/80` → `text-foreground`
-- Badges: `border-white/20 text-white/60` → use default badge styling
-- SET PATH button: `border-white/20 text-white/80` → remove those overrides, use default outline button
-- Section headers (PHOTOS/VIDEOS): keep the colored backgrounds but fix text contrast
+**1. Table Headers (lines 243-258)**
+- Change from `text-muted-foreground` to `text-slate-300` (bright) 
+- Add `uppercase tracking-wider text-xs` to each `<th>`
+- Keep `font-bold`
 
-**2. Show file summary before expanding**
-- In the collapsed event header, add a compact summary row below the event name showing freelancer names grouped by role (e.g., "📷 Ram, Shyam · 🎥 Arjun · ☁ 2/5")
-- This gives a quick glance at who's assigned and backup progress without expanding
+**2. Table Body Rows (lines 261-346)**
+- Row class: increase base to `text-sm` (from `text-xs`)
+- Name cell (line 269): `text-white font-bold text-sm`
+- Secondary data (Side, Card, Format, Size, Who Copied): change `text-muted-foreground` → `text-slate-200 font-semibold`
+- Role badge: increase to `text-xs` with `font-bold`
+- Row padding: `py-1.5` → `py-3` on all `<td>` cells
+
+**3. Tags & Chips — BackupPill (line 55)**
+- Increase padding: `px-1.5 py-0.5` → `px-3 py-1`
+- Text: ensure `text-slate-900 font-bold` on light bg, keep dark mode colors
+- Increase size to `text-xs`
+
+**4. SET PATH Button (line 336)**
+- Change to `text-sm font-bold tracking-wide` with larger height `h-7 px-3`
+
+**5. Row Spacing**
+- All `<td>` cells: `py-1.5` → `py-3`
 
 ### Scope
-- Only `src/components/client-detail/ClientFilesSection.tsx` is modified
-- No database or API changes needed
+- Only `ClientFilesSection.tsx` — no data/layout/theme changes
+- Section headers (PHOTOS/VIDEOS) kept as-is
 
