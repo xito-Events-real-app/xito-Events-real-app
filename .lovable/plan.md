@@ -1,65 +1,46 @@
 
 
-## Audit Results: Remaining Faults in the System
+## Plan: Add "Files" Section to Client Detail Page
 
-I found **3 issues** that need fixing and **several areas that are safe**.
+### What You Want
+A new "Files" sidebar item below "Benzo Keep" in the Client Detail page that shows all file management records for that specific client — inline in the main content area (not full screen). Same functionality as the Files Management module but scoped to this client.
 
----
+### Changes
 
-### ISSUE 1: Newly Appended Clients Never Get Marked as Synced (CRITICAL)
+#### 1. Add 'files' to SectionType and sidebar items
+**File:** `src/components/client-detail/ClientDetailSidebar.tsx`
+- Add `'files'` to the `SectionType` union type
+- Add a new sidebar item `{ id: 'files', label: 'Files', icon: FolderOpen }` after `keepNotes`
+- Import `FolderOpen` from lucide-react
 
-**Location:** `supabase/functions/sync-clients-to-sheets/index.ts`, line 243
+#### 2. Create a new `ClientFilesSection` component
+**File:** `src/components/client-detail/ClientFilesSection.tsx` (new)
 
-When a new client is appended to Google Sheets (no existing row number), the code intentionally sets `synced_to_sheet: false` with the comment "kept unsynced for pull verification." But pull is now disabled, so these rows will **never** become `synced_to_sheet = true`. This means:
+This component will:
+- Accept `registeredDateTimeAD` and `clientName` as props
+- Query `files_management` table directly filtered by `registered_date_time_ad` (no month filter needed — show ALL files for this client)
+- Query `freelancer_assignments` for this client to get event groupings
+- Reuse the same file table rendering pattern from `FullScreenFilesTable` (role badges, backup pills, path builder, cloud upload, notes, reconfirmation)
+- Group files by event (like the full table does per assignment row)
+- Include `FilePathBuilderDialog` and `CloudUploadDialog` for inline editing
+- Use `useStorageDevices` for device list
+- Support the same inline update flow (`updateFileRecord` + `scheduleFilesPush`)
+- Show stats: total files, files remaining (no 1st backup), total size
+- Dark theme styling to match the client detail page
 
-- Every push cycle will re-push these rows to Sheets infinitely
-- The "pending syncs" counter will never reach 0 for new clients
-- Wasted API calls on every push cycle
+#### 3. Add the section to ClientDetail page
+**File:** `src/pages/ClientDetail.tsx`
+- Import `ClientFilesSection`
+- Add rendering block: `{activeSection === 'files' && <ClientFilesSection registeredDateTimeAD={client.registeredDateTimeAD} clientName={client.clientName} />}`
+- Add 'files' tab to mobile section tabs
 
-**Fix:** Change `synced_to_sheet: false` to `synced_to_sheet: true` on line 243, since pull verification no longer exists.
+#### 4. Update barrel export
+**File:** `src/components/client-detail/index.ts`
+- Export `ClientFilesSection`
 
----
-
-### ISSUE 2: `updateClientContactDetails` Reads Back from Sheets into Supabase
-
-**Location:** `supabase/functions/google-sheets/index.ts`, lines 1451-1497
-
-After updating contact details in Google Sheets, the function re-reads the updated row FROM the sheet and upserts it into `contact_details_cache`. This means Sheets data flows back into Supabase — violating the "Supabase is source of truth" rule.
-
-If the sheet has stale or corrupted data, it would overwrite the database. The correct approach is to write the known data directly to `contact_details_cache` without re-reading from Sheets.
-
-**Fix:** Instead of re-reading from Sheets after the write, upsert the known `updates` data directly into `contact_details_cache`.
-
----
-
-### ISSUE 3: `pullStorageDevices` Action Still Active in google-sheets Function
-
-**Location:** `supabase/functions/google-sheets/index.ts` (action `pullStorageDevices`, around line 7560-7634)
-
-This action reads storage device data FROM the WTN STORAGE spreadsheet and inserts/updates it INTO the `storage_devices` Supabase table. While the frontend caller (`syncStorageDevicesFromSheets`) was disabled, the edge function action itself is still callable directly and could be triggered.
-
-**Fix:** Make the `pullStorageDevices` action handler return a no-op response, same as what was done for the other pull actions.
-
----
-
-### Safe Areas (No Issues Found)
-
-| Area | Status |
-|------|--------|
-| `sync-clients-to-sheets` pull action | Disabled (no-op) |
-| `sync-all-data` function | Disabled (no-op) |
-| `sync-crew-to-sheets` pull action | Disabled (no-op) |
-| `fullSyncContactDetails` | Sheet-to-Sheet only (BOOKED CLIENTS → CONTACT DETAILS sheet), no DB writes |
-| `fullSyncEventDetails` | Sheet-to-Sheet only (BOOKED CLIENTS → EVENT DETAILS sheet), no DB writes |
-| `fullSyncFreelancerAssignments` | Sheet-to-Sheet only, no DB writes |
-| Push logic (DB → Sheets) | Working correctly |
-| `deleteClient` | Correctly deletes from both Sheets AND Supabase |
-
----
-
-### Summary of Changes
-
-1. **`sync-clients-to-sheets/index.ts` line 243** — Change `synced_to_sheet: false` to `true` for appended rows
-2. **`google-sheets/index.ts` lines 1451-1497** — Remove the re-read-from-sheets step; write known data directly to cache
-3. **`google-sheets/index.ts` pullStorageDevices handler** — Replace with no-op return
+### How It Works
+- The files are already in `files_management` with `registered_date_time_ad` matching the client
+- We query ALL files for this client (across all months/events) in one go
+- The table groups by event name + date, with expandable rows showing PHOTO/VIDEO sections
+- All edit functionality (path builder, cloud upload, notes, reconfirmation) works identically to the main Files page
 
