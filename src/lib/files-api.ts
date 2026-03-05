@@ -314,12 +314,9 @@ export async function getFileManagementStats(): Promise<{
 
 // ── Google Sheets Sync Helpers ───────────────────────────
 export async function syncStorageDevicesFromSheets(): Promise<{ upserted: number }> {
-  const { data, error } = await supabase.functions.invoke("google-sheets", {
-    body: { action: "pullStorageDevices" },
-  });
-  if (error) throw error;
-  if (!data?.success) throw new Error(data?.error || "Failed to pull storage devices");
-  return data.data;
+  // DISABLED: Supabase is the absolute source of truth. No pulling from sheets.
+  console.log('[files-api] syncStorageDevicesFromSheets is disabled. Supabase is source of truth.');
+  return { upserted: 0 };
 }
 
 export async function pushStorageDevicesToSheets(): Promise<{ pushed: number }> {
