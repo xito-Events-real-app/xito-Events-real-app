@@ -1,20 +1,27 @@
 
 
-## Plan: Fix Card Addition Resetting Form Data
+## Plan: Fix Card Deletion Bugs in FilePathBuilderDialog
 
-### Root Cause
-In `handleAddCard` (line 271-276), after creating the duplicate row in the database, it calls `onRefresh()`. This triggers the parent to reload `allFiles`, which changes the `allFiles` prop, which triggers the `useEffect` on line 117 (dependencies: `[fileRecord, open, allFiles]`) — that effect **resets all form state**, wiping out whatever the user entered for Card 1.
+### Issues
+1. Card 1 can be deleted — this removes the base freelancer file record, making the freelancer disappear from the files table
+2. Cards are hard-deleted (`supabase.delete()`) instead of soft-deleted (`deleted_or_not = true`), bypassing the system's soft-delete pattern
+3. `onRefresh()` is called after card removal, causing a full page refresh
 
-### Fix in `src/components/files/FilePathBuilderDialog.tsx`
+### Changes to `src/components/files/FilePathBuilderDialog.tsx`
 
-**1. Remove `onRefresh()` from `handleAddCard`** (lines 273-274)
-- The DB row is created but the parent data reload is deferred until `handleSave` or dialog close
-- This prevents the reset useEffect from firing mid-editing
+**1. Prevent Card 1 deletion (line 281)**
+- Add guard: `if (cardNumber === "1") return` at the top of `handleRemoveCard`
+- Card 1 is the base record and must never be removed
 
-**2. Remove `allFiles` from the reset useEffect dependencies** (line 179)
-- Change `[fileRecord, open, allFiles]` → `[fileRecord, open]`
-- The effect only needs to run when the dialog opens with a new file record, not when background data changes
-- Card forms for other cards are loaded from `allFiles` inside the effect body (reading current value), but shouldn't re-trigger on every allFiles change
+**2. Hide delete button for Card 1 in both desktop and mobile card tabs**
+- Desktop (line 575-583): Only render the Trash2 button when `key !== "1"`
+- Mobile (line 797-805): Same — only render when `key !== "1"`
 
-These two changes ensure the form state persists while users work across multiple cards.
+**3. Use soft-delete instead of hard delete (line 295)**
+- Replace `.delete().eq("id", cardFile.id)` with `.update({ deleted_or_not: true, synced_to_sheet: false }).eq("id", cardFile.id)`
+- This matches the pattern used by `deleteFileRecord` in `files-api.ts`
+
+**4. Remove `onRefresh()` call from `handleRemoveCard` (line 307)**
+- Same fix pattern as `handleAddCard` — prevents page refresh
+- UI state is already updated locally (cardForms, cardCount, activeCard)
 
