@@ -1,30 +1,20 @@
 
 
-## Plan: PC Name + Drive Letter Selection in FilePathBuilderDialog
+## Plan: Fix Card Addition Resetting Form Data
 
-### Current Behavior
-When storage type is "PC", the Device dropdown shows all PC devices (e.g., "SABIN PC (500GB)", "SAUGAT PC (200GB)"). The drive letter is shown read-only after selection.
+### Root Cause
+In `handleAddCard` (line 271-276), after creating the duplicate row in the database, it calls `onRefresh()`. This triggers the parent to reload `allFiles`, which changes the `allFiles` prop, which triggers the `useEffect` on line 117 (dependencies: `[fileRecord, open, allFiles]`) — that effect **resets all form state**, wiping out whatever the user entered for Card 1.
 
-### Desired Behavior
-When storage type is "PC", replace the single Device dropdown with:
-1. **PC Name** dropdown — shows distinct PC names (SABIN PC, SAUGAT PC, etc.) from `filteredDevices`
-2. **Drive Letter** dropdown — shows drive letters available for the selected PC name, picking the actual device
+### Fix in `src/components/files/FilePathBuilderDialog.tsx`
 
-### Changes to `src/components/files/FilePathBuilderDialog.tsx`
+**1. Remove `onRefresh()` from `handleAddCard`** (lines 273-274)
+- The DB row is created but the parent data reload is deferred until `handleSave` or dialog close
+- This prevents the reset useEffect from firing mid-editing
 
-**Add state:**
-- `pcName` state to track selected PC name (derived from existing devices, not a new query)
+**2. Remove `allFiles` from the reset useEffect dependencies** (line 179)
+- Change `[fileRecord, open, allFiles]` → `[fileRecord, open]`
+- The effect only needs to run when the dialog opens with a new file record, not when background data changes
+- Card forms for other cards are loaded from `allFiles` inside the effect body (reading current value), but shouldn't re-trigger on every allFiles change
 
-**Modify the Storage & Path column (lines 611-643):**
-- When `storageType === "PC"`, render a 3-field layout: Storage Type | PC Name | Drive Letter
-- PC Name: `<Select>` with unique PC names extracted from `filteredDevices` (deduplicated by `device_name`)
-- Drive Letter: `<Select>` with drive letters from devices matching the selected PC name; selecting a letter sets `deviceId` to the matching device
-- When `storageType !== "PC"`, keep existing Device dropdown as-is
-
-**Reset logic:**
-- When `storageType` changes to PC, clear `deviceId` and `pcName`
-- When `pcName` changes, clear `deviceId` (so user must pick drive letter)
-- When dialog opens with existing PC device, derive `pcName` from the selected device
-
-**Remove the separate read-only drive letter section** (lines 639-644) since it's now integrated into the selection flow.
+These two changes ensure the form state persists while users work across multiple cards.
 
