@@ -80,6 +80,7 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
   const [removingBackup, setRemovingBackup] = useState(false);
   const [freelancerNames, setFreelancerNames] = useState<string[]>([]);
   const [newCopierName, setNewCopierName] = useState("");
+  const [pcName, setPcName] = useState("");
 
   const backupNumber = useMemo(() => {
     if (!fileRecord) return 1;
@@ -194,6 +195,27 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
     const typeMap: Record<string, string> = { PC: "PC", HARD_DRIVE: "HARD_DRIVE", SSD: "SSD", DRIVE: "DRIVE" };
     return devices.filter((d) => d.device_type === (typeMap[currentForm.storageType] || currentForm.storageType));
   }, [devices, currentForm.storageType]);
+
+  // PC Name + Drive Letter logic
+  const uniquePcNames = useMemo(() => {
+    if (currentForm.storageType !== "PC") return [];
+    const names = new Set(filteredDevices.map(d => d.device_name).filter(Boolean));
+    return [...names];
+  }, [filteredDevices, currentForm.storageType]);
+
+  const pcDriveOptions = useMemo(() => {
+    if (!pcName) return [];
+    return filteredDevices.filter(d => d.device_name === pcName);
+  }, [filteredDevices, pcName]);
+
+  // Derive pcName from selected device when dialog opens
+  useEffect(() => {
+    if (!open || currentForm.storageType !== "PC") { setPcName(""); return; }
+    if (currentForm.deviceId) {
+      const dev = devices.find(d => d.id === currentForm.deviceId);
+      if (dev) setPcName(dev.device_name);
+    }
+  }, [open, fileRecord]);
 
   const selectedDevice = useMemo(() => devices.find((d) => d.id === currentForm.deviceId), [devices, currentForm.deviceId]);
 
@@ -608,10 +630,10 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
               📂 Storage & Path
             </p>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className={cn("grid gap-2", currentForm.storageType === "PC" ? "grid-cols-3" : "grid-cols-2")}>
               <div className="space-y-1">
                 <Label className="text-xs font-bold">Storage Type</Label>
-                <Select value={currentForm.storageType} onValueChange={(v) => updateCurrentForm({ storageType: v, deviceId: "" })}>
+                <Select value={currentForm.storageType} onValueChange={(v) => { updateCurrentForm({ storageType: v, deviceId: "" }); setPcName(""); }}>
                   <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select..." /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="PC">PC</SelectItem>
@@ -621,28 +643,47 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-bold">Device</Label>
-                <Select value={currentForm.deviceId} onValueChange={(v) => updateCurrentForm({ deviceId: v })}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select..." /></SelectTrigger>
-                  <SelectContent>
-                    {filteredDevices.map((d) => (
-                      <SelectItem key={d.id} value={d.id}>
-                        {d.device_name} ({d.remaining_storage_gb}GB)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {currentForm.storageType === "PC" ? (
+                <>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold">PC Name</Label>
+                    <Select value={pcName} onValueChange={(v) => { setPcName(v); updateCurrentForm({ deviceId: "" }); }}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select PC..." /></SelectTrigger>
+                      <SelectContent>
+                        {uniquePcNames.map((name) => (
+                          <SelectItem key={name} value={name}>{name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold">Drive Letter</Label>
+                    <Select value={currentForm.deviceId} onValueChange={(v) => updateCurrentForm({ deviceId: v })}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select drive..." /></SelectTrigger>
+                      <SelectContent>
+                        {pcDriveOptions.map((d) => (
+                          <SelectItem key={d.id} value={d.id}>{d.pc_drive_letter}:\\ ({d.remaining_storage_gb}GB)</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-1">
+                  <Label className="text-xs font-bold">Device</Label>
+                  <Select value={currentForm.deviceId} onValueChange={(v) => updateCurrentForm({ deviceId: v })}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select..." /></SelectTrigger>
+                    <SelectContent>
+                      {filteredDevices.map((d) => (
+                        <SelectItem key={d.id} value={d.id}>
+                          {d.device_name} ({d.remaining_storage_gb}GB)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
-
-            {currentForm.storageType === "PC" && selectedDevice?.pc_drive_letter && (
-              <div className="space-y-1">
-                <Label className="text-xs font-bold">Drive Letter</Label>
-                <Input value={`${selectedDevice.pc_drive_letter}:\\`} readOnly className="bg-white/60 dark:bg-white/5 font-bold h-8 text-xs" />
-              </div>
-            )}
-
             {selectedDevice?.safety_status === "UNSAFE" && (
               <div className="flex items-center gap-2 p-1.5 rounded bg-red-100 dark:bg-red-950/30 text-red-600 text-xs font-bold">
                 <AlertTriangle className="w-3.5 h-3.5" />
