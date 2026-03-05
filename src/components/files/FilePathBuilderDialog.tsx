@@ -279,6 +279,7 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
   };
 
   const handleRemoveCard = async (cardNumber: string) => {
+    if (cardNumber === "1") return; // Card 1 is the base record — never delete it
     if (!fileRecord || !allFiles) return;
     const cardFile = allFiles.find(f =>
       f.registered_date_time_ad === fileRecord.registered_date_time_ad &&
@@ -292,7 +293,7 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
       return;
     }
     try {
-      await (supabase as any).from("files_management").delete().eq("id", cardFile.id);
+      await (supabase as any).from("files_management").update({ deleted_or_not: true, synced_to_sheet: false }).eq("id", cardFile.id);
       setCardForms(prev => {
         const next = { ...prev };
         delete next[cardNumber];
@@ -304,7 +305,7 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
       if (activeCard === cardNumber) {
         setActiveCard(remainingKeys[0] || "1");
       }
-      if (onRefresh) await onRefresh();
+      // Don't call onRefresh here — it resets form state
       toast.success(`Card ${cardNumber} removed`);
     } catch (err: any) {
       toast.error("Failed to remove card");
@@ -572,15 +573,17 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
                 >
                   Card {key}
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-950/40"
-                  onClick={() => handleRemoveCard(key)}
-                  title={`Remove Card ${key}`}
-                >
-                  <Trash2 className="w-3 h-3" />
-                </Button>
+                {key !== "1" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-950/40"
+                    onClick={() => handleRemoveCard(key)}
+                    title={`Remove Card ${key}`}
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </Button>
+                )}
               </div>
             ))}
             {cardCount < 4 && (
@@ -794,15 +797,17 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
                       >
                         Card {key}
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-5 w-5 p-0 text-red-500 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-950/40"
-                        onClick={() => handleRemoveCard(key)}
-                        title={`Remove Card ${key}`}
-                      >
-                        <Trash2 className="w-2.5 h-2.5" />
-                      </Button>
+                      {key !== "1" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 w-5 p-0 text-red-500 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-950/40"
+                          onClick={() => handleRemoveCard(key)}
+                          title={`Remove Card ${key}`}
+                        >
+                          <Trash2 className="w-2.5 h-2.5" />
+                        </Button>
+                      )}
                     </div>
                   ))}
                 </div>
