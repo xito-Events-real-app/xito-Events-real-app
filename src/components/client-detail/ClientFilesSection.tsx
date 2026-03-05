@@ -240,21 +240,21 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
                 <col style={{ width: '4%' }} />
               </colgroup>
               <thead>
-                <tr className="border-b border-border">
-                  <th className="px-2 py-2 text-left font-bold text-sm text-cyan-400 uppercase tracking-wider">Role</th>
-                  <th className="px-2 py-2 text-left font-bold text-sm text-cyan-400 uppercase tracking-wider">Name</th>
-                  <th className="px-2 py-2 text-left font-bold text-sm text-cyan-400 uppercase tracking-wider">Side</th>
-                  <th className="px-2 py-2 text-left font-bold text-sm text-cyan-400 uppercase tracking-wider">Card</th>
-                  <th className="px-2 py-2 text-left font-bold text-sm text-cyan-400 uppercase tracking-wider">Format</th>
-                  <th className="px-2 py-2 text-right font-bold text-sm text-cyan-400 uppercase tracking-wider">Size</th>
-                  <th className="px-2 py-2 text-center font-bold text-sm text-cyan-400 uppercase tracking-wider">1st</th>
-                  <th className="px-2 py-2 text-center font-bold text-sm text-cyan-400 uppercase tracking-wider">2nd</th>
-                  <th className="px-2 py-2 text-center font-bold text-sm text-cyan-400 uppercase tracking-wider">3rd</th>
-                  <th className="px-2 py-2 text-center font-bold text-sm text-cyan-400 uppercase tracking-wider">Cloud</th>
-                  <th className="px-2 py-2 text-left font-bold text-sm text-cyan-400 uppercase tracking-wider">Who Copied</th>
-                  <th className="px-2 py-2 text-center font-bold text-sm text-cyan-400 uppercase tracking-wider">Status</th>
-                  <th className="px-2 py-2 text-center font-bold text-sm text-cyan-400 uppercase tracking-wider">Action</th>
-                  <th className="px-2 py-2 text-center font-bold text-sm text-cyan-400 uppercase tracking-wider">📝</th>
+                <tr className="bg-white dark:bg-white/10">
+                  <th className="px-2 py-2 text-left font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">Role</th>
+                  <th className="px-2 py-2 text-left font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">Name</th>
+                  <th className="px-2 py-2 text-left font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">Side</th>
+                  <th className="px-2 py-2 text-left font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">Card</th>
+                  <th className="px-2 py-2 text-left font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">Format</th>
+                  <th className="px-2 py-2 text-right font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">Size</th>
+                  <th className="px-2 py-2 text-center font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">1st</th>
+                  <th className="px-2 py-2 text-center font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">2nd</th>
+                  <th className="px-2 py-2 text-center font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">3rd</th>
+                  <th className="px-2 py-2 text-center font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">Cloud</th>
+                  <th className="px-2 py-2 text-left font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">Who Copied</th>
+                  <th className="px-2 py-2 text-center font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">Status</th>
+                  <th className="px-2 py-2 text-center font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">Action</th>
+                  <th className="px-2 py-2 text-center font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">📝</th>
                 </tr>
               </thead>
               <tbody>
@@ -274,7 +274,7 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
                     <td className="px-2 py-3 text-sm text-amber-200 font-bold">
                       {file.side === "BRIDE SIDE" ? "BRIDE" : file.side === "GROOM SIDE" ? "GROOM" : file.side || "-"}
                     </td>
-                    <td className="px-2 py-3 text-sm text-amber-200 font-bold">Card {parseInt(file.card_label || "1") || 1}</td>
+                    <td className="px-2 py-3 text-sm text-amber-200 font-bold">CARD {parseInt(file.card_label || "1") || 1}</td>
                     <td className="px-2 py-3 text-sm text-amber-200 font-bold">{file.format_type || "-"}</td>
                     <td className="px-2 py-3 text-right text-sm text-amber-200 font-bold">{file.size_gb ? `${file.size_gb}GB` : "-"}</td>
                     {/* 1st Backup */}
@@ -327,7 +327,7 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
                         {file.confirmed ? (
                           <span className="text-sm font-black text-emerald-400 uppercase bg-emerald-900/60 px-3 py-1 rounded-full">CONFIRMED</span>
                         ) : (
-                          <span className="text-sm font-black text-red-400 uppercase bg-red-900/60 px-3 py-1 rounded-full">NOT CONFIRMED</span>
+                          <span className="text-sm font-black text-red-400 uppercase bg-red-900/60 px-3 py-1 rounded-full whitespace-nowrap">NOT CONFIRMED</span>
                         )}
                       </button>
                     </td>
@@ -339,8 +339,10 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
                     </td>
                     {/* Notes */}
                     <td className="px-2 py-3 text-center">
-                      <button onClick={() => openNotesDialog(file)} className="hover:text-primary transition-colors">
-                        <PenLine className={cn("w-5 h-5 mx-auto", file.notes ? "text-primary" : "text-muted-foreground")} />
+                      <button onClick={() => openNotesDialog(file)} className="hover:scale-110 transition-transform">
+                        <div className={cn("bg-white dark:bg-white/20 rounded-md shadow-md p-1 inline-flex items-center justify-center")}>
+                          <PenLine className={cn("w-5 h-5", file.notes ? "text-primary" : "text-muted-foreground")} />
+                        </div>
                       </button>
                     </td>
                   </tr>
@@ -411,6 +413,7 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
             const key = `${group.eventName}-${group.eventDateAD}`;
             const isExpanded = expandedEvents.has(key);
             const remaining = getRemainingCount(group.files);
+            const copied = group.files.length - remaining;
             const summary = buildEventSummary(group.files);
             return (
               <div key={key} className={cn("border rounded-lg overflow-hidden", isExpanded ? "border-cyan-500/50" : "border-border")}>
@@ -418,21 +421,14 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
                   className="w-full flex flex-col px-4 py-3 text-left bg-muted/50 hover:bg-muted/80 transition-colors"
                   onClick={() => toggleEvent(key)}
                 >
-                  <div className="flex items-center gap-3 w-full">
-                    <div className="w-8 h-8 rounded-full bg-cyan-600 text-white flex items-center justify-center text-xs font-bold shrink-0">
-                      {group.eventDay || "?"}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-sm text-foreground truncate">{group.eventName}</p>
-                      <p className="text-xs text-amber-200/70 font-bold">{group.eventDateAD}</p>
-                    </div>
-                    {remaining > 0 ? (
-                      <span className="text-xs font-bold text-destructive shrink-0">{remaining} REMAINING</span>
-                    ) : (
-                      <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 shrink-0">ALL COPIED</span>
-                    )}
-                    <Badge variant="outline" className="text-xs shrink-0 font-bold">{group.files.length}</Badge>
-                    {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                  <div className="flex items-center justify-center gap-2 w-full">
+                    <span className="text-base font-black text-white uppercase tracking-wide">
+                      {group.eventMonth} {group.eventDay || "?"} - {group.eventName} - {copied} FILES COPIED - {remaining} REMAINING
+                    </span>
+                    <span className="ml-6 text-base font-black text-amber-200 uppercase tracking-wide shrink-0">
+                      TOTAL: {group.files.length} FILES
+                    </span>
+                    {isExpanded ? <ChevronUp className="w-5 h-5 text-white ml-2" /> : <ChevronDown className="w-5 h-5 text-white ml-2" />}
                   </div>
                   {/* Pre-expand summary */}
                   {!isExpanded && (
