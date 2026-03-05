@@ -52,7 +52,7 @@ const BackupPill = ({ path, deviceName, file, backupNum, onDeviceClick }: { path
     <HoverCard openDelay={100} closeDelay={300}>
       <HoverCardTrigger asChild>
         <span
-          className="inline-flex items-center text-[11px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 font-bold truncate max-w-[90px] cursor-pointer rounded-md border border-transparent hover:ring-1 hover:ring-emerald-400"
+          className="inline-flex items-center text-xs px-3 py-1 bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-300 font-bold truncate max-w-[100px] cursor-pointer rounded-md border border-transparent hover:ring-1 hover:ring-emerald-400"
           onClick={(e) => { if (onDeviceClick && deviceName) { e.stopPropagation(); onDeviceClick(deviceName); } }}
         >
           {label}
@@ -222,7 +222,7 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
             {label} ({sectionFiles.length})
           </div>
           <div className="overflow-x-auto">
-            <table className="table-fixed w-full text-xs">
+            <table className="table-fixed w-full text-sm">
               <colgroup>
                 <col style={{ width: '6%' }} />
                 <col style={{ width: '8%' }} />
@@ -240,45 +240,45 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
                 <col style={{ width: '4%' }} />
               </colgroup>
               <thead>
-                <tr className="border-b border-border text-muted-foreground">
-                  <th className="px-2 py-1 text-left font-bold">Role</th>
-                  <th className="px-2 py-1 text-left font-bold">Name</th>
-                  <th className="px-2 py-1 text-left font-bold">Side</th>
-                  <th className="px-2 py-1 text-left font-bold">Card</th>
-                  <th className="px-2 py-1 text-left font-bold">Format</th>
-                  <th className="px-2 py-1 text-right font-bold">Size</th>
-                  <th className="px-2 py-1 text-center font-bold">1st</th>
-                  <th className="px-2 py-1 text-center font-bold">2nd</th>
-                  <th className="px-2 py-1 text-center font-bold">3rd</th>
-                  <th className="px-2 py-1 text-center font-bold">Cloud</th>
-                  <th className="px-2 py-1 text-left font-bold">Who Copied</th>
-                  <th className="px-2 py-1 text-center font-bold">Status</th>
-                  <th className="px-2 py-1 text-center font-bold">Action</th>
-                  <th className="px-2 py-1 text-center font-bold">📝</th>
+                <tr className="border-b border-border text-slate-300">
+                  <th className="px-2 py-2 text-left font-semibold text-xs uppercase tracking-wider">Role</th>
+                  <th className="px-2 py-2 text-left font-semibold text-xs uppercase tracking-wider">Name</th>
+                  <th className="px-2 py-2 text-left font-semibold text-xs uppercase tracking-wider">Side</th>
+                  <th className="px-2 py-2 text-left font-semibold text-xs uppercase tracking-wider">Card</th>
+                  <th className="px-2 py-2 text-left font-semibold text-xs uppercase tracking-wider">Format</th>
+                  <th className="px-2 py-2 text-right font-semibold text-xs uppercase tracking-wider">Size</th>
+                  <th className="px-2 py-2 text-center font-semibold text-xs uppercase tracking-wider">1st</th>
+                  <th className="px-2 py-2 text-center font-semibold text-xs uppercase tracking-wider">2nd</th>
+                  <th className="px-2 py-2 text-center font-semibold text-xs uppercase tracking-wider">3rd</th>
+                  <th className="px-2 py-2 text-center font-semibold text-xs uppercase tracking-wider">Cloud</th>
+                  <th className="px-2 py-2 text-left font-semibold text-xs uppercase tracking-wider">Who Copied</th>
+                  <th className="px-2 py-2 text-center font-semibold text-xs uppercase tracking-wider">Status</th>
+                  <th className="px-2 py-2 text-center font-semibold text-xs uppercase tracking-wider">Action</th>
+                  <th className="px-2 py-2 text-center font-semibold text-xs uppercase tracking-wider">📝</th>
                 </tr>
               </thead>
               <tbody>
                 {sectionFiles.map(file => (
-                  <tr key={file.id} className="border-b border-border/50 hover:bg-muted/40 text-foreground">
-                    <td className="px-2 py-1.5">
-                      <Badge variant="outline" className="text-[11px] px-1.5 font-bold">{file.freelancer_type}</Badge>
+                  <tr key={file.id} className="border-b border-border/50 hover:bg-muted/40">
+                    <td className="px-2 py-3">
+                      <Badge variant="outline" className="text-xs px-2 py-0.5 font-bold">{file.freelancer_type}</Badge>
                     </td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-2 py-3">
                       <TooltipProvider><Tooltip>
                         <TooltipTrigger asChild>
-                          <span className="font-bold cursor-pointer hover:underline">{getFirstName(file.freelancer_name)}</span>
+                          <span className="font-bold text-sm text-white cursor-pointer hover:underline">{getFirstName(file.freelancer_name)}</span>
                         </TooltipTrigger>
                         <TooltipContent><p className="font-bold">{file.freelancer_name}</p></TooltipContent>
                       </Tooltip></TooltipProvider>
                     </td>
-                    <td className="px-2 py-1.5 text-xs text-muted-foreground">
+                    <td className="px-2 py-3 text-sm text-slate-200 font-semibold">
                       {file.side === "BRIDE SIDE" ? "BRIDE" : file.side === "GROOM SIDE" ? "GROOM" : file.side || "-"}
                     </td>
-                    <td className="px-2 py-1.5 text-xs text-muted-foreground">Card {parseInt(file.card_label || "1") || 1}</td>
-                    <td className="px-2 py-1.5 text-xs text-muted-foreground">{file.format_type || "-"}</td>
-                    <td className="px-2 py-1.5 text-right text-xs text-muted-foreground">{file.size_gb ? `${file.size_gb}GB` : "-"}</td>
+                    <td className="px-2 py-3 text-sm text-slate-200 font-semibold">Card {parseInt(file.card_label || "1") || 1}</td>
+                    <td className="px-2 py-3 text-sm text-slate-200 font-semibold">{file.format_type || "-"}</td>
+                    <td className="px-2 py-3 text-right text-sm text-slate-200 font-semibold">{file.size_gb ? `${file.size_gb}GB` : "-"}</td>
                     {/* 1st Backup */}
-                    <td className="px-2 py-1.5 text-center">
+                    <td className="px-2 py-3 text-center">
                       <div className="flex items-center justify-center gap-0.5">
                         <BackupPill path={file.final_generated_path || ""} deviceName={file.backup_1_device_name || ""} file={file} backupNum={1} />
                         {file.final_generated_path && (
@@ -287,7 +287,7 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
                       </div>
                     </td>
                     {/* 2nd Backup */}
-                    <td className="px-2 py-1.5 text-center">
+                    <td className="px-2 py-3 text-center">
                       <div className="flex items-center justify-center gap-0.5">
                         <BackupPill path={file.backup_2_path || ""} deviceName={file.backup_2_device_name || ""} file={file} backupNum={2} />
                         {file.backup_2_path && (
@@ -296,7 +296,7 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
                       </div>
                     </td>
                     {/* 3rd Backup */}
-                    <td className="px-2 py-1.5 text-center">
+                    <td className="px-2 py-3 text-center">
                       <div className="flex items-center justify-center gap-0.5">
                         <BackupPill path={file.backup_3_path || ""} deviceName={file.backup_3_device_name || ""} file={file} backupNum={3} />
                         {file.backup_3_path && (
@@ -305,7 +305,7 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
                       </div>
                     </td>
                     {/* Cloud */}
-                    <td className="px-2 py-1.5 text-center">
+                    <td className="px-2 py-3 text-center">
                       <div className="flex items-center justify-center gap-0.5">
                         {file.drive_upload && file.drive_upload_path ? (
                           <span className="inline-flex items-center text-[11px] px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400 font-bold truncate max-w-[90px] cursor-pointer rounded-md hover:ring-1 hover:ring-purple-400"
@@ -320,25 +320,25 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
                       </div>
                     </td>
                     {/* Who Copied */}
-                    <td className="px-2 py-1.5 text-xs font-bold text-muted-foreground">{file.who_copied || "-"}</td>
+                    <td className="px-2 py-3 text-sm font-bold text-slate-200">{file.who_copied || "-"}</td>
                     {/* Confirmed */}
-                    <td className="px-2 py-1.5 text-center">
+                    <td className="px-2 py-3 text-center">
                       <button onClick={() => handleConfirmedToggle(file)} className="hover:scale-110 transition-transform">
                         {file.confirmed ? (
-                          <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase">CONFIRMED</span>
+                          <span className="text-xs font-black text-emerald-500 uppercase">CONFIRMED</span>
                         ) : (
-                          <span className="text-[10px] font-black text-destructive uppercase">NOT CONFIRMED</span>
+                          <span className="text-xs font-black text-destructive uppercase">NOT CONFIRMED</span>
                         )}
                       </button>
                     </td>
                     {/* Action */}
-                    <td className="px-2 py-1.5 text-center">
-                      <Button variant="outline" size="sm" className="h-6 text-xs px-2 font-bold" onClick={() => openPathBuilder(file)}>
+                    <td className="px-2 py-3 text-center">
+                      <Button variant="outline" size="sm" className="h-7 text-sm px-3 font-bold tracking-wide" onClick={() => openPathBuilder(file)}>
                         SET PATH
                       </Button>
                     </td>
                     {/* Notes */}
-                    <td className="px-2 py-1.5 text-center">
+                    <td className="px-2 py-3 text-center">
                       <button onClick={() => openNotesDialog(file)} className="hover:text-primary transition-colors">
                         <PenLine className={cn("w-3.5 h-3.5 mx-auto", file.notes ? "text-primary" : "text-muted-foreground")} />
                       </button>
