@@ -1,47 +1,52 @@
 
 
-## Plan: Upgrade WTN Files Announcement Popup
+## Plan: Make Supabase the Absolute Source of Truth — Remove All Sheet-to-DB Pulls
 
-### 3 Changes
+### What's Happening Now (The Problem)
 
-**1. Copy uploaded audio to `public/audio/wtn-celebration.mp3`**
-- Replace meditation music with the uploaded celebration sound
+Three edge functions currently pull data FROM Google Sheets INTO Supabase, treating Sheets as the source of truth. This is what caused NIBISHA's data loss and potentially other clients:
 
-**2. Update `src/components/files/WtnFilesAnnouncementDialog.tsx`**
-- Accept `user` prop — only show popup when user is logged in
-- Use new audio file `/audio/wtn-celebration.mp3`
-- Add way more celebration animations:
-  - 80 confetti pieces (up from 40), with varied sizes and shapes (circles + rectangles + stars)
-  - Firework burst rings that pulse outward
-  - Trophy emoji (🏆) bouncing in center
-  - Gold/blue/cyan sparkle particles floating up from bottom
-  - Stadium wave effect with staggered emoji rows
-  - "World Cup winning" style — multiple layers: confetti rain + rising sparkles + pulsing fireworks + camera flashes + trophy bounce
-  - More dancing emojis: add 🏆⭐🎖️🥇 to the lineup
-  - Streamer ribbons (thin colored divs rotating and falling)
+| Edge Function | Pull Behavior | Destructive? |
+|---|---|---|
+| `sync-clients-to-sheets` | `action=pull`: deletes all synced rows, re-inserts from sheet | **YES — DELETE + re-insert** |
+| `sync-all-data` | Pulls freelancers, vendors, logistics, dropdowns, contact_details, event_details — each with DELETE + re-insert | **YES — DELETE + re-insert** |
+| `sync-crew-to-sheets` | `action=pull`: upserts from sheet with timestamp check | Safer but still overwrites |
 
-**3. Update `src/App.tsx`**
-- Pass `user` from `useAuth()` into `WtnFilesAnnouncementDialog` so it only triggers after login
-- Move the wrapper inside `AuthProvider` and use auth context
+### What We'll Change
 
-**4. Add new CSS animations to `src/index.css`**
-- `@keyframes firework-burst` — ring expanding outward and fading
-- `@keyframes sparkle-rise` — particles floating upward with shimmer
-- `@keyframes trophy-bounce` — heavy bounce like a trophy being raised
-- `@keyframes streamer-fall` — thin ribbons falling with rotation
+**Remove ALL pull-from-sheet logic.** Supabase is the only database. Sheets only receive data (push/mirror). No edge function should ever read from Sheets and write into Supabase tables.
 
-### Auth-gating approach
-```tsx
-// WtnFilesAnnouncementDialog accepts user prop
-export function WtnFilesAnnouncementDialog({ onNavigate, user }: { onNavigate: () => void; user: any }) {
-  // In useEffect, add: if (!user) return;
-}
+### Step 1: Restore NIBISHA MA'AM : PRARTHANA
 
-// In App.tsx wrapper:
-function WtnFilesAnnouncement() {
-  const navigate = useNavigate();
-  const { user } = useAuthContext();
-  return <WtnFilesAnnouncementDialog user={user} onNavigate={() => navigate('/files?section=files')} />;
-}
-```
+Insert her full record back into `clients_cache` using the data you provided, with `synced_to_sheet = false` so the next push mirrors her back to the sheet.
+
+### Step 2: Fix `sync-clients-to-sheets/index.ts`
+
+- Remove the entire `action === 'pull'` branch (lines 146-301) — the destructive delete + re-insert from Sheets
+- Change the default action from `'pull'` to `'push'` so accidental calls don't trigger a pull
+- Keep only the `action === 'push'` logic (which writes DB → Sheets)
+
+### Step 3: Fix `sync-all-data/index.ts`
+
+This entire function is a pull-from-sheets function. Every one of its sub-functions (`pullFreelancers`, `pullVendors`, `pullLogistics`, `pullDropdowns`, `pullContactDetails`, `pullEventDetails`) reads from Sheets and destructively replaces DB data.
+
+- **Remove the entire function body** — replace with a no-op that returns `{ success: true, message: 'Pull from sheets disabled. Supabase is source of truth.' }`
+- This prevents any accidental calls from causing data loss
+
+### Step 4: Fix `sync-crew-to-sheets/index.ts`
+
+- Remove the `action === 'pull'` branch (lines 247-361) which reads crew assignments from Sheets into `freelancer_assignments`
+- Keep only the push logic
+
+### Step 5: Remove frontend `pullStorageDevices` caller
+
+- In `src/lib/files-api.ts`, the `syncStorageDevicesFromSheets()` function calls `pullStorageDevices` — make it a no-op or remove it
+
+### After These Changes
+
+| Direction | Status |
+|---|---|
+| Supabase → Google Sheets (push) | **Working** — all push logic preserved |
+| Google Sheets → Supabase (pull) | **Disabled** — no function can overwrite or delete DB data from Sheets |
+| Data safety | **Guaranteed** — no client can ever be deleted because a sheet is missing their row |
 
