@@ -240,10 +240,10 @@ serve(async (req) => {
             // so the NEXT pull will confirm it exists and set it to true
             await supabase
               .from('clients_cache')
-              .update({ row_number: actualRow || 0, synced_to_sheet: false, updated_at: new Date().toISOString() } as any)
+              .update({ row_number: actualRow || 0, synced_to_sheet: true, updated_at: new Date().toISOString() } as any)
               .eq('registered_date_time_ad', row.registered_date_time_ad);
 
-            console.log(`[sync-clients] Appended ${row.sheet_source} client ${row.registered_date_time_ad} to '${sheetName}' at row ${actualRow} (kept unsynced for pull verification)`);
+            console.log(`[sync-clients] Appended ${row.sheet_source} client ${row.registered_date_time_ad} to '${sheetName}' at row ${actualRow} (marked synced)`);
             // Do NOT add to syncedIds — let the next pull confirm
           }
         }

@@ -1448,50 +1448,71 @@ async function updateClientContactDetails(
 
   console.info(`[CONTACT DETAILS UPDATE] Successfully updated row ${rowNumber}`);
 
-  // Sync updated data to Supabase contact_details_cache
+  // Sync updated data to Supabase contact_details_cache using known data (no re-read from Sheets)
   try {
     const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.49.2");
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
 
-    // Re-read the updated row from Sheets
-    const freshData = await getClientContactDetails(accessToken, spreadsheetId, registeredDateTimeAD);
-
-    await supabaseAdmin.from('contact_details_cache').upsert({
+    // Build cache update from known currentData + applied updates (no sheet re-read)
+    const cacheRecord: Record<string, any> = {
       registered_date_time_ad: registeredDateTimeAD,
-      registered_date_bs: freshData.registeredDateBS || '',
-      client_name: freshData.clientName || '',
-      row_number: freshData.rowNumber || 0,
-      bride_full_name: freshData.brideFullName || '',
-      bride_contact_number: freshData.brideContactNumber || '',
-      bride_whatsapp_number: freshData.brideWhatsappNumber || '',
-      bride_backup_number: freshData.brideBackupNumber || '',
-      bride_backup_relation: freshData.brideBackupRelation || '',
-      bride_backup_number2: freshData.brideBackupNumber2 || '',
-      bride_backup_relation2: freshData.brideBackupRelation2 || '',
-      bride_instagram: freshData.brideInstagram || '',
-      bride_home_city: freshData.brideHomeCity || '',
-      bride_home_area: freshData.brideHomeArea || '',
-      bride_home_map: freshData.brideHomeMap || '',
-      bride_home_landmark: freshData.brideHomeLandmark || '',
-      groom_full_name: freshData.groomFullName || '',
-      groom_contact_number: freshData.groomContactNumber || '',
-      groom_whatsapp_number: freshData.groomWhatsappNumber || '',
-      groom_backup_number: freshData.groomBackupNumber || '',
-      groom_backup_relation: freshData.groomBackupRelation || '',
-      groom_backup_number2: freshData.groomBackupNumber2 || '',
-      groom_backup_relation2: freshData.groomBackupRelation2 || '',
-      groom_instagram: freshData.groomInstagram || '',
-      groom_home_city: freshData.groomHomeCity || '',
-      groom_home_area: freshData.groomHomeArea || '',
-      groom_home_map: freshData.groomHomeMap || '',
-      groom_home_landmark: freshData.groomHomeLandmark || '',
-      form_sent_date: freshData.formSentDate || '',
+      registered_date_bs: currentData.registeredDateBS || '',
+      client_name: currentData.clientName || '',
+      row_number: currentData.rowNumber || rowNumber || 0,
+      bride_full_name: currentData.brideFullName || '',
+      bride_contact_number: currentData.brideContactNumber || '',
+      bride_whatsapp_number: currentData.brideWhatsappNumber || '',
+      bride_backup_number: currentData.brideBackupNumber || '',
+      bride_backup_relation: currentData.brideBackupRelation || '',
+      bride_backup_number2: currentData.brideBackupNumber2 || '',
+      bride_backup_relation2: currentData.brideBackupRelation2 || '',
+      bride_instagram: currentData.brideInstagram || '',
+      bride_home_city: currentData.brideHomeCity || '',
+      bride_home_area: currentData.brideHomeArea || '',
+      bride_home_map: currentData.brideHomeMap || '',
+      bride_home_landmark: currentData.brideHomeLandmark || '',
+      groom_full_name: currentData.groomFullName || '',
+      groom_contact_number: currentData.groomContactNumber || '',
+      groom_whatsapp_number: currentData.groomWhatsappNumber || '',
+      groom_backup_number: currentData.groomBackupNumber || '',
+      groom_backup_relation: currentData.groomBackupRelation || '',
+      groom_backup_number2: currentData.groomBackupNumber2 || '',
+      groom_backup_relation2: currentData.groomBackupRelation2 || '',
+      groom_instagram: currentData.groomInstagram || '',
+      groom_home_city: currentData.groomHomeCity || '',
+      groom_home_area: currentData.groomHomeArea || '',
+      groom_home_map: currentData.groomHomeMap || '',
+      groom_home_landmark: currentData.groomHomeLandmark || '',
+      form_sent_date: currentData.formSentDate || '',
       updated_at: new Date().toISOString(),
-    }, { onConflict: 'registered_date_time_ad' });
+    };
 
-    console.info(`[CONTACT DETAILS UPDATE] Cache synced for ${registeredDateTimeAD}`);
+    // Apply the updates on top (camelCase keys → snake_case DB columns)
+    const camelToSnake: Record<string, string> = {
+      brideFullName: 'bride_full_name', brideContactNumber: 'bride_contact_number',
+      brideWhatsappNumber: 'bride_whatsapp_number', brideBackupNumber: 'bride_backup_number',
+      brideBackupRelation: 'bride_backup_relation', brideBackupNumber2: 'bride_backup_number2',
+      brideBackupRelation2: 'bride_backup_relation2', brideInstagram: 'bride_instagram',
+      brideHomeCity: 'bride_home_city', brideHomeArea: 'bride_home_area',
+      brideHomeMap: 'bride_home_map', brideHomeLandmark: 'bride_home_landmark',
+      groomFullName: 'groom_full_name', groomContactNumber: 'groom_contact_number',
+      groomWhatsappNumber: 'groom_whatsapp_number', groomBackupNumber: 'groom_backup_number',
+      groomBackupRelation: 'groom_backup_relation', groomBackupNumber2: 'groom_backup_number2',
+      groomBackupRelation2: 'groom_backup_relation2', groomInstagram: 'groom_instagram',
+      groomHomeCity: 'groom_home_city', groomHomeArea: 'groom_home_area',
+      groomHomeMap: 'groom_home_map', groomHomeLandmark: 'groom_home_landmark',
+      formSentDate: 'form_sent_date',
+    };
+    for (const [camelKey, val] of Object.entries(updates)) {
+      const snakeKey = camelToSnake[camelKey];
+      if (snakeKey) cacheRecord[snakeKey] = val || '';
+    }
+
+    await supabaseAdmin.from('contact_details_cache').upsert(cacheRecord, { onConflict: 'registered_date_time_ad' });
+
+    console.info(`[CONTACT DETAILS UPDATE] Cache synced for ${registeredDateTimeAD} (from known data, no sheet re-read)`);
   } catch (cacheErr) {
     console.warn(`[CONTACT DETAILS UPDATE] Cache sync failed (non-fatal):`, cacheErr);
   }
@@ -8658,7 +8679,9 @@ Deno.serve(async (req) => {
         break;
       }
       case 'pullStorageDevices': {
-        result = await pullStorageDevicesFromSheet(accessToken);
+        // DISABLED: Supabase is the absolute source of truth. Sheets are only a mirror.
+        console.log('[pullStorageDevices] Pull action is disabled. Supabase is source of truth.');
+        result = { success: true, message: 'Pull from sheets disabled. Supabase is source of truth.', count: 0 };
         break;
       }
       case 'pushFilesToSheet': {
