@@ -225,6 +225,22 @@ export async function updateClientFieldInCache(
 
   if (error) throw error;
 
+  // Keep crew table source in sync when client name is edited inline
+  if (field === 'clientName') {
+    const { error: assignmentError } = await supabase
+      .from('freelancer_assignments')
+      .update({
+        client_name: value,
+        synced_to_sheet: false,
+        updated_at: new Date().toISOString(),
+      } as any)
+      .eq('registered_date_time_ad', registeredDateTimeAD);
+
+    if (assignmentError) {
+      console.warn('[updateClientFieldInCache] Failed to sync freelancer_assignments client_name:', assignmentError);
+    }
+  }
+
   // Keep in-memory caches in sync for instant cross-module updates
   const memClients = getMemoryClients();
   if (memClients) {
