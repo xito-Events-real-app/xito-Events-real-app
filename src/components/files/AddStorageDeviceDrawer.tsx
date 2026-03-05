@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,8 @@ import { HardDrive, Calendar as CalendarIcon, DollarSign, CalendarDays, Cloud } 
 import { Separator } from "@/components/ui/separator";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { FormCombobox } from "@/components/form/FormCombobox";
 
 interface Props {
   open: boolean;
@@ -44,6 +46,29 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
   });
 
   const isCloud = form.device_type === "CLOUD";
+  const isPC = form.device_type === "PC";
+
+  const [pcNames, setPcNames] = useState<string[]>([]);
+
+  useEffect(() => {
+    supabase
+      .from("storage_devices")
+      .select("device_name")
+      .eq("device_type", "PC")
+      .then(({ data }) => {
+        if (data) {
+          const unique = [...new Set(data.map((d) => d.device_name).filter(Boolean))];
+          setPcNames(unique);
+        }
+      });
+  }, [open]);
+
+  const driveLetterOptions = useMemo(() => {
+    const letters: string[] = [];
+    for (let i = 67; i <= 90; i++) letters.push(String.fromCharCode(i)); // C-Z
+    letters.push("A", "B");
+    return letters;
+  }, []);
 
   useEffect(() => {
     if (editDevice) {
@@ -228,6 +253,16 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
                     </SelectContent>
                   </Select>
                 </div>
+              ) : isPC ? (
+                <FormCombobox
+                  label="PC Name"
+                  value={form.device_name}
+                  onChange={(v) => set("device_name", v)}
+                  options={pcNames}
+                  placeholder="Select PC..."
+                  searchPlaceholder="Search PC name..."
+                  className="space-y-1.5"
+                />
               ) : (
                 <div className="space-y-1.5">
                   <Label className="text-xs">Device Name</Label>
@@ -243,11 +278,16 @@ export function AddStorageDeviceDrawer({ open, onOpenChange, editDevice, onSave 
               </div>
             )}
 
-            {form.device_type === "PC" && (
-              <div className="space-y-1.5">
-                <Label className="text-xs">Drive Letter</Label>
-                <Input className="h-10 w-24" value={form.pc_drive_letter} onChange={(e) => set("pc_drive_letter", e.target.value)} placeholder="e.g. D" />
-              </div>
+            {isPC && (
+              <FormCombobox
+                label="Drive Letter"
+                value={form.pc_drive_letter}
+                onChange={(v) => set("pc_drive_letter", v)}
+                options={driveLetterOptions}
+                placeholder="Select drive..."
+                searchPlaceholder="Search letter..."
+                className="space-y-1.5"
+              />
             )}
 
             <div className="grid grid-cols-3 gap-3">
