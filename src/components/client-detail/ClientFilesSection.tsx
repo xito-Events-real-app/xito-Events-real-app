@@ -39,7 +39,7 @@ const getTimeAgo = (dateStr: string): string => {
 };
 
 const BackupPill = ({ path, deviceName, file, backupNum, onDeviceClick }: { path: string; deviceName: string; file: FileRecord; backupNum?: number; onDeviceClick?: (name: string) => void }) => {
-  if (!path) return <X className="w-4 h-4 text-destructive mx-auto" />;
+  if (!path) return <X className="w-5 h-5 text-red-400 mx-auto" />;
   const label = deviceName || path.split("\\")[0] || "✓";
   const backupTimestamp = backupNum === 1 ? file.backup_1_recorded_at
     : backupNum === 2 ? file.backup_2_recorded_at
@@ -240,49 +240,49 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
                 <col style={{ width: '4%' }} />
               </colgroup>
               <thead>
-                <tr className="border-b border-border text-slate-300">
-                  <th className="px-2 py-2 text-left font-semibold text-xs uppercase tracking-wider">Role</th>
-                  <th className="px-2 py-2 text-left font-semibold text-xs uppercase tracking-wider">Name</th>
-                  <th className="px-2 py-2 text-left font-semibold text-xs uppercase tracking-wider">Side</th>
-                  <th className="px-2 py-2 text-left font-semibold text-xs uppercase tracking-wider">Card</th>
-                  <th className="px-2 py-2 text-left font-semibold text-xs uppercase tracking-wider">Format</th>
-                  <th className="px-2 py-2 text-right font-semibold text-xs uppercase tracking-wider">Size</th>
-                  <th className="px-2 py-2 text-center font-semibold text-xs uppercase tracking-wider">1st</th>
-                  <th className="px-2 py-2 text-center font-semibold text-xs uppercase tracking-wider">2nd</th>
-                  <th className="px-2 py-2 text-center font-semibold text-xs uppercase tracking-wider">3rd</th>
-                  <th className="px-2 py-2 text-center font-semibold text-xs uppercase tracking-wider">Cloud</th>
-                  <th className="px-2 py-2 text-left font-semibold text-xs uppercase tracking-wider">Who Copied</th>
-                  <th className="px-2 py-2 text-center font-semibold text-xs uppercase tracking-wider">Status</th>
-                  <th className="px-2 py-2 text-center font-semibold text-xs uppercase tracking-wider">Action</th>
-                  <th className="px-2 py-2 text-center font-semibold text-xs uppercase tracking-wider">📝</th>
+                <tr className="border-b border-border">
+                  <th className="px-2 py-2 text-left font-bold text-sm text-cyan-400 uppercase tracking-wider">Role</th>
+                  <th className="px-2 py-2 text-left font-bold text-sm text-cyan-400 uppercase tracking-wider">Name</th>
+                  <th className="px-2 py-2 text-left font-bold text-sm text-cyan-400 uppercase tracking-wider">Side</th>
+                  <th className="px-2 py-2 text-left font-bold text-sm text-cyan-400 uppercase tracking-wider">Card</th>
+                  <th className="px-2 py-2 text-left font-bold text-sm text-cyan-400 uppercase tracking-wider">Format</th>
+                  <th className="px-2 py-2 text-right font-bold text-sm text-cyan-400 uppercase tracking-wider">Size</th>
+                  <th className="px-2 py-2 text-center font-bold text-sm text-cyan-400 uppercase tracking-wider">1st</th>
+                  <th className="px-2 py-2 text-center font-bold text-sm text-cyan-400 uppercase tracking-wider">2nd</th>
+                  <th className="px-2 py-2 text-center font-bold text-sm text-cyan-400 uppercase tracking-wider">3rd</th>
+                  <th className="px-2 py-2 text-center font-bold text-sm text-cyan-400 uppercase tracking-wider">Cloud</th>
+                  <th className="px-2 py-2 text-left font-bold text-sm text-cyan-400 uppercase tracking-wider">Who Copied</th>
+                  <th className="px-2 py-2 text-center font-bold text-sm text-cyan-400 uppercase tracking-wider">Status</th>
+                  <th className="px-2 py-2 text-center font-bold text-sm text-cyan-400 uppercase tracking-wider">Action</th>
+                  <th className="px-2 py-2 text-center font-bold text-sm text-cyan-400 uppercase tracking-wider">📝</th>
                 </tr>
               </thead>
               <tbody>
                 {sectionFiles.map(file => (
                   <tr key={file.id} className="border-b border-border/50 hover:bg-muted/40">
                     <td className="px-2 py-3">
-                      <Badge variant="outline" className="text-xs px-2 py-0.5 font-bold">{file.freelancer_type}</Badge>
+                      <Badge variant="outline" className={cn("text-sm px-3 py-1 font-black border", PHOTO_ROLES.includes(file.freelancer_type) ? "bg-emerald-800 text-emerald-200 border-emerald-600" : VIDEO_ROLES.includes(file.freelancer_type) ? "bg-indigo-800 text-indigo-200 border-indigo-600" : "")}>{file.freelancer_type}</Badge>
                     </td>
                     <td className="px-2 py-3">
                       <TooltipProvider><Tooltip>
                         <TooltipTrigger asChild>
-                          <span className="font-bold text-sm text-white cursor-pointer hover:underline">{getFirstName(file.freelancer_name)}</span>
+                          <span className="font-black text-base text-white cursor-pointer hover:underline">{getFirstName(file.freelancer_name)}</span>
                         </TooltipTrigger>
                         <TooltipContent><p className="font-bold">{file.freelancer_name}</p></TooltipContent>
                       </Tooltip></TooltipProvider>
                     </td>
-                    <td className="px-2 py-3 text-sm text-slate-200 font-semibold">
+                    <td className="px-2 py-3 text-sm text-amber-200 font-bold">
                       {file.side === "BRIDE SIDE" ? "BRIDE" : file.side === "GROOM SIDE" ? "GROOM" : file.side || "-"}
                     </td>
-                    <td className="px-2 py-3 text-sm text-slate-200 font-semibold">Card {parseInt(file.card_label || "1") || 1}</td>
-                    <td className="px-2 py-3 text-sm text-slate-200 font-semibold">{file.format_type || "-"}</td>
-                    <td className="px-2 py-3 text-right text-sm text-slate-200 font-semibold">{file.size_gb ? `${file.size_gb}GB` : "-"}</td>
+                    <td className="px-2 py-3 text-sm text-amber-200 font-bold">Card {parseInt(file.card_label || "1") || 1}</td>
+                    <td className="px-2 py-3 text-sm text-amber-200 font-bold">{file.format_type || "-"}</td>
+                    <td className="px-2 py-3 text-right text-sm text-amber-200 font-bold">{file.size_gb ? `${file.size_gb}GB` : "-"}</td>
                     {/* 1st Backup */}
                     <td className="px-2 py-3 text-center">
                       <div className="flex items-center justify-center gap-0.5">
                         <BackupPill path={file.final_generated_path || ""} deviceName={file.backup_1_device_name || ""} file={file} backupNum={1} />
                         {file.final_generated_path && (
-                          <button onClick={() => openPathBuilder(file, 1)} className="hover:text-primary text-muted-foreground"><PenLine className="w-3 h-3" /></button>
+                          <button onClick={() => openPathBuilder(file, 1)} className="hover:text-primary text-muted-foreground"><PenLine className="w-4 h-4" /></button>
                         )}
                       </div>
                     </td>
@@ -291,7 +291,7 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
                       <div className="flex items-center justify-center gap-0.5">
                         <BackupPill path={file.backup_2_path || ""} deviceName={file.backup_2_device_name || ""} file={file} backupNum={2} />
                         {file.backup_2_path && (
-                          <button onClick={() => openPathBuilder(file, 2)} className="hover:text-primary text-muted-foreground"><PenLine className="w-3 h-3" /></button>
+                          <button onClick={() => openPathBuilder(file, 2)} className="hover:text-primary text-muted-foreground"><PenLine className="w-4 h-4" /></button>
                         )}
                       </div>
                     </td>
@@ -300,7 +300,7 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
                       <div className="flex items-center justify-center gap-0.5">
                         <BackupPill path={file.backup_3_path || ""} deviceName={file.backup_3_device_name || ""} file={file} backupNum={3} />
                         {file.backup_3_path && (
-                          <button onClick={() => openPathBuilder(file, 3)} className="hover:text-primary text-muted-foreground"><PenLine className="w-3 h-3" /></button>
+                          <button onClick={() => openPathBuilder(file, 3)} className="hover:text-primary text-muted-foreground"><PenLine className="w-4 h-4" /></button>
                         )}
                       </div>
                     </td>
@@ -308,39 +308,39 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
                     <td className="px-2 py-3 text-center">
                       <div className="flex items-center justify-center gap-0.5">
                         {file.drive_upload && file.drive_upload_path ? (
-                          <span className="inline-flex items-center text-[11px] px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400 font-bold truncate max-w-[90px] cursor-pointer rounded-md hover:ring-1 hover:ring-purple-400"
+                          <span className="inline-flex items-center text-xs px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400 font-bold truncate max-w-[90px] cursor-pointer rounded-md hover:ring-1 hover:ring-purple-400"
                             onClick={() => { setCloudFile(file); setCloudDialogOpen(true); }}>
                             {file.drive_upload_path}
                           </span>
                         ) : (
                           <button onClick={() => { setCloudFile(file); setCloudDialogOpen(true); }} className="hover:text-purple-500 text-muted-foreground">
-                            <X className="w-4 h-4 text-destructive" />
+                            <X className="w-5 h-5 text-red-400" />
                           </button>
                         )}
                       </div>
                     </td>
                     {/* Who Copied */}
-                    <td className="px-2 py-3 text-sm font-bold text-slate-200">{file.who_copied || "-"}</td>
+                    <td className="px-2 py-3 text-sm font-bold text-amber-200">{file.who_copied || "-"}</td>
                     {/* Confirmed */}
                     <td className="px-2 py-3 text-center">
                       <button onClick={() => handleConfirmedToggle(file)} className="hover:scale-110 transition-transform">
                         {file.confirmed ? (
-                          <span className="text-xs font-black text-emerald-500 uppercase">CONFIRMED</span>
+                          <span className="text-sm font-black text-emerald-400 uppercase bg-emerald-900/60 px-3 py-1 rounded-full">CONFIRMED</span>
                         ) : (
-                          <span className="text-xs font-black text-destructive uppercase">NOT CONFIRMED</span>
+                          <span className="text-sm font-black text-red-400 uppercase bg-red-900/60 px-3 py-1 rounded-full">NOT CONFIRMED</span>
                         )}
                       </button>
                     </td>
                     {/* Action */}
                     <td className="px-2 py-3 text-center">
-                      <Button variant="outline" size="sm" className="h-7 text-sm px-3 font-bold tracking-wide" onClick={() => openPathBuilder(file)}>
+                      <Button size="sm" className="h-8 text-sm px-4 font-bold tracking-wide bg-cyan-600 hover:bg-cyan-500 text-white border-cyan-500" onClick={() => openPathBuilder(file)}>
                         SET PATH
                       </Button>
                     </td>
                     {/* Notes */}
                     <td className="px-2 py-3 text-center">
                       <button onClick={() => openNotesDialog(file)} className="hover:text-primary transition-colors">
-                        <PenLine className={cn("w-3.5 h-3.5 mx-auto", file.notes ? "text-primary" : "text-muted-foreground")} />
+                        <PenLine className={cn("w-5 h-5 mx-auto", file.notes ? "text-primary" : "text-muted-foreground")} />
                       </button>
                     </td>
                   </tr>
@@ -424,34 +424,34 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-bold text-sm text-foreground truncate">{group.eventName}</p>
-                      <p className="text-[11px] text-muted-foreground">{group.eventDateAD}</p>
+                      <p className="text-xs text-amber-200/70 font-bold">{group.eventDateAD}</p>
                     </div>
                     {remaining > 0 ? (
-                      <span className="text-[11px] font-bold text-destructive shrink-0">{remaining} REMAINING</span>
+                      <span className="text-xs font-bold text-destructive shrink-0">{remaining} REMAINING</span>
                     ) : (
-                      <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 shrink-0">ALL COPIED</span>
+                      <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 shrink-0">ALL COPIED</span>
                     )}
                     <Badge variant="outline" className="text-xs shrink-0 font-bold">{group.files.length}</Badge>
                     {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
                   </div>
                   {/* Pre-expand summary */}
                   {!isExpanded && (
-                    <div className="flex items-center gap-3 mt-2 ml-11 flex-wrap text-[11px] text-muted-foreground">
+                    <div className="flex items-center gap-3 mt-2 ml-11 flex-wrap text-xs text-amber-200/80 font-bold">
                       {summary.uniquePhotoNames.length > 0 && (
                         <span className="flex items-center gap-1">
-                          <Camera className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                          <span className="font-semibold">{summary.uniquePhotoNames.join(", ")}</span>
+                          <Camera className="w-3 h-3 text-emerald-400" />
+                          <span className="text-white font-bold">{summary.uniquePhotoNames.join(", ")}</span>
                         </span>
                       )}
                       {summary.uniqueVideoNames.length > 0 && (
                         <span className="flex items-center gap-1">
-                          <Video className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
-                          <span className="font-semibold">{summary.uniqueVideoNames.join(", ")}</span>
+                          <Video className="w-3 h-3 text-indigo-400" />
+                          <span className="text-white font-bold">{summary.uniqueVideoNames.join(", ")}</span>
                         </span>
                       )}
-                      <span className="font-semibold">💾 {summary.backedUp}/{summary.total}</span>
-                      {summary.cloudCount > 0 && <span className="font-semibold">☁ {summary.cloudCount}/{summary.total}</span>}
-                      {summary.totalSize > 0 && <span className="font-semibold">{summary.totalSize} GB</span>}
+                      <span>💾 {summary.backedUp}/{summary.total}</span>
+                      {summary.cloudCount > 0 && <span>☁ {summary.cloudCount}/{summary.total}</span>}
+                      {summary.totalSize > 0 && <span>{summary.totalSize} GB</span>}
                     </div>
                   )}
                 </button>
