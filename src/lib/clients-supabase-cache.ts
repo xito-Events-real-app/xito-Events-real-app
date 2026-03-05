@@ -303,6 +303,15 @@ export async function updateClientInCacheRecord(client: ClientData): Promise<voi
     .eq('registered_date_time_ad', client.registeredDateTimeAD);
 
   if (error) throw error;
+
+  // Propagate client_name change to freelancer_assignments
+  if (client.clientName) {
+    await supabase
+      .from('freelancer_assignments')
+      .update({ client_name: client.clientName })
+      .eq('registered_date_time_ad', client.registeredDateTimeAD);
+  }
+
   schedulePushToSheets();
 }
 
