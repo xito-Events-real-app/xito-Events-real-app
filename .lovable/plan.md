@@ -1,35 +1,39 @@
 
 
-## Plan: Propagate Client Name Changes to Freelancer Assignments
+## What Happens When You Rename an Event
 
-### Problem
-When a client name is edited (e.g., "Abhilasha & Bishnu" → "Abhilasha & Bhanu"), it updates `clients_cache.client_name` but does NOT update `freelancer_assignments.client_name`. The "All Clients" crew table reads from `freelancer_assignments`, so it keeps showing the old name.
+### Current Behavior (Problem)
+
+When you change an event name (e.g., "WEDDING" → "RECEPTION") via the QuickAdd edit form, here's what happens to each table:
+
+| Table | What happens | Status |
+|---|---|---|
+| **clients_cache** | `events` column updated | Works |
+| **event_details_cache** | Old name row is **deleted**, new name row inserted as empty skeleton | **Logistics data LOST** (venue, parlour, timing, demands, references) |
+| **freelancer_assignments** | Old name row is **deleted**, new skeleton row inserted | **Crew assignments LOST** (all photographer/videographer picks gone) |
+| **freelancer_event_settings** | Nothing happens | **Orphaned rows** with old event name stay forever |
+| **files_management** | Nothing happens | **Orphaned rows** — files still reference old event name |
+| **contact_details_cache** | Not affected (per-client, not per-event) | OK |
 
 ### Root Cause
-`updateClientInCacheRecord()` in `src/lib/clients-supabase-cache.ts` only updates the `clients_cache` table. There is no cascading update to `freelancer_assignments` rows that share the same `registered_date_time_ad`.
 
-### Fix
-After the `clients_cache` update in `updateClientInCacheRecord()`, add a secondary update to `freelancer_assignments` to sync the `client_name` for all rows matching the same `registered_date_time_ad`.
+The QuickAdd edit sync logic (lines 354-430) matches events by exact `(event_name, event_month, event_day)`. When you rename an event, the old name doesn't match the new name, so it's treated as "old event removed + new event added" — deleting all associated data.
 
-### Changes
+### Proposed Fix
 
-**File: `src/lib/clients-supabase-cache.ts`** (lines 261-307)
+Instead of delete-and-recreate, detect renames by matching on `event_index` position and **update** the event name in-place across all related tables.
 
-Inside `updateClientInCacheRecord()`, after the existing `clients_cache` update succeeds (line 305), add:
+**File: `src/pages/QuickAdd.tsx`** (edit mode event sync, ~lines 354-430)
 
-```typescript
-// Propagate client_name change to freelancer_assignments
-if (client.clientName) {
-  await supabase
-    .from('freelancer_assignments')
-    .update({ client_name: client.clientName })
-    .eq('registered_date_time_ad', client.registeredDateTimeAD);
-}
-```
+1. First, update existing `event_details_cache` rows by `event_index` (positional match) — just change the `event_name`, `event_year`, `event_month`, `event_day`, `event_date_ad` columns without deleting the row, preserving all logistics data
+2. Only delete rows where `event_index >= newEvents.length` (events truly removed from the end)
+3. Only insert skeleton rows where `event_index` didn't exist before
 
-This ensures that whenever a client record is saved (from the Client Detail sheet or any other edit path), the freelancer assignments table stays in sync. The realtime subscription in `AllClientsCrewTable` will automatically pick up the change since it already listens for `postgres_changes` on `freelancer_assignments`.
+**File: `src/lib/freelancer-assignment-cache.ts`** (`ensureFreelancerAssignmentRows`, ~lines 120-170)
 
-### Scope
-- Single file change: `src/lib/clients-supabase-cache.ts`
-- No UI changes needed -- the All Clients table already has realtime listeners
+4. Before inserting/deleting, detect renamed events by comparing old vs new lists positionally. If a row at position N has a different name, **update** that row's `event`, `event_year`, `event_month`, `event_day`, `event_date_ad` instead of deleting + re-inserting, preserving all crew assignments
+5. Propagate the rename to `freelancer_event_settings` so visibility/note settings aren't orphaned
+6. Propagate the rename to `files_management` rows matching the old event name + `registered_date_time_ad`
+
+This ensures renaming "WEDDING" → "RECEPTION" updates the name everywhere while keeping all venue details, crew assignments, visibility settings, and file records intact.
 
