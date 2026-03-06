@@ -1,43 +1,37 @@
 
 
-## Fix: Deliverables Section - Pure UI Only (No Database)
+## Selected Photos: Inline Freelancer Layout + Per-Freelancer Notes
 
-### Problem
-The current `DeliverablesSection` tries to bootstrap rows into `client_deliverables` table on load, which fails silently, resulting in zero switches rendered.
+### Changes to `SelectedPhotosRow` in `DeliverablesSection.tsx`
 
-### Solution
-Rewrite `DeliverablesSection` as a **pure UI component** with no Supabase calls. All state is local (useState). Database persistence will be added later.
+**1. All photographers on one line, switch right next to name**
 
-### Props Change
-Instead of `registeredDateTimeAD`, pass the **event list** directly from the parent (`ClientDetail.tsx`), since the parent already computes it:
+Current: Each photographer is a separate row with switch on the far right.
+New: All photographers rendered inline (flex-wrap) as compact chips — badge + name + switch grouped tightly together.
 
-```typescript
-interface DeliverablesProps {
-  events: { name: string; month: string; day: string }[];
-}
+```
+Selected Photos                              [SWITCH]
+  PB ARJUN [switch]  PG NIKIT [switch]  EP RAM [switch]
+  
+  [Notes for ARJUN...]     ← only if PB toggled ON
+  [Notes for NIKIT...]     ← only if PG toggled ON
 ```
 
-### What the component renders
+**2. Per-freelancer notes instead of single shared notes**
 
-**For each event** - a card matching Freelancer section style (white bg, slate-900 gradient header with event name stamp):
-- Two-column layout: **Photos** | **Videos**
-- Photos: All Photos (ON), Selected Photos (OFF), Insta Posts (OFF, with +/- qty and naming)
-- Videos: Full Video (ON), Highlights (ON, qty=1, default name "[EVENT] HIGHLIGHTS", +/- and naming), Reel (OFF, +/- naming), Insta Posts (OFF, +/- naming)
+Change `notes` from `string` to `photographerNotes: Record<string, string>` in `ItemState`. Each toggled-ON photographer gets their own textarea labeled with their code+name.
 
-**After all events:**
-- **OVERALL** section: Overall Highlights (OFF, +/- naming), Overall Reel (OFF, +/- naming)
-- **ALBUM** section: Bride Album (OFF, +/- naming), Groom Album (OFF, +/- naming), Other Album (OFF, asks album name first, then +/- type naming)
-- **PENDRIVE & FRAME** section: Pendrive (OFF, quantity only), Frame (OFF, quantity only)
+### Specific code changes
 
-### UI Style
-Match Freelancer section exactly:
-- `rounded-2xl bg-white border border-gray-100 shadow-sm`
-- Event header: `bg-gradient-to-r from-slate-900 to-slate-800` with emerald stamp for event name
-- Switch rows: light bg, gray text, clean spacing
-- Section icons: Camera for photos, Video for videos
+**`ItemState` interface** (line 20-27): Replace `notes?: string` with `photographerNotes?: Record<string, string>`
 
-### Files Changed
+**`buildDefaults`**: Update `selected_photos` default to include `photographerNotes: {}`
 
-1. **`src/components/client-detail/DeliverablesSection.tsx`** - Complete rewrite as pure UI, no Supabase imports, all local state with `useState` initialized from defaults per event
-2. **`src/pages/ClientDetail.tsx`** - Pass `events` array (already computed at line 939) to `DeliverablesSection` instead of `registeredDateTimeAD`
+**`SelectedPhotosRow`** (lines 241-286): Rewrite the photographer rendering:
+- Photographer list: single `div` with `flex flex-wrap gap-3 items-center` — each photographer is a compact inline group: `[badge][name][switch]` with `gap-1.5`
+- Muted styling (`opacity-40`) stays for OFF photographers
+- Below the photographer row: map over ON photographers only, render a labeled textarea for each: `"PB ARJUN notes..."` as placeholder
+- Remove the old single `notes` textarea
+
+**Files**: Only `src/components/client-detail/DeliverablesSection.tsx`
 
