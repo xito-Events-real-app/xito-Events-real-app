@@ -22,7 +22,7 @@ const HEADERS = [
   'Registered DateTime AD',
 ];
 
-// --- Google Auth (same pattern as sync-crew-to-sheets) ---
+// --- Google Auth ---
 async function getAccessToken(): Promise<string> {
   const clientEmail = Deno.env.get('GOOGLE_CLIENT_EMAIL')!;
   const privateKeyRaw = Deno.env.get('GOOGLE_PRIVATE_KEY')!;
@@ -68,8 +68,7 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 3): P
   for (let attempt = 0; attempt <= retries; attempt++) {
     const resp = await fetch(url, options);
     if (resp.status === 429 && attempt < retries) {
-      const delay = Math.pow(2, attempt + 1) * 1000;
-      await new Promise(r => setTimeout(r, delay));
+      await new Promise(r => setTimeout(r, Math.pow(2, attempt + 1) * 1000));
       continue;
     }
     return resp;
@@ -77,7 +76,6 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 3): P
   throw new Error('Max retries exceeded');
 }
 
-// --- Ensure sheet tab exists ---
 async function ensureSheet(spreadsheetId: string, accessToken: string): Promise<void> {
   const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`;
   const metaResp = await fetchWithRetry(metaUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -85,15 +83,11 @@ async function ensureSheet(spreadsheetId: string, accessToken: string): Promise<
   const exists = (meta.sheets || []).some((s: any) => s.properties?.title === SHEET_NAME);
 
   if (!exists) {
-    // Create sheet
     await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        requests: [{ addSheet: { properties: { title: SHEET_NAME } } }],
-      }),
+      body: JSON.stringify({ requests: [{ addSheet: { properties: { title: SHEET_NAME } } }] }),
     });
-    // Write header row
     const headerRange = encodeURIComponent(`'${SHEET_NAME}'!A1:Z1`);
     await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${headerRange}?valueInputOption=USER_ENTERED`, {
       method: 'PUT',
@@ -104,8 +98,28 @@ async function ensureSheet(spreadsheetId: string, accessToken: string): Promise<
   }
 }
 
-// --- Flatten deliverable rows into one sheet row per (client, event) ---
-interface DeliverableRow {
+// --- Helpers ---
+function yn(val: boolean): string { return val ? 'YES' : 'NO'; }
+
+function formatItemNames(raw: string): string {
+  if (!raw) return '';
+  return raw.replace(/\|\|\|/g, ', ');
+}
+
+function parseCrewString(togglesJson: string): string {
+  try {
+    const obj = JSON.parse(togglesJson);
+    return Object.entries(obj)
+      .filter(([_, v]) => v === true)
+      .map(([k]) => k)
+      .join(', ');
+  } catch { return togglesJson || ''; }
+}
+
+// Global section/event names that are NOT real events
+const GLOBAL_SECTIONS = ['OVERALL', 'ALBUM', 'PHYSICAL'];
+
+interface DbRow {
   registered_date_time_ad: string;
   event_name: string;
   section: string;
@@ -118,68 +132,110 @@ interface DeliverableRow {
   photographer_notes: string;
 }
 
-function yn(val: boolean): string { return val ? 'YES' : 'NO'; }
+function buildSheetRows(
+  allRows: DbRow[],
+  clientName: string,
+  regId: string,
+  eventDateMap: Map<string, string>, // eventName -> event_date_ad
+): string[][] {
+  // Separate real event rows vs global rows
+  const eventRows = allRows.filter(r => !GLOBAL_SECTIONS.includes(r.event_name));
+  const globalRows = allRows.filter(r => GLOBAL_SECTIONS.includes(r.event_name));
 
-function parseCrewString(togglesJson: string): string {
-  try {
-    const obj = JSON.parse(togglesJson);
-    return Object.entries(obj)
-      .filter(([_, v]) => v === true)
-      .map(([k]) => k)
-      .join(', ');
-  } catch { return togglesJson || ''; }
-}
+  // Group event rows by event_name
+  const eventGroups = new Map<string, DbRow[]>();
+  for (const r of eventRows) {
+    if (!eventGroups.has(r.event_name)) eventGroups.set(r.event_name, []);
+    eventGroups.get(r.event_name)!.push(r);
+  }
 
-function flattenGroup(rows: DeliverableRow[], clientName: string, eventDateAD: string): string[] {
-  const get = (section: string, type: string): DeliverableRow | undefined =>
-    rows.find(r => r.section === section && r.deliverable_type === type);
+  // Helper to find a deliverable
+  const findGlobal = (section: string, type: string) =>
+    globalRows.find(r => r.section === section && r.deliverable_type === type);
 
-  const allPhotos = get('photos', 'all_photos');
-  const selectedPhotos = get('photos', 'selected_photos');
-  const instaPhotos = get('photos', 'insta_posts');
-  const fullVideo = get('videos', 'full_video');
-  const highlights = get('videos', 'highlights');
-  const reel = get('videos', 'reel');
-  const instaVideo = get('videos', 'insta_posts');
-  const overallHighlights = get('overall', 'overall_highlights');
-  const overallReels = get('overall', 'overall_reels');
-  const albumBride = get('album', 'album_bride');
-  const albumGroom = get('album', 'album_groom');
-  const albumOther = get('album', 'album_other');
-  const pendrive = get('physical', 'pendrive');
-  const frame = get('physical', 'frame');
+  // Global items (only on first row)
+  const overallHighlights = findGlobal('overall', 'overall_highlights');
+  const overallReels = findGlobal('overall', 'overall_reel');
+  const brideAlbum = findGlobal('album', 'bride_album');
+  const groomAlbum = findGlobal('album', 'groom_album');
+  const otherAlbum = findGlobal('album', 'other_album');
+  const pendrive = findGlobal('physical', 'pendrive');
+  const frame = findGlobal('physical', 'frame');
 
-  const eventName = rows[0]?.event_name || '';
-  const regId = rows[0]?.registered_date_time_ad || '';
+  const result: string[][] = [];
+  let isFirst = true;
 
-  return [
-    clientName,
-    eventDateAD,
-    eventName,
-    yn(allPhotos?.enabled ?? false),
-    yn(selectedPhotos?.enabled ?? false),
-    selectedPhotos ? parseCrewString(selectedPhotos.photographer_toggles) : '',
-    yn(instaPhotos?.enabled ?? false),
-    yn(fullVideo?.enabled ?? false),
-    String(fullVideo?.quantity ?? 1),
-    fullVideo?.item_names || '',
-    yn(highlights?.enabled ?? false),
-    String(highlights?.quantity ?? 1),
-    highlights?.item_names || '',
-    yn(reel?.enabled ?? false),
-    yn(instaVideo?.enabled ?? false),
-    yn(overallHighlights?.enabled ?? false),
-    yn(overallReels?.enabled ?? false),
-    yn(albumBride?.enabled ?? false),
-    albumBride?.album_name || '',
-    yn(albumGroom?.enabled ?? false),
-    albumGroom?.album_name || '',
-    yn(albumOther?.enabled ?? false),
-    albumOther ? `${albumOther.album_name}` : '',
-    String(pendrive?.quantity ?? 0),
-    String(frame?.quantity ?? 0),
-    regId,
-  ];
+  for (const [eventName, rows] of eventGroups) {
+    const get = (section: string, type: string) =>
+      rows.find(r => r.section === section && r.deliverable_type === type);
+
+    const allPhotos = get('photos', 'all_photos');
+    const selectedPhotos = get('photos', 'selected_photos');
+    const instaPhotos = get('photos', 'insta_post');
+    const fullVideo = get('videos', 'full_video');
+    const highlights = get('videos', 'highlights');
+    const reel = get('videos', 'reel');
+    const instaVideo = get('videos', 'video_insta_post');
+
+    const eventDate = eventDateMap.get(eventName) || '';
+
+    const row: string[] = [
+      clientName,
+      eventDate,
+      eventName,
+      yn(allPhotos?.enabled ?? false),
+      yn(selectedPhotos?.enabled ?? false),
+      selectedPhotos ? parseCrewString(selectedPhotos.photographer_toggles) : '',
+      yn(instaPhotos?.enabled ?? false),
+      yn(fullVideo?.enabled ?? false),
+      String(fullVideo?.quantity ?? 1),
+      formatItemNames(fullVideo?.item_names || ''),
+      yn(highlights?.enabled ?? false),
+      String(highlights?.quantity ?? 1),
+      formatItemNames(highlights?.item_names || ''),
+      yn(reel?.enabled ?? false),
+      yn(instaVideo?.enabled ?? false),
+      // Global columns — only on first row
+      isFirst ? yn(overallHighlights?.enabled ?? false) : '',
+      isFirst ? yn(overallReels?.enabled ?? false) : '',
+      isFirst ? yn(brideAlbum?.enabled ?? false) : '',
+      isFirst ? (brideAlbum?.album_name || '') : '',
+      isFirst ? yn(groomAlbum?.enabled ?? false) : '',
+      isFirst ? (groomAlbum?.album_name || '') : '',
+      isFirst ? yn(otherAlbum?.enabled ?? false) : '',
+      isFirst ? (otherAlbum?.album_name || '') : '',
+      isFirst ? String(pendrive?.quantity ?? 0) : '',
+      isFirst ? String(frame?.quantity ?? 0) : '',
+      regId,
+    ];
+
+    result.push(row);
+    isFirst = false;
+  }
+
+  // If client has NO real events but has global items, still output one row
+  if (result.length === 0 && globalRows.length > 0) {
+    result.push([
+      clientName, '', '',
+      '', '', '', '',
+      '', '', '',
+      '', '', '',
+      '', '',
+      yn(overallHighlights?.enabled ?? false),
+      yn(overallReels?.enabled ?? false),
+      yn(brideAlbum?.enabled ?? false),
+      brideAlbum?.album_name || '',
+      yn(groomAlbum?.enabled ?? false),
+      groomAlbum?.album_name || '',
+      yn(otherAlbum?.enabled ?? false),
+      otherAlbum?.album_name || '',
+      String(pendrive?.quantity ?? 0),
+      String(frame?.quantity ?? 0),
+      regId,
+    ]);
+  }
+
+  return result;
 }
 
 serve(async (req) => {
@@ -199,43 +255,62 @@ serve(async (req) => {
 
     await ensureSheet(spreadsheetId, accessToken);
 
+    // Helper: load event dates for a set of regIds
+    async function loadEventDateMap(regIds: string[]): Promise<Map<string, Map<string, string>>> {
+      // Returns: regId -> (eventName -> eventDateAD)
+      const result = new Map<string, Map<string, string>>();
+      if (regIds.length === 0) return result;
+
+      const { data: eventDetails } = await supabase
+        .from('event_details_cache')
+        .select('registered_date_time_ad, event_name, event_date_ad')
+        .in('registered_date_time_ad', regIds);
+
+      for (const ed of eventDetails || []) {
+        if (!result.has(ed.registered_date_time_ad)) result.set(ed.registered_date_time_ad, new Map());
+        if (ed.event_name && ed.event_date_ad) {
+          result.get(ed.registered_date_time_ad)!.set(ed.event_name, ed.event_date_ad);
+        }
+      }
+      return result;
+    }
+
+    // Helper: load client names
+    async function loadClientNames(regIds: string[]): Promise<Map<string, string>> {
+      const map = new Map<string, string>();
+      if (regIds.length === 0) return map;
+      const { data: clients } = await supabase
+        .from('clients_cache')
+        .select('registered_date_time_ad, client_name')
+        .in('registered_date_time_ad', regIds);
+      for (const c of clients || []) {
+        map.set(c.registered_date_time_ad, c.client_name || '');
+      }
+      return map;
+    }
+
     if (action === 'fullSync') {
-      // Read ALL deliverables
       const { data: allRows, error } = await supabase
         .from('client_deliverables')
         .select('*');
       if (error) throw error;
 
-      // Look up client names
       const regIds = [...new Set((allRows || []).map((r: any) => r.registered_date_time_ad))];
-      const clientMap = new Map<string, { name: string; eventDateAD: string }>();
-      if (regIds.length > 0) {
-        const { data: clients } = await supabase
-          .from('clients_cache')
-          .select('registered_date_time_ad, client_name, event_date_ad')
-          .in('registered_date_time_ad', regIds);
-        for (const c of clients || []) {
-          clientMap.set(c.registered_date_time_ad, {
-            name: c.client_name || '',
-            eventDateAD: c.event_date_ad || '',
-          });
-        }
-      }
+      const clientNameMap = await loadClientNames(regIds);
+      const eventDateMaps = await loadEventDateMap(regIds);
 
-      // Group by (regId, eventName)
-      const groups = new Map<string, DeliverableRow[]>();
+      // Group all rows by regId
+      const byClient = new Map<string, DbRow[]>();
       for (const row of allRows || []) {
-        const key = `${row.registered_date_time_ad}|||${row.event_name}`;
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key)!.push(row as DeliverableRow);
+        if (!byClient.has(row.registered_date_time_ad)) byClient.set(row.registered_date_time_ad, []);
+        byClient.get(row.registered_date_time_ad)!.push(row as DbRow);
       }
 
-      // Build sheet rows
       const sheetRows: string[][] = [];
-      for (const [key, rows] of groups) {
-        const regId = key.split('|||')[0];
-        const info = clientMap.get(regId) || { name: '', eventDateAD: '' };
-        sheetRows.push(flattenGroup(rows, info.name, info.eventDateAD));
+      for (const [regId, rows] of byClient) {
+        const name = clientNameMap.get(regId) || '';
+        const edMap = eventDateMaps.get(regId) || new Map();
+        sheetRows.push(...buildSheetRows(rows, name, regId, edMap));
       }
 
       // Clear and rewrite
@@ -254,7 +329,6 @@ serve(async (req) => {
         });
       }
 
-      // Mark all synced
       await supabase
         .from('client_deliverables')
         .update({ synced_to_sheet: true } as any)
@@ -279,37 +353,25 @@ serve(async (req) => {
       });
     }
 
-    // Get unique regIds from unsynced
     const unsyncedRegIds = [...new Set(unsyncedRows.map((r: any) => r.registered_date_time_ad))];
 
-    // Load ALL deliverables for those clients (not just unsynced) to build complete rows
+    // Load ALL deliverables for affected clients
     const { data: allClientDeliverables } = await supabase
       .from('client_deliverables')
       .select('*')
       .in('registered_date_time_ad', unsyncedRegIds);
 
-    // Look up client info
-    const clientMap = new Map<string, { name: string; eventDateAD: string }>();
-    const { data: clients } = await supabase
-      .from('clients_cache')
-      .select('registered_date_time_ad, client_name, event_date_ad')
-      .in('registered_date_time_ad', unsyncedRegIds);
-    for (const c of clients || []) {
-      clientMap.set(c.registered_date_time_ad, {
-        name: c.client_name || '',
-        eventDateAD: c.event_date_ad || '',
-      });
-    }
+    const clientNameMap = await loadClientNames(unsyncedRegIds);
+    const eventDateMaps = await loadEventDateMap(unsyncedRegIds);
 
-    // Group by (regId, eventName)
-    const groups = new Map<string, DeliverableRow[]>();
+    // Group by regId
+    const byClient = new Map<string, DbRow[]>();
     for (const row of allClientDeliverables || []) {
-      const key = `${row.registered_date_time_ad}|||${row.event_name}`;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(row as DeliverableRow);
+      if (!byClient.has(row.registered_date_time_ad)) byClient.set(row.registered_date_time_ad, []);
+      byClient.get(row.registered_date_time_ad)!.push(row as DbRow);
     }
 
-    // Read existing sheet data to find rows by column Z (regId)
+    // Read existing sheet to find matching rows
     const readRange = encodeURIComponent(`'${SHEET_NAME}'!A2:Z50000`);
     const readResp = await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${readRange}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -317,35 +379,39 @@ serve(async (req) => {
     const readData = await readResp.json();
     const existingRows: string[][] = readData.values || [];
 
-    // Build index: "regId|||eventName" -> sheet row index (0-based from row 2)
+    // Index existing rows by "regId|||eventName" -> sheet row number (1-indexed from row 2)
     const sheetIndex = new Map<string, number>();
     existingRows.forEach((r, idx) => {
       const regId = (r[25] || '').trim(); // Column Z
       const eventName = (r[2] || '').trim(); // Column C
-      if (regId) sheetIndex.set(`${regId}|||${eventName}`, idx);
+      if (regId) sheetIndex.set(`${regId}|||${eventName}`, idx + 2); // +2 for header + 1-index
     });
 
     const batchUpdates: { range: string; values: string[][] }[] = [];
     const appendRows: string[][] = [];
 
-    for (const [key, rows] of groups) {
-      const regId = key.split('|||')[0];
-      const info = clientMap.get(regId) || { name: '', eventDateAD: '' };
-      const flatRow = flattenGroup(rows, info.name, info.eventDateAD);
+    for (const [regId, rows] of byClient) {
+      const name = clientNameMap.get(regId) || '';
+      const edMap = eventDateMaps.get(regId) || new Map();
+      const newRows = buildSheetRows(rows, name, regId, edMap);
 
-      const existingIdx = sheetIndex.get(key);
-      if (existingIdx !== undefined) {
-        const sheetRow = existingIdx + 2; // +2 for header + 0-index
-        batchUpdates.push({
-          range: `'${SHEET_NAME}'!A${sheetRow}:Z${sheetRow}`,
-          values: [flatRow],
-        });
-      } else {
-        appendRows.push(flatRow);
+      // First, find all existing sheet rows for this regId and delete-by-overwrite
+      // Then place the new rows
+      for (const newRow of newRows) {
+        const eventName = newRow[2] || '';
+        const key = `${regId}|||${eventName}`;
+        const existingSheetRow = sheetIndex.get(key);
+        if (existingSheetRow !== undefined) {
+          batchUpdates.push({
+            range: `'${SHEET_NAME}'!A${existingSheetRow}:Z${existingSheetRow}`,
+            values: [newRow],
+          });
+        } else {
+          appendRows.push(newRow);
+        }
       }
     }
 
-    // Batch update existing rows
     if (batchUpdates.length > 0) {
       await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`, {
         method: 'POST',
@@ -354,7 +420,6 @@ serve(async (req) => {
       });
     }
 
-    // Append new rows
     if (appendRows.length > 0) {
       const appendRange = encodeURIComponent(`'${SHEET_NAME}'!A:Z`);
       await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${appendRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
@@ -364,7 +429,6 @@ serve(async (req) => {
       });
     }
 
-    // Mark all unsynced as synced
     const unsyncedIds = unsyncedRows.map((r: any) => r.id);
     await supabase
       .from('client_deliverables')
