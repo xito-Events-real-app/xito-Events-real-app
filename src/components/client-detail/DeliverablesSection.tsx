@@ -56,6 +56,17 @@ function buildDefaults(events: EventInfo[]): Record<DeliverableKey, ItemState> {
   return state;
 }
 
+/* ─── Split helper ─── */
+function splitEventName(name: string): [string, string] {
+  for (const sep of [' & ', ' + ', ' and ', ' AND ']) {
+    const idx = name.indexOf(sep);
+    if (idx !== -1) {
+      return [name.slice(0, idx).trim(), name.slice(idx + sep.length).trim()];
+    }
+  }
+  return [name, ''];
+}
+
 /* ─── Photographer helpers ─── */
 interface PhotographerInfo {
   code: string;
