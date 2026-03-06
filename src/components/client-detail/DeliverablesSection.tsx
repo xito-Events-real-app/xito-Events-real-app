@@ -291,6 +291,80 @@ function FullVideoRow({ eventName, item, onChange }: {
   );
 }
 
+/* ─── Highlights Row with Smart Split ─── */
+function HighlightsRow({ eventName, item, onChange }: {
+  eventName: string;
+  item: ItemState;
+  onChange: (u: Partial<ItemState>) => void;
+}) {
+  const names = [...item.names];
+  while (names.length < item.quantity) names.push('');
+
+  const handleToggle = (v: boolean) => {
+    onChange({ enabled: v, quantity: v ? Math.max(item.quantity, 1) : item.quantity });
+  };
+
+  const handleQty = (delta: number) => {
+    const newQty = Math.max(1, item.quantity + delta);
+    const newNames = [...names];
+
+    if (item.quantity === 1 && newQty === 2) {
+      const baseName = item.albumName || eventName;
+      const [part1, part2] = splitEventName(baseName);
+      newNames[0] = `${part1} HIGHLIGHTS`;
+      newNames.push(part2 ? `${part2} HIGHLIGHTS` : '');
+    } else {
+      while (newNames.length < newQty) newNames.push('');
+      if (newQty < newNames.length) newNames.length = newQty;
+    }
+
+    onChange({ quantity: newQty, names: newNames });
+  };
+
+  const handleName = (idx: number, val: string) => {
+    const newNames = [...names];
+    newNames[idx] = val;
+    onChange({ names: newNames });
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between py-1.5">
+        <span className="text-sm font-medium text-foreground">Highlights</span>
+        <div className="flex items-center gap-3">
+          {item.enabled && (
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleQty(-1)}>
+                <Minus className="h-3 w-3" />
+              </Button>
+              <span className="text-xs font-semibold text-foreground min-w-[18px] text-center">{item.quantity}</span>
+              <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleQty(1)}>
+                <Plus className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
+          <Switch checked={item.enabled} onCheckedChange={handleToggle} />
+        </div>
+      </div>
+      {item.enabled && item.quantity > 0 && (
+        <div className="pl-4 space-y-1.5">
+          {Array.from({ length: item.quantity }).map((_, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <span className="text-[11px] text-muted-foreground min-w-[60px]">Highlights {idx + 1}</span>
+              <Input
+                value={names[idx] || ''}
+                onChange={e => handleName(idx, e.target.value)}
+                placeholder="Name..."
+                className="h-7 text-xs"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Selected Photos Row with Photographer Sub-Switches + Notes ─── */
 function SelectedPhotosRow({ item, onChange, eventName, assignments }: {
   item: ItemState;
