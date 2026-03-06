@@ -53,7 +53,7 @@ import { nepaliMonthsEnglish, NepaliDateObject, bsToAD, isUnknownDay, getDayForS
 import { getMonthName } from "@/lib/nepali-months";
 import NepaliDate from "nepali-date-converter";
 import PaymentDrawer from "@/components/finance/PaymentDrawer";
-import { ClientDetailSidebar, ClientHeroSection, SectionType, EventDetailsSummaryCard, FullScreenEventCard, ClientDetailsCard, BenzoKeepDialog, BenzoKeepViewer, DeleteClientDialog, ClientFilesSection } from "@/components/client-detail";
+import { ClientDetailSidebar, ClientHeroSection, SectionType, EventDetailsSummaryCard, FullScreenEventCard, ClientDetailsCard, BenzoKeepDialog, BenzoKeepViewer, DeleteClientDialog, ClientFilesSection, DeliverablesSection } from "@/components/client-detail";
 import FreelancerAssignmentSection from "@/components/client-detail/FreelancerAssignmentSection";
 import { updateRequiredCrewCategories } from "@/lib/freelancer-assignment-api";
 import { EventDetailCard } from "@/components/client-detail/EventDetailCard";
@@ -1725,6 +1725,11 @@ const ClientDetail = () => {
               registeredDateTimeAD={client.registeredDateTimeAD}
               clientName={client.clientName}
             />
+          )}
+
+          {/* Deliverables Section */}
+          {activeSection === 'deliverables' && client?.registeredDateTimeAD && (
+            <DeliverablesSection registeredDateTimeAD={client.registeredDateTimeAD} />
           )}
 
           {/* Freelancers Section */}

@@ -1,9 +1,9 @@
-import { Calendar, FileText, Users, Clock, DollarSign, Activity, MessageSquare, CreditCard, ArrowLeft, ChevronLeft, ChevronRight, LayoutDashboard, StickyNote, UserCog, FolderOpen } from "lucide-react";
+import { Calendar, FileText, Users, Clock, DollarSign, Activity, MessageSquare, CreditCard, ArrowLeft, ChevronLeft, ChevronRight, LayoutDashboard, StickyNote, UserCog, FolderOpen, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
-export type SectionType = 'dashboard' | 'events' | 'freelancers' | 'clientDetails' | 'registration' | 'inquiry' | 'sales' | 'activity' | 'comments' | 'financials' | 'keepNotes' | 'files';
+export type SectionType = 'dashboard' | 'events' | 'freelancers' | 'clientDetails' | 'registration' | 'inquiry' | 'sales' | 'activity' | 'comments' | 'financials' | 'keepNotes' | 'files' | 'deliverables';
 
 interface ClientDetailSidebarProps {
   activeSection: SectionType;
@@ -34,6 +34,7 @@ const sidebarItems: { id: SectionType; label: string; icon: React.ElementType }[
   { id: 'financials', label: 'Financials', icon: CreditCard },
   { id: 'keepNotes', label: 'Benzo Keep', icon: StickyNote },
   { id: 'files', label: 'Files', icon: FolderOpen },
+  { id: 'deliverables', label: 'Deliverables', icon: Package },
 ];
 
 const ClientDetailSidebar = ({
