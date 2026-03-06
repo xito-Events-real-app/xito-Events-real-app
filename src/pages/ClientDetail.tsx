@@ -1728,8 +1728,8 @@ const ClientDetail = () => {
           )}
 
           {/* Deliverables Section */}
-          {activeSection === 'deliverables' && client?.registeredDateTimeAD && (
-            <DeliverablesSection registeredDateTimeAD={client.registeredDateTimeAD} />
+          {activeSection === 'deliverables' && (
+            <DeliverablesSection events={events.map(e => ({ name: e.name, month: e.month, day: e.day }))} />
           )}
 
           {/* Freelancers Section */}
