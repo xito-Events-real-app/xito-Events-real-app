@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      client_deliverables: {
+        Row: {
+          album_name: string
+          deliverable_type: string
+          enabled: boolean
+          event_name: string
+          id: string
+          item_names: string
+          quantity: number
+          registered_date_time_ad: string
+          section: string
+          synced_to_sheet: boolean
+          updated_at: string
+        }
+        Insert: {
+          album_name?: string
+          deliverable_type: string
+          enabled?: boolean
+          event_name: string
+          id?: string
+          item_names?: string
+          quantity?: number
+          registered_date_time_ad: string
+          section: string
+          synced_to_sheet?: boolean
+          updated_at?: string
+        }
+        Update: {
+          album_name?: string
+          deliverable_type?: string
+          enabled?: boolean
+          event_name?: string
+          id?: string
+          item_names?: string
+          quantity?: number
+          registered_date_time_ad?: string
+          section?: string
+          synced_to_sheet?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       clients_cache: {
         Row: {
           benzo_keep_notes: string | null
