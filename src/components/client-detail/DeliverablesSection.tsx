@@ -221,12 +221,14 @@ export default function DeliverablesSection({ events, assignments, registeredDat
     return state[makeKey(event, section, type)] || { enabled: false, quantity: 1, names: [] };
   };
 
-  const update = (event: string, section: string, type: string, updates: Partial<ItemState>) => {
+  const update = (event: string, section: string, type: string, updates: Partial<ItemState>, immediate = false) => {
     const key = makeKey(event, section, type);
     setState(prev => {
       const updated = { ...prev[key], ...updates };
       const newState = { ...prev, [key]: updated };
-      debounceSave(key, updated);
+      // Save immediately for toggles (enabled changes), debounce for text
+      const shouldBeImmediate = immediate || 'enabled' in updates || 'quantity' in updates || 'photographerToggles' in updates;
+      debounceSave(key, updated, shouldBeImmediate);
       return newState;
     });
   };
