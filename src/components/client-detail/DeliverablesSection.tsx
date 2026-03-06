@@ -23,7 +23,7 @@ interface ItemState {
   names: string[];
   albumName?: string;
   photographerToggles?: Record<string, boolean>;
-  notes?: string;
+  photographerNotes?: Record<string, string>;
 }
 
 type DeliverableKey = string;
@@ -37,7 +37,7 @@ function buildDefaults(events: EventInfo[]): Record<DeliverableKey, ItemState> {
 
   for (const ev of events) {
     state[makeKey(ev.name, 'photos', 'all_photos')] = { enabled: true, quantity: 1, names: [] };
-    state[makeKey(ev.name, 'photos', 'selected_photos')] = { enabled: false, quantity: 1, names: [], photographerToggles: {}, notes: '' };
+    state[makeKey(ev.name, 'photos', 'selected_photos')] = { enabled: false, quantity: 1, names: [], photographerToggles: {}, photographerNotes: {} };
     state[makeKey(ev.name, 'photos', 'insta_post')] = { enabled: false, quantity: 1, names: [''] };
     state[makeKey(ev.name, 'videos', 'full_video')] = { enabled: true, quantity: 1, names: [] };
     state[makeKey(ev.name, 'videos', 'highlights')] = { enabled: true, quantity: 1, names: [`${ev.name} HIGHLIGHTS`] };
@@ -246,40 +246,48 @@ function SelectedPhotosRow({ item, onChange, eventName, assignments }: {
       </div>
 
       {item.enabled && (
-        <div className="pl-4 space-y-2">
-          {/* Photographer sub-switches */}
+        <div className="pl-4 space-y-3">
+          {/* Photographer sub-switches — all inline */}
           {photographers.length === 0 && (
             <p className="text-xs text-muted-foreground italic">No photographers assigned</p>
           )}
-          {photographers.map(p => {
-            const isOn = item.photographerToggles?.[p.key] ?? false;
-            return (
-              <div
-                key={p.key}
-                className={`flex items-center justify-between py-1 transition-opacity ${isOn ? 'opacity-100' : 'opacity-40'}`}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded">
-                    {p.code}
-                  </span>
-                  <span className="text-sm text-foreground">{p.name}</span>
-                </div>
-                <Switch
-                  checked={isOn}
-                  onCheckedChange={v => handlePhotographerToggle(p.key, v)}
-                  className="scale-90"
-                />
-              </div>
-            );
-          })}
+          {photographers.length > 0 && (
+            <div className="flex flex-wrap gap-3 items-center">
+              {photographers.map(p => {
+                const isOn = item.photographerToggles?.[p.key] ?? false;
+                return (
+                  <div
+                    key={p.key}
+                    className={`flex items-center gap-1.5 transition-opacity ${isOn ? 'opacity-100' : 'opacity-40'}`}
+                  >
+                    <span className="text-[10px] font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                      {p.code}
+                    </span>
+                    <span className="text-xs font-medium text-foreground">{p.name}</span>
+                    <Switch
+                      checked={isOn}
+                      onCheckedChange={v => handlePhotographerToggle(p.key, v)}
+                      className="scale-75"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
-          {/* Notes textarea */}
-          <Textarea
-            value={item.notes || ''}
-            onChange={e => onChange({ notes: e.target.value })}
-            placeholder="Notes for selected photos..."
-            className="min-h-[60px] text-xs mt-1"
-          />
+          {/* Per-photographer notes */}
+          {photographers.filter(p => item.photographerToggles?.[p.key]).map(p => (
+            <Textarea
+              key={p.key}
+              value={item.photographerNotes?.[p.key] || ''}
+              onChange={e => {
+                const notes = { ...(item.photographerNotes || {}), [p.key]: e.target.value };
+                onChange({ photographerNotes: notes });
+              }}
+              placeholder={`${p.code} ${p.name} notes...`}
+              className="min-h-[50px] text-xs"
+            />
+          ))}
         </div>
       )}
     </div>
