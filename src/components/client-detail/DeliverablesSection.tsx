@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Plus, Minus, Package, Camera, Video, Award, BookOpen, HardDrive, Frame } from "lucide-react";
+import { Plus, Minus, Package, Camera, Video, Award, BookOpen, HardDrive } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 interface DeliverableRow {
@@ -24,10 +24,6 @@ interface EventInfo {
   eventDay: string;
 }
 
-// Types that support multi-item naming
-const MULTI_ITEM_TYPES = ['insta_post', 'highlights', 'reel', 'overall_highlights', 'overall_reel', 'bride_album', 'groom_album', 'other_album'];
-
-// Default deliverables per event
 const EVENT_PHOTO_DEFAULTS: { type: string; enabled: boolean }[] = [
   { type: 'all_photos', enabled: true },
   { type: 'selected_photos', enabled: false },
@@ -57,23 +53,6 @@ const PHYSICAL_DEFAULTS: { type: string; enabled: boolean }[] = [
   { type: 'frame', enabled: false },
 ];
 
-const TYPE_LABELS: Record<string, string> = {
-  all_photos: 'All Photos',
-  selected_photos: 'Selected Photos',
-  insta_post: 'Insta Posts',
-  full_video: 'Full Video',
-  highlights: 'Highlights',
-  reel: 'Reel',
-  video_insta_post: 'Insta Posts',
-  overall_highlights: 'Overall Highlights',
-  overall_reel: 'Overall Reel',
-  bride_album: 'Bride Side Album',
-  groom_album: 'Groom Side Album',
-  other_album: 'Other Album',
-  pendrive: 'Pendrive',
-  frame: 'Frame',
-};
-
 interface DeliverablesProps {
   registeredDateTimeAD: string;
 }
@@ -84,7 +63,6 @@ export default function DeliverablesSection({ registeredDateTimeAD }: Deliverabl
   const [isLoading, setIsLoading] = useState(true);
   const loadedRef = useRef(false);
 
-  // Load events + deliverables
   useEffect(() => {
     if (!registeredDateTimeAD || loadedRef.current) return;
     loadedRef.current = true;
@@ -92,7 +70,6 @@ export default function DeliverablesSection({ registeredDateTimeAD }: Deliverabl
     const load = async () => {
       setIsLoading(true);
       try {
-        // Load events
         const { data: eventRows } = await supabase
           .from('event_details_cache')
           .select('event_name, event_month, event_day')
@@ -104,69 +81,64 @@ export default function DeliverablesSection({ registeredDateTimeAD }: Deliverabl
           .map(e => ({ eventName: e.event_name!, eventMonth: e.event_month || '', eventDay: e.event_day || '' }));
         setEvents(eventList);
 
-        // Load existing deliverables
         const { data: existing } = await supabase
           .from('client_deliverables')
           .select('*')
           .eq('registered_date_time_ad', registeredDateTimeAD);
 
         const rows = (existing || []) as DeliverableRow[];
-
-        // Auto-create defaults for events that don't have rows yet
         const inserts: any[] = [];
+
+        const makeInsert = (eventName: string, section: string, type: string, enabled: boolean, itemNames = '') => ({
+          registered_date_time_ad: registeredDateTimeAD,
+          event_name: eventName,
+          section,
+          deliverable_type: type,
+          enabled,
+          quantity: enabled ? 1 : 1,
+          item_names: itemNames,
+          album_name: '',
+        });
+
         for (const ev of eventList) {
           for (const d of EVENT_PHOTO_DEFAULTS) {
             if (!rows.find(r => r.event_name === ev.eventName && r.deliverable_type === d.type && r.section === 'photos')) {
-              const defaultNames = d.type === 'highlights' ? `${ev.eventName} HIGHLIGHTS` : '';
-              inserts.push({
-                registered_date_time_ad: registeredDateTimeAD,
-                event_name: ev.eventName,
-                section: 'photos',
-                deliverable_type: d.type,
-                enabled: d.enabled,
-                quantity: d.type === 'highlights' && d.enabled ? 1 : 1,
-                item_names: defaultNames,
-              });
+              inserts.push(makeInsert(ev.eventName, 'photos', d.type, d.enabled));
             }
           }
           for (const d of EVENT_VIDEO_DEFAULTS) {
             if (!rows.find(r => r.event_name === ev.eventName && r.deliverable_type === d.type && r.section === 'videos')) {
-              const defaultNames = d.type === 'highlights' ? `${ev.eventName} HIGHLIGHTS` : '';
-              inserts.push({
-                registered_date_time_ad: registeredDateTimeAD,
-                event_name: ev.eventName,
-                section: 'videos',
-                deliverable_type: d.type,
-                enabled: d.enabled,
-                quantity: d.type === 'highlights' ? 1 : 1,
-                item_names: defaultNames,
-              });
+              const defaultName = d.type === 'highlights' ? `${ev.eventName} HIGHLIGHTS` : '';
+              inserts.push(makeInsert(ev.eventName, 'videos', d.type, d.enabled, defaultName));
             }
           }
         }
 
-        // Overall defaults
         for (const d of OVERALL_DEFAULTS) {
           if (!rows.find(r => r.event_name === 'OVERALL' && r.deliverable_type === d.type)) {
-            inserts.push({ registered_date_time_ad: registeredDateTimeAD, event_name: 'OVERALL', section: 'overall', deliverable_type: d.type, enabled: d.enabled, quantity: 1, item_names: '' });
+            inserts.push(makeInsert('OVERALL', 'overall', d.type, d.enabled));
           }
         }
-        // Album defaults
         for (const d of ALBUM_DEFAULTS) {
           if (!rows.find(r => r.event_name === 'ALBUM' && r.deliverable_type === d.type)) {
-            inserts.push({ registered_date_time_ad: registeredDateTimeAD, event_name: 'ALBUM', section: 'album', deliverable_type: d.type, enabled: d.enabled, quantity: 1, item_names: '', album_name: '' });
+            inserts.push(makeInsert('ALBUM', 'album', d.type, d.enabled));
           }
         }
-        // Physical defaults
         for (const d of PHYSICAL_DEFAULTS) {
           if (!rows.find(r => r.event_name === 'PENDRIVE_FRAME' && r.deliverable_type === d.type)) {
-            inserts.push({ registered_date_time_ad: registeredDateTimeAD, event_name: 'PENDRIVE_FRAME', section: 'pendrive_frame', deliverable_type: d.type, enabled: d.enabled, quantity: 0, item_names: '' });
+            inserts.push({ ...makeInsert('PENDRIVE_FRAME', 'pendrive_frame', d.type, d.enabled), quantity: 0 });
           }
         }
 
         if (inserts.length > 0) {
-          const { data: inserted } = await supabase.from('client_deliverables').insert(inserts).select();
-          setDeliverables([...rows, ...(inserted || []) as DeliverableRow[]]);
+          const { data: inserted, error } = await supabase.from('client_deliverables').insert(inserts).select();
+          if (error) {
+            console.error('Failed to insert deliverables:', error);
+            toast({ title: "Error", description: `Failed to create deliverables: ${error.message}`, variant: "destructive" });
+            setDeliverables(rows);
+          } else {
+            setDeliverables([...rows, ...(inserted || []) as DeliverableRow[]]);
+          }
         } else {
           setDeliverables(rows);
         }
@@ -181,14 +153,11 @@ export default function DeliverablesSection({ registeredDateTimeAD }: Deliverabl
   }, [registeredDateTimeAD]);
 
   const updateRow = useCallback(async (id: string, updates: Partial<DeliverableRow>) => {
-    // Optimistic local update
     setDeliverables(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r));
-
     const { error } = await supabase
       .from('client_deliverables')
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', id);
-
     if (error) {
       console.error('Failed to update deliverable:', error);
       toast({ title: "Error", description: "Failed to save", variant: "destructive" });
@@ -200,87 +169,63 @@ export default function DeliverablesSection({ registeredDateTimeAD }: Deliverabl
   }, [deliverables]);
 
   if (isLoading) {
-    return <div className="flex items-center justify-center py-20 text-white/50">Loading deliverables...</div>;
+    return <div className="flex items-center justify-center py-20 text-muted-foreground">Loading deliverables...</div>;
   }
 
   return (
-    <div className="space-y-4 p-4 md:p-6">
+    <div className="space-y-5 p-4 md:p-6">
       <div className="flex items-center gap-3 mb-6">
-        <Package className="h-6 w-6 text-emerald-400" />
-        <h2 className="text-xl font-bold text-white">Deliverables</h2>
+        <Package className="h-6 w-6 text-primary" />
+        <h2 className="text-xl font-bold text-foreground">Deliverables</h2>
       </div>
 
-      {/* Per-event sections */}
       {events.map(ev => (
-        <EventDeliverableCard
-          key={ev.eventName}
-          event={ev}
-          getRow={getRow}
-          updateRow={updateRow}
-        />
+        <EventDeliverableCard key={ev.eventName} event={ev} getRow={getRow} updateRow={updateRow} />
       ))}
 
-      {/* Overall section */}
-      <SpecialSectionCard
-        title="OVERALL"
-        icon={<Award className="h-4 w-4" />}
-        bgClass="bg-purple-900/50 border-purple-700/30"
-      >
+      <SectionCard title="OVERALL" icon={<Award className="h-4 w-4" />}>
         <div className="space-y-3">
           <MultiItemToggle row={getRow('OVERALL', 'overall', 'overall_highlights')} label="Overall Highlights" updateRow={updateRow} />
           <MultiItemToggle row={getRow('OVERALL', 'overall', 'overall_reel')} label="Overall Reel" updateRow={updateRow} />
         </div>
-      </SpecialSectionCard>
+      </SectionCard>
 
-      {/* Album section */}
-      <SpecialSectionCard
-        title="ALBUM"
-        icon={<BookOpen className="h-4 w-4" />}
-        bgClass="bg-amber-900/40 border-amber-700/30"
-      >
+      <SectionCard title="ALBUM" icon={<BookOpen className="h-4 w-4" />}>
         <div className="space-y-3">
           <MultiItemToggle row={getRow('ALBUM', 'album', 'bride_album')} label="Bride Side Album" updateRow={updateRow} />
           <MultiItemToggle row={getRow('ALBUM', 'album', 'groom_album')} label="Groom Side Album" updateRow={updateRow} />
           <AlbumToggle row={getRow('ALBUM', 'album', 'other_album')} updateRow={updateRow} />
         </div>
-      </SpecialSectionCard>
+      </SectionCard>
 
-      {/* Pendrive & Frame */}
-      <SpecialSectionCard
-        title="PENDRIVE & FRAME"
-        icon={<HardDrive className="h-4 w-4" />}
-        bgClass="bg-slate-800/80 border-slate-600/30"
-      >
+      <SectionCard title="PENDRIVE & FRAME" icon={<HardDrive className="h-4 w-4" />}>
         <div className="space-y-3">
           <QuantityOnlyToggle row={getRow('PENDRIVE_FRAME', 'pendrive_frame', 'pendrive')} label="Pendrive" updateRow={updateRow} />
           <QuantityOnlyToggle row={getRow('PENDRIVE_FRAME', 'pendrive_frame', 'frame')} label="Frame" updateRow={updateRow} />
         </div>
-      </SpecialSectionCard>
+      </SectionCard>
     </div>
   );
 }
 
-// ── Event Card ──
 function EventDeliverableCard({ event, getRow, updateRow }: {
   event: EventInfo;
   getRow: (eventName: string, section: string, type: string) => DeliverableRow | undefined;
   updateRow: (id: string, updates: Partial<DeliverableRow>) => Promise<void>;
 }) {
   return (
-    <div className="rounded-xl border border-white/10 overflow-hidden">
-      {/* Event header */}
-      <div className="bg-red-900/70 px-4 py-3 text-center">
-        <span className="text-white font-black text-base uppercase tracking-wide">
+    <div className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
+      <div className="bg-destructive/90 px-4 py-3 text-center">
+        <span className="text-destructive-foreground font-black text-sm uppercase tracking-wide">
           {event.eventMonth} {event.eventDay} — {event.eventName}
         </span>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-white/10 bg-slate-900/80">
-        {/* Photos column */}
+      <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border">
         <div className="p-4">
           <div className="flex items-center gap-2 mb-4">
-            <Camera className="h-4 w-4 text-emerald-400" />
-            <span className="text-sm font-bold text-emerald-400 uppercase tracking-wider">Photos</span>
+            <Camera className="h-4 w-4 text-primary" />
+            <span className="text-xs font-bold text-primary uppercase tracking-wider">Photos</span>
           </div>
           <div className="space-y-3">
             <SimpleToggle row={getRow(event.eventName, 'photos', 'all_photos')} label="All Photos" updateRow={updateRow} />
@@ -289,11 +234,10 @@ function EventDeliverableCard({ event, getRow, updateRow }: {
           </div>
         </div>
 
-        {/* Videos column */}
         <div className="p-4">
           <div className="flex items-center gap-2 mb-4">
-            <Video className="h-4 w-4 text-indigo-400" />
-            <span className="text-sm font-bold text-indigo-400 uppercase tracking-wider">Videos</span>
+            <Video className="h-4 w-4 text-accent-foreground" />
+            <span className="text-xs font-bold text-accent-foreground uppercase tracking-wider">Videos</span>
           </div>
           <div className="space-y-3">
             <SimpleToggle row={getRow(event.eventName, 'videos', 'full_video')} label="Full Video" updateRow={updateRow} />
@@ -307,7 +251,6 @@ function EventDeliverableCard({ event, getRow, updateRow }: {
   );
 }
 
-// ── Simple on/off toggle (no quantity/names) ──
 function SimpleToggle({ row, label, updateRow }: {
   row: DeliverableRow | undefined;
   label: string;
@@ -315,14 +258,13 @@ function SimpleToggle({ row, label, updateRow }: {
 }) {
   if (!row) return null;
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-sm text-white/80">{label}</span>
+    <div className="flex items-center justify-between py-1.5">
+      <span className="text-sm font-medium text-foreground">{label}</span>
       <Switch checked={row.enabled} onCheckedChange={v => updateRow(row.id, { enabled: v })} />
     </div>
   );
 }
 
-// ── Multi-item toggle (quantity + names) ──
 function MultiItemToggle({ row, label, updateRow }: {
   row: DeliverableRow | undefined;
   label: string;
@@ -331,7 +273,6 @@ function MultiItemToggle({ row, label, updateRow }: {
   if (!row) return null;
 
   const names = row.item_names ? row.item_names.split(',') : [];
-  // Ensure names array matches quantity
   while (names.length < row.quantity) names.push('');
 
   const handleToggle = (v: boolean) => {
@@ -354,16 +295,16 @@ function MultiItemToggle({ row, label, updateRow }: {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-white/80">{label}</span>
+      <div className="flex items-center justify-between py-1.5">
+        <span className="text-sm font-medium text-foreground">{label}</span>
         <div className="flex items-center gap-3">
           {row.enabled && (
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" className="h-6 w-6 text-white/60 hover:text-white hover:bg-white/10" onClick={() => handleQuantityChange(-1)}>
+              <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleQuantityChange(-1)}>
                 <Minus className="h-3 w-3" />
               </Button>
-              <span className="text-xs text-white/70 min-w-[18px] text-center">{row.quantity}</span>
-              <Button variant="ghost" size="icon" className="h-6 w-6 text-white/60 hover:text-white hover:bg-white/10" onClick={() => handleQuantityChange(1)}>
+              <span className="text-xs font-semibold text-foreground min-w-[18px] text-center">{row.quantity}</span>
+              <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleQuantityChange(1)}>
                 <Plus className="h-3 w-3" />
               </Button>
             </div>
@@ -376,12 +317,12 @@ function MultiItemToggle({ row, label, updateRow }: {
         <div className="pl-4 space-y-1.5">
           {Array.from({ length: row.quantity }).map((_, idx) => (
             <div key={idx} className="flex items-center gap-2">
-              <span className="text-[11px] text-white/40 min-w-[60px]">{label} {idx + 1}</span>
+              <span className="text-[11px] text-muted-foreground min-w-[60px]">{label} {idx + 1}</span>
               <Input
                 value={names[idx] || ''}
                 onChange={e => handleNameChange(idx, e.target.value)}
                 placeholder="Name..."
-                className="h-7 text-xs bg-white/5 border-white/10 text-white placeholder:text-white/30"
+                className="h-7 text-xs"
               />
             </div>
           ))}
@@ -391,7 +332,6 @@ function MultiItemToggle({ row, label, updateRow }: {
   );
 }
 
-// ── Album with album_name field for "Other" ──
 function AlbumToggle({ row, updateRow }: {
   row: DeliverableRow | undefined;
   updateRow: (id: string, updates: Partial<DeliverableRow>) => Promise<void>;
@@ -421,16 +361,16 @@ function AlbumToggle({ row, updateRow }: {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-white/80">Other Album</span>
+      <div className="flex items-center justify-between py-1.5">
+        <span className="text-sm font-medium text-foreground">Other Album</span>
         <div className="flex items-center gap-3">
           {row.enabled && (
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" className="h-6 w-6 text-white/60 hover:text-white hover:bg-white/10" onClick={() => handleQuantityChange(-1)}>
+              <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleQuantityChange(-1)}>
                 <Minus className="h-3 w-3" />
               </Button>
-              <span className="text-xs text-white/70 min-w-[18px] text-center">{row.quantity}</span>
-              <Button variant="ghost" size="icon" className="h-6 w-6 text-white/60 hover:text-white hover:bg-white/10" onClick={() => handleQuantityChange(1)}>
+              <span className="text-xs font-semibold text-foreground min-w-[18px] text-center">{row.quantity}</span>
+              <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleQuantityChange(1)}>
                 <Plus className="h-3 w-3" />
               </Button>
             </div>
@@ -442,22 +382,22 @@ function AlbumToggle({ row, updateRow }: {
       {row.enabled && (
         <div className="pl-4 space-y-2">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] text-amber-400/80 min-w-[60px]">Album Name</span>
+            <span className="text-[11px] text-primary min-w-[60px] font-semibold">Album Name</span>
             <Input
               value={row.album_name || ''}
               onChange={e => updateRow(row.id, { album_name: e.target.value })}
               placeholder="Album name..."
-              className="h-7 text-xs bg-white/5 border-amber-500/20 text-white placeholder:text-white/30"
+              className="h-7 text-xs"
             />
           </div>
           {Array.from({ length: row.quantity }).map((_, idx) => (
             <div key={idx} className="flex items-center gap-2">
-              <span className="text-[11px] text-white/40 min-w-[60px]">Type {idx + 1}</span>
+              <span className="text-[11px] text-muted-foreground min-w-[60px]">Type {idx + 1}</span>
               <Input
                 value={names[idx] || ''}
                 onChange={e => handleNameChange(idx, e.target.value)}
                 placeholder="Album type..."
-                className="h-7 text-xs bg-white/5 border-white/10 text-white placeholder:text-white/30"
+                className="h-7 text-xs"
               />
             </div>
           ))}
@@ -467,7 +407,6 @@ function AlbumToggle({ row, updateRow }: {
   );
 }
 
-// ── Quantity-only toggle (pendrive/frame) ──
 function QuantityOnlyToggle({ row, label, updateRow }: {
   row: DeliverableRow | undefined;
   label: string;
@@ -485,16 +424,16 @@ function QuantityOnlyToggle({ row, label, updateRow }: {
   };
 
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-sm text-white/80">{label}</span>
+    <div className="flex items-center justify-between py-1.5">
+      <span className="text-sm font-medium text-foreground">{label}</span>
       <div className="flex items-center gap-3">
         {row.enabled && (
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-6 w-6 text-white/60 hover:text-white hover:bg-white/10" onClick={() => handleQuantityChange(-1)}>
+            <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleQuantityChange(-1)}>
               <Minus className="h-3 w-3" />
             </Button>
-            <span className="text-xs text-white/70 min-w-[18px] text-center">{row.quantity}</span>
-            <Button variant="ghost" size="icon" className="h-6 w-6 text-white/60 hover:text-white hover:bg-white/10" onClick={() => handleQuantityChange(1)}>
+            <span className="text-xs font-semibold text-foreground min-w-[18px] text-center">{row.quantity}</span>
+            <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleQuantityChange(1)}>
               <Plus className="h-3 w-3" />
             </Button>
           </div>
@@ -505,17 +444,15 @@ function QuantityOnlyToggle({ row, label, updateRow }: {
   );
 }
 
-// ── Special section wrapper ──
-function SpecialSectionCard({ title, icon, bgClass, children }: {
+function SectionCard({ title, icon, children }: {
   title: string;
   icon: React.ReactNode;
-  bgClass: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className={`rounded-xl border overflow-hidden ${bgClass}`}>
-      <div className="bg-red-900/70 px-4 py-3 text-center">
-        <span className="text-white font-black text-base uppercase tracking-wide flex items-center justify-center gap-2">
+    <div className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
+      <div className="bg-destructive/90 px-4 py-3 text-center">
+        <span className="text-destructive-foreground font-black text-sm uppercase tracking-wide flex items-center justify-center gap-2">
           {icon} {title}
         </span>
       </div>
