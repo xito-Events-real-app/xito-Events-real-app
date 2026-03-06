@@ -40,7 +40,7 @@ function buildDefaults(events: EventInfo[]): Record<DeliverableKey, ItemState> {
     state[makeKey(ev.name, 'photos', 'selected_photos')] = { enabled: false, quantity: 1, names: [], photographerToggles: {}, photographerNotes: {} };
     state[makeKey(ev.name, 'photos', 'insta_post')] = { enabled: false, quantity: 1, names: [''] };
     state[makeKey(ev.name, 'videos', 'full_video')] = { enabled: true, quantity: 1, names: [ev.name] };
-    state[makeKey(ev.name, 'videos', 'highlights')] = { enabled: true, quantity: 1, names: [`${ev.name} HIGHLIGHTS`], albumName: ev.name };
+    state[makeKey(ev.name, 'videos', 'highlights')] = { enabled: true, quantity: 1, names: [ev.name], albumName: ev.name };
     state[makeKey(ev.name, 'videos', 'reel')] = { enabled: false, quantity: 1, names: [''] };
     state[makeKey(ev.name, 'videos', 'video_insta_post')] = { enabled: false, quantity: 1, names: [''] };
   }
