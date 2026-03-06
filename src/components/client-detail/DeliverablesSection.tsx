@@ -95,8 +95,18 @@ function getPhotographersForEvent(eventName: string, assignments?: FreelancerAss
   return photographers;
 }
 
+// Default album type suggestions (will be replaced by DB-fetched values later)
+const DEFAULT_ALBUM_TYPES = ['Magazine', 'Photobook', 'Canvas', 'Flush Mount', 'Coffee Table'];
+
 export default function DeliverablesSection({ events, assignments }: DeliverablesProps) {
   const [state, setState] = useState<Record<DeliverableKey, ItemState>>(() => buildDefaults(events));
+  const [savedAlbumTypes, setSavedAlbumTypes] = useState<string[]>(DEFAULT_ALBUM_TYPES);
+
+  const handleSaveAlbumType = (typeName: string) => {
+    if (typeName.trim() && !savedAlbumTypes.includes(typeName.trim())) {
+      setSavedAlbumTypes(prev => [...prev, typeName.trim()]);
+    }
+  };
 
   const get = (event: string, section: string, type: string): ItemState => {
     return state[makeKey(event, section, type)] || { enabled: false, quantity: 1, names: [] };
