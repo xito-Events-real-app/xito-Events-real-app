@@ -194,7 +194,7 @@ function EventCard({ event, get, update, assignments }: {
           </div>
           <div className="space-y-3">
             <FullVideoRow eventName={event.name} item={get(event.name, 'videos', 'full_video')} onChange={u => update(event.name, 'videos', 'full_video', u)} />
-            <MultiItemRow label="Highlights" item={get(event.name, 'videos', 'highlights')} onChange={u => update(event.name, 'videos', 'highlights', u)} />
+            <HighlightsRow eventName={event.name} item={get(event.name, 'videos', 'highlights')} onChange={u => update(event.name, 'videos', 'highlights', u)} />
             <MultiItemRow label="Reel" item={get(event.name, 'videos', 'reel')} onChange={u => update(event.name, 'videos', 'reel', u)} />
             <MultiItemRow label="Insta Posts" item={get(event.name, 'videos', 'video_insta_post')} onChange={u => update(event.name, 'videos', 'video_insta_post', u)} />
           </div>
