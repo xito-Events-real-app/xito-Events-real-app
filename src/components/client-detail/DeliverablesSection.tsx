@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Plus, Minus, Package, Camera, Video, Award, BookOpen, HardDrive } from "lucide-react";
+import { Plus, Minus, Package, Camera, Video, Award, BookOpen, HardDrive, ChevronDown } from "lucide-react";
 import { FreelancerAssignment } from "@/lib/freelancer-assignment-api";
 
 interface EventInfo {
@@ -95,8 +95,18 @@ function getPhotographersForEvent(eventName: string, assignments?: FreelancerAss
   return photographers;
 }
 
+// Default album type suggestions (will be replaced by DB-fetched values later)
+const DEFAULT_ALBUM_TYPES = ['Magazine', 'Photobook', 'Canvas', 'Flush Mount', 'Coffee Table'];
+
 export default function DeliverablesSection({ events, assignments }: DeliverablesProps) {
   const [state, setState] = useState<Record<DeliverableKey, ItemState>>(() => buildDefaults(events));
+  const [savedAlbumTypes, setSavedAlbumTypes] = useState<string[]>(DEFAULT_ALBUM_TYPES);
+
+  const handleSaveAlbumType = (typeName: string) => {
+    if (typeName.trim() && !savedAlbumTypes.includes(typeName.trim())) {
+      setSavedAlbumTypes(prev => [...prev, typeName.trim()]);
+    }
+  };
 
   const get = (event: string, section: string, type: string): ItemState => {
     return state[makeKey(event, section, type)] || { enabled: false, quantity: 1, names: [] };
@@ -135,8 +145,8 @@ export default function DeliverablesSection({ events, assignments }: Deliverable
 
       <SectionCard title="ALBUM" icon={<BookOpen className="h-4 w-4" />}>
         <div className="space-y-3">
-          <MultiItemRow label="Bride Side Album" item={get('ALBUM', 'album', 'bride_album')} onChange={u => update('ALBUM', 'album', 'bride_album', u)} />
-          <MultiItemRow label="Groom Side Album" item={get('ALBUM', 'album', 'groom_album')} onChange={u => update('ALBUM', 'album', 'groom_album', u)} />
+          <AlbumTypeRow label="Bride Side Album" item={get('ALBUM', 'album', 'bride_album')} onChange={u => update('ALBUM', 'album', 'bride_album', u)} savedTypes={savedAlbumTypes} onSaveType={handleSaveAlbumType} />
+          <AlbumTypeRow label="Groom Side Album" item={get('ALBUM', 'album', 'groom_album')} onChange={u => update('ALBUM', 'album', 'groom_album', u)} savedTypes={savedAlbumTypes} onSaveType={handleSaveAlbumType} />
           <AlbumRow item={get('ALBUM', 'album', 'other_album')} onChange={u => update('ALBUM', 'album', 'other_album', u)} />
         </div>
       </SectionCard>
@@ -517,7 +527,138 @@ function MultiItemRow({ label, item, onChange }: {
   );
 }
 
-/* ─── Album Row ─── */
+/* ─── Album Type Row (Bride/Groom Side) ─── */
+function AlbumTypeRow({ label, item, onChange, savedTypes, onSaveType }: {
+  label: string;
+  item: ItemState;
+  onChange: (u: Partial<ItemState>) => void;
+  savedTypes: string[];
+  onSaveType: (name: string) => void;
+}) {
+  const names = [...item.names];
+  while (names.length < item.quantity) names.push('');
+
+  const handleToggle = (v: boolean) => {
+    onChange({ enabled: v, quantity: v ? Math.max(item.quantity, 1) : item.quantity });
+  };
+
+  const handleQty = (delta: number) => {
+    const newQty = Math.max(1, item.quantity + delta);
+    const newNames = [...names];
+    while (newNames.length < newQty) newNames.push('');
+    if (newQty < newNames.length) newNames.length = newQty;
+    onChange({ quantity: newQty, names: newNames });
+  };
+
+  const handleName = (idx: number, val: string) => {
+    const newNames = [...names];
+    newNames[idx] = val;
+    onChange({ names: newNames });
+  };
+
+  const handleSelectType = (idx: number, typeName: string) => {
+    handleName(idx, typeName);
+  };
+
+  const handleBlurSave = (val: string) => {
+    if (val.trim()) onSaveType(val);
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between py-1.5">
+        <span className="text-sm font-medium text-foreground">{label}</span>
+        <div className="flex items-center gap-3">
+          {item.enabled && (
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleQty(-1)}>
+                <Minus className="h-3 w-3" />
+              </Button>
+              <span className="text-xs font-semibold text-foreground min-w-[18px] text-center">{item.quantity}</span>
+              <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleQty(1)}>
+                <Plus className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
+          <Switch checked={item.enabled} onCheckedChange={handleToggle} />
+        </div>
+      </div>
+      {item.enabled && item.quantity > 0 && (
+        <div className="pl-4 space-y-1.5">
+          {Array.from({ length: item.quantity }).map((_, idx) => (
+            <AlbumTypeInput
+              key={idx}
+              idx={idx}
+              value={names[idx] || ''}
+              savedTypes={savedTypes}
+              onSelect={(val) => handleSelectType(idx, val)}
+              onChange={(val) => handleName(idx, val)}
+              onBlurSave={handleBlurSave}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Album Type Input with dropdown suggestions ─── */
+function AlbumTypeInput({ idx, value, savedTypes, onSelect, onChange, onBlurSave }: {
+  idx: number;
+  value: string;
+  savedTypes: string[];
+  onSelect: (val: string) => void;
+  onChange: (val: string) => void;
+  onBlurSave: (val: string) => void;
+}) {
+  const [showDropdown, setShowDropdown] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const filtered = savedTypes.filter(t => 
+    t.toLowerCase().includes(value.toLowerCase())
+  );
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] text-muted-foreground min-w-[60px]">Type {idx + 1}</span>
+        <div className="relative flex-1">
+          <Input
+            value={value}
+            onChange={e => { onChange(e.target.value); setShowDropdown(true); }}
+            onFocus={() => setShowDropdown(true)}
+            onBlur={() => { setTimeout(() => setShowDropdown(false), 150); onBlurSave(value); }}
+            placeholder="Album type..."
+            className="h-7 text-xs pr-6"
+          />
+          <button
+            type="button"
+            className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground hover:text-foreground"
+            onMouseDown={e => { e.preventDefault(); setShowDropdown(!showDropdown); }}
+          >
+            <ChevronDown className="h-3 w-3" />
+          </button>
+        </div>
+      </div>
+      {showDropdown && filtered.length > 0 && (
+        <div className="absolute left-[68px] right-0 z-50 mt-0.5 max-h-32 overflow-y-auto rounded-md border border-border bg-popover shadow-md">
+          {filtered.map(type => (
+            <button
+              key={type}
+              type="button"
+              className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground transition-colors"
+              onMouseDown={e => { e.preventDefault(); onSelect(type); setShowDropdown(false); }}
+            >
+              {type}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function AlbumRow({ item, onChange }: {
   item: ItemState;
   onChange: (u: Partial<ItemState>) => void;
