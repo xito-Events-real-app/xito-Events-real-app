@@ -1,49 +1,43 @@
 
-Goal: Make Deliverables show real switches (like Freelancers section style) and ensure all requested controls are visible for every event.
 
-What I found:
-- The page is rendering event headers (so events load), but switch rows are missing because each switch row only renders if a matching `client_deliverables` row exists.
-- In `DeliverablesSection`, default bootstrap insert mixes objects with and without `album_name`. Since `album_name` is NOT NULL in `client_deliverables`, the batch can fail and no rows are created.
-- Insert error is not currently handled (`const { data: inserted } = ...` without checking `error`), so failure appears as “blank rows” instead of a clear error.
-- Deliverables visual style is currently dark; you asked it to look like the Freelancers section UI.
+## Fix: Deliverables Section - Pure UI Only (No Database)
 
-Implementation plan:
+### Problem
+The current `DeliverablesSection` tries to bootstrap rows into `client_deliverables` table on load, which fails silently, resulting in zero switches rendered.
 
-1) Fix missing-switch data bootstrap (core bug)
-- Update `src/components/client-detail/DeliverablesSection.tsx` default insert builders so every inserted row includes all NOT NULL text fields (especially `album_name: ''`, plus existing required fields).
-- Add proper insert error handling:
-  - capture `{ data, error }` from insert
-  - show destructive toast on error
-  - log exact database error for debugging
-- After insert, re-fetch deliverables for that client and set state from DB result (prevents partial/local mismatch).
-- Keep existing defaults exactly as requested:
-  - Photos: all_photos ON, selected_photos OFF, insta_post OFF
-  - Videos: full_video ON, highlights ON (qty 1 + default name `EVENT NAME HIGHLIGHTS`), reel OFF, video_insta_post OFF
-  - Overall/Album/Pendrive+Frame defaults preserved.
+### Solution
+Rewrite `DeliverablesSection` as a **pure UI component** with no Supabase calls. All state is local (useState). Database persistence will be added later.
 
-2) Match Freelancers-style UI presentation
-- Restyle Deliverables container/cards to follow Freelancer section pattern (light card surfaces, readable dark text, same spacing rhythm, similar row structure).
-- Keep current deliverables logic, but make switch rows visually consistent with Freelancers:
-  - clear label + control alignment
-  - same switch size behavior
-  - consistent typography and paddings
-- Preserve event grouping and two-column Photos/Videos layout under each event.
+### Props Change
+Instead of `registeredDateTimeAD`, pass the **event list** directly from the parent (`ClientDetail.tsx`), since the parent already computes it:
 
-3) Complete/align requested controls
-- Ensure all requested sections appear after event cards:
-  - OVERALL: overall highlights + overall reel (multi-item with qty and names)
-  - ALBUM: bride, groom, other (other asks album name first, then album type entries)
-  - PENDRIVE & FRAME: quantity-only controls
-- Keep plus/minus and per-item naming for insta/highlights/reel-like items.
+```typescript
+interface DeliverablesProps {
+  events: { name: string; month: string; day: string }[];
+}
+```
 
-4) Navigation consistency
-- Add `deliverables` to mobile section tabs in `ClientDetail.tsx` (desktop sidebar already has it), so behavior is consistent across devices.
+### What the component renders
 
-5) Verification checklist (post-fix)
-- Open a client with multiple events:
-  - confirm each event now shows visible switch rows under Photos/Videos
-  - toggle ON/OFF and reload page: state persists
-  - highlights defaults to `EVENT NAME HIGHLIGHTS`
-  - album “Other” accepts album name + per-type names
-  - pendrive/frame quantity updates and persists
-- Confirm no insert 400 errors occur when first opening Deliverables for a client.
+**For each event** - a card matching Freelancer section style (white bg, slate-900 gradient header with event name stamp):
+- Two-column layout: **Photos** | **Videos**
+- Photos: All Photos (ON), Selected Photos (OFF), Insta Posts (OFF, with +/- qty and naming)
+- Videos: Full Video (ON), Highlights (ON, qty=1, default name "[EVENT] HIGHLIGHTS", +/- and naming), Reel (OFF, +/- naming), Insta Posts (OFF, +/- naming)
+
+**After all events:**
+- **OVERALL** section: Overall Highlights (OFF, +/- naming), Overall Reel (OFF, +/- naming)
+- **ALBUM** section: Bride Album (OFF, +/- naming), Groom Album (OFF, +/- naming), Other Album (OFF, asks album name first, then +/- type naming)
+- **PENDRIVE & FRAME** section: Pendrive (OFF, quantity only), Frame (OFF, quantity only)
+
+### UI Style
+Match Freelancer section exactly:
+- `rounded-2xl bg-white border border-gray-100 shadow-sm`
+- Event header: `bg-gradient-to-r from-slate-900 to-slate-800` with emerald stamp for event name
+- Switch rows: light bg, gray text, clean spacing
+- Section icons: Camera for photos, Video for videos
+
+### Files Changed
+
+1. **`src/components/client-detail/DeliverablesSection.tsx`** - Complete rewrite as pure UI, no Supabase imports, all local state with `useState` initialized from defaults per event
+2. **`src/pages/ClientDetail.tsx`** - Pass `events` array (already computed at line 939) to `DeliverablesSection` instead of `registeredDateTimeAD`
+
