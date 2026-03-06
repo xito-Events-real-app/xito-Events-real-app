@@ -1,39 +1,87 @@
 
 
-## What Happens When You Rename an Event
+## Plan: Add Deliverables Section to Client Detail Page
 
-### Current Behavior (Problem)
+### What It Does
+A new "Deliverables" section in the Client Detail page (between Files and Freelancers in the sidebar) where you define what photo/video outputs are being provided to each client, per event, plus overall highlights/reels, albums, pendrives, and frames.
 
-When you change an event name (e.g., "WEDDING" → "RECEPTION") via the QuickAdd edit form, here's what happens to each table:
+### Database
 
-| Table | What happens | Status |
+**New table: `client_deliverables`**
+
+| Column | Type | Default |
 |---|---|---|
-| **clients_cache** | `events` column updated | Works |
-| **event_details_cache** | Old name row is **deleted**, new name row inserted as empty skeleton | **Logistics data LOST** (venue, parlour, timing, demands, references) |
-| **freelancer_assignments** | Old name row is **deleted**, new skeleton row inserted | **Crew assignments LOST** (all photographer/videographer picks gone) |
-| **freelancer_event_settings** | Nothing happens | **Orphaned rows** with old event name stay forever |
-| **files_management** | Nothing happens | **Orphaned rows** — files still reference old event name |
-| **contact_details_cache** | Not affected (per-client, not per-event) | OK |
+| id | uuid | gen_random_uuid() |
+| registered_date_time_ad | text | NOT NULL |
+| event_name | text | NOT NULL (or 'OVERALL' / 'ALBUM' / 'PENDRIVE_FRAME') |
+| section | text | NOT NULL ('photos' / 'videos' / 'overall' / 'album' / 'pendrive_frame') |
+| deliverable_type | text | NOT NULL (e.g. 'all_photos', 'selected_photos', 'insta_post', 'full_video', 'highlights', 'reel', 'overall_highlights', 'overall_reel', 'bride_album', 'groom_album', 'other_album', 'pendrive', 'frame') |
+| enabled | boolean | varies per type |
+| quantity | integer | 1 |
+| item_names | text | '' (comma-separated names, e.g. "Shwambar,Couple") |
+| album_name | text | '' (for 'other_album' — the album name itself) |
+| updated_at | timestamptz | now() |
+| synced_to_sheet | boolean | true |
 
-### Root Cause
+RLS: Allow all (matches existing pattern).
 
-The QuickAdd edit sync logic (lines 354-430) matches events by exact `(event_name, event_month, event_day)`. When you rename an event, the old name doesn't match the new name, so it's treated as "old event removed + new event added" — deleting all associated data.
+### New Files
 
-### Proposed Fix
+**`src/components/client-detail/DeliverablesSection.tsx`**
+- Props: `{ registeredDateTimeAD: string }`
+- Loads events from `event_details_cache` (same pattern as FreelancerAssignmentSection)
+- Loads/saves deliverables from `client_deliverables` table
+- Auto-creates default rows on first load (all_photos ON, selected_photos OFF, insta_post OFF, full_video ON, highlights ON with default name "[EVENT] HIGHLIGHTS", reel OFF, insta_post OFF)
 
-Instead of delete-and-recreate, detect renames by matching on `event_index` position and **update** the event name in-place across all related tables.
+**UI structure per event:**
 
-**File: `src/pages/QuickAdd.tsx`** (edit mode event sync, ~lines 354-430)
+```text
+┌─────────────────────────────────────────────────┐
+│  MANGSIR 15 - ENGAGEMENT                        │
+├────────────────────┬────────────────────────────┤
+│  PHOTOS            │  VIDEOS                    │
+│                    │                            │
+│  ◉ All Photos      │  ◉ Full Video             │
+│  ○ Selected Photos │  ◉ Highlights (1)  [+][-] │
+│  ○ Insta Posts     │    → ENGAGEMENT HIGHLIGHTS │
+│                    │  ○ Reel                    │
+│                    │  ○ Insta Posts              │
+└────────────────────┴────────────────────────────┘
+```
 
-1. First, update existing `event_details_cache` rows by `event_index` (positional match) — just change the `event_name`, `event_year`, `event_month`, `event_day`, `event_date_ad` columns without deleting the row, preserving all logistics data
-2. Only delete rows where `event_index >= newEvents.length` (events truly removed from the end)
-3. Only insert skeleton rows where `event_index` didn't exist before
+When a multi-item type is enabled (insta posts, highlights, reel):
+- Show +/- quantity controls
+- For each item, show an editable name input
+- Highlights default name: `[EVENT NAME] HIGHLIGHTS`
 
-**File: `src/lib/freelancer-assignment-cache.ts`** (`ensureFreelancerAssignmentRows`, ~lines 120-170)
+**After all events, three more sections:**
 
-4. Before inserting/deleting, detect renamed events by comparing old vs new lists positionally. If a row at position N has a different name, **update** that row's `event`, `event_year`, `event_month`, `event_day`, `event_date_ad` instead of deleting + re-inserting, preserving all crew assignments
-5. Propagate the rename to `freelancer_event_settings` so visibility/note settings aren't orphaned
-6. Propagate the rename to `files_management` rows matching the old event name + `registered_date_time_ad`
+1. **OVERALL** — Overall Highlights (multi, nameable) + Overall Reel (multi, nameable)
+2. **ALBUM** — Bride Side Album (multi, nameable type), Groom Side Album (multi, nameable type), Other Album (ask album name first, then nameable type)
+3. **PENDRIVE & FRAME** — Just quantity inputs (number with +/-)
 
-This ensures renaming "WEDDING" → "RECEPTION" updates the name everywhere while keeping all venue details, crew assignments, visibility settings, and file records intact.
+### Changes to Existing Files
+
+**`src/components/client-detail/ClientDetailSidebar.tsx`**
+- Add `'deliverables'` to `SectionType`
+- Add sidebar item: `{ id: 'deliverables', label: 'Deliverables', icon: Package }` (after 'files')
+
+**`src/components/client-detail/index.ts`**
+- Export `DeliverablesSection`
+
+**`src/pages/ClientDetail.tsx`**
+- Import and render `DeliverablesSection` when `activeSection === 'deliverables'`
+
+### UI Style
+- Matches the existing dark theme (slate-900 background)
+- Event headers styled like Files section (red-900/70 bg, centered, bold)
+- Switch toggles reuse the same `Switch` component from freelancers
+- Two-column Photos/Videos layout within each event card
+- Expandable item names use `Input` components inline
+
+### Data Flow
+- On mount: load from `client_deliverables` where `registered_date_time_ad` matches
+- If no rows exist for an event, auto-insert defaults
+- Each toggle/quantity/name change → instant Supabase update (same pattern as freelancer settings)
+- No Google Sheets sync needed (database-only feature)
 
