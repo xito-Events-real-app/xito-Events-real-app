@@ -1,58 +1,43 @@
 
 
-## Selected Photos: Photographer Sub-Switches + Notes
+## Fix: Deliverables Section - Pure UI Only (No Database)
 
-### What changes
+### Problem
+The current `DeliverablesSection` tries to bootstrap rows into `client_deliverables` table on load, which fails silently, resulting in zero switches rendered.
 
-**`src/components/client-detail/DeliverablesSection.tsx`**
+### Solution
+Rewrite `DeliverablesSection` as a **pure UI component** with no Supabase calls. All state is local (useState). Database persistence will be added later.
 
-1. **Update props** to accept `assignments` from parent:
-   ```typescript
-   interface DeliverablesProps {
-     events: EventInfo[];
-     assignments?: FreelancerAssignment[];
-   }
-   ```
+### Props Change
+Instead of `registeredDateTimeAD`, pass the **event list** directly from the parent (`ClientDetail.tsx`), since the parent already computes it:
 
-2. **Add fields to `ItemState`**:
-   ```typescript
-   interface ItemState {
-     enabled: boolean;
-     quantity: number;
-     names: string[];
-     albumName?: string;
-     photographerToggles?: Record<string, boolean>; // e.g. { "PB::ARJUN": true, "PG::NIKIT": false }
-     notes?: string;
-   }
-   ```
+```typescript
+interface DeliverablesProps {
+  events: { name: string; month: string; day: string }[];
+}
+```
 
-3. **Replace the `SimpleRow` for "Selected Photos"** with a new `SelectedPhotosRow` component that:
-   - Shows the main switch (same as now)
-   - When ON, finds the matching assignment for that event from `assignments` prop
-   - Extracts photographers: PB (`photographerBride`), PG (`photographerGroom`), EP (`extraPhotographer`) — in that order always
-   - Renders each assigned photographer as a sub-row: `PB ARJUN (switch)`, `PG NIKIT (switch)` etc.
-     - **Single photographer**: auto-enabled, shown as active
-     - **Multiple photographers**: all shown, each with their own switch; OFF ones rendered in muted/opacity style
-     - **Zero photographers**: shows "No photographers assigned" hint text
-   - Below the photographer toggles, renders a **notes textarea** (always visible when Selected Photos is ON)
+### What the component renders
 
-4. **Visual style for photographer sub-rows**:
-   - Indented under Selected Photos (pl-4)
-   - Each row: `PB` as a small bold badge + freelancer name + switch
-   - ON state: normal text color
-   - OFF state: `opacity-40` or `text-muted-foreground` — visually muted
+**For each event** - a card matching Freelancer section style (white bg, slate-900 gradient header with event name stamp):
+- Two-column layout: **Photos** | **Videos**
+- Photos: All Photos (ON), Selected Photos (OFF), Insta Posts (OFF, with +/- qty and naming)
+- Videos: Full Video (ON), Highlights (ON, qty=1, default name "[EVENT] HIGHLIGHTS", +/- and naming), Reel (OFF, +/- naming), Insta Posts (OFF, +/- naming)
 
-**`src/pages/ClientDetail.tsx`**
+**After all events:**
+- **OVERALL** section: Overall Highlights (OFF, +/- naming), Overall Reel (OFF, +/- naming)
+- **ALBUM** section: Bride Album (OFF, +/- naming), Groom Album (OFF, +/- naming), Other Album (OFF, asks album name first, then +/- type naming)
+- **PENDRIVE & FRAME** section: Pendrive (OFF, quantity only), Frame (OFF, quantity only)
 
-5. **Pass `freelancerAssignments`** to `DeliverablesSection`:
-   ```tsx
-   <DeliverablesSection 
-     events={events.map(e => ({ name: e.name, month: e.month, day: e.day }))} 
-     assignments={freelancerAssignments}
-   />
-   ```
+### UI Style
+Match Freelancer section exactly:
+- `rounded-2xl bg-white border border-gray-100 shadow-sm`
+- Event header: `bg-gradient-to-r from-slate-900 to-slate-800` with emerald stamp for event name
+- Switch rows: light bg, gray text, clean spacing
+- Section icons: Camera for photos, Video for videos
 
-### Files changed
-1. `src/components/client-detail/DeliverablesSection.tsx` — new `SelectedPhotosRow`, updated `ItemState`, updated props
-2. `src/pages/ClientDetail.tsx` — pass `freelancerAssignments` prop (line 1732)
+### Files Changed
+
+1. **`src/components/client-detail/DeliverablesSection.tsx`** - Complete rewrite as pure UI, no Supabase imports, all local state with `useState` initialized from defaults per event
+2. **`src/pages/ClientDetail.tsx`** - Pass `events` array (already computed at line 939) to `DeliverablesSection` instead of `registeredDateTimeAD`
 

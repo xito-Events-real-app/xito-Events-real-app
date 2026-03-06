@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Plus, Minus, Package, Camera, Video, Award, BookOpen, HardDrive } from "lucide-react";
+import { FreelancerAssignment } from "@/lib/freelancer-assignment-api";
 
 interface EventInfo {
   name: string;
@@ -12,6 +14,7 @@ interface EventInfo {
 
 interface DeliverablesProps {
   events: EventInfo[];
+  assignments?: FreelancerAssignment[];
 }
 
 interface ItemState {
@@ -19,9 +22,11 @@ interface ItemState {
   quantity: number;
   names: string[];
   albumName?: string;
+  photographerToggles?: Record<string, boolean>;
+  notes?: string;
 }
 
-type DeliverableKey = string; // "eventName::section::type"
+type DeliverableKey = string;
 
 function makeKey(event: string, section: string, type: string) {
   return `${event}::${section}::${type}`;
@@ -31,34 +36,55 @@ function buildDefaults(events: EventInfo[]): Record<DeliverableKey, ItemState> {
   const state: Record<DeliverableKey, ItemState> = {};
 
   for (const ev of events) {
-    // Photos
     state[makeKey(ev.name, 'photos', 'all_photos')] = { enabled: true, quantity: 1, names: [] };
-    state[makeKey(ev.name, 'photos', 'selected_photos')] = { enabled: false, quantity: 1, names: [] };
+    state[makeKey(ev.name, 'photos', 'selected_photos')] = { enabled: false, quantity: 1, names: [], photographerToggles: {}, notes: '' };
     state[makeKey(ev.name, 'photos', 'insta_post')] = { enabled: false, quantity: 1, names: [''] };
-    // Videos
     state[makeKey(ev.name, 'videos', 'full_video')] = { enabled: true, quantity: 1, names: [] };
     state[makeKey(ev.name, 'videos', 'highlights')] = { enabled: true, quantity: 1, names: [`${ev.name} HIGHLIGHTS`] };
     state[makeKey(ev.name, 'videos', 'reel')] = { enabled: false, quantity: 1, names: [''] };
     state[makeKey(ev.name, 'videos', 'video_insta_post')] = { enabled: false, quantity: 1, names: [''] };
   }
 
-  // Overall
   state[makeKey('OVERALL', 'overall', 'overall_highlights')] = { enabled: false, quantity: 1, names: [''] };
   state[makeKey('OVERALL', 'overall', 'overall_reel')] = { enabled: false, quantity: 1, names: [''] };
-
-  // Album
   state[makeKey('ALBUM', 'album', 'bride_album')] = { enabled: false, quantity: 1, names: [''] };
   state[makeKey('ALBUM', 'album', 'groom_album')] = { enabled: false, quantity: 1, names: [''] };
   state[makeKey('ALBUM', 'album', 'other_album')] = { enabled: false, quantity: 1, names: [''], albumName: '' };
-
-  // Physical
   state[makeKey('PHYSICAL', 'physical', 'pendrive')] = { enabled: false, quantity: 0, names: [] };
   state[makeKey('PHYSICAL', 'physical', 'frame')] = { enabled: false, quantity: 0, names: [] };
 
   return state;
 }
 
-export default function DeliverablesSection({ events }: DeliverablesProps) {
+/* ─── Photographer helpers ─── */
+interface PhotographerInfo {
+  code: string;
+  name: string;
+  key: string;
+}
+
+function getPhotographersForEvent(eventName: string, assignments?: FreelancerAssignment[]): PhotographerInfo[] {
+  if (!assignments) return [];
+  const match = assignments.find(a => a.event?.trim().toLowerCase() === eventName.trim().toLowerCase());
+  if (!match) return [];
+
+  const photographers: PhotographerInfo[] = [];
+  const order: { code: string; field: keyof FreelancerAssignment }[] = [
+    { code: 'PB', field: 'photographerBride' },
+    { code: 'PG', field: 'photographerGroom' },
+    { code: 'EP', field: 'extraPhotographer' },
+  ];
+
+  for (const { code, field } of order) {
+    const val = match[field] as string;
+    if (val && val.trim()) {
+      photographers.push({ code, name: val.trim(), key: `${code}::${val.trim()}` });
+    }
+  }
+  return photographers;
+}
+
+export default function DeliverablesSection({ events, assignments }: DeliverablesProps) {
   const [state, setState] = useState<Record<DeliverableKey, ItemState>>(() => buildDefaults(events));
 
   const get = (event: string, section: string, type: string): ItemState => {
@@ -86,7 +112,7 @@ export default function DeliverablesSection({ events }: DeliverablesProps) {
       </div>
 
       {events.map(ev => (
-        <EventCard key={ev.name} event={ev} get={get} update={update} />
+        <EventCard key={ev.name} event={ev} get={get} update={update} assignments={assignments} />
       ))}
 
       <SectionCard title="OVERALL" icon={<Award className="h-4 w-4" />}>
@@ -115,10 +141,11 @@ export default function DeliverablesSection({ events }: DeliverablesProps) {
 }
 
 /* ─── Event Card ─── */
-function EventCard({ event, get, update }: {
+function EventCard({ event, get, update, assignments }: {
   event: EventInfo;
   get: (e: string, s: string, t: string) => ItemState;
   update: (e: string, s: string, t: string, u: Partial<ItemState>) => void;
+  assignments?: FreelancerAssignment[];
 }) {
   return (
     <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
@@ -132,7 +159,6 @@ function EventCard({ event, get, update }: {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border">
-        {/* Photos */}
         <div className="p-4">
           <div className="flex items-center gap-2 mb-4">
             <Camera className="h-4 w-4 text-primary" />
@@ -140,12 +166,16 @@ function EventCard({ event, get, update }: {
           </div>
           <div className="space-y-3">
             <SimpleRow label="All Photos" item={get(event.name, 'photos', 'all_photos')} onChange={u => update(event.name, 'photos', 'all_photos', u)} />
-            <SimpleRow label="Selected Photos" item={get(event.name, 'photos', 'selected_photos')} onChange={u => update(event.name, 'photos', 'selected_photos', u)} />
+            <SelectedPhotosRow
+              item={get(event.name, 'photos', 'selected_photos')}
+              onChange={u => update(event.name, 'photos', 'selected_photos', u)}
+              eventName={event.name}
+              assignments={assignments}
+            />
             <MultiItemRow label="Insta Posts" item={get(event.name, 'photos', 'insta_post')} onChange={u => update(event.name, 'photos', 'insta_post', u)} />
           </div>
         </div>
 
-        {/* Videos */}
         <div className="p-4">
           <div className="flex items-center gap-2 mb-4">
             <Video className="h-4 w-4 text-accent-foreground" />
@@ -173,6 +203,85 @@ function SimpleRow({ label, item, onChange }: {
     <div className="flex items-center justify-between py-1.5">
       <span className="text-sm font-medium text-foreground">{label}</span>
       <Switch checked={item.enabled} onCheckedChange={v => onChange({ enabled: v })} />
+    </div>
+  );
+}
+
+/* ─── Selected Photos Row with Photographer Sub-Switches + Notes ─── */
+function SelectedPhotosRow({ item, onChange, eventName, assignments }: {
+  item: ItemState;
+  onChange: (u: Partial<ItemState>) => void;
+  eventName: string;
+  assignments?: FreelancerAssignment[];
+}) {
+  const photographers = getPhotographersForEvent(eventName, assignments);
+
+  const handleToggle = (enabled: boolean) => {
+    if (enabled) {
+      // Auto-enable all photographers if single, or all if multiple
+      const toggles: Record<string, boolean> = {};
+      if (photographers.length === 1) {
+        toggles[photographers[0].key] = true;
+      } else {
+        for (const p of photographers) {
+          toggles[p.key] = false;
+        }
+      }
+      onChange({ enabled: true, photographerToggles: toggles });
+    } else {
+      onChange({ enabled: false });
+    }
+  };
+
+  const handlePhotographerToggle = (key: string, val: boolean) => {
+    const toggles = { ...(item.photographerToggles || {}), [key]: val };
+    onChange({ photographerToggles: toggles });
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between py-1.5">
+        <span className="text-sm font-medium text-foreground">Selected Photos</span>
+        <Switch checked={item.enabled} onCheckedChange={handleToggle} />
+      </div>
+
+      {item.enabled && (
+        <div className="pl-4 space-y-2">
+          {/* Photographer sub-switches */}
+          {photographers.length === 0 && (
+            <p className="text-xs text-muted-foreground italic">No photographers assigned</p>
+          )}
+          {photographers.map(p => {
+            const isOn = item.photographerToggles?.[p.key] ?? false;
+            return (
+              <div
+                key={p.key}
+                className={`flex items-center justify-between py-1 transition-opacity ${isOn ? 'opacity-100' : 'opacity-40'}`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                    {p.code}
+                  </span>
+                  <span className="text-sm text-foreground">{p.name}</span>
+                </div>
+                <Switch
+                  checked={isOn}
+                  onCheckedChange={v => handlePhotographerToggle(p.key, v)}
+                  className="scale-90"
+                />
+              </div>
+            );
+          })}
+
+          {/* Notes textarea */}
+          <Textarea
+            value={item.notes || ''}
+            onChange={e => onChange({ notes: e.target.value })}
+            placeholder="Notes for selected photos..."
+            className="min-h-[60px] text-xs mt-1"
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -242,7 +351,7 @@ function MultiItemRow({ label, item, onChange }: {
   );
 }
 
-/* ─── Album Row (name first, then types) ─── */
+/* ─── Album Row ─── */
 function AlbumRow({ item, onChange }: {
   item: ItemState;
   onChange: (u: Partial<ItemState>) => void;
