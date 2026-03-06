@@ -1,10 +1,11 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Plus, Minus, Package, Camera, Video, Award, BookOpen, HardDrive, ChevronDown } from "lucide-react";
 import { FreelancerAssignment } from "@/lib/freelancer-assignment-api";
+import { loadDeliverables, saveDeliverable, loadAlbumTypes, saveAlbumType, DeliverableRow } from "@/lib/deliverables-api";
 
 interface EventInfo {
   name: string;
@@ -15,6 +16,7 @@ interface EventInfo {
 interface DeliverablesProps {
   events: EventInfo[];
   assignments?: FreelancerAssignment[];
+  registeredDateTimeAD?: string;
 }
 
 interface ItemState {
@@ -30,6 +32,11 @@ type DeliverableKey = string;
 
 function makeKey(event: string, section: string, type: string) {
   return `${event}::${section}::${type}`;
+}
+
+function parseKey(key: string): { event: string; section: string; type: string } {
+  const [event, section, type] = key.split('::');
+  return { event, section, type };
 }
 
 function buildDefaults(events: EventInfo[]): Record<DeliverableKey, ItemState> {
@@ -95,16 +102,85 @@ function getPhotographersForEvent(eventName: string, assignments?: FreelancerAss
   return photographers;
 }
 
-// Default album type suggestions (will be replaced by DB-fetched values later)
-const DEFAULT_ALBUM_TYPES = ['Magazine', 'Photobook', 'Canvas', 'Flush Mount', 'Coffee Table'];
+/* ─── DB row <-> ItemState converters ─── */
+function rowToState(row: DeliverableRow): ItemState {
+  return {
+    enabled: row.enabled,
+    quantity: row.quantity,
+    names: row.item_names ? row.item_names.split('|||') : [],
+    albumName: row.album_name || undefined,
+    photographerToggles: row.photographer_toggles ? (() => { try { return JSON.parse(row.photographer_toggles); } catch { return {}; } })() : {},
+    photographerNotes: row.photographer_notes ? (() => { try { return JSON.parse(row.photographer_notes); } catch { return {}; } })() : {},
+  };
+}
 
-export default function DeliverablesSection({ events, assignments }: DeliverablesProps) {
+function stateToRow(registeredDateTimeAD: string, event: string, section: string, type: string, item: ItemState): DeliverableRow {
+  return {
+    registered_date_time_ad: registeredDateTimeAD,
+    event_name: event,
+    section,
+    deliverable_type: type,
+    enabled: item.enabled,
+    quantity: item.quantity,
+    item_names: item.names.join('|||'),
+    album_name: item.albumName || '',
+    photographer_toggles: item.photographerToggles ? JSON.stringify(item.photographerToggles) : '',
+    photographer_notes: item.photographerNotes ? JSON.stringify(item.photographerNotes) : '',
+  };
+}
+
+export default function DeliverablesSection({ events, assignments, registeredDateTimeAD }: DeliverablesProps) {
   const [state, setState] = useState<Record<DeliverableKey, ItemState>>(() => buildDefaults(events));
-  const [savedAlbumTypes, setSavedAlbumTypes] = useState<string[]>(DEFAULT_ALBUM_TYPES);
+  const [savedAlbumTypes, setSavedAlbumTypes] = useState<string[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  const handleSaveAlbumType = (typeName: string) => {
-    if (typeName.trim() && !savedAlbumTypes.includes(typeName.trim())) {
-      setSavedAlbumTypes(prev => [...prev, typeName.trim()]);
+  // Load from DB on mount
+  useEffect(() => {
+    if (!registeredDateTimeAD) return;
+
+    const load = async () => {
+      const [rows, types] = await Promise.all([
+        loadDeliverables(registeredDateTimeAD),
+        loadAlbumTypes(),
+      ]);
+
+      setSavedAlbumTypes(types.length > 0 ? types : ['Magazine', 'Photobook', 'Canvas', 'Flush Mount', 'Coffee Table']);
+
+      if (rows.length > 0) {
+        setState(prev => {
+          const merged = { ...prev };
+          for (const row of rows) {
+            const key = makeKey(row.event_name, row.section, row.deliverable_type);
+            merged[key] = rowToState(row);
+          }
+          return merged;
+        });
+      }
+      setLoaded(true);
+    };
+    load();
+  }, [registeredDateTimeAD]);
+
+  // Debounced save for a specific key
+  const debounceSave = useCallback((key: string, item: ItemState) => {
+    if (!registeredDateTimeAD || !loaded) return;
+
+    if (debounceTimers.current[key]) {
+      clearTimeout(debounceTimers.current[key]);
+    }
+    debounceTimers.current[key] = setTimeout(() => {
+      const { event, section, type } = parseKey(key);
+      const row = stateToRow(registeredDateTimeAD, event, section, type, item);
+      saveDeliverable(row);
+    }, 1000);
+  }, [registeredDateTimeAD, loaded]);
+
+  const handleSaveAlbumType = async (typeName: string) => {
+    const trimmed = typeName.trim();
+    if (trimmed && !savedAlbumTypes.includes(trimmed)) {
+      setSavedAlbumTypes(prev => [...prev, trimmed]);
+      await saveAlbumType(trimmed);
     }
   };
 
@@ -114,7 +190,12 @@ export default function DeliverablesSection({ events, assignments }: Deliverable
 
   const update = (event: string, section: string, type: string, updates: Partial<ItemState>) => {
     const key = makeKey(event, section, type);
-    setState(prev => ({ ...prev, [key]: { ...prev[key], ...updates } }));
+    setState(prev => {
+      const updated = { ...prev[key], ...updates };
+      const newState = { ...prev, [key]: updated };
+      debounceSave(key, updated);
+      return newState;
+    });
   };
 
   if (events.length === 0) {
@@ -386,7 +467,6 @@ function SelectedPhotosRow({ item, onChange, eventName, assignments }: {
 
   const handleToggle = (enabled: boolean) => {
     if (enabled) {
-      // Auto-enable all photographers if single, or all if multiple
       const toggles: Record<string, boolean> = {};
       if (photographers.length === 1) {
         toggles[photographers[0].key] = true;
@@ -415,7 +495,6 @@ function SelectedPhotosRow({ item, onChange, eventName, assignments }: {
 
       {item.enabled && (
         <div className="pl-4 space-y-3">
-          {/* Photographer sub-switches — all inline */}
           {photographers.length === 0 && (
             <p className="text-xs text-muted-foreground italic">No photographers assigned</p>
           )}

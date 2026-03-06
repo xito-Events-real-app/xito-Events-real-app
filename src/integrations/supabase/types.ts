@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      album_types: {
+        Row: {
+          created_at: string
+          id: string
+          type_name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          type_name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          type_name?: string
+        }
+        Relationships: []
+      }
       client_deliverables: {
         Row: {
           album_name: string
@@ -22,6 +40,8 @@ export type Database = {
           event_name: string
           id: string
           item_names: string
+          photographer_notes: string
+          photographer_toggles: string
           quantity: number
           registered_date_time_ad: string
           section: string
@@ -35,6 +55,8 @@ export type Database = {
           event_name: string
           id?: string
           item_names?: string
+          photographer_notes?: string
+          photographer_toggles?: string
           quantity?: number
           registered_date_time_ad: string
           section: string
@@ -48,6 +70,8 @@ export type Database = {
           event_name?: string
           id?: string
           item_names?: string
+          photographer_notes?: string
+          photographer_toggles?: string
           quantity?: number
           registered_date_time_ad?: string
           section?: string

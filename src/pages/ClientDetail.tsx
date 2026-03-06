@@ -1729,7 +1729,7 @@ const ClientDetail = () => {
 
           {/* Deliverables Section */}
           {activeSection === 'deliverables' && (
-            <DeliverablesSection events={events.map(e => ({ name: e.name, month: e.month, day: e.day }))} assignments={freelancerAssignments} />
+            <DeliverablesSection events={events.map(e => ({ name: e.name, month: e.month, day: e.day }))} assignments={freelancerAssignments} registeredDateTimeAD={client.registeredDateTimeAD} />
           )}
 
           {/* Freelancers Section */}

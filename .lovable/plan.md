@@ -1,38 +1,37 @@
 
 
-## Database Persistence for Deliverables — Refined Plan
+## Selected Photos: Inline Freelancer Layout + Per-Freelancer Notes
 
-The previously approved plan is solid. Here's the refined version ready for implementation:
+### Changes to `SelectedPhotosRow` in `DeliverablesSection.tsx`
 
-### 1. Database Migration
+**1. All photographers on one line, switch right next to name**
 
-**Add columns to `client_deliverables`:**
-- `photographer_toggles text DEFAULT ''` — JSON of `Record<string, boolean>`
-- `photographer_notes text DEFAULT ''` — JSON of `Record<string, string>`
+Current: Each photographer is a separate row with switch on the far right.
+New: All photographers rendered inline (flex-wrap) as compact chips — badge + name + switch grouped tightly together.
 
-**Create `album_types` table:**
-- `id uuid PK`, `type_name text NOT NULL UNIQUE`, `created_at timestamptz DEFAULT now()`
-- Seed with: Magazine, Photobook, Canvas, Flush Mount, Coffee Table
-- RLS: allow all access (matches existing pattern)
+```
+Selected Photos                              [SWITCH]
+  PB ARJUN [switch]  PG NIKIT [switch]  EP RAM [switch]
+  
+  [Notes for ARJUN...]     ← only if PB toggled ON
+  [Notes for NIKIT...]     ← only if PG toggled ON
+```
 
-### 2. New File: `src/lib/deliverables-api.ts`
-- `loadDeliverables(registeredDateTimeAD)` — fetch all rows from `client_deliverables`
-- `saveDeliverable(data)` — upsert by composite key (`registered_date_time_ad`, `event_name`, `section`, `deliverable_type`)
-- `loadAlbumTypes()` — fetch from `album_types`
-- `saveAlbumType(name)` — insert if not exists
+**2. Per-freelancer notes instead of single shared notes**
 
-### 3. Update `DeliverablesSection.tsx`
-- Accept `registeredDateTimeAD` prop
-- On mount: load saved deliverables + album types from DB, merge with defaults
-- On state change: debounce-save each deliverable row to DB (~1s debounce)
-- On album type blur: insert new type to `album_types`
+Change `notes` from `string` to `photographerNotes: Record<string, string>` in `ItemState`. Each toggled-ON photographer gets their own textarea labeled with their code+name.
 
-### 4. Update `ClientDetail.tsx`
-- Pass `registeredDateTimeAD` to `DeliverablesSection`
+### Specific code changes
 
-### Files Changed
-1. Migration SQL (2 column adds + 1 new table + seed data)
-2. `src/lib/deliverables-api.ts` (new)
-3. `src/components/client-detail/DeliverablesSection.tsx`
-4. `src/pages/ClientDetail.tsx`
+**`ItemState` interface** (line 20-27): Replace `notes?: string` with `photographerNotes?: Record<string, string>`
+
+**`buildDefaults`**: Update `selected_photos` default to include `photographerNotes: {}`
+
+**`SelectedPhotosRow`** (lines 241-286): Rewrite the photographer rendering:
+- Photographer list: single `div` with `flex flex-wrap gap-3 items-center` — each photographer is a compact inline group: `[badge][name][switch]` with `gap-1.5`
+- Muted styling (`opacity-40`) stays for OFF photographers
+- Below the photographer row: map over ON photographers only, render a labeled textarea for each: `"PB ARJUN notes..."` as placeholder
+- Remove the old single `notes` textarea
+
+**Files**: Only `src/components/client-detail/DeliverablesSection.tsx`
 
