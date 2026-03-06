@@ -80,3 +80,19 @@ export async function saveAlbumType(typeName: string): Promise<void> {
     console.error('Error saving album type:', error);
   }
 }
+
+export async function syncDeliverablesToSheet(action: 'push' | 'fullSync' = 'push'): Promise<{ success: boolean; syncedCount?: number }> {
+  try {
+    const { data, error } = await supabase.functions.invoke('sync-deliverables-to-sheets', {
+      body: { action },
+    });
+    if (error) {
+      console.error('Error syncing deliverables to sheet:', error);
+      return { success: false };
+    }
+    return data || { success: true };
+  } catch (err) {
+    console.error('Error syncing deliverables to sheet:', err);
+    return { success: false };
+  }
+}
