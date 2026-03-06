@@ -135,8 +135,8 @@ export default function DeliverablesSection({ events, assignments }: Deliverable
 
       <SectionCard title="ALBUM" icon={<BookOpen className="h-4 w-4" />}>
         <div className="space-y-3">
-          <MultiItemRow label="Bride Side Album" item={get('ALBUM', 'album', 'bride_album')} onChange={u => update('ALBUM', 'album', 'bride_album', u)} />
-          <MultiItemRow label="Groom Side Album" item={get('ALBUM', 'album', 'groom_album')} onChange={u => update('ALBUM', 'album', 'groom_album', u)} />
+          <AlbumTypeRow label="Bride Side Album" item={get('ALBUM', 'album', 'bride_album')} onChange={u => update('ALBUM', 'album', 'bride_album', u)} savedTypes={savedAlbumTypes} onSaveType={handleSaveAlbumType} />
+          <AlbumTypeRow label="Groom Side Album" item={get('ALBUM', 'album', 'groom_album')} onChange={u => update('ALBUM', 'album', 'groom_album', u)} savedTypes={savedAlbumTypes} onSaveType={handleSaveAlbumType} />
           <AlbumRow item={get('ALBUM', 'album', 'other_album')} onChange={u => update('ALBUM', 'album', 'other_album', u)} />
         </div>
       </SectionCard>
