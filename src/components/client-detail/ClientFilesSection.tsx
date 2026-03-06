@@ -285,7 +285,10 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
                       {file.side === "BRIDE SIDE" ? "BRIDE" : file.side === "GROOM SIDE" ? "GROOM" : file.side || "-"}
                     </td>
                     <td className="px-2 py-3 text-sm text-amber-200 font-bold">CARD {parseInt(file.card_label || "1") || 1}</td>
-                    <td className="px-2 py-3 text-sm text-amber-200 font-bold">{file.format_type || "-"}</td>
+                    <td className="px-2 py-3 text-sm text-amber-200 font-bold">
+                      {file.format_type || "-"}
+                      {file.number_of_items ? <span className="text-muted-foreground ml-0.5">({file.number_of_items})</span> : null}
+                    </td>
                     <td className="px-2 py-3 text-right text-sm text-amber-200 font-bold">{file.size_gb ? `${file.size_gb}GB` : "-"}</td>
                     {/* 1st Backup */}
                     <td className="px-2 py-3 text-center">
