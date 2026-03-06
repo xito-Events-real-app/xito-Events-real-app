@@ -1,37 +1,59 @@
 
 
-## Selected Photos: Inline Freelancer Layout + Per-Freelancer Notes
+## Sync Deliverables to "BOOKED CLIENTS DELIVERABLES" Sheet
 
-### Changes to `SelectedPhotosRow` in `DeliverablesSection.tsx`
+### Human-Readable Sheet Layout
 
-**1. All photographers on one line, switch right next to name**
+Instead of raw JSON columns, the sheet will have one row per client showing a flat, readable summary. Each client gets ONE row with all their deliverables flattened into clearly labeled columns.
 
-Current: Each photographer is a separate row with switch on the far right.
-New: All photographers rendered inline (flex-wrap) as compact chips — badge + name + switch grouped tightly together.
-
+```text
+A: Client Name
+B: Event Date (AD)
+C: Event Name
+D: All Photos (YES/NO)
+E: Selected Photos (YES/NO)
+F: Selected Photos Crew (e.g. "PB: Arjun, PG: Nikit")
+G: Insta Posts - Photos (YES/NO)
+H: Full Video (YES/NO)
+I: Full Video Qty
+J: Full Video Names
+K: Highlights (YES/NO)
+L: Highlights Qty
+M: Highlights Names
+N: Reel (YES/NO)
+O: Insta Posts - Video (YES/NO)
+P: Overall Highlights (YES/NO)
+Q: Overall Reels (YES/NO)
+R: Album Bride (YES/NO)
+S: Album Bride Type
+T: Album Groom (YES/NO)
+U: Album Groom Type
+V: Album Other (YES/NO)
+W: Album Other Name & Type
+X: Pendrive Qty
+Y: Frame Qty
+Z: Registered DateTime AD (hidden ID for matching)
 ```
-Selected Photos                              [SWITCH]
-  PB ARJUN [switch]  PG NIKIT [switch]  EP RAM [switch]
-  
-  [Notes for ARJUN...]     ← only if PB toggled ON
-  [Notes for NIKIT...]     ← only if PG toggled ON
-```
 
-**2. Per-freelancer notes instead of single shared notes**
+This means: **one row per event per client**, all values are plain text YES/NO or simple strings. No JSON anywhere. A human can open the sheet and instantly understand what each client needs.
 
-Change `notes` from `string` to `photographerNotes: Record<string, string>` in `ItemState`. Each toggled-ON photographer gets their own textarea labeled with their code+name.
+### Files to Change
 
-### Specific code changes
+1. **`supabase/functions/sync-deliverables-to-sheets/index.ts`** (new)
+   - Same Google Auth pattern as `sync-crew-to-sheets`
+   - Uses `GOOGLE_SPREADSHEET_ID` secret (already configured)
+   - Auto-creates "BOOKED CLIENTS DELIVERABLES" tab + header row if missing
+   - `push`: reads all `client_deliverables` where `synced_to_sheet = false`, groups by `(registered_date_time_ad, event_name)`, flattens into one row per event, finds/updates or appends in sheet
+   - `fullSync`: clears sheet, rewrites all deliverables
+   - Looks up `client_name` and `event_date_ad` from `clients_cache`
 
-**`ItemState` interface** (line 20-27): Replace `notes?: string` with `photographerNotes?: Record<string, string>`
+2. **`supabase/config.toml`** — add `[functions.sync-deliverables-to-sheets]` with `verify_jwt = false`
 
-**`buildDefaults`**: Update `selected_photos` default to include `photographerNotes: {}`
+3. **`src/lib/deliverables-api.ts`** — change `synced_to_sheet: true` → `synced_to_sheet: false` in `saveDeliverable()`, add `syncDeliverablesToSheet()` function
 
-**`SelectedPhotosRow`** (lines 241-286): Rewrite the photographer rendering:
-- Photographer list: single `div` with `flex flex-wrap gap-3 items-center` — each photographer is a compact inline group: `[badge][name][switch]` with `gap-1.5`
-- Muted styling (`opacity-40`) stays for OFF photographers
-- Below the photographer row: map over ON photographers only, render a labeled textarea for each: `"PB ARJUN notes..."` as placeholder
-- Remove the old single `notes` textarea
+4. **`src/components/suite/MasterSyncButton.tsx`** — currently a no-op stub; will remain unchanged (sync triggered from deliverables API or manually)
 
-**Files**: Only `src/components/client-detail/DeliverablesSection.tsx`
+### Sync Trigger
+- Every save marks `synced_to_sheet: false`
+- The edge function is called via `syncDeliverablesToSheet()` which can be triggered manually or wired into any future sync chain
 
