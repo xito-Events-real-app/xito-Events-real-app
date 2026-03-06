@@ -41,7 +41,7 @@ export async function saveDeliverable(row: DeliverableRow): Promise<void> {
         album_name: row.album_name,
         photographer_toggles: row.photographer_toggles,
         photographer_notes: row.photographer_notes,
-        synced_to_sheet: true,
+        synced_to_sheet: false,
         updated_at: new Date().toISOString(),
       },
       {

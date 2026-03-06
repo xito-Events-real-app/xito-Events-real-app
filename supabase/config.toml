@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.sync-all-data]
 verify_jwt = false
+
+[functions.sync-deliverables-to-sheets]
+verify_jwt = false
