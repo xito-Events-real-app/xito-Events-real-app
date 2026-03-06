@@ -1,175 +1,81 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Plus, Minus, Package, Camera, Video, Award, BookOpen, HardDrive } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
-
-interface DeliverableRow {
-  id: string;
-  registered_date_time_ad: string;
-  event_name: string;
-  section: string;
-  deliverable_type: string;
-  enabled: boolean;
-  quantity: number;
-  item_names: string;
-  album_name: string;
-}
 
 interface EventInfo {
-  eventName: string;
-  eventMonth: string;
-  eventDay: string;
+  name: string;
+  month: string;
+  day: string;
 }
-
-const EVENT_PHOTO_DEFAULTS: { type: string; enabled: boolean }[] = [
-  { type: 'all_photos', enabled: true },
-  { type: 'selected_photos', enabled: false },
-  { type: 'insta_post', enabled: false },
-];
-
-const EVENT_VIDEO_DEFAULTS: { type: string; enabled: boolean }[] = [
-  { type: 'full_video', enabled: true },
-  { type: 'highlights', enabled: true },
-  { type: 'reel', enabled: false },
-  { type: 'video_insta_post', enabled: false },
-];
-
-const OVERALL_DEFAULTS: { type: string; enabled: boolean }[] = [
-  { type: 'overall_highlights', enabled: false },
-  { type: 'overall_reel', enabled: false },
-];
-
-const ALBUM_DEFAULTS: { type: string; enabled: boolean }[] = [
-  { type: 'bride_album', enabled: false },
-  { type: 'groom_album', enabled: false },
-  { type: 'other_album', enabled: false },
-];
-
-const PHYSICAL_DEFAULTS: { type: string; enabled: boolean }[] = [
-  { type: 'pendrive', enabled: false },
-  { type: 'frame', enabled: false },
-];
 
 interface DeliverablesProps {
-  registeredDateTimeAD: string;
+  events: EventInfo[];
 }
 
-export default function DeliverablesSection({ registeredDateTimeAD }: DeliverablesProps) {
-  const [deliverables, setDeliverables] = useState<DeliverableRow[]>([]);
-  const [events, setEvents] = useState<EventInfo[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const loadedRef = useRef(false);
+interface ItemState {
+  enabled: boolean;
+  quantity: number;
+  names: string[];
+  albumName?: string;
+}
 
-  useEffect(() => {
-    if (!registeredDateTimeAD || loadedRef.current) return;
-    loadedRef.current = true;
+type DeliverableKey = string; // "eventName::section::type"
 
-    const load = async () => {
-      setIsLoading(true);
-      try {
-        const { data: eventRows } = await supabase
-          .from('event_details_cache')
-          .select('event_name, event_month, event_day')
-          .eq('registered_date_time_ad', registeredDateTimeAD)
-          .order('event_index');
+function makeKey(event: string, section: string, type: string) {
+  return `${event}::${section}::${type}`;
+}
 
-        const eventList: EventInfo[] = (eventRows || [])
-          .filter(e => e.event_name?.trim())
-          .map(e => ({ eventName: e.event_name!, eventMonth: e.event_month || '', eventDay: e.event_day || '' }));
-        setEvents(eventList);
+function buildDefaults(events: EventInfo[]): Record<DeliverableKey, ItemState> {
+  const state: Record<DeliverableKey, ItemState> = {};
 
-        const { data: existing } = await supabase
-          .from('client_deliverables')
-          .select('*')
-          .eq('registered_date_time_ad', registeredDateTimeAD);
+  for (const ev of events) {
+    // Photos
+    state[makeKey(ev.name, 'photos', 'all_photos')] = { enabled: true, quantity: 1, names: [] };
+    state[makeKey(ev.name, 'photos', 'selected_photos')] = { enabled: false, quantity: 1, names: [] };
+    state[makeKey(ev.name, 'photos', 'insta_post')] = { enabled: false, quantity: 1, names: [''] };
+    // Videos
+    state[makeKey(ev.name, 'videos', 'full_video')] = { enabled: true, quantity: 1, names: [] };
+    state[makeKey(ev.name, 'videos', 'highlights')] = { enabled: true, quantity: 1, names: [`${ev.name} HIGHLIGHTS`] };
+    state[makeKey(ev.name, 'videos', 'reel')] = { enabled: false, quantity: 1, names: [''] };
+    state[makeKey(ev.name, 'videos', 'video_insta_post')] = { enabled: false, quantity: 1, names: [''] };
+  }
 
-        const rows = (existing || []) as DeliverableRow[];
-        const inserts: any[] = [];
+  // Overall
+  state[makeKey('OVERALL', 'overall', 'overall_highlights')] = { enabled: false, quantity: 1, names: [''] };
+  state[makeKey('OVERALL', 'overall', 'overall_reel')] = { enabled: false, quantity: 1, names: [''] };
 
-        const makeInsert = (eventName: string, section: string, type: string, enabled: boolean, itemNames = '') => ({
-          registered_date_time_ad: registeredDateTimeAD,
-          event_name: eventName,
-          section,
-          deliverable_type: type,
-          enabled,
-          quantity: enabled ? 1 : 1,
-          item_names: itemNames,
-          album_name: '',
-        });
+  // Album
+  state[makeKey('ALBUM', 'album', 'bride_album')] = { enabled: false, quantity: 1, names: [''] };
+  state[makeKey('ALBUM', 'album', 'groom_album')] = { enabled: false, quantity: 1, names: [''] };
+  state[makeKey('ALBUM', 'album', 'other_album')] = { enabled: false, quantity: 1, names: [''], albumName: '' };
 
-        for (const ev of eventList) {
-          for (const d of EVENT_PHOTO_DEFAULTS) {
-            if (!rows.find(r => r.event_name === ev.eventName && r.deliverable_type === d.type && r.section === 'photos')) {
-              inserts.push(makeInsert(ev.eventName, 'photos', d.type, d.enabled));
-            }
-          }
-          for (const d of EVENT_VIDEO_DEFAULTS) {
-            if (!rows.find(r => r.event_name === ev.eventName && r.deliverable_type === d.type && r.section === 'videos')) {
-              const defaultName = d.type === 'highlights' ? `${ev.eventName} HIGHLIGHTS` : '';
-              inserts.push(makeInsert(ev.eventName, 'videos', d.type, d.enabled, defaultName));
-            }
-          }
-        }
+  // Physical
+  state[makeKey('PHYSICAL', 'physical', 'pendrive')] = { enabled: false, quantity: 0, names: [] };
+  state[makeKey('PHYSICAL', 'physical', 'frame')] = { enabled: false, quantity: 0, names: [] };
 
-        for (const d of OVERALL_DEFAULTS) {
-          if (!rows.find(r => r.event_name === 'OVERALL' && r.deliverable_type === d.type)) {
-            inserts.push(makeInsert('OVERALL', 'overall', d.type, d.enabled));
-          }
-        }
-        for (const d of ALBUM_DEFAULTS) {
-          if (!rows.find(r => r.event_name === 'ALBUM' && r.deliverable_type === d.type)) {
-            inserts.push(makeInsert('ALBUM', 'album', d.type, d.enabled));
-          }
-        }
-        for (const d of PHYSICAL_DEFAULTS) {
-          if (!rows.find(r => r.event_name === 'PENDRIVE_FRAME' && r.deliverable_type === d.type)) {
-            inserts.push({ ...makeInsert('PENDRIVE_FRAME', 'pendrive_frame', d.type, d.enabled), quantity: 0 });
-          }
-        }
+  return state;
+}
 
-        if (inserts.length > 0) {
-          const { data: inserted, error } = await supabase.from('client_deliverables').insert(inserts).select();
-          if (error) {
-            console.error('Failed to insert deliverables:', error);
-            toast({ title: "Error", description: `Failed to create deliverables: ${error.message}`, variant: "destructive" });
-            setDeliverables(rows);
-          } else {
-            setDeliverables([...rows, ...(inserted || []) as DeliverableRow[]]);
-          }
-        } else {
-          setDeliverables(rows);
-        }
-      } catch (err) {
-        console.error('Failed to load deliverables:', err);
-        toast({ title: "Error", description: "Failed to load deliverables", variant: "destructive" });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    load();
-  }, [registeredDateTimeAD]);
+export default function DeliverablesSection({ events }: DeliverablesProps) {
+  const [state, setState] = useState<Record<DeliverableKey, ItemState>>(() => buildDefaults(events));
 
-  const updateRow = useCallback(async (id: string, updates: Partial<DeliverableRow>) => {
-    setDeliverables(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r));
-    const { error } = await supabase
-      .from('client_deliverables')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', id);
-    if (error) {
-      console.error('Failed to update deliverable:', error);
-      toast({ title: "Error", description: "Failed to save", variant: "destructive" });
-    }
-  }, []);
+  const get = (event: string, section: string, type: string): ItemState => {
+    return state[makeKey(event, section, type)] || { enabled: false, quantity: 1, names: [] };
+  };
 
-  const getRow = useCallback((eventName: string, section: string, type: string) => {
-    return deliverables.find(r => r.event_name === eventName && r.section === section && r.deliverable_type === type);
-  }, [deliverables]);
+  const update = (event: string, section: string, type: string, updates: Partial<ItemState>) => {
+    const key = makeKey(event, section, type);
+    setState(prev => ({ ...prev, [key]: { ...prev[key], ...updates } }));
+  };
 
-  if (isLoading) {
-    return <div className="flex items-center justify-center py-20 text-muted-foreground">Loading deliverables...</div>;
+  if (events.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-20 text-muted-foreground">
+        No events found for this client.
+      </div>
+    );
   }
 
   return (
@@ -180,70 +86,76 @@ export default function DeliverablesSection({ registeredDateTimeAD }: Deliverabl
       </div>
 
       {events.map(ev => (
-        <EventDeliverableCard key={ev.eventName} event={ev} getRow={getRow} updateRow={updateRow} />
+        <EventCard key={ev.name} event={ev} get={get} update={update} />
       ))}
 
       <SectionCard title="OVERALL" icon={<Award className="h-4 w-4" />}>
         <div className="space-y-3">
-          <MultiItemToggle row={getRow('OVERALL', 'overall', 'overall_highlights')} label="Overall Highlights" updateRow={updateRow} />
-          <MultiItemToggle row={getRow('OVERALL', 'overall', 'overall_reel')} label="Overall Reel" updateRow={updateRow} />
+          <MultiItemRow label="Overall Highlights" item={get('OVERALL', 'overall', 'overall_highlights')} onChange={u => update('OVERALL', 'overall', 'overall_highlights', u)} />
+          <MultiItemRow label="Overall Reel" item={get('OVERALL', 'overall', 'overall_reel')} onChange={u => update('OVERALL', 'overall', 'overall_reel', u)} />
         </div>
       </SectionCard>
 
       <SectionCard title="ALBUM" icon={<BookOpen className="h-4 w-4" />}>
         <div className="space-y-3">
-          <MultiItemToggle row={getRow('ALBUM', 'album', 'bride_album')} label="Bride Side Album" updateRow={updateRow} />
-          <MultiItemToggle row={getRow('ALBUM', 'album', 'groom_album')} label="Groom Side Album" updateRow={updateRow} />
-          <AlbumToggle row={getRow('ALBUM', 'album', 'other_album')} updateRow={updateRow} />
+          <MultiItemRow label="Bride Side Album" item={get('ALBUM', 'album', 'bride_album')} onChange={u => update('ALBUM', 'album', 'bride_album', u)} />
+          <MultiItemRow label="Groom Side Album" item={get('ALBUM', 'album', 'groom_album')} onChange={u => update('ALBUM', 'album', 'groom_album', u)} />
+          <AlbumRow item={get('ALBUM', 'album', 'other_album')} onChange={u => update('ALBUM', 'album', 'other_album', u)} />
         </div>
       </SectionCard>
 
       <SectionCard title="PENDRIVE & FRAME" icon={<HardDrive className="h-4 w-4" />}>
         <div className="space-y-3">
-          <QuantityOnlyToggle row={getRow('PENDRIVE_FRAME', 'pendrive_frame', 'pendrive')} label="Pendrive" updateRow={updateRow} />
-          <QuantityOnlyToggle row={getRow('PENDRIVE_FRAME', 'pendrive_frame', 'frame')} label="Frame" updateRow={updateRow} />
+          <QuantityRow label="Pendrive" item={get('PHYSICAL', 'physical', 'pendrive')} onChange={u => update('PHYSICAL', 'physical', 'pendrive', u)} />
+          <QuantityRow label="Frame" item={get('PHYSICAL', 'physical', 'frame')} onChange={u => update('PHYSICAL', 'physical', 'frame', u)} />
         </div>
       </SectionCard>
     </div>
   );
 }
 
-function EventDeliverableCard({ event, getRow, updateRow }: {
+/* ─── Event Card ─── */
+function EventCard({ event, get, update }: {
   event: EventInfo;
-  getRow: (eventName: string, section: string, type: string) => DeliverableRow | undefined;
-  updateRow: (id: string, updates: Partial<DeliverableRow>) => Promise<void>;
+  get: (e: string, s: string, t: string) => ItemState;
+  update: (e: string, s: string, t: string, u: Partial<ItemState>) => void;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
-      <div className="bg-destructive/90 px-4 py-3 text-center">
-        <span className="text-destructive-foreground font-black text-sm uppercase tracking-wide">
-          {event.eventMonth} {event.eventDay} — {event.eventName}
+    <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
+      <div className="bg-gradient-to-r from-slate-900 to-slate-800 px-4 py-3 flex items-center justify-center gap-3">
+        <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+          {event.month} {event.day}
+        </span>
+        <span className="text-white font-bold text-sm uppercase tracking-wide">
+          {event.name}
         </span>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border">
+        {/* Photos */}
         <div className="p-4">
           <div className="flex items-center gap-2 mb-4">
             <Camera className="h-4 w-4 text-primary" />
             <span className="text-xs font-bold text-primary uppercase tracking-wider">Photos</span>
           </div>
           <div className="space-y-3">
-            <SimpleToggle row={getRow(event.eventName, 'photos', 'all_photos')} label="All Photos" updateRow={updateRow} />
-            <SimpleToggle row={getRow(event.eventName, 'photos', 'selected_photos')} label="Selected Photos" updateRow={updateRow} />
-            <MultiItemToggle row={getRow(event.eventName, 'photos', 'insta_post')} label="Insta Posts" updateRow={updateRow} />
+            <SimpleRow label="All Photos" item={get(event.name, 'photos', 'all_photos')} onChange={u => update(event.name, 'photos', 'all_photos', u)} />
+            <SimpleRow label="Selected Photos" item={get(event.name, 'photos', 'selected_photos')} onChange={u => update(event.name, 'photos', 'selected_photos', u)} />
+            <MultiItemRow label="Insta Posts" item={get(event.name, 'photos', 'insta_post')} onChange={u => update(event.name, 'photos', 'insta_post', u)} />
           </div>
         </div>
 
+        {/* Videos */}
         <div className="p-4">
           <div className="flex items-center gap-2 mb-4">
             <Video className="h-4 w-4 text-accent-foreground" />
             <span className="text-xs font-bold text-accent-foreground uppercase tracking-wider">Videos</span>
           </div>
           <div className="space-y-3">
-            <SimpleToggle row={getRow(event.eventName, 'videos', 'full_video')} label="Full Video" updateRow={updateRow} />
-            <MultiItemToggle row={getRow(event.eventName, 'videos', 'highlights')} label="Highlights" updateRow={updateRow} />
-            <MultiItemToggle row={getRow(event.eventName, 'videos', 'reel')} label="Reel" updateRow={updateRow} />
-            <MultiItemToggle row={getRow(event.eventName, 'videos', 'video_insta_post')} label="Insta Posts" updateRow={updateRow} />
+            <SimpleRow label="Full Video" item={get(event.name, 'videos', 'full_video')} onChange={u => update(event.name, 'videos', 'full_video', u)} />
+            <MultiItemRow label="Highlights" item={get(event.name, 'videos', 'highlights')} onChange={u => update(event.name, 'videos', 'highlights', u)} />
+            <MultiItemRow label="Reel" item={get(event.name, 'videos', 'reel')} onChange={u => update(event.name, 'videos', 'reel', u)} />
+            <MultiItemRow label="Insta Posts" item={get(event.name, 'videos', 'video_insta_post')} onChange={u => update(event.name, 'videos', 'video_insta_post', u)} />
           </div>
         </div>
       </div>
@@ -251,46 +163,45 @@ function EventDeliverableCard({ event, getRow, updateRow }: {
   );
 }
 
-function SimpleToggle({ row, label, updateRow }: {
-  row: DeliverableRow | undefined;
+/* ─── Simple Toggle Row ─── */
+function SimpleRow({ label, item, onChange }: {
   label: string;
-  updateRow: (id: string, updates: Partial<DeliverableRow>) => Promise<void>;
+  item: ItemState;
+  onChange: (u: Partial<ItemState>) => void;
 }) {
-  if (!row) return null;
   return (
     <div className="flex items-center justify-between py-1.5">
       <span className="text-sm font-medium text-foreground">{label}</span>
-      <Switch checked={row.enabled} onCheckedChange={v => updateRow(row.id, { enabled: v })} />
+      <Switch checked={item.enabled} onCheckedChange={v => onChange({ enabled: v })} />
     </div>
   );
 }
 
-function MultiItemToggle({ row, label, updateRow }: {
-  row: DeliverableRow | undefined;
+/* ─── Multi-Item Toggle with +/- and naming ─── */
+function MultiItemRow({ label, item, onChange }: {
   label: string;
-  updateRow: (id: string, updates: Partial<DeliverableRow>) => Promise<void>;
+  item: ItemState;
+  onChange: (u: Partial<ItemState>) => void;
 }) {
-  if (!row) return null;
-
-  const names = row.item_names ? row.item_names.split(',') : [];
-  while (names.length < row.quantity) names.push('');
+  const names = [...item.names];
+  while (names.length < item.quantity) names.push('');
 
   const handleToggle = (v: boolean) => {
-    updateRow(row.id, { enabled: v, quantity: v ? Math.max(row.quantity, 1) : row.quantity });
+    onChange({ enabled: v, quantity: v ? Math.max(item.quantity, 1) : item.quantity });
   };
 
-  const handleQuantityChange = (delta: number) => {
-    const newQty = Math.max(1, row.quantity + delta);
+  const handleQty = (delta: number) => {
+    const newQty = Math.max(1, item.quantity + delta);
     const newNames = [...names];
     while (newNames.length < newQty) newNames.push('');
     if (newQty < newNames.length) newNames.length = newQty;
-    updateRow(row.id, { quantity: newQty, item_names: newNames.join(',') });
+    onChange({ quantity: newQty, names: newNames });
   };
 
-  const handleNameChange = (idx: number, val: string) => {
+  const handleName = (idx: number, val: string) => {
     const newNames = [...names];
     newNames[idx] = val;
-    updateRow(row.id, { item_names: newNames.join(',') });
+    onChange({ names: newNames });
   };
 
   return (
@@ -298,29 +209,28 @@ function MultiItemToggle({ row, label, updateRow }: {
       <div className="flex items-center justify-between py-1.5">
         <span className="text-sm font-medium text-foreground">{label}</span>
         <div className="flex items-center gap-3">
-          {row.enabled && (
+          {item.enabled && (
             <div className="flex items-center gap-1">
-              <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleQuantityChange(-1)}>
+              <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleQty(-1)}>
                 <Minus className="h-3 w-3" />
               </Button>
-              <span className="text-xs font-semibold text-foreground min-w-[18px] text-center">{row.quantity}</span>
-              <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleQuantityChange(1)}>
+              <span className="text-xs font-semibold text-foreground min-w-[18px] text-center">{item.quantity}</span>
+              <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleQty(1)}>
                 <Plus className="h-3 w-3" />
               </Button>
             </div>
           )}
-          <Switch checked={row.enabled} onCheckedChange={handleToggle} />
+          <Switch checked={item.enabled} onCheckedChange={handleToggle} />
         </div>
       </div>
-
-      {row.enabled && row.quantity > 0 && (
+      {item.enabled && item.quantity > 0 && (
         <div className="pl-4 space-y-1.5">
-          {Array.from({ length: row.quantity }).map((_, idx) => (
+          {Array.from({ length: item.quantity }).map((_, idx) => (
             <div key={idx} className="flex items-center gap-2">
               <span className="text-[11px] text-muted-foreground min-w-[60px]">{label} {idx + 1}</span>
               <Input
                 value={names[idx] || ''}
-                onChange={e => handleNameChange(idx, e.target.value)}
+                onChange={e => handleName(idx, e.target.value)}
                 placeholder="Name..."
                 className="h-7 text-xs"
               />
@@ -332,31 +242,30 @@ function MultiItemToggle({ row, label, updateRow }: {
   );
 }
 
-function AlbumToggle({ row, updateRow }: {
-  row: DeliverableRow | undefined;
-  updateRow: (id: string, updates: Partial<DeliverableRow>) => Promise<void>;
+/* ─── Album Row (name first, then types) ─── */
+function AlbumRow({ item, onChange }: {
+  item: ItemState;
+  onChange: (u: Partial<ItemState>) => void;
 }) {
-  if (!row) return null;
-
-  const names = row.item_names ? row.item_names.split(',') : [];
-  while (names.length < row.quantity) names.push('');
+  const names = [...item.names];
+  while (names.length < item.quantity) names.push('');
 
   const handleToggle = (v: boolean) => {
-    updateRow(row.id, { enabled: v, quantity: v ? Math.max(row.quantity, 1) : row.quantity });
+    onChange({ enabled: v, quantity: v ? Math.max(item.quantity, 1) : item.quantity });
   };
 
-  const handleQuantityChange = (delta: number) => {
-    const newQty = Math.max(1, row.quantity + delta);
+  const handleQty = (delta: number) => {
+    const newQty = Math.max(1, item.quantity + delta);
     const newNames = [...names];
     while (newNames.length < newQty) newNames.push('');
     if (newQty < newNames.length) newNames.length = newQty;
-    updateRow(row.id, { quantity: newQty, item_names: newNames.join(',') });
+    onChange({ quantity: newQty, names: newNames });
   };
 
-  const handleNameChange = (idx: number, val: string) => {
+  const handleName = (idx: number, val: string) => {
     const newNames = [...names];
     newNames[idx] = val;
-    updateRow(row.id, { item_names: newNames.join(',') });
+    onChange({ names: newNames });
   };
 
   return (
@@ -364,38 +273,37 @@ function AlbumToggle({ row, updateRow }: {
       <div className="flex items-center justify-between py-1.5">
         <span className="text-sm font-medium text-foreground">Other Album</span>
         <div className="flex items-center gap-3">
-          {row.enabled && (
+          {item.enabled && (
             <div className="flex items-center gap-1">
-              <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleQuantityChange(-1)}>
+              <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleQty(-1)}>
                 <Minus className="h-3 w-3" />
               </Button>
-              <span className="text-xs font-semibold text-foreground min-w-[18px] text-center">{row.quantity}</span>
-              <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleQuantityChange(1)}>
+              <span className="text-xs font-semibold text-foreground min-w-[18px] text-center">{item.quantity}</span>
+              <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleQty(1)}>
                 <Plus className="h-3 w-3" />
               </Button>
             </div>
           )}
-          <Switch checked={row.enabled} onCheckedChange={handleToggle} />
+          <Switch checked={item.enabled} onCheckedChange={handleToggle} />
         </div>
       </div>
-
-      {row.enabled && (
+      {item.enabled && (
         <div className="pl-4 space-y-2">
           <div className="flex items-center gap-2">
             <span className="text-[11px] text-primary min-w-[60px] font-semibold">Album Name</span>
             <Input
-              value={row.album_name || ''}
-              onChange={e => updateRow(row.id, { album_name: e.target.value })}
+              value={item.albumName || ''}
+              onChange={e => onChange({ albumName: e.target.value })}
               placeholder="Album name..."
               className="h-7 text-xs"
             />
           </div>
-          {Array.from({ length: row.quantity }).map((_, idx) => (
+          {Array.from({ length: item.quantity }).map((_, idx) => (
             <div key={idx} className="flex items-center gap-2">
               <span className="text-[11px] text-muted-foreground min-w-[60px]">Type {idx + 1}</span>
               <Input
                 value={names[idx] || ''}
-                onChange={e => handleNameChange(idx, e.target.value)}
+                onChange={e => handleName(idx, e.target.value)}
                 placeholder="Album type..."
                 className="h-7 text-xs"
               />
@@ -407,52 +315,52 @@ function AlbumToggle({ row, updateRow }: {
   );
 }
 
-function QuantityOnlyToggle({ row, label, updateRow }: {
-  row: DeliverableRow | undefined;
+/* ─── Quantity Only Row ─── */
+function QuantityRow({ label, item, onChange }: {
   label: string;
-  updateRow: (id: string, updates: Partial<DeliverableRow>) => Promise<void>;
+  item: ItemState;
+  onChange: (u: Partial<ItemState>) => void;
 }) {
-  if (!row) return null;
-
   const handleToggle = (v: boolean) => {
-    updateRow(row.id, { enabled: v, quantity: v ? Math.max(row.quantity, 1) : row.quantity });
+    onChange({ enabled: v, quantity: v ? Math.max(item.quantity, 1) : item.quantity });
   };
 
-  const handleQuantityChange = (delta: number) => {
-    const newQty = Math.max(0, row.quantity + delta);
-    updateRow(row.id, { quantity: newQty, enabled: newQty > 0 });
+  const handleQty = (delta: number) => {
+    const newQty = Math.max(0, item.quantity + delta);
+    onChange({ quantity: newQty, enabled: newQty > 0 });
   };
 
   return (
     <div className="flex items-center justify-between py-1.5">
       <span className="text-sm font-medium text-foreground">{label}</span>
       <div className="flex items-center gap-3">
-        {row.enabled && (
+        {item.enabled && (
           <div className="flex items-center gap-1">
-            <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleQuantityChange(-1)}>
+            <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleQty(-1)}>
               <Minus className="h-3 w-3" />
             </Button>
-            <span className="text-xs font-semibold text-foreground min-w-[18px] text-center">{row.quantity}</span>
-            <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleQuantityChange(1)}>
+            <span className="text-xs font-semibold text-foreground min-w-[18px] text-center">{item.quantity}</span>
+            <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleQty(1)}>
               <Plus className="h-3 w-3" />
             </Button>
           </div>
         )}
-        <Switch checked={row.enabled} onCheckedChange={handleToggle} />
+        <Switch checked={item.enabled} onCheckedChange={handleToggle} />
       </div>
     </div>
   );
 }
 
+/* ─── Section Card ─── */
 function SectionCard({ title, icon, children }: {
   title: string;
   icon: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
-      <div className="bg-destructive/90 px-4 py-3 text-center">
-        <span className="text-destructive-foreground font-black text-sm uppercase tracking-wide flex items-center justify-center gap-2">
+    <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
+      <div className="bg-gradient-to-r from-slate-900 to-slate-800 px-4 py-3 text-center">
+        <span className="text-white font-bold text-sm uppercase tracking-wide flex items-center justify-center gap-2">
           {icon} {title}
         </span>
       </div>
