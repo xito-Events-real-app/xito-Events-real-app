@@ -133,7 +133,9 @@ export default function DeliverablesSection({ events, assignments, registeredDat
   const [state, setState] = useState<Record<DeliverableKey, ItemState>>(() => buildDefaults(events));
   const [savedAlbumTypes, setSavedAlbumTypes] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const loadedRef = useRef(false);
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const pendingItems = useRef<Record<string, ItemState>>({});
 
   // Load from DB on mount
   useEffect(() => {
@@ -158,23 +160,54 @@ export default function DeliverablesSection({ events, assignments, registeredDat
         });
       }
       setLoaded(true);
+      loadedRef.current = true;
     };
     load();
   }, [registeredDateTimeAD]);
 
+  // Flush all pending saves on unmount
+  useEffect(() => {
+    return () => {
+      // Clear all timers
+      Object.values(debounceTimers.current).forEach(t => clearTimeout(t));
+      debounceTimers.current = {};
+
+      // Flush pending items
+      if (registeredDateTimeAD) {
+        Object.entries(pendingItems.current).forEach(([key, item]) => {
+          const { event, section, type } = parseKey(key);
+          const row = stateToRow(registeredDateTimeAD, event, section, type, item);
+          saveDeliverable(row);
+        });
+        pendingItems.current = {};
+      }
+    };
+  }, [registeredDateTimeAD]);
+
   // Debounced save for a specific key
-  const debounceSave = useCallback((key: string, item: ItemState) => {
-    if (!registeredDateTimeAD || !loaded) return;
+  const debounceSave = useCallback((key: string, item: ItemState, immediate = false) => {
+    if (!registeredDateTimeAD || !loadedRef.current) return;
+
+    // Track as pending
+    pendingItems.current[key] = item;
 
     if (debounceTimers.current[key]) {
       clearTimeout(debounceTimers.current[key]);
     }
-    debounceTimers.current[key] = setTimeout(() => {
+
+    const doSave = () => {
       const { event, section, type } = parseKey(key);
       const row = stateToRow(registeredDateTimeAD, event, section, type, item);
       saveDeliverable(row);
-    }, 1000);
-  }, [registeredDateTimeAD, loaded]);
+      delete pendingItems.current[key];
+    };
+
+    if (immediate) {
+      doSave();
+    } else {
+      debounceTimers.current[key] = setTimeout(doSave, 500);
+    }
+  }, [registeredDateTimeAD]);
 
   const handleSaveAlbumType = async (typeName: string) => {
     const trimmed = typeName.trim();
