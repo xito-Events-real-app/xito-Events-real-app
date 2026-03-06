@@ -1,29 +1,37 @@
 
 
-## Fix: Instant Auto-Save for Deliverables
+## Selected Photos: Inline Freelancer Layout + Per-Freelancer Notes
 
-### Problem
-Two bugs prevent data from persisting:
-1. **Debounce timers lost on unmount**: When the user switches sections, the component unmounts. Any pending 1-second debounce timers are cleared by React, so changes never reach the database.
-2. **Stale `loaded` check**: The `debounceSave` callback guards with `if (!loaded) return`, but due to React closure behavior, early calls may capture `loaded=false` and silently skip saves.
+### Changes to `SelectedPhotosRow` in `DeliverablesSection.tsx`
 
-### Solution
+**1. All photographers on one line, switch right next to name**
 
-**File: `src/components/client-detail/DeliverablesSection.tsx`**
+Current: Each photographer is a separate row with switch on the far right.
+New: All photographers rendered inline (flex-wrap) as compact chips — badge + name + switch grouped tightly together.
 
-1. **Flush pending saves on unmount**: Add a cleanup effect that iterates all pending `debounceTimers`, clears them, and immediately saves each pending item synchronously (fire-and-forget).
+```
+Selected Photos                              [SWITCH]
+  PB ARJUN [switch]  PG NIKIT [switch]  EP RAM [switch]
+  
+  [Notes for ARJUN...]     ← only if PB toggled ON
+  [Notes for NIKIT...]     ← only if PG toggled ON
+```
 
-2. **Use a ref for `loaded`**: Replace the `loaded` state check inside `debounceSave` with a `loadedRef` to avoid stale closures.
+**2. Per-freelancer notes instead of single shared notes**
 
-3. **Save immediately (no debounce) for toggle/switch changes**: For simple on/off toggles (enabled switch), save instantly instead of debouncing — these are quick, discrete actions that should persist immediately.
+Change `notes` from `string` to `photographerNotes: Record<string, string>` in `ItemState`. Each toggled-ON photographer gets their own textarea labeled with their code+name.
 
-4. **Reduce debounce to 500ms** for text inputs (names, notes) — still debounced but faster.
+### Specific code changes
 
-### Specific Changes
+**`ItemState` interface** (line 20-27): Replace `notes?: string` with `photographerNotes?: Record<string, string>`
 
-- Add `const loadedRef = useRef(false)` alongside existing `loaded` state; set both in the load callback.
-- Add `const pendingState = useRef<Record<string, ItemState>>({})` to track items waiting for debounce.
-- In `debounceSave`: use `loadedRef.current`, and store item in `pendingState.current[key]`.
-- Add `useEffect` cleanup that on unmount: flushes all `pendingState` entries by calling `saveDeliverable` directly.
-- Reduce debounce from 1000ms to 500ms.
+**`buildDefaults`**: Update `selected_photos` default to include `photographerNotes: {}`
+
+**`SelectedPhotosRow`** (lines 241-286): Rewrite the photographer rendering:
+- Photographer list: single `div` with `flex flex-wrap gap-3 items-center` — each photographer is a compact inline group: `[badge][name][switch]` with `gap-1.5`
+- Muted styling (`opacity-40`) stays for OFF photographers
+- Below the photographer row: map over ON photographers only, render a labeled textarea for each: `"PB ARJUN notes..."` as placeholder
+- Remove the old single `notes` textarea
+
+**Files**: Only `src/components/client-detail/DeliverablesSection.tsx`
 
