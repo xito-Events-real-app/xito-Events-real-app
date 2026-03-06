@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Plus, Minus, Package, Camera, Video, Award, BookOpen, HardDrive } from "lucide-react";
+import { Plus, Minus, Package, Camera, Video, Award, BookOpen, HardDrive, ChevronDown } from "lucide-react";
 import { FreelancerAssignment } from "@/lib/freelancer-assignment-api";
 
 interface EventInfo {
