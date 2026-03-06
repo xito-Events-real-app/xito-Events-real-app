@@ -41,7 +41,7 @@ export async function saveDeliverable(row: DeliverableRow): Promise<void> {
         album_name: row.album_name,
         photographer_toggles: row.photographer_toggles,
         photographer_notes: row.photographer_notes,
-        synced_to_sheet: true,
+        synced_to_sheet: false,
         updated_at: new Date().toISOString(),
       },
       {
@@ -78,5 +78,21 @@ export async function saveAlbumType(typeName: string): Promise<void> {
 
   if (error) {
     console.error('Error saving album type:', error);
+  }
+}
+
+export async function syncDeliverablesToSheet(action: 'push' | 'fullSync' = 'push'): Promise<{ success: boolean; syncedCount?: number }> {
+  try {
+    const { data, error } = await supabase.functions.invoke('sync-deliverables-to-sheets', {
+      body: { action },
+    });
+    if (error) {
+      console.error('Error syncing deliverables to sheet:', error);
+      return { success: false };
+    }
+    return data || { success: true };
+  } catch (err) {
+    console.error('Error syncing deliverables to sheet:', err);
+    return { success: false };
   }
 }
