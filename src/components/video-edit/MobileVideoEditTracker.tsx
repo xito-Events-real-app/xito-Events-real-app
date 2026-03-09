@@ -59,12 +59,12 @@ function VideoCard({
             {["1", "2", "3", "4", "5"].map(u => <SelectItem key={u} value={u}>Urgency {u}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Select value={row.editor || ""} onValueChange={(v) => onUpdateField(row.rowNumber, "editor", v)}>
+        <Select value={row.editor || "unassigned"} onValueChange={(v) => onUpdateField(row.rowNumber, "editor", v === "unassigned" ? "" : v)}>
           <SelectTrigger className="flex-1 h-8 text-xs"><SelectValue placeholder="Editor..." /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Unassigned</SelectItem>
-            {editors.filter(e => e.isVideoEditor).map(e => <SelectItem key={e.name} value={e.name}>⭐ {e.name}</SelectItem>)}
-            {editors.filter(e => !e.isVideoEditor).map(e => <SelectItem key={e.name} value={e.name}>{e.name}</SelectItem>)}
+            <SelectItem value="unassigned">Unassigned</SelectItem>
+            {editors.filter(e => e.isVideoEditor && e.name).map(e => <SelectItem key={e.name} value={e.name}>⭐ {e.name}</SelectItem>)}
+            {editors.filter(e => !e.isVideoEditor && e.name).map(e => <SelectItem key={e.name} value={e.name}>{e.name}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>

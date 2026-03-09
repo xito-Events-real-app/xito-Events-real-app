@@ -129,18 +129,18 @@ function VideoEditTable({
               </TableCell>
               <TableCell>
                 <Select
-                  value={row.editor || ""}
-                  onValueChange={(v) => onUpdateField(row.rowNumber, "editor", v)}
+                  value={row.editor || "unassigned"}
+                  onValueChange={(v) => onUpdateField(row.rowNumber, "editor", v === "unassigned" ? "" : v)}
                 >
                   <SelectTrigger className="w-36 h-8 text-xs">
                     <SelectValue placeholder="Assign..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Unassigned</SelectItem>
-                    {editors.filter(e => e.isVideoEditor).map(e => (
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                    {editors.filter(e => e.isVideoEditor && e.name).map(e => (
                       <SelectItem key={`ve-${e.name}`} value={e.name}>⭐ {e.name}</SelectItem>
                     ))}
-                    {editors.filter(e => !e.isVideoEditor).map(e => (
+                    {editors.filter(e => !e.isVideoEditor && e.name).map(e => (
                       <SelectItem key={e.name} value={e.name}>{e.name}</SelectItem>
                     ))}
                   </SelectContent>
