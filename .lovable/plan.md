@@ -1,37 +1,32 @@
 
 
-## Selected Photos: Inline Freelancer Layout + Per-Freelancer Notes
+## Fix Video Edit Tracker: Rows Not Appearing
 
-### Changes to `SelectedPhotosRow` in `DeliverablesSection.tsx`
+### Root Cause Analysis
 
-**1. All photographers on one line, switch right next to name**
+Three issues found by testing the edge function directly:
 
-Current: Each photographer is a separate row with switch on the far right.
-New: All photographers rendered inline (flex-wrap) as compact chips — badge + name + switch grouped tightly together.
+1. **Append errors are silently swallowed** — The `generateVideoEditRows` function calls the Google Sheets API to append rows but never checks the response. If the sheet tab "BOOKED CLIENTS VIDEO EDIT TRACKER" doesn't exist or there's any API error, it logs "Generated 4 rows" anyway because that count is based on the array built in memory, not on successful sheet writes.
 
-```
-Selected Photos                              [SWITCH]
-  PB ARJUN [switch]  PG NIKIT [switch]  EP RAM [switch]
-  
-  [Notes for ARJUN...]     ← only if PB toggled ON
-  [Notes for NIKIT...]     ← only if PG toggled ON
-```
+2. **`item_names` parsing is broken** — The database stores `item_names` as `|||`-separated strings (e.g., `"BRIDE HALDI MEHNDI|||GROOM HALDI"`), but the code does `JSON.parse(del.item_names)` which always fails, falling back to `[]`. This means sub-event names always use the fallback pattern instead of actual names.
 
-**2. Per-freelancer notes instead of single shared notes**
+3. **Dedup never works** — Since `getVideoEditRows()` always returns `[]` (no data in sheet), every call to `generateVideoEditRows` tries to insert the same 4 rows again.
 
-Change `notes` from `string` to `photographerNotes: Record<string, string>` in `ItemState`. Each toggled-ON photographer gets their own textarea labeled with their code+name.
+### Fix Plan
 
-### Specific code changes
+**File: `supabase/functions/google-sheets/index.ts`**
 
-**`ItemState` interface** (line 20-27): Replace `notes?: string` with `photographerNotes?: Record<string, string>`
+1. **Add error logging to the append call** (~line 8266-8272): After the append `fetchWithRetry`, check response status and log the error body if it fails. This will reveal if the sheet tab is missing.
 
-**`buildDefaults`**: Update `selected_photos` default to include `photographerNotes: {}`
+2. **Fix `item_names` parsing** (~line 8221): Change from `JSON.parse(del.item_names)` to split by `|||`:
+   ```
+   itemNames = (del.item_names || '').split('|||').map(s => s.trim()).filter(Boolean)
+   ```
 
-**`SelectedPhotosRow`** (lines 241-286): Rewrite the photographer rendering:
-- Photographer list: single `div` with `flex flex-wrap gap-3 items-center` — each photographer is a compact inline group: `[badge][name][switch]` with `gap-1.5`
-- Muted styling (`opacity-40`) stays for OFF photographers
-- Below the photographer row: map over ON photographers only, render a labeled textarea for each: `"PB ARJUN notes..."` as placeholder
-- Remove the old single `notes` textarea
+3. **Auto-create the sheet tab if missing**: Before the first read/append, check if the tab exists. If not, use the `batchUpdate` API to create the sheet with a header row (Columns A-R). This matches the pattern of the spreadsheet being the source of truth — the tab must exist first.
 
-**Files**: Only `src/components/client-detail/DeliverablesSection.tsx`
+4. **Log the append response** for debugging visibility.
+
+### Files Changed
+- `supabase/functions/google-sheets/index.ts` — Fix item_names parsing, add sheet auto-creation, add error handling on append
 
