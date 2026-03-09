@@ -1,37 +1,35 @@
 
 
-## Selected Photos: Inline Freelancer Layout + Per-Freelancer Notes
+## Auto-Populate Video Edit Tracker with Past Events Only
 
-### Changes to `SelectedPhotosRow` in `DeliverablesSection.tsx`
+### Problem
+- Rows require manual "Generate Rows" button click
+- No filtering — future events would also appear
 
-**1. All photographers on one line, switch right next to name**
+### Changes
 
-Current: Each photographer is a separate row with switch on the far right.
-New: All photographers rendered inline (flex-wrap) as compact chips — badge + name + switch grouped tightly together.
+**1. `supabase/functions/google-sheets/index.ts` — `generateVideoEditRows` function (~line 8213)**
+- Add date filter: only generate rows where `eventDateAD < today` (past events only)
+- Compare each deliverable's event date against current date, skip if event hasn't happened yet
 
+**2. `src/hooks/useVideoEditTracker.ts` — Auto-generate on load**
+- After `loadRows()` completes, if result is empty (no rows returned from sheet), automatically call `generateRows()`
+- Also filter out any rows with future `eventDateAD` on the client side (safety net)
+
+**3. `src/hooks/useVideoEditTracker.ts` — Client-side date filter**
+- In `queueRows` and `labRows` memo computations, filter out rows where `eventDateAD >= today`
+
+**4. `src/components/video-edit/DesktopVideoEditTracker.tsx`**
+- Keep "Generate Rows" button for manual re-sync but auto-trigger is the primary flow
+
+### Flow
+```text
+Page loads → loadRows() → sheet empty? → auto-generate → 
+edge function scans deliverables → filters past events only → 
+appends to sheet → reload rows → display
 ```
-Selected Photos                              [SWITCH]
-  PB ARJUN [switch]  PG NIKIT [switch]  EP RAM [switch]
-  
-  [Notes for ARJUN...]     ← only if PB toggled ON
-  [Notes for NIKIT...]     ← only if PG toggled ON
-```
 
-**2. Per-freelancer notes instead of single shared notes**
-
-Change `notes` from `string` to `photographerNotes: Record<string, string>` in `ItemState`. Each toggled-ON photographer gets their own textarea labeled with their code+name.
-
-### Specific code changes
-
-**`ItemState` interface** (line 20-27): Replace `notes?: string` with `photographerNotes?: Record<string, string>`
-
-**`buildDefaults`**: Update `selected_photos` default to include `photographerNotes: {}`
-
-**`SelectedPhotosRow`** (lines 241-286): Rewrite the photographer rendering:
-- Photographer list: single `div` with `flex flex-wrap gap-3 items-center` — each photographer is a compact inline group: `[badge][name][switch]` with `gap-1.5`
-- Muted styling (`opacity-40`) stays for OFF photographers
-- Below the photographer row: map over ON photographers only, render a labeled textarea for each: `"PB ARJUN notes..."` as placeholder
-- Remove the old single `notes` textarea
-
-**Files**: Only `src/components/client-detail/DeliverablesSection.tsx`
+### Files Changed
+- `supabase/functions/google-sheets/index.ts` — Add date filter in generateVideoEditRows
+- `src/hooks/useVideoEditTracker.ts` — Auto-generate on empty + client-side date filter
 
