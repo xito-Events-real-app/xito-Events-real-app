@@ -8308,12 +8308,20 @@ async function generateVideoEditRows(
   }
 
   if (newRows.length > 0) {
+    await ensureVideoEditSheetExists(accessToken, spreadsheetId);
     const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(`'${VIDEO_EDIT_SHEET}'!A:R`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
-    await fetchWithRetry(appendUrl, {
+    const appendResp = await fetchWithRetry(appendUrl, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ values: newRows }),
     });
+    if (!appendResp.ok) {
+      const errBody = await appendResp.text();
+      console.error(`[VIDEO EDIT] Append failed: ${appendResp.status} ${errBody}`);
+      throw new Error(`Sheet append failed: ${appendResp.status}`);
+    }
+    const appendResult = await appendResp.json();
+    console.log(`[VIDEO EDIT] Append response: ${JSON.stringify(appendResult.updates || {})}`);
   }
 
   console.log(`[VIDEO EDIT] Generated ${newRows.length} new rows`);
