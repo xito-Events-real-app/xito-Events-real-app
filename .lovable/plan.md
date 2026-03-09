@@ -1,39 +1,35 @@
 
 
-## Root Cause
+## Fix: Event Details Cache Has Unsplit Multi-Event Rows
 
-The 3 clients — **GEETA & WILLIAM**, **PRAMILA BHUSAL**, **PUSHPA POUDEL & SIWAN KHARAL** — are completely **missing from `clients_cache`** (the main table). Their rows were deleted during a recent database migration. However, all their related data is fully preserved in:
-- `freelancer_assignments` (crew assignments with event dates)
-- `event_details_cache` (venue, timing, event details)
-- `contact_details_cache` (bride/groom contact info)
-- `files_management` (file records)
+### Problem
+When the 3 clients were restored, the `event_details_cache` auto-populated from `clients_cache` but stored ALL events in a single row (index 0) using `|||` separators, instead of splitting them into one row per event.
 
-Since they appear in "All Clients" (which reads from `freelancer_assignments`), but clicking them fails because the Client Detail page looks up the client in `clients_cache` — and finds nothing.
+**Current bad state (Pramila Bhusal):**
+- Row 0: `event_name = "BRIDE MEHNDI|||WEDDING BRIDE"`, `event_day = "10|||12"`
+- Row 1: `event_name = "WEDDING BRIDE"`, `event_day = "12"` ← correct but duplicate
 
-## Fix: Re-insert into `clients_cache`
+**Same issue for Pushpa Poudel & Siwan Kharal:**
+- Row 0: `event_name = "BRIDES MEHNDI|||WEDDING(BOTH SIDES)"`, `event_day = "6|||8"`
+- Row 1: `event_name = "WEDDING(BOTH SIDES)"`, `event_day = "8"` ← correct
 
-Using the data from `freelancer_assignments` and `event_details_cache`, reconstruct each client's `clients_cache` row with status set to **BOOKED**. The data to insert:
+**Geeta & William:** Fine (single event).
 
-**1. PUSHPA POUDEL & SIWAN KHARAL** (`2026-01-26T08:38:58.826Z`)
-- Events: BRIDES MEHNDI, WEDDING(BOTH SIDES)
-- Dates: 2082-11-6, 2082-11-8 (AD: 2026-02-18, 2026-02-20)
-- Status: BOOKED, sheet_source: booked
+### Fix (Data-only, no code changes)
 
-**2. PRAMILA BHUSAL** (`2026-01-25T13:16:03.057Z`)
-- Events: BRIDE MEHNDI, WEDDING BRIDE
-- Dates: 2082-11-10, 2082-11-12 (AD: 2026-02-22, 2026-02-24)
-- Status: BOOKED, sheet_source: booked
+1. **Delete** the broken index-0 rows for Pramila and Pushpa (where values contain `|||`)
+2. **Upsert** correct split rows:
 
-**3. GEETA & WILLIAM** (`2026-02-06T13:30:27.148Z`)
-- Events: POST-SHOOT
-- Dates: 2082-11-4 (AD: 2026-02-16)
-- Status: BOOKED, sheet_source: booked
+**Pramila Bhusal** (`2026-01-25T13:16:03.057Z`):
+- Index 0: BRIDE MEHNDI, 2082, 11, 10, 2026-02-22
+- Index 1: WEDDING BRIDE, 2082, 11, 12, 2026-02-24 (already exists, keep)
 
-## Steps
+**Pushpa Poudel** (`2026-01-26T08:38:58.826Z`):
+- Index 0: BRIDES MEHNDI, 2082, 11, 6, 2026-02-18
+- Index 1: WEDDING(BOTH SIDES), 2082, 11, 8, 2026-02-20 (already exists, keep)
 
-1. **Insert 3 rows into `clients_cache`** using the database insert tool with all reconstructed fields (client_name, events, event dates, registered_date_bs, status_log as BOOKED, sheet_source as 'booked', synced_to_sheet as false).
+3. Also fix the `clients_cache` `events` separator — currently using `|||` but the system expects `\n` (newline). Update events, event_year, event_month, event_day columns to use newline separators for all 3 restored clients.
 
-2. **No code changes needed** — the Client Detail page already handles lookup by `registeredDateTimeAD`, so once the rows exist again, navigation will work.
-
-3. After insertion, a simple refresh in the app will restore all 3 clients with full functionality including their crew assignments, event details, contact info, and files.
+### Root Cause Prevention
+The `useEventDetails` hook's skeleton-building logic in `loadData()` already handles splitting correctly — the issue was that the restored `clients_cache` rows used `|||` instead of `\n` as the multi-value separator, so the skeleton builder treated the entire `|||`-joined string as one event name.
 
