@@ -8692,6 +8692,25 @@ Deno.serve(async (req) => {
         result = await pushStorageDevicesToSheetAction(accessToken);
         break;
       }
+      // ============= VIDEO EDIT TRACKER =============
+      case 'getVideoEditRows': {
+        result = await getVideoEditRows(accessToken, spreadsheetId);
+        break;
+      }
+      case 'updateVideoEditRow': {
+        if (!data || !data.rowNumber) throw new Error('rowNumber is required for updateVideoEditRow');
+        result = await updateVideoEditRow(accessToken, spreadsheetId, data.rowNumber as number, data.updates as Record<string, string> || {});
+        break;
+      }
+      case 'generateVideoEditRows': {
+        result = await generateVideoEditRows(accessToken, spreadsheetId);
+        break;
+      }
+      case 'pushVideoEditToLab': {
+        if (!data || !data.rowNumber) throw new Error('rowNumber is required for pushVideoEditToLab');
+        result = await pushVideoEditToLab(accessToken, spreadsheetId, data.rowNumber as number);
+        break;
+      }
       default:
         throw new Error(`Unknown action: ${action}`);
     }

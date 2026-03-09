@@ -71,7 +71,7 @@ export const suiteModules: SuiteModule[] = [
     description: 'Track video editing projects',
     icon: Video,
     path: '/video-edit',
-    status: 'coming-soon',
+    status: 'active',
     gradient: 'from-red-500 to-pink-600',
   },
   {

@@ -91,7 +91,7 @@ const App = () => (
               {/* Other Modules */}
               <Route path="/finance" element={<ProtectedRoute><FinanceManager /></ProtectedRoute>} />
               <Route path="/tasks" element={<ProtectedRoute><DailyTasks /></ProtectedRoute>} />
-              <Route path="/video-edit" element={<ProtectedRoute><ComingSoon moduleId="video-edit-tracker" /></ProtectedRoute>} />
+              <Route path="/video-edit" element={<ProtectedRoute><VideoEditTracker /></ProtectedRoute>} />
               <Route path="/photo-edit" element={<ProtectedRoute><ComingSoon moduleId="photo-edit-tracker" /></ProtectedRoute>} />
               <Route path="/files" element={<ProtectedRoute><FileManagement /></ProtectedRoute>} />
               <Route path="/media" element={<ProtectedRoute><ComingSoon moduleId="album-media" /></ProtectedRoute>} />
