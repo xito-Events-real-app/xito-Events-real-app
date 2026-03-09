@@ -37,6 +37,7 @@ import BenzoKeepPage from "./pages/BenzoKeepPage";
 import Freelancers from "./pages/Freelancers";
 import FreelancerProfile from "./pages/FreelancerProfile";
 import CrewSchedule from "./pages/CrewSchedule";
+import VideoEditTracker from "./pages/VideoEditTracker";
 
 const queryClient = new QueryClient();
 
@@ -90,7 +91,7 @@ const App = () => (
               {/* Other Modules */}
               <Route path="/finance" element={<ProtectedRoute><FinanceManager /></ProtectedRoute>} />
               <Route path="/tasks" element={<ProtectedRoute><DailyTasks /></ProtectedRoute>} />
-              <Route path="/video-edit" element={<ProtectedRoute><ComingSoon moduleId="video-edit-tracker" /></ProtectedRoute>} />
+              <Route path="/video-edit" element={<ProtectedRoute><VideoEditTracker /></ProtectedRoute>} />
               <Route path="/photo-edit" element={<ProtectedRoute><ComingSoon moduleId="photo-edit-tracker" /></ProtectedRoute>} />
               <Route path="/files" element={<ProtectedRoute><FileManagement /></ProtectedRoute>} />
               <Route path="/media" element={<ProtectedRoute><ComingSoon moduleId="album-media" /></ProtectedRoute>} />
