@@ -8208,6 +8208,7 @@ async function generateVideoEditRows(
     video_insta_post: 'Insta Post',
   };
 
+  const todayStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
   const newRows: string[][] = [];
 
   for (const del of deliverables) {
@@ -8227,6 +8228,9 @@ async function generateVideoEditRows(
     const eventMonth = matchingEvent?.event_month || client.event_month || '';
     const eventDay = matchingEvent?.event_day || client.event_day || '';
     const eventDateAD = matchingEvent?.event_date_ad || client.event_date_ad || '';
+
+    // Only include past events (event date < today)
+    if (!eventDateAD || eventDateAD >= todayStr) continue;
 
     for (let i = 0; i < quantity; i++) {
       const itemName = itemNames[i] || `${del.event_name} - ${editTypeLabel} ${i + 1}`;
