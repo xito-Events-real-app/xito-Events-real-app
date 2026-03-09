@@ -1,19 +1,29 @@
 
 
-## Remove Duplicate "NIBISHA MA'AM : PRARTHANA" Client
+## Fix: Include Video Edit Tracker in Client Deletion
 
-### What's happening
-Two entries exist for the same client:
-1. `2025-03-05 17:18:25` — Has final quotation (PREMIUM: NPR 55,000/-), status BOOKED. **Keep this one.**
-2. `2026-01-18T16:19:50.358Z` — No quotation, no final quotation. **Delete this one.**
+### Problem
+When deleting a client, the `deleteClientFromAll` function cleans up the main sheets and database tables but does NOT remove entries from:
+1. The **BOOKED CLIENTS VIDEO EDIT TRACKER** sheet (Google Sheets)
+2. The `client_deliverables` table (database)
 
-### Plan
+So the deleted duplicate "NIBISHA MA'AM : PRARTHANA" still has rows in the video edit tracker.
 
-1. **Delete from `clients_cache`** — Remove the row where `registered_date_time_ad = '2026-01-18T16:19:50.358Z'`
-2. **Delete from related tables** — Clean up any associated rows in `event_details_cache`, `contact_details_cache`, `freelancer_assignments`, `client_deliverables`, and `freelancer_event_settings` for the same `registered_date_time_ad`
-3. **Delete from Google Sheet** — Call the existing `deleteClient` API to remove it from the Booked Clients sheet as well
+### Changes
 
-### Files Changed
-- `supabase/functions/google-sheets/index.ts` — No code changes needed; will use existing `deleteClient` action
-- Direct database cleanup via migration for the cache tables
+**File: `supabase/functions/google-sheets/index.ts`** — `deleteClientFromAll` function (lines ~6087-6133)
+
+1. Add deletion from the Video Edit Tracker sheet — use the existing `deleteRowsByColumnA` helper, but match on **Column A** (registered_date_time_ad) in the `BOOKED CLIENTS VIDEO EDIT TRACKER` tab
+2. Add `client_deliverables` to the Supabase tables cleanup list (currently missing)
+
+```typescript
+// Add after line 6110 (after BOOKED CLIENTS CONTACT DETAILS deletion):
+await deleteRowsByColumnA(accessToken, spreadsheetId, 'BOOKED CLIENTS VIDEO EDIT TRACKER', registeredDateTimeAD);
+
+// Update tables array at line 6113 to include client_deliverables:
+const tables = ['clients_cache', 'event_details_cache', 'contact_details_cache', 
+  'freelancer_assignments', 'freelancer_event_settings', 'client_deliverables'];
+```
+
+After deploying, we'll invoke the `deleteClient` action for the duplicate entry (`2026-01-18T16:19:50.358Z`) to clean up remaining video edit tracker rows.
 
