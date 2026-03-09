@@ -6109,8 +6109,11 @@ async function deleteClientFromAll(
   // 4. Delete from BOOKED CLIENTS CONTACT DETAILS
   await deleteRowsByColumnA(accessToken, spreadsheetId, 'BOOKED CLIENTS CONTACT DETAILS', registeredDateTimeAD);
 
-  // 5. Delete from all Supabase cache tables
-  const tables = ['clients_cache', 'event_details_cache', 'contact_details_cache', 'freelancer_assignments', 'freelancer_event_settings'];
+  // 5. Delete from BOOKED CLIENTS VIDEO EDIT TRACKER
+  await deleteRowsByColumnA(accessToken, spreadsheetId, 'BOOKED CLIENTS VIDEO EDIT TRACKER', registeredDateTimeAD);
+
+  // 6. Delete from all Supabase cache tables
+  const tables = ['clients_cache', 'event_details_cache', 'contact_details_cache', 'freelancer_assignments', 'freelancer_event_settings', 'client_deliverables'];
   for (const table of tables) {
     try {
       const res = await fetch(`${supabaseUrl}/rest/v1/${table}?registered_date_time_ad=eq.${encodeURIComponent(registeredDateTimeAD)}`, {
