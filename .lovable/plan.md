@@ -1,29 +1,37 @@
 
 
-## Fix: Include Video Edit Tracker in Client Deletion
+## Selected Photos: Inline Freelancer Layout + Per-Freelancer Notes
 
-### Problem
-When deleting a client, the `deleteClientFromAll` function cleans up the main sheets and database tables but does NOT remove entries from:
-1. The **BOOKED CLIENTS VIDEO EDIT TRACKER** sheet (Google Sheets)
-2. The `client_deliverables` table (database)
+### Changes to `SelectedPhotosRow` in `DeliverablesSection.tsx`
 
-So the deleted duplicate "NIBISHA MA'AM : PRARTHANA" still has rows in the video edit tracker.
+**1. All photographers on one line, switch right next to name**
 
-### Changes
+Current: Each photographer is a separate row with switch on the far right.
+New: All photographers rendered inline (flex-wrap) as compact chips — badge + name + switch grouped tightly together.
 
-**File: `supabase/functions/google-sheets/index.ts`** — `deleteClientFromAll` function (lines ~6087-6133)
-
-1. Add deletion from the Video Edit Tracker sheet — use the existing `deleteRowsByColumnA` helper, but match on **Column A** (registered_date_time_ad) in the `BOOKED CLIENTS VIDEO EDIT TRACKER` tab
-2. Add `client_deliverables` to the Supabase tables cleanup list (currently missing)
-
-```typescript
-// Add after line 6110 (after BOOKED CLIENTS CONTACT DETAILS deletion):
-await deleteRowsByColumnA(accessToken, spreadsheetId, 'BOOKED CLIENTS VIDEO EDIT TRACKER', registeredDateTimeAD);
-
-// Update tables array at line 6113 to include client_deliverables:
-const tables = ['clients_cache', 'event_details_cache', 'contact_details_cache', 
-  'freelancer_assignments', 'freelancer_event_settings', 'client_deliverables'];
+```
+Selected Photos                              [SWITCH]
+  PB ARJUN [switch]  PG NIKIT [switch]  EP RAM [switch]
+  
+  [Notes for ARJUN...]     ← only if PB toggled ON
+  [Notes for NIKIT...]     ← only if PG toggled ON
 ```
 
-After deploying, we'll invoke the `deleteClient` action for the duplicate entry (`2026-01-18T16:19:50.358Z`) to clean up remaining video edit tracker rows.
+**2. Per-freelancer notes instead of single shared notes**
+
+Change `notes` from `string` to `photographerNotes: Record<string, string>` in `ItemState`. Each toggled-ON photographer gets their own textarea labeled with their code+name.
+
+### Specific code changes
+
+**`ItemState` interface** (line 20-27): Replace `notes?: string` with `photographerNotes?: Record<string, string>`
+
+**`buildDefaults`**: Update `selected_photos` default to include `photographerNotes: {}`
+
+**`SelectedPhotosRow`** (lines 241-286): Rewrite the photographer rendering:
+- Photographer list: single `div` with `flex flex-wrap gap-3 items-center` — each photographer is a compact inline group: `[badge][name][switch]` with `gap-1.5`
+- Muted styling (`opacity-40`) stays for OFF photographers
+- Below the photographer row: map over ON photographers only, render a labeled textarea for each: `"PB ARJUN notes..."` as placeholder
+- Remove the old single `notes` textarea
+
+**Files**: Only `src/components/client-detail/DeliverablesSection.tsx`
 
