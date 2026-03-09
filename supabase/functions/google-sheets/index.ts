@@ -8208,41 +8208,43 @@ async function generateVideoEditRows(
     existing.map((r: VideoEditRowData) => `${r.registeredDateTimeAD}||${r.eventName}||${r.subEventName}||${r.editType}`)
   );
 
-  // 2. Load video deliverables from Supabase
   const sbUrl = Deno.env.get('SUPABASE_URL')!;
   const sbKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const headers = { apikey: sbKey, Authorization: `Bearer ${sbKey}` };
 
-  // Fetch enabled video deliverables
-  const delResponse = await fetch(
-    `${sbUrl}/rest/v1/client_deliverables?section=eq.videos&enabled=eq.true&select=*`,
-    { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
-  );
-  const deliverables = await delResponse.json();
-
-  // Fetch booked clients (status contains BOOKED)
-  const clientsResponse = await fetch(
+  // 2. Load ALL booked clients
+  const clientsResp = await fetch(
     `${sbUrl}/rest/v1/clients_cache?sheet_source=eq.booked&select=registered_date_time_ad,registered_date_bs,client_name,events,event_year,event_month,event_day,event_date_ad`,
-    { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
+    { headers }
   );
-  const clients = await clientsResponse.json();
-
+  const clients = await clientsResp.json();
   const clientMap: Record<string, any> = {};
   for (const c of clients) {
     if (c.registered_date_time_ad) clientMap[c.registered_date_time_ad] = c;
   }
+  console.log(`[VIDEO EDIT] Found ${clients.length} booked clients`);
 
-  // Fetch event details for precise event dates
-  const eventDetailsResponse = await fetch(
+  // 3. Load ALL event details (the primary source for per-event rows)
+  const eventsResp = await fetch(
     `${sbUrl}/rest/v1/event_details_cache?select=registered_date_time_ad,event_name,event_year,event_month,event_day,event_date_ad,event_index`,
-    { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
+    { headers }
   );
-  const eventDetails = await eventDetailsResponse.json();
+  const allEvents = await eventsResp.json();
+  console.log(`[VIDEO EDIT] Found ${allEvents.length} total event detail rows`);
 
-  const eventDetailMap: Record<string, any[]> = {};
-  for (const ed of eventDetails) {
-    const key = ed.registered_date_time_ad;
-    if (!eventDetailMap[key]) eventDetailMap[key] = [];
-    eventDetailMap[key].push(ed);
+  // 4. Load video deliverables for enrichment (optional overlay)
+  const delResp = await fetch(
+    `${sbUrl}/rest/v1/client_deliverables?section=eq.videos&enabled=eq.true&select=*`,
+    { headers }
+  );
+  const deliverables = await delResp.json();
+
+  // Build deliverables lookup: key = "regId||eventName||type"
+  const delMap: Record<string, any[]> = {};
+  for (const del of deliverables) {
+    const k = `${del.registered_date_time_ad}||${del.event_name}`;
+    if (!delMap[k]) delMap[k] = [];
+    delMap[k].push(del);
   }
 
   const EDIT_TYPE_LABELS: Record<string, string> = {
@@ -8252,61 +8254,75 @@ async function generateVideoEditRows(
     video_insta_post: 'Insta Post',
   };
 
-  const todayStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  const todayStr = new Date().toISOString().split('T')[0];
   const newRows: string[][] = [];
 
-  for (const del of deliverables) {
-    const client = clientMap[del.registered_date_time_ad];
-    if (!client) continue;
+  // 5. Iterate ALL events, filter to past events with a booked client
+  for (const evt of allEvents) {
+    const client = clientMap[evt.registered_date_time_ad];
+    if (!client) continue; // not a booked client
 
-    const editTypeLabel = EDIT_TYPE_LABELS[del.deliverable_type] || del.deliverable_type;
-    const quantity = del.quantity || 1;
-    let itemNames: string[] = [];
-    try { itemNames = (del.item_names || '').split('|||').map((s: string) => s.trim()).filter(Boolean); } catch { itemNames = []; }
+    const eventDateAD = evt.event_date_ad || '';
+    // Skip future events, empty dates, and unknown "**" dates
+    if (!eventDateAD || eventDateAD.includes('**') || eventDateAD >= todayStr) continue;
 
-    // Find matching event details
-    const clientEvents = eventDetailMap[del.registered_date_time_ad] || [];
-    const matchingEvent = clientEvents.find((e: any) => e.event_name === del.event_name);
+    const eventName = evt.event_name || '';
+    if (!eventName) continue;
 
-    const eventYear = matchingEvent?.event_year || client.event_year || '';
-    const eventMonth = matchingEvent?.event_month || client.event_month || '';
-    const eventDay = matchingEvent?.event_day || client.event_day || '';
-    const eventDateAD = matchingEvent?.event_date_ad || client.event_date_ad || '';
+    const baseInfo = {
+      regId: evt.registered_date_time_ad,
+      regBS: client.registered_date_bs || '',
+      clientName: client.client_name || '',
+      eventName,
+      eventYear: evt.event_year || '',
+      eventMonth: evt.event_month || '',
+      eventDay: evt.event_day || '',
+      eventDateAD,
+    };
 
-    // Only include past events (event date < today)
-    if (!eventDateAD || eventDateAD >= todayStr) continue;
+    // Check if this client+event has specific video deliverables
+    const delKey = `${evt.registered_date_time_ad}||${eventName}`;
+    const eventDeliverables = delMap[delKey];
 
-    for (let i = 0; i < quantity; i++) {
-      const itemName = itemNames[i] || `${del.event_name} - ${editTypeLabel} ${i + 1}`;
-      const subEventName = itemName || `${del.event_name} - ${editTypeLabel} ${i + 1}`;
-      const uniqueKey = `${del.registered_date_time_ad}||${del.event_name}||${subEventName}||${editTypeLabel}`;
+    if (eventDeliverables && eventDeliverables.length > 0) {
+      // Use configured deliverables (with quantities/item names)
+      for (const del of eventDeliverables) {
+        const editTypeLabel = EDIT_TYPE_LABELS[del.deliverable_type] || del.deliverable_type;
+        const quantity = del.quantity || 1;
+        let itemNames: string[] = [];
+        try { itemNames = (del.item_names || '').split('|||').map((s: string) => s.trim()).filter(Boolean); } catch { itemNames = []; }
 
-      if (existingKeys.has(uniqueKey)) continue;
-      existingKeys.add(uniqueKey);
+        for (let i = 0; i < quantity; i++) {
+          const subEventName = itemNames[i] || `${eventName} - ${editTypeLabel} ${quantity > 1 ? i + 1 : ''}`.trim();
+          const uniqueKey = `${baseInfo.regId}||${eventName}||${subEventName}||${editTypeLabel}`;
+          if (existingKeys.has(uniqueKey)) continue;
+          existingKeys.add(uniqueKey);
 
-      newRows.push([
-        del.registered_date_time_ad,                    // A
-        client.registered_date_bs || '',                // B
-        client.client_name || '',                       // C
-        del.event_name || '',                           // D
-        eventYear,                                      // E
-        eventMonth,                                     // F
-        eventDay,                                       // G
-        eventDateAD,                                    // H
-        'QUEUE',                                        // I
-        '',                                             // J urgency
-        '',                                             // K priority (computed client-side)
-        subEventName,                                   // L
-        editTypeLabel,                                  // M
-        '',                                             // N editor
-        '',                                             // O company notes
-        '',                                             // P client demand
-        '',                                             // Q reference
-        '',                                             // R songs
-      ]);
+          newRows.push([
+            baseInfo.regId, baseInfo.regBS, baseInfo.clientName, baseInfo.eventName,
+            baseInfo.eventYear, baseInfo.eventMonth, baseInfo.eventDay, baseInfo.eventDateAD,
+            'QUEUE', '', '', subEventName, editTypeLabel, '', '', '', '', '',
+          ]);
+        }
+      }
+    } else {
+      // Default: generate Full Video + Highlights for this event
+      for (const editType of ['Full Video', 'Highlights']) {
+        const subEventName = `${eventName} - ${editType}`;
+        const uniqueKey = `${baseInfo.regId}||${eventName}||${subEventName}||${editType}`;
+        if (existingKeys.has(uniqueKey)) continue;
+        existingKeys.add(uniqueKey);
+
+        newRows.push([
+          baseInfo.regId, baseInfo.regBS, baseInfo.clientName, baseInfo.eventName,
+          baseInfo.eventYear, baseInfo.eventMonth, baseInfo.eventDay, baseInfo.eventDateAD,
+          'QUEUE', '', '', subEventName, editType, '', '', '', '', '',
+        ]);
+      }
     }
   }
 
+  // 6. Append to sheet
   if (newRows.length > 0) {
     await ensureVideoEditSheetExists(accessToken, spreadsheetId);
     const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(`'${VIDEO_EDIT_SHEET}'!A:R`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
@@ -8324,7 +8340,7 @@ async function generateVideoEditRows(
     console.log(`[VIDEO EDIT] Append response: ${JSON.stringify(appendResult.updates || {})}`);
   }
 
-  console.log(`[VIDEO EDIT] Generated ${newRows.length} new rows`);
+  console.log(`[VIDEO EDIT] Generated ${newRows.length} new rows from ${allEvents.length} event records`);
   return { success: true, generatedCount: newRows.length };
 }
 
