@@ -8262,7 +8262,7 @@ async function generateVideoEditRows(
     const editTypeLabel = EDIT_TYPE_LABELS[del.deliverable_type] || del.deliverable_type;
     const quantity = del.quantity || 1;
     let itemNames: string[] = [];
-    try { itemNames = JSON.parse(del.item_names || '[]'); } catch { itemNames = []; }
+    try { itemNames = (del.item_names || '').split('|||').map((s: string) => s.trim()).filter(Boolean); } catch { itemNames = []; }
 
     // Find matching event details
     const clientEvents = eventDetailMap[del.registered_date_time_ad] || [];
