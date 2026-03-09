@@ -8085,12 +8085,56 @@ interface VideoEditRowData {
   songs: string;
 }
 
+async function ensureVideoEditSheetExists(accessToken: string, spreadsheetId: string): Promise<void> {
+  // Check if the tab exists
+  const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`;
+  const metaResp = await fetchWithRetry(metaUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const meta = await metaResp.json();
+  const sheets = (meta.sheets || []).map((s: any) => s.properties?.title);
+  
+  if (sheets.includes(VIDEO_EDIT_SHEET)) return;
+
+  console.log(`[VIDEO EDIT] Sheet tab "${VIDEO_EDIT_SHEET}" not found, creating...`);
+  
+  // Create the sheet tab
+  const batchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+  await fetchWithRetry(batchUrl, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      requests: [{ addSheet: { properties: { title: VIDEO_EDIT_SHEET } } }],
+    }),
+  });
+
+  // Add header row
+  const headerRange = `'${VIDEO_EDIT_SHEET}'!A1:R1`;
+  const headerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(headerRange)}?valueInputOption=RAW`;
+  await fetchWithRetry(headerUrl, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      values: [['REGISTERED DATE TIME AD', 'REGISTERED DATE BS', 'CLIENT NAME', 'EVENT NAME', 'EVENT YEAR', 'EVENT MONTH', 'EVENT DAY', 'EVENT DATE AD', 'VIDEO EDIT STATUS', 'URGENCY', 'PRIORITY', 'SUB EVENT NAME', 'EDIT TYPE', 'EDITOR', 'COMPANY NOTES', 'CLIENT DEMAND', 'REFERENCE', 'SONGS']],
+    }),
+  });
+  console.log(`[VIDEO EDIT] Sheet tab created with headers`);
+}
+
 async function getVideoEditRows(accessToken: string, spreadsheetId: string): Promise<VideoEditRowData[]> {
+  await ensureVideoEditSheetExists(accessToken, spreadsheetId);
   const range = `'${VIDEO_EDIT_SHEET}'!A2:R1000`;
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`;
   const response = await fetchWithRetry(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
+  
+  if (!response.ok) {
+    const errBody = await response.text();
+    console.error(`[VIDEO EDIT] getVideoEditRows failed: ${response.status} ${errBody}`);
+    return [];
+  }
+  
   const result = await response.json();
   const values: string[][] = result.values || [];
 
@@ -8218,7 +8262,7 @@ async function generateVideoEditRows(
     const editTypeLabel = EDIT_TYPE_LABELS[del.deliverable_type] || del.deliverable_type;
     const quantity = del.quantity || 1;
     let itemNames: string[] = [];
-    try { itemNames = JSON.parse(del.item_names || '[]'); } catch { itemNames = []; }
+    try { itemNames = (del.item_names || '').split('|||').map((s: string) => s.trim()).filter(Boolean); } catch { itemNames = []; }
 
     // Find matching event details
     const clientEvents = eventDetailMap[del.registered_date_time_ad] || [];
@@ -8264,12 +8308,20 @@ async function generateVideoEditRows(
   }
 
   if (newRows.length > 0) {
+    await ensureVideoEditSheetExists(accessToken, spreadsheetId);
     const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(`'${VIDEO_EDIT_SHEET}'!A:R`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
-    await fetchWithRetry(appendUrl, {
+    const appendResp = await fetchWithRetry(appendUrl, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ values: newRows }),
     });
+    if (!appendResp.ok) {
+      const errBody = await appendResp.text();
+      console.error(`[VIDEO EDIT] Append failed: ${appendResp.status} ${errBody}`);
+      throw new Error(`Sheet append failed: ${appendResp.status}`);
+    }
+    const appendResult = await appendResp.json();
+    console.log(`[VIDEO EDIT] Append response: ${JSON.stringify(appendResult.updates || {})}`);
   }
 
   console.log(`[VIDEO EDIT] Generated ${newRows.length} new rows`);
