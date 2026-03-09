@@ -8059,6 +8059,219 @@ async function pushStorageDevicesToSheetAction(accessToken: string) {
   return { pushed: totalPushed };
 }
 
+// ============= VIDEO EDIT TRACKER FUNCTIONS =============
+
+const VIDEO_EDIT_SHEET = 'BOOKED CLIENTS VIDEO EDIT TRACKER';
+
+interface VideoEditRowData {
+  rowNumber: number;
+  registeredDateTimeAD: string;
+  registeredDateBS: string;
+  clientName: string;
+  eventName: string;
+  eventYear: string;
+  eventMonth: string;
+  eventDay: string;
+  eventDateAD: string;
+  videoEditStatus: string;
+  urgency: string;
+  priority: string;
+  subEventName: string;
+  editType: string;
+  editor: string;
+  companyNotes: string;
+  clientDemand: string;
+  reference: string;
+  songs: string;
+}
+
+async function getVideoEditRows(accessToken: string, spreadsheetId: string): Promise<VideoEditRowData[]> {
+  const range = `'${VIDEO_EDIT_SHEET}'!A2:R1000`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`;
+  const response = await fetchWithRetry(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const result = await response.json();
+  const values: string[][] = result.values || [];
+
+  return values
+    .map((row: string[], idx: number) => ({
+      rowNumber: idx + 2,
+      registeredDateTimeAD: row[0] || '',
+      registeredDateBS: row[1] || '',
+      clientName: row[2] || '',
+      eventName: row[3] || '',
+      eventYear: row[4] || '',
+      eventMonth: row[5] || '',
+      eventDay: row[6] || '',
+      eventDateAD: row[7] || '',
+      videoEditStatus: row[8] || 'QUEUE',
+      urgency: row[9] || '',
+      priority: row[10] || '',
+      subEventName: row[11] || '',
+      editType: row[12] || '',
+      editor: row[13] || '',
+      companyNotes: row[14] || '',
+      clientDemand: row[15] || '',
+      reference: row[16] || '',
+      songs: row[17] || '',
+    }))
+    .filter((r: VideoEditRowData) => r.registeredDateTimeAD);
+}
+
+async function updateVideoEditRow(
+  accessToken: string,
+  spreadsheetId: string,
+  rowNumber: number,
+  updates: Record<string, string>
+): Promise<{ success: boolean }> {
+  // Map field names to column letters
+  const fieldToCol: Record<string, string> = {
+    videoEditStatus: 'I', urgency: 'J', priority: 'K',
+    subEventName: 'L', editType: 'M', editor: 'N',
+    companyNotes: 'O', clientDemand: 'P', reference: 'Q', songs: 'R',
+  };
+
+  for (const [field, value] of Object.entries(updates)) {
+    const col = fieldToCol[field];
+    if (!col) continue;
+    const range = `'${VIDEO_EDIT_SHEET}'!${col}${rowNumber}`;
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`;
+    await fetchWithRetry(url, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: [[value]] }),
+    });
+  }
+  return { success: true };
+}
+
+async function pushVideoEditToLab(
+  accessToken: string,
+  spreadsheetId: string,
+  rowNumber: number
+): Promise<{ success: boolean }> {
+  return updateVideoEditRow(accessToken, spreadsheetId, rowNumber, { videoEditStatus: 'LAB' });
+}
+
+async function generateVideoEditRows(
+  accessToken: string,
+  spreadsheetId: string
+): Promise<{ success: boolean; generatedCount: number }> {
+  // 1. Get existing rows to avoid duplicates
+  const existing = await getVideoEditRows(accessToken, spreadsheetId);
+  const existingKeys = new Set(
+    existing.map((r: VideoEditRowData) => `${r.registeredDateTimeAD}||${r.eventName}||${r.subEventName}||${r.editType}`)
+  );
+
+  // 2. Load video deliverables from Supabase
+  const sbUrl = Deno.env.get('SUPABASE_URL')!;
+  const sbKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+  // Fetch enabled video deliverables
+  const delResponse = await fetch(
+    `${sbUrl}/rest/v1/client_deliverables?section=eq.videos&enabled=eq.true&select=*`,
+    { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
+  );
+  const deliverables = await delResponse.json();
+
+  // Fetch booked clients (status contains BOOKED)
+  const clientsResponse = await fetch(
+    `${sbUrl}/rest/v1/clients_cache?sheet_source=eq.booked&select=registered_date_time_ad,registered_date_bs,client_name,events,event_year,event_month,event_day,event_date_ad`,
+    { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
+  );
+  const clients = await clientsResponse.json();
+
+  const clientMap: Record<string, any> = {};
+  for (const c of clients) {
+    if (c.registered_date_time_ad) clientMap[c.registered_date_time_ad] = c;
+  }
+
+  // Fetch event details for precise event dates
+  const eventDetailsResponse = await fetch(
+    `${sbUrl}/rest/v1/event_details_cache?select=registered_date_time_ad,event_name,event_year,event_month,event_day,event_date_ad,event_index`,
+    { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
+  );
+  const eventDetails = await eventDetailsResponse.json();
+
+  const eventDetailMap: Record<string, any[]> = {};
+  for (const ed of eventDetails) {
+    const key = ed.registered_date_time_ad;
+    if (!eventDetailMap[key]) eventDetailMap[key] = [];
+    eventDetailMap[key].push(ed);
+  }
+
+  const EDIT_TYPE_LABELS: Record<string, string> = {
+    full_video: 'Full Video',
+    highlights: 'Highlights',
+    reel: 'Reel',
+    video_insta_post: 'Insta Post',
+  };
+
+  const newRows: string[][] = [];
+
+  for (const del of deliverables) {
+    const client = clientMap[del.registered_date_time_ad];
+    if (!client) continue;
+
+    const editTypeLabel = EDIT_TYPE_LABELS[del.deliverable_type] || del.deliverable_type;
+    const quantity = del.quantity || 1;
+    let itemNames: string[] = [];
+    try { itemNames = JSON.parse(del.item_names || '[]'); } catch { itemNames = []; }
+
+    // Find matching event details
+    const clientEvents = eventDetailMap[del.registered_date_time_ad] || [];
+    const matchingEvent = clientEvents.find((e: any) => e.event_name === del.event_name);
+
+    const eventYear = matchingEvent?.event_year || client.event_year || '';
+    const eventMonth = matchingEvent?.event_month || client.event_month || '';
+    const eventDay = matchingEvent?.event_day || client.event_day || '';
+    const eventDateAD = matchingEvent?.event_date_ad || client.event_date_ad || '';
+
+    for (let i = 0; i < quantity; i++) {
+      const itemName = itemNames[i] || `${del.event_name} - ${editTypeLabel} ${i + 1}`;
+      const subEventName = itemName || `${del.event_name} - ${editTypeLabel} ${i + 1}`;
+      const uniqueKey = `${del.registered_date_time_ad}||${del.event_name}||${subEventName}||${editTypeLabel}`;
+
+      if (existingKeys.has(uniqueKey)) continue;
+      existingKeys.add(uniqueKey);
+
+      newRows.push([
+        del.registered_date_time_ad,                    // A
+        client.registered_date_bs || '',                // B
+        client.client_name || '',                       // C
+        del.event_name || '',                           // D
+        eventYear,                                      // E
+        eventMonth,                                     // F
+        eventDay,                                       // G
+        eventDateAD,                                    // H
+        'QUEUE',                                        // I
+        '',                                             // J urgency
+        '',                                             // K priority (computed client-side)
+        subEventName,                                   // L
+        editTypeLabel,                                  // M
+        '',                                             // N editor
+        '',                                             // O company notes
+        '',                                             // P client demand
+        '',                                             // Q reference
+        '',                                             // R songs
+      ]);
+    }
+  }
+
+  if (newRows.length > 0) {
+    const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(`'${VIDEO_EDIT_SHEET}'!A:R`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
+    await fetchWithRetry(appendUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: newRows }),
+    });
+  }
+
+  console.log(`[VIDEO EDIT] Generated ${newRows.length} new rows`);
+  return { success: true, generatedCount: newRows.length };
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
