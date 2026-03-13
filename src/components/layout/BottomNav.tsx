@@ -25,7 +25,7 @@ export function BottomNav() {
   const location = useLocation();
   const navigate = useNavigate();
   const [showDateConverter, setShowDateConverter] = useState(false);
-  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLongPressRef = useRef(false);
 
   // Long press handlers for Search button

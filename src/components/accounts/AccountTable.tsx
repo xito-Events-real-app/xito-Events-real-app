@@ -53,7 +53,6 @@ export function AccountTable({ accounts, onSelectAccount }: AccountTableProps) {
   const handleWhatsApp = (number: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (number) {
-      const { openWhatsApp } = require('@/lib/whatsapp-utils');
       openWhatsApp(number);
     }
   };

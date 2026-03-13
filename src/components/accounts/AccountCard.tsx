@@ -43,7 +43,6 @@ export function AccountCard({ account, onSelect }: AccountCardProps) {
   const handleWhatsApp = (e: React.MouseEvent, number: string) => {
     e.stopPropagation();
     if (number) {
-      const { openWhatsApp } = require('@/lib/whatsapp-utils');
       openWhatsApp(number);
     }
   };

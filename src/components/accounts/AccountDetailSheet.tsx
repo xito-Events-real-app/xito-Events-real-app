@@ -53,7 +53,6 @@ export function AccountDetailSheet({ account, open, onOpenChange }: AccountDetai
 
   const handleWhatsApp = (number: string) => {
     if (number) {
-      const { openWhatsApp } = require('@/lib/whatsapp-utils');
       openWhatsApp(number);
     }
   };
