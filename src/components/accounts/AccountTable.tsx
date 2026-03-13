@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { AccountData, getExpiryStatus, formatPrice } from "@/lib/accounts-api";
+import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { ClickableDateWithBS } from "./ClickableDateWithBS";
 
 interface AccountTableProps {
@@ -52,7 +53,6 @@ export function AccountTable({ accounts, onSelectAccount }: AccountTableProps) {
   const handleWhatsApp = (number: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (number) {
-      const { openWhatsApp } = require('@/lib/whatsapp-utils');
       openWhatsApp(number);
     }
   };

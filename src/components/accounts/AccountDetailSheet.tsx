@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { AccountData, getExpiryStatus, formatPrice, getEffectiveExpiryDate } from "@/lib/accounts-api";
+import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { ClickableDateWithBS } from "./ClickableDateWithBS";
 
 interface AccountDetailSheetProps {
@@ -52,7 +53,6 @@ export function AccountDetailSheet({ account, open, onOpenChange }: AccountDetai
 
   const handleWhatsApp = (number: string) => {
     if (number) {
-      const { openWhatsApp } = require('@/lib/whatsapp-utils');
       openWhatsApp(number);
     }
   };
