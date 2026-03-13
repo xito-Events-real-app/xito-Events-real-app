@@ -273,7 +273,7 @@ export default function Dashboard() {
 
         const entry = { clientName: client.clientName || 'Unnamed', eventName: event.eventName };
 
-        if (status.includes('BOOKED') && !status.includes('SOMEWHERE ELSE')) {
+        if (client._source === 'booked' || (status.includes('BOOKED') && !status.includes('SOMEWHERE ELSE'))) {
           dateGroups[dateKey].booked.push(entry);
         } else if (GONE_ELSEWHERE_STATUSES.some(s => status.includes(s))) {
           dateGroups[dateKey].goneElsewhere.push(entry);
@@ -426,7 +426,8 @@ export default function Dashboard() {
     return clients
       .filter(client => {
         const status = getCurrentStatus(client.statusLog || '').toUpperCase();
-        if (!status.includes('BOOKED')) return false;
+        const isBooked = client._source === 'booked' || (status.includes('BOOKED') && !status.includes('SOMEWHERE ELSE'));
+        if (!isBooked) return false;
         
         // Parse event date (AD format: YYYY-MM-DD or similar)
         const eventDateAD = client.eventDateAD;
@@ -827,7 +828,7 @@ export default function Dashboard() {
                   <div className="space-y-2 max-h-64 overflow-y-auto">
                     {mobileHotDateFilteredClients.map((client) => {
                       const status = getCurrentStatus(client.statusLog || '').toUpperCase();
-                      const isBooked = status.includes('BOOKED') && !status.includes('SOMEWHERE ELSE');
+                      const isBooked = client._source === 'booked' || (status.includes('BOOKED') && !status.includes('SOMEWHERE ELSE'));
                       const isGone = status.includes('CANCELLED') || status.includes('SOMEWHERE ELSE');
                       
                       return (

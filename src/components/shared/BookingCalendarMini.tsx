@@ -23,7 +23,7 @@ export function BookingCalendarMini({ className }: BookingCalendarMiniProps) {
     () => clients
       .filter(c => {
         const status = getCurrentStatus(c.statusLog || '').toUpperCase();
-        return status.includes('BOOKED') && !status.includes('BOOKED SOMEWHERE ELSE');
+        return (c as any)._source === 'booked' || (status.includes('BOOKED') && !status.includes('BOOKED SOMEWHERE ELSE'));
       })
       .map(c => c.registeredDateTimeAD)
       .filter(Boolean) as string[],
@@ -50,8 +50,8 @@ export function BookingCalendarMini({ className }: BookingCalendarMiniProps) {
       events.forEach(event => {
         if (!event.year || !event.month) return;
         const isUnknownDay = !event.day || event.day === '**' || String(event.day).startsWith('**');
-        const isBooked = status.includes('BOOKED') && !status.includes('BOOKED SOMEWHERE ELSE');
-        const isAdvancePending = status.includes('ADVANCE PENDING');
+        const isBooked = (client as any)._source === 'booked' || (status.includes('BOOKED') && !status.includes('BOOKED SOMEWHERE ELSE'));
+        const isAdvancePending = !isBooked && status.includes('ADVANCE PENDING');
 
         if (isUnknownDay) {
           // Track unknown-day events per month
