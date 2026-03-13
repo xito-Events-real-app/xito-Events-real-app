@@ -23,7 +23,7 @@ export function BookingCalendarMini({ className }: BookingCalendarMiniProps) {
     () => clients
       .filter(c => {
         const status = getCurrentStatus(c.statusLog || '').toUpperCase();
-        return status.includes('BOOKED') && !status.includes('BOOKED SOMEWHERE ELSE');
+        return (c as any)._source === 'booked' || (status.includes('BOOKED') && !status.includes('BOOKED SOMEWHERE ELSE'));
       })
       .map(c => c.registeredDateTimeAD)
       .filter(Boolean) as string[],
