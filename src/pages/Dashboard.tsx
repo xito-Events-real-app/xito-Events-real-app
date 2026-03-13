@@ -828,7 +828,7 @@ export default function Dashboard() {
                   <div className="space-y-2 max-h-64 overflow-y-auto">
                     {mobileHotDateFilteredClients.map((client) => {
                       const status = getCurrentStatus(client.statusLog || '').toUpperCase();
-                      const isBooked = status.includes('BOOKED') && !status.includes('SOMEWHERE ELSE');
+                      const isBooked = client._source === 'booked' || (status.includes('BOOKED') && !status.includes('SOMEWHERE ELSE'));
                       const isGone = status.includes('CANCELLED') || status.includes('SOMEWHERE ELSE');
                       
                       return (

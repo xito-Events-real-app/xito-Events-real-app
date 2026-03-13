@@ -565,6 +565,24 @@ export function getCurrentStatus(statusLog?: string): string {
       }
     }
 
+    // Future-date swap heuristic: if parsed date is >30 days in the future
+    // and both month/day are ≤12, swap them (fixes DD/MM vs MM/DD ambiguity)
+    if (timestamp && !isNaN(timestamp.getTime())) {
+      const thirtyDaysFromNow = new Date();
+      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+      if (timestamp > thirtyDaysFromNow) {
+        const mo = timestamp.getMonth() + 1; // 1-based
+        const da = timestamp.getDate();
+        if (mo <= 12 && da <= 12 && mo !== da) {
+          // Try swapping month and day
+          const swapped = new Date(timestamp.getFullYear(), da - 1, mo, timestamp.getHours(), timestamp.getMinutes(), timestamp.getSeconds());
+          if (!isNaN(swapped.getTime()) && swapped <= thirtyDaysFromNow) {
+            timestamp = swapped;
+          }
+        }
+      }
+    }
+
     if (timestamp && !isNaN(timestamp.getTime()) && status) {
       const t = timestamp.getTime();
       if (t > bestTime) {

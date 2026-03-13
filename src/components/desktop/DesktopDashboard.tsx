@@ -403,8 +403,8 @@ export function DesktopDashboard({
       events.forEach(event => {
         if (!event.year || !event.month) return;
         const isUnknownDay = !event.day || event.day === '**' || String(event.day).startsWith('**');
-        const isBooked = status.includes('BOOKED') && !status.includes('BOOKED SOMEWHERE ELSE');
-        const isAdvancePending = status.includes('ADVANCE PENDING');
+        const isBooked = client._source === 'booked' || (status.includes('BOOKED') && !status.includes('BOOKED SOMEWHERE ELSE'));
+        const isAdvancePending = !isBooked && status.includes('ADVANCE PENDING');
 
         if (isUnknownDay) {
           if (isBooked || isAdvancePending) {
