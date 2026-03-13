@@ -426,7 +426,8 @@ export default function Dashboard() {
     return clients
       .filter(client => {
         const status = getCurrentStatus(client.statusLog || '').toUpperCase();
-        if (!status.includes('BOOKED')) return false;
+        const isBooked = client._source === 'booked' || (status.includes('BOOKED') && !status.includes('SOMEWHERE ELSE'));
+        if (!isBooked) return false;
         
         // Parse event date (AD format: YYYY-MM-DD or similar)
         const eventDateAD = client.eventDateAD;
