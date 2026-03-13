@@ -1,37 +1,35 @@
 
 
-## Selected Photos: Inline Freelancer Layout + Per-Freelancer Notes
+## Fix Build Errors + Investigate Crew Schedule Event Mismatch
 
-### Changes to `SelectedPhotosRow` in `DeliverablesSection.tsx`
+### Build Errors (4 files)
 
-**1. All photographers on one line, switch right next to name**
+The `require()` calls and `NodeJS.Timeout` type are not available in the browser/Vite environment.
 
-Current: Each photographer is a separate row with switch on the far right.
-New: All photographers rendered inline (flex-wrap) as compact chips — badge + name + switch grouped tightly together.
+**Files to fix:**
 
-```
-Selected Photos                              [SWITCH]
-  PB ARJUN [switch]  PG NIKIT [switch]  EP RAM [switch]
-  
-  [Notes for ARJUN...]     ← only if PB toggled ON
-  [Notes for NIKIT...]     ← only if PG toggled ON
-```
+1. **`src/components/accounts/AccountCard.tsx`** (line 45) — Replace `require('@/lib/whatsapp-utils')` with a top-level `import { openWhatsApp } from '@/lib/whatsapp-utils'`
 
-**2. Per-freelancer notes instead of single shared notes**
+2. **`src/components/accounts/AccountDetailSheet.tsx`** (line 55) — Same fix
 
-Change `notes` from `string` to `photographerNotes: Record<string, string>` in `ItemState`. Each toggled-ON photographer gets their own textarea labeled with their code+name.
+3. **`src/components/accounts/AccountTable.tsx`** (line 55) — Same fix
 
-### Specific code changes
+4. **`src/components/layout/BottomNav.tsx`** (line 28) — Replace `NodeJS.Timeout` with `ReturnType<typeof setTimeout>`
 
-**`ItemState` interface** (line 20-27): Replace `notes?: string` with `photographerNotes?: Record<string, string>`
+### Crew Schedule "SHAKTI NEUPANE" Event Mismatch
 
-**`buildDefaults`**: Update `selected_photos` default to include `photographerNotes: {}`
+I queried the database and the data is **correct**:
+- `freelancer_assignments`: Chaitra 2 → `PRE+RECEPTION`
+- `event_details_cache`: Chaitra 2 → `PRE+RECEPTION`
+- `clients_cache`: Chaitra 2 → `PRE+RECEPTION`
 
-**`SelectedPhotosRow`** (lines 241-286): Rewrite the photographer rendering:
-- Photographer list: single `div` with `flex flex-wrap gap-3 items-center` — each photographer is a compact inline group: `[badge][name][switch]` with `gap-1.5`
-- Muted styling (`opacity-40`) stays for OFF photographers
-- Below the photographer row: map over ON photographers only, render a labeled textarea for each: `"PB ARJUN notes..."` as placeholder
-- Remove the old single `notes` textarea
+"WEDDING BOTH SIDES" is correctly stored as Falgun 28 (not Chaitra 2) in all tables.
 
-**Files**: Only `src/components/client-detail/DeliverablesSection.tsx`
+**Most likely cause**: Stale browser/session cache. After fixing the build errors and redeploying, a hard refresh should resolve this. If the issue persists after refresh, it would indicate a rendering bug in the Upcoming Events section that needs further investigation.
+
+### Files Changed
+- `src/components/accounts/AccountCard.tsx` — Replace `require()` with static import
+- `src/components/accounts/AccountDetailSheet.tsx` — Replace `require()` with static import
+- `src/components/accounts/AccountTable.tsx` — Replace `require()` with static import
+- `src/components/layout/BottomNav.tsx` — Fix `NodeJS.Timeout` type
 
