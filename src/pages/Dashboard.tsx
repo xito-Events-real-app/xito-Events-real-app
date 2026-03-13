@@ -273,7 +273,7 @@ export default function Dashboard() {
 
         const entry = { clientName: client.clientName || 'Unnamed', eventName: event.eventName };
 
-        if (status.includes('BOOKED') && !status.includes('SOMEWHERE ELSE')) {
+        if (client._source === 'booked' || (status.includes('BOOKED') && !status.includes('SOMEWHERE ELSE'))) {
           dateGroups[dateKey].booked.push(entry);
         } else if (GONE_ELSEWHERE_STATUSES.some(s => status.includes(s))) {
           dateGroups[dateKey].goneElsewhere.push(entry);
