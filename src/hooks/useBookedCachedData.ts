@@ -87,9 +87,8 @@ export function useBookedCachedData(): UseBookedCachedDataResult {
             if (row?.updated_at && localUpdateTimestamps.current.has(row.updated_at)) return;
             
             // Check if client is still actively BOOKED
-            const status = getCurrentStatus(row.status_log || '').toUpperCase();
-            const status = getCurrentStatus(row.status_log || '').toUpperCase();
-            const isStillBooked = status.includes('BOOKED') && !status.includes('SOMEWHERE ELSE');
+            const currentStatus = getCurrentStatus(row.status_log || '').toUpperCase();
+            const isStillBooked = currentStatus.includes('BOOKED') && !currentStatus.includes('SOMEWHERE ELSE');
             
             const mapped = rowToBookedClientData(row);
             if (!isStillBooked) {
