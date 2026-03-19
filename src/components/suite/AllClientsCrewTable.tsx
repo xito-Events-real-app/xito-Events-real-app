@@ -16,8 +16,6 @@ import {
   getFilteredFreelancersByRole,
   FreelancerAssignment,
   FreelancerField,
-  updateRequiredCrewCategories,
-  CATEGORY_CODES,
 } from "@/lib/freelancer-assignment-api";
 import {
   loadAssignmentsFromCache,
