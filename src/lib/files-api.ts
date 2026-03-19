@@ -476,7 +476,7 @@ async function _ensureFileRowsForMonthInner(eventYear: string, eventMonth: strin
 
   const newRows: Partial<FileRecord>[] = [];
 
-  for (const assignment of pastAssignments) {
+  for (const assignment of activePastAssignments) {
     const regDate = assignment.registered_date_time_ad;
     const clientInfo = clientMap.get(regDate) || { client_name: assignment.client_name || "", registered_date_bs: "" };
     const eventName = assignment.event || "";

@@ -81,11 +81,23 @@ export function useBookedCachedData(): UseBookedCachedDataResult {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'clients_cache', filter: 'sheet_source=eq.booked' },
         (payload) => {
-          if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+        if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
             const row = payload.new as any;
             if (row?.updated_at && localUpdateTimestamps.current.has(row.updated_at)) return;
+            
+            // Check if client is still actively BOOKED
+            const { getCurrentStatus } = await import('@/lib/sheets-api');
+            const status = getCurrentStatus(row.status_log || '').toUpperCase();
+            const isStillBooked = status.includes('BOOKED') && !status.includes('SOMEWHERE ELSE');
+            
             const mapped = rowToBookedClientData(row);
-            if (payload.eventType === 'UPDATE') {
+            if (!isStillBooked) {
+              // Client is no longer BOOKED — remove from local state
+              setTimeout(() => {
+                setClients(prev => prev.filter(c => c.registeredDateTimeAD !== mapped.registeredDateTimeAD));
+                setLastSyncedAt(new Date());
+              }, 0);
+            } else if (payload.eventType === 'UPDATE') {
               setTimeout(() => {
                 setClients(prev => prev.map(c => c.registeredDateTimeAD === mapped.registeredDateTimeAD ? mapped : c));
                 setLastSyncedAt(new Date());

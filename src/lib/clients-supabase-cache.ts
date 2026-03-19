@@ -136,7 +136,7 @@ export async function loadTrackerClientsFromCache(): Promise<ClientData[]> {
   return allRows.map(rowToClientData);
 }
 
-/** Load only booked clients */
+/** Load only booked clients — filters out clients whose current status is no longer BOOKED */
 export async function loadBookedClientsFromCache(): Promise<BookedClientData[]> {
   const allRows: any[] = [];
   let from = 0;
@@ -156,7 +156,13 @@ export async function loadBookedClientsFromCache(): Promise<BookedClientData[]> 
     from += batchSize;
   }
 
-  return allRows.map(rowToBookedClientData);
+  // Filter out clients whose status is no longer actively BOOKED
+  const activeRows = allRows.filter(row => {
+    const status = getCurrentStatus(row.status_log || '').toUpperCase();
+    return status.includes('BOOKED') && !status.includes('SOMEWHERE ELSE');
+  });
+
+  return activeRows.map(rowToBookedClientData);
 }
 
 /** Check if cache has any data */
