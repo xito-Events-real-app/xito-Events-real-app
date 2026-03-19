@@ -1137,9 +1137,9 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
             <table className="w-full border-collapse min-w-[1400px]">
               <thead className="sticky top-0 z-20">
                 <tr>
-                  <th className="bg-gray-800 text-white text-xs font-semibold px-3 py-2.5 text-left border-r border-gray-700 w-[50px]">Day</th>
-                  <th className="bg-gray-800 text-white text-xs font-semibold px-3 py-2.5 text-left border-r border-gray-700 w-[180px]">Client</th>
-                  <th className="bg-gray-800 text-white text-xs font-semibold px-3 py-2.5 text-left border-r border-gray-700 w-[140px]">Event</th>
+                  <th className="bg-gray-800 text-white text-sm font-bold px-3 py-2.5 text-left border-r border-gray-700 w-[60px]">Day</th>
+                  <th className="bg-gray-800 text-white text-sm font-bold px-3 py-2.5 text-left border-r border-gray-700 w-[180px]">Client</th>
+                  <th className="bg-gray-800 text-white text-sm font-bold px-3 py-2.5 text-left border-r border-gray-700 w-[140px]">Event</th>
                   {CREW_COLUMNS.map(col => {
                     const s = columnStats[col.field];
                     return (
