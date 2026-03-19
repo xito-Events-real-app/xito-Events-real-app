@@ -700,11 +700,22 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
           <tr><td colSpan={13} className="h-1 bg-violet-400" /></tr>
         )}
         <tr className={cn(dayColor, isCompleted && "opacity-60", "hover:brightness-95 transition-all border-b border-gray-200")}>
-          <td className="px-3 py-2 text-xs font-black text-gray-700 border-r border-gray-200 text-center whitespace-nowrap">
-            <button onClick={() => setFilterDay(filterDay === row.eventDay ? null : row.eventDay)} className="hover:text-violet-600 transition-colors flex items-center gap-1 justify-center w-full">
-              {isLagan && <GaneshIcon size={14} />}
-              {row.eventDay}
-            </button>
+          <td className="px-3 py-2 border-r border-gray-200 text-center whitespace-nowrap">
+            {(() => {
+              const hasUnassigned = CREW_COLUMNS.some(col => {
+                const isReq = reqCodes.length === 0 || reqCodes.includes(col.short);
+                return isReq && !(row[col.field] as string)?.trim();
+              });
+              return (
+                <button onClick={() => setFilterDay(filterDay === row.eventDay ? null : row.eventDay)} className={cn(
+                  "hover:text-violet-600 transition-colors flex items-center justify-center w-full text-base font-black",
+                  isLagan ? "text-orange-600 animate-lagan-spin w-8 h-8 mx-auto" : "text-gray-700",
+                  hasUnassigned && !isLagan && "ring-2 ring-red-400 rounded-full w-8 h-8 mx-auto animate-[unassigned-date-glow_2s_ease-in-out_infinite]"
+                )}>
+                  {row.eventDay}
+                </button>
+              );
+            })()}
           </td>
           <td className="px-2 py-2 border-r border-gray-200">
             <HoverCard openDelay={200}>
