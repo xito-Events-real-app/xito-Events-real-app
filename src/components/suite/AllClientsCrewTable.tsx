@@ -1890,7 +1890,7 @@ function CrewCell({
           )}
         </div>
       ) : readOnly ? (
-        <span className="block w-full text-xs px-2 py-1.5 rounded-md text-center border border-dashed border-red-400 text-red-400 animate-pulse-red">
+        <span className="block w-full text-sm px-2 py-1.5 rounded-md text-center border border-dashed border-red-400 text-red-400 animate-pulse-red font-medium">
           ---
         </span>
       ) : (
