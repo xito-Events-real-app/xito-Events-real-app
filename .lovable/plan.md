@@ -1,24 +1,17 @@
 
 
-## Fix: Wrap CrewCategorySelector in a Popover
+## Restore Original Crew Table Row Styling
 
 ### Problem
-The `CrewCategorySelector` component is rendered **inline** in each table row's event cell (line 728), showing the full 10-button grid + "Select All/Clear All" directly in the table. This breaks the UI layout.
+The recent sort feature changes shrunk text sizes and replaced the original crew icon with a Settings gear icon. The screenshot shows the original UI had:
+- Larger, bolder text for client names and event names
+- Event names not truncated (no `max-w-[110px]`)
+- A small crew/users icon (not Settings) at the right edge of the event cell for the required crew popover
 
-### Solution
-Wrap the `CrewCategorySelector` in a `Popover` (matching the pattern used in `FullScreenEventCard.tsx` and `FreelancerAssignmentSection.tsx`). The trigger will be a small icon button (or `CategoryBadges` showing selected codes). Clicking it opens the selector in a floating popover.
+### Changes — `src/components/suite/AllClientsCrewTable.tsx`
 
-### Changes
-
-**File: `src/components/suite/AllClientsCrewTable.tsx`**
-
-1. Import `CategoryBadges` from `CrewCategorySelector` and `Popover`/`PopoverContent`/`PopoverTrigger` from UI components (if not already imported).
-
-2. Replace the inline `<CrewCategorySelector>` (lines ~727-742) with:
-   - A `Popover` wrapping a trigger button (small settings/crew icon or the `CategoryBadges` display)
-   - The `CrewCategorySelector` inside `PopoverContent` with proper z-index
-
-3. Apply the same pattern in the mobile card renderer if it also renders the selector inline.
-
-This restores the old compact UI where the event name column stays narrow and the crew category selector only appears on demand.
+1. **Replace `Settings` icon with `Users` icon** in the event cell popover trigger (already imported)
+2. **Restore text sizes**: Change `text-xs` to `text-sm` for client name and event name, increase `font-semibold` to `font-bold` for client name
+3. **Remove truncation limit** on event name: remove `max-w-[110px]` constraint, allow full event name display
+4. **Keep everything else** (sort dropdown, popover behavior, filtering) exactly as-is
 
