@@ -1,55 +1,24 @@
 
 
-## Add "Sort By" Dropdown to All Clients Crew Table Header
+## Fix: Wrap CrewCategorySelector in a Popover
 
-### Overview
-Add a "Sort By" dropdown next to the "Expand All" button with 7 sorting modes that reorder and group the table rows differently.
+### Problem
+The `CrewCategorySelector` component is rendered **inline** in each table row's event cell (line 728), showing the full 10-button grid + "Select All/Clear All" directly in the table. This breaks the UI layout.
 
-### Sort Modes
+### Solution
+Wrap the `CrewCategorySelector` in a `Popover` (matching the pattern used in `FullScreenEventCard.tsx` and `FreelancerAssignmentSection.tsx`). The trigger will be a small icon button (or `CategoryBadges` showing selected codes). Clicking it opens the selector in a floating popover.
 
-1. **Default** — Current behavior (by day ascending)
-2. **Maximum Events** — Group by date, dates with most events first. Thick border between date groups.
-3. **Minimum Events** — Group by date, dates with fewest events first. Same thick borders.
-4. **Drone** — Filter to only rows where `droneOperator` is assigned, sorted ascending by day.
-5. **Freelancer Maximum** — Group rows by freelancer name (across all crew columns), freelancers with most events first. Each group gets a header card showing: Name, Total Events (this month), Last Month Events, Next Month Events, All-Time Events. Rows start collapsed, expandable per freelancer.
-6. **Freelancer Minimum** — Same as above but freelancers with fewest events first.
-7. **Unassigned First** — Rows with the most empty required slots appear first (helps prioritize incomplete assignments).
-
-### Technical Approach
+### Changes
 
 **File: `src/components/suite/AllClientsCrewTable.tsx`**
 
-#### State
-```typescript
-const [sortMode, setSortMode] = useState<'default' | 'maxEvents' | 'minEvents' | 'drone' | 'freelancerMax' | 'freelancerMin' | 'unassignedFirst'>('default');
-```
+1. Import `CategoryBadges` from `CrewCategorySelector` and `Popover`/`PopoverContent`/`PopoverTrigger` from UI components (if not already imported).
 
-#### Sorted/Grouped Rows Logic
-- Wrap existing `filteredRows` with a `sortedRows` memo that applies the active sort
-- For "Maximum/Minimum Events": count events per `eventDay`, then sort days by count desc/asc, maintain day grouping
-- For "Drone": filter `filteredRows` to only rows with `droneOperator` non-empty
-- For "Freelancer Max/Min": extract all unique freelancer names from all crew columns across `filteredRows`, count appearances, sort desc/asc. Build a `Map<freelancerName, FreelancerAssignment[]>` structure
-- For "Unassigned First": count empty required slots per row, sort descending
+2. Replace the inline `<CrewCategorySelector>` (lines ~727-742) with:
+   - A `Popover` wrapping a trigger button (small settings/crew icon or the `CategoryBadges` display)
+   - The `CrewCategorySelector` inside `PopoverContent` with proper z-index
 
-#### Freelancer Group Headers
-When `sortMode` is `freelancerMax` or `freelancerMin`, render a different layout:
-- For each freelancer group, show a collapsible header card with:
-  - **Name** (bold)
-  - **This Month**: count from current filteredRows
-  - **Last Month**: count from `assignments` where year/month is previous
-  - **Next Month**: count from `assignments` where year/month is next
-  - **All-Time**: count from full `assignments` array
-- Rows under each header start collapsed (separate expand state per freelancer group)
+3. Apply the same pattern in the mobile card renderer if it also renders the selector inline.
 
-#### UI — Header Button
-Add a `Select` dropdown after the "Expand All" button:
-```
-[Sort By ▾]  →  Default | Max Events | Min Events | Drone | Freelancer Max | Freelancer Min | Unassigned First
-```
-
-#### Date Group Borders
-For Max/Min Events sort modes, add a `border-b-4 border-violet-400` between date groups (using the existing `dayGroups` pattern but applying a thicker separator).
-
-### Files Changed
-- **`src/components/suite/AllClientsCrewTable.tsx`** — Add sort state, sorted rows logic, freelancer grouping with header cards, dropdown in header bar, thick date borders for event count sorts
+This restores the old compact UI where the event name column stays narrow and the crew category selector only appears on demand.
 
