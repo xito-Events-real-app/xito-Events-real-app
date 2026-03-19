@@ -130,6 +130,8 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
     loading: boolean;
   }>>(new Map());
   const [laganDays, setLaganDays] = useState<Set<number>>(new Set());
+  const [sortMode, setSortMode] = useState<SortMode>('default');
+  const [freelancerExpandedGroups, setFreelancerExpandedGroups] = useState<Set<string>>(new Set());
 
   // Load lagan dates for selected month/year
   useEffect(() => {
