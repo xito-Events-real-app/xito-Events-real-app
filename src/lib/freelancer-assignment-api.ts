@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getFreelancers, addFreelancer, FreelancerData } from "./freelancer-api";
+import { syncFilesWithAssignments } from "./files-api";
 import { updateAssignmentInCache, updateCategoriesInCache, rowToAssignment } from "./freelancer-assignment-cache";
 
 export interface FreelancerAssignment {
