@@ -73,7 +73,7 @@ const DAY_COLORS = [
   "bg-orange-200/70",
 ];
 
-const LazyCrewSchedule = lazy(() => import("@/pages/CrewSchedule"));
+
 const PILL_STYLES = {
   photo: 'bg-amber-50 text-amber-700 border-amber-200',
   video: 'bg-purple-50 text-purple-700 border-purple-200',
