@@ -723,7 +723,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
           </td>
           <td className="px-2 py-2 border-r border-gray-200">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-600 truncate max-w-[110px]">{row.event}</span>
+              <span className="text-sm text-gray-600 truncate">{row.event}</span>
               {!readOnly && (
                 <Popover>
                   <PopoverTrigger asChild>
