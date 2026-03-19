@@ -126,6 +126,24 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
     settings: any[];
     loading: boolean;
   }>>(new Map());
+  const [laganDays, setLaganDays] = useState<Set<number>>(new Set());
+
+  // Load lagan dates for selected month/year
+  useEffect(() => {
+    const loadLagan = async () => {
+      const bsYear = parseInt(selectedYear);
+      const bsMonth = parseInt(selectedMonth);
+      const { data } = await (supabase as any)
+        .from("lagan_dates")
+        .select("bs_day")
+        .eq("bs_year", bsYear)
+        .eq("bs_month", bsMonth);
+      if (data) {
+        setLaganDays(new Set(data.map((r: any) => r.bs_day)));
+      }
+    };
+    loadLagan();
+  }, [selectedYear, selectedMonth]);
 
   // Schedule auto-push to sheets after 3 seconds of inactivity
   const schedulePush = useCallback(() => {
