@@ -37,7 +37,7 @@ import type { AssignmentRow } from "@/components/crew-schedule/types";
 import type { EventDetail } from "@/hooks/useEventDetails";
 import type { ClientContactDetails } from "@/lib/client-contact-api";
 import { LaganDatesPicker } from "./LaganDatesPicker";
-import { GaneshIcon } from "./GaneshIcon";
+
 
 const CREW_COLUMNS: { field: FreelancerField; label: string; short: string; group: 'photo' | 'video' | 'assist' | 'tech'; size: 'wide' | 'narrow' }[] = [
   { field: 'photographerBride', label: 'Photographer Bride', short: 'PB', group: 'photo', size: 'wide' },
@@ -700,11 +700,22 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
           <tr><td colSpan={13} className="h-1 bg-violet-400" /></tr>
         )}
         <tr className={cn(dayColor, isCompleted && "opacity-60", "hover:brightness-95 transition-all border-b border-gray-200")}>
-          <td className="px-3 py-2 text-xs font-black text-gray-700 border-r border-gray-200 text-center whitespace-nowrap">
-            <button onClick={() => setFilterDay(filterDay === row.eventDay ? null : row.eventDay)} className="hover:text-violet-600 transition-colors flex items-center gap-1 justify-center w-full">
-              {isLagan && <GaneshIcon size={14} />}
-              {row.eventDay}
-            </button>
+          <td className="px-3 py-2 border-r border-gray-200 text-center whitespace-nowrap">
+            {(() => {
+              const hasUnassigned = CREW_COLUMNS.some(col => {
+                const isReq = reqCodes.length === 0 || reqCodes.includes(col.short);
+                return isReq && !(row[col.field] as string)?.trim();
+              });
+              return (
+                <button onClick={() => setFilterDay(filterDay === row.eventDay ? null : row.eventDay)} className={cn(
+                  "hover:text-violet-600 transition-colors flex items-center justify-center w-full text-base font-black",
+                  isLagan ? "text-orange-600 animate-lagan-spin w-8 h-8 mx-auto" : "text-gray-700",
+                  hasUnassigned && !isLagan && "ring-2 ring-red-400 rounded-full w-8 h-8 mx-auto animate-[unassigned-date-glow_2s_ease-in-out_infinite]"
+                )}>
+                  {row.eventDay}
+                </button>
+              );
+            })()}
           </td>
           <td className="px-2 py-2 border-r border-gray-200">
             <HoverCard openDelay={200}>
@@ -716,7 +727,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                   {row.clientName}
                 </button>
               </HoverCardTrigger>
-              <HoverCardContent className="w-72 p-3 z-[200]" side="right" avoidCollisions>
+              <HoverCardContent className="w-72 p-3 z-[300] bg-popover border shadow-xl" side="right" avoidCollisions>
                 <ClientHoverPreview registeredDateTimeAD={row.registeredDateTimeAD} clientName={row.clientName} onOpenFull={() => navigate(`/client/${row.registeredDateTimeAD}`)} />
               </HoverCardContent>
             </HoverCard>
@@ -804,8 +815,17 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
         <div className={cn("rounded-xl border-2 p-3 shadow-sm transition-all", isCompleted ? "opacity-60 border-gray-200 bg-gray-50" : "border-violet-200 bg-white")}>
           <div className="flex items-center justify-between mb-2">
             <button onClick={() => toggleExpand(rowKey, row)} className="flex items-center gap-2 flex-1 min-w-0">
-              <span className="text-xs font-black text-violet-600 shrink-0 flex items-center gap-1">
-                {isLagan && <GaneshIcon size={12} />}
+              <span className={cn(
+                "text-base font-black shrink-0 flex items-center justify-center",
+                isLagan ? "text-orange-600 animate-lagan-spin w-7 h-7 rounded-full" : "text-violet-600",
+                (() => {
+                  const hasUnassigned = CREW_COLUMNS.some(col => {
+                    const isReq = reqCodes.length === 0 || reqCodes.includes(col.short);
+                    return isReq && !(row[col.field] as string)?.trim();
+                  });
+                  return hasUnassigned && !isLagan ? "ring-2 ring-red-400 rounded-full w-7 h-7 animate-[unassigned-date-glow_2s_ease-in-out_infinite]" : "";
+                })()
+              )}>
                 {row.eventDay}
               </span>
               <span className="text-sm font-bold text-gray-800 truncate">{row.clientName}</span>
@@ -826,7 +846,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                           {col.short}: {getFirstName(val)}
                         </span>
                       </HoverCardTrigger>
-                      <HoverCardContent className="w-64 p-3 z-[200]" side="bottom">
+                      <HoverCardContent className="w-64 p-3 z-[300] bg-popover border shadow-xl" side="bottom">
                         <FreelancerHoverInfo name={val} allAssignments={assignments} selectedYear={selectedYear} selectedMonth={selectedMonth} freelancers={freelancers} onFilterFreelancer={setFilterFreelancer} />
                       </HoverCardContent>
                     </HoverCard>
@@ -1117,9 +1137,9 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
             <table className="w-full border-collapse min-w-[1400px]">
               <thead className="sticky top-0 z-20">
                 <tr>
-                  <th className="bg-gray-800 text-white text-xs font-semibold px-3 py-2.5 text-left border-r border-gray-700 w-[50px]">Day</th>
-                  <th className="bg-gray-800 text-white text-xs font-semibold px-3 py-2.5 text-left border-r border-gray-700 w-[180px]">Client</th>
-                  <th className="bg-gray-800 text-white text-xs font-semibold px-3 py-2.5 text-left border-r border-gray-700 w-[140px]">Event</th>
+                  <th className="bg-gray-800 text-white text-sm font-bold px-3 py-2.5 text-left border-r border-gray-700 w-[60px]">Day</th>
+                  <th className="bg-gray-800 text-white text-sm font-bold px-3 py-2.5 text-left border-r border-gray-700 w-[180px]">Client</th>
+                  <th className="bg-gray-800 text-white text-sm font-bold px-3 py-2.5 text-left border-r border-gray-700 w-[140px]">Event</th>
                   {CREW_COLUMNS.map(col => {
                     const s = columnStats[col.field];
                     return (
@@ -1827,7 +1847,7 @@ function CrewCell({
             <HoverCardTrigger asChild>
               <span
                 className={cn(
-                  "block w-full text-xs px-2 py-1.5 rounded-md text-center truncate border font-medium transition-all",
+                  "block w-full text-sm px-2 py-1.5 rounded-md text-center truncate border font-semibold transition-all",
                   PILL_STYLES[group],
                   !readOnly && "cursor-pointer"
                 )}
@@ -1836,7 +1856,7 @@ function CrewCell({
                 {firstName}
               </span>
             </HoverCardTrigger>
-            <HoverCardContent className="w-72 p-3 z-[200]" side="bottom" avoidCollisions={true} collisionPadding={16}>
+            <HoverCardContent className="w-72 p-3 z-[300] bg-popover border shadow-xl" side="bottom" avoidCollisions={true} collisionPadding={16}>
               <FreelancerHoverInfo name={value} allAssignments={allAssignments} selectedYear={selectedYear} selectedMonth={selectedMonth} freelancers={freelancers} onFilterFreelancer={onFilterFreelancer} />
             </HoverCardContent>
           </HoverCard>
@@ -1879,13 +1899,13 @@ function CrewCell({
           )}
         </div>
       ) : readOnly ? (
-        <span className="block w-full text-xs px-2 py-1.5 rounded-md text-center border border-dashed border-red-400 text-red-400 animate-pulse-red">
+        <span className="block w-full text-sm px-2 py-1.5 rounded-md text-center border border-dashed border-red-400 text-red-400 animate-pulse-red font-medium">
           ---
         </span>
       ) : (
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
-            <button className="w-full text-xs px-2 py-1.5 rounded-md text-center truncate transition-all border border-dashed border-red-400 text-red-400 hover:border-red-500 hover:text-red-600 hover:bg-red-50 animate-pulse-red">
+            <button className="w-full text-sm px-2 py-1.5 rounded-md text-center truncate transition-all border border-dashed border-red-400 text-red-400 hover:border-red-500 hover:text-red-600 hover:bg-red-50 animate-pulse-red font-medium">
               <Plus className="w-3 h-3 mx-auto" />
             </button>
           </PopoverTrigger>

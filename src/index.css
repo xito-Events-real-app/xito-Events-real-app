@@ -675,3 +675,53 @@
 .wtn-streamer-fall {
   animation: wtn-streamer-fall 5s linear infinite;
 }
+
+/* Lagan date spinning animation */
+@keyframes lagan-spin {
+  0% {
+    transform: rotateY(0deg) scale(1);
+    box-shadow: 0 0 8px rgba(249, 115, 22, 0.4);
+    text-shadow: 0 0 4px rgba(249, 115, 22, 0.3);
+  }
+  25% {
+    transform: rotateY(90deg) scale(1.12);
+    box-shadow: 0 0 16px rgba(249, 115, 22, 0.7);
+    text-shadow: 0 0 8px rgba(249, 115, 22, 0.5);
+  }
+  50% {
+    transform: rotateY(180deg) scale(1.2);
+    box-shadow: 0 0 24px rgba(249, 115, 22, 0.9), 0 0 40px rgba(251, 146, 60, 0.4);
+    text-shadow: 0 0 12px rgba(249, 115, 22, 0.7);
+  }
+  75% {
+    transform: rotateY(270deg) scale(1.12);
+    box-shadow: 0 0 16px rgba(249, 115, 22, 0.7);
+    text-shadow: 0 0 8px rgba(249, 115, 22, 0.5);
+  }
+  100% {
+    transform: rotateY(360deg) scale(1);
+    box-shadow: 0 0 8px rgba(249, 115, 22, 0.4);
+    text-shadow: 0 0 4px rgba(249, 115, 22, 0.3);
+  }
+}
+
+.animate-lagan-spin {
+  animation: lagan-spin 3s ease-in-out infinite;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 600px;
+  border-radius: 9999px;
+}
+
+/* Unassigned date glow ring */
+@keyframes unassigned-date-glow {
+  0%, 100% { box-shadow: 0 0 6px rgba(239, 68, 68, 0.3), 0 0 12px rgba(239, 68, 68, 0.1); }
+  50% { box-shadow: 0 0 14px rgba(239, 68, 68, 0.7), 0 0 28px rgba(239, 68, 68, 0.3); }
+}
+
+.animate-unassigned-glow {
+  animation: unassigned-date-glow 2s ease-in-out infinite;
+  border-radius: 9999px;
+  ring: 2px;
+}
