@@ -276,6 +276,20 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
     return groups;
   }, [isFreelancerMode, filteredRows, assignments, selectedMonth, selectedYear, sortMode]);
 
+  const displayDayGroups = useMemo(() => {
+    if (sortMode === 'default') return dayGroups;
+    const rows = isFreelancerMode ? filteredRows : displayUpcoming;
+    const map = new Map<string, number>();
+    let groupIdx = 0, lastDay = "";
+    rows.forEach(row => {
+      const day = row.eventDay;
+      if (day !== lastDay) { if (lastDay !== "") groupIdx++; lastDay = day; }
+      const key = `${row.registeredDateTimeAD}-${row.event}-${row.eventDateAD}`;
+      if (!map.has(key)) map.set(key, groupIdx);
+    });
+    return map;
+  }, [sortMode, dayGroups, displayUpcoming, filteredRows, isFreelancerMode]);
+
 
   const loadData = useCallback(async () => {
     setLoading(true);
