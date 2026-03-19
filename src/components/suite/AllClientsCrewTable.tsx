@@ -837,7 +837,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                           {col.short}: {getFirstName(val)}
                         </span>
                       </HoverCardTrigger>
-                      <HoverCardContent className="w-64 p-3 z-[200]" side="bottom">
+                      <HoverCardContent className="w-64 p-3 z-[300] bg-popover border shadow-xl" side="bottom">
                         <FreelancerHoverInfo name={val} allAssignments={assignments} selectedYear={selectedYear} selectedMonth={selectedMonth} freelancers={freelancers} onFilterFreelancer={setFilterFreelancer} />
                       </HoverCardContent>
                     </HoverCard>
