@@ -1240,7 +1240,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                                             title="Set required crew"
                                             onClick={(e) => e.stopPropagation()}
                                           >
-                                            <UserCog className="w-3.5 h-3.5" />
+                                            <Users className="w-3.5 h-3.5" />
                                           </button>
                                         </PopoverTrigger>
                                         <PopoverContent className="w-auto p-0 z-[200]" align="start">
