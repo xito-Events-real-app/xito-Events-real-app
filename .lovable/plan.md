@@ -1,37 +1,51 @@
 
 
-## Selected Photos: Inline Freelancer Layout + Per-Freelancer Notes
+## Fix: Cascade Freelancer Changes to File Management (and Future-Proof the Chain)
 
-### Changes to `SelectedPhotosRow` in `DeliverablesSection.tsx`
+### Problem
+When you remove a freelancer (e.g., RAMESH) from KARISHMA SHRESTHA's Chaitra 5 assignment, the `freelancer_assignments` table updates correctly, but the `files_management` table still has RAMESH's old file row. The file system only **adds** new rows — it never removes or updates rows when freelancers change.
 
-**1. All photographers on one line, switch right next to name**
+### Root Cause
+`updateFreelancerAssignment()` in `freelancer-assignment-api.ts` writes to the assignment table and syncs to Google Sheets, but has **zero awareness** of the `files_management` table. The `ensureFileRowsForMonth()` function only inserts missing rows — it never removes stale ones where the freelancer no longer matches the assignment.
 
-Current: Each photographer is a separate row with switch on the far right.
-New: All photographers rendered inline (flex-wrap) as compact chips — badge + name + switch grouped tightly together.
-
+### The Cascade Chain You Want
+```text
+BOOKED → Freelancer Assigned → Files → Video Edit Tracker
+         ↓ (change here)
+         ↓ cascades to ↓
+         Files updated/removed
+         Video edit rows cleaned
 ```
-Selected Photos                              [SWITCH]
-  PB ARJUN [switch]  PG NIKIT [switch]  EP RAM [switch]
-  
-  [Notes for ARJUN...]     ← only if PB toggled ON
-  [Notes for NIKIT...]     ← only if PG toggled ON
-```
 
-**2. Per-freelancer notes instead of single shared notes**
+### Fix (3 parts)
 
-Change `notes` from `string` to `photographerNotes: Record<string, string>` in `ItemState`. Each toggled-ON photographer gets their own textarea labeled with their code+name.
+#### 1. Add `syncFilesWithAssignments()` function
+**File: `src/lib/files-api.ts`**
 
-### Specific code changes
+New function that, given a `registeredDateTimeAD` and `eventName`, reads the current freelancer assignments and reconciles the `files_management` table:
+- **Remove**: Soft-delete (`deleted_or_not: true`) any file row where the freelancer no longer exists in the assignment (only if the file has NO backup data — `final_generated_path` is empty)
+- **Add**: Insert skeleton rows for any newly assigned freelancer not yet in files
+- **Rename**: If a freelancer name changed for the same role, update the file row's `freelancer_name` in-place (preserving backup data)
 
-**`ItemState` interface** (line 20-27): Replace `notes?: string` with `photographerNotes?: Record<string, string>`
+This protects files that already have backups from being deleted — those get flagged instead.
 
-**`buildDefaults`**: Update `selected_photos` default to include `photographerNotes: {}`
+#### 2. Call `syncFilesWithAssignments()` after every assignment update
+**File: `src/lib/freelancer-assignment-api.ts`** — inside `updateFreelancerAssignment()`
 
-**`SelectedPhotosRow`** (lines 241-286): Rewrite the photographer rendering:
-- Photographer list: single `div` with `flex flex-wrap gap-3 items-center` — each photographer is a compact inline group: `[badge][name][switch]` with `gap-1.5`
-- Muted styling (`opacity-40`) stays for OFF photographers
-- Below the photographer row: map over ON photographers only, render a labeled textarea for each: `"PB ARJUN notes..."` as placeholder
-- Remove the old single `notes` textarea
+After the Supabase cache write (line 88), call `syncFilesWithAssignments()` for the affected event. This makes the cascade automatic and instant.
 
-**Files**: Only `src/components/client-detail/DeliverablesSection.tsx`
+#### 3. Add cleanup pass to `ensureFileRowsForMonth()`
+**File: `src/lib/files-api.ts`** — inside `_ensureFileRowsForMonthInner()`
+
+After inserting new rows (the existing logic), add a cleanup pass: for each assignment in the month, check if any file rows reference a freelancer that's no longer in the assignment, and soft-delete the empty ones.
+
+### Safety Rules
+- File rows with backup data (`final_generated_path` not empty, or `size_gb > 0`) are **never deleted** — they're flagged/preserved
+- Only skeleton rows (no path, no size, no backups) get soft-deleted
+- All deletions use `deleted_or_not: true` (soft delete), not hard delete
+
+### Files Changed
+- `src/lib/files-api.ts` — New `syncFilesWithAssignments()` + cleanup in `ensureFileRowsForMonth`
+- `src/lib/freelancer-assignment-api.ts` — Call cascade after assignment update
+- `src/components/suite/AllClientsCrewTable.tsx` — Call cascade after inline assignment changes
 
