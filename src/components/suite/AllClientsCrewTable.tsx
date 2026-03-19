@@ -36,6 +36,8 @@ import { Calendar as CalendarIcon } from "lucide-react";
 import type { AssignmentRow } from "@/components/crew-schedule/types";
 import type { EventDetail } from "@/hooks/useEventDetails";
 import type { ClientContactDetails } from "@/lib/client-contact-api";
+import { LaganDatesPicker } from "./LaganDatesPicker";
+import { GaneshIcon } from "./GaneshIcon";
 
 const CREW_COLUMNS: { field: FreelancerField; label: string; short: string; group: 'photo' | 'video' | 'assist' | 'tech'; size: 'wide' | 'narrow' }[] = [
   { field: 'photographerBride', label: 'Photographer Bride', short: 'PB', group: 'photo', size: 'wide' },
@@ -124,6 +126,24 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
     settings: any[];
     loading: boolean;
   }>>(new Map());
+  const [laganDays, setLaganDays] = useState<Set<number>>(new Set());
+
+  // Load lagan dates for selected month/year
+  useEffect(() => {
+    const loadLagan = async () => {
+      const bsYear = parseInt(selectedYear);
+      const bsMonth = parseInt(selectedMonth);
+      const { data } = await (supabase as any)
+        .from("lagan_dates")
+        .select("bs_day")
+        .eq("bs_year", bsYear)
+        .eq("bs_month", bsMonth);
+      if (data) {
+        setLaganDays(new Set(data.map((r: any) => r.bs_day)));
+      }
+    };
+    loadLagan();
+  }, [selectedYear, selectedMonth]);
 
   // Schedule auto-push to sheets after 3 seconds of inactivity
   const schedulePush = useCallback(() => {
@@ -592,6 +612,21 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
         </div>
         {!readOnly && (
           <>
+            <LaganDatesPicker
+              bsYear={parseInt(selectedYear)}
+              bsMonth={parseInt(selectedMonth)}
+              laganDays={laganDays}
+              onLaganDaysChange={setLaganDays}
+            />
+            {laganDays.size > 0 && (
+              <div className="flex items-center gap-1 flex-wrap">
+                {Array.from(laganDays).sort((a, b) => a - b).map(day => (
+                  <span key={day} className="bg-orange-400/80 text-white text-[10px] px-1.5 py-0.5 rounded-full font-semibold">
+                    {day}
+                  </span>
+                ))}
+              </div>
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -738,6 +773,9 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                             >
                               {row.eventDay}
                             </button>
+                            {laganDays.has(parseInt(row.eventDay || '0')) && (
+                              <GaneshIcon size={14} className="text-orange-500 shrink-0" />
+                            )}
                             <div className="flex-1 min-w-0">
                               <button
                                 onClick={() => setFilterClient(filterClient === row.clientName ? null : row.clientName)}
@@ -869,6 +907,9 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                                 >
                                   {row.eventDay}
                                 </button>
+                                {laganDays.has(parseInt(row.eventDay || '0')) && (
+                                  <GaneshIcon size={14} className="text-orange-500 shrink-0" />
+                                )}
                                 <div className="flex-1 min-w-0">
                                   <button
                                     onClick={() => setFilterClient(filterClient === row.clientName ? null : row.clientName)}
@@ -1036,6 +1077,9 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                               >
                                 {row.eventDay}
                               </button>
+                              {laganDays.has(parseInt(row.eventDay || '0')) && (
+                                <GaneshIcon size={14} className="text-orange-500 mx-auto mt-0.5" />
+                              )}
                               <button
                                 onClick={() => toggleExpand(rowKey, row)}
                                 className={cn(
@@ -1186,6 +1230,9 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                                   >
                                     {row.eventDay}
                                   </button>
+                                  {laganDays.has(parseInt(row.eventDay || '0')) && (
+                                    <GaneshIcon size={14} className="text-orange-500 mx-auto mt-0.5" />
+                                  )}
                                   <button
                                     onClick={() => toggleExpand(rowKey, row)}
                                     className={cn(

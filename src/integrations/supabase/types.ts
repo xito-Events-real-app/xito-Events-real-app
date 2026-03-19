@@ -790,6 +790,30 @@ export type Database = {
         }
         Relationships: []
       }
+      lagan_dates: {
+        Row: {
+          bs_day: number
+          bs_month: number
+          bs_year: number
+          created_at: string
+          id: string
+        }
+        Insert: {
+          bs_day: number
+          bs_month: number
+          bs_year: number
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          bs_day?: number
+          bs_month?: number
+          bs_year?: number
+          created_at?: string
+          id?: string
+        }
+        Relationships: []
+      }
       logistics_types_cache: {
         Row: {
           category: string
