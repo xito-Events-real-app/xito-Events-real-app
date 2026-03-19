@@ -612,3 +612,68 @@ export function getNextBackupNumber(file: FileRecord): number {
   if (!file.backup_3_path) return 3;
   return 0; // all 3 filled
 }
+
+// ── Cascade: sync files_management with freelancer_assignments ──
+// Called after any freelancer assignment change to keep files in sync.
+// Safety: only soft-deletes skeleton rows (no backup data). Rows with data are preserved.
+export async function syncFilesWithAssignments(
+  registeredDateTimeAD: string,
+  eventName: string
+): Promise<void> {
+  try {
+    // 1. Get current assignment for this client+event
+    const { data: assignments } = await (supabase as any)
+      .from("freelancer_assignments")
+      .select("*")
+      .eq("registered_date_time_ad", registeredDateTimeAD)
+      .eq("event", eventName);
+
+    if (!assignments || assignments.length === 0) return;
+    const assignment = assignments[0];
+
+    // Build set of currently assigned freelancers: { "PB||ARJUN", "VG||NIKIT", ... }
+    const currentCrewKeys = new Set<string>();
+    for (const [field, config] of Object.entries(CREW_CODE_MAP)) {
+      const name = (assignment[field] || "").trim();
+      if (name) currentCrewKeys.add(`${config.code}||${name.toUpperCase()}`);
+    }
+
+    // 2. Get existing file rows for this client+event
+    const { data: fileRows } = await (supabase as any)
+      .from("files_management")
+      .select("*")
+      .eq("registered_date_time_ad", registeredDateTimeAD)
+      .eq("event_name", eventName)
+      .eq("deleted_or_not", false);
+
+    if (!fileRows || fileRows.length === 0) return;
+
+    // 3. Soft-delete stale skeleton rows (freelancer no longer in assignment)
+    const idsToDelete: string[] = [];
+    for (const file of fileRows) {
+      const fileKey = `${(file.freelancer_type || "").toUpperCase()}||${(file.freelancer_name || "").trim().toUpperCase()}`;
+      if (!currentCrewKeys.has(fileKey)) {
+        // Safety: only delete if no backup data exists
+        const hasData = !!(
+          file.final_generated_path ||
+          (Number(file.size_gb) > 0) ||
+          file.backup_2_path ||
+          file.backup_3_path
+        );
+        if (!hasData) {
+          idsToDelete.push(file.id);
+        }
+      }
+    }
+
+    if (idsToDelete.length > 0) {
+      await (supabase as any)
+        .from("files_management")
+        .update({ deleted_or_not: true, synced_to_sheet: false })
+        .in("id", idsToDelete);
+      console.log(`[syncFilesWithAssignments] Soft-deleted ${idsToDelete.length} stale file rows for ${eventName}`);
+    }
+  } catch (err) {
+    console.error("[syncFilesWithAssignments] Error:", err);
+  }
+}
