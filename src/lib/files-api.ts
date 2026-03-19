@@ -454,13 +454,25 @@ async function _ensureFileRowsForMonthInner(eventYear: string, eventMonth: strin
   const uniqueRegDates = [...new Set(pastAssignments.map((a: any) => a.registered_date_time_ad))];
   const { data: clientsData } = await (supabase as any)
     .from("clients_cache")
-    .select("registered_date_time_ad, client_name, registered_date_bs")
+    .select("registered_date_time_ad, client_name, registered_date_bs, status_log")
     .in("registered_date_time_ad", uniqueRegDates);
 
+  // Filter out clients whose status is no longer actively BOOKED
+  const { getCurrentStatus } = await import("@/lib/sheets-api");
+  const activeRegDates = new Set<string>();
   const clientMap = new Map<string, { client_name: string; registered_date_bs: string }>();
   for (const c of clientsData || []) {
+    const status = getCurrentStatus(c.status_log || '').toUpperCase();
+    const isBooked = status.includes('BOOKED') && !status.includes('SOMEWHERE ELSE');
+    if (isBooked) {
+      activeRegDates.add(c.registered_date_time_ad);
+    }
     clientMap.set(c.registered_date_time_ad, { client_name: c.client_name || "", registered_date_bs: c.registered_date_bs || "" });
   }
+
+  // Only generate file rows for actively BOOKED clients
+  const activePastAssignments = pastAssignments.filter((a: any) => activeRegDates.has(a.registered_date_time_ad));
+  // Use activePastAssignments for row generation below
 
   const newRows: Partial<FileRecord>[] = [];
 
