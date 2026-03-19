@@ -205,6 +205,77 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
 
 
 
+  // Reset freelancer expand groups when sort mode changes
+  useEffect(() => { setFreelancerExpandedGroups(new Set()); }, [sortMode]);
+
+  const isFreelancerMode = sortMode === 'freelancerMax' || sortMode === 'freelancerMin';
+
+  const { displayUpcoming, displayCompleted } = useMemo(() => {
+    if (isFreelancerMode) return { displayUpcoming: [] as FreelancerAssignment[], displayCompleted: [] as FreelancerAssignment[] };
+    switch (sortMode) {
+      case 'maxEvents':
+      case 'minEvents': {
+        const counts = new Map<string, number>();
+        filteredRows.forEach(r => counts.set(r.eventDay, (counts.get(r.eventDay) || 0) + 1));
+        const sorted = [...filteredRows].sort((a, b) => {
+          const diff = (counts.get(b.eventDay) || 0) - (counts.get(a.eventDay) || 0);
+          return (sortMode === 'minEvents' ? -diff : diff) || (parseInt(a.eventDay) - parseInt(b.eventDay));
+        });
+        return { displayUpcoming: sorted, displayCompleted: [] as FreelancerAssignment[] };
+      }
+      case 'drone': {
+        const droneRows = filteredRows.filter(r => (r.droneOperator as string)?.trim());
+        droneRows.sort((a, b) => (parseInt(a.eventDay) || 0) - (parseInt(b.eventDay) || 0));
+        return { displayUpcoming: droneRows, displayCompleted: [] as FreelancerAssignment[] };
+      }
+      case 'unassignedFirst': {
+        const emptyCount = (row: FreelancerAssignment) => CREW_COLUMNS.filter(col => {
+          const req = (row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
+          return (req.length === 0 || req.includes(col.short)) && !(row[col.field] as string)?.trim();
+        }).length;
+        const sorted = [...filteredRows].sort((a, b) => emptyCount(b) - emptyCount(a) || (parseInt(a.eventDay) || 0) - (parseInt(b.eventDay) || 0));
+        return { displayUpcoming: sorted, displayCompleted: [] as FreelancerAssignment[] };
+      }
+      default:
+        return { displayUpcoming: upcomingRows, displayCompleted: completedRows };
+    }
+  }, [sortMode, filteredRows, upcomingRows, completedRows, isFreelancerMode]);
+
+  const freelancerGroups = useMemo<FreelancerGroupData[]>(() => {
+    if (!isFreelancerMode) return [];
+    const nameKeys = new Map<string, Set<string>>();
+    const nameRows = new Map<string, FreelancerAssignment[]>();
+    filteredRows.forEach(row => {
+      CREW_COLUMNS.forEach(col => {
+        const val = (row[col.field] as string)?.trim();
+        if (val) {
+          const key = `${row.registeredDateTimeAD}|${row.event}|${row.eventDateAD}`;
+          if (!nameKeys.has(val)) { nameKeys.set(val, new Set()); nameRows.set(val, []); }
+          if (!nameKeys.get(val)!.has(key)) { nameKeys.get(val)!.add(key); nameRows.get(val)!.push(row); }
+        }
+      });
+    });
+    const curM = parseInt(selectedMonth), curY = parseInt(selectedYear);
+    const prevM = curM === 1 ? 12 : curM - 1, prevY = curM === 1 ? curY - 1 : curY;
+    const nextM = curM === 12 ? 1 : curM + 1, nextY = curM === 12 ? curY + 1 : curY;
+    const countFL = (name: string, y: number, m: number) => {
+      const upper = name.toUpperCase();
+      return assignments.filter(a => a.eventYear === String(y) && a.eventMonth === String(m) &&
+        CREW_COLUMNS.some(col => (a[col.field] as string)?.trim().toUpperCase() === upper)
+      ).length;
+    };
+    const groups: FreelancerGroupData[] = Array.from(nameRows.entries()).map(([name, rows]) => ({
+      name,
+      thisMonth: rows.length,
+      lastMonth: countFL(name, prevY, prevM),
+      nextMonth: countFL(name, nextY, nextM),
+      allTime: assignments.filter(a => CREW_COLUMNS.some(col => (a[col.field] as string)?.trim().toUpperCase() === name.toUpperCase())).length,
+      rows: rows.sort((a, b) => (parseInt(a.eventDay) || 0) - (parseInt(b.eventDay) || 0)),
+    }));
+    groups.sort((a, b) => sortMode === 'freelancerMax' ? b.thisMonth - a.thisMonth : a.thisMonth - b.thisMonth);
+    return groups;
+  }, [isFreelancerMode, filteredRows, assignments, selectedMonth, selectedYear, sortMode]);
+
 
   const loadData = useCallback(async () => {
     setLoading(true);
