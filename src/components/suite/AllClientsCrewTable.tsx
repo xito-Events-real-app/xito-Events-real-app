@@ -818,13 +818,13 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
             <button onClick={() => toggleExpand(rowKey, row)} className="flex items-center gap-2 flex-1 min-w-0">
               <span className={cn(
                 "text-base font-black shrink-0 flex items-center justify-center",
-                isLagan ? "text-orange-600 animate-lagan-spin w-7 h-7 rounded-full" : "text-violet-600",
+                isLagan ? "text-orange-600 w-7 h-7 rounded-full ring-2 ring-orange-300 bg-orange-50" : "text-violet-600",
                 (() => {
                   const hasUnassigned = CREW_COLUMNS.some(col => {
                     const isReq = reqCodes.length === 0 || reqCodes.includes(col.short);
                     return isReq && !(row[col.field] as string)?.trim();
                   });
-                  return hasUnassigned && !isLagan ? "ring-2 ring-red-400 rounded-full w-7 h-7 animate-[unassigned-date-glow_2s_ease-in-out_infinite]" : "";
+                  return hasUnassigned ? "animate-lagan-spin w-7 h-7" + (!isLagan ? " ring-2 ring-red-400 rounded-full text-red-500" : "") : "";
                 })()
               )}>
                 {row.eventDay}
