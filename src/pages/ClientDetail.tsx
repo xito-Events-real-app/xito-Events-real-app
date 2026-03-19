@@ -63,6 +63,7 @@ import { useFreelancerAssignments } from "@/hooks/useFreelancerAssignments";
 import { useClientContactDetails } from "@/hooks/useClientContactDetails";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { FinalQuotationDialog, AdvancePaymentDialog } from "@/components/status-dialogs";
+import BookedStatusPasswordDialog from "@/components/shared/BookedStatusPasswordDialog";
 
 // Helper to convert AD date to BS formatted string
 function formatADtoBS(adDateStr: string): string {

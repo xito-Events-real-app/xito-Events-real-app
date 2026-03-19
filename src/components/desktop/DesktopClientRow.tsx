@@ -89,6 +89,7 @@ import { bsToAD } from "@/lib/nepali-date";
 import { getStatusConfig } from "@/lib/status-config";
 import { FinalQuotationDialog, AdvancePaymentDialog } from "@/components/status-dialogs";
 import { notifyCacheUpdate } from "@/lib/cache-manager";
+import BookedStatusPasswordDialog from "@/components/shared/BookedStatusPasswordDialog";
 
 interface DesktopClientRowProps {
   client: ClientData;
