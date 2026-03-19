@@ -1847,7 +1847,7 @@ function CrewCell({
                 {firstName}
               </span>
             </HoverCardTrigger>
-            <HoverCardContent className="w-72 p-3 z-[200]" side="bottom" avoidCollisions={true} collisionPadding={16}>
+            <HoverCardContent className="w-72 p-3 z-[300] bg-popover border shadow-xl" side="bottom" avoidCollisions={true} collisionPadding={16}>
               <FreelancerHoverInfo name={value} allAssignments={allAssignments} selectedYear={selectedYear} selectedMonth={selectedMonth} freelancers={freelancers} onFilterFreelancer={onFilterFreelancer} />
             </HoverCardContent>
           </HoverCard>
