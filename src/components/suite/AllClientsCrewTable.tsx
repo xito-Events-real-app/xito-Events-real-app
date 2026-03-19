@@ -1327,15 +1327,6 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
         onSuccess={handleQuickAddSuccess}
       />
 
-      <Dialog open={showCrewPreview} onOpenChange={setShowCrewPreview}>
-        <DialogContent className="max-w-md h-[85vh] p-0 overflow-hidden rounded-2xl z-[200]">
-          <div className="w-full h-full overflow-y-auto">
-            <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="w-6 h-6 animate-spin" /></div>}>
-              <LazyCrewSchedule previewName="Barun Koirala" />
-            </Suspense>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
