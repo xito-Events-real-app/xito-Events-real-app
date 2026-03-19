@@ -907,6 +907,9 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                                 >
                                   {row.eventDay}
                                 </button>
+                                {laganDays.has(parseInt(row.eventDay || '0')) && (
+                                  <GaneshIcon size={14} className="text-orange-500 shrink-0" />
+                                )}
                                 <div className="flex-1 min-w-0">
                                   <button
                                     onClick={() => setFilterClient(filterClient === row.clientName ? null : row.clientName)}
