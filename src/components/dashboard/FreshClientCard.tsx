@@ -3438,6 +3438,8 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
         paymentTypes={paymentTypes}
         banks={banks}
         onSave={handleSaveBookedPayment}
+        isSaving={isSavingBookedPayment}
+      />
       {/* Booked Status Password Gate */}
       <BookedStatusPasswordDialog
         open={showBookedPasswordDialog}
