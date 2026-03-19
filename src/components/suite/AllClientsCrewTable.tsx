@@ -612,6 +612,21 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
         </div>
         {!readOnly && (
           <>
+            <LaganDatesPicker
+              bsYear={parseInt(selectedYear)}
+              bsMonth={parseInt(selectedMonth)}
+              laganDays={laganDays}
+              onLaganDaysChange={setLaganDays}
+            />
+            {laganDays.size > 0 && (
+              <div className="flex items-center gap-1 flex-wrap">
+                {Array.from(laganDays).sort((a, b) => a - b).map(day => (
+                  <span key={day} className="bg-orange-400/80 text-white text-[10px] px-1.5 py-0.5 rounded-full font-semibold">
+                    {day}
+                  </span>
+                ))}
+              </div>
+            )}
             <Button
               variant="ghost"
               size="sm"
