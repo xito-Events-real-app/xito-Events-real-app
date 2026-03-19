@@ -5,7 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty, CommandGroup, CommandSeparator } from "@/components/ui/command";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Users, Plus, X, ChevronLeft, ChevronRight, Database, Trash2, Download, Upload, Cloud, ChevronDown, ChevronUp, Phone, MapPin, StickyNote, Pencil, Filter } from "lucide-react";
+import { Loader2, Users, Plus, X, ChevronLeft, ChevronRight, Database, Trash2, Download, Upload, Cloud, ChevronDown, ChevronUp, Phone, MapPin, StickyNote, Pencil, Filter, ArrowUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
