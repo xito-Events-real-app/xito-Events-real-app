@@ -13,6 +13,9 @@ interface LaganDatesPickerProps {
   onLaganDaysChange: (days: Set<number>) => void;
 }
 
+// Use untyped client to avoid type issues with new table
+const laganTable = () => (supabase as any).from("lagan_dates");
+
 export function LaganDatesPicker({ bsYear, bsMonth, laganDays, onLaganDaysChange }: LaganDatesPickerProps) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -23,20 +26,17 @@ export function LaganDatesPicker({ bsYear, bsMonth, laganDays, onLaganDaysChange
     try {
       const isLagan = laganDays.has(day);
       if (isLagan) {
-        const { error } = await supabase.rpc("" as any).abortSignal?.() as any ||
-          await supabase
-            .from("lagan_dates" as any)
-            .delete()
-            .eq("bs_year", bsYear)
-            .eq("bs_month", bsMonth)
-            .eq("bs_day", day);
+        await laganTable()
+          .delete()
+          .eq("bs_year", bsYear)
+          .eq("bs_month", bsMonth)
+          .eq("bs_day", day);
         const next = new Set(laganDays);
         next.delete(day);
         onLaganDaysChange(next);
       } else {
-        await supabase
-          .from("lagan_dates" as any)
-          .insert({ bs_year: bsYear, bs_month: bsMonth, bs_day: day } as any);
+        await laganTable()
+          .insert({ bs_year: bsYear, bs_month: bsMonth, bs_day: day });
         const next = new Set(laganDays);
         next.add(day);
         onLaganDaysChange(next);
