@@ -1,47 +1,55 @@
 
 
-## Add Lagan (Auspicious Wedding Dates) Feature to All Clients Page
+## Add "Sort By" Dropdown to All Clients Crew Table Header
 
-### What are Lagans?
-Lagan dates are auspicious Hindu wedding dates that vary by month. You need to store which days in each BS month/year are Lagan dates, display them in the header, and mark them with a Ganesh-style icon in the table's date column.
+### Overview
+Add a "Sort By" dropdown next to the "Expand All" button with 7 sorting modes that reorder and group the table rows differently.
 
-### Database
+### Sort Modes
 
-**New table: `lagan_dates`**
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid | PK, auto |
-| bs_year | integer | e.g. 2082 |
-| bs_month | integer | 1-12 |
-| bs_day | integer | day of month |
-| created_at | timestamptz | auto |
+1. **Default** — Current behavior (by day ascending)
+2. **Maximum Events** — Group by date, dates with most events first. Thick border between date groups.
+3. **Minimum Events** — Group by date, dates with fewest events first. Same thick borders.
+4. **Drone** — Filter to only rows where `droneOperator` is assigned, sorted ascending by day.
+5. **Freelancer Maximum** — Group rows by freelancer name (across all crew columns), freelancers with most events first. Each group gets a header card showing: Name, Total Events (this month), Last Month Events, Next Month Events, All-Time Events. Rows start collapsed, expandable per freelancer.
+6. **Freelancer Minimum** — Same as above but freelancers with fewest events first.
+7. **Unassigned First** — Rows with the most empty required slots appear first (helps prioritize incomplete assignments).
 
-Unique constraint on `(bs_year, bs_month, bs_day)`. RLS: allow all (public data).
+### Technical Approach
 
-### UI Changes — `src/components/suite/AllClientsCrewTable.tsx`
+**File: `src/components/suite/AllClientsCrewTable.tsx`**
 
-#### 1. Header: Add Lagan button + display selected dates
-- Add a small calendar icon button (e.g. "🕉 Lagan") in the header bar, between the month arrows and the Expand All button
-- Clicking it opens a Popover with a simple day-picker grid (1-32 days for the current month) where you can toggle days on/off as Lagan dates — saves to `lagan_dates` table immediately
-- Between the month selector and "Expand All" button, show the current month's Lagan dates as small orange/saffron pill badges (e.g. `3, 7, 12, 18, 25`)
+#### State
+```typescript
+const [sortMode, setSortMode] = useState<'default' | 'maxEvents' | 'minEvents' | 'drone' | 'freelancerMax' | 'freelancerMin' | 'unassignedFirst'>('default');
+```
 
-#### 2. Table rows: Ganesh icon on Lagan dates
-- In the date cell (`<td>` around line 1025), check if `row.eventDay` matches a Lagan date for the current month/year
-- If yes, render a small inline SVG Ganesh symbol (a simple stylized "ॐ" or elephant-head silhouette, ~12px) below or beside the day number
-- The icon will be saffron/orange colored to stand out
+#### Sorted/Grouped Rows Logic
+- Wrap existing `filteredRows` with a `sortedRows` memo that applies the active sort
+- For "Maximum/Minimum Events": count events per `eventDay`, then sort days by count desc/asc, maintain day grouping
+- For "Drone": filter `filteredRows` to only rows with `droneOperator` non-empty
+- For "Freelancer Max/Min": extract all unique freelancer names from all crew columns across `filteredRows`, count appearances, sort desc/asc. Build a `Map<freelancerName, FreelancerAssignment[]>` structure
+- For "Unassigned First": count empty required slots per row, sort descending
 
-#### 3. Ganesh Icon
-Since Lucide doesn't have a Ganesh icon, I'll create a tiny inline SVG component — a simple stylized elephant head silhouette (minimal art style, ~16x16). This keeps it lightweight without external dependencies.
+#### Freelancer Group Headers
+When `sortMode` is `freelancerMax` or `freelancerMin`, render a different layout:
+- For each freelancer group, show a collapsible header card with:
+  - **Name** (bold)
+  - **This Month**: count from current filteredRows
+  - **Last Month**: count from `assignments` where year/month is previous
+  - **Next Month**: count from `assignments` where year/month is next
+  - **All-Time**: count from full `assignments` array
+- Rows under each header start collapsed (separate expand state per freelancer group)
+
+#### UI — Header Button
+Add a `Select` dropdown after the "Expand All" button:
+```
+[Sort By ▾]  →  Default | Max Events | Min Events | Drone | Freelancer Max | Freelancer Min | Unassigned First
+```
+
+#### Date Group Borders
+For Max/Min Events sort modes, add a `border-b-4 border-violet-400` between date groups (using the existing `dayGroups` pattern but applying a thicker separator).
 
 ### Files Changed
-- **Database migration**: Create `lagan_dates` table
-- **New**: `src/components/suite/LaganDatesPicker.tsx` — Popover with day grid for adding/removing Lagan dates
-- **New**: `src/components/suite/GaneshIcon.tsx` — Simple SVG elephant head icon
-- **Edit**: `src/components/suite/AllClientsCrewTable.tsx` — Load Lagan dates, show pills in header, show Ganesh icon in date cells
-
-### Data Flow
-1. On mount (and when year/month changes), query `lagan_dates` for the selected year+month
-2. Store in local state as `Set<number>` of days
-3. Header shows pills; table rows check membership
-4. Popover toggles insert/delete on `lagan_dates` table per day click
+- **`src/components/suite/AllClientsCrewTable.tsx`** — Add sort state, sorted rows logic, freelancer grouping with header cards, dropdown in header bar, thick date borders for event count sorts
 
