@@ -1,51 +1,57 @@
 
 
-## Fix: Cascade Freelancer Changes to File Management (and Future-Proof the Chain)
+## Password-Protect Status Changes FROM BOOKED + Fix MANDIRA NEUPANE
 
 ### Problem
-When you remove a freelancer (e.g., RAMESH) from KARISHMA SHRESTHA's Chaitra 5 assignment, the `freelancer_assignments` table updates correctly, but the `files_management` table still has RAMESH's old file row. The file system only **adds** new rows — it never removes or updates rows when freelancers change.
-
-### Root Cause
-`updateFreelancerAssignment()` in `freelancer-assignment-api.ts` writes to the assignment table and syncs to Google Sheets, but has **zero awareness** of the `files_management` table. The `ensureFileRowsForMonth()` function only inserts missing rows — it never removes stale ones where the freelancer no longer matches the assignment.
-
-### The Cascade Chain You Want
-```text
-BOOKED → Freelancer Assigned → Files → Video Edit Tracker
-         ↓ (change here)
-         ↓ cascades to ↓
-         Files updated/removed
-         Video edit rows cleaned
-```
+Once a client reaches BOOKED status, their status should be locked. MANDIRA NEUPANE's status was changed to "CANCELLED BY CLIENT" without any safeguard. This must require password `984124` going forward, and affects ALL modules where status can be changed.
 
 ### Fix (3 parts)
 
-#### 1. Add `syncFilesWithAssignments()` function
-**File: `src/lib/files-api.ts`**
+#### 1. New Component: `BookedStatusPasswordDialog`
+**File: `src/components/shared/BookedStatusPasswordDialog.tsx`**
 
-New function that, given a `registeredDateTimeAD` and `eventName`, reads the current freelancer assignments and reconciles the `files_management` table:
-- **Remove**: Soft-delete (`deleted_or_not: true`) any file row where the freelancer no longer exists in the assignment (only if the file has NO backup data — `final_generated_path` is empty)
-- **Add**: Insert skeleton rows for any newly assigned freelancer not yet in files
-- **Rename**: If a freelancer name changed for the same role, update the file row's `freelancer_name` in-place (preserving backup data)
+A simple dialog (reusing the same dark theme as `DeleteClientDialog`) with:
+- Password input field (password: `984124`)
+- "This client is BOOKED. Enter password to change status." message
+- Confirm/Cancel buttons
+- Shake animation on wrong password, toast error
 
-This protects files that already have backups from being deleted — those get flagged instead.
+Props: `open`, `onOpenChange`, `onConfirm()`, `clientName`
 
-#### 2. Call `syncFilesWithAssignments()` after every assignment update
-**File: `src/lib/freelancer-assignment-api.ts`** — inside `updateFreelancerAssignment()`
+#### 2. Add Password Gate to ALL 3 Status Change Handlers
 
-After the Supabase cache write (line 88), call `syncFilesWithAssignments()` for the affected event. This makes the cascade automatic and instant.
+The gate logic (added at the TOP of each handler, before any other intercepts):
 
-#### 3. Add cleanup pass to `ensureFileRowsForMonth()`
-**File: `src/lib/files-api.ts`** — inside `_ensureFileRowsForMonthInner()`
+```typescript
+const isCurrentlyBooked = 
+  client._source === 'booked' || 
+  (getCurrentStatus(currentStatusLog).toUpperCase().includes('BOOKED') && 
+   !getCurrentStatus(currentStatusLog).toUpperCase().includes('SOMEWHERE ELSE'));
 
-After inserting new rows (the existing logic), add a cleanup pass: for each assignment in the month, check if any file rows reference a freelancer that's no longer in the assignment, and soft-delete the empty ones.
+if (isCurrentlyBooked) {
+  setPendingStatus(newStatus);
+  setShowBookedPasswordDialog(true);
+  return;
+}
+```
 
-### Safety Rules
-- File rows with backup data (`final_generated_path` not empty, or `size_gb > 0`) are **never deleted** — they're flagged/preserved
-- Only skeleton rows (no path, no size, no backups) get soft-deleted
-- All deletions use `deleted_or_not: true` (soft delete), not hard delete
+**Files affected:**
+
+| File | Handler | What changes |
+|------|---------|-------------|
+| `src/pages/ClientDetail.tsx` | `handleStatusChange` (line 475) | Add gate + dialog state + render dialog |
+| `src/components/desktop/DesktopClientRow.tsx` | `handleStatusChange` (line 303) | Add gate + dialog state + render dialog |
+| `src/components/dashboard/FreshClientCard.tsx` | `handleStatusClick` (line 478) | Add gate + dialog state + render dialog |
+
+When password is correct, the dialog calls `onConfirm()` which proceeds with the original status change flow (the existing intercept chain for QUOTATION SENT / ADVANCE PENDING / BOOKED / normal).
+
+#### 3. Database Fix — MANDIRA NEUPANE
+Update her `status_log` in `clients_cache` to append a POSTPONED entry with current timestamp, making POSTPONED her current status.
 
 ### Files Changed
-- `src/lib/files-api.ts` — New `syncFilesWithAssignments()` + cleanup in `ensureFileRowsForMonth`
-- `src/lib/freelancer-assignment-api.ts` — Call cascade after assignment update
-- `src/components/suite/AllClientsCrewTable.tsx` — Call cascade after inline assignment changes
+- **New**: `src/components/shared/BookedStatusPasswordDialog.tsx`
+- **Edit**: `src/pages/ClientDetail.tsx` — gate + dialog
+- **Edit**: `src/components/desktop/DesktopClientRow.tsx` — gate + dialog
+- **Edit**: `src/components/dashboard/FreshClientCard.tsx` — gate + dialog
+- **Database**: Update MANDIRA NEUPANE's status_log to POSTPONED
 
