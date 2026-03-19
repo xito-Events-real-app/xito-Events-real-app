@@ -621,9 +621,18 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
             {laganDays.size > 0 && (
               <div className="flex items-center gap-1 flex-wrap">
                 {Array.from(laganDays).sort((a, b) => a - b).map(day => (
-                  <span key={day} className="bg-orange-400/80 text-white text-[10px] px-1.5 py-0.5 rounded-full font-semibold">
+                  <button
+                    key={day}
+                    onClick={() => setFilterDay(filterDay === String(day) ? null : String(day))}
+                    className={cn(
+                      "text-[10px] px-1.5 py-0.5 rounded-full font-semibold transition-all cursor-pointer",
+                      filterDay === String(day)
+                        ? "bg-orange-600 text-white ring-2 ring-orange-300 scale-110"
+                        : "bg-orange-400/80 text-white hover:bg-orange-500"
+                    )}
+                  >
                     {day}
-                  </span>
+                  </button>
                 ))}
               </div>
             )}
