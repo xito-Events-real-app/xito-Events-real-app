@@ -566,6 +566,288 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
     return stats;
   }, [filteredRows]);
 
+  // ─── Sort mode: compute displayUpcoming, displayCompleted, freelancerGroups ───
+  const isFreelancerMode = sortMode === 'freelancerMax' || sortMode === 'freelancerMin';
+
+  const sortedFilteredRows = useMemo(() => {
+    if (sortMode === 'default') return filteredRows;
+    if (sortMode === 'drone') return filteredRows.filter(r => (r.droneOperator || '').trim()).sort((a, b) => (parseInt(a.eventDay) || 0) - (parseInt(b.eventDay) || 0));
+    if (sortMode === 'maxEvents' || sortMode === 'minEvents') {
+      const dayCntMap = new Map<string, number>();
+      filteredRows.forEach(r => dayCntMap.set(r.eventDay, (dayCntMap.get(r.eventDay) || 0) + 1));
+      const sorted = [...filteredRows].sort((a, b) => {
+        const cntA = dayCntMap.get(a.eventDay) || 0;
+        const cntB = dayCntMap.get(b.eventDay) || 0;
+        const dir = sortMode === 'maxEvents' ? -1 : 1;
+        if (cntA !== cntB) return (cntA - cntB) * dir;
+        return (parseInt(a.eventDay) || 0) - (parseInt(b.eventDay) || 0);
+      });
+      return sorted;
+    }
+    if (sortMode === 'unassignedFirst') {
+      return [...filteredRows].sort((a, b) => {
+        const emptyA = CREW_COLUMNS.filter(col => {
+          const reqCodes = (a.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
+          const isReq = reqCodes.length === 0 || reqCodes.includes(col.short);
+          return isReq && !(a[col.field] as string)?.trim();
+        }).length;
+        const emptyB = CREW_COLUMNS.filter(col => {
+          const reqCodes = (b.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
+          const isReq = reqCodes.length === 0 || reqCodes.includes(col.short);
+          return isReq && !(b[col.field] as string)?.trim();
+        }).length;
+        return emptyB - emptyA;
+      });
+    }
+    return filteredRows;
+  }, [filteredRows, sortMode]);
+
+  const displayUpcoming = useMemo(() =>
+    sortMode === 'default'
+      ? upcomingRows
+      : sortedFilteredRows.filter(row => !row.eventDay || row.eventDay.includes('**') || !isBSDatePast(row.eventYear, row.eventMonth, row.eventDay)),
+    [sortMode, upcomingRows, sortedFilteredRows]
+  );
+
+  const displayCompleted = useMemo(() =>
+    sortMode === 'default'
+      ? completedRows
+      : sortedFilteredRows.filter(row => row.eventDay && !row.eventDay.includes('**') && isBSDatePast(row.eventYear, row.eventMonth, row.eventDay)),
+    [sortMode, completedRows, sortedFilteredRows]
+  );
+
+  const freelancerGroups = useMemo<FreelancerGroupData[]>(() => {
+    if (!isFreelancerMode) return [];
+    const curMonth = parseInt(selectedMonth);
+    const curYear = parseInt(selectedYear);
+    const prevMonth = curMonth === 1 ? 12 : curMonth - 1;
+    const prevYear = curMonth === 1 ? curYear - 1 : curYear;
+    const nextMonth = curMonth === 12 ? 1 : curMonth + 1;
+    const nextYear = curMonth === 12 ? curYear + 1 : curYear;
+
+    const nameMap = new Map<string, FreelancerAssignment[]>();
+    filteredRows.forEach(row => {
+      CREW_COLUMNS.forEach(col => {
+        const val = (row[col.field] as string)?.trim();
+        if (val) {
+          const upper = val.toUpperCase();
+          if (!nameMap.has(upper)) nameMap.set(upper, []);
+          // Avoid duplicates
+          const existing = nameMap.get(upper)!;
+          if (!existing.some(e => e.registeredDateTimeAD === row.registeredDateTimeAD && e.event === row.event && e.eventDateAD === row.eventDateAD)) {
+            existing.push(row);
+          }
+        }
+      });
+    });
+
+    const groups: FreelancerGroupData[] = [];
+    nameMap.forEach((rows, upperName) => {
+      // Find original casing
+      const displayName = rows.length > 0
+        ? CREW_COLUMNS.reduce<string>((found, col) => {
+            if (found) return found;
+            for (const r of rows) { const v = (r[col.field] as string)?.trim(); if (v && v.toUpperCase() === upperName) return v; }
+            return found;
+          }, '') || upperName
+        : upperName;
+
+      // Count across all assignments for stats
+      const countInMonth = (y: number, m: number) => {
+        let cnt = 0;
+        const yStr = String(y);
+        const mStr = String(m);
+        assignments.forEach(a => {
+          if (a.eventYear !== yStr || a.eventMonth !== mStr) return;
+          CREW_COLUMNS.forEach(col => {
+            if ((a[col.field] as string)?.trim().toUpperCase() === upperName) cnt++;
+          });
+        });
+        return cnt;
+      };
+
+      groups.push({
+        name: displayName,
+        thisMonth: countInMonth(curYear, curMonth),
+        lastMonth: countInMonth(prevYear, prevMonth),
+        nextMonth: countInMonth(nextYear, nextMonth),
+        allTime: assignments.filter(a => CREW_COLUMNS.some(col => (a[col.field] as string)?.trim().toUpperCase() === upperName)).length,
+        rows,
+      });
+    });
+
+    groups.sort((a, b) => sortMode === 'freelancerMax' ? b.thisMonth - a.thisMonth : a.thisMonth - b.thisMonth);
+    return groups;
+  }, [isFreelancerMode, filteredRows, assignments, selectedYear, selectedMonth, sortMode]);
+
+  // ─── Render helpers ───
+  const renderDesktopEventRow = useCallback((row: FreelancerAssignment, idx: number, rowsList: FreelancerAssignment[], isCompleted = false) => {
+    const rowKey = `${row.registeredDateTimeAD}-${row.event}-${row.eventDateAD}`;
+    const groupIdx = dayGroups.get(rowKey) ?? 0;
+    const dayColor = DAY_COLORS[groupIdx % DAY_COLORS.length];
+    const isExpanded = expandedRows.has(rowKey);
+    const cacheKey = `${row.registeredDateTimeAD}__${row.event}`;
+    const cached = expandCache.get(cacheKey);
+    const isLagan = laganDays.has(parseInt(row.eventDay));
+    const reqCodes = (row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
+
+    // Date group thick border for maxEvents / minEvents
+    const showThickBorder = (sortMode === 'maxEvents' || sortMode === 'minEvents') && idx > 0 && rowsList[idx - 1]?.eventDay !== row.eventDay;
+
+    return (
+      <React.Fragment key={`desk-${rowKey}`}>
+        {showThickBorder && (
+          <tr><td colSpan={13} className="h-1 bg-violet-400" /></tr>
+        )}
+        <tr className={cn(dayColor, isCompleted && "opacity-60", "hover:brightness-95 transition-all border-b border-gray-200")}>
+          <td className="px-3 py-2 text-xs font-black text-gray-700 border-r border-gray-200 text-center whitespace-nowrap">
+            <button onClick={() => setFilterDay(filterDay === row.eventDay ? null : row.eventDay)} className="hover:text-violet-600 transition-colors flex items-center gap-1 justify-center w-full">
+              {isLagan && <GaneshIcon size={14} />}
+              {row.eventDay}
+            </button>
+          </td>
+          <td className="px-2 py-2 border-r border-gray-200">
+            <HoverCard openDelay={200}>
+              <HoverCardTrigger asChild>
+                <button
+                  onClick={() => toggleExpand(rowKey, row)}
+                  className="text-xs font-semibold text-gray-800 hover:text-violet-600 transition-colors truncate max-w-[170px] block text-left"
+                >
+                  {row.clientName}
+                </button>
+              </HoverCardTrigger>
+              <HoverCardContent className="w-72 p-3 z-[200]" side="right" avoidCollisions>
+                <ClientHoverPreview registeredDateTimeAD={row.registeredDateTimeAD} clientName={row.clientName} onOpenFull={() => navigate(`/client/${row.registeredDateTimeAD}`)} />
+              </HoverCardContent>
+            </HoverCard>
+          </td>
+          <td className="px-2 py-2 border-r border-gray-200">
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-gray-600 truncate max-w-[110px]">{row.event}</span>
+              {!readOnly && (
+                <CrewCategorySelector
+                  registeredDateTimeAD={row.registeredDateTimeAD}
+                  eventName={row.event}
+                  eventDateAD={row.eventDateAD}
+                  currentCategories={row.requiredCategories || ''}
+                  onCategoriesChange={(cats) => {
+                    setAssignments(prev => prev.map(a =>
+                      a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event && a.eventDateAD === row.eventDateAD
+                        ? { ...a, requiredCategories: cats }
+                        : a
+                    ));
+                  }}
+                />
+              )}
+            </div>
+          </td>
+          {CREW_COLUMNS.map((col, cIdx) => {
+            const isRequired = reqCodes.length === 0 || reqCodes.includes(col.short);
+            const nextCol = CREW_COLUMNS[cIdx + 1];
+            const nextReqCodes = nextCol ? (row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean) : [];
+            const isNextRequired = nextCol ? (nextReqCodes.length === 0 || nextReqCodes.includes(nextCol.short)) : true;
+            return (
+              <CrewCell
+                key={col.field}
+                value={(row[col.field] as string) || ''}
+                field={col.field}
+                label={col.label}
+                group={col.group}
+                colWidth={columnWidths[col.field]}
+                freelancers={freelancers}
+                allAssignments={assignments}
+                selectedYear={selectedYear}
+                selectedMonth={selectedMonth}
+                onAssign={(name) => handleAssign(row, col.field, name)}
+                onQuickAdd={() => setQuickAddState({ open: true, field: col.field, label: col.label, row })}
+                isRequired={isRequired}
+                isNextRequired={isNextRequired}
+                readOnly={readOnly}
+                onFilterFreelancer={setFilterFreelancer}
+              />
+            );
+          })}
+        </tr>
+        {isExpanded && cached && (
+          <tr>
+            <td colSpan={13} className="bg-gray-50/80 px-3 py-2 border-b border-gray-300">
+              <EventLogisticsPanel eventDetail={cached.eventDetail} contactDetail={cached.contactDetail} settings={cached.settings} loading={cached.loading} row={row} />
+            </td>
+          </tr>
+        )}
+      </React.Fragment>
+    );
+  }, [dayGroups, expandedRows, expandCache, laganDays, filterDay, readOnly, freelancers, assignments, selectedYear, selectedMonth, columnWidths, sortMode, navigate, handleAssign, toggleExpand, setFilterDay, setFilterFreelancer, setQuickAddState, setAssignments]);
+
+  const renderMobileEventCard = useCallback((row: FreelancerAssignment, idx: number, rowsList: FreelancerAssignment[], isCompleted = false) => {
+    const rowKey = `${row.registeredDateTimeAD}-${row.event}-${row.eventDateAD}`;
+    const isExpanded = expandedRows.has(rowKey);
+    const cacheKey = `${row.registeredDateTimeAD}__${row.event}`;
+    const cached = expandCache.get(cacheKey);
+    const isLagan = laganDays.has(parseInt(row.eventDay));
+    const reqCodes = (row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean);
+    const showThickBorder = (sortMode === 'maxEvents' || sortMode === 'minEvents') && idx > 0 && rowsList[idx - 1]?.eventDay !== row.eventDay;
+
+    return (
+      <React.Fragment key={`mob-${rowKey}`}>
+        {showThickBorder && <div className="h-1 bg-violet-400 rounded-full my-2" />}
+        <div className={cn("rounded-xl border-2 p-3 shadow-sm transition-all", isCompleted ? "opacity-60 border-gray-200 bg-gray-50" : "border-violet-200 bg-white")}>
+          <div className="flex items-center justify-between mb-2">
+            <button onClick={() => toggleExpand(rowKey, row)} className="flex items-center gap-2 flex-1 min-w-0">
+              <span className="text-xs font-black text-violet-600 shrink-0 flex items-center gap-1">
+                {isLagan && <GaneshIcon size={12} />}
+                {row.eventDay}
+              </span>
+              <span className="text-sm font-bold text-gray-800 truncate">{row.clientName}</span>
+            </button>
+            <span className="text-[10px] bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full font-semibold shrink-0">{row.event}</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {CREW_COLUMNS.map(col => {
+              const isReq = reqCodes.length === 0 || reqCodes.includes(col.short);
+              if (!isReq) return null;
+              const val = (row[col.field] as string)?.trim();
+              return (
+                <div key={col.field} className="flex items-center gap-0.5">
+                  {val ? (
+                    <HoverCard openDelay={200}>
+                      <HoverCardTrigger asChild>
+                        <span className={cn("text-[10px] px-2 py-1 rounded-full font-semibold border", PILL_STYLES[col.group])}>
+                          {col.short}: {getFirstName(val)}
+                        </span>
+                      </HoverCardTrigger>
+                      <HoverCardContent className="w-64 p-3 z-[200]" side="bottom">
+                        <FreelancerHoverInfo name={val} allAssignments={assignments} selectedYear={selectedYear} selectedMonth={selectedMonth} freelancers={freelancers} onFilterFreelancer={setFilterFreelancer} />
+                      </HoverCardContent>
+                    </HoverCard>
+                  ) : (
+                    <span className="text-[10px] px-2 py-1 rounded-full border border-dashed border-red-300 text-red-400 animate-pulse-red">
+                      {col.short}: ---
+                    </span>
+                  )}
+                  {!readOnly && !val && (
+                    <MobileCrewAssign
+                      field={col.field}
+                      label={col.label}
+                      freelancers={freelancers}
+                      onAssign={(name) => handleAssign(row, col.field, name)}
+                      onQuickAdd={() => setQuickAddState({ open: true, field: col.field, label: col.label, row })}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {isExpanded && cached && (
+            <div className="mt-2 pt-2 border-t border-gray-200">
+              <EventLogisticsPanel eventDetail={cached.eventDetail} contactDetail={cached.contactDetail} settings={cached.settings} loading={cached.loading} row={row} />
+            </div>
+          )}
+        </div>
+      </React.Fragment>
+    );
+  }, [expandedRows, expandCache, laganDays, readOnly, freelancers, assignments, selectedYear, selectedMonth, sortMode, handleAssign, toggleExpand, setFilterFreelancer, setQuickAddState]);
+
   return (
     <div className="fixed inset-0 z-[100] bg-gray-200 flex flex-col">
       {/* Header Bar */}
