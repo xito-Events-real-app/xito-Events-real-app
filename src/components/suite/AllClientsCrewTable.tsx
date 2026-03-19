@@ -728,10 +728,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                 <Popover>
                   <PopoverTrigger asChild>
                     <button className="shrink-0 p-0.5 hover:bg-gray-100 rounded transition-colors">
-                      {(row.requiredCategories || '').trim() ? (
-                        <CategoryBadges categories={row.requiredCategories || ''} />
-                      ) : (
-                        <Settings className="w-3 h-3 text-gray-400" />
+                      <Settings className="w-3 h-3 text-gray-400" />
                       )}
                     </button>
                   </PopoverTrigger>
