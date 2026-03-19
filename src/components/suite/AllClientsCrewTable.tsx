@@ -1838,7 +1838,7 @@ function CrewCell({
             <HoverCardTrigger asChild>
               <span
                 className={cn(
-                  "block w-full text-xs px-2 py-1.5 rounded-md text-center truncate border font-medium transition-all",
+                  "block w-full text-sm px-2 py-1.5 rounded-md text-center truncate border font-semibold transition-all",
                   PILL_STYLES[group],
                   !readOnly && "cursor-pointer"
                 )}
