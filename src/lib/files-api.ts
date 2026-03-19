@@ -510,14 +510,59 @@ async function _ensureFileRowsForMonthInner(eventYear: string, eventMonth: strin
     }
   }
 
-  if (newRows.length === 0) return;
+  if (newRows.length > 0) {
+    for (let i = 0; i < newRows.length; i += 50) {
+      const batch = newRows.slice(i, i + 50);
+      const { error } = await (supabase as any)
+        .from("files_management")
+        .insert(batch);
+      if (error) throw error;
+    }
+  }
 
-  for (let i = 0; i < newRows.length; i += 50) {
-    const batch = newRows.slice(i, i + 50);
-    const { error } = await (supabase as any)
-      .from("files_management")
-      .insert(batch);
-    if (error) throw error;
+  // ── Cleanup pass: soft-delete stale skeleton rows ──
+  // For each assignment, check if any file rows reference a freelancer no longer in the assignment
+  const existingAllFiles = existingFiles || [];
+  const { data: allFilesForMonth } = await (supabase as any)
+    .from("files_management")
+    .select("id, registered_date_time_ad, event_name, freelancer_type, freelancer_name, final_generated_path, size_gb, backup_2_path, backup_3_path")
+    .eq("event_year", eventYear)
+    .eq("event_month", eventMonth)
+    .eq("deleted_or_not", false);
+
+  if (allFilesForMonth && allFilesForMonth.length > 0) {
+    // Build a map of current assignments: regDate+event → Set of "CODE||NAME"
+    const assignmentCrewMap = new Map<string, Set<string>>();
+    for (const assignment of pastAssignments) {
+      const mapKey = `${assignment.registered_date_time_ad}||${assignment.event}`;
+      const crewSet = new Set<string>();
+      for (const [field, config] of Object.entries(CREW_CODE_MAP)) {
+        const name = (assignment[field] || "").trim();
+        if (name) crewSet.add(`${config.code}||${name.toUpperCase()}`);
+      }
+      assignmentCrewMap.set(mapKey, crewSet);
+    }
+
+    const staleIds: string[] = [];
+    for (const file of allFilesForMonth) {
+      const mapKey = `${file.registered_date_time_ad}||${file.event_name}`;
+      const crewSet = assignmentCrewMap.get(mapKey);
+      if (!crewSet) continue; // no assignment found, skip (don't delete orphans from unknown assignments)
+
+      const fileKey = `${(file.freelancer_type || "").toUpperCase()}||${(file.freelancer_name || "").trim().toUpperCase()}`;
+      if (!crewSet.has(fileKey)) {
+        const hasData = !!(file.final_generated_path || (Number(file.size_gb) > 0) || file.backup_2_path || file.backup_3_path);
+        if (!hasData) staleIds.push(file.id);
+      }
+    }
+
+    if (staleIds.length > 0) {
+      await (supabase as any)
+        .from("files_management")
+        .update({ deleted_or_not: true, synced_to_sheet: false })
+        .in("id", staleIds);
+      console.log(`[ensureFileRowsForMonth] Cleaned up ${staleIds.length} stale skeleton file rows`);
+    }
   }
 }
 
@@ -611,4 +656,69 @@ export function getNextBackupNumber(file: FileRecord): number {
   if (!file.backup_2_path) return 2;
   if (!file.backup_3_path) return 3;
   return 0; // all 3 filled
+}
+
+// ── Cascade: sync files_management with freelancer_assignments ──
+// Called after any freelancer assignment change to keep files in sync.
+// Safety: only soft-deletes skeleton rows (no backup data). Rows with data are preserved.
+export async function syncFilesWithAssignments(
+  registeredDateTimeAD: string,
+  eventName: string
+): Promise<void> {
+  try {
+    // 1. Get current assignment for this client+event
+    const { data: assignments } = await (supabase as any)
+      .from("freelancer_assignments")
+      .select("*")
+      .eq("registered_date_time_ad", registeredDateTimeAD)
+      .eq("event", eventName);
+
+    if (!assignments || assignments.length === 0) return;
+    const assignment = assignments[0];
+
+    // Build set of currently assigned freelancers: { "PB||ARJUN", "VG||NIKIT", ... }
+    const currentCrewKeys = new Set<string>();
+    for (const [field, config] of Object.entries(CREW_CODE_MAP)) {
+      const name = (assignment[field] || "").trim();
+      if (name) currentCrewKeys.add(`${config.code}||${name.toUpperCase()}`);
+    }
+
+    // 2. Get existing file rows for this client+event
+    const { data: fileRows } = await (supabase as any)
+      .from("files_management")
+      .select("*")
+      .eq("registered_date_time_ad", registeredDateTimeAD)
+      .eq("event_name", eventName)
+      .eq("deleted_or_not", false);
+
+    if (!fileRows || fileRows.length === 0) return;
+
+    // 3. Soft-delete stale skeleton rows (freelancer no longer in assignment)
+    const idsToDelete: string[] = [];
+    for (const file of fileRows) {
+      const fileKey = `${(file.freelancer_type || "").toUpperCase()}||${(file.freelancer_name || "").trim().toUpperCase()}`;
+      if (!currentCrewKeys.has(fileKey)) {
+        // Safety: only delete if no backup data exists
+        const hasData = !!(
+          file.final_generated_path ||
+          (Number(file.size_gb) > 0) ||
+          file.backup_2_path ||
+          file.backup_3_path
+        );
+        if (!hasData) {
+          idsToDelete.push(file.id);
+        }
+      }
+    }
+
+    if (idsToDelete.length > 0) {
+      await (supabase as any)
+        .from("files_management")
+        .update({ deleted_or_not: true, synced_to_sheet: false })
+        .in("id", idsToDelete);
+      console.log(`[syncFilesWithAssignments] Soft-deleted ${idsToDelete.length} stale file rows for ${eventName}`);
+    }
+  } catch (err) {
+    console.error("[syncFilesWithAssignments] Error:", err);
+  }
 }

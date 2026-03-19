@@ -437,6 +437,14 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
       ));
       setPendingSyncs(prev => prev + 1);
       schedulePush(); // Auto-push after 3s of inactivity
+
+      // Cascade: sync files_management with updated assignment
+      import("@/lib/files-api").then(({ syncFilesWithAssignments }) => {
+        syncFilesWithAssignments(row.registeredDateTimeAD, row.event).catch(err =>
+          console.warn('[CASCADE] Files sync failed:', err)
+        );
+      });
+
       toast.success(freelancerName ? `Assigned ${freelancerName}` : 'Assignment cleared');
     } catch {
       toast.error("Failed to assign");

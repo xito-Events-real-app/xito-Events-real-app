@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getFreelancers, addFreelancer, FreelancerData } from "./freelancer-api";
+import { syncFilesWithAssignments } from "./files-api";
 import { updateAssignmentInCache, updateCategoriesInCache, rowToAssignment } from "./freelancer-assignment-cache";
 
 export interface FreelancerAssignment {
@@ -87,7 +88,12 @@ export async function updateFreelancerAssignment(
   // STEP 1: Write to Supabase immediately (marks synced_to_sheet: false)
   await updateAssignmentInCache(registeredDateTimeAD, eventName, field, value, eventDateAD);
 
-  // STEP 2: Push to Google Sheets in background (non-blocking)
+  // STEP 2: Cascade to files_management — soft-delete stale skeleton rows (non-blocking)
+  syncFilesWithAssignments(registeredDateTimeAD, eventName).catch(err => {
+    console.warn('[CASCADE] Files sync after assignment update failed:', err);
+  });
+
+  // STEP 3: Push to Google Sheets in background (non-blocking)
   supabase.functions.invoke('google-sheets', {
     body: { action: 'updateFreelancerAssignment', data: { registeredDateTimeAD, eventName, eventDateAD, field, value } }
   }).then(({ data, error }) => {
