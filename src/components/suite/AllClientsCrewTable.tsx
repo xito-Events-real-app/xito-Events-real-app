@@ -711,7 +711,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
               <HoverCardTrigger asChild>
                 <button
                   onClick={() => toggleExpand(rowKey, row)}
-                  className="text-xs font-semibold text-gray-800 hover:text-violet-600 transition-colors truncate max-w-[170px] block text-left"
+                  className="text-sm font-bold text-gray-800 hover:text-violet-600 transition-colors truncate max-w-[170px] block text-left"
                 >
                   {row.clientName}
                 </button>
