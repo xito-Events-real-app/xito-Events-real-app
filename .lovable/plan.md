@@ -1,57 +1,49 @@
 
 
-## Password-Protect Status Changes FROM BOOKED + Fix MANDIRA NEUPANE
+## Fix: Non-BOOKED Clients Should Not Appear in Booked Views
 
 ### Problem
-Once a client reaches BOOKED status, their status should be locked. MANDIRA NEUPANE's status was changed to "CANCELLED BY CLIENT" without any safeguard. This must require password `984124` going forward, and affects ALL modules where status can be changed.
+When MANDIRA NEUPANE's status was changed from BOOKED to POSTPONED, she still appears in All Clients (crew table), File Management, and the Booked Dashboard because:
+1. Her `sheet_source` remains `'booked'` in `clients_cache`
+2. `loadBookedClientsFromCache()` loads ALL `sheet_source='booked'` rows without checking current status
+3. Her `freelancer_assignments` and `files_management` rows still exist
 
-### Fix (3 parts)
+### Solution: Filter by Active BOOKED Status
 
-#### 1. New Component: `BookedStatusPasswordDialog`
-**File: `src/components/shared/BookedStatusPasswordDialog.tsx`**
+Rather than moving data between sheets (which you explicitly want to avoid), we filter at the **query level** so only clients with an active BOOKED status appear in booked views.
 
-A simple dialog (reusing the same dark theme as `DeleteClientDialog`) with:
-- Password input field (password: `984124`)
-- "This client is BOOKED. Enter password to change status." message
-- Confirm/Cancel buttons
-- Shake animation on wrong password, toast error
+#### 1. Filter `loadBookedClientsFromCache()` by status
+**File: `src/lib/clients-supabase-cache.ts`**
 
-Props: `open`, `onOpenChange`, `onConfirm()`, `clientName`
+After loading all `sheet_source='booked'` rows, filter out clients whose `getCurrentStatus()` is NOT "BOOKED" (excluding BOOKED SOMEWHERE ELSE). This ensures POSTPONED / CANCELLED clients don't appear in:
+- Booked Dashboard
+- All Clients crew table
+- Booking Calendar
+- Hot Dates
 
-#### 2. Add Password Gate to ALL 3 Status Change Handlers
+#### 2. Filter `_ensureFileRowsForMonthInner()` to skip non-BOOKED clients
+**File: `src/lib/files-api.ts`**
 
-The gate logic (added at the TOP of each handler, before any other intercepts):
+When generating file skeleton rows, cross-check the client's current status. If the client is no longer BOOKED, skip creating file rows for them. Also soft-delete existing skeleton rows for non-BOOKED clients during cleanup.
 
-```typescript
-const isCurrentlyBooked = 
-  client._source === 'booked' || 
-  (getCurrentStatus(currentStatusLog).toUpperCase().includes('BOOKED') && 
-   !getCurrentStatus(currentStatusLog).toUpperCase().includes('SOMEWHERE ELSE'));
+#### 3. Filter `freelancer_assignments` display in AllClientsCrewTable
+**File: `src/components/suite/AllClientsCrewTable.tsx`**
 
-if (isCurrentlyBooked) {
-  setPendingStatus(newStatus);
-  setShowBookedPasswordDialog(true);
-  return;
-}
-```
+When loading assignments for display, cross-check against `clients_cache` status. Exclude assignments where the client is no longer actively BOOKED.
 
-**Files affected:**
+#### 4. Handle the realtime subscription filter
+**File: `src/hooks/useBookedCachedData.ts`**
 
-| File | Handler | What changes |
-|------|---------|-------------|
-| `src/pages/ClientDetail.tsx` | `handleStatusChange` (line 475) | Add gate + dialog state + render dialog |
-| `src/components/desktop/DesktopClientRow.tsx` | `handleStatusChange` (line 303) | Add gate + dialog state + render dialog |
-| `src/components/dashboard/FreshClientCard.tsx` | `handleStatusClick` (line 478) | Add gate + dialog state + render dialog |
+In the realtime handler, when a client UPDATE comes in, check if their status is still BOOKED. If not, remove them from the local state instead of updating.
 
-When password is correct, the dialog calls `onConfirm()` which proceeds with the original status change flow (the existing intercept chain for QUOTATION SENT / ADVANCE PENDING / BOOKED / normal).
-
-#### 3. Database Fix — MANDIRA NEUPANE
-Update her `status_log` in `clients_cache` to append a POSTPONED entry with current timestamp, making POSTPONED her current status.
+### Safety
+- No data is deleted — `sheet_source` stays as `'booked'` in the database
+- If status is changed back to BOOKED, the client reappears automatically
+- File rows with backup data are never touched
 
 ### Files Changed
-- **New**: `src/components/shared/BookedStatusPasswordDialog.tsx`
-- **Edit**: `src/pages/ClientDetail.tsx` — gate + dialog
-- **Edit**: `src/components/desktop/DesktopClientRow.tsx` — gate + dialog
-- **Edit**: `src/components/dashboard/FreshClientCard.tsx` — gate + dialog
-- **Database**: Update MANDIRA NEUPANE's status_log to POSTPONED
+- `src/lib/clients-supabase-cache.ts` — Add status filter to `loadBookedClientsFromCache()`
+- `src/lib/files-api.ts` — Skip non-BOOKED clients in file row generation
+- `src/components/suite/AllClientsCrewTable.tsx` — Filter out non-BOOKED assignments
+- `src/hooks/useBookedCachedData.ts` — Handle status-changed clients in realtime
 
