@@ -52,6 +52,7 @@ import { NepaliCalendar } from "@/components/form/NepaliCalendar";
 import { FinalQuotationDialog, AdvancePaymentDialog } from "@/components/status-dialogs";
 import { formatNPR, parseFinalQuotation } from "@/lib/client-card-utils";
 import { notifyCacheUpdate } from "@/lib/cache-manager";
+import BookedStatusPasswordDialog from "@/components/shared/BookedStatusPasswordDialog";
 
 // Parse call log to get structured entries
 interface CallEntry {
@@ -475,6 +476,9 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
     setIsExpanded(!isExpanded);
   };
 
+  const [showBookedPasswordDialog, setShowBookedPasswordDialog] = useState(false);
+  const [bookedPendingStatus, setBookedPendingStatus] = useState<string | null>(null);
+
   const handleStatusClick = (e: React.MouseEvent, newStatus: string) => {
     e.stopPropagation();
     
@@ -487,11 +491,22 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
       return; // Same status, no update needed
     }
 
+    // GATE: If client is currently BOOKED, require password first
+    const isCurrentlyBooked =
+      client._source === 'booked' ||
+      (getCurrentStatus(currentStatusLog).toUpperCase().includes('BOOKED') &&
+       !getCurrentStatus(currentStatusLog).toUpperCase().includes('SOMEWHERE ELSE'));
+
+    if (isCurrentlyBooked) {
+      setBookedPendingStatus(newStatus);
+      setShowBookedPasswordDialog(true);
+      return;
+    }
+
     // INTERCEPT: If moving to QUOTATION SENT, ALWAYS show quotation dialog first
     const isToQuotationSent = newStatus.toUpperCase().includes('QUOTATION SENT');
     
     if (isToQuotationSent) {
-      // Show quotation dialog - user must enter quotation before status change
       setPendingStatus(newStatus);
       setShowQuotationDialog(true);
       return;
@@ -3424,6 +3439,23 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
         banks={banks}
         onSave={handleSaveBookedPayment}
         isSaving={isSavingBookedPayment}
+      />
+      {/* Booked Status Password Gate */}
+      <BookedStatusPasswordDialog
+        open={showBookedPasswordDialog}
+        onOpenChange={(open) => {
+          setShowBookedPasswordDialog(open);
+          if (!open) setBookedPendingStatus(null);
+        }}
+        clientName={client.clientName || 'Client'}
+        onConfirm={() => {
+          if (bookedPendingStatus) {
+            // Proceed with confirm dialog flow
+            setPendingStatus(bookedPendingStatus);
+            setShowConfirmDialog(true);
+            setBookedPendingStatus(null);
+          }
+        }}
       />
     </div>
   );

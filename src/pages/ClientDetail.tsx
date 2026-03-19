@@ -63,6 +63,7 @@ import { useFreelancerAssignments } from "@/hooks/useFreelancerAssignments";
 import { useClientContactDetails } from "@/hooks/useClientContactDetails";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { FinalQuotationDialog, AdvancePaymentDialog } from "@/components/status-dialogs";
+import BookedStatusPasswordDialog from "@/components/shared/BookedStatusPasswordDialog";
 
 // Helper to convert AD date to BS formatted string
 function formatADtoBS(adDateStr: string): string {
@@ -472,8 +473,23 @@ const ClientDetail = () => {
     }
   };
 
+  const [showBookedPasswordDialog, setShowBookedPasswordDialog] = useState(false);
+  const [bookedPendingStatus, setBookedPendingStatus] = useState("");
+
   const handleStatusChange = async (newStatus: string) => {
     if (!client) return;
+
+    // GATE: If client is currently BOOKED, require password first
+    const isCurrentlyBooked =
+      client._source === 'booked' ||
+      (getCurrentStatus(currentStatusLog).toUpperCase().includes('BOOKED') &&
+       !getCurrentStatus(currentStatusLog).toUpperCase().includes('SOMEWHERE ELSE'));
+
+    if (isCurrentlyBooked) {
+      setBookedPendingStatus(newStatus);
+      setShowBookedPasswordDialog(true);
+      return;
+    }
     
     // INTERCEPT: If moving to QUOTATION SENT, ALWAYS show quotation dialog first
     const isToQuotationSent = newStatus.toUpperCase().includes('QUOTATION SENT');
@@ -511,6 +527,13 @@ const ClientDetail = () => {
     
     // Continue with normal status change
     await performStatusChange(newStatus);
+  };
+
+  const handleBookedPasswordConfirm = () => {
+    if (bookedPendingStatus) {
+      performStatusChange(bookedPendingStatus);
+      setBookedPendingStatus("");
+    }
   };
 
   const performStatusChange = async (newStatus: string) => {
@@ -2029,6 +2052,17 @@ const ClientDetail = () => {
         clientName={client?.clientName || ''}
         onConfirmDelete={handleDeleteClient}
         isDeleting={isDeletingClient}
+      />
+
+      {/* Booked Status Password Gate */}
+      <BookedStatusPasswordDialog
+        open={showBookedPasswordDialog}
+        onOpenChange={(open) => {
+          setShowBookedPasswordDialog(open);
+          if (!open) setBookedPendingStatus("");
+        }}
+        clientName={client?.clientName || ''}
+        onConfirm={handleBookedPasswordConfirm}
       />
     </div>
   );

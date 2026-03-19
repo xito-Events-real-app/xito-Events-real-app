@@ -89,6 +89,7 @@ import { bsToAD } from "@/lib/nepali-date";
 import { getStatusConfig } from "@/lib/status-config";
 import { FinalQuotationDialog, AdvancePaymentDialog } from "@/components/status-dialogs";
 import { notifyCacheUpdate } from "@/lib/cache-manager";
+import BookedStatusPasswordDialog from "@/components/shared/BookedStatusPasswordDialog";
 
 interface DesktopClientRowProps {
   client: ClientData;
@@ -300,14 +301,28 @@ export function DesktopClientRow({
     }
   };
 
+  const [showBookedPasswordDialog, setShowBookedPasswordDialog] = useState(false);
+  const [bookedPendingStatus, setBookedPendingStatus] = useState("");
+
   const handleStatusChange = async (newStatus: string) => {
     if (!client.rowNumber) return;
+
+    // GATE: If client is currently BOOKED, require password first
+    const isCurrentlyBooked =
+      client._source === 'booked' ||
+      (getCurrentStatus(currentStatusLog).toUpperCase().includes('BOOKED') &&
+       !getCurrentStatus(currentStatusLog).toUpperCase().includes('SOMEWHERE ELSE'));
+
+    if (isCurrentlyBooked) {
+      setBookedPendingStatus(newStatus);
+      setShowBookedPasswordDialog(true);
+      return;
+    }
     
     // INTERCEPT: If moving to QUOTATION SENT, ALWAYS show quotation dialog first
     const isToQuotationSent = newStatus.toUpperCase().includes('QUOTATION SENT');
     
     if (isToQuotationSent) {
-      // Show quotation dialog - user must enter quotation before status change
       setPendingStatus(newStatus);
       setShowQuotationDialog(true);
       return;
@@ -2113,6 +2128,33 @@ export function DesktopClientRow({
         banks={banks}
         onSave={handleSaveBookedPayment}
         isSaving={isSavingBookedPayment}
+      />
+      {/* Booked Status Password Gate */}
+      <BookedStatusPasswordDialog
+        open={showBookedPasswordDialog}
+        onOpenChange={(open) => {
+          setShowBookedPasswordDialog(open);
+          if (!open) setBookedPendingStatus("");
+        }}
+        clientName={client.clientName || ''}
+        onConfirm={() => {
+          if (bookedPendingStatus) {
+            // Proceed with normal status change flow after password verified
+            const newStatusLog = generateStatusLogEntry(bookedPendingStatus, currentStatusLog);
+            setCurrentStatusLog(newStatusLog);
+            toast.success(`Status changed to ${bookedPendingStatus}`);
+            setShowSuccessFlash(true);
+            setTimeout(() => setShowSuccessFlash(false), 1000);
+            if (onClientUpdate) {
+              onClientUpdate({ ...client, statusLog: newStatusLog });
+            }
+            if (client.registeredDateTimeAD) {
+              updateClientFieldInCache(client.registeredDateTimeAD, 'statusLog', newStatusLog)
+                .catch(err => console.warn('[BACKGROUND] [statusLog cache]', err));
+            }
+            setBookedPendingStatus("");
+          }
+        }}
       />
     </>
   );
