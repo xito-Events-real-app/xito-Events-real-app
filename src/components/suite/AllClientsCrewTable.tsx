@@ -1410,7 +1410,7 @@ function ClientHoverPreview({ registeredDateTimeAD, clientName, onOpenFull }: {
         onClick={onOpenFull}
         className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold bg-violet-600 hover:bg-violet-700 text-white px-3 py-1.5 rounded-lg transition-colors"
       >
-        <ExternalLink className="w-3 h-3" />
+        <ChevronRight className="w-3 h-3" />
         Open Client Page
       </button>
     </div>
