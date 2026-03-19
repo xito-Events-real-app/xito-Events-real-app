@@ -37,7 +37,7 @@ import type { AssignmentRow } from "@/components/crew-schedule/types";
 import type { EventDetail } from "@/hooks/useEventDetails";
 import type { ClientContactDetails } from "@/lib/client-contact-api";
 import { LaganDatesPicker } from "./LaganDatesPicker";
-import { GaneshIcon } from "./GaneshIcon";
+
 
 const CREW_COLUMNS: { field: FreelancerField; label: string; short: string; group: 'photo' | 'video' | 'assist' | 'tech'; size: 'wide' | 'narrow' }[] = [
   { field: 'photographerBride', label: 'Photographer Bride', short: 'PB', group: 'photo', size: 'wide' },
