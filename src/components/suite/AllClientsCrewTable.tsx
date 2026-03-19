@@ -1071,6 +1071,9 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                               >
                                 {row.eventDay}
                               </button>
+                              {laganDays.has(parseInt(row.eventDay || '0')) && (
+                                <GaneshIcon size={14} className="text-orange-500 mx-auto mt-0.5" />
+                              )}
                               <button
                                 onClick={() => toggleExpand(rowKey, row)}
                                 className={cn(
