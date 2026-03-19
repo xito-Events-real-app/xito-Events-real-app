@@ -72,6 +72,9 @@ const DAY_COLORS = [
   "bg-orange-200/70",
 ];
 
+type SortMode = 'default' | 'maxEvents' | 'minEvents' | 'drone' | 'freelancerMax' | 'freelancerMin' | 'unassignedFirst';
+type FreelancerGroupData = { name: string; thisMonth: number; lastMonth: number; nextMonth: number; allTime: number; rows: FreelancerAssignment[] };
+
 
 const PILL_STYLES = {
   photo: 'bg-amber-50 text-amber-700 border-amber-200',
