@@ -726,16 +726,17 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
               <span className="text-xs text-gray-600 truncate max-w-[110px]">{row.event}</span>
               {!readOnly && (
                 <CrewCategorySelector
-                  registeredDateTimeAD={row.registeredDateTimeAD}
-                  eventName={row.event}
-                  eventDateAD={row.eventDateAD}
-                  currentCategories={row.requiredCategories || ''}
-                  onCategoriesChange={(cats) => {
+                  selected={(row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean)}
+                  onChange={(codes) => {
+                    const cats = codes.join(',');
                     setAssignments(prev => prev.map(a =>
                       a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event && a.eventDateAD === row.eventDateAD
                         ? { ...a, requiredCategories: cats }
                         : a
                     ));
+                    import('@/lib/freelancer-assignment-api').then(({ updateRequiredCrewCategories }) => {
+                      updateRequiredCrewCategories(row.registeredDateTimeAD, row.event, row.eventDateAD, cats);
+                    });
                   }}
                 />
               )}
