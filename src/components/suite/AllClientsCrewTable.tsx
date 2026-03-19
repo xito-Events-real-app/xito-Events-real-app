@@ -725,20 +725,33 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
             <div className="flex items-center gap-1">
               <span className="text-xs text-gray-600 truncate max-w-[110px]">{row.event}</span>
               {!readOnly && (
-                <CrewCategorySelector
-                  selected={(row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean)}
-                  onChange={(codes) => {
-                    const cats = codes.join(',');
-                    setAssignments(prev => prev.map(a =>
-                      a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event && a.eventDateAD === row.eventDateAD
-                        ? { ...a, requiredCategories: cats }
-                        : a
-                    ));
-                    import('@/lib/freelancer-assignment-api').then(({ updateRequiredCrewCategories }) => {
-                      updateRequiredCrewCategories(row.registeredDateTimeAD, row.event, row.eventDateAD, cats);
-                    });
-                  }}
-                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button className="shrink-0 p-0.5 hover:bg-gray-100 rounded transition-colors">
+                      {(row.requiredCategories || '').trim() ? (
+                        <CategoryBadges categories={row.requiredCategories || ''} />
+                      ) : (
+                        <Settings className="w-3 h-3 text-gray-400" />
+                      )}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 z-[200]" align="start" side="bottom">
+                    <CrewCategorySelector
+                      selected={(row.requiredCategories || '').split(',').map(c => c.trim()).filter(Boolean)}
+                      onChange={(codes) => {
+                        const cats = codes.join(',');
+                        setAssignments(prev => prev.map(a =>
+                          a.registeredDateTimeAD === row.registeredDateTimeAD && a.event === row.event && a.eventDateAD === row.eventDateAD
+                            ? { ...a, requiredCategories: cats }
+                            : a
+                        ));
+                        import('@/lib/freelancer-assignment-api').then(({ updateRequiredCrewCategories }) => {
+                          updateRequiredCrewCategories(row.registeredDateTimeAD, row.event, row.eventDateAD, cats);
+                        });
+                      }}
+                    />
+                  </PopoverContent>
+                </Popover>
               )}
             </div>
           </td>
