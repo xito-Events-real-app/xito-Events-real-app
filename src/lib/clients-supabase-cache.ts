@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { ClientData, BookedClientData } from "@/lib/sheets-api";
+import { ClientData, BookedClientData, getCurrentStatus } from "@/lib/sheets-api";
 import {
   getMemoryClients,
   setMemoryClients,
