@@ -475,6 +475,9 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
     setIsExpanded(!isExpanded);
   };
 
+  const [showBookedPasswordDialog, setShowBookedPasswordDialog] = useState(false);
+  const [bookedPendingStatus, setBookedPendingStatus] = useState<string | null>(null);
+
   const handleStatusClick = (e: React.MouseEvent, newStatus: string) => {
     e.stopPropagation();
     
@@ -487,11 +490,22 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
       return; // Same status, no update needed
     }
 
+    // GATE: If client is currently BOOKED, require password first
+    const isCurrentlyBooked =
+      client._source === 'booked' ||
+      (getCurrentStatus(currentStatusLog).toUpperCase().includes('BOOKED') &&
+       !getCurrentStatus(currentStatusLog).toUpperCase().includes('SOMEWHERE ELSE'));
+
+    if (isCurrentlyBooked) {
+      setBookedPendingStatus(newStatus);
+      setShowBookedPasswordDialog(true);
+      return;
+    }
+
     // INTERCEPT: If moving to QUOTATION SENT, ALWAYS show quotation dialog first
     const isToQuotationSent = newStatus.toUpperCase().includes('QUOTATION SENT');
     
     if (isToQuotationSent) {
-      // Show quotation dialog - user must enter quotation before status change
       setPendingStatus(newStatus);
       setShowQuotationDialog(true);
       return;

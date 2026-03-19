@@ -300,14 +300,28 @@ export function DesktopClientRow({
     }
   };
 
+  const [showBookedPasswordDialog, setShowBookedPasswordDialog] = useState(false);
+  const [bookedPendingStatus, setBookedPendingStatus] = useState("");
+
   const handleStatusChange = async (newStatus: string) => {
     if (!client.rowNumber) return;
+
+    // GATE: If client is currently BOOKED, require password first
+    const isCurrentlyBooked =
+      client._source === 'booked' ||
+      (getCurrentStatus(currentStatusLog).toUpperCase().includes('BOOKED') &&
+       !getCurrentStatus(currentStatusLog).toUpperCase().includes('SOMEWHERE ELSE'));
+
+    if (isCurrentlyBooked) {
+      setBookedPendingStatus(newStatus);
+      setShowBookedPasswordDialog(true);
+      return;
+    }
     
     // INTERCEPT: If moving to QUOTATION SENT, ALWAYS show quotation dialog first
     const isToQuotationSent = newStatus.toUpperCase().includes('QUOTATION SENT');
     
     if (isToQuotationSent) {
-      // Show quotation dialog - user must enter quotation before status change
       setPendingStatus(newStatus);
       setShowQuotationDialog(true);
       return;
