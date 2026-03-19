@@ -641,6 +641,21 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                 ))}
               </div>
             )}
+            <Select value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
+              <SelectTrigger className="w-auto h-8 bg-white/15 border-white/30 text-white text-xs gap-1.5 [&>svg]:text-white px-2.5">
+                <ArrowUpDown className="w-3.5 h-3.5 shrink-0" />
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent className="z-[200]">
+                <SelectItem value="default">Default</SelectItem>
+                <SelectItem value="maxEvents">Max Events</SelectItem>
+                <SelectItem value="minEvents">Min Events</SelectItem>
+                <SelectItem value="drone">Drone</SelectItem>
+                <SelectItem value="freelancerMax">Freelancer Max</SelectItem>
+                <SelectItem value="freelancerMin">Freelancer Min</SelectItem>
+                <SelectItem value="unassignedFirst">Unassigned First</SelectItem>
+              </SelectContent>
+            </Select>
             <Button
               variant="ghost"
               size="sm"
@@ -651,6 +666,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
               {allExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               {allExpanded ? "Collapse All" : "Expand All"}
             </Button>
+
           </>
         )}
         <div className="ml-auto flex items-center gap-3">
