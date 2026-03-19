@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { BookedClientData } from "@/lib/sheets-api";
+import { getCurrentStatus } from "@/lib/client-card-utils";
 import { 
   notifyCacheUpdate
 } from "@/lib/cache-manager";
