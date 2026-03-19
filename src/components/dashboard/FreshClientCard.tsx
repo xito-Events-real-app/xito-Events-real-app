@@ -52,6 +52,7 @@ import { NepaliCalendar } from "@/components/form/NepaliCalendar";
 import { FinalQuotationDialog, AdvancePaymentDialog } from "@/components/status-dialogs";
 import { formatNPR, parseFinalQuotation } from "@/lib/client-card-utils";
 import { notifyCacheUpdate } from "@/lib/cache-manager";
+import BookedStatusPasswordDialog from "@/components/shared/BookedStatusPasswordDialog";
 
 // Parse call log to get structured entries
 interface CallEntry {
