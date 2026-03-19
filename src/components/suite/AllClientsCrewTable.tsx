@@ -193,7 +193,33 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
         loadAssignmentsFromCache(),
         getFreelancers(),
       ]);
-      setAssignments(allAssignments);
+      
+      // Filter out assignments for clients who are no longer actively BOOKED
+      const uniqueRegDates = [...new Set(allAssignments.map(a => a.registeredDateTimeAD))];
+      const { getCurrentStatus } = await import('@/lib/sheets-api');
+      
+      // Batch-fetch status for all referenced clients
+      const activeRegDates = new Set<string>();
+      for (let i = 0; i < uniqueRegDates.length; i += 500) {
+        const batch = uniqueRegDates.slice(i, i + 500);
+        const { data } = await supabase
+          .from('clients_cache')
+          .select('registered_date_time_ad, status_log, sheet_source')
+          .in('registered_date_time_ad', batch);
+        for (const c of data || []) {
+          if (c.sheet_source !== 'booked') {
+            activeRegDates.add(c.registered_date_time_ad);
+            continue;
+          }
+          const status = getCurrentStatus(c.status_log || '').toUpperCase();
+          if (status.includes('BOOKED') && !status.includes('SOMEWHERE ELSE')) {
+            activeRegDates.add(c.registered_date_time_ad);
+          }
+        }
+      }
+      
+      const filteredAssignments = allAssignments.filter(a => activeRegDates.has(a.registeredDateTimeAD));
+      setAssignments(filteredAssignments);
       setFreelancers(allFreelancers);
       const count = await getUnsyncedCount();
       setPendingSyncs(count);
