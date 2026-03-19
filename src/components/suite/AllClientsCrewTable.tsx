@@ -74,8 +74,6 @@ const DAY_COLORS = [
 
 type SortMode = 'default' | 'maxEvents' | 'minEvents' | 'drone' | 'freelancerMax' | 'freelancerMin' | 'unassignedFirst';
 type FreelancerGroupData = { name: string; thisMonth: number; lastMonth: number; nextMonth: number; allTime: number; rows: FreelancerAssignment[] };
-  const [sortMode, setSortMode] = useState<SortMode>('default');
-  const [freelancerExpandedGroups, setFreelancerExpandedGroups] = useState<Set<string>>(new Set());
 
 
 const PILL_STYLES = {
