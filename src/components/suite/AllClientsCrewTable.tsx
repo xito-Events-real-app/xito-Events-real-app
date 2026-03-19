@@ -30,7 +30,7 @@ import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { QuickAddFreelancerDialog } from "./QuickAddFreelancerDialog";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { CrewCategorySelector } from "@/components/shared/CrewCategorySelector";
+import { CrewCategorySelector, CategoryBadges } from "@/components/shared/CrewCategorySelector";
 import CrewScheduleEventSheet from "@/components/crew-schedule/CrewScheduleEventSheet";
 import { Calendar as CalendarIcon } from "lucide-react";
 import type { AssignmentRow } from "@/components/crew-schedule/types";
