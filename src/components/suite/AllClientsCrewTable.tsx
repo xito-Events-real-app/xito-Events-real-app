@@ -709,8 +709,9 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
               return (
                 <button onClick={() => setFilterDay(filterDay === row.eventDay ? null : row.eventDay)} className={cn(
                   "hover:text-violet-600 transition-colors flex items-center justify-center w-full text-base font-black",
-                  isLagan ? "text-orange-600 animate-lagan-spin w-8 h-8 mx-auto" : "text-gray-700",
-                  hasUnassigned && !isLagan && "ring-2 ring-red-400 rounded-full w-8 h-8 mx-auto animate-[unassigned-date-glow_2s_ease-in-out_infinite]"
+                  isLagan ? "text-orange-600 w-8 h-8 mx-auto ring-2 ring-orange-300 rounded-full bg-orange-50" : "text-gray-700",
+                  hasUnassigned && "animate-lagan-spin w-8 h-8 mx-auto",
+                  hasUnassigned && !isLagan && "ring-2 ring-red-400 rounded-full text-red-500"
                 )}>
                   {row.eventDay}
                 </button>
