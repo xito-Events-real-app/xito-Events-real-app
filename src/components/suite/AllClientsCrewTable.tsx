@@ -1,12 +1,11 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from "react";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { getMemoryClients } from "@/lib/memory-cache";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty, CommandGroup, CommandSeparator } from "@/components/ui/command";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Users, Plus, X, ChevronLeft, Database, Trash2, Download, Upload, UserCog, Cloud, ExternalLink, ChevronDown, ChevronUp, Phone, MapPin, StickyNote, Pencil, Filter } from "lucide-react";
+import { Loader2, Users, Plus, X, ChevronLeft, ChevronRight, Database, Trash2, Download, Upload, Cloud, ChevronDown, ChevronUp, Phone, MapPin, StickyNote, Pencil, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -17,8 +16,6 @@ import {
   getFilteredFreelancersByRole,
   FreelancerAssignment,
   FreelancerField,
-  updateRequiredCrewCategories,
-  CATEGORY_CODES,
 } from "@/lib/freelancer-assignment-api";
 import {
   loadAssignmentsFromCache,
@@ -73,7 +70,7 @@ const DAY_COLORS = [
   "bg-orange-200/70",
 ];
 
-const LazyCrewSchedule = lazy(() => import("@/pages/CrewSchedule"));
+
 const PILL_STYLES = {
   photo: 'bg-amber-50 text-amber-700 border-amber-200',
   video: 'bg-purple-50 text-purple-700 border-purple-200',
@@ -116,9 +113,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
   const [filterClient, setFilterClient] = useState<string | null>(null);
   const [filterFreelancer, setFilterFreelancer] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
-  const [isLockingSlots, setIsLockingSlots] = useState(false);
   const [pendingSyncs, setPendingSyncs] = useState(0);
-  const [showCrewPreview, setShowCrewPreview] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -557,14 +552,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
           <Users className="w-5 h-5" />
           <h1 className="text-lg font-bold tracking-wide">{readOnly ? "FILE MANAGEMENT" : "ALL CLIENTS"}</h1>
         </div>
-        <button
-          onClick={() => setShowCrewPreview(true)}
-          className="flex items-center gap-1 text-xs bg-white/15 px-2.5 py-1 rounded-full hover:bg-white/25 transition-colors"
-        >
-          <ExternalLink className="w-3 h-3" />
-          Preview Crew Link
-        </button>
-        <div className="flex items-center gap-2 ml-4">
+        <div className="flex items-center gap-1 ml-4">
           <Select value={selectedYear} onValueChange={setSelectedYear}>
             <SelectTrigger className="w-24 h-8 bg-white/15 border-white/30 text-white text-sm [&>svg]:text-white">
               <SelectValue />
@@ -573,6 +561,16 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
               {years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
             </SelectContent>
           </Select>
+          <button
+            onClick={() => {
+              const m = parseInt(selectedMonth);
+              if (m <= 1) { setSelectedMonth("12"); setSelectedYear(String(parseInt(selectedYear) - 1)); }
+              else setSelectedMonth(String(m - 1));
+            }}
+            className="p-1 rounded hover:bg-white/20 transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
           <Select value={selectedMonth} onValueChange={setSelectedMonth}>
             <SelectTrigger className="w-32 h-8 bg-white/15 border-white/30 text-white text-sm [&>svg]:text-white">
               <SelectValue />
@@ -581,53 +579,19 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
               {nepaliMonthsEnglish.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}
             </SelectContent>
           </Select>
+          <button
+            onClick={() => {
+              const m = parseInt(selectedMonth);
+              if (m >= 12) { setSelectedMonth("1"); setSelectedYear(String(parseInt(selectedYear) + 1)); }
+              else setSelectedMonth(String(m + 1));
+            }}
+            className="p-1 rounded hover:bg-white/20 transition-colors"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
         {!readOnly && (
           <>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={isLockingSlots || filteredRows.length === 0}
-              className="gap-1.5 text-white hover:bg-white/20 hover:text-white"
-              onClick={async () => {
-                setIsLockingSlots(true);
-                try {
-                  let updatedCount = 0;
-                  for (const row of filteredRows) {
-                    const filledCodes = CREW_COLUMNS
-                      .filter(col => !!(row[col.field] as string)?.trim())
-                      .map(col => col.short);
-                    const cats = filledCodes.join(',');
-                    await updateCategoriesInCache(
-                      row.registeredDateTimeAD,
-                      row.event,
-                      cats,
-                      row.eventDateAD
-                    );
-                    updatedCount++;
-                  }
-                  setPendingSyncs(prev => prev + updatedCount);
-                  schedulePush();
-                  setAssignments(prev => prev.map(a => {
-                    const match = filteredRows.find(r => r.registeredDateTimeAD === a.registeredDateTimeAD && r.event === a.event);
-                    if (!match) return a;
-                    const filledCodes = CREW_COLUMNS
-                      .filter(col => !!(match[col.field] as string)?.trim())
-                      .map(col => col.short);
-                    return { ...a, requiredCategories: filledCodes.join(',') };
-                  }));
-                  toast.success(`${updatedCount} event(s) locked — empty slots marked as Not Required`);
-                } catch (err) {
-                  console.error('Lock empty slots failed:', err);
-                  toast.error("Failed to lock empty slots");
-                } finally {
-                  setIsLockingSlots(false);
-                }
-              }}
-            >
-              {isLockingSlots ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserCog className="w-3.5 h-3.5" />}
-              {isLockingSlots ? "Locking..." : "Lock Empty Slots"}
-            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -1124,7 +1088,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                                         title="Set required crew"
                                         onClick={(e) => e.stopPropagation()}
                                       >
-                                        <UserCog className="w-3.5 h-3.5" />
+                                        <Users className="w-3.5 h-3.5" />
                                       </button>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-auto p-0 z-[200]" align="start">
@@ -1273,7 +1237,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                                             title="Set required crew"
                                             onClick={(e) => e.stopPropagation()}
                                           >
-                                            <UserCog className="w-3.5 h-3.5" />
+                                            <Users className="w-3.5 h-3.5" />
                                           </button>
                                         </PopoverTrigger>
                                         <PopoverContent className="w-auto p-0 z-[200]" align="start">
@@ -1360,15 +1324,6 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
         onSuccess={handleQuickAddSuccess}
       />
 
-      <Dialog open={showCrewPreview} onOpenChange={setShowCrewPreview}>
-        <DialogContent className="max-w-md h-[85vh] p-0 overflow-hidden rounded-2xl z-[200]">
-          <div className="w-full h-full overflow-y-auto">
-            <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="w-6 h-6 animate-spin" /></div>}>
-              <LazyCrewSchedule previewName="Barun Koirala" />
-            </Suspense>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
@@ -1452,7 +1407,7 @@ function ClientHoverPreview({ registeredDateTimeAD, clientName, onOpenFull }: {
         onClick={onOpenFull}
         className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold bg-violet-600 hover:bg-violet-700 text-white px-3 py-1.5 rounded-lg transition-colors"
       >
-        <ExternalLink className="w-3 h-3" />
+        <ChevronRight className="w-3 h-3" />
         Open Client Page
       </button>
     </div>
