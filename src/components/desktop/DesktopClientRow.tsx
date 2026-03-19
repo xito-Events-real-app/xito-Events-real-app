@@ -2129,6 +2129,33 @@ export function DesktopClientRow({
         onSave={handleSaveBookedPayment}
         isSaving={isSavingBookedPayment}
       />
+      {/* Booked Status Password Gate */}
+      <BookedStatusPasswordDialog
+        open={showBookedPasswordDialog}
+        onOpenChange={(open) => {
+          setShowBookedPasswordDialog(open);
+          if (!open) setBookedPendingStatus("");
+        }}
+        clientName={client.clientName || ''}
+        onConfirm={() => {
+          if (bookedPendingStatus) {
+            // Proceed with normal status change flow after password verified
+            const newStatusLog = generateStatusLogEntry(bookedPendingStatus, currentStatusLog);
+            setCurrentStatusLog(newStatusLog);
+            toast.success(`Status changed to ${bookedPendingStatus}`);
+            setShowSuccessFlash(true);
+            setTimeout(() => setShowSuccessFlash(false), 1000);
+            if (onClientUpdate) {
+              onClientUpdate({ ...client, statusLog: newStatusLog });
+            }
+            if (client.registeredDateTimeAD) {
+              updateClientFieldInCache(client.registeredDateTimeAD, 'statusLog', newStatusLog)
+                .catch(err => console.warn('[BACKGROUND] [statusLog cache]', err));
+            }
+            setBookedPendingStatus("");
+          }
+        }}
+      />
     </>
   );
 }

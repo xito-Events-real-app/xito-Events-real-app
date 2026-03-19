@@ -3438,7 +3438,22 @@ export function FreshClientCard({ client, onEditClick, statusOptions, handlerOpt
         paymentTypes={paymentTypes}
         banks={banks}
         onSave={handleSaveBookedPayment}
-        isSaving={isSavingBookedPayment}
+      {/* Booked Status Password Gate */}
+      <BookedStatusPasswordDialog
+        open={showBookedPasswordDialog}
+        onOpenChange={(open) => {
+          setShowBookedPasswordDialog(open);
+          if (!open) setBookedPendingStatus(null);
+        }}
+        clientName={client.clientName || 'Client'}
+        onConfirm={() => {
+          if (bookedPendingStatus) {
+            // Proceed with confirm dialog flow
+            setPendingStatus(bookedPendingStatus);
+            setShowConfirmDialog(true);
+            setBookedPendingStatus(null);
+          }
+        }}
       />
     </div>
   );

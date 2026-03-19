@@ -2053,6 +2053,17 @@ const ClientDetail = () => {
         onConfirmDelete={handleDeleteClient}
         isDeleting={isDeletingClient}
       />
+
+      {/* Booked Status Password Gate */}
+      <BookedStatusPasswordDialog
+        open={showBookedPasswordDialog}
+        onOpenChange={(open) => {
+          setShowBookedPasswordDialog(open);
+          if (!open) setBookedPendingStatus("");
+        }}
+        clientName={client?.clientName || ''}
+        onConfirm={handleBookedPasswordConfirm}
+      />
     </div>
   );
 };
