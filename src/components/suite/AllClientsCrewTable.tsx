@@ -325,12 +325,13 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
       .filter(a => a.eventYear === selectedYear && a.eventMonth === selectedMonth)
       .sort((a, b) => (parseInt(a.eventDay) || 0) - (parseInt(b.eventDay) || 0));
 
-    if (filterDay) {
+    // Similar sort mode filter (works without filterDay)
+    if (sortMode === 'similar' && eventCountFilter !== null) {
+      rows = rows.filter(a => (dayEventCounts.get(a.eventDay || '') || 0) === eventCountFilter);
+    } else if (filterDay) {
       if (similarMode) {
-        // Show all days with same event count as the filtered day
         rows = rows.filter(a => (dayEventCounts.get(a.eventDay || '') || 0) === currentDayEventCount);
       } else if (eventCountFilter !== null) {
-        // Show all days with exactly eventCountFilter events
         rows = rows.filter(a => (dayEventCounts.get(a.eventDay || '') || 0) === eventCountFilter);
       } else {
         rows = rows.filter(a => a.eventDay === filterDay);
