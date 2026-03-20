@@ -212,8 +212,16 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
     toast.success("Notes saved");
   };
 
-  const handleConfirmedToggle = async (file: FileRecord) => {
-    await update(file.id, { confirmed: !file.confirmed, synced_to_sheet: false });
+  const [reconfirmFile, setReconfirmFile] = useState<FileRecord | null>(null);
+  const [reconfirmOpen, setReconfirmOpen] = useState(false);
+
+  const handleReconfirmClick = (file: FileRecord) => {
+    setReconfirmFile(file);
+    setReconfirmOpen(true);
+  };
+
+  const handleConfirmFile = async (fileId: string) => {
+    await update(fileId, { confirmed: true, reconfirmation: true, synced_to_sheet: false });
   };
 
   const getFirstName = (name: string) => (name || "").split(" ")[0];
