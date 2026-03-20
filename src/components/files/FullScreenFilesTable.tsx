@@ -24,6 +24,7 @@ import { useStorageDevices } from "@/hooks/useStorageDevices";
 import { FilePathBuilderDialog } from "./FilePathBuilderDialog";
 import { CloudUploadDialog } from "./CloudUploadDialog";
 import { FileRecord, duplicateFileRowForCard } from "@/lib/files-api";
+import { ReconfirmationDialog } from "./ReconfirmationDialog";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 
 const DAY_COLORS = [
