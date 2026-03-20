@@ -254,17 +254,19 @@ export function FilesManagementTable({ selectedMonth, availableMonths, onMonthCh
                                 />
                               </TableCell>
                               <TableCell className="text-center">
-                                <Checkbox className="h-3.5 w-3.5" checked={file.reconfirmation} onCheckedChange={(v) => handleInlineUpdate(file.id, "reconfirmation", !!v)} />
+                                {!file.final_generated_path ? (
+                                  <span className="text-[10px] text-muted-foreground">-</span>
+                                ) : file.confirmed ? (
+                                  <span className="text-[10px] font-black text-emerald-600 cursor-default">CONFIRMED</span>
+                                ) : (
+                                  <button onClick={() => { setReconfirmFile(file); setReconfirmOpen(true); }} className="hover:scale-110 transition-transform">
+                                    <span className="text-[10px] font-black text-red-600 whitespace-nowrap">NOT CONFIRMED</span>
+                                  </button>
+                                )}
                               </TableCell>
-                              <TableCell className="text-center">
-                                <Checkbox className="h-3.5 w-3.5" checked={file.double_backup} onCheckedChange={(v) => handleInlineUpdate(file.id, "double_backup", !!v)} />
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <Checkbox className="h-3.5 w-3.5" checked={file.triple_backup} onCheckedChange={(v) => handleInlineUpdate(file.id, "triple_backup", !!v)} />
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <Checkbox className="h-3.5 w-3.5" checked={file.drive_upload} onCheckedChange={(v) => handleInlineUpdate(file.id, "drive_upload", !!v)} />
-                              </TableCell>
+                              <TableCell className="text-center text-[10px]">{file.double_backup ? "✓" : "-"}</TableCell>
+                              <TableCell className="text-center text-[10px]">{file.triple_backup ? "✓" : "-"}</TableCell>
+                              <TableCell className="text-center text-[10px]">{file.drive_upload ? "✓" : "-"}</TableCell>
                               <TableCell>
                                 <button
                                   onClick={() => openPathBuilder(file)}
