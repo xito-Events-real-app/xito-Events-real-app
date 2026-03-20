@@ -24,6 +24,7 @@ import { useStorageDevices } from "@/hooks/useStorageDevices";
 import { FilePathBuilderDialog } from "./FilePathBuilderDialog";
 import { CloudUploadDialog } from "./CloudUploadDialog";
 import { FileRecord, duplicateFileRowForCard } from "@/lib/files-api";
+import { ReconfirmationDialog } from "./ReconfirmationDialog";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 
 const DAY_COLORS = [
@@ -306,9 +307,17 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
     toast.success("Notes saved");
   };
 
-  // Inline confirmed toggle
-  const handleConfirmedToggle = async (file: FileRecord) => {
-    await update(file.id, { confirmed: !file.confirmed, synced_to_sheet: false });
+  // Reconfirmation dialog state
+  const [reconfirmFile, setReconfirmFile] = useState<FileRecord | null>(null);
+  const [reconfirmOpen, setReconfirmOpen] = useState(false);
+
+  const handleReconfirmClick = (file: FileRecord) => {
+    setReconfirmFile(file);
+    setReconfirmOpen(true);
+  };
+
+  const handleConfirmFile = async (fileId: string) => {
+    await update(fileId, { confirmed: true, reconfirmation: true, synced_to_sheet: false });
   };
 
   // Years/months
@@ -524,13 +533,15 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                     <td className="px-3 py-1.5 text-xs font-bold border-l border-border/40">{file.who_copied || "-"}</td>
                     {/* Confirmed */}
                     <td className="px-2 py-1.5 text-center">
-                      <button onClick={() => handleConfirmedToggle(file)} className="hover:scale-110 transition-transform">
-                        {file.confirmed ? (
-                          <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wide">CONFIRMED</span>
-                        ) : (
+                      {!file.final_generated_path ? (
+                        <span className="text-[10px] text-muted-foreground">-</span>
+                      ) : file.confirmed ? (
+                        <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wide cursor-default">CONFIRMED</span>
+                      ) : (
+                        <button onClick={() => handleReconfirmClick(file)} className="hover:scale-110 transition-transform">
                           <span className="text-[10px] font-black text-red-600 uppercase tracking-wide">NOT CONFIRMED</span>
-                        )}
-                      </button>
+                        </button>
+                      )}
                     </td>
                     {/* Notes */}
                     <td className="px-2 py-1.5 text-center">
@@ -876,6 +887,13 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
           )}
         </div>
       )}
+
+      <ReconfirmationDialog
+        open={reconfirmOpen}
+        onOpenChange={setReconfirmOpen}
+        file={reconfirmFile}
+        onConfirm={handleConfirmFile}
+      />
 
       <FilePathBuilderDialog
         open={pathDialogOpen}

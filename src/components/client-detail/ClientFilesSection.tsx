@@ -19,6 +19,7 @@ import { CloudUploadDialog } from "@/components/files/CloudUploadDialog";
 import { FileRecord, updateFileRecord, getFileRecords } from "@/lib/files-api";
 import { scheduleFilesPush } from "@/lib/files-push-scheduler";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
+import { ReconfirmationDialog } from "@/components/files/ReconfirmationDialog";
 
 const PHOTO_ROLES = ["PB", "PG", "EP"];
 const VIDEO_ROLES = ["VB", "VG", "EV", "DRONE", "FPV", "IPHONE"];
@@ -211,8 +212,16 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
     toast.success("Notes saved");
   };
 
-  const handleConfirmedToggle = async (file: FileRecord) => {
-    await update(file.id, { confirmed: !file.confirmed, synced_to_sheet: false });
+  const [reconfirmFile, setReconfirmFile] = useState<FileRecord | null>(null);
+  const [reconfirmOpen, setReconfirmOpen] = useState(false);
+
+  const handleReconfirmClick = (file: FileRecord) => {
+    setReconfirmFile(file);
+    setReconfirmOpen(true);
+  };
+
+  const handleConfirmFile = async (fileId: string) => {
+    await update(fileId, { confirmed: true, reconfirmation: true, synced_to_sheet: false });
   };
 
   const getFirstName = (name: string) => (name || "").split(" ")[0];
@@ -336,13 +345,15 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
                     <td className="px-2 py-3 text-sm font-bold text-amber-200">{file.who_copied || "-"}</td>
                     {/* Confirmed */}
                     <td className="px-2 py-3 text-center">
-                      <button onClick={() => handleConfirmedToggle(file)} className="hover:scale-110 transition-transform">
-                        {file.confirmed ? (
-                          <span className="text-sm font-black text-emerald-500 uppercase bg-white dark:bg-white/90 px-3 py-1 rounded-full">CONFIRMED</span>
-                        ) : (
+                      {!file.final_generated_path ? (
+                        <span className="text-xs text-muted-foreground">-</span>
+                      ) : file.confirmed ? (
+                        <span className="text-sm font-black text-emerald-500 uppercase bg-white dark:bg-white/90 px-3 py-1 rounded-full cursor-default">CONFIRMED</span>
+                      ) : (
+                        <button onClick={() => handleReconfirmClick(file)} className="hover:scale-110 transition-transform">
                           <span className="text-[10px] font-black text-red-500 uppercase bg-white dark:bg-white/90 px-2 py-0.5 rounded-full whitespace-nowrap">NOT CONFIRMED</span>
-                        )}
-                      </button>
+                        </button>
+                      )}
                     </td>
                     {/* Action */}
                     <td className="px-2 py-3 text-center">
@@ -487,6 +498,13 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
         allFiles={files}
         onRefresh={loadFiles}
         initialBackupNumber={editBackupNumber ?? undefined}
+      />
+
+      <ReconfirmationDialog
+        open={reconfirmOpen}
+        onOpenChange={setReconfirmOpen}
+        file={reconfirmFile}
+        onConfirm={handleConfirmFile}
       />
 
       <CloudUploadDialog

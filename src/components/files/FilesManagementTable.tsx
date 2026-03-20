@@ -1,7 +1,6 @@
 import { useState, useMemo } from "react";
 import { FolderOpen, ChevronDown, ChevronRight, Calendar } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -11,6 +10,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { useFilesManagement } from "@/hooks/useFilesManagement";
 import { useStorageDevices } from "@/hooks/useStorageDevices";
 import { FilePathBuilderDialog } from "./FilePathBuilderDialog";
+import { ReconfirmationDialog } from "./ReconfirmationDialog";
 import { FileRecord, FileMonthData, getNextCardLabel } from "@/lib/files-api";
 import { cn } from "@/lib/utils";
 
@@ -34,6 +34,8 @@ export function FilesManagementTable({ selectedMonth, availableMonths, onMonthCh
   const [selectedFile, setSelectedFile] = useState<FileRecord | null>(null);
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
   const [showAllMonths, setShowAllMonths] = useState(false);
+  const [reconfirmFile, setReconfirmFile] = useState<FileRecord | null>(null);
+  const [reconfirmOpen, setReconfirmOpen] = useState(false);
 
   // Group files by client -> event
   const clientGroups: ClientGroup[] = useMemo(() => {
@@ -195,7 +197,7 @@ export function FilesManagementTable({ selectedMonth, availableMonths, onMonthCh
                             <TableHead className="text-[10px] w-16">Size</TableHead>
                             <TableHead className="text-[10px] w-20">Format</TableHead>
                             <TableHead className="text-[10px] w-20">Copied</TableHead>
-                            <TableHead className="text-[10px] text-center w-8">✓</TableHead>
+                            <TableHead className="text-[10px] text-center w-16">Status</TableHead>
                             <TableHead className="text-[10px] text-center w-8">2x</TableHead>
                             <TableHead className="text-[10px] text-center w-8">3x</TableHead>
                             <TableHead className="text-[10px] text-center w-8">☁</TableHead>
@@ -252,17 +254,19 @@ export function FilesManagementTable({ selectedMonth, availableMonths, onMonthCh
                                 />
                               </TableCell>
                               <TableCell className="text-center">
-                                <Checkbox className="h-3.5 w-3.5" checked={file.reconfirmation} onCheckedChange={(v) => handleInlineUpdate(file.id, "reconfirmation", !!v)} />
+                                {!file.final_generated_path ? (
+                                  <span className="text-[10px] text-muted-foreground">-</span>
+                                ) : file.confirmed ? (
+                                  <span className="text-[10px] font-black text-emerald-600 cursor-default">CONFIRMED</span>
+                                ) : (
+                                  <button onClick={() => { setReconfirmFile(file); setReconfirmOpen(true); }} className="hover:scale-110 transition-transform">
+                                    <span className="text-[10px] font-black text-red-600 whitespace-nowrap">NOT CONFIRMED</span>
+                                  </button>
+                                )}
                               </TableCell>
-                              <TableCell className="text-center">
-                                <Checkbox className="h-3.5 w-3.5" checked={file.double_backup} onCheckedChange={(v) => handleInlineUpdate(file.id, "double_backup", !!v)} />
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <Checkbox className="h-3.5 w-3.5" checked={file.triple_backup} onCheckedChange={(v) => handleInlineUpdate(file.id, "triple_backup", !!v)} />
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <Checkbox className="h-3.5 w-3.5" checked={file.drive_upload} onCheckedChange={(v) => handleInlineUpdate(file.id, "drive_upload", !!v)} />
-                              </TableCell>
+                              <TableCell className="text-center text-[10px]">{file.double_backup ? "✓" : "-"}</TableCell>
+                              <TableCell className="text-center text-[10px]">{file.triple_backup ? "✓" : "-"}</TableCell>
+                              <TableCell className="text-center text-[10px]">{file.drive_upload ? "✓" : "-"}</TableCell>
                               <TableCell>
                                 <button
                                   onClick={() => openPathBuilder(file)}
@@ -286,6 +290,15 @@ export function FilesManagementTable({ selectedMonth, availableMonths, onMonthCh
           </Collapsible>
         );
       })}
+
+      <ReconfirmationDialog
+        open={reconfirmOpen}
+        onOpenChange={setReconfirmOpen}
+        file={reconfirmFile}
+        onConfirm={async (fileId) => {
+          await update(fileId, { confirmed: true, reconfirmation: true, synced_to_sheet: false });
+        }}
+      />
 
       <FilePathBuilderDialog
         open={pathDialogOpen}
