@@ -10,6 +10,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { useFilesManagement } from "@/hooks/useFilesManagement";
 import { useStorageDevices } from "@/hooks/useStorageDevices";
 import { FilePathBuilderDialog } from "./FilePathBuilderDialog";
+import { ReconfirmationDialog } from "./ReconfirmationDialog";
 import { FileRecord, FileMonthData, getNextCardLabel } from "@/lib/files-api";
 import { cn } from "@/lib/utils";
 

@@ -888,6 +888,13 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
         </div>
       )}
 
+      <ReconfirmationDialog
+        open={reconfirmOpen}
+        onOpenChange={setReconfirmOpen}
+        file={reconfirmFile}
+        onConfirm={handleConfirmFile}
+      />
+
       <FilePathBuilderDialog
         open={pathDialogOpen}
         onOpenChange={setPathDialogOpen}

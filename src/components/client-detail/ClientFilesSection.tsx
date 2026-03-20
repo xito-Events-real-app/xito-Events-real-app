@@ -500,6 +500,13 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
         initialBackupNumber={editBackupNumber ?? undefined}
       />
 
+      <ReconfirmationDialog
+        open={reconfirmOpen}
+        onOpenChange={setReconfirmOpen}
+        file={reconfirmFile}
+        onConfirm={handleConfirmFile}
+      />
+
       <CloudUploadDialog
         open={cloudDialogOpen}
         onOpenChange={setCloudDialogOpen}
