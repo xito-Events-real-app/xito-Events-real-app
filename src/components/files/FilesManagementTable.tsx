@@ -291,6 +291,15 @@ export function FilesManagementTable({ selectedMonth, availableMonths, onMonthCh
         );
       })}
 
+      <ReconfirmationDialog
+        open={reconfirmOpen}
+        onOpenChange={setReconfirmOpen}
+        file={reconfirmFile}
+        onConfirm={async (fileId) => {
+          await update(fileId, { confirmed: true, reconfirmation: true, synced_to_sheet: false });
+        }}
+      />
+
       <FilePathBuilderDialog
         open={pathDialogOpen}
         onOpenChange={setPathDialogOpen}
