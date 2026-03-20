@@ -117,6 +117,8 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
   const [filterDay, setFilterDay] = useState<string | null>(null);
   const [filterClient, setFilterClient] = useState<string | null>(null);
   const [filterFreelancer, setFilterFreelancer] = useState<string | null>(null);
+  const [similarMode, setSimilarMode] = useState(false);
+  const [eventCountFilter, setEventCountFilter] = useState<number | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
   const [pendingSyncs, setPendingSyncs] = useState(0);
   const [isPushing, setIsPushing] = useState(false);
@@ -303,18 +305,45 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
     };
   }, [loadData]);
 
+  // Compute event counts per day for the current month (unfiltered)
+  const dayEventCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    assignments
+      .filter(a => a.eventYear === selectedYear && a.eventMonth === selectedMonth)
+      .forEach(a => {
+        const day = a.eventDay || '';
+        counts.set(day, (counts.get(day) || 0) + 1);
+      });
+    return counts;
+  }, [assignments, selectedYear, selectedMonth]);
+
+  const maxEventsPerDay = useMemo(() => Math.max(0, ...dayEventCounts.values()), [dayEventCounts]);
+  const currentDayEventCount = filterDay ? (dayEventCounts.get(filterDay) || 0) : 0;
+
   const filteredRows = useMemo(() => {
     let rows = assignments
       .filter(a => a.eventYear === selectedYear && a.eventMonth === selectedMonth)
       .sort((a, b) => (parseInt(a.eventDay) || 0) - (parseInt(b.eventDay) || 0));
-    if (filterDay) rows = rows.filter(a => a.eventDay === filterDay);
+
+    if (filterDay) {
+      if (similarMode) {
+        // Show all days with same event count as the filtered day
+        rows = rows.filter(a => (dayEventCounts.get(a.eventDay || '') || 0) === currentDayEventCount);
+      } else if (eventCountFilter !== null) {
+        // Show all days with exactly eventCountFilter events
+        rows = rows.filter(a => (dayEventCounts.get(a.eventDay || '') || 0) === eventCountFilter);
+      } else {
+        rows = rows.filter(a => a.eventDay === filterDay);
+      }
+    }
+
     if (filterClient) rows = rows.filter(a => a.clientName === filterClient);
     if (filterFreelancer) {
       const upper = filterFreelancer.trim().toUpperCase();
       rows = rows.filter(a => CREW_COLUMNS.some(col => (a[col.field] as string)?.trim().toUpperCase() === upper));
     }
     return rows;
-  }, [assignments, selectedYear, selectedMonth, filterDay, filterClient, filterFreelancer]);
+  }, [assignments, selectedYear, selectedMonth, filterDay, filterClient, filterFreelancer, similarMode, eventCountFilter, dayEventCounts, currentDayEventCount]);
 
   const upcomingRows = useMemo(() =>
     filteredRows.filter(row => !row.eventDay || row.eventDay.includes('**') || !isBSDatePast(row.eventYear, row.eventMonth, row.eventDay)),
@@ -980,6 +1009,45 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
               {allExpanded ? "Collapse All" : "Expand All"}
             </Button>
 
+            {/* Similar Events Filter - only when filterDay is active */}
+            {filterDay && (
+              <div className="flex items-center gap-1.5 ml-2">
+                <button
+                  onClick={() => {
+                    setSimilarMode(!similarMode);
+                    setEventCountFilter(null);
+                  }}
+                  className={cn(
+                    "px-2.5 py-1 rounded-full text-xs font-bold transition-all",
+                    similarMode
+                      ? "bg-white text-violet-700 shadow-md scale-105"
+                      : "bg-white/20 text-white hover:bg-white/30"
+                  )}
+                >
+                  Similar ({currentDayEventCount})
+                </button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: maxEventsPerDay }, (_, i) => i + 1).map(n => (
+                    <button
+                      key={n}
+                      onClick={() => {
+                        setEventCountFilter(eventCountFilter === n ? null : n);
+                        setSimilarMode(false);
+                      }}
+                      className={cn(
+                        "w-6 h-6 rounded-full text-xs font-bold transition-all flex items-center justify-center",
+                        eventCountFilter === n
+                          ? "bg-white text-violet-700 shadow-md scale-110"
+                          : "bg-white/20 text-white hover:bg-white/30"
+                      )}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
           </>
         )}
         <div className="ml-auto flex items-center gap-3">
@@ -1040,9 +1108,21 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
         <div className="bg-violet-50 border-b border-violet-200 px-4 py-2 flex items-center gap-2 shrink-0">
           <span className="text-xs font-medium text-violet-700">Filtered by:</span>
           {filterDay && (
-            <button onClick={() => setFilterDay(null)} className="inline-flex items-center gap-1 bg-violet-200 text-violet-800 text-xs font-bold px-2.5 py-1 rounded-full hover:bg-violet-300 transition-colors">
+            <button onClick={() => { setFilterDay(null); setSimilarMode(false); setEventCountFilter(null); }} className="inline-flex items-center gap-1 bg-violet-200 text-violet-800 text-xs font-bold px-2.5 py-1 rounded-full hover:bg-violet-300 transition-colors">
               Day {filterDay} <X className="w-3 h-3" />
             </button>
+          )}
+          {similarMode && (
+            <span className="inline-flex items-center gap-1 bg-emerald-200 text-emerald-800 text-xs font-bold px-2.5 py-1 rounded-full">
+              Similar: {currentDayEventCount} events
+              <button onClick={() => setSimilarMode(false)} className="hover:text-emerald-900"><X className="w-3 h-3" /></button>
+            </span>
+          )}
+          {eventCountFilter !== null && (
+            <span className="inline-flex items-center gap-1 bg-emerald-200 text-emerald-800 text-xs font-bold px-2.5 py-1 rounded-full">
+              {eventCountFilter} events/day
+              <button onClick={() => setEventCountFilter(null)} className="hover:text-emerald-900"><X className="w-3 h-3" /></button>
+            </span>
           )}
           {filterClient && (
             <button onClick={() => setFilterClient(null)} className="inline-flex items-center gap-1 bg-violet-200 text-violet-800 text-xs font-bold px-2.5 py-1 rounded-full hover:bg-violet-300 transition-colors">
@@ -1054,7 +1134,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
               👤 {filterFreelancer} <X className="w-3 h-3" />
             </button>
           )}
-          <button onClick={() => { setFilterDay(null); setFilterClient(null); setFilterFreelancer(null); }} className="text-xs text-violet-500 hover:text-violet-700 underline ml-2">
+          <button onClick={() => { setFilterDay(null); setFilterClient(null); setFilterFreelancer(null); setSimilarMode(false); setEventCountFilter(null); }} className="text-xs text-violet-500 hover:text-violet-700 underline ml-2">
             Clear All
           </button>
         </div>
