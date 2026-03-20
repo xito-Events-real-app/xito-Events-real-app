@@ -997,6 +997,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                 <SelectItem value="freelancerMax">Freelancer Max</SelectItem>
                 <SelectItem value="freelancerMin">Freelancer Min</SelectItem>
                 <SelectItem value="unassignedFirst">Unassigned First</SelectItem>
+                <SelectItem value="similar">Similar</SelectItem>
               </SelectContent>
             </Select>
             <Button
