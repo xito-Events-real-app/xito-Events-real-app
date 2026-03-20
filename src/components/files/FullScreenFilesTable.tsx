@@ -533,13 +533,15 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                     <td className="px-3 py-1.5 text-xs font-bold border-l border-border/40">{file.who_copied || "-"}</td>
                     {/* Confirmed */}
                     <td className="px-2 py-1.5 text-center">
-                      <button onClick={() => handleConfirmedToggle(file)} className="hover:scale-110 transition-transform">
-                        {file.confirmed ? (
-                          <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wide">CONFIRMED</span>
-                        ) : (
+                      {!file.final_generated_path ? (
+                        <span className="text-[10px] text-muted-foreground">-</span>
+                      ) : file.confirmed ? (
+                        <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wide cursor-default">CONFIRMED</span>
+                      ) : (
+                        <button onClick={() => handleReconfirmClick(file)} className="hover:scale-110 transition-transform">
                           <span className="text-[10px] font-black text-red-600 uppercase tracking-wide">NOT CONFIRMED</span>
-                        )}
-                      </button>
+                        </button>
+                      )}
                     </td>
                     {/* Notes */}
                     <td className="px-2 py-1.5 text-center">
