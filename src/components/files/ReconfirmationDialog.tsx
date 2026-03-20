@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Check, MessageCircle, Download } from "lucide-react";
 import { FileRecord } from "@/lib/files-api";
-import { downloadConfirmationPDF } from "@/lib/file-confirmation-pdf";
+import { downloadConfirmationPDF, getConfirmationPDFFile } from "@/lib/file-confirmation-pdf";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
