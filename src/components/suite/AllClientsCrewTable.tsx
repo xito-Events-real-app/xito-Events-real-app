@@ -984,7 +984,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                 ))}
               </div>
             )}
-            <Select value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
+            <Select value={sortMode} onValueChange={(v) => { setSortMode(v as SortMode); if (v !== 'similar') setEventCountFilter(null); }}>
               <SelectTrigger className="w-auto h-8 bg-white/15 border-white/30 text-white text-xs gap-1.5 [&>svg]:text-white px-2.5">
                 <ArrowUpDown className="w-3.5 h-3.5 shrink-0" />
                 <SelectValue placeholder="Sort" />
