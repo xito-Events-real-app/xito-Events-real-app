@@ -19,6 +19,7 @@ import { CloudUploadDialog } from "@/components/files/CloudUploadDialog";
 import { FileRecord, updateFileRecord, getFileRecords } from "@/lib/files-api";
 import { scheduleFilesPush } from "@/lib/files-push-scheduler";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
+import { ReconfirmationDialog } from "@/components/files/ReconfirmationDialog";
 
 const PHOTO_ROLES = ["PB", "PG", "EP"];
 const VIDEO_ROLES = ["VB", "VG", "EV", "DRONE", "FPV", "IPHONE"];
