@@ -1,54 +1,25 @@
 
 
-## "Similar Events" Filter for All Clients Crew Table
+## Add "Similar" as a Sort Mode Option
 
-### What it does
+### What changes
+Add "Similar" as a new option in the existing Sort dropdown (alongside Default, Max Events, etc.). When "Similar" is selected, the event count pills (1, 2, 3...) appear next to the dropdown — no need for `filterDay` to be active first.
 
-When you're viewing a filtered day (e.g., Day 7 with 3 events), two new controls appear in the header bar next to "Expand All":
+### Technical approach — `src/components/suite/AllClientsCrewTable.tsx`
 
-1. **"Similar" toggle button** — When turned ON, it finds all other dates in the current month that have the **same number of events** as the currently filtered day (e.g., 3 events), and shows those dates too, sorted in ascending order by day number.
+1. **Extend `SortMode` type**: Add `'similar'` to the union type (line 75)
 
-2. **Event count pills (1, 2, 3, ... N)** — Clickable number buttons that appear next to Similar. Clicking "2" shows only dates with exactly 2 events. The maximum number shown is dynamically computed from the highest event count any single day has in the current month.
+2. **Sort dropdown** (line 992-999): Add `<SelectItem value="similar">Similar</SelectItem>`
 
-- Both controls only appear when a day filter (`filterDay`) is active.
-- "Similar" and the number pills are mutually exclusive — clicking a number disables Similar and vice versa.
-- Clicking the active number again clears the filter back to just the original day.
+3. **When `sortMode === 'similar'`**:
+   - Show the event count pills (1, 2, 3... up to `maxEventsPerDay`) next to the sort dropdown, same styling as current pills
+   - Default `eventCountFilter` to `null` (show all), clicking a number filters to days with that count
+   - `sortedFilteredRows` groups/sorts by day event count ascending
 
-### Technical Approach
+4. **Compute `maxEventsPerDay` and `dayEventCounts`** from all month rows (not just filtered) — these already exist in the component, just need to ensure they're available outside the `filterDay` conditional
 
-**File: `src/components/suite/AllClientsCrewTable.tsx`**
+5. **Keep existing `filterDay`-based Similar button** as-is for backward compatibility, or remove it since the sort dropdown now covers it — removing is cleaner
 
-#### New State
-```typescript
-const [similarMode, setSimilarMode] = useState(false);
-const [eventCountFilter, setEventCountFilter] = useState<number | null>(null);
-```
-
-#### Computed Values (useMemo)
-- `dayEventCounts`: A `Map<string, number>` counting events per day for the current month (from the unfiltered month rows, not `filteredRows`)
-- `maxEventsPerDay`: The highest count in `dayEventCounts`
-- `currentDayEventCount`: The count for the currently selected `filterDay`
-
-#### Modified `filteredRows` logic
-Currently (line 310): `if (filterDay) rows = rows.filter(a => a.eventDay === filterDay);`
-
-Updated logic:
-- If `similarMode` is ON and `filterDay` is set: filter to all days where `dayEventCounts.get(day) === currentDayEventCount`, sorted ascending
-- If `eventCountFilter` is set: filter to all days where `dayEventCounts.get(day) === eventCountFilter`, sorted ascending  
-- Otherwise: keep existing `filterDay` behavior
-
-#### UI — Header controls (after Sort dropdown, before Expand All)
-Only render when `filterDay` is active:
-```
-[Similar] [1] [2] [3] [4] [5]
-```
-- "Similar" is a toggle button (highlighted when active)
-- Number pills are styled like the lagan day pills, highlighted when selected
-- Reset both when `filterDay` is cleared
-
-#### Cleanup
-- When `filterDay` changes to null, reset `similarMode` and `eventCountFilter`
-
-### Files Changed
-- **`src/components/suite/AllClientsCrewTable.tsx`** — add state, computed values, modify filteredRows, add UI controls
+### Files changed
+- `src/components/suite/AllClientsCrewTable.tsx`
 
