@@ -305,18 +305,45 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
     };
   }, [loadData]);
 
+  // Compute event counts per day for the current month (unfiltered)
+  const dayEventCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    assignments
+      .filter(a => a.eventYear === selectedYear && a.eventMonth === selectedMonth)
+      .forEach(a => {
+        const day = a.eventDay || '';
+        counts.set(day, (counts.get(day) || 0) + 1);
+      });
+    return counts;
+  }, [assignments, selectedYear, selectedMonth]);
+
+  const maxEventsPerDay = useMemo(() => Math.max(0, ...dayEventCounts.values()), [dayEventCounts]);
+  const currentDayEventCount = filterDay ? (dayEventCounts.get(filterDay) || 0) : 0;
+
   const filteredRows = useMemo(() => {
     let rows = assignments
       .filter(a => a.eventYear === selectedYear && a.eventMonth === selectedMonth)
       .sort((a, b) => (parseInt(a.eventDay) || 0) - (parseInt(b.eventDay) || 0));
-    if (filterDay) rows = rows.filter(a => a.eventDay === filterDay);
+
+    if (filterDay) {
+      if (similarMode) {
+        // Show all days with same event count as the filtered day
+        rows = rows.filter(a => (dayEventCounts.get(a.eventDay || '') || 0) === currentDayEventCount);
+      } else if (eventCountFilter !== null) {
+        // Show all days with exactly eventCountFilter events
+        rows = rows.filter(a => (dayEventCounts.get(a.eventDay || '') || 0) === eventCountFilter);
+      } else {
+        rows = rows.filter(a => a.eventDay === filterDay);
+      }
+    }
+
     if (filterClient) rows = rows.filter(a => a.clientName === filterClient);
     if (filterFreelancer) {
       const upper = filterFreelancer.trim().toUpperCase();
       rows = rows.filter(a => CREW_COLUMNS.some(col => (a[col.field] as string)?.trim().toUpperCase() === upper));
     }
     return rows;
-  }, [assignments, selectedYear, selectedMonth, filterDay, filterClient, filterFreelancer]);
+  }, [assignments, selectedYear, selectedMonth, filterDay, filterClient, filterFreelancer, similarMode, eventCountFilter, dayEventCounts, currentDayEventCount]);
 
   const upcomingRows = useMemo(() =>
     filteredRows.filter(row => !row.eventDay || row.eventDay.includes('**') || !isBSDatePast(row.eventYear, row.eventMonth, row.eventDay)),
