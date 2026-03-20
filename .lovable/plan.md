@@ -1,70 +1,54 @@
 
 
-## Reconfirmation Flow Upgrade + WhatsApp PDF for Freelancer
+## "Similar Events" Filter for All Clients Crew Table
 
-### Overview
-Upgrade the "Reconfirmation" column across all file tables so it:
-1. Only shows "NOT CONFIRMED" when 1st backup is set (`final_generated_path` is not empty)
-2. Clicking "NOT CONFIRMED" opens a confirmation dialog with option to send WhatsApp message + PDF to the freelancer
-3. Once confirmed, the button becomes non-clickable "CONFIRMED" permanently
-4. The WhatsApp message includes a PDF with "Wedding Tales Nepal" branding and file details
+### What it does
 
-### Changes
+When you're viewing a filtered day (e.g., Day 7 with 3 events), two new controls appear in the header bar next to "Expand All":
 
-#### 1. New Component: `ReconfirmationDialog` (`src/components/files/ReconfirmationDialog.tsx`)
-A dialog that appears when clicking "NOT CONFIRMED":
-- Shows file details summary (client name, nepali date, card, format, 1st backup device/path)
-- Two buttons: **"Confirm & Send WhatsApp"** and **"Confirm Only (Skip)"**
-- Both confirm the file (set `confirmed: true`, `reconfirmation: true`)
-- "Send WhatsApp" generates a PDF, then opens WhatsApp with the freelancer's number
-- Looks up freelancer WhatsApp number from `freelancers_cache` by matching `freelancer_name`
+1. **"Similar" toggle button** — When turned ON, it finds all other dates in the current month that have the **same number of events** as the currently filtered day (e.g., 3 events), and shows those dates too, sorted in ascending order by day number.
 
-#### 2. PDF Generation (`src/lib/file-confirmation-pdf.ts`)
-Uses browser-based PDF generation (jsPDF or html2canvas approach) to create a branded PDF:
-- **Header**: "Wedding Tales Nepal" with branding
-- **Body**: Client Name, Event Name, Nepali Date (BS), Event Date (AD), Freelancer Role, Card Label, Format Type, Size, 1st Backup Device, 1st Backup Path, Backup Time
-- Returns a blob URL that can be downloaded
+2. **Event count pills (1, 2, 3, ... N)** — Clickable number buttons that appear next to Similar. Clicking "2" shows only dates with exactly 2 events. The maximum number shown is dynamically computed from the highest event count any single day has in the current month.
 
-#### 3. Update Reconfirmation UI in 3 files:
+- Both controls only appear when a day filter (`filterDay`) is active.
+- "Similar" and the number pills are mutually exclusive — clicking a number disables Similar and vice versa.
+- Clicking the active number again clears the filter back to just the original day.
 
-**`src/components/files/FullScreenFilesTable.tsx`**:
-- Hide reconfirmation column content when `!file.final_generated_path` (show "-")
-- When `file.confirmed` → show non-clickable green "CONFIRMED"
-- When not confirmed + has backup → show clickable red "NOT CONFIRMED" that opens `ReconfirmationDialog`
+### Technical Approach
 
-**`src/components/client-detail/ClientFilesSection.tsx`**:
-- Same logic as above
+**File: `src/components/suite/AllClientsCrewTable.tsx`**
 
-**`src/components/files/FilesManagementTable.tsx`**:
-- Replace simple checkbox with same button pattern
-
-#### 4. WhatsApp Message
-Compose a message like:
+#### New State
+```typescript
+const [similarMode, setSimilarMode] = useState(false);
+const [eventCountFilter, setEventCountFilter] = useState<number | null>(null);
 ```
-*Wedding Tales Nepal - File Backup Confirmation*
 
-Hi {freelancerName}, your files have been copied successfully ✅
+#### Computed Values (useMemo)
+- `dayEventCounts`: A `Map<string, number>` counting events per day for the current month (from the unfiltered month rows, not `filteredRows`)
+- `maxEventsPerDay`: The highest count in `dayEventCounts`
+- `currentDayEventCount`: The count for the currently selected `filterDay`
 
-📋 *Details:*
-• Client: {clientName}
-• Event: {eventName}
-• Date (BS): {nepaliDate}
-• Card: {cardLabel}
-• Format: {formatType}
-• Size: {sizeGB} GB
-• Backed up to: {deviceName}
+#### Modified `filteredRows` logic
+Currently (line 310): `if (filterDay) rows = rows.filter(a => a.eventDay === filterDay);`
 
-📄 PDF receipt attached separately.
+Updated logic:
+- If `similarMode` is ON and `filterDay` is set: filter to all days where `dayEventCounts.get(day) === currentDayEventCount`, sorted ascending
+- If `eventCountFilter` is set: filter to all days where `dayEventCounts.get(day) === eventCountFilter`, sorted ascending  
+- Otherwise: keep existing `filterDay` behavior
 
-Thank you! 🙏
+#### UI — Header controls (after Sort dropdown, before Expand All)
+Only render when `filterDay` is active:
 ```
-Uses `openWhatsApp()` from `src/lib/whatsapp-utils.ts`
+[Similar] [1] [2] [3] [4] [5]
+```
+- "Similar" is a toggle button (highlighted when active)
+- Number pills are styled like the lagan day pills, highlighted when selected
+- Reset both when `filterDay` is cleared
 
-### Files to create/modify
-1. **Create** `src/components/files/ReconfirmationDialog.tsx` — dialog with confirm + WhatsApp option
-2. **Create** `src/lib/file-confirmation-pdf.ts` — PDF generation utility
-3. **Modify** `src/components/files/FullScreenFilesTable.tsx` — new reconfirmation UI
-4. **Modify** `src/components/client-detail/ClientFilesSection.tsx` — new reconfirmation UI
-5. **Modify** `src/components/files/FilesManagementTable.tsx` — replace checkbox with button pattern
-6. **Install** `jspdf` package for PDF generation
+#### Cleanup
+- When `filterDay` changes to null, reset `similarMode` and `eventCountFilter`
+
+### Files Changed
+- **`src/components/suite/AllClientsCrewTable.tsx`** — add state, computed values, modify filteredRows, add UI controls
 
