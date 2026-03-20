@@ -344,7 +344,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
       rows = rows.filter(a => CREW_COLUMNS.some(col => (a[col.field] as string)?.trim().toUpperCase() === upper));
     }
     return rows;
-  }, [assignments, selectedYear, selectedMonth, filterDay, filterClient, filterFreelancer, similarMode, eventCountFilter, dayEventCounts, currentDayEventCount]);
+  }, [assignments, selectedYear, selectedMonth, filterDay, filterClient, filterFreelancer, similarMode, eventCountFilter, dayEventCounts, currentDayEventCount, sortMode]);
 
   const upcomingRows = useMemo(() =>
     filteredRows.filter(row => !row.eventDay || row.eventDay.includes('**') || !isBSDatePast(row.eventYear, row.eventMonth, row.eventDay)),
