@@ -1112,6 +1112,18 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
               Day {filterDay} <X className="w-3 h-3" />
             </button>
           )}
+          {similarMode && (
+            <span className="inline-flex items-center gap-1 bg-emerald-200 text-emerald-800 text-xs font-bold px-2.5 py-1 rounded-full">
+              Similar: {currentDayEventCount} events
+              <button onClick={() => setSimilarMode(false)} className="hover:text-emerald-900"><X className="w-3 h-3" /></button>
+            </span>
+          )}
+          {eventCountFilter !== null && (
+            <span className="inline-flex items-center gap-1 bg-emerald-200 text-emerald-800 text-xs font-bold px-2.5 py-1 rounded-full">
+              {eventCountFilter} events/day
+              <button onClick={() => setEventCountFilter(null)} className="hover:text-emerald-900"><X className="w-3 h-3" /></button>
+            </span>
+          )}
           {filterClient && (
             <button onClick={() => setFilterClient(null)} className="inline-flex items-center gap-1 bg-violet-200 text-violet-800 text-xs font-bold px-2.5 py-1 rounded-full hover:bg-violet-300 transition-colors">
               {filterClient} <X className="w-3 h-3" />
