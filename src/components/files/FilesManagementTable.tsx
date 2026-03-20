@@ -197,7 +197,7 @@ export function FilesManagementTable({ selectedMonth, availableMonths, onMonthCh
                             <TableHead className="text-[10px] w-16">Size</TableHead>
                             <TableHead className="text-[10px] w-20">Format</TableHead>
                             <TableHead className="text-[10px] w-20">Copied</TableHead>
-                            <TableHead className="text-[10px] text-center w-8">✓</TableHead>
+                            <TableHead className="text-[10px] text-center w-16">Status</TableHead>
                             <TableHead className="text-[10px] text-center w-8">2x</TableHead>
                             <TableHead className="text-[10px] text-center w-8">3x</TableHead>
                             <TableHead className="text-[10px] text-center w-8">☁</TableHead>
