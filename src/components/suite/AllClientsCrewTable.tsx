@@ -1000,6 +1000,25 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                 <SelectItem value="similar">Similar</SelectItem>
               </SelectContent>
             </Select>
+            {/* Event count pills when Similar sort mode is active */}
+            {sortMode === 'similar' && (
+              <div className="flex items-center gap-1">
+                {Array.from({ length: maxEventsPerDay }, (_, i) => i + 1).map(n => (
+                  <button
+                    key={n}
+                    onClick={() => setEventCountFilter(eventCountFilter === n ? null : n)}
+                    className={cn(
+                      "w-6 h-6 rounded-full text-xs font-bold transition-all flex items-center justify-center",
+                      eventCountFilter === n
+                        ? "bg-white text-violet-700 shadow-md scale-110"
+                        : "bg-white/20 text-white hover:bg-white/30"
+                    )}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            )}
             <Button
               variant="ghost"
               size="sm"
