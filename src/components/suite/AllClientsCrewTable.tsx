@@ -1122,7 +1122,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
               👤 {filterFreelancer} <X className="w-3 h-3" />
             </button>
           )}
-          <button onClick={() => { setFilterDay(null); setFilterClient(null); setFilterFreelancer(null); }} className="text-xs text-violet-500 hover:text-violet-700 underline ml-2">
+          <button onClick={() => { setFilterDay(null); setFilterClient(null); setFilterFreelancer(null); setSimilarMode(false); setEventCountFilter(null); }} className="text-xs text-violet-500 hover:text-violet-700 underline ml-2">
             Clear All
           </button>
         </div>
