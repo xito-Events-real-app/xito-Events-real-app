@@ -34,6 +34,8 @@ export function FilesManagementTable({ selectedMonth, availableMonths, onMonthCh
   const [selectedFile, setSelectedFile] = useState<FileRecord | null>(null);
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
   const [showAllMonths, setShowAllMonths] = useState(false);
+  const [reconfirmFile, setReconfirmFile] = useState<FileRecord | null>(null);
+  const [reconfirmOpen, setReconfirmOpen] = useState(false);
 
   // Group files by client -> event
   const clientGroups: ClientGroup[] = useMemo(() => {
