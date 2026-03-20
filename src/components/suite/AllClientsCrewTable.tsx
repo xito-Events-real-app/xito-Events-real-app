@@ -1009,6 +1009,45 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
               {allExpanded ? "Collapse All" : "Expand All"}
             </Button>
 
+            {/* Similar Events Filter - only when filterDay is active */}
+            {filterDay && (
+              <div className="flex items-center gap-1.5 ml-2">
+                <button
+                  onClick={() => {
+                    setSimilarMode(!similarMode);
+                    setEventCountFilter(null);
+                  }}
+                  className={cn(
+                    "px-2.5 py-1 rounded-full text-xs font-bold transition-all",
+                    similarMode
+                      ? "bg-white text-violet-700 shadow-md scale-105"
+                      : "bg-white/20 text-white hover:bg-white/30"
+                  )}
+                >
+                  Similar ({currentDayEventCount})
+                </button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: maxEventsPerDay }, (_, i) => i + 1).map(n => (
+                    <button
+                      key={n}
+                      onClick={() => {
+                        setEventCountFilter(eventCountFilter === n ? null : n);
+                        setSimilarMode(false);
+                      }}
+                      className={cn(
+                        "w-6 h-6 rounded-full text-xs font-bold transition-all flex items-center justify-center",
+                        eventCountFilter === n
+                          ? "bg-white text-violet-700 shadow-md scale-110"
+                          : "bg-white/20 text-white hover:bg-white/30"
+                      )}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
           </>
         )}
         <div className="ml-auto flex items-center gap-3">
