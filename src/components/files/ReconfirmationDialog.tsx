@@ -71,29 +71,12 @@ Hi ${file.freelancer_name || ""},\nyour files have been copied successfully!
 
 Thank you! 🙏`;
 
-      // Try Web Share API with file attachment (works on mobile)
-      if (navigator.share && navigator.canShare?.({ files: [pdfFile] })) {
-        try {
-          await navigator.share({
-            text: message,
-            files: [pdfFile],
-          });
-        } catch (shareErr: any) {
-          // User cancelled share - still confirm
-          if (shareErr?.name !== "AbortError") {
-            // Fallback: download PDF + open WhatsApp
-            downloadConfirmationPDF(file);
-            if (whatsappNo) openWhatsApp(whatsappNo, message);
-          }
-        }
+      // Download PDF and open WhatsApp directly
+      downloadConfirmationPDF(file);
+      if (whatsappNo) {
+        openWhatsApp(whatsappNo, message);
       } else {
-        // Desktop fallback: download PDF then open WhatsApp
-        downloadConfirmationPDF(file);
-        if (whatsappNo) {
-          openWhatsApp(whatsappNo, message);
-        } else {
-          toast.info("No WhatsApp number found. PDF downloaded.");
-        }
+        toast.info("No WhatsApp number found. PDF downloaded.");
       }
 
       await onConfirm(file.id);
