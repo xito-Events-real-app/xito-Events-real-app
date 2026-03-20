@@ -44,8 +44,7 @@ export function ReconfirmationDialog({ open, onOpenChange, file, onConfirm }: Re
   const handleConfirmAndWhatsApp = async () => {
     setIsConfirming(true);
     try {
-      // Download PDF first
-      downloadConfirmationPDF(file);
+      const pdfFile = getConfirmationPDFFile(file);
 
       // Look up freelancer WhatsApp number
       const { data: freelancerData } = await supabase
@@ -57,7 +56,6 @@ export function ReconfirmationDialog({ open, onOpenChange, file, onConfirm }: Re
 
       const whatsappNo = freelancerData?.whatsapp_no || freelancerData?.contact_no || "";
 
-      // Compose WhatsApp message
       const message = `*Wedding Tales Nepal - File Backup Confirmation* ✅
 
 Hi ${file.freelancer_name || ""},\nyour files have been copied successfully!
@@ -71,18 +69,35 @@ Hi ${file.freelancer_name || ""},\nyour files have been copied successfully!
 • Size: ${file.size_gb ? `${file.size_gb} GB` : "-"}
 • Backed up to: ${file.backup_1_device_name || "-"}
 
-📄 PDF receipt sent separately.
-
 Thank you! 🙏`;
 
-      if (whatsappNo) {
-        openWhatsApp(whatsappNo, message);
+      // Try Web Share API with file attachment (works on mobile)
+      if (navigator.share && navigator.canShare?.({ files: [pdfFile] })) {
+        try {
+          await navigator.share({
+            text: message,
+            files: [pdfFile],
+          });
+        } catch (shareErr: any) {
+          // User cancelled share - still confirm
+          if (shareErr?.name !== "AbortError") {
+            // Fallback: download PDF + open WhatsApp
+            downloadConfirmationPDF(file);
+            if (whatsappNo) openWhatsApp(whatsappNo, message);
+          }
+        }
       } else {
-        toast.info("No WhatsApp number found for this freelancer. PDF downloaded.");
+        // Desktop fallback: download PDF then open WhatsApp
+        downloadConfirmationPDF(file);
+        if (whatsappNo) {
+          openWhatsApp(whatsappNo, message);
+        } else {
+          toast.info("No WhatsApp number found. PDF downloaded.");
+        }
       }
 
       await onConfirm(file.id);
-      toast.success("File confirmed & PDF downloaded");
+      toast.success("File confirmed");
       onOpenChange(false);
     } catch {
       toast.error("Failed to confirm");
