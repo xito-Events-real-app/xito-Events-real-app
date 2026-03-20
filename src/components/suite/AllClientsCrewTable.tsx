@@ -1108,7 +1108,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
         <div className="bg-violet-50 border-b border-violet-200 px-4 py-2 flex items-center gap-2 shrink-0">
           <span className="text-xs font-medium text-violet-700">Filtered by:</span>
           {filterDay && (
-            <button onClick={() => setFilterDay(null)} className="inline-flex items-center gap-1 bg-violet-200 text-violet-800 text-xs font-bold px-2.5 py-1 rounded-full hover:bg-violet-300 transition-colors">
+            <button onClick={() => { setFilterDay(null); setSimilarMode(false); setEventCountFilter(null); }} className="inline-flex items-center gap-1 bg-violet-200 text-violet-800 text-xs font-bold px-2.5 py-1 rounded-full hover:bg-violet-300 transition-colors">
               Day {filterDay} <X className="w-3 h-3" />
             </button>
           )}
