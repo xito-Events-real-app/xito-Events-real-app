@@ -72,7 +72,7 @@ const DAY_COLORS = [
   "bg-orange-200/70",
 ];
 
-type SortMode = 'default' | 'maxEvents' | 'minEvents' | 'drone' | 'freelancerMax' | 'freelancerMin' | 'unassignedFirst';
+type SortMode = 'default' | 'maxEvents' | 'minEvents' | 'drone' | 'freelancerMax' | 'freelancerMin' | 'unassignedFirst' | 'similar';
 type FreelancerGroupData = { name: string; thisMonth: number; lastMonth: number; nextMonth: number; allTime: number; rows: FreelancerAssignment[] };
 
 
@@ -325,12 +325,13 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
       .filter(a => a.eventYear === selectedYear && a.eventMonth === selectedMonth)
       .sort((a, b) => (parseInt(a.eventDay) || 0) - (parseInt(b.eventDay) || 0));
 
-    if (filterDay) {
+    // Similar sort mode filter (works without filterDay)
+    if (sortMode === 'similar' && eventCountFilter !== null) {
+      rows = rows.filter(a => (dayEventCounts.get(a.eventDay || '') || 0) === eventCountFilter);
+    } else if (filterDay) {
       if (similarMode) {
-        // Show all days with same event count as the filtered day
         rows = rows.filter(a => (dayEventCounts.get(a.eventDay || '') || 0) === currentDayEventCount);
       } else if (eventCountFilter !== null) {
-        // Show all days with exactly eventCountFilter events
         rows = rows.filter(a => (dayEventCounts.get(a.eventDay || '') || 0) === eventCountFilter);
       } else {
         rows = rows.filter(a => a.eventDay === filterDay);
@@ -343,7 +344,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
       rows = rows.filter(a => CREW_COLUMNS.some(col => (a[col.field] as string)?.trim().toUpperCase() === upper));
     }
     return rows;
-  }, [assignments, selectedYear, selectedMonth, filterDay, filterClient, filterFreelancer, similarMode, eventCountFilter, dayEventCounts, currentDayEventCount]);
+  }, [assignments, selectedYear, selectedMonth, filterDay, filterClient, filterFreelancer, similarMode, eventCountFilter, dayEventCounts, currentDayEventCount, sortMode]);
 
   const upcomingRows = useMemo(() =>
     filteredRows.filter(row => !row.eventDay || row.eventDay.includes('**') || !isBSDatePast(row.eventYear, row.eventMonth, row.eventDay)),
@@ -983,7 +984,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                 ))}
               </div>
             )}
-            <Select value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
+            <Select value={sortMode} onValueChange={(v) => { setSortMode(v as SortMode); if (v !== 'similar') setEventCountFilter(null); }}>
               <SelectTrigger className="w-auto h-8 bg-white/15 border-white/30 text-white text-xs gap-1.5 [&>svg]:text-white px-2.5">
                 <ArrowUpDown className="w-3.5 h-3.5 shrink-0" />
                 <SelectValue placeholder="Sort" />
@@ -996,8 +997,28 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                 <SelectItem value="freelancerMax">Freelancer Max</SelectItem>
                 <SelectItem value="freelancerMin">Freelancer Min</SelectItem>
                 <SelectItem value="unassignedFirst">Unassigned First</SelectItem>
+                <SelectItem value="similar">Similar</SelectItem>
               </SelectContent>
             </Select>
+            {/* Event count pills when Similar sort mode is active */}
+            {sortMode === 'similar' && (
+              <div className="flex items-center gap-1">
+                {Array.from({ length: maxEventsPerDay }, (_, i) => i + 1).map(n => (
+                  <button
+                    key={n}
+                    onClick={() => setEventCountFilter(eventCountFilter === n ? null : n)}
+                    className={cn(
+                      "w-6 h-6 rounded-full text-xs font-bold transition-all flex items-center justify-center",
+                      eventCountFilter === n
+                        ? "bg-white text-violet-700 shadow-md scale-110"
+                        : "bg-white/20 text-white hover:bg-white/30"
+                    )}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            )}
             <Button
               variant="ghost"
               size="sm"
