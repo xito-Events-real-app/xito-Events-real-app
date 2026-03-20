@@ -72,7 +72,7 @@ const DAY_COLORS = [
   "bg-orange-200/70",
 ];
 
-type SortMode = 'default' | 'maxEvents' | 'minEvents' | 'drone' | 'freelancerMax' | 'freelancerMin' | 'unassignedFirst';
+type SortMode = 'default' | 'maxEvents' | 'minEvents' | 'drone' | 'freelancerMax' | 'freelancerMin' | 'unassignedFirst' | 'similar';
 type FreelancerGroupData = { name: string; thisMonth: number; lastMonth: number; nextMonth: number; allTime: number; rows: FreelancerAssignment[] };
 
 
