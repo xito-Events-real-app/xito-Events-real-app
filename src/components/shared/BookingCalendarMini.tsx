@@ -50,7 +50,7 @@ export function BookingCalendarMini({ className }: BookingCalendarMiniProps) {
       events.forEach(event => {
         if (!event.year || !event.month) return;
         const isUnknownDay = !event.day || event.day === '**' || String(event.day).startsWith('**');
-        const isBooked = (client as any)._source === 'booked' || (status.includes('BOOKED') && !status.includes('BOOKED SOMEWHERE ELSE'));
+        const isBooked = ((client as any)._source === 'booked' || (status.includes('BOOKED') && !status.includes('BOOKED SOMEWHERE ELSE'))) && !status.includes('POSTPONED') && !status.includes('CANCELLED');
         const isAdvancePending = !isBooked && status.includes('ADVANCE PENDING');
 
         if (isUnknownDay) {
