@@ -131,7 +131,7 @@ export function DesktopDashboard({
     () => statsClients
       .filter(c => {
         const status = getCurrentStatus(c.statusLog || '').toUpperCase();
-        return c._source === 'booked' || (status.includes('BOOKED') && !status.includes('BOOKED SOMEWHERE ELSE'));
+        return (c._source === 'booked' || (status.includes('BOOKED') && !status.includes('BOOKED SOMEWHERE ELSE'))) && !status.includes('POSTPONED') && !status.includes('CANCELLED');
       })
       .map(c => c.registeredDateTimeAD)
       .filter(Boolean) as string[],
