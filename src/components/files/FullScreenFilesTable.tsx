@@ -133,7 +133,7 @@ interface FullScreenFilesTableProps {
 
 export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
   const isMobile = useIsMobile();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const didApplyUrlParams = useRef(false);
   const currentBS = getCurrentBSDate();
   const [selectedYear, setSelectedYear] = useState(String(currentBS.year));
