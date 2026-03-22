@@ -292,7 +292,7 @@ export async function ensureVideoEditRows(): Promise<number> {
   );
 
   // Load ALL deliverables (enabled AND disabled) for per-type decisions
-  const bookedRegDates = [...bookedMap.keys()];
+  const bookedRegDates = Array.from(bookedMap.keys());
   const allDeliverables: any[] = [];
   for (let i = 0; i < bookedRegDates.length; i += 50) {
     const batch = bookedRegDates.slice(i, i + 50);
