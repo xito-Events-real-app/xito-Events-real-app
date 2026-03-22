@@ -98,7 +98,7 @@ export function AssignNoteDialog({ open, onOpenChange, note, onSuccess }: Assign
         toast.success(`Note assigned to ${client.clientName}`, {
         action: {
           label: "View Client",
-          onClick: () => navigate(`/client/${encodeURIComponent(client.registeredDateTimeAD!)}`),
+          onClick: () => navigate(`/client-tracker/client/${encodeURIComponent(client.registeredDateTimeAD!)}`),
         },
       });
       onSuccess();
