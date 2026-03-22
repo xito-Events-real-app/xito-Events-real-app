@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useFilesDashboardData, type DashboardStats } from "@/hooks/useFilesDashboardData";
+import { useFilesDashboardData, type DashboardStats, type FilterMode } from "@/hooks/useFilesDashboardData";
 import { FileDashboardClientSheet } from "./FileDashboardClientSheet";
 import { FileRecord } from "@/lib/files-api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,26 +9,39 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  Search, RefreshCw, Clock, CheckCircle, AlertTriangle, HardDrive,
-  TrendingUp, Activity, Info, ShieldAlert, ShieldCheck, CalendarDays,
+  Search, RefreshCw, CheckCircle, Clock, AlertTriangle, HardDrive,
+  TrendingUp, Activity, Info, ShieldAlert, ShieldCheck, CalendarDays, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type CardKey = "recent" | "pending" | "backup" | "today";
+interface CardDef {
+  key: string;
+  filterMode: FilterMode;
+  label: string;
+  icon: React.ElementType;
+  color: string;
+  glowColor: string;
+}
 
-const STATUS_CARDS: { key: CardKey; label: string; icon: React.ElementType; color: string; glowColor: string }[] = [
-  { key: "recent", label: "Recently Copied", icon: CheckCircle, color: "hsl(145,65%,42%)", glowColor: "hsl(145,65%,42%/0.15)" },
-  { key: "pending", label: "Files Pending", icon: Clock, color: "hsl(0,84%,60%)", glowColor: "hsl(0,84%,60%/0.15)" },
-  { key: "backup", label: "Double Backup Pending", icon: AlertTriangle, color: "hsl(40,95%,50%)", glowColor: "hsl(40,95%,50%/0.15)" },
-  { key: "today", label: "Storage Today", icon: HardDrive, color: "hsl(210,90%,55%)", glowColor: "hsl(210,90%,55%/0.15)" },
+const STATUS_CARDS: CardDef[] = [
+  { key: "today", filterMode: "today", label: "Today's Transfers", icon: CheckCircle, color: "hsl(145,65%,42%)", glowColor: "hsl(145,65%,42%/0.15)" },
+  { key: "copied", filterMode: "copied", label: "Total Copied", icon: HardDrive, color: "hsl(210,90%,55%)", glowColor: "hsl(210,90%,55%/0.15)" },
+  { key: "pending", filterMode: "pending", label: "Files Pending", icon: Clock, color: "hsl(0,84%,60%)", glowColor: "hsl(0,84%,60%/0.15)" },
+  { key: "backup", filterMode: "backup_done", label: "Double Backup", icon: AlertTriangle, color: "hsl(40,95%,50%)", glowColor: "hsl(40,95%,50%/0.15)" },
 ];
 
-function getStatValue(stats: DashboardStats, key: CardKey): string {
+function getCardDisplay(stats: DashboardStats, key: string): { primary: string; secondary?: string } {
   switch (key) {
-    case "recent": return String(stats.recentlyCopied);
-    case "pending": return String(stats.filesPending);
-    case "backup": return String(stats.doubleBackupPending);
-    case "today": return `${stats.storageTodayGB.toFixed(1)} GB`;
+    case "today":
+      return { primary: String(stats.todayCopied), secondary: `${stats.todayCopiedGB.toFixed(1)} GB` };
+    case "copied":
+      return { primary: String(stats.totalCopied), secondary: `${stats.totalCopiedGB.toFixed(1)} GB` };
+    case "pending":
+      return { primary: String(stats.filesPending) };
+    case "backup":
+      return { primary: `${stats.doubleBackupDone} Done`, secondary: `${stats.doubleBackupRemaining} Left` };
+    default:
+      return { primary: "0" };
   }
 }
 
@@ -45,12 +58,22 @@ function timeAgo(dateStr: string): string {
 export function FilesDashboard() {
   const navigate = useNavigate();
   const {
-    files, stats, activityFeed, insights, isLoading,
+    files, allFiles, stats, activityFeed, insights, isLoading,
     search, setSearch, filterMode, setFilterMode, lastUpdated, refresh,
   } = useFilesDashboardData();
 
   const [selectedFile, setSelectedFile] = useState<FileRecord | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+
+  // Sub-filter state
+  const [subMonth, setSubMonth] = useState<string | null>(null);
+  const [subDevice, setSubDevice] = useState<string | null>(null);
+
+  // Reset sub-filters when main filter changes
+  useEffect(() => {
+    setSubMonth(null);
+    setSubDevice(null);
+  }, [filterMode]);
 
   // Restore scroll on mount
   useEffect(() => {
@@ -68,11 +91,59 @@ export function FilesDashboard() {
     navigate(`/files/client/${encodeURIComponent(f.registered_date_time_ad)}`);
   };
 
-  const activeCard = filterMode === "all" ? null : filterMode;
+  // Compute available sub-filter options from currently filtered files
+  const subFilterOptions = useMemo(() => {
+    const months = new Set<string>();
+    const devices = new Set<string>();
+    const events = new Set<string>();
+    for (const f of files) {
+      if (f.event_month && f.event_year) months.add(`${f.event_year}-${f.event_month}`);
+      if (f.backup_1_device_name) devices.add(f.backup_1_device_name);
+      if (f.event_name) events.add(f.event_name);
+    }
+    return {
+      months: Array.from(months).sort().reverse(),
+      devices: Array.from(devices).sort(),
+      events: Array.from(events).sort(),
+    };
+  }, [files]);
 
-  const handleCardClick = (key: CardKey) => {
-    setFilterMode(filterMode === key ? "all" : key);
+  // Apply sub-filters on top of main filter
+  const displayFiles = useMemo(() => {
+    let result = files;
+    if (subMonth) {
+      const [y, m] = subMonth.split("-");
+      result = result.filter(f => f.event_year === y && f.event_month === m);
+    }
+    if (subDevice) {
+      result = result.filter(f => f.backup_1_device_name === subDevice);
+    }
+    return result;
+  }, [files, subMonth, subDevice]);
+
+  const handleCardClick = (card: CardDef) => {
+    if (card.key === "backup") {
+      // Toggle between backup_done and backup_remaining, or turn off
+      if (filterMode === "backup_done") {
+        setFilterMode("backup_remaining");
+      } else if (filterMode === "backup_remaining") {
+        setFilterMode("all");
+      } else {
+        setFilterMode("backup_done");
+      }
+    } else {
+      setFilterMode(filterMode === card.filterMode ? "all" : card.filterMode);
+    }
   };
+
+  const isCardActive = (card: CardDef) => {
+    if (card.key === "backup") return filterMode === "backup_done" || filterMode === "backup_remaining";
+    return filterMode === card.filterMode;
+  };
+
+  const showSubFilters = filterMode !== "all";
+  const showDeviceFilter = filterMode === "copied" || filterMode === "backup_done" || filterMode === "backup_remaining";
+  const showMonthFilter = filterMode !== "all";
 
   return (
     <div className="files-dashboard space-y-5 animate-fade-in">
@@ -97,41 +168,151 @@ export function FilesDashboard() {
 
       {/* ─── STATUS CARDS ─── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {STATUS_CARDS.map(({ key, label, icon: Icon, color, glowColor }) => {
-          const isActive = activeCard === key;
+        {STATUS_CARDS.map((card) => {
+          const active = isCardActive(card);
+          const display = getCardDisplay(stats, card.key);
+          const Icon = card.icon;
           return (
             <Card
-              key={key}
-              onClick={() => handleCardClick(key)}
+              key={card.key}
+              onClick={() => handleCardClick(card)}
               className={cn(
                 "cursor-pointer border-0 transition-all duration-300 hover:scale-[1.02]",
                 "bg-[hsl(220,25%,11%)]",
-                isActive && "ring-2",
+                active && "ring-2",
               )}
               style={{
-                boxShadow: isActive ? `0 0 20px ${glowColor}` : `0 0 0 transparent`,
-                borderColor: isActive ? color : "transparent",
-                ...(isActive ? { ringColor: color } : {}),
+                boxShadow: active ? `0 0 20px ${card.glowColor}` : `0 0 0 transparent`,
+                borderColor: active ? card.color : "transparent",
+                ...(active ? { ringColor: card.color } : {}),
               }}
             >
               <CardContent className="p-4 flex items-center gap-3">
-                <div className="p-2.5 rounded-xl" style={{ backgroundColor: glowColor }}>
-                  <Icon className="w-5 h-5" style={{ color }} />
+                <div className="p-2.5 rounded-xl" style={{ backgroundColor: card.glowColor }}>
+                  <Icon className="w-5 h-5" style={{ color: card.color }} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: `${color}` }}>
-                    {label}
+                  <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: card.color }}>
+                    {card.label}
+                    {card.key === "backup" && filterMode === "backup_remaining" && (
+                      <span className="ml-1 text-[hsl(0,84%,60%)]">• Remaining</span>
+                    )}
+                    {card.key === "backup" && filterMode === "backup_done" && (
+                      <span className="ml-1 text-[hsl(145,65%,55%)]">• Done</span>
+                    )}
                   </p>
-                  <p className="text-2xl font-black text-[hsl(220,15%,95%)] tabular-nums">
-                    {getStatValue(stats, key)}
-                  </p>
+                  <div className="flex items-baseline gap-1.5">
+                    <p className="text-xl font-black text-[hsl(220,15%,95%)] tabular-nums leading-tight">
+                      {display.primary}
+                    </p>
+                    {display.secondary && (
+                      <p className="text-xs font-medium text-[hsl(220,15%,55%)]">
+                        {display.secondary}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <TrendingUp className="w-4 h-4" style={{ color, opacity: 0.4 }} />
+                <TrendingUp className="w-4 h-4" style={{ color: card.color, opacity: 0.4 }} />
               </CardContent>
             </Card>
           );
         })}
       </div>
+
+      {/* ─── SUB-FILTERS BAR ─── */}
+      {showSubFilters && (
+        <div className="flex flex-wrap items-center gap-2 px-1">
+          <span className="text-[10px] uppercase tracking-wider text-[hsl(220,15%,45%)] font-semibold mr-1">Filters:</span>
+
+          {/* Backup sub-mode toggle */}
+          {(filterMode === "backup_done" || filterMode === "backup_remaining") && (
+            <div className="flex gap-1">
+              <button
+                onClick={() => setFilterMode("backup_done")}
+                className={cn(
+                  "text-[10px] font-bold px-3 py-1 rounded-full transition-all",
+                  filterMode === "backup_done"
+                    ? "bg-[hsl(145,65%,42%/0.2)] text-[hsl(145,65%,55%)] ring-1 ring-[hsl(145,65%,42%)]"
+                    : "bg-[hsl(220,25%,15%)] text-[hsl(220,15%,55%)] hover:bg-[hsl(220,25%,18%)]"
+                )}
+              >
+                Done ({stats.doubleBackupDone})
+              </button>
+              <button
+                onClick={() => setFilterMode("backup_remaining")}
+                className={cn(
+                  "text-[10px] font-bold px-3 py-1 rounded-full transition-all",
+                  filterMode === "backup_remaining"
+                    ? "bg-[hsl(0,84%,60%/0.2)] text-[hsl(0,84%,65%)] ring-1 ring-[hsl(0,84%,60%)]"
+                    : "bg-[hsl(220,25%,15%)] text-[hsl(220,15%,55%)] hover:bg-[hsl(220,25%,18%)]"
+                )}
+              >
+                Remaining ({stats.doubleBackupRemaining})
+              </button>
+            </div>
+          )}
+
+          {/* Month pills */}
+          {showMonthFilter && subFilterOptions.months.length > 0 && (
+            <>
+              <div className="w-px h-4 bg-[hsl(220,20%,20%)]" />
+              <div className="max-w-[400px] overflow-x-auto">
+                <div className="flex gap-1">
+                  {subFilterOptions.months.map(m => (
+                    <button
+                      key={m}
+                      onClick={() => setSubMonth(subMonth === m ? null : m)}
+                      className={cn(
+                        "text-[10px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap transition-all",
+                        subMonth === m
+                          ? "bg-[hsl(210,90%,55%/0.2)] text-[hsl(210,90%,65%)] ring-1 ring-[hsl(210,90%,55%)]"
+                          : "bg-[hsl(220,25%,15%)] text-[hsl(220,15%,55%)] hover:bg-[hsl(220,25%,18%)]"
+                      )}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Device pills */}
+          {showDeviceFilter && subFilterOptions.devices.length > 0 && (
+            <>
+              <div className="w-px h-4 bg-[hsl(220,20%,20%)]" />
+              <div className="max-w-[300px] overflow-x-auto">
+                <div className="flex gap-1">
+                  {subFilterOptions.devices.map(d => (
+                    <button
+                      key={d}
+                      onClick={() => setSubDevice(subDevice === d ? null : d)}
+                      className={cn(
+                        "text-[10px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap transition-all",
+                        subDevice === d
+                          ? "bg-[hsl(270,60%,60%/0.2)] text-[hsl(270,60%,70%)] ring-1 ring-[hsl(270,60%,60%)]"
+                          : "bg-[hsl(220,25%,15%)] text-[hsl(220,15%,55%)] hover:bg-[hsl(220,25%,18%)]"
+                      )}
+                    >
+                      {d}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Clear all */}
+          {(subMonth || subDevice) && (
+            <button
+              onClick={() => { setSubMonth(null); setSubDevice(null); }}
+              className="text-[10px] font-semibold px-2 py-1 rounded-full bg-[hsl(220,25%,15%)] text-[hsl(0,84%,65%)] hover:bg-[hsl(0,84%,60%/0.15)] flex items-center gap-1"
+            >
+              <X className="w-3 h-3" /> Clear
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ─── FILE TRACKING TABLE ─── */}
       <Card className="border-0 bg-[hsl(220,25%,10%)] overflow-hidden">
@@ -141,11 +322,11 @@ export function FilesDashboard() {
             File Tracking
             {filterMode !== "all" && (
               <Badge variant="secondary" className="ml-2 text-[10px] bg-[hsl(220,25%,18%)] text-[hsl(220,15%,70%)]">
-                {filterMode}
+                {filterMode.replace("_", " ")}
               </Badge>
             )}
           </h3>
-          <span className="text-[10px] text-[hsl(220,15%,45%)]">{files.length} records</span>
+          <span className="text-[10px] text-[hsl(220,15%,45%)]">{displayFiles.length} records</span>
         </div>
         <ScrollArea className="max-h-[360px]">
           <Table>
@@ -157,7 +338,7 @@ export function FilesDashboard() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {files.slice(0, 50).map(f => {
+              {displayFiles.slice(0, 50).map(f => {
                 const copied = !!f.final_generated_path;
                 const hasB2 = !!f.backup_2_path;
                 return (
@@ -187,7 +368,7 @@ export function FilesDashboard() {
                   </TableRow>
                 );
               })}
-              {files.length === 0 && (
+              {displayFiles.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-sm text-[hsl(220,15%,40%)] py-8">
                     {isLoading ? "Loading..." : "No files found"}
@@ -257,7 +438,6 @@ export function FilesDashboard() {
         </Card>
       </div>
 
-      {/* Client detail sheet */}
       <FileDashboardClientSheet
         file={selectedFile}
         open={sheetOpen}

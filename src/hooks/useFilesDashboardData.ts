@@ -3,10 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { FileRecord } from "@/lib/files-api";
 
 export interface DashboardStats {
-  recentlyCopied: number;
+  todayCopied: number;
+  todayCopiedGB: number;
+  totalCopied: number;
+  totalCopiedGB: number;
   filesPending: number;
-  doubleBackupPending: number;
-  storageTodayGB: number;
+  doubleBackupDone: number;
+  doubleBackupRemaining: number;
 }
 
 export interface ActivityItem {
@@ -21,12 +24,7 @@ export interface InsightItem {
   message: string;
 }
 
-type FilterMode = "all" | "recent" | "pending" | "backup" | "today";
-
-function isWithin24Hours(dateStr: string): boolean {
-  const d = new Date(dateStr);
-  return Date.now() - d.getTime() < 24 * 60 * 60 * 1000;
-}
+export type FilterMode = "all" | "today" | "copied" | "pending" | "backup_done" | "backup_remaining";
 
 function isToday(dateStr: string): boolean {
   const d = new Date(dateStr);
@@ -76,13 +74,20 @@ export function useFilesDashboardData() {
   }, [fetchAll]);
 
   const stats = useMemo<DashboardStats>(() => {
-    const recentlyCopied = files.filter(f => f.backup_1_recorded_at && isWithin24Hours(f.backup_1_recorded_at)).length;
+    const todayFiles = files.filter(f => f.backup_1_recorded_at && isToday(f.backup_1_recorded_at));
+    const todayCopied = todayFiles.length;
+    const todayCopiedGB = todayFiles.reduce((sum, f) => sum + (Number(f.size_gb) || 0), 0);
+
+    const copiedFiles = files.filter(f => !!f.final_generated_path);
+    const totalCopied = copiedFiles.length;
+    const totalCopiedGB = copiedFiles.reduce((sum, f) => sum + (Number(f.size_gb) || 0), 0);
+
     const filesPending = files.filter(f => !f.final_generated_path).length;
-    const doubleBackupPending = files.filter(f => f.final_generated_path && !f.backup_2_path).length;
-    const storageTodayGB = files
-      .filter(f => f.backup_1_recorded_at && isToday(f.backup_1_recorded_at))
-      .reduce((sum, f) => sum + (Number(f.size_gb) || 0), 0);
-    return { recentlyCopied, filesPending, doubleBackupPending, storageTodayGB };
+
+    const doubleBackupDone = files.filter(f => !!f.backup_2_path).length;
+    const doubleBackupRemaining = files.filter(f => f.final_generated_path && !f.backup_2_path).length;
+
+    return { todayCopied, todayCopiedGB, totalCopied, totalCopiedGB, filesPending, doubleBackupDone, doubleBackupRemaining };
   }, [files]);
 
   const filteredFiles = useMemo(() => {
@@ -96,14 +101,16 @@ export function useFilesDashboardData() {
       );
     }
     switch (filterMode) {
-      case "recent":
-        return result.filter(f => f.backup_1_recorded_at && isWithin24Hours(f.backup_1_recorded_at));
-      case "pending":
-        return result.filter(f => !f.final_generated_path);
-      case "backup":
-        return result.filter(f => f.final_generated_path && !f.backup_2_path);
       case "today":
         return result.filter(f => f.backup_1_recorded_at && isToday(f.backup_1_recorded_at));
+      case "copied":
+        return result.filter(f => !!f.final_generated_path);
+      case "pending":
+        return result.filter(f => !f.final_generated_path);
+      case "backup_done":
+        return result.filter(f => !!f.backup_2_path);
+      case "backup_remaining":
+        return result.filter(f => f.final_generated_path && !f.backup_2_path);
       default:
         return result;
     }
@@ -135,14 +142,12 @@ export function useFilesDashboardData() {
 
   const insights = useMemo<InsightItem[]>(() => {
     const items: InsightItem[] = [];
-    const todayCount = files.filter(f => f.backup_1_recorded_at && isToday(f.backup_1_recorded_at)).length;
-    items.push({ type: "info", message: `${todayCount} files copied today` });
+    items.push({ type: "info", message: `${stats.todayCopied} files copied today (${stats.todayCopiedGB.toFixed(1)} GB)` });
     if (stats.filesPending > 0) items.push({ type: "warning", message: `${stats.filesPending} files pending copy` });
-    if (stats.doubleBackupPending > 0) items.push({ type: "warning", message: `${stats.doubleBackupPending} files need double backup` });
-    const confirmedCount = files.filter(f => f.confirmed).length;
-    items.push({ type: "success", message: `${confirmedCount} backups confirmed` });
+    if (stats.doubleBackupRemaining > 0) items.push({ type: "warning", message: `${stats.doubleBackupRemaining} files need double backup` });
+    items.push({ type: "success", message: `${stats.doubleBackupDone} double backups completed` });
     return items;
-  }, [files, stats]);
+  }, [stats]);
 
   return {
     files: filteredFiles,
