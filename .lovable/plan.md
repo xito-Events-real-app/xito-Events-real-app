@@ -1,47 +1,25 @@
 
 
-## Fix: Shakti Neupane — Correct Crew Assignments + File Cleanup
+## Fix: Add Missing Aashik Magar File Row for Shakti Neupane
 
-### Current vs Correct Crew
+### Problem
+WEDDING BOTH SIDES crew has `extra_videographer = Aashik Magar`, but the `files_management` table has no row for him. All other crew members have file rows.
 
-**BRIDE MEHNDI & GROOM HALDI** (currently wrong):
-```text
-Current:  PB=empty, PG=NIKIT, VB=empty, VG=BARUN, EP=ARJUN, IPHONE=BENZO
-Correct:  PB=ARJUN, PG=PRASAN, VB=BARUN, VG=JEEWAN, DRONE=ARJUN
-```
+### Fix
+Insert one skeleton file row for Aashik Magar / EV in WEDDING BOTH SIDES with the correct event metadata. No other data will be touched.
 
-**WEDDING BOTH SIDES** (almost right, missing EV + wrong DRONE):
-```text
-Current:  PB=ARJUN, PG=PRASAN, VB=BARUN, VG=JEEWAN, DRONE=ARJUN
-Correct:  PB=ARJUN, PG=PRASAN, VB=BARUN, VG=JEEWAN, DRONE=BARUN, EV=AASHIK
-```
-
-**PRE+RECEPTION** (EV wrong, missing EP):
-```text
-Current:  PB=ARJUN, PG=PRASAN, VB=BARUN, VG=JEEWAN, EV=Aashik, DRONE=BARUN
-Correct:  PB=ARJUN, PG=PRASAN, VB=BARUN, VG=JEEWAN, EP=NIKIT, EV=HARI
-```
-
-### Data fixes (via database migration)
-
-**1. Fix crew in `freelancer_assignments`:**
-
-- **BRIDE MEHNDI** (id: `0e3f36b0`): set PB=ARJUN PANDEY, PG=PRASAN KARKI, VB=BARUN KOIRALA, VG=JEEWAN SHRESTHA, DRONE=ARJUN PANDEY, clear EP/IPHONE
-- **WEDDING** (id: `a02a5567`): set DRONE=BARUN KOIRALA, EV=Aashik Magar
-- **PRE+RECEPTION** (id: `6fcc83a9`): set EP=NIKIT NEUPANE, EV=Hari Khanal, clear DRONE
-
-**2. Clean up wrong skeleton file rows (0GB, empty path):**
-- BRIDE MEHNDI: delete skeletons for NIKIT/PG, BARUN/VG, ARJUN/EP, BENZO/IPHONE
-- WEDDING: delete skeleton for ARJUN/DRONE (real BARUN/DRONE data exists)
-- PRE+RECEPTION: delete skeletons for Aashik/EV, ARJUN/PB, BARUN/DRONE, PRASAN/PG
-
-**3. Keep all file rows with real data (size > 0) untouched** — paths are physically correct on disk.
-
-### Files changed
-- Database only — no code changes needed
+### Data to insert
+- `registered_date_time_ad`: `2026-01-13T19:51:53.944Z`
+- `registered_date_bs`: `2082-09-30`
+- `client_name`: `Shakti Neupane`
+- `event_name`: `WEDDING BOTH SIDES`
+- `event_year`: `2082`, `event_month`: `11`, `event_day`: `28`, `event_date_ad`: `2026-03-12`
+- `freelancer_type`: `EV`, `freelancer_name`: `Aashik Magar`
+- `format_type`: `VIDEO`
+- All other fields: defaults (0 size, empty paths)
 
 ### Safety
-- Only Shakti Neupane rows touched
-- Only 0GB skeleton rows deleted; all rows with real file data preserved
-- Crew fields set exactly as user specified
+- Only 1 row inserted
+- No existing data modified
+- No code changes needed
 
