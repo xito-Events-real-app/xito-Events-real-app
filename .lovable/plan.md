@@ -1,63 +1,31 @@
 
 
-## Revamp Dashboard Status Cards — 4 Enhanced Cards with Sub-Filters
+## File Tracking Table — Scrollable, Filtered, Reordered Columns
 
-### Current State
-4 cards: Recently Copied, Files Pending, Double Backup Pending, Storage Today. Each toggles a simple filter. No size info on cards, no sub-filters.
+### Problems
+1. Table limited to 50 rows with `slice(0, 50)` — needs full scroll
+2. No year/month filters inside the file tracking section (user wants NepaliDateFilter style like All Clients page)
+3. Column order wrong — needs: Client, Event, Date (Nepali), Freelancer, Role, Card, Copy, Backup, Size, Storage, Updated
+4. Date shows AD format — needs Nepali like "Magh 21, 2082"
 
-### New Card Design
+### Changes
 
-**Card 1: "Today's Transfers"** (Green)
-- Shows: count + total GB (e.g. "12 files • 45.2 GB")
-- Click: filters to today's copied files
+**`src/components/files/FilesDashboard.tsx`**
 
-**Card 2: "Total Copied"** (Blue)  
-- Shows: count + total GB of all files with `final_generated_path`
-- Click: filters to all copied files
-- Sub-filters appear above table: by month (`event_month`/`event_year`), by device (`backup_1_device_name`)
+1. **Make table fully scrollable**: Change `ScrollArea` `max-h-[360px]` to `max-h-[500px]` and remove `slice(0, 50)` — show all `displayFiles`
 
-**Card 3: "Files Pending"** (Red)
-- Shows: count of files without `final_generated_path`
-- Click: filters to pending files
-- Sub-filters: by month, by event name
+2. **Add NepaliDateFilter inside the File Tracking card header**: Import `NepaliDateFilter` from `@/components/booked/NepaliDateFilter`. Add `filterYear` and `filterMonth` state. Place the filter inline in the card header bar. Apply year/month filtering on `displayFiles` using `event_year` and `event_month` fields.
 
-**Card 4: "Double Backup"** (Yellow/Amber)
-- Shows: done count / remaining count (e.g. "8 Done • 15 Remaining")
-- Click: shows sub-filter toggle — "Done" vs "Remaining"
-  - Done = files with `backup_2_path`
-  - Remaining = files with `final_generated_path` but no `backup_2_path`
-- Additional sub-filters: by month, by device
+3. **Reorder columns to**: Client Name, Event, Date, Freelancer, Role, Card, Copy, Backup, Size, Storage, Updated
 
-### Implementation
+4. **Date column**: Convert from `event_date_ad` to Nepali format using `event_month`, `event_day`, `event_year` fields → display as `"Magh 21, 2082"` using `nepaliMonthsEnglish`
 
-**1. `src/hooks/useFilesDashboardData.ts`**
-- Update `DashboardStats` interface:
-  ```typescript
-  todayCopied: number;
-  todayCopiedGB: number;
-  totalCopied: number;
-  totalCopiedGB: number;
-  filesPending: number;
-  doubleBackupDone: number;
-  doubleBackupRemaining: number;
-  ```
-- Update `FilterMode` type: `"all" | "today" | "copied" | "pending" | "backup_done" | "backup_remaining"`
-- Add filter cases for the new modes
-- Expose `allFiles` for sub-filter computation (already exposed)
-
-**2. `src/components/files/FilesDashboard.tsx`**
-- Update `STATUS_CARDS` array with new names, values, colors
-- Card 4 shows two numbers ("Done • Remaining") instead of one
-- Add **sub-filter bar** between cards and table:
-  - Only visible when a card filter is active
-  - Shows month pills (derived from filtered files' `event_year`/`event_month`)
-  - For "Double Backup": shows "Done" / "Remaining" toggle pills
-  - For "Total Copied": shows device name pills
-  - Each pill toggles a secondary filter applied on top of the card filter
-- Add local state: `subFilterMonth`, `subFilterDevice`, `backupSubMode` ("done" | "remaining")
-- Apply sub-filters in a `useMemo` between `files` (from hook) and rendered rows
+5. **New columns**:
+   - Freelancer: `f.freelancer_name`
+   - Role: `f.freelancer_type`
+   - Card: `f.card_label`
+   - Storage: `f.backup_1_device_name`
 
 ### Files Changed
-- `src/hooks/useFilesDashboardData.ts`
 - `src/components/files/FilesDashboard.tsx`
 
