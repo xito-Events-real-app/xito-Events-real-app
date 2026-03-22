@@ -182,7 +182,7 @@ function VideoEditTable({
 }
 
 export function DesktopVideoEditTracker() {
-  const { queueRows, labRows, isLoading, isGenerating, updateField, pushToLab, generateRows, refresh } = useVideoEditTracker();
+  const { queueRows, labRows, isLoading, updateField, pushToLab } = useVideoEditTracker();
   const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean }[]>([]);
 
   useEffect(() => {
@@ -213,16 +213,6 @@ export function DesktopVideoEditTracker() {
                 Queue: {queueRows.length} · Lab: {labRows.length}
               </p>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={refresh} disabled={isLoading}>
-              <RefreshCw className={`w-4 h-4 mr-1 ${isLoading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-            <Button size="sm" onClick={generateRows} disabled={isGenerating} className="bg-gradient-to-r from-red-500 to-pink-600 text-white">
-              {isGenerating ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1" />}
-              Generate Rows
-            </Button>
           </div>
         </div>
       </div>

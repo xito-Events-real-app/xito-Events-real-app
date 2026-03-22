@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { useVideoEditTracker } from "@/hooks/useVideoEditTracker";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Video, RefreshCw, Sparkles, FlaskConical, ArrowRight, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Video, FlaskConical, ArrowRight, Loader2 } from "lucide-react";
 import { VideoEditRow } from "@/lib/video-edit-api";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -25,8 +25,8 @@ function VideoCard({
 }: {
   row: VideoEditRow;
   index: number;
-  onUpdateField: (rowNumber: number, field: string, value: string) => void;
-  onPushToLab?: (rowNumber: number) => void;
+  onUpdateField: (id: string, field: string, value: string) => void;
+  onPushToLab?: (id: string) => void;
   editors: { name: string; isVideoEditor: boolean }[];
   showPushToLab: boolean;
 }) {
@@ -53,13 +53,13 @@ function VideoCard({
       </div>
 
       <div className="flex items-center gap-2">
-        <Select value={row.urgency || "0"} onValueChange={(v) => onUpdateField(row.rowNumber, "urgency", v)}>
+        <Select value={row.urgency || "0"} onValueChange={(v) => onUpdateField(row.id, "urgency", v)}>
           <SelectTrigger className="w-24 h-8 text-xs"><SelectValue placeholder="Urgency" /></SelectTrigger>
           <SelectContent>
             {["1", "2", "3", "4", "5"].map(u => <SelectItem key={u} value={u}>Urgency {u}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Select value={row.editor || "unassigned"} onValueChange={(v) => onUpdateField(row.rowNumber, "editor", v === "unassigned" ? "" : v)}>
+        <Select value={row.editor || "unassigned"} onValueChange={(v) => onUpdateField(row.id, "editor", v === "unassigned" ? "" : v)}>
           <SelectTrigger className="flex-1 h-8 text-xs"><SelectValue placeholder="Editor..." /></SelectTrigger>
           <SelectContent>
             <SelectItem value="unassigned">Unassigned</SelectItem>
@@ -70,7 +70,7 @@ function VideoCard({
       </div>
 
       {showPushToLab && (
-        <Button size="sm" variant="outline" className="w-full h-8 text-xs gap-1" onClick={() => onPushToLab?.(row.rowNumber)}>
+        <Button size="sm" variant="outline" className="w-full h-8 text-xs gap-1" onClick={() => onPushToLab?.(row.id)}>
           <FlaskConical className="w-3 h-3" /> Push to Lab <ArrowRight className="w-3 h-3" />
         </Button>
       )}
@@ -79,7 +79,7 @@ function VideoCard({
 }
 
 export function MobileVideoEditTracker() {
-  const { queueRows, labRows, isLoading, isGenerating, updateField, pushToLab, generateRows, refresh } = useVideoEditTracker();
+  const { queueRows, labRows, isLoading, updateField, pushToLab } = useVideoEditTracker();
   const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean }[]>([]);
 
   useEffect(() => {
@@ -94,21 +94,11 @@ export function MobileVideoEditTracker() {
   return (
     <div className="min-h-screen bg-background pb-20">
       <div className="sticky top-0 z-10 bg-card border-b px-4 py-3">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center">
-              <Video className="w-4 h-4 text-white" />
-            </div>
-            <h1 className="text-base font-bold text-foreground">Video Edit</h1>
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center">
+            <Video className="w-4 h-4 text-white" />
           </div>
-          <div className="flex gap-1.5">
-            <Button variant="ghost" size="icon" className="w-8 h-8" onClick={refresh} disabled={isLoading}>
-              <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
-            </Button>
-            <Button size="sm" className="h-8 text-xs bg-gradient-to-r from-red-500 to-pink-600 text-white" onClick={generateRows} disabled={isGenerating}>
-              {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-            </Button>
-          </div>
+          <h1 className="text-base font-bold text-foreground">Video Edit</h1>
         </div>
       </div>
 
@@ -130,7 +120,7 @@ export function MobileVideoEditTracker() {
             <TabsContent value="queue">
               <div className="space-y-3">
                 {queueRows.map((row, i) => (
-                  <VideoCard key={row.rowNumber} row={row} index={i} onUpdateField={updateField} onPushToLab={pushToLab} editors={editors} showPushToLab />
+                  <VideoCard key={row.id} row={row} index={i} onUpdateField={updateField} onPushToLab={pushToLab} editors={editors} showPushToLab />
                 ))}
                 {queueRows.length === 0 && <p className="text-center text-sm text-muted-foreground py-8">No items in queue</p>}
               </div>
@@ -138,7 +128,7 @@ export function MobileVideoEditTracker() {
             <TabsContent value="lab">
               <div className="space-y-3">
                 {labRows.map((row, i) => (
-                  <VideoCard key={row.rowNumber} row={row} index={i} onUpdateField={updateField} editors={editors} showPushToLab={false} />
+                  <VideoCard key={row.id} row={row} index={i} onUpdateField={updateField} editors={editors} showPushToLab={false} />
                 ))}
                 {labRows.length === 0 && <p className="text-center text-sm text-muted-foreground py-8">No items in lab</p>}
               </div>
