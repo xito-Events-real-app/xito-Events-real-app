@@ -39,7 +39,7 @@ interface ServiceAccountCredentials {
 }
 
 interface SheetRequest {
-  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient' | 'getDailyTasks' | 'addDailyTask' | 'updateDailyTask' | 'updateDailyTaskStatus' | 'getDailyTaskSetupData' | 'getFreelancers' | 'addFreelancer' | 'updateFreelancer' | 'deleteFreelancer' | 'syncFreelancerCategories' | 'getClientFreelancerAssignments' | 'updateFreelancerAssignment' | 'checkFreelancerAvailability' | 'fullSyncFreelancerAssignments' | 'getFreelancerBookings' | 'getAllFreelancerAssignments' | 'restoreFreelancerAssignments' | 'updateRequiredCrewCategories' | 'deleteClient' | 'reconcileBookedClients' | 'pullStorageDevices' | 'pushFilesToSheet' | 'pushStorageDevicesToSheet' | 'getVideoEditRows' | 'updateVideoEditRow' | 'generateVideoEditRows' | 'pushVideoEditToLab';
+  action: 'getDropdowns' | 'getClients' | 'getAllClients' | 'getSingleClient' | 'addClient' | 'updateClient' | 'searchClients' | 'testConnection' | 'getClientStatuses' | 'updateClientStatus' | 'addOldClient' | 'bulkUpdateStatus' | 'updateClientHandler' | 'logCallAttempt' | 'updateClientQuotation' | 'updateClientMindset' | 'updateBargainingRates' | 'updateClientBargainedRates' | 'updateOurCounterRates' | 'addClientComment' | 'addBookedClientComment' | 'updateFinalQuotation' | 'addPayment' | 'updatePayment' | 'getBookedClients' | 'migrateExistingBookedClients' | 'updateBookedClient' | 'resyncAllBookedClients' | 'fullResyncAllBookedClients' | 'cleanupDuplicateBookedFromTracker' | 'getVendors' | 'addVendor' | 'updateVendor' | 'deleteVendor' | 'getVendorTypes' | 'getBookedEventDetails' | 'syncToEventDetails' | 'fullSyncEventDetails' | 'updateEventDetails' | 'getClientEventDetails' | 'updateClientEventDetails' | 'getBulkEventDetails' | 'getAccounts' | 'addAccount' | 'getAccountSetupData' | 'getSecretsVendors' | 'addSecretsVendor' | 'getEventSetupData' | 'getEventDetailsSetupData' | 'getVenuesByType' | 'addVenueEntry' | 'getParlourTypes' | 'getParloursByType' | 'addParlourEntry' | 'refreshClientVendorData' | 'getClientContactDetails' | 'updateClientContactDetails' | 'fullSyncContactDetails' | 'resyncClientContactDetails' | 'getPublicFormData' | 'updateClientPriority' | 'updateBenzoKeepNotes' | 'getSearchHistory' | 'saveSearchQuery' | 'getUnassignedBenzoKeepNotes' | 'saveUnassignedBenzoKeepNote' | 'deleteUnassignedBenzoKeepNote' | 'transferBenzoKeepNote' | 'getClientsForNoteAssignment' | 'assignBenzoKeepNoteToClient' | 'getDailyTasks' | 'addDailyTask' | 'updateDailyTask' | 'updateDailyTaskStatus' | 'getDailyTaskSetupData' | 'getFreelancers' | 'addFreelancer' | 'updateFreelancer' | 'deleteFreelancer' | 'syncFreelancerCategories' | 'getClientFreelancerAssignments' | 'updateFreelancerAssignment' | 'checkFreelancerAvailability' | 'fullSyncFreelancerAssignments' | 'getFreelancerBookings' | 'getAllFreelancerAssignments' | 'restoreFreelancerAssignments' | 'updateRequiredCrewCategories' | 'deleteClient' | 'reconcileBookedClients' | 'pullStorageDevices' | 'pushFilesToSheet' | 'pushStorageDevicesToSheet' | 'getVideoEditRows' | 'updateVideoEditRow' | 'generateVideoEditRows' | 'pushVideoEditToLab' | 'pushVideoEditsToSheet';
   spreadsheetId?: string;
   data?: Record<string, unknown>;
   searchQuery?: string;
@@ -8347,6 +8347,133 @@ async function generateVideoEditRows(
   return { success: true, generatedCount: newRows.length };
 }
 
+// ============= PUSH VIDEO EDITS TO SHEET (Supabase → Sheets one-way sync) =============
+async function pushVideoEditsToSheetAction(accessToken: string) {
+  const spreadsheetId = Deno.env.get('GOOGLE_SPREADSHEET_ID');
+  if (!spreadsheetId) throw new Error('GOOGLE_SPREADSHEET_ID not configured');
+
+  const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const sb = createClient(supabaseUrl, supabaseKey);
+
+  // Get unsynced rows
+  const { data: unsyncedRows, error } = await sb
+    .from('video_edit_tracker')
+    .select('*')
+    .eq('synced_to_sheet', false)
+    .eq('deleted', false);
+
+  if (error) throw error;
+  if (!unsyncedRows || unsyncedRows.length === 0) return { pushed: 0 };
+
+  await ensureVideoEditSheetExists(accessToken, spreadsheetId);
+
+  const HEADER = ['REGISTERED DATE TIME AD', 'REGISTERED DATE BS', 'CLIENT NAME', 'EVENT NAME', 'EVENT YEAR', 'EVENT MONTH', 'EVENT DAY', 'EVENT DATE AD', 'VIDEO EDIT STATUS', 'URGENCY', 'PRIORITY', 'SUB EVENT NAME', 'EDIT TYPE', 'EDITOR', 'COMPANY NOTES', 'CLIENT DEMAND', 'REFERENCE', 'SONGS'];
+
+  const mapRow = (r: any) => [
+    r.registered_date_time_ad || '',
+    r.registered_date_bs || '',
+    r.client_name || '',
+    r.event_name || '',
+    r.event_year || '',
+    r.event_month || '',
+    r.event_day || '',
+    r.event_date_ad || '',
+    r.video_edit_status || 'QUEUE',
+    r.urgency || '',
+    '', // priority computed client-side
+    r.sub_event_name || '',
+    r.edit_type || '',
+    r.editor || '',
+    r.company_notes || '',
+    r.client_demand || '',
+    r.reference || '',
+    r.songs || '',
+  ];
+
+  // Composite key for matching: regDateTimeAD + eventName + subEventName + editType
+  const makeKey = (row: string[]) => `${row[0]}||${row[3]}||${row[11]}||${row[12]}`;
+
+  // Read existing sheet data
+  const readRange = encodeURIComponent(`'${VIDEO_EDIT_SHEET}'!A:R`);
+  const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${readRange}`;
+  const readRes = await fetchWithRetry(readUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const readData = await readRes.json();
+  const existingRows: string[][] = readData.values || [];
+
+  // Build key → sheet row number map
+  const keyToSheetRow = new Map<string, number>();
+  for (let i = 1; i < existingRows.length; i++) {
+    const row = existingRows[i];
+    if (row && row.length > 0) {
+      const key = makeKey(row);
+      keyToSheetRow.set(key, i + 1);
+    }
+  }
+
+  const updateBatch: { range: string; values: string[][] }[] = [];
+  const appendRows: string[][] = [];
+
+  for (const r of unsyncedRows) {
+    const row = mapRow(r);
+    const key = makeKey(row);
+    const existingSheetRow = keyToSheetRow.get(key);
+
+    if (existingSheetRow) {
+      const range = `'${VIDEO_EDIT_SHEET}'!A${existingSheetRow}:R${existingSheetRow}`;
+      updateBatch.push({ range, values: [row] });
+    } else {
+      appendRows.push(row);
+    }
+  }
+
+  // Batch update existing
+  if (updateBatch.length > 0) {
+    for (let i = 0; i < updateBatch.length; i += 100) {
+      const chunk = updateBatch.slice(i, i + 100);
+      const batchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`;
+      const batchRes = await fetchWithRetry(batchUrl, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data: chunk }),
+      });
+      if (!batchRes.ok) {
+        const errText = await batchRes.text();
+        throw new Error(`Failed to batch update video edits: ${batchRes.status} - ${errText.substring(0, 200)}`);
+      }
+    }
+    console.log(`[VIDEO-EDIT-PUSH] Updated ${updateBatch.length} existing rows`);
+  }
+
+  // Append new
+  if (appendRows.length > 0) {
+    const appendRange = encodeURIComponent(`'${VIDEO_EDIT_SHEET}'!A:R`);
+    const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${appendRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+    const appendRes = await fetchWithRetry(appendUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: appendRows }),
+    });
+    if (!appendRes.ok) {
+      const errText = await appendRes.text();
+      throw new Error(`Failed to append video edits: ${appendRes.status} - ${errText.substring(0, 200)}`);
+    }
+    console.log(`[VIDEO-EDIT-PUSH] Appended ${appendRows.length} new rows`);
+  }
+
+  // Mark as synced
+  const ids = unsyncedRows.map((r: any) => r.id);
+  for (let i = 0; i < ids.length; i += 100) {
+    const batch = ids.slice(i, i + 100);
+    await sb.from('video_edit_tracker').update({ synced_to_sheet: true }).in('id', batch);
+  }
+
+  return { pushed: unsyncedRows.length, updated: updateBatch.length, appended: appendRows.length };
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -8997,6 +9124,10 @@ Deno.serve(async (req) => {
       case 'pushVideoEditToLab': {
         if (!data || !data.rowNumber) throw new Error('rowNumber is required for pushVideoEditToLab');
         result = await pushVideoEditToLab(accessToken, spreadsheetId, data.rowNumber as number);
+        break;
+      }
+      case 'pushVideoEditsToSheet': {
+        result = await pushVideoEditsToSheetAction(accessToken);
         break;
       }
       default:

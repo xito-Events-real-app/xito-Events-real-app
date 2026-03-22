@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { Video, RefreshCw, Sparkles, FlaskConical, MessageSquare, Music, ExternalLink, ArrowRight, Loader2 } from "lucide-react";
+import { Video, FlaskConical, MessageSquare, Music, ExternalLink, ArrowRight, Loader2 } from "lucide-react";
 import { VideoEditRow } from "@/lib/video-edit-api";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -57,8 +57,8 @@ function VideoEditTable({
   showPushToLab,
 }: {
   rows: VideoEditRow[];
-  onUpdateField: (rowNumber: number, field: string, value: string) => void;
-  onPushToLab?: (rowNumber: number) => void;
+  onUpdateField: (id: string, field: string, value: string) => void;
+  onPushToLab?: (id: string) => void;
   editors: { name: string; isVideoEditor: boolean }[];
   showPushToLab: boolean;
 }) {
@@ -88,12 +88,12 @@ function VideoEditTable({
             </TableRow>
           )}
           {rows.map((row, idx) => (
-            <TableRow key={row.rowNumber} className="hover:bg-muted/30">
+            <TableRow key={row.id} className="hover:bg-muted/30">
               <TableCell className="text-center text-muted-foreground text-xs font-mono">{idx + 1}</TableCell>
               <TableCell className="text-center">
                 <Select
                   value={row.urgency || "0"}
-                  onValueChange={(v) => onUpdateField(row.rowNumber, "urgency", v)}
+                  onValueChange={(v) => onUpdateField(row.id, "urgency", v)}
                 >
                   <SelectTrigger className="w-16 h-8 p-0 border-0 bg-transparent justify-center">
                     <UrgencyBadge value={row.urgency || "0"} />
@@ -130,7 +130,7 @@ function VideoEditTable({
               <TableCell>
                 <Select
                   value={row.editor || "unassigned"}
-                  onValueChange={(v) => onUpdateField(row.rowNumber, "editor", v === "unassigned" ? "" : v)}
+                  onValueChange={(v) => onUpdateField(row.id, "editor", v === "unassigned" ? "" : v)}
                 >
                   <SelectTrigger className="w-36 h-8 text-xs">
                     <SelectValue placeholder="Assign..." />
@@ -165,7 +165,7 @@ function VideoEditTable({
                     size="sm"
                     variant="outline"
                     className="h-7 text-xs gap-1"
-                    onClick={() => onPushToLab?.(row.rowNumber)}
+                    onClick={() => onPushToLab?.(row.id)}
                   >
                     <FlaskConical className="w-3 h-3" />
                     Lab
@@ -182,7 +182,7 @@ function VideoEditTable({
 }
 
 export function DesktopVideoEditTracker() {
-  const { queueRows, labRows, isLoading, isGenerating, updateField, pushToLab, generateRows, refresh } = useVideoEditTracker();
+  const { queueRows, labRows, isLoading, updateField, pushToLab } = useVideoEditTracker();
   const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean }[]>([]);
 
   useEffect(() => {
@@ -213,16 +213,6 @@ export function DesktopVideoEditTracker() {
                 Queue: {queueRows.length} · Lab: {labRows.length}
               </p>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={refresh} disabled={isLoading}>
-              <RefreshCw className={`w-4 h-4 mr-1 ${isLoading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-            <Button size="sm" onClick={generateRows} disabled={isGenerating} className="bg-gradient-to-r from-red-500 to-pink-600 text-white">
-              {isGenerating ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1" />}
-              Generate Rows
-            </Button>
           </div>
         </div>
       </div>

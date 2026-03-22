@@ -1060,6 +1060,81 @@ export type Database = {
         }
         Relationships: []
       }
+      video_edit_tracker: {
+        Row: {
+          client_demand: string | null
+          client_name: string | null
+          company_notes: string | null
+          created_at: string | null
+          deleted: boolean | null
+          edit_type: string | null
+          editor: string | null
+          event_date_ad: string | null
+          event_day: string | null
+          event_month: string | null
+          event_name: string | null
+          event_year: string | null
+          id: string
+          reference: string | null
+          registered_date_bs: string | null
+          registered_date_time_ad: string
+          songs: string | null
+          sub_event_name: string | null
+          synced_to_sheet: boolean | null
+          updated_at: string | null
+          urgency: string | null
+          video_edit_status: string | null
+        }
+        Insert: {
+          client_demand?: string | null
+          client_name?: string | null
+          company_notes?: string | null
+          created_at?: string | null
+          deleted?: boolean | null
+          edit_type?: string | null
+          editor?: string | null
+          event_date_ad?: string | null
+          event_day?: string | null
+          event_month?: string | null
+          event_name?: string | null
+          event_year?: string | null
+          id?: string
+          reference?: string | null
+          registered_date_bs?: string | null
+          registered_date_time_ad: string
+          songs?: string | null
+          sub_event_name?: string | null
+          synced_to_sheet?: boolean | null
+          updated_at?: string | null
+          urgency?: string | null
+          video_edit_status?: string | null
+        }
+        Update: {
+          client_demand?: string | null
+          client_name?: string | null
+          company_notes?: string | null
+          created_at?: string | null
+          deleted?: boolean | null
+          edit_type?: string | null
+          editor?: string | null
+          event_date_ad?: string | null
+          event_day?: string | null
+          event_month?: string | null
+          event_name?: string | null
+          event_year?: string | null
+          id?: string
+          reference?: string | null
+          registered_date_bs?: string | null
+          registered_date_time_ad?: string
+          songs?: string | null
+          sub_event_name?: string | null
+          synced_to_sheet?: boolean | null
+          updated_at?: string | null
+          urgency?: string | null
+          video_edit_status?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
