@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { Copy, Check, AlertTriangle, Plus, Trash2 } from "lucide-react";
+import { Copy, Check, AlertTriangle, Plus, Trash2, ChevronsUpDown } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { buildFilePath, StorageDevice, FileRecord, getNextBackupNumber, duplicateFileRowForCard } from "@/lib/files-api";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -82,6 +84,9 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
   const [newCopierName, setNewCopierName] = useState("");
   const [pcName, setPcName] = useState("");
   const [localCardIds, setLocalCardIds] = useState<Record<string, string>>({});  // card_label -> row id for newly created cards
+  const [devicePopoverOpen, setDevicePopoverOpen] = useState(false);
+  const [pcNamePopoverOpen, setPcNamePopoverOpen] = useState(false);
+  const [drivePopoverOpen, setDrivePopoverOpen] = useState(false);
 
   const backupNumber = useMemo(() => {
     if (!fileRecord) return 1;
@@ -653,40 +658,86 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
                 <>
                   <div className="space-y-1">
                     <Label className="text-xs font-bold">PC Name</Label>
-                    <Select value={pcName} onValueChange={(v) => { setPcName(v); updateCurrentForm({ deviceId: "" }); }}>
-                      <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select PC..." /></SelectTrigger>
-                      <SelectContent>
-                        {uniquePcNames.map((name) => (
-                          <SelectItem key={name} value={name}>{name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Popover open={pcNamePopoverOpen} onOpenChange={setPcNamePopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" role="combobox" className="w-full justify-between h-8 text-xs font-normal">
+                          {pcName || <span className="text-muted-foreground">Select PC...</span>}
+                          <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[9999]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search PC..." className="h-8 text-xs" />
+                          <CommandList className="max-h-48">
+                            <CommandEmpty className="py-3 text-xs text-center">No PC found.</CommandEmpty>
+                            <CommandGroup>
+                              {[...uniquePcNames].sort((a, b) => a.localeCompare(b)).map((name) => (
+                                <CommandItem key={name} value={name} onSelect={() => { setPcName(name); updateCurrentForm({ deviceId: "" }); setPcNamePopoverOpen(false); }} className="text-xs">
+                                  <Check className={cn("mr-2 h-3 w-3", pcName === name ? "opacity-100" : "opacity-0")} />
+                                  {name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs font-bold">Drive Letter</Label>
-                    <Select value={currentForm.deviceId} onValueChange={(v) => updateCurrentForm({ deviceId: v })}>
-                      <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select drive..." /></SelectTrigger>
-                      <SelectContent>
-                        {pcDriveOptions.map((d) => (
-                          <SelectItem key={d.id} value={d.id}>{d.pc_drive_letter}:\\ ({d.remaining_storage_gb}GB)</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Popover open={drivePopoverOpen} onOpenChange={setDrivePopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" role="combobox" className="w-full justify-between h-8 text-xs font-normal">
+                          {currentForm.deviceId ? (() => { const d = pcDriveOptions.find(x => x.id === currentForm.deviceId); return d ? `${d.pc_drive_letter}:\\ (${d.remaining_storage_gb}GB)` : "Select..."; })() : <span className="text-muted-foreground">Select drive...</span>}
+                          <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[9999]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search drive..." className="h-8 text-xs" />
+                          <CommandList className="max-h-48">
+                            <CommandEmpty className="py-3 text-xs text-center">No drive found.</CommandEmpty>
+                            <CommandGroup>
+                              {pcDriveOptions.sort((a, b) => (a.pc_drive_letter || "").localeCompare(b.pc_drive_letter || "")).map((d) => (
+                                <CommandItem key={d.id} value={`${d.pc_drive_letter} ${d.remaining_storage_gb}GB`} onSelect={() => { updateCurrentForm({ deviceId: d.id }); setDrivePopoverOpen(false); }} className="text-xs">
+                                  <Check className={cn("mr-2 h-3 w-3", currentForm.deviceId === d.id ? "opacity-100" : "opacity-0")} />
+                                  {d.pc_drive_letter}:\\ ({d.remaining_storage_gb}GB)
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                 </>
               ) : (
                 <div className="space-y-1">
                   <Label className="text-xs font-bold">Device</Label>
-                  <Select value={currentForm.deviceId} onValueChange={(v) => updateCurrentForm({ deviceId: v })}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select..." /></SelectTrigger>
-                    <SelectContent>
-                      {filteredDevices.map((d) => (
-                        <SelectItem key={d.id} value={d.id}>
-                          {d.device_name} ({d.remaining_storage_gb}GB)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={devicePopoverOpen} onOpenChange={setDevicePopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" role="combobox" className="w-full justify-between h-8 text-xs font-normal">
+                        {currentForm.deviceId ? (() => { const d = filteredDevices.find(x => x.id === currentForm.deviceId); return d ? `${d.device_name} (${d.remaining_storage_gb}GB)` : "Select..."; })() : <span className="text-muted-foreground">Select device...</span>}
+                        <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[9999]" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search device..." className="h-8 text-xs" />
+                        <CommandList className="max-h-48">
+                          <CommandEmpty className="py-3 text-xs text-center">No device found.</CommandEmpty>
+                          <CommandGroup>
+                            {[...filteredDevices].sort((a, b) => (a.device_name || "").localeCompare(b.device_name || "")).map((d) => (
+                              <CommandItem key={d.id} value={`${d.device_name} ${d.remaining_storage_gb}GB`} onSelect={() => { updateCurrentForm({ deviceId: d.id }); setDevicePopoverOpen(false); }} className="text-xs">
+                                <Check className={cn("mr-2 h-3 w-3", currentForm.deviceId === d.id ? "opacity-100" : "opacity-0")} />
+                                {d.device_name} ({d.remaining_storage_gb}GB)
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               )}
             </div>
