@@ -233,17 +233,21 @@ export async function updateClientFieldInCache(
 
   // Keep crew table source in sync when client name is edited inline
   if (field === 'clientName') {
-    const { error: assignmentError } = await supabase
-      .from('freelancer_assignments')
-      .update({
-        client_name: value,
-        synced_to_sheet: false,
-        updated_at: new Date().toISOString(),
-      } as any)
-      .eq('registered_date_time_ad', registeredDateTimeAD);
+    // Propagate client_name to all related tables
+    const relatedTables = ['freelancer_assignments', 'files_management', 'contact_details_cache', 'event_details_cache'] as const;
+    for (const table of relatedTables) {
+      const { error: propError } = await supabase
+        .from(table)
+        .update({
+          client_name: value,
+          synced_to_sheet: false,
+          updated_at: new Date().toISOString(),
+        } as any)
+        .eq('registered_date_time_ad', registeredDateTimeAD);
 
-    if (assignmentError) {
-      console.warn('[updateClientFieldInCache] Failed to sync freelancer_assignments client_name:', assignmentError);
+      if (propError) {
+        console.warn(`[updateClientFieldInCache] Failed to sync ${table} client_name:`, propError);
+      }
     }
   }
 
@@ -326,12 +330,15 @@ export async function updateClientInCacheRecord(client: ClientData): Promise<voi
 
   if (error) throw error;
 
-  // Propagate client_name change to freelancer_assignments
+  // Propagate client_name change to all related tables
   if (client.clientName) {
-    await supabase
-      .from('freelancer_assignments')
-      .update({ client_name: client.clientName })
-      .eq('registered_date_time_ad', client.registeredDateTimeAD);
+    const relatedTables = ['freelancer_assignments', 'files_management', 'contact_details_cache', 'event_details_cache'] as const;
+    for (const table of relatedTables) {
+      await supabase
+        .from(table)
+        .update({ client_name: client.clientName } as any)
+        .eq('registered_date_time_ad', client.registeredDateTimeAD);
+    }
   }
 
   schedulePushToSheets();
