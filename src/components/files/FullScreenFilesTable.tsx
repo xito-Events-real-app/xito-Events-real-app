@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -132,6 +133,8 @@ interface FullScreenFilesTableProps {
 
 export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
   const isMobile = useIsMobile();
+  const [searchParams] = useSearchParams();
+  const didApplyUrlParams = useRef(false);
   const currentBS = getCurrentBSDate();
   const [selectedYear, setSelectedYear] = useState(String(currentBS.year));
   const [selectedMonth, setSelectedMonth] = useState(String(currentBS.month));
@@ -205,7 +208,32 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
     loadAssignments();
   }, [loadAssignments]);
 
-  // Sort by day DESCENDING
+  // Auto-filter and expand from URL params (e.g. from FileClientDetail "Set Path")
+  useEffect(() => {
+    if (didApplyUrlParams.current || loading || assignments.length === 0) return;
+    const urlClient = searchParams.get("client");
+    const urlEvent = searchParams.get("event");
+    const urlYear = searchParams.get("year");
+    const urlMonth = searchParams.get("month");
+
+    if (!urlClient) return;
+
+    // Set year/month if provided
+    if (urlYear && urlYear !== selectedYear) setSelectedYear(urlYear);
+    if (urlMonth && urlMonth !== selectedMonth) setSelectedMonth(urlMonth);
+
+    setFilterClient(urlClient);
+    didApplyUrlParams.current = true;
+
+    // Auto-expand matching row
+    if (urlEvent) {
+      const match = assignments.find(a => a.clientName === urlClient && a.event === urlEvent);
+      if (match) {
+        const rowKey = `${match.registeredDateTimeAD}__${match.event}`;
+        setExpandedRows(new Set([rowKey]));
+      }
+    }
+  }, [searchParams, assignments, loading, selectedYear, selectedMonth]);
   const filteredRows = useMemo(() => {
     let rows = [...assignments].sort((a, b) => (parseInt(b.eventDay) || 0) - (parseInt(a.eventDay) || 0));
     if (filterDay) rows = rows.filter(a => a.eventDay === filterDay);
