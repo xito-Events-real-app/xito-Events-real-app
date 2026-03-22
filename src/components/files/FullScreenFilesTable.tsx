@@ -225,6 +225,14 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
     setFilterClient(urlClient);
     didApplyUrlParams.current = true;
 
+    // Clear URL params after applying so they don't persist on re-navigation
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete("client");
+    newParams.delete("event");
+    newParams.delete("year");
+    newParams.delete("month");
+    setSearchParams(newParams, { replace: true });
+
     // Auto-expand matching row
     if (urlEvent) {
       const match = assignments.find(a => a.clientName === urlClient && a.event === urlEvent);
