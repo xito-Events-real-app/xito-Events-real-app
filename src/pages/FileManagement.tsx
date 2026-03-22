@@ -203,7 +203,7 @@ export default function FileManagement() {
           )}
         </main>
       </div>
-      </div>
+
       <FileReminderPopup />
     </div>
   );
