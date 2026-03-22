@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   VideoEditRow,
   getVideoEditRows,
   updateVideoEditField as apiUpdateField,
   pushToLab as apiPushToLab,
-  generateVideoEditRows as apiGenerate,
+  ensureVideoEditRows,
 } from "@/lib/video-edit-api";
+import { scheduleVideoEditPush } from "@/lib/video-edit-push-scheduler";
 import { useToast } from "@/hooks/use-toast";
 
 function getTodayStr() {
@@ -15,40 +16,28 @@ function getTodayStr() {
 export function useVideoEditTracker() {
   const [rows, setRows] = useState<VideoEditRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const autoGenTriggered = useRef(false);
   const { toast } = useToast();
 
   const loadRows = useCallback(async () => {
-    setIsLoading(true);
     try {
       const data = await getVideoEditRows();
       setRows(data || []);
-      return data || [];
     } catch (err: any) {
       toast({ title: "Error loading video edit data", description: err.message, variant: "destructive" });
-      return [];
-    } finally {
-      setIsLoading(false);
     }
   }, [toast]);
 
-  // Auto-generate on first load if sheet is empty
+  // On mount: ensure rows then load
   useEffect(() => {
     (async () => {
-      const data = await loadRows();
-      if (data.length === 0 && !autoGenTriggered.current) {
-        autoGenTriggered.current = true;
-        setIsGenerating(true);
-        try {
-          const result = await apiGenerate();
-          toast({ title: `Generated ${result.generatedCount} rows` });
-          await loadRows();
-        } catch (err: any) {
-          toast({ title: "Auto-generate failed", description: err.message, variant: "destructive" });
-        } finally {
-          setIsGenerating(false);
-        }
+      setIsLoading(true);
+      try {
+        await ensureVideoEditRows();
+        await loadRows();
+      } catch (err: any) {
+        console.error("[VIDEO-EDIT] Init error:", err);
+      } finally {
+        setIsLoading(false);
       }
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -68,34 +57,35 @@ export function useVideoEditTracker() {
   const queueRows = useMemo(() => {
     const filtered = rows.filter(r =>
       (r.videoEditStatus || "QUEUE").toUpperCase() === "QUEUE" &&
-      (!r.eventDateAD || r.eventDateAD < today)
+      r.eventDateAD && r.eventDateAD <= today
     );
     return withPriority(filtered);
   }, [rows, withPriority, today]);
 
   const labRows = useMemo(() => {
     const filtered = rows.filter(r =>
-      (r.videoEditStatus || "").toUpperCase() === "LAB" &&
-      (!r.eventDateAD || r.eventDateAD < today)
+      (r.videoEditStatus || "").toUpperCase() === "LAB"
     );
     return withPriority(filtered);
-  }, [rows, withPriority, today]);
+  }, [rows, withPriority]);
 
-  const updateField = useCallback(async (rowNumber: number, field: string, value: string) => {
+  const updateField = useCallback(async (id: string, field: string, value: string) => {
     // Optimistic update
-    setRows(prev => prev.map(r => r.rowNumber === rowNumber ? { ...r, [field]: value } : r));
+    setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
     try {
-      await apiUpdateField(rowNumber, field, value);
+      await apiUpdateField(id, field, value);
+      scheduleVideoEditPush();
     } catch (err: any) {
       toast({ title: "Update failed", description: err.message, variant: "destructive" });
       loadRows();
     }
   }, [toast, loadRows]);
 
-  const pushToLab = useCallback(async (rowNumber: number) => {
-    setRows(prev => prev.map(r => r.rowNumber === rowNumber ? { ...r, videoEditStatus: "LAB" } : r));
+  const pushToLab = useCallback(async (id: string) => {
+    setRows(prev => prev.map(r => r.id === id ? { ...r, videoEditStatus: "LAB" } : r));
     try {
-      await apiPushToLab(rowNumber);
+      await apiPushToLab(id);
+      scheduleVideoEditPush();
       toast({ title: "Pushed to Lab" });
     } catch (err: any) {
       toast({ title: "Push failed", description: err.message, variant: "destructive" });
@@ -103,18 +93,5 @@ export function useVideoEditTracker() {
     }
   }, [toast, loadRows]);
 
-  const generateRows = useCallback(async () => {
-    setIsGenerating(true);
-    try {
-      const result = await apiGenerate();
-      toast({ title: `Generated ${result.generatedCount} rows` });
-      await loadRows();
-    } catch (err: any) {
-      toast({ title: "Generate failed", description: err.message, variant: "destructive" });
-    } finally {
-      setIsGenerating(false);
-    }
-  }, [toast, loadRows]);
-
-  return { queueRows, labRows, isLoading, isGenerating, updateField, pushToLab, generateRows, refresh: loadRows };
+  return { queueRows, labRows, isLoading, updateField, pushToLab, refresh: loadRows };
 }
