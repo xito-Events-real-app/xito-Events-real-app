@@ -8999,6 +8999,10 @@ Deno.serve(async (req) => {
         result = await pushVideoEditToLab(accessToken, spreadsheetId, data.rowNumber as number);
         break;
       }
+      case 'pushVideoEditsToSheet': {
+        result = await pushVideoEditsToSheetAction(accessToken);
+        break;
+      }
       default:
         throw new Error(`Unknown action: ${action}`);
     }
