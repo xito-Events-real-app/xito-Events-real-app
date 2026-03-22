@@ -257,7 +257,9 @@ export function FilesManagementTable({ selectedMonth, availableMonths, onMonthCh
                                 {!file.final_generated_path ? (
                                   <span className="text-[10px] text-muted-foreground">-</span>
                                 ) : file.confirmed ? (
-                                  <span className="text-[10px] font-black text-emerald-600 cursor-default">CONFIRMED</span>
+                                  <button onClick={() => { setReconfirmFile(file); setReconfirmOpen(true); }} className="hover:scale-110 transition-transform">
+                                    <span className="text-[10px] font-black text-emerald-600 cursor-pointer">CONFIRMED</span>
+                                  </button>
                                 ) : (
                                   <button onClick={() => { setReconfirmFile(file); setReconfirmOpen(true); }} className="hover:scale-110 transition-transform">
                                     <span className="text-[10px] font-black text-red-600 whitespace-nowrap">NOT CONFIRMED</span>
@@ -298,6 +300,7 @@ export function FilesManagementTable({ selectedMonth, availableMonths, onMonthCh
         onConfirm={async (fileId) => {
           await update(fileId, { confirmed: true, reconfirmation: true, synced_to_sheet: false });
         }}
+        alreadyConfirmed={reconfirmFile?.confirmed === true}
       />
 
       <FilePathBuilderDialog

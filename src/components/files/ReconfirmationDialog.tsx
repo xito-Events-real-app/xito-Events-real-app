@@ -17,9 +17,10 @@ interface ReconfirmationDialogProps {
   onOpenChange: (open: boolean) => void;
   file: FileRecord | null;
   onConfirm: (fileId: string) => Promise<void>;
+  alreadyConfirmed?: boolean;
 }
 
-export function ReconfirmationDialog({ open, onOpenChange, file, onConfirm }: ReconfirmationDialogProps) {
+export function ReconfirmationDialog({ open, onOpenChange, file, onConfirm, alreadyConfirmed }: ReconfirmationDialogProps) {
   const [isConfirming, setIsConfirming] = useState(false);
 
   if (!file) return null;
@@ -50,12 +51,9 @@ export function ReconfirmationDialog({ open, onOpenChange, file, onConfirm }: Re
     }
   };
 
-  const handleConfirmAndWhatsApp = async () => {
+  const handleSendWhatsApp = async () => {
     setIsConfirming(true);
     try {
-      const pdfFile = getConfirmationPDFFile(file);
-
-      // Look up freelancer WhatsApp number
       const { data: freelancerData } = await supabase
         .from("freelancers_cache")
         .select("whatsapp_no, contact_no")
@@ -83,7 +81,6 @@ Hi ${file.freelancer_name || ""},\nyour files have been copied successfully!
 
 Thank you! 🙏`;
 
-      // Download PDF and open WhatsApp directly
       downloadConfirmationPDF(file);
       if (whatsappNo) {
         openWhatsApp(whatsappNo, message);
@@ -91,11 +88,13 @@ Thank you! 🙏`;
         toast.info("No WhatsApp number found. PDF downloaded.");
       }
 
-      await onConfirm(file.id);
-      toast.success("File confirmed");
+      if (!alreadyConfirmed) {
+        await onConfirm(file.id);
+      }
+      toast.success(alreadyConfirmed ? "WhatsApp opened" : "File confirmed");
       onOpenChange(false);
     } catch {
-      toast.error("Failed to confirm");
+      toast.error("Failed");
     } finally {
       setIsConfirming(false);
     }
@@ -105,7 +104,9 @@ Thank you! 🙏`;
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-lg font-bold">Confirm File Backup</DialogTitle>
+          <DialogTitle className="text-lg font-bold">
+            {alreadyConfirmed ? "Backup Confirmation Details" : "Confirm File Backup"}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3 py-2">
@@ -174,22 +175,24 @@ Thank you! 🙏`;
 
         <DialogFooter className="flex flex-col gap-2 sm:flex-col">
           <Button
-            onClick={handleConfirmAndWhatsApp}
+            onClick={handleSendWhatsApp}
             disabled={isConfirming}
             className="w-full gap-2 bg-emerald-600 hover:bg-emerald-500 text-white"
           >
             <MessageCircle className="w-4 h-4" />
-            Confirm & Send WhatsApp
+            {alreadyConfirmed ? "Send WhatsApp" : "Confirm & Send WhatsApp"}
           </Button>
-          <Button
-            variant="outline"
-            onClick={handleConfirmOnly}
-            disabled={isConfirming}
-            className="w-full gap-2"
-          >
-            <Check className="w-4 h-4" />
-            Confirm Only (Skip)
-          </Button>
+          {!alreadyConfirmed && (
+            <Button
+              variant="outline"
+              onClick={handleConfirmOnly}
+              disabled={isConfirming}
+              className="w-full gap-2"
+            >
+              <Check className="w-4 h-4" />
+              Confirm Only (Skip)
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
