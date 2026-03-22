@@ -93,7 +93,7 @@ function VideoEditTable({
               <TableCell className="text-center">
                 <Select
                   value={row.urgency || "0"}
-                  onValueChange={(v) => onUpdateField(row.rowNumber, "urgency", v)}
+                  onValueChange={(v) => onUpdateField(row.id, "urgency", v)}
                 >
                   <SelectTrigger className="w-16 h-8 p-0 border-0 bg-transparent justify-center">
                     <UrgencyBadge value={row.urgency || "0"} />
