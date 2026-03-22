@@ -1,33 +1,51 @@
 
 
-## Fix: Shakti Neupane — Remove `**` Date Events from File Management
+## Cascade Event Removal to Files, Video Edit, and Freelancer Settings
 
-### Problem 1: POST SHOOT rows should not exist
-POST SHOOT has `event_date_ad: 2026-03-**` — the `**` means the date is not yet decided, so the event has NOT happened. File rows should never be generated for undated events. Currently there are **13 active POST SHOOT rows**, many with wrong crew data (crew from BRIDE MEHNDI leaked into POST SHOOT rows).
+### What this does
+When an event is removed from a client in All Clients, cascade soft-deletes to `files_management`, `video_edit_tracker`, and hard-delete `freelancer_event_settings` — so orphaned rows don't linger.
 
-### Problem 2: FileClientDetail page shows `**` events
-The page at `/files/client/:clientId` loads ALL file rows for a client without filtering out `**` dates, so POST SHOOT appears even though it should not.
+### Data safety guarantee
+- Only rows matching the **exact** `registered_date_time_ad` + removed `event_name` are affected
+- `files_management` and `video_edit_tracker` use **soft-delete** (reversible)
+- For Shyam Poudel's "NUWAKOT BHOJ SHOOT": 3 skeleton rows with 0 data — safe to remove
 
-### Problem 3: `syncFilesWithAssignments` creates rows for `**` events
-When crew is assigned to any event, `syncFilesWithAssignments` is called — it does NOT check if `event_date_ad` contains `**`, so it generates file rows for undated events.
+### Code change — `src/lib/freelancer-assignment-cache.ts` (lines 261-267)
 
----
+After the existing `freelancer_assignments` delete, add cascade to three tables:
 
-### Fix 1: Data cleanup (via database)
-- Soft-delete all 13 active POST SHOOT rows for Shakti (`event_date_ad = '2026-03-**'`)
-- These rows have no meaningful file data (all `final_generated_path` are empty, `size_gb = 0`)
+```typescript
+if (existingList.length > names.length) {
+  const toDelete = existingList.slice(names.length);
+  const ids = toDelete.map(r => r.id);
+  await supabase.from('freelancer_assignments').delete().in('id', ids);
 
-### Fix 2: `src/pages/FileClientDetail.tsx`
-- In `fetchData()`, add filter: exclude rows where `event_date_ad` contains `**`
-- This prevents undated events from ever appearing in the client file detail view
+  // CASCADE: soft-delete files, video edit; hard-delete settings
+  for (const removedRow of toDelete) {
+    await supabase.from('files_management')
+      .update({ deleted_or_not: true, synced_to_sheet: false, updated_at: new Date().toISOString() } as any)
+      .eq('registered_date_time_ad', registeredDateTimeAD)
+      .eq('event_name', removedRow.event);
 
-### Fix 3: `src/lib/files-api.ts` — `syncFilesWithAssignments()`
-- At the top of the function, after loading the assignment, check if `event_date_ad` contains `**`
-- If yes, return early — never create file rows for undated events
-- This prevents the root cause: crew changes on other events triggering row creation for `**` events
+    await supabase.from('video_edit_tracker')
+      .update({ deleted: true, synced_to_sheet: false, updated_at: new Date().toISOString() } as any)
+      .eq('registered_date_time_ad', registeredDateTimeAD)
+      .eq('event_name', removedRow.event);
+
+    await supabase.from('freelancer_event_settings')
+      .delete()
+      .eq('registered_date_time_ad', registeredDateTimeAD)
+      .eq('event_name', removedRow.event);
+  }
+
+  console.log(`[CREW SYNC] Deleted ${toDelete.length} removed event rows + cascaded for ${clientName}`);
+}
+```
+
+### Data fix for Shyam Poudel
+Soft-delete the 3 orphaned "NUWAKOT BHOJ SHOOT" file rows via database update.
 
 ### Files changed
-1. `src/pages/FileClientDetail.tsx` — filter out `**` date rows
-2. `src/lib/files-api.ts` — early return in `syncFilesWithAssignments` for `**` dates
-3. Data: soft-delete 13 corrupted POST SHOOT rows
+1. `src/lib/freelancer-assignment-cache.ts` — add cascade in event removal block
+2. Data: soft-delete 3 orphaned rows for Shyam Poudel
 
