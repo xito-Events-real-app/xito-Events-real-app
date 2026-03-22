@@ -1,31 +1,50 @@
 
 
-## File Tracking Table — Scrollable, Filtered, Reordered Columns
+## Redesigned Freelancer Hover Info — Enhanced Stats & Actions
 
-### Problems
-1. Table limited to 50 rows with `slice(0, 50)` — needs full scroll
-2. No year/month filters inside the file tracking section (user wants NepaliDateFilter style like All Clients page)
-3. Column order wrong — needs: Client, Event, Date (Nepali), Freelancer, Role, Card, Copy, Backup, Size, Storage, Updated
-4. Date shows AD format — needs Nepali like "Magh 21, 2082"
+### What Changes
+Replace the current `FreelancerHoverInfo` component in `AllClientsCrewTable.tsx` with a cleaner, more informative layout.
 
-### Changes
+### New Layout
 
-**`src/components/files/FilesDashboard.tsx`**
+```text
+┌─────────────────────────────────┐
+│  Freelancer Name        → profile│
+├─────────────────────────────────┤
+│  Total: 8  │ Remaining: 3 │ Done: 5│
+│  (violet)    (amber)       (green) │
+├─────────────────────────────────┤
+│  Upcoming events list (if any)  │
+├─────────────────────────────────┤
+│  [Show only rows]  [WhatsApp]   │
+│  [Send Schedule →]              │
+└─────────────────────────────────┘
+```
 
-1. **Make table fully scrollable**: Change `ScrollArea` `max-h-[360px]` to `max-h-[500px]` and remove `slice(0, 50)` — show all `displayFiles`
+### Changes — `src/components/suite/AllClientsCrewTable.tsx`
 
-2. **Add NepaliDateFilter inside the File Tracking card header**: Import `NepaliDateFilter` from `@/components/booked/NepaliDateFilter`. Add `filterYear` and `filterMonth` state. Place the filter inline in the card header bar. Apply year/month filtering on `displayFiles` using `event_year` and `event_month` fields.
+**Rewrite `FreelancerHoverInfo` function (~lines 1798-1889)**
 
-3. **Reorder columns to**: Client Name, Event, Date, Freelancer, Role, Card, Copy, Backup, Size, Storage, Updated
+1. **Stats row**: Compute from `monthEvents`:
+   - `total` = all events in selected month
+   - `completed` = events where BS date is past (`isBSDatePast`)
+   - `remaining` = total - completed
+   - Display as 3 mini stat badges in a row: Total (violet), Remaining (amber), Completed (green)
 
-4. **Date column**: Convert from `event_date_ad` to Nepali format using `event_month`, `event_day`, `event_year` fields → display as `"Magh 21, 2082"` using `nepaliMonthsEnglish`
+2. **"Show only rows" button**: Already exists — keep as-is, style as outline button
 
-5. **New columns**:
-   - Freelancer: `f.freelancer_name`
-   - Role: `f.freelancer_type`
-   - Card: `f.card_label`
-   - Storage: `f.backup_1_device_name`
+3. **"Chat on WhatsApp" button**: New button that opens `wa.me/{phone}` without a message (just opens chat). Uses same freelancer phone lookup logic.
 
-### Files Changed
-- `src/components/files/FilesDashboard.tsx`
+4. **"Send Schedule" button**: Keep existing logic but make it a Dialog/AlertDialog popup instead of direct send:
+   - Click opens a small `Dialog` showing:
+     - Freelancer name
+     - Preview of the message text
+     - "Send via WhatsApp" confirm button
+     - "Cancel" button
+   - This avoids accidental sends and gives a clean preview
+
+5. **Clean UI**: Use proper spacing, dividers between sections, consistent button sizing
+
+### Single file changed
+- `src/components/suite/AllClientsCrewTable.tsx` (rewrite `FreelancerHoverInfo` ~90 lines)
 
