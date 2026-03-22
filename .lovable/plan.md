@@ -1,55 +1,30 @@
 
 
-## Expand Video Edit Tracker: 11-Tab Workflow Pipeline
+## Fix: Deliverable-Disabled Items Still Appearing in Video Edit Tracker
 
-### Overview
-Replace the current 2-tab system (Queue, Lab) with an 11-tab sequential pipeline. Each tab has an action button that pushes the row to the next stage.
+### Root Cause
+Both `ensureVideoEditRows` and `syncWithDeliverables` only query `enabled = true` deliverables. When a user disables ALL video deliverables for an event (e.g. switches off Full Video), the system sees zero enabled rows and falls back to creating default "Full Video + Highlights" rows — defeating the purpose.
 
-### Pipeline Stages (in order)
+### The Fix — `src/lib/video-edit-api.ts`
 
-| # | Tab Name | Status Value | Action Button Label |
-|---|----------|-------------|-------------------|
-| 1 | Queue | QUEUE | Edit Lab → |
-| 2 | Edit Lab | EDIT_LAB | Edit on Progress → |
-| 3 | Edit on Progress | EDIT_ON_PROGRESS | Color Queue → |
-| 4 | Color Queue | COLOR_QUEUE | Color Lab → |
-| 5 | Color Lab | COLOR_LAB | Color on Progress → |
-| 6 | Color on Progress | COLOR_ON_PROGRESS | Export Queue → |
-| 7 | Export Queue | EXPORT_QUEUE | Exported → |
-| 8 | Exported | EXPORTED | Client Review → |
-| 9 | Client Review | CLIENT_REVIEW | Re-Edit on Progress → |
-| 10 | Re-Edit on Progress | RE_EDIT_ON_PROGRESS | Finalized → |
-| 11 | Finalized | FINALIZED | *(no action button)* |
+#### In `ensureVideoEditRows` (step 5 + step 6):
+- Load ALL deliverables (both enabled and disabled) for the `video` and `overall` sections — not just enabled ones.
+- Track two maps:
+  - `enabledDeliverablesMap` — only enabled items (used to generate rows)
+  - `hasAnyDeliverablesMap` — all items including disabled (used to decide if client has configured deliverables)
+- Change the default branch (line 237): Only generate default "Full Video + Highlights" if `hasAnyDeliverablesMap` does NOT have ANY records for that client+event. If records exist but all are disabled → generate nothing.
 
-### Technical Details
+#### In `syncWithDeliverables` (step 3 + step 4):
+- Same approach: load ALL deliverables (enabled + disabled) to build a `hasAnyConfigured` set.
+- Change line 376-382: If `hasAnyConfigured` has the group key but `hasConfiguredDeliverables` (enabled only) does NOT → soft-delete all QUEUE rows for that event (client configured deliverables but disabled all).
 
-#### File 1: `src/lib/video-edit-api.ts`
-- Rename `pushToLab` → generic `pushToStatus(id, newStatus)` that updates `video_edit_status` to any value
-- Keep existing `updateVideoEditField` unchanged
-
-#### File 2: `src/hooks/useVideoEditTracker.ts`
-- Define a `STAGES` array with `{ key, label, nextStatus, nextLabel }`
-- Replace `queueRows`/`labRows` with a single computed map: `rowsByStatus` — keyed by status string, each filtered + priority-sorted
-- Replace `pushToLab` with generic `pushToStatus(id, newStatus)` that optimistically updates the row and calls the API
-- Export: `{ rowsByStatus, isLoading, updateField, pushToStatus, refresh, STAGES }`
-
-#### File 3: `src/components/video-edit/DesktopVideoEditTracker.tsx`
-- Import `STAGES` from the hook
-- Render tabs dynamically from `STAGES` array
-- `VideoEditTable` receives `actionLabel` and `nextStatus` props instead of `showPushToLab`
-- Action button shows `actionLabel` text (e.g. "Edit on Progress →"), calls `pushToStatus(id, nextStatus)`
-- Last tab (Finalized) has no action button
-- Header summary shows counts for all stages
-- Tab bar will be scrollable horizontally to fit 11 tabs
-
-#### File 4: `src/components/video-edit/MobileVideoEditTracker.tsx`
-- Same changes — dynamic tabs from `STAGES`, horizontal scroll on TabsList
-- `VideoCard` receives `actionLabel`/`nextStatus` instead of `showPushToLab`
-- Action button text matches the next stage name
+### Summary of logic change
+```
+Before: no enabled deliverables → "not configured" → keep/create defaults
+After:  no deliverable records at all → "not configured" → keep/create defaults
+        has records but all disabled → "configured, all off" → delete/skip defaults
+```
 
 ### Files changed
-1. `src/lib/video-edit-api.ts` — rename `pushToLab` → `pushToStatus(id, status)`
-2. `src/hooks/useVideoEditTracker.ts` — define STAGES, compute `rowsByStatus`, generic `pushToStatus`
-3. `src/components/video-edit/DesktopVideoEditTracker.tsx` — dynamic 11-tab rendering
-4. `src/components/video-edit/MobileVideoEditTracker.tsx` — dynamic 11-tab rendering
+1. `src/lib/video-edit-api.ts` — fix both functions to distinguish "never configured" vs "all disabled"
 
