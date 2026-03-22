@@ -338,7 +338,7 @@ export async function syncWithDeliverables(): Promise<number> {
   // 2. Get unique regDates from queue rows
   const regDates = [...new Set(queueRows.map(r => r.registered_date_time_ad))];
 
-  // 3. Load all enabled video + overall deliverables for these clients
+  // 3. Load ALL video + overall deliverables (enabled AND disabled) for these clients
   const allDeliverables: any[] = [];
   for (let i = 0; i < regDates.length; i += 50) {
     const batch = regDates.slice(i, i + 50);
@@ -346,8 +346,7 @@ export async function syncWithDeliverables(): Promise<number> {
       .from('client_deliverables')
       .select('*')
       .in('registered_date_time_ad', batch)
-      .in('section', ['video', 'overall'])
-      .eq('enabled', true);
+      .in('section', ['video', 'overall']);
     if (data) allDeliverables.push(...data);
   }
 
