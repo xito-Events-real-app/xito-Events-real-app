@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { Copy, Check, AlertTriangle, Plus, Trash2 } from "lucide-react";
+import { Copy, Check, AlertTriangle, Plus, Trash2, ChevronsUpDown } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
