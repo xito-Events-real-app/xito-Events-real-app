@@ -329,31 +329,43 @@ export function FilesDashboard() {
 
       {/* ─── FILE TRACKING TABLE ─── */}
       <Card className="border-0 bg-[hsl(220,25%,10%)] overflow-hidden">
-        <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-[hsl(220,15%,85%)] flex items-center gap-2">
-            <Activity className="w-4 h-4 text-[hsl(210,90%,55%)]" />
-            File Tracking
-            {filterMode !== "all" && (
-              <Badge variant="secondary" className="ml-2 text-[10px] bg-[hsl(220,25%,18%)] text-[hsl(220,15%,70%)]">
-                {filterMode.replace("_", " ")}
-              </Badge>
-            )}
-          </h3>
-          <span className="text-[10px] text-[hsl(220,15%,45%)]">{displayFiles.length} records</span>
+        <div className="px-4 pt-4 pb-2 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-[hsl(220,15%,85%)] flex items-center gap-2">
+              <Activity className="w-4 h-4 text-[hsl(210,90%,55%)]" />
+              File Tracking
+              {filterMode !== "all" && (
+                <Badge variant="secondary" className="ml-2 text-[10px] bg-[hsl(220,25%,18%)] text-[hsl(220,15%,70%)]">
+                  {filterMode.replace("_", " ")}
+                </Badge>
+              )}
+            </h3>
+            <span className="text-[10px] text-[hsl(220,15%,45%)]">{displayFiles.length} records</span>
+          </div>
+          <NepaliDateFilter
+            selectedYear={tableFilterYear}
+            selectedMonth={tableFilterMonth}
+            onYearChange={setTableFilterYear}
+            onMonthChange={setTableFilterMonth}
+            onReset={() => { setTableFilterYear(null); setTableFilterMonth(null); }}
+          />
         </div>
-        <ScrollArea className="max-h-[360px]">
+        <ScrollArea className="max-h-[500px]">
           <Table>
             <TableHeader>
               <TableRow className="border-[hsl(220,20%,16%)] hover:bg-transparent">
-                {["Client", "Event", "Date", "Copy", "Backup", "Size", "Updated"].map(h => (
+                {["Client", "Event", "Date", "Freelancer", "Role", "Card", "Copy", "Backup", "Size", "Storage", "Updated"].map(h => (
                   <TableHead key={h} className="text-[10px] uppercase tracking-wider text-[hsl(220,15%,45%)] font-semibold py-2">{h}</TableHead>
                 ))}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {displayFiles.slice(0, 50).map(f => {
+              {displayFiles.map(f => {
                 const copied = !!f.final_generated_path;
                 const hasB2 = !!f.backup_2_path;
+                const nepaliDate = f.event_month && f.event_year
+                  ? `${nepaliMonthsEnglish[parseInt(f.event_month) - 1] || f.event_month} ${f.event_day || ""}, ${f.event_year}`
+                  : "-";
                 return (
                   <TableRow
                     key={f.id}
@@ -365,7 +377,10 @@ export function FilesDashboard() {
                       onClick={(e) => { e.stopPropagation(); navigateToClient(f); }}
                     >{f.client_name || "-"}</TableCell>
                     <TableCell className="text-xs text-[hsl(220,15%,65%)] max-w-[100px] truncate">{f.event_name || "-"}</TableCell>
-                    <TableCell className="text-xs text-[hsl(220,15%,55%)] whitespace-nowrap">{f.event_date_ad || "-"}</TableCell>
+                    <TableCell className="text-xs text-[hsl(220,15%,55%)] whitespace-nowrap">{nepaliDate}</TableCell>
+                    <TableCell className="text-xs text-[hsl(220,15%,70%)] max-w-[90px] truncate">{f.freelancer_name || "-"}</TableCell>
+                    <TableCell className="text-[10px] text-[hsl(220,15%,55%)] uppercase">{f.freelancer_type || "-"}</TableCell>
+                    <TableCell className="text-xs text-[hsl(220,15%,65%)]">{f.card_label || "-"}</TableCell>
                     <TableCell>
                       <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full", copied ? "bg-[hsl(145,65%,42%/0.15)] text-[hsl(145,65%,55%)]" : "bg-[hsl(0,84%,60%/0.15)] text-[hsl(0,84%,65%)]")}>
                         {copied ? "DONE" : "PENDING"}
@@ -377,13 +392,14 @@ export function FilesDashboard() {
                       </span>
                     </TableCell>
                     <TableCell className="text-xs text-[hsl(220,15%,65%)] tabular-nums">{Number(f.size_gb) || 0} GB</TableCell>
+                    <TableCell className="text-xs text-[hsl(220,15%,65%)] max-w-[80px] truncate">{f.backup_1_device_name || "-"}</TableCell>
                     <TableCell className="text-[10px] text-[hsl(220,15%,45%)] whitespace-nowrap">{timeAgo(f.updated_at)}</TableCell>
                   </TableRow>
                 );
               })}
               {displayFiles.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-sm text-[hsl(220,15%,40%)] py-8">
+                  <TableCell colSpan={11} className="text-center text-sm text-[hsl(220,15%,40%)] py-8">
                     {isLoading ? "Loading..." : "No files found"}
                   </TableCell>
                 </TableRow>
