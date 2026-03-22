@@ -1,7 +1,6 @@
 /**
  * Opens a WhatsApp chat URL.
- * Tries window.top.open (escapes iframes), then window.open, then anchor click,
- * then falls back to location.href as last resort.
+ * Uses multiple fallback strategies to escape iframe sandboxes (e.g. Lovable preview).
  */
 export const openWhatsApp = (phoneNumber: string, message?: string) => {
   const cleanNumber = phoneNumber.replace(/[^\d+]/g, '').replace('+', '');
@@ -15,6 +14,12 @@ export const openWhatsApp = (phoneNumber: string, message?: string) => {
   // Try window.top.open first (escapes iframe sandbox)
   try {
     const win = window.top?.open(url, '_blank', 'noopener,noreferrer');
+    if (win) return;
+  } catch {}
+
+  // Try window.parent.open (one level up from iframe)
+  try {
+    const win = window.parent?.open(url, '_blank', 'noopener,noreferrer');
     if (win) return;
   } catch {}
 
