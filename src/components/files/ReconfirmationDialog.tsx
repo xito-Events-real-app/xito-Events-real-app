@@ -76,7 +76,10 @@ Hi ${file.freelancer_name || ""},\nyour files have been copied successfully!
 • Card: ${file.card_label || "-"}
 • Format: ${file.format_type || "-"}
 • Size: ${file.size_gb ? `${file.size_gb} GB` : "-"}
+• No. of Items: ${file.number_of_items || "-"}
 • Backed up to: ${file.backup_1_device_name || "-"}
+• Copied by: ${file.who_copied || "-"}
+• Copied on: ${backupTime}
 
 Thank you! 🙏`;
 
