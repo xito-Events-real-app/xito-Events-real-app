@@ -330,12 +330,15 @@ export async function updateClientInCacheRecord(client: ClientData): Promise<voi
 
   if (error) throw error;
 
-  // Propagate client_name change to freelancer_assignments
+  // Propagate client_name change to all related tables
   if (client.clientName) {
-    await supabase
-      .from('freelancer_assignments')
-      .update({ client_name: client.clientName })
-      .eq('registered_date_time_ad', client.registeredDateTimeAD);
+    const relatedTables = ['freelancer_assignments', 'files_management', 'contact_details_cache', 'event_details_cache'] as const;
+    for (const table of relatedTables) {
+      await supabase
+        .from(table)
+        .update({ client_name: client.clientName } as any)
+        .eq('registered_date_time_ad', client.registeredDateTimeAD);
+    }
   }
 
   schedulePushToSheets();
