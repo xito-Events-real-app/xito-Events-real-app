@@ -178,6 +178,79 @@ export const CREW_CODE_MAP: Record<string, { field: string; code: string; catego
   assistant: { field: "assistant", code: "ASST", category: "", side: "" },
 };
 
+const NEPALI_MONTHS: Record<number, string> = {
+  1: "BAISAKH",
+  2: "JESTHA",
+  3: "ASHADH",
+  4: "SHRAWAN",
+  5: "BHADRA",
+  6: "ASHWIN",
+  7: "KARTIK",
+  8: "MANGSIR",
+  9: "POUSH",
+  10: "MAGH",
+  11: "FALGUN",
+  12: "CHAITRA",
+};
+
+function buildYearEventFolder(eventMonth?: string, eventYear?: string): string {
+  if (!eventMonth || !eventYear) return "";
+  const monthNumber = parseInt(eventMonth, 10);
+  return `${NEPALI_MONTHS[monthNumber] || eventMonth.toUpperCase()} EVENTS ${eventYear}`;
+}
+
+function buildCrewKey(code?: string, name?: string): string {
+  return `${(code || "").trim().toUpperCase()}||${(name || "").trim().toUpperCase()}`;
+}
+
+function buildFileUniquenessKey(file: Partial<FileRecord>): string {
+  return [
+    file.registered_date_time_ad || "",
+    file.event_name || "",
+    file.freelancer_type || "",
+    file.freelancer_name || "",
+    file.card_label || "1",
+  ].join("||");
+}
+
+function hasMeaningfulFileData(file: Partial<FileRecord>): boolean {
+  return Boolean(
+    file.final_generated_path ||
+    (Number(file.size_gb) > 0) ||
+    file.backup_2_path ||
+    file.backup_3_path
+  );
+}
+
+function buildFileRowFromAssignment(
+  assignment: any,
+  clientInfo: { client_name: string; registered_date_bs: string },
+  config: { code: string; category: string; side: string },
+  freelancerName: string
+): Partial<FileRecord> {
+  const eventName = assignment.event || "";
+
+  return {
+    registered_date_time_ad: assignment.registered_date_time_ad,
+    registered_date_bs: clientInfo.registered_date_bs || "",
+    client_name: clientInfo.client_name || assignment.client_name || "",
+    event_name: eventName,
+    event_year: assignment.event_year || "",
+    event_month: assignment.event_month || "",
+    event_day: assignment.event_day || "",
+    event_date_ad: assignment.event_date_ad || "",
+    freelancer_type: config.code,
+    freelancer_name: freelancerName,
+    year_event_folder: buildYearEventFolder(assignment.event_month, assignment.event_year),
+    category: config.category,
+    client_folder_name: (clientInfo.client_name || assignment.client_name || "").toUpperCase(),
+    event_folder_name: eventName.toUpperCase(),
+    side: config.side,
+    card_label: "1",
+    synced_to_sheet: false,
+  };
+}
+
 export function autoGenerateFileRows(registeredDateTimeAD: string): Promise<FileRecord[]> {
   return _autoGenerateFileRows(registeredDateTimeAD, 1);
 }
@@ -202,41 +275,18 @@ async function _autoGenerateFileRows(registeredDateTimeAD: string, cardNum: numb
   const newRows: Partial<FileRecord>[] = [];
 
   for (const assignment of assignments) {
-    const eventName = assignment.event || "";
-    const eventYear = assignment.event_year || "";
-    const eventMonth = assignment.event_month || "";
-    const eventDay = assignment.event_day || "";
-    const eventDateAD = assignment.event_date_ad || "";
-    const yearEventFolder = eventMonth && eventYear
-      ? (() => {
-          const mn = parseInt(eventMonth, 10);
-          const MONTHS: Record<number, string> = {1:"BAISAKH",2:"JESTHA",3:"ASHADH",4:"SHRAWAN",5:"BHADRA",6:"ASHWIN",7:"KARTIK",8:"MANGSIR",9:"POUSH",10:"MAGH",11:"FALGUN",12:"CHAITRA"};
-          return `${MONTHS[mn] || eventMonth.toUpperCase()} EVENTS ${eventYear}`;
-        })()
-      : "";
-
     for (const [field, config] of Object.entries(CREW_CODE_MAP)) {
       const freelancerName = assignment[field];
       if (!freelancerName || freelancerName.trim() === "") continue;
 
-      newRows.push({
-        registered_date_time_ad: registeredDateTimeAD,
-        registered_date_bs: registeredDateBS,
-        client_name: clientName,
-        event_name: eventName,
-        event_year: eventYear,
-        event_month: eventMonth,
-        event_day: eventDay,
-        event_date_ad: eventDateAD,
-        freelancer_type: config.code,
-        freelancer_name: freelancerName,
-        year_event_folder: yearEventFolder,
-        category: config.category,
-        client_folder_name: clientName.toUpperCase(),
-        event_folder_name: eventName.toUpperCase(),
-        side: config.side,
-        synced_to_sheet: false,
-      });
+      newRows.push(
+        buildFileRowFromAssignment(
+          assignment,
+          { client_name: clientName, registered_date_bs: registeredDateBS },
+          config,
+          freelancerName
+        )
+      );
     }
   }
 
@@ -440,15 +490,13 @@ async function _ensureFileRowsForMonthInner(eventYear: string, eventMonth: strin
 
   const { data: existingFiles } = await (supabase as any)
     .from("files_management")
-    .select("registered_date_time_ad, event_name, freelancer_type, freelancer_name")
+    .select("registered_date_time_ad, event_name, freelancer_type, freelancer_name, card_label")
     .eq("event_year", eventYear)
     .eq("event_month", eventMonth)
     .eq("deleted_or_not", false);
 
   const existingKeys = new Set(
-    (existingFiles || []).map((f: any) =>
-      `${f.registered_date_time_ad}||${f.event_name}||${f.freelancer_type}||${f.freelancer_name}`
-    )
+    (existingFiles || []).map((f: any) => buildFileUniquenessKey(f))
   );
 
   const uniqueRegDates = [...new Set(pastAssignments.map((a: any) => a.registered_date_time_ad))];
@@ -479,46 +527,17 @@ async function _ensureFileRowsForMonthInner(eventYear: string, eventMonth: strin
   for (const assignment of activePastAssignments) {
     const regDate = assignment.registered_date_time_ad;
     const clientInfo = clientMap.get(regDate) || { client_name: assignment.client_name || "", registered_date_bs: "" };
-    const eventName = assignment.event || "";
-    const evYear = assignment.event_year || "";
-    const evMonth = assignment.event_month || "";
-    const evDay = assignment.event_day || "";
-    const eventDateAD = assignment.event_date_ad || "";
-    const yearEventFolder = evMonth && evYear
-      ? (() => {
-        const mn = parseInt(evMonth, 10);
-        const MONTHS: Record<number, string> = {1:"BAISAKH",2:"JESTHA",3:"ASHADH",4:"SHRAWAN",5:"BHADRA",6:"ASHWIN",7:"KARTIK",8:"MANGSIR",9:"POUSH",10:"MAGH",11:"FALGUN",12:"CHAITRA"};
-        return `${MONTHS[mn] || evMonth} EVENTS ${evYear}`;
-      })()
-      : "";
 
     for (const [field, config] of Object.entries(CREW_CODE_MAP)) {
       const freelancerName = assignment[field];
       if (!freelancerName || freelancerName.trim() === "") continue;
 
-      const key = `${regDate}||${eventName}||${config.code}||${freelancerName}`;
+      const row = buildFileRowFromAssignment(assignment, clientInfo, config, freelancerName);
+      const key = buildFileUniquenessKey(row);
       if (existingKeys.has(key)) continue;
       existingKeys.add(key);
 
-      newRows.push({
-        registered_date_time_ad: regDate,
-        registered_date_bs: clientInfo.registered_date_bs,
-        client_name: clientInfo.client_name,
-        event_name: eventName,
-        event_year: evYear,
-        event_month: evMonth,
-        event_day: evDay,
-        event_date_ad: eventDateAD,
-        freelancer_type: config.code,
-        freelancer_name: freelancerName,
-        year_event_folder: yearEventFolder,
-        category: config.category,
-        client_folder_name: clientInfo.client_name.toUpperCase(),
-        event_folder_name: eventName.toUpperCase(),
-        side: config.side,
-        card_label: "1",
-        synced_to_sheet: false,
-      });
+      newRows.push(row);
     }
   }
 
@@ -526,21 +545,16 @@ async function _ensureFileRowsForMonthInner(eventYear: string, eventMonth: strin
     // Pre-insert dedup recheck: query DB again to catch rows inserted by concurrent calls
     const { data: recheckFiles } = await (supabase as any)
       .from("files_management")
-      .select("registered_date_time_ad, event_name, freelancer_type, freelancer_name")
+      .select("registered_date_time_ad, event_name, freelancer_type, freelancer_name, card_label")
       .eq("event_year", eventYear)
       .eq("event_month", eventMonth)
       .eq("deleted_or_not", false);
 
     const recheckKeys = new Set(
-      (recheckFiles || []).map((f: any) =>
-        `${f.registered_date_time_ad}||${f.event_name}||${f.freelancer_type}||${f.freelancer_name}`
-      )
+      (recheckFiles || []).map((f: any) => buildFileUniquenessKey(f))
     );
 
-    const dedupedRows = newRows.filter((r) => {
-      const key = `${r.registered_date_time_ad}||${r.event_name}||${r.freelancer_type}||${r.freelancer_name}`;
-      return !recheckKeys.has(key);
-    });
+    const dedupedRows = newRows.filter((r) => !recheckKeys.has(buildFileUniquenessKey(r)));
 
     for (let i = 0; i < dedupedRows.length; i += 50) {
       const batch = dedupedRows.slice(i, i + 50);
@@ -556,7 +570,7 @@ async function _ensureFileRowsForMonthInner(eventYear: string, eventMonth: strin
   const existingAllFiles = existingFiles || [];
   const { data: allFilesForMonth } = await (supabase as any)
     .from("files_management")
-    .select("id, registered_date_time_ad, event_name, freelancer_type, freelancer_name, final_generated_path, size_gb, backup_2_path, backup_3_path")
+    .select("id, registered_date_time_ad, event_name, freelancer_type, freelancer_name, card_label, final_generated_path, size_gb, backup_2_path, backup_3_path, created_at")
     .eq("event_year", eventYear)
     .eq("event_month", eventMonth)
     .eq("deleted_or_not", false);
@@ -564,27 +578,44 @@ async function _ensureFileRowsForMonthInner(eventYear: string, eventMonth: strin
   if (allFilesForMonth && allFilesForMonth.length > 0) {
     // Build a map of current assignments: regDate+event → Set of "CODE||NAME"
     const assignmentCrewMap = new Map<string, Set<string>>();
-    for (const assignment of pastAssignments) {
+    const activeAssignmentsForCleanup = assignments.filter((a: any) => activeRegDates.has(a.registered_date_time_ad));
+    for (const assignment of activeAssignmentsForCleanup) {
       const mapKey = `${assignment.registered_date_time_ad}||${assignment.event}`;
       const crewSet = new Set<string>();
       for (const [field, config] of Object.entries(CREW_CODE_MAP)) {
         const name = (assignment[field] || "").trim();
-        if (name) crewSet.add(`${config.code}||${name.toUpperCase()}`);
+        if (name) crewSet.add(buildCrewKey(config.code, name));
       }
       assignmentCrewMap.set(mapKey, crewSet);
     }
 
     const staleIds: string[] = [];
-    for (const file of allFilesForMonth) {
+    const seenRowKeys = new Set<string>();
+    const filesSortedForCleanup = [...allFilesForMonth].sort((a: any, b: any) => {
+      const aHasData = hasMeaningfulFileData(a) ? 1 : 0;
+      const bHasData = hasMeaningfulFileData(b) ? 1 : 0;
+      if (aHasData !== bHasData) return bHasData - aHasData;
+      return String(a.created_at || "").localeCompare(String(b.created_at || ""));
+    });
+
+    for (const file of filesSortedForCleanup) {
       const mapKey = `${file.registered_date_time_ad}||${file.event_name}`;
       const crewSet = assignmentCrewMap.get(mapKey);
       if (!crewSet) continue; // no assignment found, skip (don't delete orphans from unknown assignments)
 
-      const fileKey = `${(file.freelancer_type || "").toUpperCase()}||${(file.freelancer_name || "").trim().toUpperCase()}`;
+      const fileKey = buildCrewKey(file.freelancer_type, file.freelancer_name);
       if (!crewSet.has(fileKey)) {
-        const hasData = !!(file.final_generated_path || (Number(file.size_gb) > 0) || file.backup_2_path || file.backup_3_path);
-        if (!hasData) staleIds.push(file.id);
+        if (!hasMeaningfulFileData(file)) staleIds.push(file.id);
+        continue;
       }
+
+      const dedupeKey = `${mapKey}||${fileKey}||${file.card_label || "1"}`;
+      if (seenRowKeys.has(dedupeKey) && !hasMeaningfulFileData(file)) {
+        staleIds.push(file.id);
+        continue;
+      }
+
+      seenRowKeys.add(dedupeKey);
     }
 
     if (staleIds.length > 0) {
@@ -707,11 +738,29 @@ export async function syncFilesWithAssignments(
     if (!assignments || assignments.length === 0) return;
     const assignment = assignments[0];
 
+    const { data: clientData } = await (supabase as any)
+      .from("clients_cache")
+      .select("client_name, registered_date_bs")
+      .eq("registered_date_time_ad", registeredDateTimeAD)
+      .single();
+
+    const clientInfo = {
+      client_name: clientData?.client_name || assignment.client_name || "",
+      registered_date_bs: clientData?.registered_date_bs || "",
+    };
+
     // Build set of currently assigned freelancers: { "PB||ARJUN", "VG||NIKIT", ... }
     const currentCrewKeys = new Set<string>();
+    const desiredRowsByKey = new Map<string, Partial<FileRecord>>();
     for (const [field, config] of Object.entries(CREW_CODE_MAP)) {
       const name = (assignment[field] || "").trim();
-      if (name) currentCrewKeys.add(`${config.code}||${name.toUpperCase()}`);
+      if (!name) continue;
+
+      const crewKey = buildCrewKey(config.code, name);
+      currentCrewKeys.add(crewKey);
+
+      const row = buildFileRowFromAssignment(assignment, clientInfo, config, name);
+      desiredRowsByKey.set(`${crewKey}||${row.card_label || "1"}`, row);
     }
 
     // 2. Get existing file rows for this client+event
@@ -720,26 +769,37 @@ export async function syncFilesWithAssignments(
       .select("*")
       .eq("registered_date_time_ad", registeredDateTimeAD)
       .eq("event_name", eventName)
-      .eq("deleted_or_not", false);
+      .eq("deleted_or_not", false)
+      .order("created_at", { ascending: true });
 
-    if (!fileRows || fileRows.length === 0) return;
+    const sortedFileRows = [...(fileRows || [])].sort((a: any, b: any) => {
+      const aHasData = hasMeaningfulFileData(a) ? 1 : 0;
+      const bHasData = hasMeaningfulFileData(b) ? 1 : 0;
+      if (aHasData !== bHasData) return bHasData - aHasData;
+      return String(a.created_at || "").localeCompare(String(b.created_at || ""));
+    });
 
     // 3. Soft-delete stale skeleton rows (freelancer no longer in assignment)
     const idsToDelete: string[] = [];
-    for (const file of fileRows) {
-      const fileKey = `${(file.freelancer_type || "").toUpperCase()}||${(file.freelancer_name || "").trim().toUpperCase()}`;
+    const seenCurrentRows = new Set<string>();
+    const existingDesiredKeys = new Set<string>();
+
+    for (const file of sortedFileRows) {
+      const fileKey = buildCrewKey(file.freelancer_type, file.freelancer_name);
+      const rowKey = `${fileKey}||${file.card_label || "1"}`;
+
       if (!currentCrewKeys.has(fileKey)) {
-        // Safety: only delete if no backup data exists
-        const hasData = !!(
-          file.final_generated_path ||
-          (Number(file.size_gb) > 0) ||
-          file.backup_2_path ||
-          file.backup_3_path
-        );
-        if (!hasData) {
-          idsToDelete.push(file.id);
-        }
+        if (!hasMeaningfulFileData(file)) idsToDelete.push(file.id);
+        continue;
       }
+
+      if (seenCurrentRows.has(rowKey) && !hasMeaningfulFileData(file)) {
+        idsToDelete.push(file.id);
+        continue;
+      }
+
+      seenCurrentRows.add(rowKey);
+      if (desiredRowsByKey.has(rowKey)) existingDesiredKeys.add(rowKey);
     }
 
     if (idsToDelete.length > 0) {
@@ -748,6 +808,17 @@ export async function syncFilesWithAssignments(
         .update({ deleted_or_not: true, synced_to_sheet: false })
         .in("id", idsToDelete);
       console.log(`[syncFilesWithAssignments] Soft-deleted ${idsToDelete.length} stale file rows for ${eventName}`);
+    }
+
+    const rowsToInsert = Array.from(desiredRowsByKey.entries())
+      .filter(([key]) => !existingDesiredKeys.has(key))
+      .map(([, row]) => row);
+
+    if (rowsToInsert.length > 0) {
+      await (supabase as any)
+        .from("files_management")
+        .insert(rowsToInsert);
+      console.log(`[syncFilesWithAssignments] Inserted ${rowsToInsert.length} missing file rows for ${eventName}`);
     }
   } catch (err) {
     console.error("[syncFilesWithAssignments] Error:", err);
