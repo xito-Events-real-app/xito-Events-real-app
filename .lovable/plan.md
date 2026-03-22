@@ -1,43 +1,55 @@
 
 
-## Fix: Video Edit Tracker Sorting + Live Deliverable Sync
+## Expand Video Edit Tracker: 11-Tab Workflow Pipeline
 
-### Problem 1: Sorting
-Rows are sorted only by `event_date_ad`. Full Video and Highlights for the same event can appear scattered. Need secondary sort keys to group same-event rows together.
+### Overview
+Replace the current 2-tab system (Queue, Lab) with an 11-tab sequential pipeline. Each tab has an action button that pushes the row to the next stage.
 
-### Problem 2: Live Updates
-When deliverables are added/changed in a client's detail page, the video edit tracker doesn't reflect changes until a full page reload. Need realtime subscription on `client_deliverables` to auto-regenerate and reload rows.
+### Pipeline Stages (in order)
 
----
+| # | Tab Name | Status Value | Action Button Label |
+|---|----------|-------------|-------------------|
+| 1 | Queue | QUEUE | Edit Lab → |
+| 2 | Edit Lab | EDIT_LAB | Edit on Progress → |
+| 3 | Edit on Progress | EDIT_ON_PROGRESS | Color Queue → |
+| 4 | Color Queue | COLOR_QUEUE | Color Lab → |
+| 5 | Color Lab | COLOR_LAB | Color on Progress → |
+| 6 | Color on Progress | COLOR_ON_PROGRESS | Export Queue → |
+| 7 | Export Queue | EXPORT_QUEUE | Exported → |
+| 8 | Exported | EXPORTED | Client Review → |
+| 9 | Client Review | CLIENT_REVIEW | Re-Edit on Progress → |
+| 10 | Re-Edit on Progress | RE_EDIT_ON_PROGRESS | Finalized → |
+| 11 | Finalized | FINALIZED | *(no action button)* |
 
-### Part 1: Fix sorting — `src/hooks/useVideoEditTracker.ts`
+### Technical Details
 
-Update `withPriority` to sort by:
-1. `eventDateAD` (ascending — oldest first)
-2. `registeredDateTimeAD` (group same client)
-3. `eventName` (group same event)
-4. `editType` with explicit order: Full Video → Highlights → Reel → others
+#### File 1: `src/lib/video-edit-api.ts`
+- Rename `pushToLab` → generic `pushToStatus(id, newStatus)` that updates `video_edit_status` to any value
+- Keep existing `updateVideoEditField` unchanged
 
-This ensures Full Video and Highlights for the same event always appear consecutively.
+#### File 2: `src/hooks/useVideoEditTracker.ts`
+- Define a `STAGES` array with `{ key, label, nextStatus, nextLabel }`
+- Replace `queueRows`/`labRows` with a single computed map: `rowsByStatus` — keyed by status string, each filtered + priority-sorted
+- Replace `pushToLab` with generic `pushToStatus(id, newStatus)` that optimistically updates the row and calls the API
+- Export: `{ rowsByStatus, isLoading, updateField, pushToStatus, refresh, STAGES }`
 
-### Part 2: Live deliverable sync — `src/hooks/useVideoEditTracker.ts`
+#### File 3: `src/components/video-edit/DesktopVideoEditTracker.tsx`
+- Import `STAGES` from the hook
+- Render tabs dynamically from `STAGES` array
+- `VideoEditTable` receives `actionLabel` and `nextStatus` props instead of `showPushToLab`
+- Action button shows `actionLabel` text (e.g. "Edit on Progress →"), calls `pushToStatus(id, nextStatus)`
+- Last tab (Finalized) has no action button
+- Header summary shows counts for all stages
+- Tab bar will be scrollable horizontally to fit 11 tabs
 
-Add a Supabase realtime subscription on `client_deliverables` table (video section changes). When an INSERT/UPDATE/DELETE is detected:
-1. Re-run `ensureVideoEditRows()` to generate any new rows from newly enabled deliverables
-2. Re-load rows from Supabase (silent, no loading spinner)
-
-Also clean up rows for deliverables that were disabled: add a `cleanupDisabledDeliverables()` function in `video-edit-api.ts` that soft-deletes tracker rows whose corresponding deliverable is no longer enabled (only for rows still in QUEUE status — never delete LAB rows).
-
-### Part 3: Cleanup function — `src/lib/video-edit-api.ts`
-
-New `syncWithDeliverables()` function:
-- Load all enabled video deliverables for booked clients with past/today events
-- Load all QUEUE video_edit_tracker rows
-- For each QUEUE row, check if a matching enabled deliverable still exists
-- If deliverable was disabled (or default Full Video/Highlights replaced by configured deliverables), soft-delete the tracker row
-- This runs after `ensureVideoEditRows()` on each realtime event
+#### File 4: `src/components/video-edit/MobileVideoEditTracker.tsx`
+- Same changes — dynamic tabs from `STAGES`, horizontal scroll on TabsList
+- `VideoCard` receives `actionLabel`/`nextStatus` instead of `showPushToLab`
+- Action button text matches the next stage name
 
 ### Files changed
-1. `src/hooks/useVideoEditTracker.ts` — fix sort order + add realtime subscription on `client_deliverables`
-2. `src/lib/video-edit-api.ts` — add `syncWithDeliverables()` cleanup function
+1. `src/lib/video-edit-api.ts` — rename `pushToLab` → `pushToStatus(id, status)`
+2. `src/hooks/useVideoEditTracker.ts` — define STAGES, compute `rowsByStatus`, generic `pushToStatus`
+3. `src/components/video-edit/DesktopVideoEditTracker.tsx` — dynamic 11-tab rendering
+4. `src/components/video-edit/MobileVideoEditTracker.tsx` — dynamic 11-tab rendering
 
