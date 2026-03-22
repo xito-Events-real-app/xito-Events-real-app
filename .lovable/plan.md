@@ -1,47 +1,63 @@
 
 
-## Fix Client File Detail Page — 5 Changes
+## Revamp Dashboard Status Cards — 4 Enhanced Cards with Sub-Filters
 
-### Changes to `src/pages/FileClientDetail.tsx`
+### Current State
+4 cards: Recently Copied, Files Pending, Double Backup Pending, Storage Today. Each toggles a simple filter. No size info on cards, no sub-filters.
 
-**1. "Set Path" redirects to FullScreenFilesTable with specific client+event expanded**
-- Change the "Set Path →" link to navigate with query params that identify the specific file:
+### New Card Design
+
+**Card 1: "Today's Transfers"** (Green)
+- Shows: count + total GB (e.g. "12 files • 45.2 GB")
+- Click: filters to today's copied files
+
+**Card 2: "Total Copied"** (Blue)  
+- Shows: count + total GB of all files with `final_generated_path`
+- Click: filters to all copied files
+- Sub-filters appear above table: by month (`event_month`/`event_year`), by device (`backup_1_device_name`)
+
+**Card 3: "Files Pending"** (Red)
+- Shows: count of files without `final_generated_path`
+- Click: filters to pending files
+- Sub-filters: by month, by event name
+
+**Card 4: "Double Backup"** (Yellow/Amber)
+- Shows: done count / remaining count (e.g. "8 Done • 15 Remaining")
+- Click: shows sub-filter toggle — "Done" vs "Remaining"
+  - Done = files with `backup_2_path`
+  - Remaining = files with `final_generated_path` but no `backup_2_path`
+- Additional sub-filters: by month, by device
+
+### Implementation
+
+**1. `src/hooks/useFilesDashboardData.ts`**
+- Update `DashboardStats` interface:
+  ```typescript
+  todayCopied: number;
+  todayCopiedGB: number;
+  totalCopied: number;
+  totalCopiedGB: number;
+  filesPending: number;
+  doubleBackupDone: number;
+  doubleBackupRemaining: number;
   ```
-  /files?section=files&client={clientName}&event={eventName}&year={eventYear}&month={eventMonth}
-  ```
-- The FullScreenFilesTable already has `filterClient` state — we'll read these from URL params to auto-expand the right row.
+- Update `FilterMode` type: `"all" | "today" | "copied" | "pending" | "backup_done" | "backup_remaining"`
+- Add filter cases for the new modes
+- Expose `allFiles` for sub-filter computation (already exposed)
 
-**2. Rearrange summary cards: Total Size → Photo Size → Video Size → Remaining (remove "Copied")**
-- Card 1: Total Size (blue) — same as now
-- Card 2: Photo Size (purple) — `stats.photoSize` 
-- Card 3: Video Size (amber) — `stats.videoSize`
-- Card 4: Remaining (red) — clickable, toggles a `showOnlyRemaining` filter state
+**2. `src/components/files/FilesDashboard.tsx`**
+- Update `STATUS_CARDS` array with new names, values, colors
+- Card 4 shows two numbers ("Done • Remaining") instead of one
+- Add **sub-filter bar** between cards and table:
+  - Only visible when a card filter is active
+  - Shows month pills (derived from filtered files' `event_year`/`event_month`)
+  - For "Double Backup": shows "Done" / "Remaining" toggle pills
+  - For "Total Copied": shows device name pills
+  - Each pill toggles a secondary filter applied on top of the card filter
+- Add local state: `subFilterMonth`, `subFilterDevice`, `backupSubMode` ("done" | "remaining")
+- Apply sub-filters in a `useMemo` between `files` (from hook) and rendered rows
 
-**3. Remaining card is clickable — filters table to show only pending files**
-- Add `showOnlyRemaining` state toggle
-- When active, filter `eventGroups` to only show files where `!f.final_generated_path`
-- Visual indicator on the card when filter is active (ring/border highlight)
-
-**4. Event name gets a colored background highlight**
-- Replace the plain text event header with a styled bar:
-  ```
-  <div className="bg-blue-900/40 border-l-4 border-blue-500 px-4 py-2 rounded-r-lg">
-  ```
-
-**5. Path column shows device name pill with hover for full path (same pattern as FullScreenFilesTable BackupPill)**
-- Import `HoverCard` components
-- If file has `final_generated_path`: show device name (`backup_1_device_name` or first segment of path) as a short highlighted pill
-- On hover: show full path, timestamp, and time ago — matching the existing `BackupPill` pattern from FullScreenFilesTable
-
-### Changes to `src/components/files/FullScreenFilesTable.tsx`
-
-**6. Read URL params to auto-filter and auto-expand on load**
-- Import `useSearchParams`
-- On mount, read `client` param → set `filterClient`
-- Read `event` param → auto-expand matching row in `expandedRows`
-- This enables the "Set Path" redirect from client detail to land on the right expanded row
-
-### Files changed
-- `src/pages/FileClientDetail.tsx`
-- `src/components/files/FullScreenFilesTable.tsx`
+### Files Changed
+- `src/hooks/useFilesDashboardData.ts`
+- `src/components/files/FilesDashboard.tsx`
 
