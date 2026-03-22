@@ -263,6 +263,25 @@ export async function ensureFreelancerAssignmentRows(
     const toDelete = existingList.slice(names.length);
     const ids = toDelete.map(r => r.id);
     await supabase.from('freelancer_assignments').delete().in('id', ids);
-    console.log(`[CREW SYNC] Deleted ${toDelete.length} removed event rows for ${clientName}`);
+
+    // CASCADE: soft-delete files & video edit; hard-delete freelancer settings
+    for (const removedRow of toDelete) {
+      await supabase.from('files_management')
+        .update({ deleted_or_not: true, synced_to_sheet: false, updated_at: new Date().toISOString() } as any)
+        .eq('registered_date_time_ad', registeredDateTimeAD)
+        .eq('event_name', removedRow.event);
+
+      await supabase.from('video_edit_tracker')
+        .update({ deleted: true, synced_to_sheet: false, updated_at: new Date().toISOString() } as any)
+        .eq('registered_date_time_ad', registeredDateTimeAD)
+        .eq('event_name', removedRow.event);
+
+      await supabase.from('freelancer_event_settings')
+        .delete()
+        .eq('registered_date_time_ad', registeredDateTimeAD)
+        .eq('event_name', removedRow.event);
+    }
+
+    console.log(`[CREW SYNC] Deleted ${toDelete.length} removed event rows + cascaded for ${clientName}`);
   }
 }
