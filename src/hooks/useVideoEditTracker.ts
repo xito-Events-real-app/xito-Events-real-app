@@ -64,14 +64,17 @@ export function useVideoEditTracker() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'client_deliverables' },
-        async () => {
-          try {
-            await ensureVideoEditRows();
-            await syncWithDeliverables();
-            await loadRows();
-          } catch (err) {
-            console.error("[VIDEO-EDIT] Realtime sync error:", err);
-          }
+        () => {
+          // Wrap in setTimeout to avoid React 18 "Should have a queue" error
+          setTimeout(async () => {
+            try {
+              await ensureVideoEditRows();
+              await syncWithDeliverables();
+              await loadRows();
+            } catch (err) {
+              console.error("[VIDEO-EDIT] Realtime sync error:", err);
+            }
+          }, 0);
         }
       )
       .subscribe();
