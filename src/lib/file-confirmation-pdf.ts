@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import { FileRecord } from "./files-api";
+import { nepaliMonthsEnglish } from "./nepali-date";
 
 function buildPDF(file: FileRecord): jsPDF {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
@@ -32,10 +33,14 @@ function buildPDF(file: FileRecord): jsPDF {
     y += 8;
   };
 
-  const nepaliDate = file.registered_date_bs ||
-    (file.event_year && file.event_month && file.event_day
-      ? `${file.event_year}/${file.event_month}/${file.event_day}`
-      : "-");
+  const nepaliDate = (() => {
+    if (file.event_year && file.event_month && file.event_day) {
+      const mIdx = parseInt(String(file.event_month));
+      const monthName = mIdx >= 1 && mIdx <= 12 ? nepaliMonthsEnglish[mIdx - 1] : String(file.event_month);
+      return `${monthName} ${file.event_day}, ${file.event_year}`;
+    }
+    return file.registered_date_bs || "-";
+  })();
 
   addRow("Client Name", file.client_name || "-");
   addRow("Event Name", file.event_name || "-");

@@ -9,6 +9,7 @@ import { FileRecord } from "@/lib/files-api";
 import { downloadConfirmationPDF, getConfirmationPDFFile } from "@/lib/file-confirmation-pdf";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { supabase } from "@/integrations/supabase/client";
+import { nepaliMonthsEnglish } from "@/lib/nepali-date";
 import { toast } from "sonner";
 
 interface ReconfirmationDialogProps {
@@ -23,10 +24,18 @@ export function ReconfirmationDialog({ open, onOpenChange, file, onConfirm }: Re
 
   if (!file) return null;
 
-  const nepaliDate = file.registered_date_bs ||
-    (file.event_year && file.event_month && file.event_day
-      ? `${file.event_year}/${file.event_month}/${file.event_day}`
-      : "-");
+  const nepaliDate = (() => {
+    if (file.event_year && file.event_month && file.event_day) {
+      const mIdx = parseInt(String(file.event_month));
+      const monthName = mIdx >= 1 && mIdx <= 12 ? nepaliMonthsEnglish[mIdx - 1] : file.event_month;
+      return `${monthName} ${file.event_day}, ${file.event_year}`;
+    }
+    return file.registered_date_bs || "-";
+  })();
+
+  const backupTime = file.backup_1_recorded_at
+    ? new Date(file.backup_1_recorded_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })
+    : "-";
 
   const handleConfirmOnly = async () => {
     setIsConfirming(true);
@@ -67,7 +76,10 @@ Hi ${file.freelancer_name || ""},\nyour files have been copied successfully!
 • Card: ${file.card_label || "-"}
 • Format: ${file.format_type || "-"}
 • Size: ${file.size_gb ? `${file.size_gb} GB` : "-"}
+• No. of Items: ${file.number_of_items || "-"}
 • Backed up to: ${file.backup_1_device_name || "-"}
+• Copied by: ${file.who_copied || "-"}
+• Copied on: ${backupTime}
 
 Thank you! 🙏`;
 
@@ -137,6 +149,14 @@ Thank you! 🙏`;
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Path</span>
               <span className="font-mono text-xs truncate max-w-[180px]">{file.final_generated_path || "-"}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Copied By</span>
+              <span className="font-bold">{file.who_copied || "-"}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Copied At</span>
+              <span className="font-bold">{backupTime}</span>
             </div>
           </div>
 
