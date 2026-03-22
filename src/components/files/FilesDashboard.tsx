@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useFilesDashboardData, type DashboardStats } from "@/hooks/useFilesDashboardData";
 import { FileDashboardClientSheet } from "./FileDashboardClientSheet";
 import { FileRecord } from "@/lib/files-api";
