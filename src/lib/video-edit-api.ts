@@ -87,14 +87,14 @@ export async function updateVideoEditField(id: string, field: string, value: str
   }
 }
 
-export async function pushToLab(id: string): Promise<void> {
+export async function pushToStatus(id: string, newStatus: string): Promise<void> {
   const { error } = await supabase
     .from('video_edit_tracker')
-    .update({ video_edit_status: 'LAB', synced_to_sheet: false, updated_at: new Date().toISOString() })
+    .update({ video_edit_status: newStatus, synced_to_sheet: false, updated_at: new Date().toISOString() })
     .eq('id', id);
 
   if (error) {
-    console.error('[VIDEO-EDIT] Push to lab error:', error);
+    console.error('[VIDEO-EDIT] Push to status error:', error);
     throw new Error(error.message);
   }
 }
