@@ -130,7 +130,7 @@ function VideoEditTable({
               <TableCell>
                 <Select
                   value={row.editor || "unassigned"}
-                  onValueChange={(v) => onUpdateField(row.rowNumber, "editor", v === "unassigned" ? "" : v)}
+                  onValueChange={(v) => onUpdateField(row.id, "editor", v === "unassigned" ? "" : v)}
                 >
                   <SelectTrigger className="w-36 h-8 text-xs">
                     <SelectValue placeholder="Assign..." />
