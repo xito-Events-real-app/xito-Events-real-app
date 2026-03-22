@@ -252,7 +252,7 @@ export async function ensureVideoEditRows(): Promise<number> {
 
   if (evErr || !events?.length) return 0;
 
-  const regDates = [...new Set(events.map((e) => e.registered_date_time_ad))];
+  const regDates = Array.from(new Set(events.map((e) => e.registered_date_time_ad)));
 
   const allClients: any[] = [];
   for (let i = 0; i < regDates.length; i += 50) {
