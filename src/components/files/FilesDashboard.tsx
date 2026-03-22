@@ -273,7 +273,7 @@ export function FilesDashboard() {
                     </button>
                   ))}
                 </div>
-              </ScrollArea>
+              </div>
             </>
           )}
 
