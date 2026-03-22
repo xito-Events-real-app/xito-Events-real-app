@@ -52,6 +52,7 @@ function buildPDF(file: FileRecord): jsPDF {
   addRow("Card", file.card_label || "-");
   addRow("Format", file.format_type || "-");
   addRow("Size", file.size_gb ? `${file.size_gb} GB` : "-");
+  addRow("No. of Items", file.number_of_items ? String(file.number_of_items) : "-");
 
   y += 4;
   doc.setFillColor(226, 232, 240);
