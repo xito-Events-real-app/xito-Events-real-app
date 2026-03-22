@@ -88,7 +88,7 @@ function VideoEditTable({
             </TableRow>
           )}
           {rows.map((row, idx) => (
-            <TableRow key={row.rowNumber} className="hover:bg-muted/30">
+            <TableRow key={row.id} className="hover:bg-muted/30">
               <TableCell className="text-center text-muted-foreground text-xs font-mono">{idx + 1}</TableCell>
               <TableCell className="text-center">
                 <Select
