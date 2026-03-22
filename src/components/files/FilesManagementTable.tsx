@@ -300,6 +300,7 @@ export function FilesManagementTable({ selectedMonth, availableMonths, onMonthCh
         onConfirm={async (fileId) => {
           await update(fileId, { confirmed: true, reconfirmation: true, synced_to_sheet: false });
         }}
+        alreadyConfirmed={reconfirmFile?.confirmed === true}
       />
 
       <FilePathBuilderDialog

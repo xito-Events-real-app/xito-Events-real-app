@@ -895,6 +895,7 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
         onOpenChange={setReconfirmOpen}
         file={reconfirmFile}
         onConfirm={handleConfirmFile}
+        alreadyConfirmed={reconfirmFile?.confirmed === true}
       />
 
       <FilePathBuilderDialog

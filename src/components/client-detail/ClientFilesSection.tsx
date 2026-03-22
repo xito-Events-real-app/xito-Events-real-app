@@ -507,6 +507,7 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
         onOpenChange={setReconfirmOpen}
         file={reconfirmFile}
         onConfirm={handleConfirmFile}
+        alreadyConfirmed={reconfirmFile?.confirmed === true}
       />
 
       <CloudUploadDialog
