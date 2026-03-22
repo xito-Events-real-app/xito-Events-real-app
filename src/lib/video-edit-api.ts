@@ -350,15 +350,19 @@ export async function syncWithDeliverables(): Promise<number> {
     if (data) allDeliverables.push(...data);
   }
 
-  // Group deliverables by regDate + eventName (overall uses "OVERALL" as event_name)
-  const delMap = new Map<string, Set<string>>();
-  const hasConfiguredDeliverables = new Set<string>();
+  // Group deliverables: track all records (for "has configured") and enabled-only (for matching)
+  const delMap = new Map<string, Set<string>>(); // enabled deliverables only
+  const hasAnyConfigured = new Set<string>(); // all records including disabled
+  const hasEnabledConfigured = new Set<string>(); // only groups with enabled items
 
   for (const d of allDeliverables) {
     const eventName = d.section === 'overall' ? 'OVERALL' : d.event_name;
     const groupKey = `${d.registered_date_time_ad}||${eventName}`;
-    hasConfiguredDeliverables.add(groupKey);
+    hasAnyConfigured.add(groupKey);
 
+    if (!d.enabled) continue; // skip disabled for matching
+
+    hasEnabledConfigured.add(groupKey);
     if (!delMap.has(groupKey)) delMap.set(groupKey, new Set());
     const editType = d.deliverable_type || '';
     const itemNames = d.item_names ? d.item_names.split(',').map((n: string) => n.trim()).filter(Boolean) : [];
