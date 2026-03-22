@@ -80,7 +80,8 @@ function computeEffectiveDeliverables(
   }
 
   // Check all other types (only if explicitly enabled)
-  for (const [type, row] of byType.entries()) {
+  for (const type of Array.from(byType.keys())) {
+    const row = byType.get(type)!;
     if ((DEFAULT_ON_TYPES as readonly string[]).includes(type)) continue;
     if (row.enabled) {
       effective.push(row);
