@@ -43,6 +43,7 @@ function timeAgo(dateStr: string): string {
 }
 
 export function FilesDashboard() {
+  const navigate = useNavigate();
   const {
     files, stats, activityFeed, insights, isLoading,
     search, setSearch, filterMode, setFilterMode, lastUpdated, refresh,
@@ -50,6 +51,22 @@ export function FilesDashboard() {
 
   const [selectedFile, setSelectedFile] = useState<FileRecord | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+
+  // Restore scroll on mount
+  useEffect(() => {
+    const saved = sessionStorage.getItem("files_dashboard_scroll");
+    if (saved) {
+      setTimeout(() => window.scrollTo(0, Number(saved)), 100);
+      sessionStorage.removeItem("files_dashboard_scroll");
+    }
+  }, []);
+
+  const navigateToClient = (f: FileRecord) => {
+    sessionStorage.setItem("files_dashboard_scroll", String(window.scrollY));
+    sessionStorage.setItem("files_dashboard_search", search);
+    sessionStorage.setItem("files_dashboard_filter", filterMode);
+    navigate(`/files/client/${encodeURIComponent(f.registered_date_time_ad)}`);
+  };
 
   const activeCard = filterMode === "all" ? null : filterMode;
 

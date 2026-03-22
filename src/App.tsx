@@ -95,6 +95,7 @@ const App = () => (
               <Route path="/video-edit" element={<ProtectedRoute><VideoEditTracker /></ProtectedRoute>} />
               <Route path="/photo-edit" element={<ProtectedRoute><ComingSoon moduleId="photo-edit-tracker" /></ProtectedRoute>} />
               <Route path="/files" element={<ProtectedRoute><FileManagement /></ProtectedRoute>} />
+              <Route path="/files/client/:clientId" element={<ProtectedRoute><FileClientDetail /></ProtectedRoute>} />
               <Route path="/media" element={<ProtectedRoute><ComingSoon moduleId="album-media" /></ProtectedRoute>} />
               <Route path="/vendors" element={<ProtectedRoute><Vendors /></ProtectedRoute>} />
               <Route path="/my-accounts" element={<ProtectedRoute><MyAccounts /></ProtectedRoute>} />
