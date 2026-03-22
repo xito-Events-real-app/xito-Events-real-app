@@ -157,7 +157,7 @@ export async function ensureVideoEditRows(): Promise<number> {
     (existingRows || []).map(r => `${r.registered_date_time_ad}||${r.event_name}||${r.sub_event_name}||${r.edit_type}`)
   );
 
-  // 5. Load deliverables for video AND overall sections (overall_reel etc. are video-related)
+  // 5. Load ALL deliverables (enabled AND disabled) for video AND overall sections
   const bookedRegDates = [...bookedMap.keys()];
   const allDeliverables: any[] = [];
   for (let i = 0; i < bookedRegDates.length; i += 50) {
@@ -166,18 +166,23 @@ export async function ensureVideoEditRows(): Promise<number> {
       .from('client_deliverables')
       .select('*')
       .in('registered_date_time_ad', batch)
-      .in('section', ['video', 'overall'])
-      .eq('enabled', true);
+      .in('section', ['video', 'overall']);
     if (data) allDeliverables.push(...data);
   }
 
-  // Separate video-section (event-specific) and overall-section deliverables
-  const deliverablesMap = new Map<string, any[]>();
-  const overallDeliverablesMap = new Map<string, any[]>();
+  // Separate into enabled deliverables (for row generation) and "has any records" (to skip defaults)
+  const deliverablesMap = new Map<string, any[]>(); // enabled only
+  const overallDeliverablesMap = new Map<string, any[]>(); // enabled only
+  const hasAnyRecordsMap = new Set<string>(); // all records including disabled
 
   for (const d of allDeliverables) {
+    const eventName = d.section === 'overall' ? 'OVERALL' : d.event_name;
+    const groupKey = `${d.registered_date_time_ad}||${eventName}`;
+    hasAnyRecordsMap.add(groupKey);
+
+    if (!d.enabled) continue; // only enabled items go into generation maps
+
     if (d.section === 'overall') {
-      // Overall deliverables are not event-specific
       if (!overallDeliverablesMap.has(d.registered_date_time_ad)) overallDeliverablesMap.set(d.registered_date_time_ad, []);
       overallDeliverablesMap.get(d.registered_date_time_ad)!.push(d);
     } else {
