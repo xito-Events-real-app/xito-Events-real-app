@@ -1,40 +1,47 @@
 
 
-## Fix Client File Detail Page — Read-Only View with Proper Colors
+## Fix Client File Detail Page — 5 Changes
 
-### Problems
-1. Black text on dark background — unreadable
-2. Editable inputs where user just wants to see data
-3. Action buttons cluttering the view — user wants read-only
-4. "Set Path" should redirect to the Files page (FullScreenFilesTable) instead of opening dialog here
+### Changes to `src/pages/FileClientDetail.tsx`
 
-### Changes — `src/pages/FileClientDetail.tsx`
+**1. "Set Path" redirects to FullScreenFilesTable with specific client+event expanded**
+- Change the "Set Path →" link to navigate with query params that identify the specific file:
+  ```
+  /files?section=files&client={clientName}&event={eventName}&year={eventYear}&month={eventMonth}
+  ```
+- The FullScreenFilesTable already has `filterClient` state — we'll read these from URL params to auto-expand the right row.
 
-**1. Remove all editable elements**
-- Remove `Input` fields for Size, Items — replace with plain text
-- Remove `Set Path` and `CONFIRM` buttons
-- Remove `FilePathBuilderDialog` and `ReconfirmationDialog` imports and state
-- Remove `handleUpdate`, `handleConfirm`, `openPathDialog`, `openConfirmDialog`
-- Keep only the `fetchData` logic for loading
+**2. Rearrange summary cards: Total Size → Photo Size → Video Size → Remaining (remove "Copied")**
+- Card 1: Total Size (blue) — same as now
+- Card 2: Photo Size (purple) — `stats.photoSize` 
+- Card 3: Video Size (amber) — `stats.videoSize`
+- Card 4: Remaining (red) — clickable, toggles a `showOnlyRemaining` filter state
 
-**2. "Set Path" becomes a navigation link**
-- If file has no path: show "Set Path →" as a link that navigates to `/files?section=files` (the FullScreenFilesTable)
-- If file has a path: show the path as plain text
+**3. Remaining card is clickable — filters table to show only pending files**
+- Add `showOnlyRemaining` state toggle
+- When active, filter `eventGroups` to only show files where `!f.final_generated_path`
+- Visual indicator on the card when filter is active (ring/border highlight)
 
-**3. Fix color theory for dark theme**
-- Primary text: `text-white` (freelancer names, values)
-- Secondary text: `text-slate-300` (labels like "Format", "Size")
-- Muted text: `text-slate-400` (sub-info, timestamps)
-- Accent colors remain: green for copied, red for pending, yellow for single backup
-- Card backgrounds: `bg-slate-900` with `border-slate-700`
-- Header: `bg-slate-950`
-- Remove all raw `hsl()` inline values — use Tailwind's slate palette for consistency and readability
+**4. Event name gets a colored background highlight**
+- Replace the plain text event header with a styled bar:
+  ```
+  <div className="bg-blue-900/40 border-l-4 border-blue-500 px-4 py-2 rounded-r-lg">
+  ```
 
-**4. Keep the same card-based layout structure**
-- Summary cards at top (same 4 cards)
-- Event sections with freelancer cards in 2-col grid
-- Same grouping logic — no structural changes
+**5. Path column shows device name pill with hover for full path (same pattern as FullScreenFilesTable BackupPill)**
+- Import `HoverCard` components
+- If file has `final_generated_path`: show device name (`backup_1_device_name` or first segment of path) as a short highlighted pill
+- On hover: show full path, timestamp, and time ago — matching the existing `BackupPill` pattern from FullScreenFilesTable
 
-### Single file changed
+### Changes to `src/components/files/FullScreenFilesTable.tsx`
+
+**6. Read URL params to auto-filter and auto-expand on load**
+- Import `useSearchParams`
+- On mount, read `client` param → set `filterClient`
+- Read `event` param → auto-expand matching row in `expandedRows`
+- This enables the "Set Path" redirect from client detail to land on the right expanded row
+
+### Files changed
 - `src/pages/FileClientDetail.tsx`
+- `src/components/files/FullScreenFilesTable.tsx`
 
