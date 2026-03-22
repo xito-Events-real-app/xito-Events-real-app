@@ -523,8 +523,27 @@ async function _ensureFileRowsForMonthInner(eventYear: string, eventMonth: strin
   }
 
   if (newRows.length > 0) {
-    for (let i = 0; i < newRows.length; i += 50) {
-      const batch = newRows.slice(i, i + 50);
+    // Pre-insert dedup recheck: query DB again to catch rows inserted by concurrent calls
+    const { data: recheckFiles } = await (supabase as any)
+      .from("files_management")
+      .select("registered_date_time_ad, event_name, freelancer_type, freelancer_name")
+      .eq("event_year", eventYear)
+      .eq("event_month", eventMonth)
+      .eq("deleted_or_not", false);
+
+    const recheckKeys = new Set(
+      (recheckFiles || []).map((f: any) =>
+        `${f.registered_date_time_ad}||${f.event_name}||${f.freelancer_type}||${f.freelancer_name}`
+      )
+    );
+
+    const dedupedRows = newRows.filter((r) => {
+      const key = `${r.registered_date_time_ad}||${r.event_name}||${r.freelancer_type}||${r.freelancer_name}`;
+      return !recheckKeys.has(key);
+    });
+
+    for (let i = 0; i < dedupedRows.length; i += 50) {
+      const batch = dedupedRows.slice(i, i + 50);
       const { error } = await (supabase as any)
         .from("files_management")
         .insert(batch);
