@@ -150,6 +150,14 @@ Thank you! 🙏`;
               <span className="text-muted-foreground">Path</span>
               <span className="font-mono text-xs truncate max-w-[180px]">{file.final_generated_path || "-"}</span>
             </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Copied By</span>
+              <span className="font-bold">{file.who_copied || "-"}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Copied At</span>
+              <span className="font-bold">{backupTime}</span>
+            </div>
           </div>
 
           {/* Download PDF only button */}
