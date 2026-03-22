@@ -166,7 +166,10 @@ export function FilesDashboard() {
                     onClick={() => { setSelectedFile(f); setSheetOpen(true); }}
                     className="cursor-pointer border-[hsl(220,20%,14%)] hover:bg-[hsl(220,25%,13%)] transition-colors"
                   >
-                    <TableCell className="text-xs font-medium text-[hsl(220,15%,90%)] max-w-[120px] truncate">{f.client_name || "-"}</TableCell>
+                    <TableCell
+                      className="text-xs font-medium text-[hsl(210,90%,65%)] max-w-[120px] truncate cursor-pointer hover:underline"
+                      onClick={(e) => { e.stopPropagation(); navigateToClient(f); }}
+                    >{f.client_name || "-"}</TableCell>
                     <TableCell className="text-xs text-[hsl(220,15%,65%)] max-w-[100px] truncate">{f.event_name || "-"}</TableCell>
                     <TableCell className="text-xs text-[hsl(220,15%,55%)] whitespace-nowrap">{f.event_date_ad || "-"}</TableCell>
                     <TableCell>
