@@ -350,7 +350,7 @@ export function FilesDashboard() {
             onReset={() => { setTableFilterYear(null); setTableFilterMonth(null); }}
           />
         </div>
-        <ScrollArea className="max-h-[500px]">
+        <ScrollArea className="h-[calc(100vh-420px)] min-h-[300px]">
           <Table>
             <TableHeader>
               <TableRow className="border-[hsl(220,20%,16%)] hover:bg-transparent">
