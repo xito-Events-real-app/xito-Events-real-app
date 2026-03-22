@@ -71,6 +71,10 @@ export function FilesDashboard() {
   const [subMonth, setSubMonth] = useState<string | null>(null);
   const [subDevice, setSubDevice] = useState<string | null>(null);
 
+  // Nepali date filter for table
+  const [tableFilterYear, setTableFilterYear] = useState<number | null>(null);
+  const [tableFilterMonth, setTableFilterMonth] = useState<number | null>(null);
+
   // Reset sub-filters when main filter changes
   useEffect(() => {
     setSubMonth(null);
