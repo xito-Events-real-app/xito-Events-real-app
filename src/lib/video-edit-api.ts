@@ -437,7 +437,8 @@ export async function syncWithDeliverables(): Promise<number> {
 
   // Build effective enabled set per event using per-type logic
   const effectiveEnabledMap = new Map<string, Set<string>>();
-  for (const [groupKey, dels] of eventDeliverablesMap.entries()) {
+  for (const groupKey of Array.from(eventDeliverablesMap.keys())) {
+    const dels = eventDeliverablesMap.get(groupKey)!;
     const isOverall = groupKey.includes("||OVERALL");
     let effective: any[];
     if (isOverall) {
