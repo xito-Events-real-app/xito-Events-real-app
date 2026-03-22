@@ -180,17 +180,24 @@ export async function ensureFreelancerAssignmentRows(
   const days = eventDays.split('\n');
   const datesAD = eventDatesAD.split('\n');
 
-  // Read existing rows ordered by a stable key to establish positional mapping
+  // Read existing rows
   const { data: existing } = await supabase
     .from('freelancer_assignments')
     .select('id, event, event_year, event_month, event_day, event_date_ad')
-    .eq('registered_date_time_ad', registeredDateTimeAD)
-    .order('event_date_ad', { ascending: true })
-    .order('event', { ascending: true });
+    .eq('registered_date_time_ad', registeredDateTimeAD);
 
   const existingList = existing || [];
 
-  // Build positional mapping: index i → existing row at position i
+  // Build a map of existing rows by event name for O(1) lookup
+  const existingByName = new Map<string, typeof existingList[0]>();
+  for (const row of existingList) {
+    existingByName.set(row.event, row);
+  }
+
+  // Build set of new event names
+  const newEventNames = new Set(names);
+
+  // For each new event: update date fields if exists, or insert skeleton
   for (let i = 0; i < names.length; i++) {
     const eventName = names[i];
     const year = years[i] || '';
@@ -198,16 +205,19 @@ export async function ensureFreelancerAssignmentRows(
     const day = days[i] || '';
     const dateAD = datesAD[i] || '';
 
-    if (i < existingList.length) {
-      const oldRow = existingList[i];
-      // Check if this position's event identity changed (rename detected)
-      if (oldRow.event !== eventName || oldRow.event_month !== month || oldRow.event_day !== day) {
-        const oldEventName = oldRow.event;
+    const existingRow = existingByName.get(eventName);
 
-        // Update the assignment row in-place (preserves all crew picks)
+    if (existingRow) {
+      // Update date/meta fields only — crew stays untouched
+      const needsUpdate =
+        existingRow.event_year !== year ||
+        existingRow.event_month !== month ||
+        existingRow.event_day !== day ||
+        existingRow.event_date_ad !== dateAD;
+
+      if (needsUpdate) {
         await supabase.from('freelancer_assignments')
           .update({
-            event: eventName,
             event_year: year,
             event_month: month,
             event_day: day,
@@ -216,32 +226,11 @@ export async function ensureFreelancerAssignmentRows(
             synced_to_sheet: false,
             updated_at: new Date().toISOString(),
           } as any)
-          .eq('id', oldRow.id);
-
-        console.log(`[CREW SYNC] Renamed event "${oldEventName}" → "${eventName}" for ${clientName}`);
-
-        // Propagate rename to freelancer_event_settings
-        await supabase.from('freelancer_event_settings')
-          .update({ event_name: eventName } as any)
-          .eq('registered_date_time_ad', registeredDateTimeAD)
-          .eq('event_name', oldEventName);
-
-        // Propagate rename to files_management
-        await supabase.from('files_management')
-          .update({
-            event_name: eventName,
-            event_year: year,
-            event_month: month,
-            event_day: day,
-            event_date_ad: dateAD,
-            synced_to_sheet: false,
-            updated_at: new Date().toISOString(),
-          } as any)
-          .eq('registered_date_time_ad', registeredDateTimeAD)
-          .eq('event_name', oldEventName);
+          .eq('id', existingRow.id);
+        console.log(`[CREW SYNC] Updated dates for "${eventName}" for ${clientName}`);
       }
     } else {
-      // New event at a position beyond existing list — insert skeleton
+      // New event — insert skeleton (no crew)
       await supabase.from('freelancer_assignments').upsert({
         registered_date_time_ad: registeredDateTimeAD,
         registered_date_bs: registeredDateBS,
@@ -258,9 +247,9 @@ export async function ensureFreelancerAssignmentRows(
     }
   }
 
-  // Delete rows beyond the new event count (events truly removed)
-  if (existingList.length > names.length) {
-    const toDelete = existingList.slice(names.length);
+  // Delete rows whose event name no longer exists in the new list
+  const toDelete = existingList.filter(row => !newEventNames.has(row.event));
+  if (toDelete.length > 0) {
     const ids = toDelete.map(r => r.id);
     await supabase.from('freelancer_assignments').delete().in('id', ids);
 
