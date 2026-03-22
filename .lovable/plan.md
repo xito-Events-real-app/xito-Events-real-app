@@ -1,47 +1,31 @@
 
 
-## Fix File Tracking Table — Visibility, Scrolling, Filters & Row Differentiation
+## File Tracking Table — Scrollable, Filtered, Reordered Columns
 
-### Problems Identified
-1. Client name truncated at `max-w-[120px]`, Event at `max-w-[100px]` — text not readable
-2. `ScrollArea` has `max-h-[500px]` but table rows scroll the whole page instead of independently
-3. Date column shows year (e.g. "Falgun 10, 2082") — year wastes space, remove it → just "Falgun 10"
-4. No visual distinction between photo and video file rows
-5. Only client name is clickable — user wants ALL columns clickable as filters (event, freelancer, role, storage, etc.) EXCEPT client name which navigates to client page
+### Problems
+1. Table limited to 50 rows with `slice(0, 50)` — needs full scroll
+2. No year/month filters inside the file tracking section (user wants NepaliDateFilter style like All Clients page)
+3. Column order wrong — needs: Client, Event, Date (Nepali), Freelancer, Role, Card, Copy, Backup, Size, Storage, Updated
+4. Date shows AD format — needs Nepali like "Magh 21, 2082"
 
-### Changes — `src/components/files/FilesDashboard.tsx`
+### Changes
 
-**1. Remove truncation from Client and Event columns**
-- Remove `max-w-[120px]` from client cell, `max-w-[100px]` from event cell
-- Use `whitespace-nowrap` instead of `truncate` — let table be wider and scroll horizontally
-- Also remove `max-w-[90px]` from freelancer and `max-w-[80px]` from storage
+**`src/components/files/FilesDashboard.tsx`**
 
-**2. Fix table scrolling — independent scroll container**
-- Wrap the table in a `div` with `overflow-y-auto max-h-[500px]` with sticky header
-- Add `sticky top-0 z-10 bg-[hsl(220,25%,10%)]` to `TableHeader` so headers stay visible while scrolling
-- This ensures table scrolls independently without moving the page
+1. **Make table fully scrollable**: Change `ScrollArea` `max-h-[360px]` to `max-h-[500px]` and remove `slice(0, 50)` — show all `displayFiles`
 
-**3. Date column — remove year**
-- Change from `"Falgun 10, 2082"` → `"Falgun 10"`
-- Just `${monthName} ${day}` without the year portion
+2. **Add NepaliDateFilter inside the File Tracking card header**: Import `NepaliDateFilter` from `@/components/booked/NepaliDateFilter`. Add `filterYear` and `filterMonth` state. Place the filter inline in the card header bar. Apply year/month filtering on `displayFiles` using `event_year` and `event_month` fields.
 
-**4. Photo/Video row differentiation**
-- Add a thin colored left border to each row based on `freelancer_type`:
-  - Photo types (PB, PG, etc.): left border `border-l-2 border-l-blue-500/40`
-  - Video types (VB, VG, etc.): left border `border-l-2 border-l-purple-500/40`
-  - Other: no left border
-- This gives instant visual grouping without changing layout
+3. **Reorder columns to**: Client Name, Event, Date, Freelancer, Role, Card, Copy, Backup, Size, Storage, Updated
 
-**5. Make columns clickable as filters (except Client Name)**
-- **Event**: clicking toggles a filter to show only that event name
-- **Freelancer**: clicking filters to that freelancer
-- **Role**: clicking filters to that role type
-- **Storage**: clicking filters to that device name
-- Add filter state: `clickFilterEvent`, `clickFilterFreelancer`, `clickFilterRole`, `clickFilterDevice`
-- Show active filters as dismissible badges in the sub-filter bar
-- Client name keeps its existing navigate-to-client behavior (no filter)
-- All clickable cells get `hover:underline cursor-pointer` styling with a subtle color shift
+4. **Date column**: Convert from `event_date_ad` to Nepali format using `event_month`, `event_day`, `event_year` fields → display as `"Magh 21, 2082"` using `nepaliMonthsEnglish`
 
-### Single file changed
+5. **New columns**:
+   - Freelancer: `f.freelancer_name`
+   - Role: `f.freelancer_type`
+   - Card: `f.card_label`
+   - Storage: `f.backup_1_device_name`
+
+### Files Changed
 - `src/components/files/FilesDashboard.tsx`
 
