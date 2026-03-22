@@ -9,6 +9,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+} from "@/components/ui/table";
+import {
   ArrowLeft, CheckCircle, Clock, AlertTriangle, HardDrive,
   FileText, ShieldCheck, ExternalLink,
 } from "lucide-react";
@@ -106,7 +109,7 @@ export default function FileClientDetail() {
     <div className="min-h-screen bg-slate-950 text-slate-200">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-slate-950/95 backdrop-blur border-b border-slate-800">
-        <div className="flex items-center gap-3 px-4 sm:px-6 py-4 max-w-6xl mx-auto">
+        <div className="flex items-center gap-3 px-4 sm:px-6 py-4 max-w-[1400px] mx-auto">
           <Button variant="ghost" size="icon" onClick={() => navigate("/files")} className="text-slate-400 hover:text-white shrink-0">
             <ArrowLeft className="w-5 h-5" />
           </Button>
@@ -117,7 +120,7 @@ export default function FileClientDetail() {
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6 space-y-6">
         {isLoading ? (
           <div className="text-center py-20 text-slate-500">Loading...</div>
         ) : (
@@ -140,7 +143,7 @@ export default function FileClientDetail() {
               ))}
             </div>
 
-            {/* Event Sections */}
+            {/* Event Sections — Table Layout */}
             {eventGroups.map((group, gi) => (
               <div key={gi} className="space-y-3">
                 <div className="flex items-center gap-3 px-1">
@@ -152,75 +155,89 @@ export default function FileClientDetail() {
                   <span className="text-xs text-slate-500 ml-auto">{group.files.length} files</span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {group.files.map(f => {
-                    const copied = !!f.final_generated_path;
-                    const hasB2 = !!f.backup_2_path;
-                    return (
-                      <Card key={f.id} className="border-slate-800 bg-slate-900">
-                        <CardContent className="p-4 space-y-3">
-                          {/* Row 1: Name + Status */}
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="text-sm font-bold text-white truncate">{f.freelancer_name || "-"}</span>
-                              <span className="text-xs text-slate-400 shrink-0">{f.freelancer_type || ""}</span>
-                              {f.side && <span className="text-xs text-slate-500 shrink-0">({f.side})</span>}
-                            </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <span className={cn("text-[11px] font-bold px-2.5 py-1 rounded-full",
-                                copied ? "bg-emerald-500/15 text-emerald-400" : "bg-red-500/15 text-red-400"
-                              )}>
-                                {copied ? "COPIED" : "PENDING"}
-                              </span>
-                              <span className={cn("text-[11px] font-bold px-2.5 py-1 rounded-full",
-                                hasB2 ? "bg-emerald-500/15 text-emerald-400" : "bg-yellow-500/15 text-yellow-400"
-                              )}>
-                                {hasB2 ? "DOUBLE" : "SINGLE"}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Row 2: Details */}
-                          <div className="grid grid-cols-4 gap-3">
-                            <div>
-                              <p className="text-[11px] text-slate-400 mb-1">Format</p>
-                              <p className="text-sm font-medium text-slate-200">{f.format_type || "-"}</p>
-                            </div>
-                            <div>
-                              <p className="text-[11px] text-slate-400 mb-1">Size (GB)</p>
-                              <p className="text-sm font-medium text-white">{f.size_gb || "0"}</p>
-                            </div>
-                            <div>
-                              <p className="text-[11px] text-slate-400 mb-1">Items</p>
-                              <p className="text-sm font-medium text-white">{f.number_of_items || "0"}</p>
-                            </div>
-                            <div>
-                              <p className="text-[11px] text-slate-400 mb-1">Copied By</p>
-                              <p className="text-sm font-medium text-slate-200">{f.who_copied || "-"}</p>
-                              {f.backup_1_recorded_at && <p className="text-[11px] text-slate-500">{timeAgo(f.backup_1_recorded_at)}</p>}
-                            </div>
-                          </div>
-
-                          {/* Row 3: Path or Set Path link */}
-                          {copied && f.final_generated_path ? (
-                            <div className="bg-slate-950 rounded-lg px-3 py-2">
-                              <p className="text-[11px] text-slate-500 mb-0.5">Storage Path</p>
-                              <p className="text-xs text-slate-300 break-all leading-relaxed">{f.final_generated_path}</p>
-                            </div>
-                          ) : !copied ? (
-                            <button
-                              onClick={() => navigate("/files?section=files")}
-                              className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors pt-1"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                              Set Path in Files →
-                            </button>
-                          ) : null}
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
+                <Card className="border-slate-800 bg-slate-900 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <Table className="table-fixed w-full">
+                      <TableHeader>
+                        <TableRow className="border-slate-800 hover:bg-transparent">
+                          <TableHead className="w-[16%] text-slate-400 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">Name</TableHead>
+                          <TableHead className="w-[8%] text-slate-400 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">Type</TableHead>
+                          <TableHead className="w-[6%] text-slate-400 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">Side</TableHead>
+                          <TableHead className="w-[8%] text-slate-400 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">Format</TableHead>
+                          <TableHead className="w-[6%] text-slate-400 text-xs font-semibold uppercase tracking-wider whitespace-nowrap text-right">Size</TableHead>
+                          <TableHead className="w-[6%] text-slate-400 text-xs font-semibold uppercase tracking-wider whitespace-nowrap text-right">Items</TableHead>
+                          <TableHead className="w-[8%] text-slate-400 text-xs font-semibold uppercase tracking-wider whitespace-nowrap text-center">Copy</TableHead>
+                          <TableHead className="w-[8%] text-slate-400 text-xs font-semibold uppercase tracking-wider whitespace-nowrap text-center">Backup</TableHead>
+                          <TableHead className="w-[10%] text-slate-400 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">Copied By</TableHead>
+                          <TableHead className="w-[24%] text-slate-400 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">Path</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {group.files.map(f => {
+                          const copied = !!f.final_generated_path;
+                          const hasB2 = !!f.backup_2_path;
+                          return (
+                            <TableRow key={f.id} className="border-slate-800/50 hover:bg-slate-800/30">
+                              <TableCell className="py-3">
+                                <span className="text-sm font-semibold text-white truncate block">{f.freelancer_name || "-"}</span>
+                              </TableCell>
+                              <TableCell className="py-3">
+                                <span className="text-xs text-slate-300">{f.freelancer_type || "-"}</span>
+                              </TableCell>
+                              <TableCell className="py-3">
+                                <span className="text-xs text-slate-300">{f.side || "-"}</span>
+                              </TableCell>
+                              <TableCell className="py-3">
+                                <span className="text-xs text-slate-300">{f.format_type || "-"}</span>
+                              </TableCell>
+                              <TableCell className="py-3 text-right">
+                                <span className="text-sm font-medium text-white tabular-nums">{f.size_gb || "0"}</span>
+                              </TableCell>
+                              <TableCell className="py-3 text-right">
+                                <span className="text-sm font-medium text-white tabular-nums">{f.number_of_items || "0"}</span>
+                              </TableCell>
+                              <TableCell className="py-3 text-center">
+                                <span className={cn("text-[11px] font-bold px-2 py-0.5 rounded-full inline-block",
+                                  copied ? "bg-emerald-500/15 text-emerald-400" : "bg-red-500/15 text-red-400"
+                                )}>
+                                  {copied ? "DONE" : "PENDING"}
+                                </span>
+                              </TableCell>
+                              <TableCell className="py-3 text-center">
+                                <span className={cn("text-[11px] font-bold px-2 py-0.5 rounded-full inline-block",
+                                  hasB2 ? "bg-emerald-500/15 text-emerald-400" : "bg-yellow-500/15 text-yellow-400"
+                                )}>
+                                  {hasB2 ? "DOUBLE" : "SINGLE"}
+                                </span>
+                              </TableCell>
+                              <TableCell className="py-3">
+                                <span className="text-xs text-slate-200 block">{f.who_copied || "-"}</span>
+                                {f.backup_1_recorded_at && (
+                                  <span className="text-[11px] text-slate-500">{timeAgo(f.backup_1_recorded_at)}</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="py-3">
+                                {copied && f.final_generated_path ? (
+                                  <span className="text-xs text-slate-300 break-all leading-relaxed block">{f.final_generated_path}</span>
+                                ) : !copied ? (
+                                  <button
+                                    onClick={() => navigate("/files?section=files")}
+                                    className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                                  >
+                                    <ExternalLink className="w-3 h-3" />
+                                    Set Path →
+                                  </button>
+                                ) : (
+                                  <span className="text-xs text-slate-500">-</span>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </Card>
               </div>
             ))}
 
