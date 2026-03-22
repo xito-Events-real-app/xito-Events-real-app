@@ -1,32 +1,33 @@
 
 
-## Fix: Shakti Neupane File Data Corruption + Missing Events
+## Fix: Shakti Neupane — Remove `**` Date Events from File Management
 
-### What happened
-1. **36 duplicate POST SHOOT rows** exist (should be ~4 based on assignment). Multiple batches were created at different timestamps today, indicating the dedup mechanism failed — likely due to concurrent `ensureFileRowsForMonth` calls from multiple components or realtime triggers.
-2. **BRIDE MEHNDI & GROOM HALDI** and **WEDDING BOTH SIDES** events have **zero file rows** — these are in month 11 (Falgun) and were never generated because the user hasn't viewed that month.
-3. The POST SHOOT event has `event_date_ad: 2026-03-**` (date TBD), so the `**` filter in `ensureFileRowsForMonth` correctly skips it. But somehow rows got created — likely from a race condition where the existing-keys query returned empty before prior inserts completed.
+### Problem 1: POST SHOOT rows should not exist
+POST SHOOT has `event_date_ad: 2026-03-**` — the `**` means the date is not yet decided, so the event has NOT happened. File rows should never be generated for undated events. Currently there are **13 active POST SHOOT rows**, many with wrong crew data (crew from BRIDE MEHNDI leaked into POST SHOOT rows).
 
-### Data fix (using insert tool)
-1. **Delete duplicate POST SHOOT rows** — for each unique `freelancer_type + freelancer_name` combo, keep only 1 row and soft-delete the rest
-2. **Verify PRE+RECEPTION rows** are correct (6 rows — looks fine)
+### Problem 2: FileClientDetail page shows `**` events
+The page at `/files/client/:clientId` loads ALL file rows for a client without filtering out `**` dates, so POST SHOOT appears even though it should not.
 
-### Code fix — `src/lib/files-api.ts`
-The `ensureFileRowsForMonth` lock uses a module-level Promise, but if the page reloads or multiple components call it simultaneously before the first call's inserts complete, duplicates are created.
+### Problem 3: `syncFilesWithAssignments` creates rows for `**` events
+When crew is assigned to any event, `syncFilesWithAssignments` is called — it does NOT check if `event_date_ad` contains `**`, so it generates file rows for undated events.
 
-**Fix**: After building `newRows`, do a second dedup query right before inserting — check if any of the composite keys already exist in the DB. This prevents race-condition duplicates:
+---
 
-```
-// Before inserting, re-check for any rows that appeared since our initial query
-const recheckKeys = newRows.map(r => 
-  `${r.registered_date_time_ad}||${r.event_name}||${r.freelancer_type}||${r.freelancer_name}`
-);
-// Query existing again and filter out any that now exist
-```
+### Fix 1: Data cleanup (via database)
+- Soft-delete all 13 active POST SHOOT rows for Shakti (`event_date_ad = '2026-03-**'`)
+- These rows have no meaningful file data (all `final_generated_path` are empty, `size_gb = 0`)
 
-Also add `card_label` to the dedup key to prevent issues with duplicated cards.
+### Fix 2: `src/pages/FileClientDetail.tsx`
+- In `fetchData()`, add filter: exclude rows where `event_date_ad` contains `**`
+- This prevents undated events from ever appearing in the client file detail view
+
+### Fix 3: `src/lib/files-api.ts` — `syncFilesWithAssignments()`
+- At the top of the function, after loading the assignment, check if `event_date_ad` contains `**`
+- If yes, return early — never create file rows for undated events
+- This prevents the root cause: crew changes on other events triggering row creation for `**` events
 
 ### Files changed
-1. `src/lib/files-api.ts` — add pre-insert dedup recheck in `ensureFileRowsForMonth`
-2. Data cleanup via insert tool (DELETE duplicates for Shakti)
+1. `src/pages/FileClientDetail.tsx` — filter out `**` date rows
+2. `src/lib/files-api.ts` — early return in `syncFilesWithAssignments` for `**` dates
+3. Data: soft-delete 13 corrupted POST SHOOT rows
 
