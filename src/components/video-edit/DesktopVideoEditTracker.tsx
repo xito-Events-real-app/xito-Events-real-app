@@ -57,8 +57,8 @@ function VideoEditTable({
   showPushToLab,
 }: {
   rows: VideoEditRow[];
-  onUpdateField: (rowNumber: number, field: string, value: string) => void;
-  onPushToLab?: (rowNumber: number) => void;
+  onUpdateField: (id: string, field: string, value: string) => void;
+  onPushToLab?: (id: string) => void;
   editors: { name: string; isVideoEditor: boolean }[];
   showPushToLab: boolean;
 }) {
