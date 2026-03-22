@@ -759,7 +759,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
                 </button>
               </HoverCardTrigger>
               <HoverCardContent className="w-72 p-3 z-[300] bg-popover border shadow-xl" side="right" avoidCollisions>
-                <ClientHoverPreview registeredDateTimeAD={row.registeredDateTimeAD} clientName={row.clientName} onOpenFull={() => navigate(`/client/${row.registeredDateTimeAD}`)} />
+                <ClientHoverPreview registeredDateTimeAD={row.registeredDateTimeAD} clientName={row.clientName} onOpenFull={() => navigate(`/client-tracker/client/${encodeURIComponent(row.registeredDateTimeAD)}`)} />
               </HoverCardContent>
             </HoverCard>
           </td>
