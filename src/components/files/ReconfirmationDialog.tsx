@@ -17,9 +17,10 @@ interface ReconfirmationDialogProps {
   onOpenChange: (open: boolean) => void;
   file: FileRecord | null;
   onConfirm: (fileId: string) => Promise<void>;
+  alreadyConfirmed?: boolean;
 }
 
-export function ReconfirmationDialog({ open, onOpenChange, file, onConfirm }: ReconfirmationDialogProps) {
+export function ReconfirmationDialog({ open, onOpenChange, file, onConfirm, alreadyConfirmed }: ReconfirmationDialogProps) {
   const [isConfirming, setIsConfirming] = useState(false);
 
   if (!file) return null;
