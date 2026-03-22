@@ -256,7 +256,7 @@ export function FilesDashboard() {
           {showMonthFilter && subFilterOptions.months.length > 0 && (
             <>
               <div className="w-px h-4 bg-[hsl(220,20%,20%)]" />
-              <ScrollArea className="max-w-[400px]" orientation="horizontal">
+              <div className="max-w-[400px] overflow-x-auto">
                 <div className="flex gap-1">
                   {subFilterOptions.months.map(m => (
                     <button
