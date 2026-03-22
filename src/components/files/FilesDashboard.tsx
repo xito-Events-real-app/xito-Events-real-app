@@ -281,7 +281,7 @@ export function FilesDashboard() {
           {showDeviceFilter && subFilterOptions.devices.length > 0 && (
             <>
               <div className="w-px h-4 bg-[hsl(220,20%,20%)]" />
-              <ScrollArea className="max-w-[300px]" orientation="horizontal">
+              <div className="max-w-[300px] overflow-x-auto">
                 <div className="flex gap-1">
                   {subFilterOptions.devices.map(d => (
                     <button
