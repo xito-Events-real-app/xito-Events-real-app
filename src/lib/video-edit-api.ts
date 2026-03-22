@@ -25,6 +25,71 @@ export interface VideoEditRow {
 
 const VIDEO_DELIVERABLE_SECTIONS = ["video", "videos"] as const;
 
+/** These deliverable types are ON by default even when no DB row exists */
+const DEFAULT_ON_TYPES = ["full_video", "highlights"] as const;
+
+function isDefaultOnType(deliverableType: string): boolean {
+  const key = deliverableType.toLowerCase().replace(/[\s_-]+/g, "_");
+  return (DEFAULT_ON_TYPES as readonly string[]).includes(key);
+}
+
+/** Reverse-map normalized edit type back to deliverable_type key */
+function editTypeToDeliverableKey(editType: string): string {
+  const map: Record<string, string> = {
+    "Full Video": "full_video",
+    "Highlights": "highlights",
+    "Reel": "reel",
+    "Video Insta Post": "video_insta_post",
+    "Overall Highlights": "overall_highlights",
+    "Overall Reel": "overall_reel",
+  };
+  return map[editType] || editType.toLowerCase().replace(/\s+/g, "_");
+}
+
+/**
+ * Compute the effective enabled deliverables for an event.
+ * For default-ON types (full_video, highlights): enabled unless explicit row says enabled=false
+ * For all others: enabled only if explicit row says enabled=true
+ */
+function computeEffectiveDeliverables(
+  allDeliverablesForEvent: any[],
+): any[] {
+  // Build a map of type → deliverable row
+  const byType = new Map<string, any>();
+  for (const d of allDeliverablesForEvent) {
+    byType.set(d.deliverable_type, d);
+  }
+
+  const effective: any[] = [];
+
+  // Check default-ON types
+  for (const defaultType of DEFAULT_ON_TYPES) {
+    const row = byType.get(defaultType);
+    if (!row) {
+      // No row = default ON → create a synthetic enabled entry
+      effective.push({
+        deliverable_type: defaultType,
+        enabled: true,
+        quantity: 1,
+        item_names: "",
+      });
+    } else if (row.enabled) {
+      effective.push(row);
+    }
+    // If row exists and enabled=false → skip (disabled)
+  }
+
+  // Check all other types (only if explicitly enabled)
+  for (const [type, row] of byType.entries()) {
+    if ((DEFAULT_ON_TYPES as readonly string[]).includes(type)) continue;
+    if (row.enabled) {
+      effective.push(row);
+    }
+  }
+
+  return effective;
+}
+
 const DELIVERABLE_TYPE_LABELS: Record<string, string> = {
   full_video: "Full Video",
   highlights: "Highlights",
