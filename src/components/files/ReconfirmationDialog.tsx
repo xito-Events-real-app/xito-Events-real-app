@@ -9,6 +9,7 @@ import { FileRecord } from "@/lib/files-api";
 import { downloadConfirmationPDF, getConfirmationPDFFile } from "@/lib/file-confirmation-pdf";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { supabase } from "@/integrations/supabase/client";
+import { nepaliMonthsEnglish } from "@/lib/nepali-date";
 import { toast } from "sonner";
 
 interface ReconfirmationDialogProps {
