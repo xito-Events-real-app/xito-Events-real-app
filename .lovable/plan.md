@@ -1,32 +1,19 @@
 
 
-## Fix: Booked Calendar Shows POSTPONED/CANCELLED Clients
+## Fix: Client Pages Not Opening (404 Error)
 
 ### Root Cause
-When checking if a client is "booked" for calendar display, the code uses:
-```
-_source === 'booked' || (status.includes('BOOKED') && !status.includes('SOMEWHERE ELSE'))
-```
-The `_source === 'booked'` check **bypasses status validation**. Mandira Neupane's record has `_source = 'booked'` but her status is now POSTPONED. The booked clients page filters correctly because `loadBookedClientsFromCache` validates the actual status, but the tracker calendar does not.
+Two files navigate to `/client/...` instead of the correct `/client-tracker/client/...` route, causing a 404.
 
-### Fix
-Add a status exclusion check whenever `_source === 'booked'` is used. A client with `_source === 'booked'` should still be excluded if their current status is POSTPONED, CANCELLED, or similar non-active statuses.
+### Changes
 
-The condition changes from:
-```
-_source === 'booked' || (status.includes('BOOKED') && ...)
-```
-To:
-```
-(_source === 'booked' || (status.includes('BOOKED') && ...)) 
-  && !status.includes('POSTPONED') && !status.includes('CANCELLED')
-```
+**1. `src/components/suite/AllClientsCrewTable.tsx` (line 762)**
+- Change: `navigate(\`/client/${row.registeredDateTimeAD}\`)`
+- To: `navigate(\`/client-tracker/client/${encodeURIComponent(row.registeredDateTimeAD)}\`)`
 
-### Files to modify
+**2. `src/components/suite/AssignNoteDialog.tsx` (line 101)**
+- Change: `navigate(\`/client/${encodeURIComponent(client.registeredDateTimeAD!)}\`)`
+- To: `navigate(\`/client-tracker/client/${encodeURIComponent(client.registeredDateTimeAD!)}\`)`
 
-1. **`src/components/shared/BookingCalendarMini.tsx`** — Lines 26 and 53: Add POSTPONED/CANCELLED exclusion to both the `bookedClientIds` filter and the `isBooked` check inside `calendarData`
-
-2. **`src/components/desktop/DesktopDashboard.tsx`** — Lines 134 and 406: Same fix for both `bookedClientIds` filter and `isBooked` in calendar data computation
-
-3. **`src/pages/Dashboard.tsx`** — Lines 276 and 429: Same fix for mobile dashboard hot dates and calendar logic
+Two lines changed, nothing else touched.
 
