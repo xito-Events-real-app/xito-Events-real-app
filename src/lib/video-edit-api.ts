@@ -411,7 +411,7 @@ export async function syncWithDeliverables(): Promise<number> {
 
   if (!queueRows?.length) return 0;
 
-  const regDates = [...new Set(queueRows.map((r) => r.registered_date_time_ad))];
+  const regDates = Array.from(new Set(queueRows.map((r) => r.registered_date_time_ad)));
 
   // Load ALL deliverables (enabled AND disabled)
   const allDeliverables: any[] = [];
