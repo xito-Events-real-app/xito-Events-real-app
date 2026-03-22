@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { useVideoEditTracker } from "@/hooks/useVideoEditTracker";
+import { useVideoEditTracker, STAGES } from "@/hooks/useVideoEditTracker";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { Video, FlaskConical, MessageSquare, Music, ExternalLink, ArrowRight, Loader2 } from "lucide-react";
+import { Video, MessageSquare, Music, ExternalLink, ArrowRight, Loader2 } from "lucide-react";
 import { VideoEditRow } from "@/lib/video-edit-api";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -52,15 +52,17 @@ function SongsCell({ songs }: { songs: string }) {
 function VideoEditTable({
   rows,
   onUpdateField,
-  onPushToLab,
+  onPushToStatus,
   editors,
-  showPushToLab,
+  actionLabel,
+  nextStatus,
 }: {
   rows: VideoEditRow[];
   onUpdateField: (id: string, field: string, value: string) => void;
-  onPushToLab?: (id: string) => void;
+  onPushToStatus?: (id: string, status: string) => void;
   editors: { name: string; isVideoEditor: boolean }[];
-  showPushToLab: boolean;
+  actionLabel: string | null;
+  nextStatus: string | null;
 }) {
   return (
     <div className="rounded-xl border bg-card overflow-auto">
@@ -76,13 +78,13 @@ function VideoEditTable({
             <TableHead>Editor</TableHead>
             <TableHead className="w-12 text-center">Notes</TableHead>
             <TableHead className="w-12 text-center">Songs</TableHead>
-            {showPushToLab && <TableHead className="w-24 text-center">Action</TableHead>}
+            {actionLabel && <TableHead className="w-32 text-center">Action</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={showPushToLab ? 10 : 9} className="text-center py-12 text-muted-foreground">
+              <TableCell colSpan={actionLabel ? 10 : 9} className="text-center py-12 text-muted-foreground">
                 No rows found
               </TableCell>
             </TableRow>
@@ -91,10 +93,7 @@ function VideoEditTable({
             <TableRow key={row.id} className="hover:bg-muted/30">
               <TableCell className="text-center text-muted-foreground text-xs font-mono">{idx + 1}</TableCell>
               <TableCell className="text-center">
-                <Select
-                  value={row.urgency || "0"}
-                  onValueChange={(v) => onUpdateField(row.id, "urgency", v)}
-                >
+                <Select value={row.urgency || "0"} onValueChange={(v) => onUpdateField(row.id, "urgency", v)}>
                   <SelectTrigger className="w-16 h-8 p-0 border-0 bg-transparent justify-center">
                     <UrgencyBadge value={row.urgency || "0"} />
                   </SelectTrigger>
@@ -128,10 +127,7 @@ function VideoEditTable({
                 </span>
               </TableCell>
               <TableCell>
-                <Select
-                  value={row.editor || "unassigned"}
-                  onValueChange={(v) => onUpdateField(row.id, "editor", v === "unassigned" ? "" : v)}
-                >
+                <Select value={row.editor || "unassigned"} onValueChange={(v) => onUpdateField(row.id, "editor", v === "unassigned" ? "" : v)}>
                   <SelectTrigger className="w-36 h-8 text-xs">
                     <SelectValue placeholder="Assign..." />
                   </SelectTrigger>
@@ -159,16 +155,15 @@ function VideoEditTable({
               <TableCell className="text-center">
                 <SongsCell songs={row.songs} />
               </TableCell>
-              {showPushToLab && (
+              {actionLabel && nextStatus && (
                 <TableCell className="text-center">
                   <Button
                     size="sm"
                     variant="outline"
                     className="h-7 text-xs gap-1"
-                    onClick={() => onPushToLab?.(row.id)}
+                    onClick={() => onPushToStatus?.(row.id, nextStatus)}
                   >
-                    <FlaskConical className="w-3 h-3" />
-                    Lab
+                    {actionLabel}
                     <ArrowRight className="w-3 h-3" />
                   </Button>
                 </TableCell>
@@ -182,7 +177,7 @@ function VideoEditTable({
 }
 
 export function DesktopVideoEditTracker() {
-  const { queueRows, labRows, isLoading, updateField, pushToLab } = useVideoEditTracker();
+  const { rowsByStatus, isLoading, updateField, pushToStatus } = useVideoEditTracker();
   const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean }[]>([]);
 
   useEffect(() => {
@@ -198,9 +193,10 @@ export function DesktopVideoEditTracker() {
     })();
   }, []);
 
+  const totalCount = STAGES.reduce((sum, s) => sum + (rowsByStatus[s.key]?.length || 0), 0);
+
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <div className="border-b bg-card">
         <div className="max-w-[1600px] mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -210,48 +206,41 @@ export function DesktopVideoEditTracker() {
             <div>
               <h1 className="text-lg font-bold text-foreground">Video Edit Tracker</h1>
               <p className="text-xs text-muted-foreground">
-                Queue: {queueRows.length} · Lab: {labRows.length}
+                Total: {totalCount} · {STAGES.filter(s => (rowsByStatus[s.key]?.length || 0) > 0).map(s => `${s.label}: ${rowsByStatus[s.key]?.length}`).join(' · ')}
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Content */}
       <div className="max-w-[1600px] mx-auto px-6 py-6">
         {isLoading ? (
           <div className="flex items-center justify-center py-24">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <Tabs defaultValue="queue">
-            <TabsList className="mb-4">
-              <TabsTrigger value="queue" className="gap-1.5">
-                <Video className="w-4 h-4" />
-                Queue ({queueRows.length})
-              </TabsTrigger>
-              <TabsTrigger value="lab" className="gap-1.5">
-                <FlaskConical className="w-4 h-4" />
-                Lab ({labRows.length})
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="queue">
-              <VideoEditTable
-                rows={queueRows}
-                onUpdateField={updateField}
-                onPushToLab={pushToLab}
-                editors={editors}
-                showPushToLab={true}
-              />
-            </TabsContent>
-            <TabsContent value="lab">
-              <VideoEditTable
-                rows={labRows}
-                onUpdateField={updateField}
-                editors={editors}
-                showPushToLab={false}
-              />
-            </TabsContent>
+          <Tabs defaultValue="QUEUE">
+            <div className="overflow-x-auto -mx-6 px-6">
+              <TabsList className="mb-4 w-max">
+                {STAGES.map(stage => (
+                  <TabsTrigger key={stage.key} value={stage.key} className="gap-1 text-xs whitespace-nowrap">
+                    {stage.label} ({rowsByStatus[stage.key]?.length || 0})
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
+            {STAGES.map(stage => (
+              <TabsContent key={stage.key} value={stage.key}>
+                <VideoEditTable
+                  rows={rowsByStatus[stage.key] || []}
+                  onUpdateField={updateField}
+                  onPushToStatus={pushToStatus}
+                  editors={editors}
+                  actionLabel={stage.nextLabel}
+                  nextStatus={stage.nextStatus}
+                />
+              </TabsContent>
+            ))}
           </Tabs>
         )}
       </div>

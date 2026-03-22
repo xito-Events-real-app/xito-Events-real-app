@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
-import { useVideoEditTracker } from "@/hooks/useVideoEditTracker";
+import { useVideoEditTracker, STAGES } from "@/hooks/useVideoEditTracker";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Video, FlaskConical, ArrowRight, Loader2 } from "lucide-react";
+import { Video, ArrowRight, Loader2 } from "lucide-react";
 import { VideoEditRow } from "@/lib/video-edit-api";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -19,16 +19,18 @@ function VideoCard({
   row,
   index,
   onUpdateField,
-  onPushToLab,
+  onPushToStatus,
   editors,
-  showPushToLab,
+  actionLabel,
+  nextStatus,
 }: {
   row: VideoEditRow;
   index: number;
   onUpdateField: (id: string, field: string, value: string) => void;
-  onPushToLab?: (id: string) => void;
+  onPushToStatus?: (id: string, status: string) => void;
   editors: { name: string; isVideoEditor: boolean }[];
-  showPushToLab: boolean;
+  actionLabel: string | null;
+  nextStatus: string | null;
 }) {
   const urgCls = URGENCY_COLORS[row.urgency] || URGENCY_COLORS["1"];
   return (
@@ -69,9 +71,9 @@ function VideoCard({
         </Select>
       </div>
 
-      {showPushToLab && (
-        <Button size="sm" variant="outline" className="w-full h-8 text-xs gap-1" onClick={() => onPushToLab?.(row.id)}>
-          <FlaskConical className="w-3 h-3" /> Push to Lab <ArrowRight className="w-3 h-3" />
+      {actionLabel && nextStatus && (
+        <Button size="sm" variant="outline" className="w-full h-8 text-xs gap-1" onClick={() => onPushToStatus?.(row.id, nextStatus)}>
+          {actionLabel} <ArrowRight className="w-3 h-3" />
         </Button>
       )}
     </div>
@@ -79,7 +81,7 @@ function VideoCard({
 }
 
 export function MobileVideoEditTracker() {
-  const { queueRows, labRows, isLoading, updateField, pushToLab } = useVideoEditTracker();
+  const { rowsByStatus, isLoading, updateField, pushToStatus } = useVideoEditTracker();
   const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean }[]>([]);
 
   useEffect(() => {
@@ -108,31 +110,37 @@ export function MobileVideoEditTracker() {
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <Tabs defaultValue="queue">
-            <TabsList className="w-full mb-4">
-              <TabsTrigger value="queue" className="flex-1 gap-1 text-xs">
-                <Video className="w-3 h-3" /> Queue ({queueRows.length})
-              </TabsTrigger>
-              <TabsTrigger value="lab" className="flex-1 gap-1 text-xs">
-                <FlaskConical className="w-3 h-3" /> Lab ({labRows.length})
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="queue">
-              <div className="space-y-3">
-                {queueRows.map((row, i) => (
-                  <VideoCard key={row.id} row={row} index={i} onUpdateField={updateField} onPushToLab={pushToLab} editors={editors} showPushToLab />
+          <Tabs defaultValue="QUEUE">
+            <div className="overflow-x-auto -mx-4 px-4">
+              <TabsList className="w-max mb-4">
+                {STAGES.map(stage => (
+                  <TabsTrigger key={stage.key} value={stage.key} className="text-xs whitespace-nowrap">
+                    {stage.label} ({rowsByStatus[stage.key]?.length || 0})
+                  </TabsTrigger>
                 ))}
-                {queueRows.length === 0 && <p className="text-center text-sm text-muted-foreground py-8">No items in queue</p>}
-              </div>
-            </TabsContent>
-            <TabsContent value="lab">
-              <div className="space-y-3">
-                {labRows.map((row, i) => (
-                  <VideoCard key={row.id} row={row} index={i} onUpdateField={updateField} editors={editors} showPushToLab={false} />
-                ))}
-                {labRows.length === 0 && <p className="text-center text-sm text-muted-foreground py-8">No items in lab</p>}
-              </div>
-            </TabsContent>
+              </TabsList>
+            </div>
+            {STAGES.map(stage => (
+              <TabsContent key={stage.key} value={stage.key}>
+                <div className="space-y-3">
+                  {(rowsByStatus[stage.key] || []).map((row, i) => (
+                    <VideoCard
+                      key={row.id}
+                      row={row}
+                      index={i}
+                      onUpdateField={updateField}
+                      onPushToStatus={pushToStatus}
+                      editors={editors}
+                      actionLabel={stage.nextLabel}
+                      nextStatus={stage.nextStatus}
+                    />
+                  ))}
+                  {(rowsByStatus[stage.key]?.length || 0) === 0 && (
+                    <p className="text-center text-sm text-muted-foreground py-8">No items in {stage.label}</p>
+                  )}
+                </div>
+              </TabsContent>
+            ))}
           </Tabs>
         )}
       </div>

@@ -3,7 +3,7 @@ import {
   VideoEditRow,
   getVideoEditRows,
   updateVideoEditField as apiUpdateField,
-  pushToLab as apiPushToLab,
+  pushToStatus as apiPushToStatus,
   ensureVideoEditRows,
   syncWithDeliverables,
 } from "@/lib/video-edit-api";
@@ -27,6 +27,22 @@ function getEditTypePriority(editType: string): number {
   return EDIT_TYPE_ORDER[editType] || 99;
 }
 
+export const STAGES = [
+  { key: 'QUEUE', label: 'Queue', nextStatus: 'EDIT_LAB', nextLabel: 'Edit Lab' },
+  { key: 'EDIT_LAB', label: 'Edit Lab', nextStatus: 'EDIT_ON_PROGRESS', nextLabel: 'Edit on Progress' },
+  { key: 'EDIT_ON_PROGRESS', label: 'Edit on Progress', nextStatus: 'COLOR_QUEUE', nextLabel: 'Color Queue' },
+  { key: 'COLOR_QUEUE', label: 'Color Queue', nextStatus: 'COLOR_LAB', nextLabel: 'Color Lab' },
+  { key: 'COLOR_LAB', label: 'Color Lab', nextStatus: 'COLOR_ON_PROGRESS', nextLabel: 'Color on Progress' },
+  { key: 'COLOR_ON_PROGRESS', label: 'Color on Progress', nextStatus: 'EXPORT_QUEUE', nextLabel: 'Export Queue' },
+  { key: 'EXPORT_QUEUE', label: 'Export Queue', nextStatus: 'EXPORTED', nextLabel: 'Exported' },
+  { key: 'EXPORTED', label: 'Exported', nextStatus: 'CLIENT_REVIEW', nextLabel: 'Client Review' },
+  { key: 'CLIENT_REVIEW', label: 'Client Review', nextStatus: 'RE_EDIT_ON_PROGRESS', nextLabel: 'Re-Edit' },
+  { key: 'RE_EDIT_ON_PROGRESS', label: 'Re-Edit on Progress', nextStatus: 'FINALIZED', nextLabel: 'Finalized' },
+  { key: 'FINALIZED', label: 'Finalized', nextStatus: null, nextLabel: null },
+] as const;
+
+export type Stage = typeof STAGES[number];
+
 export function useVideoEditTracker() {
   const [rows, setRows] = useState<VideoEditRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -41,7 +57,6 @@ export function useVideoEditTracker() {
     }
   }, [toast]);
 
-  // On mount: ensure rows, sync cleanup, then load
   useEffect(() => {
     (async () => {
       setIsLoading(true);
@@ -57,7 +72,6 @@ export function useVideoEditTracker() {
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Realtime subscription on client_deliverables for live sync
   useEffect(() => {
     const channel = supabase
       .channel('video-edit-deliverables-sync')
@@ -65,7 +79,6 @@ export function useVideoEditTracker() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'client_deliverables' },
         () => {
-          // Wrap in setTimeout to avoid React 18 "Should have a queue" error
           setTimeout(async () => {
             try {
               await ensureVideoEditRows();
@@ -84,7 +97,6 @@ export function useVideoEditTracker() {
     };
   }, [loadRows]);
 
-  // Compute priority with multi-level sort: eventDateAD → regDate → eventName → editType
   const withPriority = useCallback((input: VideoEditRow[]): VideoEditRow[] => {
     const sorted = [...input].sort((a, b) => {
       const dateA = a.eventDateAD || "9999";
@@ -106,20 +118,24 @@ export function useVideoEditTracker() {
 
   const today = getTodayStr();
 
-  const queueRows = useMemo(() => {
-    const filtered = rows.filter(r =>
-      (r.videoEditStatus || "QUEUE").toUpperCase() === "QUEUE" &&
-      r.eventDateAD && r.eventDateAD <= today
-    );
-    return withPriority(filtered);
+  const rowsByStatus = useMemo(() => {
+    const map: Record<string, VideoEditRow[]> = {};
+    for (const stage of STAGES) {
+      let filtered: VideoEditRow[];
+      if (stage.key === 'QUEUE') {
+        filtered = rows.filter(r =>
+          (r.videoEditStatus || 'QUEUE').toUpperCase() === 'QUEUE' &&
+          r.eventDateAD && r.eventDateAD <= today
+        );
+      } else {
+        filtered = rows.filter(r =>
+          (r.videoEditStatus || '').toUpperCase() === stage.key
+        );
+      }
+      map[stage.key] = withPriority(filtered);
+    }
+    return map;
   }, [rows, withPriority, today]);
-
-  const labRows = useMemo(() => {
-    const filtered = rows.filter(r =>
-      (r.videoEditStatus || "").toUpperCase() === "LAB"
-    );
-    return withPriority(filtered);
-  }, [rows, withPriority]);
 
   const updateField = useCallback(async (id: string, field: string, value: string) => {
     setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
@@ -132,17 +148,17 @@ export function useVideoEditTracker() {
     }
   }, [toast, loadRows]);
 
-  const pushToLab = useCallback(async (id: string) => {
-    setRows(prev => prev.map(r => r.id === id ? { ...r, videoEditStatus: "LAB" } : r));
+  const pushToStatus = useCallback(async (id: string, newStatus: string) => {
+    setRows(prev => prev.map(r => r.id === id ? { ...r, videoEditStatus: newStatus } : r));
     try {
-      await apiPushToLab(id);
+      await apiPushToStatus(id, newStatus);
       scheduleVideoEditPush();
-      toast({ title: "Pushed to Lab" });
+      toast({ title: `Moved to ${STAGES.find(s => s.key === newStatus)?.label || newStatus}` });
     } catch (err: any) {
-      toast({ title: "Push failed", description: err.message, variant: "destructive" });
+      toast({ title: "Move failed", description: err.message, variant: "destructive" });
       loadRows();
     }
   }, [toast, loadRows]);
 
-  return { queueRows, labRows, isLoading, updateField, pushToLab, refresh: loadRows };
+  return { rowsByStatus, isLoading, updateField, pushToStatus, refresh: loadRows, STAGES };
 }
