@@ -329,7 +329,7 @@ export async function syncWithDeliverables(): Promise<number> {
   // 2. Get unique regDates from queue rows
   const regDates = [...new Set(queueRows.map(r => r.registered_date_time_ad))];
 
-  // 3. Load all enabled video deliverables for these clients
+  // 3. Load all enabled video + overall deliverables for these clients
   const allDeliverables: any[] = [];
   for (let i = 0; i < regDates.length; i += 50) {
     const batch = regDates.slice(i, i + 50);
@@ -337,17 +337,18 @@ export async function syncWithDeliverables(): Promise<number> {
       .from('client_deliverables')
       .select('*')
       .in('registered_date_time_ad', batch)
-      .eq('section', 'video')
+      .in('section', ['video', 'overall'])
       .eq('enabled', true);
     if (data) allDeliverables.push(...data);
   }
 
-  // Group deliverables by regDate + eventName
+  // Group deliverables by regDate + eventName (overall uses "OVERALL" as event_name)
   const delMap = new Map<string, Set<string>>();
   const hasConfiguredDeliverables = new Set<string>();
 
   for (const d of allDeliverables) {
-    const groupKey = `${d.registered_date_time_ad}||${d.event_name}`;
+    const eventName = d.section === 'overall' ? 'OVERALL' : d.event_name;
+    const groupKey = `${d.registered_date_time_ad}||${eventName}`;
     hasConfiguredDeliverables.add(groupKey);
 
     if (!delMap.has(groupKey)) delMap.set(groupKey, new Set());
