@@ -125,77 +125,8 @@ export default function FileManagement() {
         {/* Content */}
         <main className="p-4">
           {activeSection === "dashboard" && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <Card className="border-0 shadow-sm bg-card/80">
-                  <CardContent className="p-3 flex items-center gap-2.5">
-                    <div className="p-2 rounded-xl bg-cyan-100 dark:bg-cyan-900/40">
-                      <FileText className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-muted-foreground font-medium">Files</p>
-                      <p className="text-xl font-bold text-foreground">{stats?.totalFiles ?? "—"}</p>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card className="border-0 shadow-sm bg-card/80">
-                  <CardContent className="p-3 flex items-center gap-2.5">
-                    <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/40">
-                      <Database className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-muted-foreground font-medium">Size</p>
-                      <p className="text-xl font-bold text-foreground">{stats ? `${stats.totalSizeGB} GB` : "—"}</p>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card className="border-0 shadow-sm bg-card/80">
-                  <CardContent className="p-3 flex items-center gap-2.5">
-                    <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/40">
-                      <HardDrive className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-muted-foreground font-medium">Devices</p>
-                      <p className="text-xl font-bold text-foreground">{stats?.devicesCount ?? "—"}</p>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card className={cn("border-0 shadow-sm bg-card/80", stats && stats.warningDevices > 0 && "ring-1 ring-red-300 dark:ring-red-800")}>
-                  <CardContent className="p-3 flex items-center gap-2.5">
-                    <div className="p-2 rounded-xl bg-red-100 dark:bg-red-900/40">
-                      <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-muted-foreground font-medium">Warnings</p>
-                      <p className={cn("text-xl font-bold", stats && stats.warningDevices > 0 ? "text-red-600 dark:text-red-400" : "text-foreground")}>
-                        {stats?.warningDevices ?? "—"}
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-              <Card className="border shadow-sm" onClick={() => setActiveSection("storage")}>
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white">
-                    <HardDrive className="w-5 h-5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-sm text-foreground">Manage Storage Devices</h3>
-                    <p className="text-xs text-muted-foreground">Hard drives, SSDs & PCs</p>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="border shadow-sm" onClick={() => setActiveSection("files")}>
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
-                    <FolderOpen className="w-5 h-5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-sm text-foreground">File Management Table</h3>
-                    <p className="text-xs text-muted-foreground">Track files, paths & backups</p>
-                  </div>
-                </CardContent>
-              </Card>
+            <div className="files-dashboard rounded-xl bg-[hsl(220,25%,8%)] p-4">
+              <FilesDashboard />
             </div>
           )}
 
