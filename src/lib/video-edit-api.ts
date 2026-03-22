@@ -157,7 +157,7 @@ export async function ensureVideoEditRows(): Promise<number> {
     (existingRows || []).map(r => `${r.registered_date_time_ad}||${r.event_name}||${r.sub_event_name}||${r.edit_type}`)
   );
 
-  // 5. Load deliverables for video section
+  // 5. Load deliverables for video AND overall sections (overall_reel etc. are video-related)
   const bookedRegDates = [...bookedMap.keys()];
   const allDeliverables: any[] = [];
   for (let i = 0; i < bookedRegDates.length; i += 50) {
@@ -166,21 +166,32 @@ export async function ensureVideoEditRows(): Promise<number> {
       .from('client_deliverables')
       .select('*')
       .in('registered_date_time_ad', batch)
-      .eq('section', 'video')
+      .in('section', ['video', 'overall'])
       .eq('enabled', true);
     if (data) allDeliverables.push(...data);
   }
 
-  // Group deliverables by regDate + eventName
+  // Separate video-section (event-specific) and overall-section deliverables
   const deliverablesMap = new Map<string, any[]>();
+  const overallDeliverablesMap = new Map<string, any[]>();
+
   for (const d of allDeliverables) {
-    const key = `${d.registered_date_time_ad}||${d.event_name}`;
-    if (!deliverablesMap.has(key)) deliverablesMap.set(key, []);
-    deliverablesMap.get(key)!.push(d);
+    if (d.section === 'overall') {
+      // Overall deliverables are not event-specific
+      if (!overallDeliverablesMap.has(d.registered_date_time_ad)) overallDeliverablesMap.set(d.registered_date_time_ad, []);
+      overallDeliverablesMap.get(d.registered_date_time_ad)!.push(d);
+    } else {
+      const key = `${d.registered_date_time_ad}||${d.event_name}`;
+      if (!deliverablesMap.has(key)) deliverablesMap.set(key, []);
+      deliverablesMap.get(key)!.push(d);
+    }
   }
 
   // 6. Generate rows
   const newRows: any[] = [];
+
+  // Track which regDates we've already processed for overall deliverables
+  const processedOverall = new Set<string>();
 
   for (const ev of bookedEvents) {
     const client = bookedMap.get(ev.registered_date_time_ad)!;
@@ -201,7 +212,6 @@ export async function ensureVideoEditRows(): Promise<number> {
     };
 
     if (deliverables && deliverables.length > 0) {
-      // Generate from configured deliverables
       for (const d of deliverables) {
         const editType = d.deliverable_type || '';
         const qty = d.quantity || 1;
@@ -231,6 +241,55 @@ export async function ensureVideoEditRows(): Promise<number> {
         if (!existingKeys.has(compositeKey)) {
           newRows.push({ ...baseRow, sub_event_name: '', edit_type: editType });
           existingKeys.add(compositeKey);
+        }
+      }
+    }
+
+    // Generate overall deliverable rows (once per client, using latest event date)
+    if (!processedOverall.has(ev.registered_date_time_ad)) {
+      processedOverall.add(ev.registered_date_time_ad);
+      const overallDels = overallDeliverablesMap.get(ev.registered_date_time_ad);
+      if (overallDels) {
+        // Find the latest event date for this client to use for sorting
+        const clientEvents = bookedEvents.filter(e => e.registered_date_time_ad === ev.registered_date_time_ad);
+        const latestEvent = clientEvents.reduce((latest, e) => 
+          (e.event_date_ad || '') > (latest.event_date_ad || '') ? e : latest
+        , clientEvents[0]);
+
+        for (const d of overallDels) {
+          const editType = d.deliverable_type || '';
+          const qty = d.quantity || 1;
+          const itemNames = d.item_names ? d.item_names.split(',').map((n: string) => n.trim()).filter(Boolean) : [];
+
+          const overallBaseRow = {
+            registered_date_time_ad: ev.registered_date_time_ad,
+            registered_date_bs: client.registered_date_bs,
+            client_name: client.client_name,
+            event_name: 'OVERALL',
+            event_year: latestEvent.event_year || '',
+            event_month: latestEvent.event_month || '',
+            event_day: latestEvent.event_day || '',
+            event_date_ad: latestEvent.event_date_ad || '',
+            video_edit_status: 'QUEUE',
+            synced_to_sheet: false,
+          };
+
+          if (qty <= 1 && itemNames.length <= 1) {
+            const compositeKey = `${ev.registered_date_time_ad}||OVERALL||${itemNames[0] || ''}||${editType}`;
+            if (!existingKeys.has(compositeKey)) {
+              newRows.push({ ...overallBaseRow, sub_event_name: itemNames[0] || '', edit_type: editType });
+              existingKeys.add(compositeKey);
+            }
+          } else {
+            for (let i = 0; i < qty; i++) {
+              const subName = itemNames[i] || `${editType} ${i + 1}`;
+              const compositeKey = `${ev.registered_date_time_ad}||OVERALL||${subName}||${editType}`;
+              if (!existingKeys.has(compositeKey)) {
+                newRows.push({ ...overallBaseRow, sub_event_name: subName, edit_type: editType });
+                existingKeys.add(compositeKey);
+              }
+            }
+          }
         }
       }
     }
@@ -270,7 +329,7 @@ export async function syncWithDeliverables(): Promise<number> {
   // 2. Get unique regDates from queue rows
   const regDates = [...new Set(queueRows.map(r => r.registered_date_time_ad))];
 
-  // 3. Load all enabled video deliverables for these clients
+  // 3. Load all enabled video + overall deliverables for these clients
   const allDeliverables: any[] = [];
   for (let i = 0; i < regDates.length; i += 50) {
     const batch = regDates.slice(i, i + 50);
@@ -278,17 +337,18 @@ export async function syncWithDeliverables(): Promise<number> {
       .from('client_deliverables')
       .select('*')
       .in('registered_date_time_ad', batch)
-      .eq('section', 'video')
+      .in('section', ['video', 'overall'])
       .eq('enabled', true);
     if (data) allDeliverables.push(...data);
   }
 
-  // Group deliverables by regDate + eventName
+  // Group deliverables by regDate + eventName (overall uses "OVERALL" as event_name)
   const delMap = new Map<string, Set<string>>();
   const hasConfiguredDeliverables = new Set<string>();
 
   for (const d of allDeliverables) {
-    const groupKey = `${d.registered_date_time_ad}||${d.event_name}`;
+    const eventName = d.section === 'overall' ? 'OVERALL' : d.event_name;
+    const groupKey = `${d.registered_date_time_ad}||${eventName}`;
     hasConfiguredDeliverables.add(groupKey);
 
     if (!delMap.has(groupKey)) delMap.set(groupKey, new Set());
