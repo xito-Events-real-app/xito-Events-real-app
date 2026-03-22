@@ -12,8 +12,11 @@ import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from "@/components/ui/table";
 import {
-  ArrowLeft, CheckCircle, Clock, AlertTriangle, HardDrive,
-  FileText, ShieldCheck, ExternalLink,
+  HoverCard, HoverCardTrigger, HoverCardContent,
+} from "@/components/ui/hover-card";
+import {
+  ArrowLeft, Clock, AlertTriangle, HardDrive,
+  FileText, ShieldCheck, ExternalLink, Camera, Video,
 } from "lucide-react";
 
 function formatNepaliDate(year?: string, month?: string, day?: string): string {
@@ -33,6 +36,39 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+function PathPill({ file }: { file: FileRecord }) {
+  const path = file.final_generated_path;
+  if (!path) return <span className="text-xs text-slate-500">-</span>;
+
+  const deviceName = file.backup_1_device_name || path.split("\\")[0] || path.split("/")[0] || "Device";
+
+  return (
+    <HoverCard openDelay={200} closeDelay={100}>
+      <HoverCardTrigger asChild>
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/15 text-emerald-400 text-xs font-semibold cursor-default hover:bg-emerald-500/25 transition-colors">
+          <HardDrive className="w-3 h-3" />
+          {deviceName}
+        </span>
+      </HoverCardTrigger>
+      <HoverCardContent side="top" className="w-80 bg-slate-800 border-slate-700 p-3 space-y-2">
+        <p className="text-xs font-semibold text-slate-300">Full Path</p>
+        <p className="text-xs text-white break-all leading-relaxed font-mono">{path}</p>
+        {file.backup_1_recorded_at && (
+          <div className="flex items-center gap-2 pt-1 border-t border-slate-700">
+            <Clock className="w-3 h-3 text-slate-400" />
+            <span className="text-[11px] text-slate-400">
+              Copied {timeAgo(file.backup_1_recorded_at)}
+            </span>
+          </div>
+        )}
+        {file.who_copied && (
+          <p className="text-[11px] text-slate-400">By: {file.who_copied}</p>
+        )}
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
+
 export default function FileClientDetail() {
   const { clientId } = useParams<{ clientId: string }>();
   const navigate = useNavigate();
@@ -41,6 +77,7 @@ export default function FileClientDetail() {
   const [files, setFiles] = useState<FileRecord[]>([]);
   const [clientName, setClientName] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [showOnlyRemaining, setShowOnlyRemaining] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!registeredDateTimeAD) return;
@@ -77,18 +114,18 @@ export default function FileClientDetail() {
 
   const stats = useMemo(() => {
     const totalSize = files.reduce((s, f) => s + (Number(f.size_gb) || 0), 0);
-    const copiedSize = files.filter(f => !!f.final_generated_path).reduce((s, f) => s + (Number(f.size_gb) || 0), 0);
     const remaining = files.filter(f => !f.final_generated_path).length;
     const doubleBackupDone = files.filter(f => !!f.backup_2_path).length;
     const doubleBackupPending = files.filter(f => f.final_generated_path && !f.backup_2_path).length;
     const photoSize = files.filter(f => (f.category || "").toLowerCase().includes("photo")).reduce((s, f) => s + (Number(f.size_gb) || 0), 0);
     const videoSize = files.filter(f => (f.category || "").toLowerCase().includes("video")).reduce((s, f) => s + (Number(f.size_gb) || 0), 0);
-    return { totalSize, copiedSize, remaining, doubleBackupDone, doubleBackupPending, photoSize, videoSize };
+    return { totalSize, remaining, doubleBackupDone, doubleBackupPending, photoSize, videoSize };
   }, [files]);
 
   const eventGroups = useMemo(() => {
+    const source = showOnlyRemaining ? files.filter(f => !f.final_generated_path) : files;
     const map = new Map<string, { eventName: string; year: string; month: string; day: string; files: FileRecord[] }>();
-    for (const f of files) {
+    for (const f of source) {
       const key = `${f.event_name}__${f.event_date_ad}`;
       if (!map.has(key)) {
         map.set(key, { eventName: f.event_name, year: f.event_year, month: f.event_month, day: f.event_day, files: [] });
@@ -96,13 +133,24 @@ export default function FileClientDetail() {
       map.get(key)!.files.push(f);
     }
     return Array.from(map.values());
-  }, [files]);
+  }, [files, showOnlyRemaining]);
+
+  const handleSetPath = (f: FileRecord) => {
+    const params = new URLSearchParams({
+      section: "files",
+      client: clientName,
+      event: f.event_name || "",
+      year: f.event_year || "",
+      month: f.event_month || "",
+    });
+    navigate(`/files?${params.toString()}`);
+  };
 
   const summaryCards = [
-    { label: "Total Size", value: `${stats.totalSize.toFixed(1)} GB`, sub: `Photo: ${stats.photoSize.toFixed(1)} | Video: ${stats.videoSize.toFixed(1)}`, icon: HardDrive, colorClass: "text-blue-400", bgClass: "bg-blue-500/15" },
-    { label: "Copied", value: `${stats.copiedSize.toFixed(1)} GB`, sub: `${files.filter(f => !!f.final_generated_path).length} files done`, icon: CheckCircle, colorClass: "text-emerald-400", bgClass: "bg-emerald-500/15" },
-    { label: "Remaining", value: String(stats.remaining), sub: "files to copy", icon: Clock, colorClass: "text-red-400", bgClass: "bg-red-500/15" },
-    { label: "Double Backup", value: `${stats.doubleBackupDone} / ${files.length}`, sub: stats.doubleBackupPending > 0 ? `${stats.doubleBackupPending} pending` : "All done", icon: stats.doubleBackupPending > 0 ? AlertTriangle : ShieldCheck, colorClass: stats.doubleBackupPending > 0 ? "text-yellow-400" : "text-emerald-400", bgClass: stats.doubleBackupPending > 0 ? "bg-yellow-500/15" : "bg-emerald-500/15" },
+    { label: "Total Size", value: `${stats.totalSize.toFixed(1)} GB`, sub: `${files.length} total files`, icon: HardDrive, colorClass: "text-blue-400", bgClass: "bg-blue-500/15", onClick: undefined as (() => void) | undefined },
+    { label: "Photo Size", value: `${stats.photoSize.toFixed(1)} GB`, sub: `Photo files`, icon: Camera, colorClass: "text-purple-400", bgClass: "bg-purple-500/15", onClick: undefined },
+    { label: "Video Size", value: `${stats.videoSize.toFixed(1)} GB`, sub: `Video files`, icon: Video, colorClass: "text-amber-400", bgClass: "bg-amber-500/15", onClick: undefined },
+    { label: "Remaining", value: String(stats.remaining), sub: showOnlyRemaining ? "Showing filtered" : "files to copy", icon: Clock, colorClass: "text-red-400", bgClass: "bg-red-500/15", onClick: () => setShowOnlyRemaining(prev => !prev) },
   ];
 
   return (
@@ -128,7 +176,15 @@ export default function FileClientDetail() {
             {/* Summary Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {summaryCards.map((c, i) => (
-                <Card key={i} className="border-slate-800 bg-slate-900">
+                <Card
+                  key={i}
+                  className={cn(
+                    "border-slate-800 bg-slate-900 transition-all",
+                    c.onClick && "cursor-pointer hover:border-slate-600",
+                    c.label === "Remaining" && showOnlyRemaining && "ring-2 ring-red-500/50 border-red-500/30"
+                  )}
+                  onClick={c.onClick}
+                >
                   <CardContent className="p-5 flex items-center gap-4">
                     <div className={cn("p-3 rounded-xl shrink-0", c.bgClass)}>
                       <c.icon className={cn("w-6 h-6", c.colorClass)} />
@@ -143,16 +199,28 @@ export default function FileClientDetail() {
               ))}
             </div>
 
+            {showOnlyRemaining && (
+              <div className="flex items-center gap-2">
+                <Badge className="bg-red-500/15 text-red-400 border-red-500/30 px-3 py-1">
+                  Showing only remaining files
+                </Badge>
+                <button onClick={() => setShowOnlyRemaining(false)} className="text-xs text-slate-400 hover:text-white transition-colors">
+                  Clear filter
+                </button>
+              </div>
+            )}
+
             {/* Event Sections — Table Layout */}
             {eventGroups.map((group, gi) => (
               <div key={gi} className="space-y-3">
-                <div className="flex items-center gap-3 px-1">
+                {/* Event header with colored highlight */}
+                <div className="bg-blue-900/40 border-l-4 border-blue-500 px-4 py-2.5 rounded-r-lg flex items-center gap-3">
                   <FileText className="w-5 h-5 text-blue-400 shrink-0" />
                   <h3 className="text-base font-bold text-white">{group.eventName || "Event"}</h3>
                   <Badge className="text-xs bg-slate-800 text-slate-300 border-slate-700 px-3 py-1">
                     {formatNepaliDate(group.year, group.month, group.day)}
                   </Badge>
-                  <span className="text-xs text-slate-500 ml-auto">{group.files.length} files</span>
+                  <span className="text-xs text-slate-400 ml-auto">{group.files.length} files</span>
                 </div>
 
                 <Card className="border-slate-800 bg-slate-900 overflow-hidden">
@@ -217,18 +285,16 @@ export default function FileClientDetail() {
                                 )}
                               </TableCell>
                               <TableCell className="py-3">
-                                {copied && f.final_generated_path ? (
-                                  <span className="text-xs text-slate-300 break-all leading-relaxed block">{f.final_generated_path}</span>
-                                ) : !copied ? (
+                                {copied ? (
+                                  <PathPill file={f} />
+                                ) : (
                                   <button
-                                    onClick={() => navigate("/files?section=files")}
+                                    onClick={() => handleSetPath(f)}
                                     className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
                                   >
                                     <ExternalLink className="w-3 h-3" />
                                     Set Path →
                                   </button>
-                                ) : (
-                                  <span className="text-xs text-slate-500">-</span>
                                 )}
                               </TableCell>
                             </TableRow>
