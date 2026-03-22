@@ -714,30 +714,43 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
               ) : (
                 <div className="space-y-1">
                   <Label className="text-xs font-bold">Device</Label>
-                  <Popover open={devicePopoverOpen} onOpenChange={setDevicePopoverOpen}>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" role="combobox" className="w-full justify-between h-8 text-xs font-normal">
-                        {currentForm.deviceId ? (() => { const d = filteredDevices.find(x => x.id === currentForm.deviceId); return d ? `${d.device_name} (${d.remaining_storage_gb}GB)` : "Select..."; })() : <span className="text-muted-foreground">Select device...</span>}
-                        <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[9999]" align="start">
-                      <Command>
-                        <CommandInput placeholder="Search device..." className="h-8 text-xs" />
-                        <CommandList className="max-h-48">
-                          <CommandEmpty className="py-3 text-xs text-center">No device found.</CommandEmpty>
-                          <CommandGroup>
+                  <Button variant="outline" type="button" className="w-full justify-between h-8 text-xs font-normal" onClick={() => setDevicePopoverOpen(true)}>
+                    {currentForm.deviceId ? (() => { const d = filteredDevices.find(x => x.id === currentForm.deviceId); return d ? `${d.device_name} (${d.remaining_storage_gb}GB)` : "Select..."; })() : <span className="text-muted-foreground">Select device...</span>}
+                    <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+                  </Button>
+                  <Dialog open={devicePopoverOpen} onOpenChange={setDevicePopoverOpen}>
+                    <DialogContent className="sm:max-w-md p-0 gap-0 overflow-hidden">
+                      <DialogHeader className="px-4 pt-4 pb-2">
+                        <DialogTitle className="text-sm font-bold flex items-center gap-2">📂 Select Device</DialogTitle>
+                        <DialogDescription className="text-xs text-muted-foreground">Type to search, click to select</DialogDescription>
+                      </DialogHeader>
+                      <Command className="border-t">
+                        <CommandInput placeholder="Search device name..." className="h-10" />
+                        <CommandList className="max-h-[320px]">
+                          <CommandEmpty className="py-6 text-center text-sm text-muted-foreground">No device found.</CommandEmpty>
+                          <CommandGroup heading={`${filteredDevices.length} devices`}>
                             {[...filteredDevices].sort((a, b) => (a.device_name || "").localeCompare(b.device_name || "")).map((d) => (
-                              <CommandItem key={d.id} value={`${d.device_name} ${d.remaining_storage_gb}GB`} onSelect={() => { updateCurrentForm({ deviceId: d.id }); setDevicePopoverOpen(false); }} className="text-xs">
-                                <Check className={cn("mr-2 h-3 w-3", currentForm.deviceId === d.id ? "opacity-100" : "opacity-0")} />
-                                {d.device_name} ({d.remaining_storage_gb}GB)
+                              <CommandItem
+                                key={d.id}
+                                value={`${d.device_name} ${d.remaining_storage_gb}GB`}
+                                onSelect={() => { updateCurrentForm({ deviceId: d.id }); setDevicePopoverOpen(false); }}
+                                className="flex items-center justify-between py-2.5 px-3 cursor-pointer"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <Check className={cn("h-4 w-4 text-primary", currentForm.deviceId === d.id ? "opacity-100" : "opacity-0")} />
+                                  <span className="font-medium text-sm">{d.device_name}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className="text-xs">{d.device_type}</Badge>
+                                  <span className="text-xs text-muted-foreground">{d.remaining_storage_gb ?? "?"}GB free</span>
+                                </div>
                               </CommandItem>
                             ))}
                           </CommandGroup>
                         </CommandList>
                       </Command>
-                    </PopoverContent>
-                  </Popover>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               )}
             </div>
