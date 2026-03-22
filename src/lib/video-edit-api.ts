@@ -240,14 +240,18 @@ export async function ensureVideoEditRows(): Promise<number> {
         }
       }
     } else {
-      // Default: Full Video + Highlights
-      for (const editType of ['Full Video', 'Highlights']) {
-        const compositeKey = `${ev.registered_date_time_ad}||${ev.event_name}||||${editType}`;
-        if (!existingKeys.has(compositeKey)) {
-          newRows.push({ ...baseRow, sub_event_name: '', edit_type: editType });
-          existingKeys.add(compositeKey);
+      // Only create defaults if client has NEVER configured deliverables for this event
+      const eventGroupKey = `${ev.registered_date_time_ad}||${ev.event_name}`;
+      if (!hasAnyRecordsMap.has(eventGroupKey)) {
+        for (const editType of ['Full Video', 'Highlights']) {
+          const compositeKey = `${ev.registered_date_time_ad}||${ev.event_name}||||${editType}`;
+          if (!existingKeys.has(compositeKey)) {
+            newRows.push({ ...baseRow, sub_event_name: '', edit_type: editType });
+            existingKeys.add(compositeKey);
+          }
         }
       }
+      // If hasAnyRecordsMap has the key but no enabled items → generate nothing (all disabled)
     }
 
     // Generate overall deliverable rows (once per client, using latest event date)
