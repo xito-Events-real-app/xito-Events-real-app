@@ -251,6 +251,92 @@ export async function ensureVideoEditRows(): Promise<number> {
   return newRows.length;
 }
 
+/**
+ * Sync tracker rows with deliverables: soft-delete QUEUE rows
+ * whose deliverable was disabled or replaced by configured ones.
+ */
+export async function syncWithDeliverables(): Promise<number> {
+  const today = new Date().toISOString().split('T')[0];
+
+  // 1. Load all QUEUE rows
+  const { data: queueRows } = await supabase
+    .from('video_edit_tracker')
+    .select('id, registered_date_time_ad, event_name, sub_event_name, edit_type')
+    .eq('deleted', false)
+    .eq('video_edit_status', 'QUEUE');
+
+  if (!queueRows?.length) return 0;
+
+  // 2. Get unique regDates from queue rows
+  const regDates = [...new Set(queueRows.map(r => r.registered_date_time_ad))];
+
+  // 3. Load all enabled video deliverables for these clients
+  const allDeliverables: any[] = [];
+  for (let i = 0; i < regDates.length; i += 50) {
+    const batch = regDates.slice(i, i + 50);
+    const { data } = await supabase
+      .from('client_deliverables')
+      .select('*')
+      .in('registered_date_time_ad', batch)
+      .eq('section', 'video')
+      .eq('enabled', true);
+    if (data) allDeliverables.push(...data);
+  }
+
+  // Group deliverables by regDate + eventName
+  const delMap = new Map<string, Set<string>>();
+  const hasConfiguredDeliverables = new Set<string>();
+
+  for (const d of allDeliverables) {
+    const groupKey = `${d.registered_date_time_ad}||${d.event_name}`;
+    hasConfiguredDeliverables.add(groupKey);
+
+    if (!delMap.has(groupKey)) delMap.set(groupKey, new Set());
+    const editType = d.deliverable_type || '';
+    const itemNames = d.item_names ? d.item_names.split(',').map((n: string) => n.trim()).filter(Boolean) : [];
+    const qty = d.quantity || 1;
+
+    if (qty <= 1 && itemNames.length <= 1) {
+      delMap.get(groupKey)!.add(`${itemNames[0] || ''}||${editType}`);
+    } else {
+      for (let i = 0; i < qty; i++) {
+        const subName = itemNames[i] || `${editType} ${i + 1}`;
+        delMap.get(groupKey)!.add(`${subName}||${editType}`);
+      }
+    }
+  }
+
+  // 4. Check each QUEUE row — soft-delete if deliverable no longer exists
+  const toDelete: string[] = [];
+
+  for (const row of queueRows) {
+    const groupKey = `${row.registered_date_time_ad}||${row.event_name}`;
+    const rowKey = `${row.sub_event_name || ''}||${row.edit_type || ''}`;
+
+    if (hasConfiguredDeliverables.has(groupKey)) {
+      // Client has configured deliverables for this event — row must match one
+      if (!delMap.get(groupKey)!.has(rowKey)) {
+        toDelete.push(row.id);
+      }
+    }
+    // If no configured deliverables, defaults (Full Video/Highlights) are kept
+  }
+
+  if (toDelete.length === 0) return 0;
+
+  // Soft-delete in batches
+  for (let i = 0; i < toDelete.length; i += 50) {
+    const batch = toDelete.slice(i, i + 50);
+    await supabase
+      .from('video_edit_tracker')
+      .update({ deleted: true, synced_to_sheet: false, updated_at: new Date().toISOString() })
+      .in('id', batch);
+  }
+
+  console.log(`[VIDEO-EDIT] Cleaned up ${toDelete.length} stale QUEUE rows`);
+  return toDelete.length;
+}
+
 export async function pushVideoEditsToSheets(): Promise<number> {
   const { data, error } = await supabase.functions.invoke('google-sheets', {
     body: { action: 'pushVideoEditsToSheet' },

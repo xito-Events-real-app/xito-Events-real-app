@@ -5,12 +5,26 @@ import {
   updateVideoEditField as apiUpdateField,
   pushToLab as apiPushToLab,
   ensureVideoEditRows,
+  syncWithDeliverables,
 } from "@/lib/video-edit-api";
 import { scheduleVideoEditPush } from "@/lib/video-edit-push-scheduler";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 function getTodayStr() {
   return new Date().toISOString().split("T")[0];
+}
+
+const EDIT_TYPE_ORDER: Record<string, number> = {
+  'Full Video': 1,
+  'Highlights': 2,
+  'Reel': 3,
+  'Reels': 3,
+  'Teaser': 4,
+};
+
+function getEditTypePriority(editType: string): number {
+  return EDIT_TYPE_ORDER[editType] || 99;
 }
 
 export function useVideoEditTracker() {
@@ -27,12 +41,13 @@ export function useVideoEditTracker() {
     }
   }, [toast]);
 
-  // On mount: ensure rows then load
+  // On mount: ensure rows, sync cleanup, then load
   useEffect(() => {
     (async () => {
       setIsLoading(true);
       try {
         await ensureVideoEditRows();
+        await syncWithDeliverables();
         await loadRows();
       } catch (err: any) {
         console.error("[VIDEO-EDIT] Init error:", err);
@@ -42,12 +57,46 @@ export function useVideoEditTracker() {
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Compute priority: rank 1..N by event_date_ad ascending
+  // Realtime subscription on client_deliverables for live sync
+  useEffect(() => {
+    const channel = supabase
+      .channel('video-edit-deliverables-sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'client_deliverables' },
+        async () => {
+          try {
+            await ensureVideoEditRows();
+            await syncWithDeliverables();
+            await loadRows();
+          } catch (err) {
+            console.error("[VIDEO-EDIT] Realtime sync error:", err);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loadRows]);
+
+  // Compute priority with multi-level sort: eventDateAD → regDate → eventName → editType
   const withPriority = useCallback((input: VideoEditRow[]): VideoEditRow[] => {
     const sorted = [...input].sort((a, b) => {
-      const da = a.eventDateAD || "9999";
-      const db = b.eventDateAD || "9999";
-      return da.localeCompare(db);
+      const dateA = a.eventDateAD || "9999";
+      const dateB = b.eventDateAD || "9999";
+      if (dateA !== dateB) return dateA.localeCompare(dateB);
+
+      const regA = a.registeredDateTimeAD || "";
+      const regB = b.registeredDateTimeAD || "";
+      if (regA !== regB) return regA.localeCompare(regB);
+
+      const evA = a.eventName || "";
+      const evB = b.eventName || "";
+      if (evA !== evB) return evA.localeCompare(evB);
+
+      return getEditTypePriority(a.editType) - getEditTypePriority(b.editType);
     });
     return sorted.map((r, i) => ({ ...r, priority: String(i + 1) }));
   }, []);
@@ -70,7 +119,6 @@ export function useVideoEditTracker() {
   }, [rows, withPriority]);
 
   const updateField = useCallback(async (id: string, field: string, value: string) => {
-    // Optimistic update
     setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
     try {
       await apiUpdateField(id, field, value);
