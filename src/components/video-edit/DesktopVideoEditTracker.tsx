@@ -165,7 +165,7 @@ function VideoEditTable({
                     size="sm"
                     variant="outline"
                     className="h-7 text-xs gap-1"
-                    onClick={() => onPushToLab?.(row.rowNumber)}
+                    onClick={() => onPushToLab?.(row.id)}
                   >
                     <FlaskConical className="w-3 h-3" />
                     Lab
