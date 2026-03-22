@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import { FileRecord } from "./files-api";
+import { nepaliMonthsEnglish } from "./nepali-date";
 
 function buildPDF(file: FileRecord): jsPDF {
   const doc = new jsPDF({ unit: "mm", format: "a4" });

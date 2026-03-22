@@ -24,10 +24,18 @@ export function ReconfirmationDialog({ open, onOpenChange, file, onConfirm }: Re
 
   if (!file) return null;
 
-  const nepaliDate = file.registered_date_bs ||
-    (file.event_year && file.event_month && file.event_day
-      ? `${file.event_year}/${file.event_month}/${file.event_day}`
-      : "-");
+  const nepaliDate = (() => {
+    if (file.event_year && file.event_month && file.event_day) {
+      const mIdx = parseInt(String(file.event_month));
+      const monthName = mIdx >= 1 && mIdx <= 12 ? nepaliMonthsEnglish[mIdx - 1] : file.event_month;
+      return `${monthName} ${file.event_day}, ${file.event_year}`;
+    }
+    return file.registered_date_bs || "-";
+  })();
+
+  const backupTime = file.backup_1_recorded_at
+    ? new Date(file.backup_1_recorded_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })
+    : "-";
 
   const handleConfirmOnly = async () => {
     setIsConfirming(true);
