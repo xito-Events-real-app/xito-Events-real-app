@@ -23,78 +23,111 @@ export interface VideoEditRow {
   songs: string;
 }
 
+const VIDEO_DELIVERABLE_SECTIONS = ["video", "videos"] as const;
+
+const DELIVERABLE_TYPE_LABELS: Record<string, string> = {
+  full_video: "Full Video",
+  highlights: "Highlights",
+  reel: "Reel",
+  video_insta_post: "Video Insta Post",
+  overall_highlights: "Overall Highlights",
+  overall_reel: "Overall Reel",
+};
+
+function normalizeEditType(value: string | null | undefined): string {
+  const raw = (value || "").trim();
+  if (!raw) return "";
+
+  const key = raw.toLowerCase();
+  if (DELIVERABLE_TYPE_LABELS[key]) return DELIVERABLE_TYPE_LABELS[key];
+
+  return raw
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function splitItemNames(value: string | null | undefined): string[] {
+  return (value || "")
+    .split(/\|\|\||,/)
+    .map((name) => name.trim())
+    .filter(Boolean);
+}
+
 function dbToRow(r: any): VideoEditRow {
   return {
     id: r.id,
-    registeredDateTimeAD: r.registered_date_time_ad || '',
-    registeredDateBS: r.registered_date_bs || '',
-    clientName: r.client_name || '',
-    eventName: r.event_name || '',
-    eventYear: r.event_year || '',
-    eventMonth: r.event_month || '',
-    eventDay: r.event_day || '',
-    eventDateAD: r.event_date_ad || '',
-    videoEditStatus: r.video_edit_status || 'QUEUE',
-    urgency: r.urgency || '',
-    priority: '',
-    subEventName: r.sub_event_name || '',
-    editType: r.edit_type || '',
-    editor: r.editor || '',
-    companyNotes: r.company_notes || '',
-    clientDemand: r.client_demand || '',
-    reference: r.reference || '',
-    songs: r.songs || '',
+    registeredDateTimeAD: r.registered_date_time_ad || "",
+    registeredDateBS: r.registered_date_bs || "",
+    clientName: r.client_name || "",
+    eventName: r.event_name || "",
+    eventYear: r.event_year || "",
+    eventMonth: r.event_month || "",
+    eventDay: r.event_day || "",
+    eventDateAD: r.event_date_ad || "",
+    videoEditStatus: r.video_edit_status || "QUEUE",
+    urgency: r.urgency || "",
+    priority: "",
+    subEventName: r.sub_event_name || "",
+    editType: normalizeEditType(r.edit_type),
+    editor: r.editor || "",
+    companyNotes: r.company_notes || "",
+    clientDemand: r.client_demand || "",
+    reference: r.reference || "",
+    songs: r.songs || "",
   };
 }
 
 export async function getVideoEditRows(): Promise<VideoEditRow[]> {
   const { data, error } = await supabase
-    .from('video_edit_tracker')
-    .select('*')
-    .eq('deleted', false)
-    .order('event_date_ad', { ascending: true });
+    .from("video_edit_tracker")
+    .select("*")
+    .eq("deleted", false)
+    .order("event_date_ad", { ascending: true });
 
   if (error) {
-    console.error('[VIDEO-EDIT] Load error:', error);
+    console.error("[VIDEO-EDIT] Load error:", error);
     return [];
   }
   return (data || []).map(dbToRow);
 }
 
 export async function updateVideoEditField(id: string, field: string, value: string): Promise<void> {
-  // Map camelCase field names to snake_case DB columns
   const fieldMap: Record<string, string> = {
-    urgency: 'urgency',
-    editor: 'editor',
-    videoEditStatus: 'video_edit_status',
-    companyNotes: 'company_notes',
-    clientDemand: 'client_demand',
-    reference: 'reference',
-    songs: 'songs',
-    subEventName: 'sub_event_name',
-    editType: 'edit_type',
+    urgency: "urgency",
+    editor: "editor",
+    videoEditStatus: "video_edit_status",
+    companyNotes: "company_notes",
+    clientDemand: "client_demand",
+    reference: "reference",
+    songs: "songs",
+    subEventName: "sub_event_name",
+    editType: "edit_type",
   };
   const dbField = fieldMap[field] || field;
 
+  const normalizedValue = field === "editType" ? normalizeEditType(value) : value;
+
   const { error } = await supabase
-    .from('video_edit_tracker')
-    .update({ [dbField]: value, synced_to_sheet: false, updated_at: new Date().toISOString() })
-    .eq('id', id);
+    .from("video_edit_tracker")
+    .update({ [dbField]: normalizedValue, synced_to_sheet: false, updated_at: new Date().toISOString() })
+    .eq("id", id);
 
   if (error) {
-    console.error('[VIDEO-EDIT] Update error:', error);
+    console.error("[VIDEO-EDIT] Update error:", error);
     throw new Error(error.message);
   }
 }
 
 export async function pushToStatus(id: string, newStatus: string): Promise<void> {
   const { error } = await supabase
-    .from('video_edit_tracker')
+    .from("video_edit_tracker")
     .update({ video_edit_status: newStatus, synced_to_sheet: false, updated_at: new Date().toISOString() })
-    .eq('id', id);
+    .eq("id", id);
 
   if (error) {
-    console.error('[VIDEO-EDIT] Push to status error:', error);
+    console.error("[VIDEO-EDIT] Push to status error:", error);
     throw new Error(error.message);
   }
 }
@@ -104,98 +137,94 @@ export async function pushToStatus(id: string, newStatus: string): Promise<void>
  * Mirrors the file management auto-generation pattern.
  */
 export async function ensureVideoEditRows(): Promise<number> {
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toISOString().split("T")[0];
 
-  // 1. Get all event details where event_date_ad <= today
   const { data: events, error: evErr } = await supabase
-    .from('event_details_cache')
-    .select('registered_date_time_ad, event_name, event_year, event_month, event_day, event_date_ad')
-    .lte('event_date_ad', today)
-    .neq('event_date_ad', '')
-    .not('event_date_ad', 'is', null);
+    .from("event_details_cache")
+    .select("registered_date_time_ad, event_name, event_year, event_month, event_day, event_date_ad")
+    .lte("event_date_ad", today)
+    .neq("event_date_ad", "")
+    .not("event_date_ad", "is", null);
 
   if (evErr || !events?.length) return 0;
 
-  // 2. Get unique registered_date_time_ad values and check BOOKED status
-  const regDates = [...new Set(events.map(e => e.registered_date_time_ad))];
+  const regDates = [...new Set(events.map((e) => e.registered_date_time_ad))];
 
-  // Load clients in batches
   const allClients: any[] = [];
   for (let i = 0; i < regDates.length; i += 50) {
     const batch = regDates.slice(i, i + 50);
     const { data } = await supabase
-      .from('clients_cache')
-      .select('registered_date_time_ad, client_name, registered_date_bs, status_log')
-      .in('registered_date_time_ad', batch);
+      .from("clients_cache")
+      .select("registered_date_time_ad, client_name, registered_date_bs, status_log")
+      .in("registered_date_time_ad", batch);
     if (data) allClients.push(...data);
   }
 
-  // Filter to BOOKED only
   const bookedMap = new Map<string, { client_name: string; registered_date_bs: string }>();
   for (const c of allClients) {
-    const status = getCurrentStatus(c.status_log || '').toUpperCase();
-    if (status.includes('BOOKED') && !status.includes('SOMEWHERE ELSE')) {
+    const status = getCurrentStatus(c.status_log || "").toUpperCase();
+    if (status.includes("BOOKED") && !status.includes("SOMEWHERE ELSE")) {
       bookedMap.set(c.registered_date_time_ad, {
-        client_name: c.client_name || '',
-        registered_date_bs: c.registered_date_bs || '',
+        client_name: c.client_name || "",
+        registered_date_bs: c.registered_date_bs || "",
       });
     }
   }
 
   if (bookedMap.size === 0) return 0;
 
-  // 3. Filter events to only BOOKED clients
-  const bookedEvents = events.filter(e => bookedMap.has(e.registered_date_time_ad));
+  const bookedEvents = events.filter((e) => bookedMap.has(e.registered_date_time_ad));
 
-  // 4. Load existing video edit rows to deduplicate
   const { data: existingRows } = await supabase
-    .from('video_edit_tracker')
-    .select('registered_date_time_ad, event_name, sub_event_name, edit_type')
-    .eq('deleted', false);
+    .from("video_edit_tracker")
+    .select("registered_date_time_ad, event_name, sub_event_name, edit_type")
+    .eq("deleted", false);
 
   const existingKeys = new Set(
-    (existingRows || []).map(r => `${r.registered_date_time_ad}||${r.event_name}||${r.sub_event_name}||${r.edit_type}`)
+    (existingRows || []).map(
+      (r) =>
+        `${r.registered_date_time_ad}||${r.event_name}||${r.sub_event_name || ""}||${normalizeEditType(r.edit_type)}`,
+    ),
   );
 
-  // 5. Load ALL deliverables (enabled AND disabled) for video AND overall sections
   const bookedRegDates = [...bookedMap.keys()];
   const allDeliverables: any[] = [];
   for (let i = 0; i < bookedRegDates.length; i += 50) {
     const batch = bookedRegDates.slice(i, i + 50);
     const { data } = await supabase
-      .from('client_deliverables')
-      .select('*')
-      .in('registered_date_time_ad', batch)
-      .in('section', ['video', 'overall']);
+      .from("client_deliverables")
+      .select("*")
+      .in("registered_date_time_ad", batch)
+      .in("section", [...VIDEO_DELIVERABLE_SECTIONS, "overall"]);
     if (data) allDeliverables.push(...data);
   }
 
-  // Separate into enabled deliverables (for row generation) and "has any records" (to skip defaults)
-  const deliverablesMap = new Map<string, any[]>(); // enabled only
-  const overallDeliverablesMap = new Map<string, any[]>(); // enabled only
-  const hasAnyRecordsMap = new Set<string>(); // all records including disabled
+  const deliverablesMap = new Map<string, any[]>();
+  const overallDeliverablesMap = new Map<string, any[]>();
+  const hasAnyRecordsMap = new Set<string>();
 
   for (const d of allDeliverables) {
-    const eventName = d.section === 'overall' ? 'OVERALL' : d.event_name;
+    const section = (d.section || "").toLowerCase();
+    const eventName = section === "overall" ? "OVERALL" : d.event_name;
     const groupKey = `${d.registered_date_time_ad}||${eventName}`;
     hasAnyRecordsMap.add(groupKey);
 
-    if (!d.enabled) continue; // only enabled items go into generation maps
+    if (!d.enabled) continue;
 
-    if (d.section === 'overall') {
+    if (section === "overall") {
       if (!overallDeliverablesMap.has(d.registered_date_time_ad)) overallDeliverablesMap.set(d.registered_date_time_ad, []);
       overallDeliverablesMap.get(d.registered_date_time_ad)!.push(d);
-    } else {
-      const key = `${d.registered_date_time_ad}||${d.event_name}`;
-      if (!deliverablesMap.has(key)) deliverablesMap.set(key, []);
-      deliverablesMap.get(key)!.push(d);
+      continue;
     }
+
+    if (!VIDEO_DELIVERABLE_SECTIONS.includes(section as (typeof VIDEO_DELIVERABLE_SECTIONS)[number])) continue;
+
+    const key = `${d.registered_date_time_ad}||${d.event_name}`;
+    if (!deliverablesMap.has(key)) deliverablesMap.set(key, []);
+    deliverablesMap.get(key)!.push(d);
   }
 
-  // 6. Generate rows
   const newRows: any[] = [];
-
-  // Track which regDates we've already processed for overall deliverables
   const processedOverall = new Set<string>();
 
   for (const ev of bookedEvents) {
@@ -207,25 +236,27 @@ export async function ensureVideoEditRows(): Promise<number> {
       registered_date_time_ad: ev.registered_date_time_ad,
       registered_date_bs: client.registered_date_bs,
       client_name: client.client_name,
-      event_name: ev.event_name || '',
-      event_year: ev.event_year || '',
-      event_month: ev.event_month || '',
-      event_day: ev.event_day || '',
-      event_date_ad: ev.event_date_ad || '',
-      video_edit_status: 'QUEUE',
+      event_name: ev.event_name || "",
+      event_year: ev.event_year || "",
+      event_month: ev.event_month || "",
+      event_day: ev.event_day || "",
+      event_date_ad: ev.event_date_ad || "",
+      video_edit_status: "QUEUE",
       synced_to_sheet: false,
     };
 
     if (deliverables && deliverables.length > 0) {
       for (const d of deliverables) {
-        const editType = d.deliverable_type || '';
+        const editType = normalizeEditType(d.deliverable_type);
+        if (!editType) continue;
+
         const qty = d.quantity || 1;
-        const itemNames = d.item_names ? d.item_names.split(',').map((n: string) => n.trim()).filter(Boolean) : [];
+        const itemNames = splitItemNames(d.item_names);
 
         if (qty <= 1 && itemNames.length <= 1) {
-          const compositeKey = `${ev.registered_date_time_ad}||${ev.event_name}||${itemNames[0] || ''}||${editType}`;
+          const compositeKey = `${ev.registered_date_time_ad}||${ev.event_name}||${itemNames[0] || ""}||${editType}`;
           if (!existingKeys.has(compositeKey)) {
-            newRows.push({ ...baseRow, sub_event_name: itemNames[0] || '', edit_type: editType });
+            newRows.push({ ...baseRow, sub_event_name: itemNames[0] || "", edit_type: editType });
             existingKeys.add(compositeKey);
           }
         } else {
@@ -240,53 +271,52 @@ export async function ensureVideoEditRows(): Promise<number> {
         }
       }
     } else {
-      // Only create defaults if client has NEVER configured deliverables for this event
       const eventGroupKey = `${ev.registered_date_time_ad}||${ev.event_name}`;
       if (!hasAnyRecordsMap.has(eventGroupKey)) {
-        for (const editType of ['Full Video', 'Highlights']) {
+        for (const editType of ["Full Video", "Highlights"]) {
           const compositeKey = `${ev.registered_date_time_ad}||${ev.event_name}||||${editType}`;
           if (!existingKeys.has(compositeKey)) {
-            newRows.push({ ...baseRow, sub_event_name: '', edit_type: editType });
+            newRows.push({ ...baseRow, sub_event_name: "", edit_type: editType });
             existingKeys.add(compositeKey);
           }
         }
       }
-      // If hasAnyRecordsMap has the key but no enabled items → generate nothing (all disabled)
     }
 
-    // Generate overall deliverable rows (once per client, using latest event date)
     if (!processedOverall.has(ev.registered_date_time_ad)) {
       processedOverall.add(ev.registered_date_time_ad);
       const overallDels = overallDeliverablesMap.get(ev.registered_date_time_ad);
       if (overallDels) {
-        // Find the latest event date for this client to use for sorting
-        const clientEvents = bookedEvents.filter(e => e.registered_date_time_ad === ev.registered_date_time_ad);
-        const latestEvent = clientEvents.reduce((latest, e) => 
-          (e.event_date_ad || '') > (latest.event_date_ad || '') ? e : latest
-        , clientEvents[0]);
+        const clientEvents = bookedEvents.filter((e) => e.registered_date_time_ad === ev.registered_date_time_ad);
+        const latestEvent = clientEvents.reduce(
+          (latest, e) => ((e.event_date_ad || "") > (latest.event_date_ad || "") ? e : latest),
+          clientEvents[0],
+        );
 
         for (const d of overallDels) {
-          const editType = d.deliverable_type || '';
+          const editType = normalizeEditType(d.deliverable_type);
+          if (!editType) continue;
+
           const qty = d.quantity || 1;
-          const itemNames = d.item_names ? d.item_names.split(',').map((n: string) => n.trim()).filter(Boolean) : [];
+          const itemNames = splitItemNames(d.item_names);
 
           const overallBaseRow = {
             registered_date_time_ad: ev.registered_date_time_ad,
             registered_date_bs: client.registered_date_bs,
             client_name: client.client_name,
-            event_name: 'OVERALL',
-            event_year: latestEvent.event_year || '',
-            event_month: latestEvent.event_month || '',
-            event_day: latestEvent.event_day || '',
-            event_date_ad: latestEvent.event_date_ad || '',
-            video_edit_status: 'QUEUE',
+            event_name: "OVERALL",
+            event_year: latestEvent.event_year || "",
+            event_month: latestEvent.event_month || "",
+            event_day: latestEvent.event_day || "",
+            event_date_ad: latestEvent.event_date_ad || "",
+            video_edit_status: "QUEUE",
             synced_to_sheet: false,
           };
 
           if (qty <= 1 && itemNames.length <= 1) {
-            const compositeKey = `${ev.registered_date_time_ad}||OVERALL||${itemNames[0] || ''}||${editType}`;
+            const compositeKey = `${ev.registered_date_time_ad}||OVERALL||${itemNames[0] || ""}||${editType}`;
             if (!existingKeys.has(compositeKey)) {
-              newRows.push({ ...overallBaseRow, sub_event_name: itemNames[0] || '', edit_type: editType });
+              newRows.push({ ...overallBaseRow, sub_event_name: itemNames[0] || "", edit_type: editType });
               existingKeys.add(compositeKey);
             }
           } else {
@@ -306,12 +336,11 @@ export async function ensureVideoEditRows(): Promise<number> {
 
   if (newRows.length === 0) return 0;
 
-  // 7. Insert in batches
   for (let i = 0; i < newRows.length; i += 100) {
     const batch = newRows.slice(i, i + 100);
-    const { error } = await supabase.from('video_edit_tracker').insert(batch);
+    const { error } = await supabase.from("video_edit_tracker").insert(batch);
     if (error) {
-      console.error('[VIDEO-EDIT] Insert error:', error);
+      console.error("[VIDEO-EDIT] Insert error:", error);
     }
   }
 
@@ -324,52 +353,49 @@ export async function ensureVideoEditRows(): Promise<number> {
  * whose deliverable was disabled or replaced by configured ones.
  */
 export async function syncWithDeliverables(): Promise<number> {
-  const today = new Date().toISOString().split('T')[0];
-
-  // 1. Load all QUEUE rows
   const { data: queueRows } = await supabase
-    .from('video_edit_tracker')
-    .select('id, registered_date_time_ad, event_name, sub_event_name, edit_type')
-    .eq('deleted', false)
-    .eq('video_edit_status', 'QUEUE');
+    .from("video_edit_tracker")
+    .select("id, registered_date_time_ad, event_name, sub_event_name, edit_type")
+    .eq("deleted", false)
+    .eq("video_edit_status", "QUEUE");
 
   if (!queueRows?.length) return 0;
 
-  // 2. Get unique regDates from queue rows
-  const regDates = [...new Set(queueRows.map(r => r.registered_date_time_ad))];
+  const regDates = [...new Set(queueRows.map((r) => r.registered_date_time_ad))];
 
-  // 3. Load ALL video + overall deliverables (enabled AND disabled) for these clients
   const allDeliverables: any[] = [];
   for (let i = 0; i < regDates.length; i += 50) {
     const batch = regDates.slice(i, i + 50);
     const { data } = await supabase
-      .from('client_deliverables')
-      .select('*')
-      .in('registered_date_time_ad', batch)
-      .in('section', ['video', 'overall']);
+      .from("client_deliverables")
+      .select("*")
+      .in("registered_date_time_ad", batch)
+      .in("section", [...VIDEO_DELIVERABLE_SECTIONS, "overall"]);
     if (data) allDeliverables.push(...data);
   }
 
-  // Group deliverables: track all records (for "has configured") and enabled-only (for matching)
-  const delMap = new Map<string, Set<string>>(); // enabled deliverables only
-  const hasAnyConfigured = new Set<string>(); // all records including disabled
-  const hasEnabledConfigured = new Set<string>(); // only groups with enabled items
+  const delMap = new Map<string, Set<string>>();
+  const hasAnyConfigured = new Set<string>();
+  const hasEnabledConfigured = new Set<string>();
 
   for (const d of allDeliverables) {
-    const eventName = d.section === 'overall' ? 'OVERALL' : d.event_name;
+    const section = (d.section || "").toLowerCase();
+    const eventName = section === "overall" ? "OVERALL" : d.event_name;
     const groupKey = `${d.registered_date_time_ad}||${eventName}`;
     hasAnyConfigured.add(groupKey);
 
-    if (!d.enabled) continue; // skip disabled for matching
+    if (!d.enabled) continue;
+
+    const editType = normalizeEditType(d.deliverable_type);
+    if (!editType) continue;
 
     hasEnabledConfigured.add(groupKey);
     if (!delMap.has(groupKey)) delMap.set(groupKey, new Set());
-    const editType = d.deliverable_type || '';
-    const itemNames = d.item_names ? d.item_names.split(',').map((n: string) => n.trim()).filter(Boolean) : [];
+    const itemNames = splitItemNames(d.item_names);
     const qty = d.quantity || 1;
 
     if (qty <= 1 && itemNames.length <= 1) {
-      delMap.get(groupKey)!.add(`${itemNames[0] || ''}||${editType}`);
+      delMap.get(groupKey)!.add(`${itemNames[0] || ""}||${editType}`);
     } else {
       for (let i = 0; i < qty; i++) {
         const subName = itemNames[i] || `${editType} ${i + 1}`;
@@ -378,34 +404,29 @@ export async function syncWithDeliverables(): Promise<number> {
     }
   }
 
-  // 4. Check each QUEUE row — soft-delete if deliverable no longer exists
   const toDelete: string[] = [];
 
   for (const row of queueRows) {
     const groupKey = `${row.registered_date_time_ad}||${row.event_name}`;
-    const rowKey = `${row.sub_event_name || ''}||${row.edit_type || ''}`;
+    const rowKey = `${row.sub_event_name || ""}||${normalizeEditType(row.edit_type || "")}`;
 
     if (hasAnyConfigured.has(groupKey)) {
       if (!hasEnabledConfigured.has(groupKey)) {
-        // All deliverables disabled → soft-delete all QUEUE rows for this event
         toDelete.push(row.id);
-      } else if (!delMap.get(groupKey)!.has(rowKey)) {
-        // Has enabled deliverables but this row doesn't match any
+      } else if (!delMap.get(groupKey)?.has(rowKey)) {
         toDelete.push(row.id);
       }
     }
-    // If no records at all, defaults (Full Video/Highlights) are kept
   }
 
   if (toDelete.length === 0) return 0;
 
-  // Soft-delete in batches
   for (let i = 0; i < toDelete.length; i += 50) {
     const batch = toDelete.slice(i, i + 50);
     await supabase
-      .from('video_edit_tracker')
+      .from("video_edit_tracker")
       .update({ deleted: true, synced_to_sheet: false, updated_at: new Date().toISOString() })
-      .in('id', batch);
+      .in("id", batch);
   }
 
   console.log(`[VIDEO-EDIT] Cleaned up ${toDelete.length} stale QUEUE rows`);
@@ -413,12 +434,12 @@ export async function syncWithDeliverables(): Promise<number> {
 }
 
 export async function pushVideoEditsToSheets(): Promise<number> {
-  const { data, error } = await supabase.functions.invoke('google-sheets', {
-    body: { action: 'pushVideoEditsToSheet' },
+  const { data, error } = await supabase.functions.invoke("google-sheets", {
+    body: { action: "pushVideoEditsToSheet" },
   });
 
   if (error) {
-    console.error('[VIDEO-EDIT] Push to sheets error:', error);
+    console.error("[VIDEO-EDIT] Push to sheets error:", error);
     return 0;
   }
   return data?.pushed || 0;
