@@ -90,7 +90,9 @@ export default function FileClientDetail() {
         .eq("deleted_or_not", false)
         .order("event_name");
 
-      const rows = (fileRows as FileRecord[]) || [];
+      const rows = ((fileRows as FileRecord[]) || []).filter(
+        r => !r.event_date_ad?.includes('**')
+      );
       setFiles(rows);
 
       if (rows.length > 0) {
