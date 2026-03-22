@@ -1,109 +1,63 @@
 
 
-## Revamped File Management Dashboard — Stock Market Style
+## Client File Detail Page — Dedicated Route
 
-### Overview
-Replace the current basic dashboard section in the File Management page with a comprehensive, dark-themed, real-time monitoring dashboard. This builds on the existing `files_management` table, `useFilesManagement` hook, and `getFileManagementStats` API — no new database tables needed.
+### What We're Building
+A new dedicated page at `/files/client/:registeredDateTimeAD` that shows ALL file information for a specific client. Client names in the dashboard table become clickable links to this page. The page preserves scroll position on the dashboard when navigating back.
 
 ### Architecture
-The dashboard replaces only the `activeSection === "dashboard"` content in `FileManagement.tsx`. All data comes from the existing `files_management` and `storage_devices` tables via new computed stats.
 
 ```text
-┌──────────────────────────────────────────────────────────────┐
-│ TOP BAR: Search | Today's Events | Last Updated             │
-├──────────┬──────────┬──────────┬──────────┬─────────────────┤
-│ Recently │ Files    │ Double   │ Storage  │                 │
-│ Copied   │ Pending  │ Backup   │ Today    │  (clickable)    │
-│ (green)  │ (red)    │ (yellow) │ (blue)   │                 │
-├──────────┴──────────┴──────────┴──────────┴─────────────────┤
-│ FILE TRACKING TABLE (filtered by clicked card)              │
-│ Client | Event | Date | Copy Status | Backup | Size | Time │
-├─────────────────────────────┬───────────────────────────────┤
-│ RECENT ACTIVITY FEED        │ INSIGHTS / WARNINGS           │
-│ (scrolling log)             │ (auto-generated stats)        │
-└─────────────────────────────┴───────────────────────────────┘
+/files/client/:registeredDateTimeAD
+┌─────────────────────────────────────────────────┐
+│ ← Back to Dashboard    CLIENT NAME              │
+├─────────────────────────────────────────────────┤
+│ SUMMARY CARDS (Nepali dates)                    │
+│ Total Size | Copied | Remaining | Double Backup │
+├─────────────────────────────────────────────────┤
+│ EVENT 1: Mehndi — Magh 4, 2082                  │
+│ ┌─ Freelancer rows with file paths, status ──┐  │
+│ │ SET PATH / CONFIRMED buttons per row       │  │
+│ └────────────────────────────────────────────┘  │
+│ EVENT 2: Wedding — Magh 5, 2082                 │
+│ ┌─ ...                                      ─┐  │
+└─────────────────────────────────────────────────┘
 ```
 
-### Files to Create/Modify
+### Files to Create
 
-**1. New: `src/components/files/FilesDashboard.tsx`** (~500 lines)
-Main dashboard component replacing the old dashboard cards. Contains:
-- **Top bar**: Live search (queries `files_management` by `client_name`), "Today's Events" button (filters to today's event date), auto-refresh timestamp
-- **4 status cards**: Computed from all files in DB:
-  - Recently Copied (last 24h): files where `backup_1_recorded_at > now()-24h` → green
-  - Files Pending: files where `final_generated_path` is empty → red
-  - Double Backup Pending: files with backup 1 but no backup 2 → yellow
-  - Storage Processed Today: sum of `size_gb` where copied today → blue
-- **File tracking table**: Shows file rows with computed status columns, filterable by card click
-- **Activity feed**: Recent `backup_1_recorded_at`/`backup_2_recorded_at` timestamps sorted descending
-- **Insights panel**: Auto-computed warnings (clients without double backup, pending counts)
-- All data fetched via single Supabase query on `files_management` + `storage_devices`
+**1. `src/pages/FileClientDetail.tsx`** (~350 lines)
+- Route param: `registeredDateTimeAD` (URI-decoded)
+- Fetches all `files_management` rows for that client (`registered_date_time_ad` match)
+- Also fetches `freelancer_assignments` for the client to show ALL freelancers even if no file row exists yet
+- **Header**: Back button (navigates to `/files` preserving dashboard state), client name
+- **Summary cards**: Total copied size (GB), files remaining to copy count, double backup status, all dates in Nepali format (`Magh 4, 2082` style using `nepaliMonthsEnglish`)
+- **Event sections**: Grouped by event name + date, each showing:
+  - Event header with Nepali date
+  - Freelancer table: name, type, side, format, size, items count, copy status, backup status, who copied, storage path
+  - "Set Path" button opens `FilePathBuilderDialog`
+  - "CONFIRMED" clickable opens `ReconfirmationDialog`
+  - Inline edits for size, format, items (same as existing tables)
+- Dark theme matching dashboard aesthetic
 
-**2. New: `src/hooks/useFilesDashboardData.ts`** (~120 lines)
-Hook that:
-- Fetches ALL file records (no month filter) with realtime subscription
-- Computes the 4 card stats, activity feed, and insights
-- Auto-refreshes every 60 seconds
-- Provides search/filter state
+**2. Modify `src/App.tsx`** (line ~96)
+- Add route: `<Route path="/files/client/:clientId" element={<ProtectedRoute><FileClientDetail /></ProtectedRoute>} />`
 
-**3. New: `src/components/files/FileDashboardClientSheet.tsx`** (~200 lines)
-Sheet/dialog that opens when clicking a client row in search results or table. Shows:
-- Client name, event, date
-- File size breakdown (photo vs video based on `freelancer_type`)
-- Storage paths (backup 1, 2, 3)
-- Status indicators
-- Action buttons: Mark as Copied, Mark Double Backup
+**3. Modify `src/components/files/FilesDashboard.tsx`**
+- Make client name in table a clickable link using `useNavigate`
+- `navigate(\`/files/client/${encodeURIComponent(f.registered_date_time_ad)}\`)`
+- Client name styled as clickable (underline on hover, pointer cursor)
+- Store current scroll/search/filter state in `sessionStorage` before navigating so it restores on return
 
-**4. New: `src/components/files/FileReminderPopup.tsx`** (~80 lines)
-- Uses `setInterval` (3 hours) to show a dialog
-- Fetches today's events from `files_management` where `event_date_ad` matches today
-- Shows list with "View Client" and "Dismiss" buttons
-- Stores last-shown timestamp in `localStorage` to avoid re-showing
+### Key Details
+- All dates displayed in Nepali format: `nepaliMonthsEnglish[month-1] + " " + day + ", " + year`
+- Back navigation uses `navigate('/files')` — dashboard reads `sessionStorage` to restore search/filter/scroll
+- File path builder and confirmation dialogs reused from existing components
+- `useStorageDevices()` hook reused for device data
+- Updates use existing `updateFileRecord` + `scheduleFilesPush`
 
-**5. Modify: `src/pages/FileManagement.tsx`**
-- Import and render `<FilesDashboard />` when `activeSection === "dashboard"` (replacing the current basic cards)
-- Mount `<FileReminderPopup />` at page level
-- Apply dark theme class to the dashboard section
-
-**6. Modify: `src/index.css`**
-- Add dark theme variables for the file dashboard (`.files-dashboard` scoped)
-- Stock-market style animations: pulse on card value change, smooth number transitions
-
-### Data Logic (no new tables needed)
-
-All stats computed client-side from `files_management` rows:
-```typescript
-// Recently Copied (24h)
-const recentlyCopied = files.filter(f => 
-  f.backup_1_recorded_at && isWithin24Hours(f.backup_1_recorded_at)
-).length;
-
-// Pending
-const pending = files.filter(f => !f.final_generated_path).length;
-
-// Double Backup Pending  
-const doubleBackupPending = files.filter(f => 
-  f.final_generated_path && !f.backup_2_path
-).length;
-
-// Storage today
-const storageToday = files
-  .filter(f => f.backup_1_recorded_at && isToday(f.backup_1_recorded_at))
-  .reduce((sum, f) => sum + (f.size_gb || 0), 0);
-```
-
-### Design Approach
-- Dark theme using existing Tailwind dark classes (the sidebar already uses dark colors)
-- Green/Red/Yellow/Blue color coding on cards with subtle glow effects
-- Cards show animated count transitions
-- Table uses existing `Table` components with status badges
-- Activity feed is a scrollable `div` with relative timestamps
-- Responsive: cards stack on mobile, table becomes card-based
-
-### What This Does NOT Change
-- Existing Files table (`FullScreenFilesTable`) — untouched
-- Storage Devices section — untouched
-- Sidebar — untouched
-- All existing file CRUD operations — untouched
-- Database schema — no changes
+### Files Changed
+- **New**: `src/pages/FileClientDetail.tsx`
+- **Modify**: `src/App.tsx` (add route)
+- **Modify**: `src/components/files/FilesDashboard.tsx` (clickable names + state preservation)
 
