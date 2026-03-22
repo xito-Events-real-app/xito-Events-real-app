@@ -1,23 +1,33 @@
 
 
-## Fix: Schedule Dialog Hidden Behind HoverCard
+## Fix: Client Name Propagation Chain + Data Repair
 
-### Problem
-The "Send Schedule" `Dialog` renders inside `FreelancerHoverInfo`, which is inside a `HoverCardContent` with `z-[300]`. The Dialog overlay and content use `z-[200]`, so the HoverCard sits on top of the Dialog.
+### Current State
+- `clients_cache`: "ABHILASHA & BHANU" (correct)
+- `freelancer_assignments`: "ABHILASHA & BHANU" (correct)
+- `files_management`: "ABHILASHA & BISHNU" (STALE)
+- `contact_details_cache`: "ABHILASHA & BISHNU" (STALE)
 
-### Fix — `src/components/suite/AllClientsCrewTable.tsx`
+### Part 1: Fix existing stale data (SQL update)
 
-**Line ~1934**: Add higher z-index classes to `DialogContent`:
-```tsx
-<DialogContent className="max-w-sm z-[500]">
+Run UPDATE on `files_management` and `contact_details_cache` where `registered_date_time_ad = '2026-01-25T13:18:32.040Z'` to set `client_name = 'ABHILASHA & BHANU'`.
+
+### Part 2: Complete the propagation chain — `src/lib/clients-supabase-cache.ts`
+
+**In `updateClientFieldInCache` (after the existing `freelancer_assignments` block, ~line 248)**:
+Add propagation to `files_management`, `contact_details_cache`, and `event_details_cache` — same pattern, matching by `registered_date_time_ad`.
+
+**In `updateClientInCacheRecord` (after the existing `freelancer_assignments` block, ~line 335)**:
+Same — add the 3 missing table updates.
+
+Both use:
+```typescript
+for (const table of ['files_management', 'contact_details_cache', 'event_details_cache']) {
+  await supabase.from(table).update({ client_name: value }).eq('registered_date_time_ad', registeredDateTimeAD);
+}
 ```
 
-This ensures the Dialog (and its overlay) renders above the HoverCard. The Dialog's portal renders at `document.body` level, so only the z-index needs bumping. The overlay from `dialog.tsx` also needs to be above `z-[300]` — it's already `z-[200]`, so we override it on this specific Dialog's content to `z-[500]`.
-
-Additionally, we need to add a custom overlay z-index. The simplest approach: wrap the Dialog content className with `z-[500]` and also pass a custom overlay. Since the Dialog component auto-renders `DialogOverlay` inside `DialogContent`, we'll override by adding `[&~div]:z-[400]` or simply set the DialogContent's parent portal z-index.
-
-**Simplest reliable fix**: Add `className="z-[500]"` to the `DialogContent`, which already uses `fixed` positioning. For the overlay, we'll add an explicit style override on the DialogContent wrapper.
-
-### File changed
-- `src/components/suite/AllClientsCrewTable.tsx` (~line 1934)
+### Files changed
+- `src/lib/clients-supabase-cache.ts` (add propagation to 3 more tables in 2 functions)
+- One-time SQL data fix for the ABHILASHA record
 
