@@ -1,38 +1,38 @@
 
 
-## Replace Device Dropdown with Searchable Command Popup
+## Add "Copied by" & "Copied at" to WhatsApp Message + Fix Date Format
 
-### Problem
-The device `Select` dropdown in the File Path Builder is too long and hard to navigate. Need a searchable popup (like Windows File Explorer) instead.
+### Current State
+- **PDF**: Already includes "Who Copied" and "Backed Up At" — no PDF changes needed
+- **WhatsApp message**: Missing these two fields
+- **Date format**: Shows `2082/11/4` instead of `Magh 4, 2082` in both WhatsApp message and dialog summary
 
-### Approach
-Replace the three device `Select` dropdowns (Device, PC Name, Drive Letter) with `Popover + Command` searchable popups — same pattern already used by `FormCombobox` and `CitySelector` in this project.
+### Changes — `src/components/files/ReconfirmationDialog.tsx`
 
-### Changes — `src/components/files/FilePathBuilderDialog.tsx`
+1. **Import** `nepaliMonthsEnglish` from `@/lib/nepali-date`
 
-**1. Add imports**
-- Import `Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList` from `@/components/ui/command`
-- Import `Popover, PopoverContent, PopoverTrigger` from `@/components/ui/popover`
-- Import `ChevronsUpDown, Check` from lucide-react
+2. **Fix `nepaliDate` formatting** (line 26-29): Convert numeric format to readable:
+   ```
+   Before: "2082/11/4"
+   After:  "Magh 4, 2082"
+   ```
+   Using: `nepaliMonthsEnglish[month - 1] + " " + day + ", " + year`
 
-**2. Replace Device Select (lines 678-691)** — non-PC storage types
-- Replace `Select` with `Popover + Command` combo
-- Devices sorted alphabetically by `device_name`
-- Searchable input filters by device name
-- Shows device name + remaining storage in each item
-- Displays check icon on selected device
+3. **Add to WhatsApp message** (after line 70, before "Thank you"):
+   ```
+   • Copied by: ${file.who_copied || "-"}
+   • Copied on: ${backup_1_recorded_at formatted}
+   ```
 
-**3. Replace PC Name Select (lines 654-663)**
-- Same pattern: `Popover + Command` with search
-- PC names sorted alphabetically
+4. **Add to dialog summary** (after the Path row, before the divider): Two new rows showing "Copied By" and "Copied At"
 
-**4. Replace Drive Letter Select (lines 665-675)**
-- Same pattern for drive letter selection
-- Shows drive letter + remaining storage
+### Changes — `src/lib/file-confirmation-pdf.ts`
 
-**5. Add local open states**
-- `devicePopoverOpen`, `pcNamePopoverOpen`, `drivePopoverOpen` — three boolean states for each popover
+5. **Import** `nepaliMonthsEnglish` from `./nepali-date`
 
-### Files to modify
-- `src/components/files/FilePathBuilderDialog.tsx`
+6. **Fix `nepaliDate` formatting** (line 35-38): Same readable format `Magh 4, 2082`
+
+### Files changed
+- `src/components/files/ReconfirmationDialog.tsx`
+- `src/lib/file-confirmation-pdf.ts`
 
