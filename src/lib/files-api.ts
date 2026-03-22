@@ -738,6 +738,9 @@ export async function syncFilesWithAssignments(
     if (!assignments || assignments.length === 0) return;
     const assignment = assignments[0];
 
+    // Never create file rows for undated events (date contains **)
+    if (assignment.event_date_ad?.includes('**')) return;
+
     const { data: clientData } = await (supabase as any)
       .from("clients_cache")
       .select("client_name, registered_date_bs")
