@@ -1,50 +1,23 @@
 
 
-## Redesigned Freelancer Hover Info — Enhanced Stats & Actions
+## Fix: Schedule Dialog Hidden Behind HoverCard
 
-### What Changes
-Replace the current `FreelancerHoverInfo` component in `AllClientsCrewTable.tsx` with a cleaner, more informative layout.
+### Problem
+The "Send Schedule" `Dialog` renders inside `FreelancerHoverInfo`, which is inside a `HoverCardContent` with `z-[300]`. The Dialog overlay and content use `z-[200]`, so the HoverCard sits on top of the Dialog.
 
-### New Layout
+### Fix — `src/components/suite/AllClientsCrewTable.tsx`
 
-```text
-┌─────────────────────────────────┐
-│  Freelancer Name        → profile│
-├─────────────────────────────────┤
-│  Total: 8  │ Remaining: 3 │ Done: 5│
-│  (violet)    (amber)       (green) │
-├─────────────────────────────────┤
-│  Upcoming events list (if any)  │
-├─────────────────────────────────┤
-│  [Show only rows]  [WhatsApp]   │
-│  [Send Schedule →]              │
-└─────────────────────────────────┘
+**Line ~1934**: Add higher z-index classes to `DialogContent`:
+```tsx
+<DialogContent className="max-w-sm z-[500]">
 ```
 
-### Changes — `src/components/suite/AllClientsCrewTable.tsx`
+This ensures the Dialog (and its overlay) renders above the HoverCard. The Dialog's portal renders at `document.body` level, so only the z-index needs bumping. The overlay from `dialog.tsx` also needs to be above `z-[300]` — it's already `z-[200]`, so we override it on this specific Dialog's content to `z-[500]`.
 
-**Rewrite `FreelancerHoverInfo` function (~lines 1798-1889)**
+Additionally, we need to add a custom overlay z-index. The simplest approach: wrap the Dialog content className with `z-[500]` and also pass a custom overlay. Since the Dialog component auto-renders `DialogOverlay` inside `DialogContent`, we'll override by adding `[&~div]:z-[400]` or simply set the DialogContent's parent portal z-index.
 
-1. **Stats row**: Compute from `monthEvents`:
-   - `total` = all events in selected month
-   - `completed` = events where BS date is past (`isBSDatePast`)
-   - `remaining` = total - completed
-   - Display as 3 mini stat badges in a row: Total (violet), Remaining (amber), Completed (green)
+**Simplest reliable fix**: Add `className="z-[500]"` to the `DialogContent`, which already uses `fixed` positioning. For the overlay, we'll add an explicit style override on the DialogContent wrapper.
 
-2. **"Show only rows" button**: Already exists — keep as-is, style as outline button
-
-3. **"Chat on WhatsApp" button**: New button that opens `wa.me/{phone}` without a message (just opens chat). Uses same freelancer phone lookup logic.
-
-4. **"Send Schedule" button**: Keep existing logic but make it a Dialog/AlertDialog popup instead of direct send:
-   - Click opens a small `Dialog` showing:
-     - Freelancer name
-     - Preview of the message text
-     - "Send via WhatsApp" confirm button
-     - "Cancel" button
-   - This avoids accidental sends and gives a clean preview
-
-5. **Clean UI**: Use proper spacing, dividers between sections, consistent button sizing
-
-### Single file changed
-- `src/components/suite/AllClientsCrewTable.tsx` (rewrite `FreelancerHoverInfo` ~90 lines)
+### File changed
+- `src/components/suite/AllClientsCrewTable.tsx` (~line 1934)
 
