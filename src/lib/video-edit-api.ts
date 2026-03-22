@@ -157,7 +157,7 @@ export async function ensureVideoEditRows(): Promise<number> {
     (existingRows || []).map(r => `${r.registered_date_time_ad}||${r.event_name}||${r.sub_event_name}||${r.edit_type}`)
   );
 
-  // 5. Load deliverables for video AND overall sections (overall_reel etc. are video-related)
+  // 5. Load ALL deliverables (enabled AND disabled) for video AND overall sections
   const bookedRegDates = [...bookedMap.keys()];
   const allDeliverables: any[] = [];
   for (let i = 0; i < bookedRegDates.length; i += 50) {
@@ -166,18 +166,23 @@ export async function ensureVideoEditRows(): Promise<number> {
       .from('client_deliverables')
       .select('*')
       .in('registered_date_time_ad', batch)
-      .in('section', ['video', 'overall'])
-      .eq('enabled', true);
+      .in('section', ['video', 'overall']);
     if (data) allDeliverables.push(...data);
   }
 
-  // Separate video-section (event-specific) and overall-section deliverables
-  const deliverablesMap = new Map<string, any[]>();
-  const overallDeliverablesMap = new Map<string, any[]>();
+  // Separate into enabled deliverables (for row generation) and "has any records" (to skip defaults)
+  const deliverablesMap = new Map<string, any[]>(); // enabled only
+  const overallDeliverablesMap = new Map<string, any[]>(); // enabled only
+  const hasAnyRecordsMap = new Set<string>(); // all records including disabled
 
   for (const d of allDeliverables) {
+    const eventName = d.section === 'overall' ? 'OVERALL' : d.event_name;
+    const groupKey = `${d.registered_date_time_ad}||${eventName}`;
+    hasAnyRecordsMap.add(groupKey);
+
+    if (!d.enabled) continue; // only enabled items go into generation maps
+
     if (d.section === 'overall') {
-      // Overall deliverables are not event-specific
       if (!overallDeliverablesMap.has(d.registered_date_time_ad)) overallDeliverablesMap.set(d.registered_date_time_ad, []);
       overallDeliverablesMap.get(d.registered_date_time_ad)!.push(d);
     } else {
@@ -235,14 +240,18 @@ export async function ensureVideoEditRows(): Promise<number> {
         }
       }
     } else {
-      // Default: Full Video + Highlights
-      for (const editType of ['Full Video', 'Highlights']) {
-        const compositeKey = `${ev.registered_date_time_ad}||${ev.event_name}||||${editType}`;
-        if (!existingKeys.has(compositeKey)) {
-          newRows.push({ ...baseRow, sub_event_name: '', edit_type: editType });
-          existingKeys.add(compositeKey);
+      // Only create defaults if client has NEVER configured deliverables for this event
+      const eventGroupKey = `${ev.registered_date_time_ad}||${ev.event_name}`;
+      if (!hasAnyRecordsMap.has(eventGroupKey)) {
+        for (const editType of ['Full Video', 'Highlights']) {
+          const compositeKey = `${ev.registered_date_time_ad}||${ev.event_name}||||${editType}`;
+          if (!existingKeys.has(compositeKey)) {
+            newRows.push({ ...baseRow, sub_event_name: '', edit_type: editType });
+            existingKeys.add(compositeKey);
+          }
         }
       }
+      // If hasAnyRecordsMap has the key but no enabled items → generate nothing (all disabled)
     }
 
     // Generate overall deliverable rows (once per client, using latest event date)
@@ -329,7 +338,7 @@ export async function syncWithDeliverables(): Promise<number> {
   // 2. Get unique regDates from queue rows
   const regDates = [...new Set(queueRows.map(r => r.registered_date_time_ad))];
 
-  // 3. Load all enabled video + overall deliverables for these clients
+  // 3. Load ALL video + overall deliverables (enabled AND disabled) for these clients
   const allDeliverables: any[] = [];
   for (let i = 0; i < regDates.length; i += 50) {
     const batch = regDates.slice(i, i + 50);
@@ -337,20 +346,23 @@ export async function syncWithDeliverables(): Promise<number> {
       .from('client_deliverables')
       .select('*')
       .in('registered_date_time_ad', batch)
-      .in('section', ['video', 'overall'])
-      .eq('enabled', true);
+      .in('section', ['video', 'overall']);
     if (data) allDeliverables.push(...data);
   }
 
-  // Group deliverables by regDate + eventName (overall uses "OVERALL" as event_name)
-  const delMap = new Map<string, Set<string>>();
-  const hasConfiguredDeliverables = new Set<string>();
+  // Group deliverables: track all records (for "has configured") and enabled-only (for matching)
+  const delMap = new Map<string, Set<string>>(); // enabled deliverables only
+  const hasAnyConfigured = new Set<string>(); // all records including disabled
+  const hasEnabledConfigured = new Set<string>(); // only groups with enabled items
 
   for (const d of allDeliverables) {
     const eventName = d.section === 'overall' ? 'OVERALL' : d.event_name;
     const groupKey = `${d.registered_date_time_ad}||${eventName}`;
-    hasConfiguredDeliverables.add(groupKey);
+    hasAnyConfigured.add(groupKey);
 
+    if (!d.enabled) continue; // skip disabled for matching
+
+    hasEnabledConfigured.add(groupKey);
     if (!delMap.has(groupKey)) delMap.set(groupKey, new Set());
     const editType = d.deliverable_type || '';
     const itemNames = d.item_names ? d.item_names.split(',').map((n: string) => n.trim()).filter(Boolean) : [];
@@ -373,13 +385,16 @@ export async function syncWithDeliverables(): Promise<number> {
     const groupKey = `${row.registered_date_time_ad}||${row.event_name}`;
     const rowKey = `${row.sub_event_name || ''}||${row.edit_type || ''}`;
 
-    if (hasConfiguredDeliverables.has(groupKey)) {
-      // Client has configured deliverables for this event — row must match one
-      if (!delMap.get(groupKey)!.has(rowKey)) {
+    if (hasAnyConfigured.has(groupKey)) {
+      if (!hasEnabledConfigured.has(groupKey)) {
+        // All deliverables disabled → soft-delete all QUEUE rows for this event
+        toDelete.push(row.id);
+      } else if (!delMap.get(groupKey)!.has(rowKey)) {
+        // Has enabled deliverables but this row doesn't match any
         toDelete.push(row.id);
       }
     }
-    // If no configured deliverables, defaults (Full Video/Highlights) are kept
+    // If no records at all, defaults (Full Video/Highlights) are kept
   }
 
   if (toDelete.length === 0) return 0;
