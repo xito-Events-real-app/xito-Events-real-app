@@ -385,13 +385,16 @@ export async function syncWithDeliverables(): Promise<number> {
     const groupKey = `${row.registered_date_time_ad}||${row.event_name}`;
     const rowKey = `${row.sub_event_name || ''}||${row.edit_type || ''}`;
 
-    if (hasConfiguredDeliverables.has(groupKey)) {
-      // Client has configured deliverables for this event — row must match one
-      if (!delMap.get(groupKey)!.has(rowKey)) {
+    if (hasAnyConfigured.has(groupKey)) {
+      if (!hasEnabledConfigured.has(groupKey)) {
+        // All deliverables disabled → soft-delete all QUEUE rows for this event
+        toDelete.push(row.id);
+      } else if (!delMap.get(groupKey)!.has(rowKey)) {
+        // Has enabled deliverables but this row doesn't match any
         toDelete.push(row.id);
       }
     }
-    // If no configured deliverables, defaults (Full Video/Highlights) are kept
+    // If no records at all, defaults (Full Video/Highlights) are kept
   }
 
   if (toDelete.length === 0) return 0;
