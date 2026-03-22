@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useFilesDashboardData, type DashboardStats } from "@/hooks/useFilesDashboardData";
 import { FileDashboardClientSheet } from "./FileDashboardClientSheet";
 import { FileRecord } from "@/lib/files-api";
@@ -42,6 +43,7 @@ function timeAgo(dateStr: string): string {
 }
 
 export function FilesDashboard() {
+  const navigate = useNavigate();
   const {
     files, stats, activityFeed, insights, isLoading,
     search, setSearch, filterMode, setFilterMode, lastUpdated, refresh,
@@ -49,6 +51,22 @@ export function FilesDashboard() {
 
   const [selectedFile, setSelectedFile] = useState<FileRecord | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+
+  // Restore scroll on mount
+  useEffect(() => {
+    const saved = sessionStorage.getItem("files_dashboard_scroll");
+    if (saved) {
+      setTimeout(() => window.scrollTo(0, Number(saved)), 100);
+      sessionStorage.removeItem("files_dashboard_scroll");
+    }
+  }, []);
+
+  const navigateToClient = (f: FileRecord) => {
+    sessionStorage.setItem("files_dashboard_scroll", String(window.scrollY));
+    sessionStorage.setItem("files_dashboard_search", search);
+    sessionStorage.setItem("files_dashboard_filter", filterMode);
+    navigate(`/files/client/${encodeURIComponent(f.registered_date_time_ad)}`);
+  };
 
   const activeCard = filterMode === "all" ? null : filterMode;
 
@@ -148,7 +166,10 @@ export function FilesDashboard() {
                     onClick={() => { setSelectedFile(f); setSheetOpen(true); }}
                     className="cursor-pointer border-[hsl(220,20%,14%)] hover:bg-[hsl(220,25%,13%)] transition-colors"
                   >
-                    <TableCell className="text-xs font-medium text-[hsl(220,15%,90%)] max-w-[120px] truncate">{f.client_name || "-"}</TableCell>
+                    <TableCell
+                      className="text-xs font-medium text-[hsl(210,90%,65%)] max-w-[120px] truncate cursor-pointer hover:underline"
+                      onClick={(e) => { e.stopPropagation(); navigateToClient(f); }}
+                    >{f.client_name || "-"}</TableCell>
                     <TableCell className="text-xs text-[hsl(220,15%,65%)] max-w-[100px] truncate">{f.event_name || "-"}</TableCell>
                     <TableCell className="text-xs text-[hsl(220,15%,55%)] whitespace-nowrap">{f.event_date_ad || "-"}</TableCell>
                     <TableCell>
