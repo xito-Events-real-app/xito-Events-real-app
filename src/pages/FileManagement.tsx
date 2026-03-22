@@ -6,6 +6,8 @@ import { FileManagementSidebar } from "@/components/files/FileManagementSidebar"
 import { StorageDevicesSection } from "@/components/files/StorageDevicesSection";
 import { FilesManagementTable } from "@/components/files/FilesManagementTable";
 import { FullScreenFilesTable } from "@/components/files/FullScreenFilesTable";
+import { FilesDashboard } from "@/components/files/FilesDashboard";
+import { FileReminderPopup } from "@/components/files/FileReminderPopup";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FileText, HardDrive, FolderOpen, Database, AlertTriangle, BarChart3, ChevronLeft, Plus, Monitor, Disc, Cloud } from "lucide-react";
