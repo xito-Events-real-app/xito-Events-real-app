@@ -536,7 +536,9 @@ export function FullScreenFilesTable({ onClose }: FullScreenFilesTableProps) {
                       {!file.final_generated_path ? (
                         <span className="text-[10px] text-muted-foreground">-</span>
                       ) : file.confirmed ? (
-                        <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wide cursor-default">CONFIRMED</span>
+                        <button onClick={() => { setReconfirmFile(file); setReconfirmOpen(true); }} className="hover:scale-110 transition-transform">
+                          <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wide cursor-pointer">CONFIRMED</span>
+                        </button>
                       ) : (
                         <button onClick={() => handleReconfirmClick(file)} className="hover:scale-110 transition-transform">
                           <span className="text-[10px] font-black text-red-600 uppercase tracking-wide">NOT CONFIRMED</span>

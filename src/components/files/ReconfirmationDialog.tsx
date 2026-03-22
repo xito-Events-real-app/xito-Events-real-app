@@ -104,7 +104,9 @@ Thank you! 🙏`;
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-lg font-bold">Confirm File Backup</DialogTitle>
+          <DialogTitle className="text-lg font-bold">
+            {alreadyConfirmed ? "Backup Confirmation Details" : "Confirm File Backup"}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3 py-2">
@@ -173,22 +175,24 @@ Thank you! 🙏`;
 
         <DialogFooter className="flex flex-col gap-2 sm:flex-col">
           <Button
-            onClick={handleConfirmAndWhatsApp}
+            onClick={handleSendWhatsApp}
             disabled={isConfirming}
             className="w-full gap-2 bg-emerald-600 hover:bg-emerald-500 text-white"
           >
             <MessageCircle className="w-4 h-4" />
-            Confirm & Send WhatsApp
+            {alreadyConfirmed ? "Send WhatsApp" : "Confirm & Send WhatsApp"}
           </Button>
-          <Button
-            variant="outline"
-            onClick={handleConfirmOnly}
-            disabled={isConfirming}
-            className="w-full gap-2"
-          >
-            <Check className="w-4 h-4" />
-            Confirm Only (Skip)
-          </Button>
+          {!alreadyConfirmed && (
+            <Button
+              variant="outline"
+              onClick={handleConfirmOnly}
+              disabled={isConfirming}
+              className="w-full gap-2"
+            >
+              <Check className="w-4 h-4" />
+              Confirm Only (Skip)
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

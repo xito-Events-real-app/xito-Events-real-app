@@ -348,7 +348,9 @@ export default function ClientFilesSection({ registeredDateTimeAD, clientName }:
                       {!file.final_generated_path ? (
                         <span className="text-xs text-muted-foreground">-</span>
                       ) : file.confirmed ? (
-                        <span className="text-sm font-black text-emerald-500 uppercase bg-white dark:bg-white/90 px-3 py-1 rounded-full cursor-default">CONFIRMED</span>
+                        <button onClick={() => handleReconfirmClick(file)} className="hover:scale-110 transition-transform">
+                          <span className="text-sm font-black text-emerald-500 uppercase bg-white dark:bg-white/90 px-3 py-1 rounded-full cursor-pointer">CONFIRMED</span>
+                        </button>
                       ) : (
                         <button onClick={() => handleReconfirmClick(file)} className="hover:scale-110 transition-transform">
                           <span className="text-[10px] font-black text-red-500 uppercase bg-white dark:bg-white/90 px-2 py-0.5 rounded-full whitespace-nowrap">NOT CONFIRMED</span>
