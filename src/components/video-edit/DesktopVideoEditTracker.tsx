@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { Video, RefreshCw, Sparkles, FlaskConical, MessageSquare, Music, ExternalLink, ArrowRight, Loader2 } from "lucide-react";
+import { Video, FlaskConical, MessageSquare, Music, ExternalLink, ArrowRight, Loader2 } from "lucide-react";
 import { VideoEditRow } from "@/lib/video-edit-api";
 import { supabase } from "@/integrations/supabase/client";
 
