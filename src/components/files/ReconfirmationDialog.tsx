@@ -51,12 +51,9 @@ export function ReconfirmationDialog({ open, onOpenChange, file, onConfirm, alre
     }
   };
 
-  const handleConfirmAndWhatsApp = async () => {
+  const handleSendWhatsApp = async () => {
     setIsConfirming(true);
     try {
-      const pdfFile = getConfirmationPDFFile(file);
-
-      // Look up freelancer WhatsApp number
       const { data: freelancerData } = await supabase
         .from("freelancers_cache")
         .select("whatsapp_no, contact_no")
@@ -84,7 +81,6 @@ Hi ${file.freelancer_name || ""},\nyour files have been copied successfully!
 
 Thank you! 🙏`;
 
-      // Download PDF and open WhatsApp directly
       downloadConfirmationPDF(file);
       if (whatsappNo) {
         openWhatsApp(whatsappNo, message);
@@ -92,11 +88,13 @@ Thank you! 🙏`;
         toast.info("No WhatsApp number found. PDF downloaded.");
       }
 
-      await onConfirm(file.id);
-      toast.success("File confirmed");
+      if (!alreadyConfirmed) {
+        await onConfirm(file.id);
+      }
+      toast.success(alreadyConfirmed ? "WhatsApp opened" : "File confirmed");
       onOpenChange(false);
     } catch {
-      toast.error("Failed to confirm");
+      toast.error("Failed");
     } finally {
       setIsConfirming(false);
     }
