@@ -124,8 +124,15 @@ export function FilesDashboard() {
     if (subDevice) {
       result = result.filter(f => f.backup_1_device_name === subDevice);
     }
+    // Apply Nepali date table filter
+    if (tableFilterYear !== null) {
+      result = result.filter(f => f.event_year === String(tableFilterYear));
+    }
+    if (tableFilterMonth !== null) {
+      result = result.filter(f => f.event_month === String(tableFilterMonth));
+    }
     return result;
-  }, [files, subMonth, subDevice]);
+  }, [files, subMonth, subDevice, tableFilterYear, tableFilterMonth]);
 
   const handleCardClick = (card: CardDef) => {
     if (card.key === "backup") {
