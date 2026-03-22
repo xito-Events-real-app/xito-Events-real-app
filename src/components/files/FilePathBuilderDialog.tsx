@@ -84,6 +84,9 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
   const [newCopierName, setNewCopierName] = useState("");
   const [pcName, setPcName] = useState("");
   const [localCardIds, setLocalCardIds] = useState<Record<string, string>>({});  // card_label -> row id for newly created cards
+  const [devicePopoverOpen, setDevicePopoverOpen] = useState(false);
+  const [pcNamePopoverOpen, setPcNamePopoverOpen] = useState(false);
+  const [drivePopoverOpen, setDrivePopoverOpen] = useState(false);
 
   const backupNumber = useMemo(() => {
     if (!fileRecord) return 1;
