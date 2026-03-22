@@ -1931,7 +1931,7 @@ function FreelancerHoverInfo({ name, allAssignments, selectedYear, selectedMonth
       {/* Send Schedule Confirmation Dialog */}
       {showScheduleDialog && (
         <Dialog open={showScheduleDialog} onOpenChange={setShowScheduleDialog}>
-          <DialogContent className="max-w-sm">
+          <DialogContent className="max-w-sm z-[500] [&~*]:z-[500]" style={{ zIndex: 500 }}>
             <DialogHeader>
               <DialogTitle className="text-base">Send Schedule to {getFirstName(name)}</DialogTitle>
               <DialogDescription className="text-xs text-gray-500">
