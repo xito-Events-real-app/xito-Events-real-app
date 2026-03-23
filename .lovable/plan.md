@@ -1,26 +1,38 @@
 
 
-## Fix: 2nd/3rd Backup Should Not Auto-Fill Storage Location for All Cards
+## Replace Action Button with Stage Dropdown in Video Edit Tracker
 
-### Problem
-When setting 2nd backup for a specific card (e.g. Card 3), the dialog pre-fills ALL cards with storage type/device from their 1st backup data. On save, it forces ALL cards to have storage + device filled, and saves backup 2 paths for ALL cards — even if user only intended to back up one card.
+### Changes
 
-### Desired behavior
-- **1st backup**: All cards share the same storage location — current behavior is correct
-- **2nd/3rd backup**: 
-  - File info (size, items, format) stays pre-populated from existing data
-  - Storage location fields (`storageType`, `deviceId`) start **EMPTY** for all cards
-  - Only cards where user explicitly selects a storage location get saved
-  - Cards left empty are skipped — no validation error
+**1. `src/components/video-edit/DesktopVideoEditTracker.tsx`** — Replace the single "push to next" button with a `DropdownMenu` that lists all pipeline stages (excluding the current one). Selecting any stage calls `onPushToStatus(row.id, selectedStage)`.
 
-### Changes to `src/components/files/FilePathBuilderDialog.tsx`
+Replace lines 158-169 (the action button cell) with:
+```tsx
+<TableCell className="text-center">
+  <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
+        Move to <ChevronDown className="w-3 h-3" />
+      </Button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="end">
+      {STAGES.filter(s => s.key !== currentStageKey).map(s => (
+        <DropdownMenuItem key={s.key} onClick={() => onPushToStatus?.(row.id, s.key)}>
+          {s.label}
+        </DropdownMenuItem>
+      ))}
+    </DropdownMenuContent>
+  </DropdownMenu>
+</TableCell>
+```
 
-**1. Initialization (lines 122-185):** When `backupNumber >= 2`, load card forms with size/items/format from existing data but set `storageType` and `deviceId` to empty strings.
+The `VideoEditTable` props will add `currentStageKey: string` so it knows which stage to exclude. The action column now always renders (for all stages including Finalized — useful to move items back).
 
-**2. Validation (lines 391-401):** For `backupNumber >= 2`, skip the "all cards must be complete" validation. Instead, only require at least ONE card to have storage + device filled.
+**2. `src/components/video-edit/MobileVideoEditTracker.tsx`** — Same change for `VideoCard`: replace the single push button with a `Select` dropdown listing all stages except current.
 
-**3. Save logic (lines 472-542):** For `backupNumber >= 2`, skip cards where `storageType` or `deviceId` is empty — don't save backup path for those cards.
+**3. Remove `actionLabel`/`nextStatus` props** — Replace with `currentStageKey` prop since the dropdown handles all destinations.
 
 ### Files changed
-1. `src/components/files/FilePathBuilderDialog.tsx` — 3 targeted changes in init, validation, and save
+1. `src/components/video-edit/DesktopVideoEditTracker.tsx` — dropdown menu replacing button
+2. `src/components/video-edit/MobileVideoEditTracker.tsx` — select dropdown replacing button
 
