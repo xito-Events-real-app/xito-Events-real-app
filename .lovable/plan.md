@@ -1,50 +1,57 @@
 
 
-## Merge Full Video + Highlights into Combined Rows in Video Edit Tracker
+## Add Filter Bar + Client/EditType Filters to Video Edit Tracker
 
-### Concept
+### Overview
 
-When both "Full Video" and "Highlights" rows exist for the same client+event (same `registeredDateTimeAD` + `eventName`), display them as a single merged row showing "Full Video + Highlights" in the Edit Type column. A small split button lets users break them into individual rows, and a merge button appears on separated rows to combine them back.
-
-### Approach — UI-only merging (no DB changes)
-
-This is purely a **display-level** merge. Both DB rows remain separate. The hook groups them visually and operations (move to stage, assign editor, etc.) apply to **both** underlying rows simultaneously.
+Add a new filter bar below the pipeline tabs with:
+1. **Edit Type filter** — click any edit type badge in the table to filter by that type across current tab
+2. **Client Name filter** — click any client name to show only that client's rows, plus a cross-pipeline summary bar showing how many items are in each stage
+3. **Month/Year filter** — BS month and year selectors (like All Clients pattern)
+4. **"All" tab** — new tab showing all rows across all stages when a filter is active
+5. Priority numbers stay based on the full unfiltered dataset
 
 ### Changes
 
-**1. `src/hooks/useVideoEditTracker.ts` — Add merge/split state + grouped rows**
+**1. `src/components/video-edit/DesktopVideoEditTracker.tsx`**
 
-- Add `mergedKeys` state: `Set<string>` where key = `${registeredDateTimeAD}||${eventName}`. Tracks which pairs are currently displayed as merged. Default: ALL pairs with both Full Video + Highlights start merged.
-- New `splitRow(key)` and `mergeRow(key)` functions toggle the key in/out of the set.
-- New `groupedRowsByStatus` computed property: for each stage, find pairs where both Full Video and Highlights exist for the same client+event. If the pair key is in `mergedKeys`, replace the two rows with one synthetic "merged" row that carries both IDs.
-- Export a new `DisplayRow` type extending `VideoEditRow` with optional `mergedIds: string[]` (array of the two real IDs) and `isMerged: boolean`.
+Add filter state:
+- `filterEditType: string | null` — set when clicking an edit type badge
+- `filterClient: string | null` — set when clicking a client name
+- `filterYear: number | null`, `filterMonth: number | null` — BS month/year selectors
 
-**2. `src/hooks/useVideoEditTracker.ts` — Wrapped operations for merged rows**
+Add a **filter bar** between the pipeline tabs and the table:
+- Shows active filters as dismissible pills (edit type, client name, month/year)
+- When client is filtered: show a summary row like "Queue: 2 · Edit Lab: 1 · Finalized: 3" across all stages for that client
+- Month/Year selects using `nepaliMonthsEnglish` and `getBSYearsRange` (same pattern as `NepaliDateFilter`)
+- "Clear All" button
 
-- `updateField`: if row has `mergedIds`, apply update to ALL IDs in the array
-- `pushToStatus`: if row has `mergedIds`, move ALL IDs together
-- Merged row displays: `editType = "Full Video + Highlights"`, takes urgency/editor from the Full Video row
+Make edit type badges and client names **clickable** — clicking sets the filter.
 
-**3. `src/components/video-edit/DesktopVideoEditTracker.tsx` — Render merge/split buttons**
+Apply filters to the rows passed to `VideoEditTable` — but priority numbers come from `rowsByStatus` (unfiltered), so they don't change.
 
-- In the Edit Type column, if `row.isMerged`: show "Full Video + Highlights" badge + a small "Split" icon button (Ungroup icon)
-- If row is an unmerged Full Video or Highlights that has a matching partner in the same stage: show a small "Merge" icon button (Group icon)
-- Split/merge buttons call `splitRow`/`mergeRow` from the hook
+When any filter is active, add an "All" pseudo-tab that shows filtered rows from every stage combined.
 
-**4. `src/components/video-edit/MobileVideoEditTracker.tsx` — Same merge/split UI for mobile cards**
+**2. `src/components/video-edit/MobileVideoEditTracker.tsx`**
 
-### Merge key logic
+Same filter bar adapted for mobile layout — compact pills and selects.
+
+**3. `src/hooks/useVideoEditTracker.ts`**
+
+Export raw `rows` array so the desktop component can compute cross-pipeline stats for client filter (count per stage for the selected client). No other hook changes needed — filtering is purely UI-level in the component.
+
+### Filter bar layout (below tabs, above table)
 ```text
-key = `${row.registeredDateTimeAD}||${row.eventName}`
-
-A pair is mergeable when:
-- Same key
-- Same stage (videoEditStatus)  
-- One has editType "Full Video", other has "Highlights"
+┌─────────────────────────────────────────────────────────────┐
+│ 🔍 Client: Shakti Neupane ✕  │  Type: Full Video ✕  │      │
+│ Year: [2082 ▾]  Month: [Falgun ▾]  │  Clear All            │
+├─────────────────────────────────────────────────────────────┤
+│ Pipeline: Queue 2 · Edit Lab 1 · Color 0 · Finalized 3     │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ### Files changed
-1. `src/hooks/useVideoEditTracker.ts` — merge state, grouped rows, wrapped operations
-2. `src/components/video-edit/DesktopVideoEditTracker.tsx` — split/merge buttons in Edit Type column
-3. `src/components/video-edit/MobileVideoEditTracker.tsx` — split/merge buttons in mobile cards
+1. `src/hooks/useVideoEditTracker.ts` — export `allRows` for cross-pipeline stats
+2. `src/components/video-edit/DesktopVideoEditTracker.tsx` — filter state, filter bar, clickable cells, filtered display
+3. `src/components/video-edit/MobileVideoEditTracker.tsx` — same filter logic for mobile
 
