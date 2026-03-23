@@ -390,9 +390,19 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
   const handleSave = async () => {
     if (!fileRecord || backupNumber === 0) return;
 
-    // Validate all cards have required fields
+    // Validate cards have required fields
     const keys = Object.keys(cardForms);
-    if (keys.length > 1) {
+    if (backupNumber >= 2) {
+      // For 2nd/3rd backup: at least ONE card must have storage location set
+      const anyFilled = keys.some(key => {
+        const cf = cardForms[key];
+        return cf && cf.storageType && cf.deviceId;
+      });
+      if (!anyFilled) {
+        toast.error("Please set a storage location for at least one card");
+        return;
+      }
+    } else if (keys.length > 1) {
       for (const key of keys) {
         const cf = cardForms[key];
         if (!cf || !cf.storageType || !cf.deviceId) {
