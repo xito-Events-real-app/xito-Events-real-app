@@ -1,25 +1,37 @@
 
 
-## Fix: Add Missing Aashik Magar File Row for Shakti Neupane
+## Add Photo/Video Size Breakdown + TB Display to Dashboard Cards
 
-### Problem
-WEDDING BOTH SIDES crew has `extra_videographer = Aashik Magar`, but the `files_management` table has no row for him. All other crew members have file rows.
+### What changes
 
-### Fix
-Insert one skeleton file row for Aashik Magar / EV in WEDDING BOTH SIDES with the correct event metadata. No other data will be touched.
+**1. `src/hooks/useFilesDashboardData.ts` — Expand `DashboardStats`**
 
-### Data to insert
-- `registered_date_time_ad`: `2026-01-13T19:51:53.944Z`
-- `registered_date_bs`: `2082-09-30`
-- `client_name`: `Shakti Neupane`
-- `event_name`: `WEDDING BOTH SIDES`
-- `event_year`: `2082`, `event_month`: `11`, `event_day`: `28`, `event_date_ad`: `2026-03-12`
-- `freelancer_type`: `EV`, `freelancer_name`: `Aashik Magar`
-- `format_type`: `VIDEO`
-- All other fields: defaults (0 size, empty paths)
+Add photo/video size fields for each card category. Use `freelancer_type` to classify:
+- PHOTO roles: `PB`, `PG`, `EP`
+- VIDEO roles: `VB`, `VG`, `EV`, `DRONE`, `FPV`, `IPHONE`
 
-### Safety
-- Only 1 row inserted
-- No existing data modified
-- No code changes needed
+New stats fields:
+- `todayPhotoGB`, `todayVideoGB`
+- `totalPhotoGB`, `totalVideoGB`
+- `pendingPhotoCount`, `pendingVideoCount`
+- `backupDonePhotoGB`, `backupDoneVideoGB`, `backupRemainingPhotoGB`, `backupRemainingVideoGB`
+
+All existing GB fields converted to display as TB (divide by 1024).
+
+**2. `src/components/files/FilesDashboard.tsx` — Update card display**
+
+- `getCardDisplay()` returns additional lines for photo/video sizes in TB
+- Each card shows: main count → total size in TB → photo size in TB → video size in TB
+- Layout: keep primary number large, add a compact 2-line photo/video breakdown below the secondary text
+
+Example card layout:
+```text
+Today's Transfers
+42          1.2 TB
+📷 0.5 TB  🎬 0.7 TB
+```
+
+### Files changed
+1. `src/hooks/useFilesDashboardData.ts` — compute photo/video sizes per category
+2. `src/components/files/FilesDashboard.tsx` — render photo/video breakdown in cards, display TB
 
