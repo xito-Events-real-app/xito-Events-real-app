@@ -114,9 +114,10 @@ export default function FileClientDetail() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  const PHOTO_ROLES = useMemo(() => new Set(["PB", "PG", "EP"]), []);
+  const VIDEO_ROLES = useMemo(() => new Set(["VB", "VG", "EV", "DRONE", "FPV", "IPHONE"]), []);
+
   const stats = useMemo(() => {
-    const PHOTO_ROLES = new Set(["PB", "PG", "EP"]);
-    const VIDEO_ROLES = new Set(["VB", "VG", "EV", "DRONE", "FPV", "IPHONE"]);
     const isPhotoRole = (f: FileRecord) => PHOTO_ROLES.has((f.freelancer_type || "").toUpperCase());
     const isVideoRole = (f: FileRecord) => VIDEO_ROLES.has((f.freelancer_type || "").toUpperCase());
     const gb = (f: FileRecord) => Number(f.size_gb) || 0;
@@ -131,7 +132,7 @@ export default function FileClientDetail() {
     const remainingPhoto = files.filter(f => !f.final_generated_path && isPhotoRole(f)).length;
     const remainingVideo = files.filter(f => !f.final_generated_path && isVideoRole(f)).length;
     return { totalSize, remaining, doubleBackupDone, doubleBackupPending, photoSize, videoSize, remainingPhoto, remainingVideo };
-  }, [files]);
+  }, [files, PHOTO_ROLES, VIDEO_ROLES]);
 
   const eventGroups = useMemo(() => {
     const source = showOnlyRemaining ? files.filter(f => !f.final_generated_path) : files;
@@ -143,8 +144,19 @@ export default function FileClientDetail() {
       }
       map.get(key)!.files.push(f);
     }
+    // Sort files within each group: photos first, then videos, then by name
+    for (const group of map.values()) {
+      group.files.sort((a, b) => {
+        const aType = (a.freelancer_type || "").toUpperCase();
+        const bType = (b.freelancer_type || "").toUpperCase();
+        const aIsPhoto = PHOTO_ROLES.has(aType);
+        const bIsPhoto = PHOTO_ROLES.has(bType);
+        if (aIsPhoto !== bIsPhoto) return aIsPhoto ? -1 : 1;
+        return (a.freelancer_name || "").localeCompare(b.freelancer_name || "");
+      });
+    }
     return Array.from(map.values());
-  }, [files, showOnlyRemaining]);
+  }, [files, showOnlyRemaining, PHOTO_ROLES]);
 
   const handleSetPath = (f: FileRecord) => {
     const params = new URLSearchParams({
