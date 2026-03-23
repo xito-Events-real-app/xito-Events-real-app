@@ -206,6 +206,7 @@ export default function FileClientDetail() {
                       <p className={cn("text-xs uppercase tracking-wider font-semibold mb-1", c.colorClass)}>{c.label}</p>
                       <p className="text-2xl font-black tabular-nums leading-tight text-white">{c.value}</p>
                       <p className="text-xs text-slate-500 mt-0.5">{c.sub}</p>
+                      {c.extra && <p className="text-[10px] font-semibold text-slate-400 mt-0.5">{c.extra}</p>}
                     </div>
                   </CardContent>
                 </Card>
