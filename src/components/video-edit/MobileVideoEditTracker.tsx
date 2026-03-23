@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
-import { useVideoEditTracker, STAGES } from "@/hooks/useVideoEditTracker";
+import { useVideoEditTracker, STAGES, DisplayRow } from "@/hooks/useVideoEditTracker";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Video, Loader2 } from "lucide-react";
-import { VideoEditRow } from "@/lib/video-edit-api";
+import { Video, Loader2, Ungroup, Group } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 const URGENCY_COLORS: Record<string, string> = {
@@ -19,13 +18,17 @@ function VideoCard({
   index,
   onUpdateField,
   onPushToStatus,
+  onSplit,
+  onMerge,
   editors,
   currentStageKey,
 }: {
-  row: VideoEditRow;
+  row: DisplayRow;
   index: number;
-  onUpdateField: (id: string, field: string, value: string) => void;
-  onPushToStatus?: (id: string, status: string) => void;
+  onUpdateField: (id: string, field: string, value: string, mergedIds?: string[]) => void;
+  onPushToStatus?: (id: string, status: string, mergedIds?: string[]) => void;
+  onSplit?: (mergeKey: string) => void;
+  onMerge?: (mergeKey: string) => void;
   editors: { name: string; isVideoEditor: boolean }[];
   currentStageKey: string;
 }) {
@@ -46,19 +49,37 @@ function VideoCard({
           <p className="font-semibold text-sm truncate">{row.clientName}</p>
           <p className="text-xs text-muted-foreground truncate">{row.subEventName || row.eventName}</p>
         </div>
-        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-accent/10 text-accent text-xs font-medium shrink-0">
-          {row.editType}
-        </span>
+        <div className="flex items-center gap-1 shrink-0">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-accent/10 text-accent text-xs font-medium">
+            {row.editType}
+          </span>
+          {row.isMerged && row.mergeKey && (
+            <button
+              onClick={() => onSplit?.(row.mergeKey!)}
+              className="inline-flex items-center justify-center w-6 h-6 rounded hover:bg-muted transition-colors"
+            >
+              <Ungroup className="w-3.5 h-3.5 text-muted-foreground" />
+            </button>
+          )}
+          {!row.isMerged && row.canMerge && row.mergeKey && (
+            <button
+              onClick={() => onMerge?.(row.mergeKey!)}
+              className="inline-flex items-center justify-center w-6 h-6 rounded hover:bg-muted transition-colors"
+            >
+              <Group className="w-3.5 h-3.5 text-muted-foreground" />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center gap-2">
-        <Select value={row.urgency || "0"} onValueChange={(v) => onUpdateField(row.id, "urgency", v)}>
+        <Select value={row.urgency || "0"} onValueChange={(v) => onUpdateField(row.id, "urgency", v, row.mergedIds)}>
           <SelectTrigger className="w-24 h-8 text-xs"><SelectValue placeholder="Urgency" /></SelectTrigger>
           <SelectContent>
             {["1", "2", "3", "4", "5"].map(u => <SelectItem key={u} value={u}>Urgency {u}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Select value={row.editor || "unassigned"} onValueChange={(v) => onUpdateField(row.id, "editor", v === "unassigned" ? "" : v)}>
+        <Select value={row.editor || "unassigned"} onValueChange={(v) => onUpdateField(row.id, "editor", v === "unassigned" ? "" : v, row.mergedIds)}>
           <SelectTrigger className="flex-1 h-8 text-xs"><SelectValue placeholder="Editor..." /></SelectTrigger>
           <SelectContent>
             <SelectItem value="unassigned">Unassigned</SelectItem>
@@ -68,7 +89,7 @@ function VideoCard({
         </Select>
       </div>
 
-      <Select onValueChange={(v) => onPushToStatus?.(row.id, v)}>
+      <Select onValueChange={(v) => onPushToStatus?.(row.id, v, row.mergedIds)}>
         <SelectTrigger className="w-full h-8 text-xs">
           <SelectValue placeholder="Move to..." />
         </SelectTrigger>
@@ -83,7 +104,7 @@ function VideoCard({
 }
 
 export function MobileVideoEditTracker() {
-  const { rowsByStatus, isLoading, updateField, pushToStatus } = useVideoEditTracker();
+  const { rowsByStatus, isLoading, updateField, pushToStatus, splitRow, mergeRow } = useVideoEditTracker();
   const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean }[]>([]);
 
   useEffect(() => {
@@ -132,6 +153,8 @@ export function MobileVideoEditTracker() {
                       index={i}
                       onUpdateField={updateField}
                       onPushToStatus={pushToStatus}
+                      onSplit={splitRow}
+                      onMerge={mergeRow}
                       editors={editors}
                       currentStageKey={stage.key}
                     />

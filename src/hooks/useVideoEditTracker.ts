@@ -43,9 +43,21 @@ export const STAGES = [
 
 export type Stage = typeof STAGES[number];
 
+export interface DisplayRow extends VideoEditRow {
+  isMerged: boolean;
+  mergedIds?: string[];
+  mergeKey?: string;
+  canMerge?: boolean;
+}
+
+function makeMergeKey(row: VideoEditRow): string {
+  return `${row.registeredDateTimeAD}||${row.eventName}`;
+}
+
 export function useVideoEditTracker() {
   const [rows, setRows] = useState<VideoEditRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [splitKeys, setSplitKeys] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   const loadRows = useCallback(async () => {
@@ -137,10 +149,94 @@ export function useVideoEditTracker() {
     return map;
   }, [rows, withPriority, today]);
 
-  const updateField = useCallback(async (id: string, field: string, value: string) => {
-    setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
+  // Build display rows with merge/split logic
+  const displayRowsByStatus = useMemo(() => {
+    const result: Record<string, DisplayRow[]> = {};
+
+    for (const stage of STAGES) {
+      const stageRows = rowsByStatus[stage.key] || [];
+      const displayRows: DisplayRow[] = [];
+      const processed = new Set<string>();
+
+      // Group by merge key
+      const byKey: Record<string, VideoEditRow[]> = {};
+      for (const r of stageRows) {
+        const key = makeMergeKey(r);
+        if (!byKey[key]) byKey[key] = [];
+        byKey[key].push(r);
+      }
+
+      // Find mergeable pairs per key
+      const mergeablePairs: Record<string, { fv: VideoEditRow; hl: VideoEditRow }> = {};
+      for (const [key, group] of Object.entries(byKey)) {
+        const fv = group.find(r => r.editType === 'Full Video');
+        const hl = group.find(r => r.editType === 'Highlights');
+        if (fv && hl) {
+          mergeablePairs[key] = { fv, hl };
+        }
+      }
+
+      for (const r of stageRows) {
+        if (processed.has(r.id)) continue;
+        const key = makeMergeKey(r);
+        const pair = mergeablePairs[key];
+
+        if (pair && !splitKeys.has(key)) {
+          // Merge: create synthetic row from Full Video data
+          processed.add(pair.fv.id);
+          processed.add(pair.hl.id);
+          displayRows.push({
+            ...pair.fv,
+            editType: 'Full Video + Highlights',
+            isMerged: true,
+            mergedIds: [pair.fv.id, pair.hl.id],
+            mergeKey: key,
+          });
+        } else if (pair && splitKeys.has(key)) {
+          // Split: show individually with canMerge flag
+          displayRows.push({
+            ...r,
+            isMerged: false,
+            canMerge: true,
+            mergeKey: key,
+          });
+        } else {
+          displayRows.push({
+            ...r,
+            isMerged: false,
+            canMerge: false,
+          });
+        }
+      }
+
+      // Re-number priority
+      result[stage.key] = displayRows.map((r, i) => ({ ...r, priority: String(i + 1) }));
+    }
+
+    return result;
+  }, [rowsByStatus, splitKeys]);
+
+  const splitRow = useCallback((mergeKey: string) => {
+    setSplitKeys(prev => {
+      const next = new Set(prev);
+      next.add(mergeKey);
+      return next;
+    });
+  }, []);
+
+  const mergeRow = useCallback((mergeKey: string) => {
+    setSplitKeys(prev => {
+      const next = new Set(prev);
+      next.delete(mergeKey);
+      return next;
+    });
+  }, []);
+
+  const updateField = useCallback(async (id: string, field: string, value: string, mergedIds?: string[]) => {
+    const ids = mergedIds || [id];
+    setRows(prev => prev.map(r => ids.includes(r.id) ? { ...r, [field]: value } : r));
     try {
-      await apiUpdateField(id, field, value);
+      await Promise.all(ids.map(i => apiUpdateField(i, field, value)));
       scheduleVideoEditPush();
     } catch (err: any) {
       toast({ title: "Update failed", description: err.message, variant: "destructive" });
@@ -148,10 +244,11 @@ export function useVideoEditTracker() {
     }
   }, [toast, loadRows]);
 
-  const pushToStatus = useCallback(async (id: string, newStatus: string) => {
-    setRows(prev => prev.map(r => r.id === id ? { ...r, videoEditStatus: newStatus } : r));
+  const pushToStatus = useCallback(async (id: string, newStatus: string, mergedIds?: string[]) => {
+    const ids = mergedIds || [id];
+    setRows(prev => prev.map(r => ids.includes(r.id) ? { ...r, videoEditStatus: newStatus } : r));
     try {
-      await apiPushToStatus(id, newStatus);
+      await Promise.all(ids.map(i => apiPushToStatus(i, newStatus)));
       scheduleVideoEditPush();
       toast({ title: `Moved to ${STAGES.find(s => s.key === newStatus)?.label || newStatus}` });
     } catch (err: any) {
@@ -160,5 +257,14 @@ export function useVideoEditTracker() {
     }
   }, [toast, loadRows]);
 
-  return { rowsByStatus, isLoading, updateField, pushToStatus, refresh: loadRows, STAGES };
+  return {
+    rowsByStatus: displayRowsByStatus,
+    isLoading,
+    updateField,
+    pushToStatus,
+    refresh: loadRows,
+    splitRow,
+    mergeRow,
+    STAGES,
+  };
 }
