@@ -32,16 +32,21 @@ const STATUS_CARDS: CardDef[] = [
   { key: "backup", filterMode: "backup_done", label: "Double Backup", icon: AlertTriangle, color: "hsl(40,95%,50%)", glowColor: "hsl(40,95%,50%/0.15)" },
 ];
 
-function getCardDisplay(stats: DashboardStats, key: string): { primary: string; secondary?: string } {
+function toTB(gb: number): string {
+  if (gb >= 1024) return `${(gb / 1024).toFixed(2)} TB`;
+  return `${gb.toFixed(1)} GB`;
+}
+
+function getCardDisplay(stats: DashboardStats, key: string): { primary: string; secondary?: string; photoInfo?: string; videoInfo?: string } {
   switch (key) {
     case "today":
-      return { primary: String(stats.todayCopied), secondary: `${stats.todayCopiedGB.toFixed(1)} GB` };
+      return { primary: String(stats.todayCopied), secondary: toTB(stats.todayCopiedGB), photoInfo: `📷 ${toTB(stats.todayPhotoGB)}`, videoInfo: `🎬 ${toTB(stats.todayVideoGB)}` };
     case "copied":
-      return { primary: String(stats.totalCopied), secondary: `${stats.totalCopiedGB.toFixed(1)} GB` };
+      return { primary: String(stats.totalCopied), secondary: toTB(stats.totalCopiedGB), photoInfo: `📷 ${toTB(stats.totalPhotoGB)}`, videoInfo: `🎬 ${toTB(stats.totalVideoGB)}` };
     case "pending":
-      return { primary: String(stats.filesPending) };
+      return { primary: String(stats.filesPending), photoInfo: `📷 ${stats.pendingPhotoCount}`, videoInfo: `🎬 ${stats.pendingVideoCount}` };
     case "backup":
-      return { primary: `${stats.doubleBackupDone} Done`, secondary: `${stats.doubleBackupRemaining} Left` };
+      return { primary: `${stats.doubleBackupDone} Done`, secondary: `${stats.doubleBackupRemaining} Left`, photoInfo: `📷 ${toTB(stats.backupDonePhotoGB)}`, videoInfo: `🎬 ${toTB(stats.backupDoneVideoGB)}` };
     default:
       return { primary: "0" };
   }
@@ -224,6 +229,12 @@ export function FilesDashboard() {
                       </p>
                     )}
                   </div>
+                  {(display.photoInfo || display.videoInfo) && (
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {display.photoInfo && <span className="text-[10px] font-semibold text-[hsl(220,15%,50%)]">{display.photoInfo}</span>}
+                      {display.videoInfo && <span className="text-[10px] font-semibold text-[hsl(220,15%,50%)]">{display.videoInfo}</span>}
+                    </div>
+                  )}
                 </div>
                 <TrendingUp className="w-4 h-4" style={{ color: card.color, opacity: 0.4 }} />
               </CardContent>
