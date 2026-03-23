@@ -1,57 +1,34 @@
 
 
-## Add Filter Bar + Client/EditType Filters to Video Edit Tracker
+## Fix: Duplicate Rows, Future Events in Queue, and Merge Key
 
-### Overview
+### Problems identified
 
-Add a new filter bar below the pipeline tabs with:
-1. **Edit Type filter** — click any edit type badge in the table to filter by that type across current tab
-2. **Client Name filter** — click any client name to show only that client's rows, plus a cross-pipeline summary bar showing how many items are in each stage
-3. **Month/Year filter** — BS month and year selectors (like All Clients pattern)
-4. **"All" tab** — new tab showing all rows across all stages when a filter is active
-5. Priority numbers stay based on the full unfiltered dataset
+1. **Duplicate DB rows**: BRIDE MEHNDI has 2 Highlights (should be 1), GROOM HALDI has 2 Full Videos + 2 Highlights (should be 1+1). Total 3 extra rows from race conditions in `ensureVideoEditRows`.
 
-### Changes
+2. **POST SHOOT in queue**: This event is on 2026-04-13 (future) but has a tracker row. The `full_video` is explicitly disabled, but `highlights` has no record so default-ON logic created a row. The event date in the tracker row appears incorrect.
 
-**1. `src/components/video-edit/DesktopVideoEditTracker.tsx`**
+3. **Merge key ignores subEventName**: Current key is `registeredDateTimeAD||eventName`, so BRIDE MEHNDI and GROOM HALDI (both under same event "BRIDE MEHNDI & GROOM HALDI") can't be independently merged. Need key to be `registeredDateTimeAD||eventName||subEventName`.
 
-Add filter state:
-- `filterEditType: string | null` — set when clicking an edit type badge
-- `filterClient: string | null` — set when clicking a client name
-- `filterYear: number | null`, `filterMonth: number | null` — BS month/year selectors
+### Fixes
 
-Add a **filter bar** between the pipeline tabs and the table:
-- Shows active filters as dismissible pills (edit type, client name, month/year)
-- When client is filtered: show a summary row like "Queue: 2 · Edit Lab: 1 · Finalized: 3" across all stages for that client
-- Month/Year selects using `nepaliMonthsEnglish` and `getBSYearsRange` (same pattern as `NepaliDateFilter`)
-- "Clear All" button
+**1. Database cleanup migration**
+- Soft-delete the 3 duplicate rows (keep earliest ID per unique combo of registered_date_time_ad, event_name, sub_event_name, edit_type)
+- Soft-delete POST SHOOT row (future event)
+- Add a unique partial index on `(registered_date_time_ad, event_name, sub_event_name, edit_type)` WHERE `deleted = false` to prevent future duplicates
 
-Make edit type badges and client names **clickable** — clicking sets the filter.
+**2. `src/lib/video-edit-api.ts` — Prevent duplicates + fix future events**
+- In `ensureVideoEditRows()`: change `.insert(batch)` to `.upsert(batch, { onConflict: ... })` or add `ON CONFLICT DO NOTHING` behavior. Since we're adding a unique index, inserts of duplicates will be caught.
+- Actually, wrap inserts in try/catch per batch to gracefully handle unique constraint violations.
+- The existing `lte("event_date_ad", today)` filter on `event_details_cache` should already prevent future events. The POST SHOOT row likely snuck in from a previous bug or wrong date. The unique index + cleanup prevents recurrence.
 
-Apply filters to the rows passed to `VideoEditTable` — but priority numbers come from `rowsByStatus` (unfiltered), so they don't change.
-
-When any filter is active, add an "All" pseudo-tab that shows filtered rows from every stage combined.
-
-**2. `src/components/video-edit/MobileVideoEditTracker.tsx`**
-
-Same filter bar adapted for mobile layout — compact pills and selects.
-
-**3. `src/hooks/useVideoEditTracker.ts`**
-
-Export raw `rows` array so the desktop component can compute cross-pipeline stats for client filter (count per stage for the selected client). No other hook changes needed — filtering is purely UI-level in the component.
-
-### Filter bar layout (below tabs, above table)
-```text
-┌─────────────────────────────────────────────────────────────┐
-│ 🔍 Client: Shakti Neupane ✕  │  Type: Full Video ✕  │      │
-│ Year: [2082 ▾]  Month: [Falgun ▾]  │  Clear All            │
-├─────────────────────────────────────────────────────────────┤
-│ Pipeline: Queue 2 · Edit Lab 1 · Color 0 · Finalized 3     │
-└─────────────────────────────────────────────────────────────┘
-```
+**3. `src/hooks/useVideoEditTracker.ts` — Fix merge key to include subEventName**
+- `makeMergeKey()`: change to `${row.registeredDateTimeAD}||${row.eventName}||${row.subEventName || ''}`
+- This ensures BRIDE MEHNDI Full Video merges only with BRIDE MEHNDI Highlights (not GROOM HALDI's)
+- Display: when merged and subEventName exists, show `"BRIDE MEHNDI: Full Video + Highlights"`
 
 ### Files changed
-1. `src/hooks/useVideoEditTracker.ts` — export `allRows` for cross-pipeline stats
-2. `src/components/video-edit/DesktopVideoEditTracker.tsx` — filter state, filter bar, clickable cells, filtered display
-3. `src/components/video-edit/MobileVideoEditTracker.tsx` — same filter logic for mobile
+1. Database migration — cleanup duplicates + unique index
+2. `src/lib/video-edit-api.ts` — graceful duplicate handling in inserts
+3. `src/hooks/useVideoEditTracker.ts` — merge key includes subEventName
 
