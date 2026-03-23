@@ -69,11 +69,16 @@ function VideoCard({
         </Select>
       </div>
 
-      {actionLabel && nextStatus && (
-        <Button size="sm" variant="outline" className="w-full h-8 text-xs gap-1" onClick={() => onPushToStatus?.(row.id, nextStatus)}>
-          {actionLabel} <ArrowRight className="w-3 h-3" />
-        </Button>
-      )}
+      <Select onValueChange={(v) => onPushToStatus?.(row.id, v)}>
+        <SelectTrigger className="w-full h-8 text-xs">
+          <SelectValue placeholder="Move to..." />
+        </SelectTrigger>
+        <SelectContent>
+          {STAGES.filter(s => s.key !== currentStageKey).map(s => (
+            <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }
