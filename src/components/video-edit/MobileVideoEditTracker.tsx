@@ -2,8 +2,7 @@ import { useState, useEffect } from "react";
 import { useVideoEditTracker, STAGES } from "@/hooks/useVideoEditTracker";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { Video, ArrowRight, Loader2 } from "lucide-react";
+import { Video, Loader2 } from "lucide-react";
 import { VideoEditRow } from "@/lib/video-edit-api";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -21,16 +20,14 @@ function VideoCard({
   onUpdateField,
   onPushToStatus,
   editors,
-  actionLabel,
-  nextStatus,
+  currentStageKey,
 }: {
   row: VideoEditRow;
   index: number;
   onUpdateField: (id: string, field: string, value: string) => void;
   onPushToStatus?: (id: string, status: string) => void;
   editors: { name: string; isVideoEditor: boolean }[];
-  actionLabel: string | null;
-  nextStatus: string | null;
+  currentStageKey: string;
 }) {
   const urgCls = URGENCY_COLORS[row.urgency] || URGENCY_COLORS["1"];
   return (
@@ -71,11 +68,16 @@ function VideoCard({
         </Select>
       </div>
 
-      {actionLabel && nextStatus && (
-        <Button size="sm" variant="outline" className="w-full h-8 text-xs gap-1" onClick={() => onPushToStatus?.(row.id, nextStatus)}>
-          {actionLabel} <ArrowRight className="w-3 h-3" />
-        </Button>
-      )}
+      <Select onValueChange={(v) => onPushToStatus?.(row.id, v)}>
+        <SelectTrigger className="w-full h-8 text-xs">
+          <SelectValue placeholder="Move to..." />
+        </SelectTrigger>
+        <SelectContent>
+          {STAGES.filter(s => s.key !== currentStageKey).map(s => (
+            <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }
@@ -131,8 +133,7 @@ export function MobileVideoEditTracker() {
                       onUpdateField={updateField}
                       onPushToStatus={pushToStatus}
                       editors={editors}
-                      actionLabel={stage.nextLabel}
-                      nextStatus={stage.nextStatus}
+                      currentStageKey={stage.key}
                     />
                   ))}
                   {(rowsByStatus[stage.key]?.length || 0) === 0 && (

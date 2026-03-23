@@ -4,8 +4,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { Video, MessageSquare, Music, ExternalLink, ArrowRight, Loader2 } from "lucide-react";
+import { Video, MessageSquare, Music, ExternalLink, ChevronDown, Loader2 } from "lucide-react";
 import { VideoEditRow } from "@/lib/video-edit-api";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -54,15 +55,13 @@ function VideoEditTable({
   onUpdateField,
   onPushToStatus,
   editors,
-  actionLabel,
-  nextStatus,
+  currentStageKey,
 }: {
   rows: VideoEditRow[];
   onUpdateField: (id: string, field: string, value: string) => void;
   onPushToStatus?: (id: string, status: string) => void;
   editors: { name: string; isVideoEditor: boolean }[];
-  actionLabel: string | null;
-  nextStatus: string | null;
+  currentStageKey: string;
 }) {
   return (
     <div className="rounded-xl border bg-card overflow-auto">
@@ -78,13 +77,13 @@ function VideoEditTable({
             <TableHead>Editor</TableHead>
             <TableHead className="w-12 text-center">Notes</TableHead>
             <TableHead className="w-12 text-center">Songs</TableHead>
-            {actionLabel && <TableHead className="w-32 text-center">Action</TableHead>}
+            <TableHead className="w-32 text-center">Action</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={actionLabel ? 10 : 9} className="text-center py-12 text-muted-foreground">
+              <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                 No rows found
               </TableCell>
             </TableRow>
@@ -155,19 +154,22 @@ function VideoEditTable({
               <TableCell className="text-center">
                 <SongsCell songs={row.songs} />
               </TableCell>
-              {actionLabel && nextStatus && (
-                <TableCell className="text-center">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs gap-1"
-                    onClick={() => onPushToStatus?.(row.id, nextStatus)}
-                  >
-                    {actionLabel}
-                    <ArrowRight className="w-3 h-3" />
-                  </Button>
-                </TableCell>
-              )}
+              <TableCell className="text-center">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
+                      Move to <ChevronDown className="w-3 h-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {STAGES.filter(s => s.key !== currentStageKey).map(s => (
+                      <DropdownMenuItem key={s.key} onClick={() => onPushToStatus?.(row.id, s.key)}>
+                        {s.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -236,8 +238,7 @@ export function DesktopVideoEditTracker() {
                   onUpdateField={updateField}
                   onPushToStatus={pushToStatus}
                   editors={editors}
-                  actionLabel={stage.nextLabel}
-                  nextStatus={stage.nextStatus}
+                  currentStageKey={stage.key}
                 />
               </TabsContent>
             ))}
