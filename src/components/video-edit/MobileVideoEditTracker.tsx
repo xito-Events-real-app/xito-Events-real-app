@@ -21,16 +21,14 @@ function VideoCard({
   onUpdateField,
   onPushToStatus,
   editors,
-  actionLabel,
-  nextStatus,
+  currentStageKey,
 }: {
   row: VideoEditRow;
   index: number;
   onUpdateField: (id: string, field: string, value: string) => void;
   onPushToStatus?: (id: string, status: string) => void;
   editors: { name: string; isVideoEditor: boolean }[];
-  actionLabel: string | null;
-  nextStatus: string | null;
+  currentStageKey: string;
 }) {
   const urgCls = URGENCY_COLORS[row.urgency] || URGENCY_COLORS["1"];
   return (
