@@ -115,13 +115,22 @@ export default function FileClientDetail() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const stats = useMemo(() => {
-    const totalSize = files.reduce((s, f) => s + (Number(f.size_gb) || 0), 0);
+    const PHOTO_ROLES = new Set(["PB", "PG", "EP"]);
+    const VIDEO_ROLES = new Set(["VB", "VG", "EV", "DRONE", "FPV", "IPHONE"]);
+    const isPhotoRole = (f: FileRecord) => PHOTO_ROLES.has((f.freelancer_type || "").toUpperCase());
+    const isVideoRole = (f: FileRecord) => VIDEO_ROLES.has((f.freelancer_type || "").toUpperCase());
+    const gb = (f: FileRecord) => Number(f.size_gb) || 0;
+    const sumGB = (arr: FileRecord[]) => arr.reduce((s, f) => s + gb(f), 0);
+
+    const totalSize = sumGB(files);
     const remaining = files.filter(f => !f.final_generated_path).length;
     const doubleBackupDone = files.filter(f => !!f.backup_2_path).length;
     const doubleBackupPending = files.filter(f => f.final_generated_path && !f.backup_2_path).length;
-    const photoSize = files.filter(f => (f.category || "").toLowerCase().includes("photo")).reduce((s, f) => s + (Number(f.size_gb) || 0), 0);
-    const videoSize = files.filter(f => (f.category || "").toLowerCase().includes("video")).reduce((s, f) => s + (Number(f.size_gb) || 0), 0);
-    return { totalSize, remaining, doubleBackupDone, doubleBackupPending, photoSize, videoSize };
+    const photoSize = sumGB(files.filter(isPhotoRole));
+    const videoSize = sumGB(files.filter(isVideoRole));
+    const remainingPhoto = files.filter(f => !f.final_generated_path && isPhotoRole(f)).length;
+    const remainingVideo = files.filter(f => !f.final_generated_path && isVideoRole(f)).length;
+    return { totalSize, remaining, doubleBackupDone, doubleBackupPending, photoSize, videoSize, remainingPhoto, remainingVideo };
   }, [files]);
 
   const eventGroups = useMemo(() => {
