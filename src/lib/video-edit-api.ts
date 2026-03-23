@@ -46,6 +46,31 @@ function editTypeToDeliverableKey(editType: string): string {
   return map[editType] || editType.toLowerCase().replace(/\s+/g, "_");
 }
 
+function normalizeKeyPart(value: string | null | undefined): string {
+  return (value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function makeEventKey(registeredDateTimeAD: string, eventName: string | null | undefined): string {
+  return `${registeredDateTimeAD}||${normalizeKeyPart(eventName)}`;
+}
+
+function makeTrackerCompositeKey(
+  registeredDateTimeAD: string,
+  eventName: string | null | undefined,
+  subEventName: string | null | undefined,
+  editType: string | null | undefined,
+): string {
+  return `${registeredDateTimeAD}||${normalizeKeyPart(eventName)}||${normalizeKeyPart(subEventName)}||${normalizeKeyPart(editType)}`;
+}
+
+function makeEnabledRowKey(subEventName: string | null | undefined, editType: string | null | undefined): string {
+  return `${normalizeKeyPart(subEventName)}||${normalizeKeyPart(editType)}`;
+}
+
 /**
  * Compute the effective enabled deliverables for an event.
  * For default-ON types (full_video, highlights): enabled unless explicit row says enabled=false
@@ -54,7 +79,6 @@ function editTypeToDeliverableKey(editType: string): string {
 function computeEffectiveDeliverables(
   allDeliverablesForEvent: any[],
 ): any[] {
-  // Build a map of type → deliverable row
   const byType = new Map<string, any>();
   for (const d of allDeliverablesForEvent) {
     byType.set(d.deliverable_type, d);
@@ -62,11 +86,9 @@ function computeEffectiveDeliverables(
 
   const effective: any[] = [];
 
-  // Check default-ON types
   for (const defaultType of DEFAULT_ON_TYPES) {
     const row = byType.get(defaultType);
     if (!row) {
-      // No row = default ON → create a synthetic enabled entry
       effective.push({
         deliverable_type: defaultType,
         enabled: true,
@@ -76,10 +98,8 @@ function computeEffectiveDeliverables(
     } else if (row.enabled) {
       effective.push(row);
     }
-    // If row exists and enabled=false → skip (disabled)
   }
 
-  // Check all other types (only if explicitly enabled)
   for (const type of Array.from(byType.keys())) {
     const row = byType.get(type)!;
     if ((DEFAULT_ON_TYPES as readonly string[]).includes(type)) continue;
@@ -217,7 +237,7 @@ function generateRowsFromEffective(
     const itemNames = splitItemNames(d.item_names);
 
     if (qty <= 1 && itemNames.length <= 1) {
-      const compositeKey = `${regDateTimeAD}||${eventName}||${itemNames[0] || ""}||${editType}`;
+      const compositeKey = makeTrackerCompositeKey(regDateTimeAD, eventName, itemNames[0] || "", editType);
       if (!existingKeys.has(compositeKey)) {
         rows.push({ ...baseRow, sub_event_name: itemNames[0] || "", edit_type: editType });
         existingKeys.add(compositeKey);
@@ -225,7 +245,7 @@ function generateRowsFromEffective(
     } else {
       for (let i = 0; i < qty; i++) {
         const subName = itemNames[i] || `${editType} ${i + 1}`;
-        const compositeKey = `${regDateTimeAD}||${eventName}||${subName}||${editType}`;
+        const compositeKey = makeTrackerCompositeKey(regDateTimeAD, eventName, subName, editType);
         if (!existingKeys.has(compositeKey)) {
           rows.push({ ...baseRow, sub_event_name: subName, edit_type: editType });
           existingKeys.add(compositeKey);
@@ -285,13 +305,16 @@ export async function ensureVideoEditRows(): Promise<number> {
     .eq("deleted", false);
 
   const existingKeys = new Set(
-    (existingRows || []).map(
-      (r) =>
-        `${r.registered_date_time_ad}||${r.event_name}||${r.sub_event_name || ""}||${normalizeEditType(r.edit_type)}`,
+    (existingRows || []).map((r) =>
+      makeTrackerCompositeKey(
+        r.registered_date_time_ad,
+        r.event_name || "",
+        r.sub_event_name || "",
+        normalizeEditType(r.edit_type),
+      ),
     ),
   );
 
-  // Load ALL deliverables (enabled AND disabled) for per-type decisions
   const bookedRegDates = Array.from(bookedMap.keys());
   const allDeliverables: any[] = [];
   for (let i = 0; i < bookedRegDates.length; i += 50) {
@@ -304,18 +327,18 @@ export async function ensureVideoEditRows(): Promise<number> {
     if (data) allDeliverables.push(...data);
   }
 
-  // Group deliverables by regDate+eventName (ALL rows, not just enabled)
   const eventDeliverablesMap = new Map<string, any[]>();
   const overallDeliverablesMap = new Map<string, any[]>();
 
   for (const d of allDeliverables) {
     const section = (d.section || "").toLowerCase();
     if (section === "overall") {
-      if (!overallDeliverablesMap.has(d.registered_date_time_ad))
+      if (!overallDeliverablesMap.has(d.registered_date_time_ad)) {
         overallDeliverablesMap.set(d.registered_date_time_ad, []);
+      }
       overallDeliverablesMap.get(d.registered_date_time_ad)!.push(d);
     } else if (VIDEO_DELIVERABLE_SECTIONS.includes(section as (typeof VIDEO_DELIVERABLE_SECTIONS)[number])) {
-      const key = `${d.registered_date_time_ad}||${d.event_name}`;
+      const key = makeEventKey(d.registered_date_time_ad, d.event_name);
       if (!eventDeliverablesMap.has(key)) eventDeliverablesMap.set(key, []);
       eventDeliverablesMap.get(key)!.push(d);
     }
@@ -326,7 +349,7 @@ export async function ensureVideoEditRows(): Promise<number> {
 
   for (const ev of bookedEvents) {
     const client = bookedMap.get(ev.registered_date_time_ad)!;
-    const delKey = `${ev.registered_date_time_ad}||${ev.event_name}`;
+    const delKey = makeEventKey(ev.registered_date_time_ad, ev.event_name || "");
     const rawDeliverables = eventDeliverablesMap.get(delKey) || [];
 
     const baseRow = {
@@ -342,14 +365,16 @@ export async function ensureVideoEditRows(): Promise<number> {
       synced_to_sheet: false,
     };
 
-    // Per-type logic: compute effective enabled deliverables
     const effective = computeEffectiveDeliverables(rawDeliverables);
     const generated = generateRowsFromEffective(
-      effective, baseRow, ev.event_name || "", ev.registered_date_time_ad, existingKeys,
+      effective,
+      baseRow,
+      ev.event_name || "",
+      ev.registered_date_time_ad,
+      existingKeys,
     );
     newRows.push(...generated);
 
-    // Handle OVERALL deliverables (once per client)
     if (!processedOverall.has(ev.registered_date_time_ad)) {
       processedOverall.add(ev.registered_date_time_ad);
       const overallDels = overallDeliverablesMap.get(ev.registered_date_time_ad);
@@ -360,7 +385,6 @@ export async function ensureVideoEditRows(): Promise<number> {
           clientEvents[0],
         );
 
-        // Overall deliverables do NOT have default-ON types, only explicit enabled
         const enabledOverall = overallDels.filter((d) => d.enabled);
         const overallBaseRow = {
           registered_date_time_ad: ev.registered_date_time_ad,
@@ -376,7 +400,11 @@ export async function ensureVideoEditRows(): Promise<number> {
         };
 
         const overallGenerated = generateRowsFromEffective(
-          enabledOverall, overallBaseRow, "OVERALL", ev.registered_date_time_ad, existingKeys,
+          enabledOverall,
+          overallBaseRow,
+          "OVERALL",
+          ev.registered_date_time_ad,
+          existingKeys,
         );
         newRows.push(...overallGenerated);
       }
@@ -390,8 +418,7 @@ export async function ensureVideoEditRows(): Promise<number> {
     try {
       const { error } = await supabase.from("video_edit_tracker").insert(batch);
       if (error) {
-        // Unique constraint violation = duplicates, safe to ignore
-        if (error.code === '23505') {
+        if (error.code === "23505") {
           console.log("[VIDEO-EDIT] Skipped duplicate rows in batch");
         } else {
           console.error("[VIDEO-EDIT] Insert error:", error);
@@ -412,9 +439,11 @@ export async function ensureVideoEditRows(): Promise<number> {
  * Uses per-type logic: full_video/highlights are ON unless explicitly disabled.
  */
 export async function syncWithDeliverables(): Promise<number> {
+  const today = new Date().toISOString().split("T")[0];
+
   const { data: queueRows } = await supabase
     .from("video_edit_tracker")
-    .select("id, registered_date_time_ad, event_name, sub_event_name, edit_type")
+    .select("id, registered_date_time_ad, event_name, sub_event_name, edit_type, event_date_ad")
     .eq("deleted", false)
     .eq("video_edit_status", "QUEUE");
 
@@ -422,7 +451,6 @@ export async function syncWithDeliverables(): Promise<number> {
 
   const regDates = Array.from(new Set(queueRows.map((r) => r.registered_date_time_ad)));
 
-  // Load ALL deliverables (enabled AND disabled)
   const allDeliverables: any[] = [];
   for (let i = 0; i < regDates.length; i += 50) {
     const batch = regDates.slice(i, i + 50);
@@ -434,24 +462,36 @@ export async function syncWithDeliverables(): Promise<number> {
     if (data) allDeliverables.push(...data);
   }
 
-  // Group by regDate+eventName
+  const allEventDetails: any[] = [];
+  for (let i = 0; i < regDates.length; i += 50) {
+    const batch = regDates.slice(i, i + 50);
+    const { data } = await supabase
+      .from("event_details_cache")
+      .select("registered_date_time_ad, event_name, event_date_ad")
+      .in("registered_date_time_ad", batch);
+    if (data) allEventDetails.push(...data);
+  }
+
+  const actualEventDateMap = new Map<string, string>();
+  for (const event of allEventDetails) {
+    actualEventDateMap.set(makeEventKey(event.registered_date_time_ad, event.event_name), event.event_date_ad || "");
+  }
+
   const eventDeliverablesMap = new Map<string, any[]>();
   for (const d of allDeliverables) {
     const section = (d.section || "").toLowerCase();
     const eventName = section === "overall" ? "OVERALL" : d.event_name;
-    const key = `${d.registered_date_time_ad}||${eventName}`;
+    const key = makeEventKey(d.registered_date_time_ad, eventName);
     if (!eventDeliverablesMap.has(key)) eventDeliverablesMap.set(key, []);
     eventDeliverablesMap.get(key)!.push(d);
   }
 
-  // Build effective enabled set per event using per-type logic
   const effectiveEnabledMap = new Map<string, Set<string>>();
   for (const groupKey of Array.from(eventDeliverablesMap.keys())) {
     const dels = eventDeliverablesMap.get(groupKey)!;
-    const isOverall = groupKey.includes("||OVERALL");
+    const isOverall = groupKey.endsWith(`||${normalizeKeyPart("OVERALL")}`);
     let effective: any[];
     if (isOverall) {
-      // Overall: no default-ON types, only explicit enabled
       effective = dels.filter((d) => d.enabled);
     } else {
       effective = computeEffectiveDeliverables(dels);
@@ -464,11 +504,11 @@ export async function syncWithDeliverables(): Promise<number> {
       const qty = d.quantity || 1;
       const itemNames = splitItemNames(d.item_names);
       if (qty <= 1 && itemNames.length <= 1) {
-        enabledSet.add(`${itemNames[0] || ""}||${editType}`);
+        enabledSet.add(makeEnabledRowKey(itemNames[0] || "", editType));
       } else {
         for (let i = 0; i < qty; i++) {
           const subName = itemNames[i] || `${editType} ${i + 1}`;
-          enabledSet.add(`${subName}||${editType}`);
+          enabledSet.add(makeEnabledRowKey(subName, editType));
         }
       }
     }
@@ -478,24 +518,28 @@ export async function syncWithDeliverables(): Promise<number> {
   const toDelete: string[] = [];
 
   for (const row of queueRows) {
-    const groupKey = `${row.registered_date_time_ad}||${row.event_name}`;
+    const normalizedGroupKey = makeEventKey(row.registered_date_time_ad, row.event_name || "");
+    const actualEventDate = row.event_name === "OVERALL"
+      ? null
+      : actualEventDateMap.get(normalizedGroupKey);
+
+    if ((actualEventDate && actualEventDate > today) || ((row.event_date_ad || "") > today && !actualEventDate)) {
+      toDelete.push(row.id);
+      continue;
+    }
+
     const rowEditType = normalizeEditType(row.edit_type || "");
-    const rowKey = `${row.sub_event_name || ""}||${rowEditType}`;
+    const rowKey = makeEnabledRowKey(row.sub_event_name || "", rowEditType);
     const deliverableKey = editTypeToDeliverableKey(rowEditType);
 
-    // Check if this event has any deliverable records at all
-    const hasRecords = eventDeliverablesMap.has(groupKey);
+    const hasRecords = eventDeliverablesMap.has(normalizedGroupKey);
 
     if (!hasRecords) {
-      // No deliverable records at all for this event
-      // Default-ON types should stay, others should be deleted
       if (!isDefaultOnType(deliverableKey)) {
         toDelete.push(row.id);
       }
-      // default-ON types with no records = keep (default ON)
     } else {
-      // Has records: check the per-type effective enabled set
-      const enabledSet = effectiveEnabledMap.get(groupKey);
+      const enabledSet = effectiveEnabledMap.get(normalizedGroupKey);
       if (!enabledSet || !enabledSet.has(rowKey)) {
         toDelete.push(row.id);
       }
