@@ -142,10 +142,13 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
     setCardCount(maxCard);
     setActiveCard(fileRecord.card_label || "1");
 
+    // For 2nd/3rd backups, start with empty storage location so user picks per-card
+    const clearStorage = backupNumber >= 2;
+
     // Initialize form for the current card
     const formData: CardFormData = {
-      storageType: fileRecord.storage_type || "",
-      deviceId: fileRecord.storage_device_id || "",
+      storageType: clearStorage ? "" : (fileRecord.storage_type || ""),
+      deviceId: clearStorage ? "" : (fileRecord.storage_device_id || ""),
       yearEventFolder: defaultYearFolder,
       category: fileRecord.category || (isPhotoRole ? "PHOTOS" : "VIDEOS"),
       clientFolder: fileRecord.client_folder_name || fileRecord.client_name?.toUpperCase() || "",
@@ -164,8 +167,8 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
         setCardForms(prev => ({
           ...prev,
           [card.card_label || "1"]: {
-            storageType: card.storage_type || "",
-            deviceId: card.storage_device_id || "",
+            storageType: clearStorage ? "" : (card.storage_type || ""),
+            deviceId: clearStorage ? "" : (card.storage_device_id || ""),
             yearEventFolder: getNormalizedYearEventFolder(card.year_event_folder, card.event_month, card.event_year),
             category: card.category || (isPhotoRole ? "PHOTOS" : "VIDEOS"),
             clientFolder: card.client_folder_name || card.client_name?.toUpperCase() || "",
@@ -387,9 +390,19 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
   const handleSave = async () => {
     if (!fileRecord || backupNumber === 0) return;
 
-    // Validate all cards have required fields
+    // Validate cards have required fields
     const keys = Object.keys(cardForms);
-    if (keys.length > 1) {
+    if (backupNumber >= 2) {
+      // For 2nd/3rd backup: at least ONE card must have storage location set
+      const anyFilled = keys.some(key => {
+        const cf = cardForms[key];
+        return cf && cf.storageType && cf.deviceId;
+      });
+      if (!anyFilled) {
+        toast.error("Please set a storage location for at least one card");
+        return;
+      }
+    } else if (keys.length > 1) {
       for (const key of keys) {
         const cf = cardForms[key];
         if (!cf || !cf.storageType || !cf.deviceId) {
@@ -419,55 +432,60 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
     try {
       const currentCardKey = fileRecord.card_label || "1";
       const form = cardForms[currentCardKey] || currentForm;
-      const dev = devices.find(d => d.id === form.deviceId);
-      const path = !form.storageType || !dev ? "" : buildFilePath({
-        storageType: form.storageType,
-        deviceName: dev.device_name,
-        pcDriveLetter: dev.pc_drive_letter || undefined,
-        yearEventFolder: form.yearEventFolder,
-        category: form.category,
-        clientFolderName: form.clientFolder,
-        eventFolderName: form.eventFolder,
-        side: form.side,
-        freelancerName: form.freelancerName,
-        cardLabel: `Card ${currentCardKey}`,
-      });
+      const hasStorageSet = form.storageType && form.deviceId;
 
-      const updates: Partial<FileRecord> = {
-        storage_type: form.storageType,
-        storage_device_id: form.deviceId || null,
-        year_event_folder: form.yearEventFolder,
-        category: form.category,
-        client_folder_name: form.clientFolder,
-        event_folder_name: form.eventFolder,
-        side: form.side,
-        card_label: currentCardKey,
-        format_type: form.formatType,
-        size_gb: form.sizeGb ? Number(form.sizeGb) : 0,
-        number_of_items: form.numberOfItems ? Number(form.numberOfItems) : 0,
-        who_copied: whoCopied,
-        notes,
-      };
+      // For 2nd/3rd backups, skip primary card save if no storage location set
+      if (hasStorageSet || backupNumber === 1) {
+        const dev = devices.find(d => d.id === form.deviceId);
+        const path = !form.storageType || !dev ? "" : buildFilePath({
+          storageType: form.storageType,
+          deviceName: dev.device_name,
+          pcDriveLetter: dev.pc_drive_letter || undefined,
+          yearEventFolder: form.yearEventFolder,
+          category: form.category,
+          clientFolderName: form.clientFolder,
+          eventFolderName: form.eventFolder,
+          side: form.side,
+          freelancerName: form.freelancerName,
+          cardLabel: `Card ${currentCardKey}`,
+        });
 
-      // Save path to the correct backup slot with per-backup timestamp
-      const now = new Date().toISOString();
-      if (backupNumber === 1) {
-        updates.final_generated_path = path;
-        updates.backup_1_device_name = dev?.device_name || "";
-        updates.backup_1_recorded_at = now;
-      } else if (backupNumber === 2) {
-        updates.backup_2_path = path;
-        updates.backup_2_device_name = dev?.device_name || "";
-        updates.double_backup = true;
-        updates.backup_2_recorded_at = now;
-      } else if (backupNumber === 3) {
-        updates.backup_3_path = path;
-        updates.backup_3_device_name = dev?.device_name || "";
-        updates.triple_backup = true;
-        updates.backup_3_recorded_at = now;
+        const updates: Partial<FileRecord> = {
+          storage_type: form.storageType,
+          storage_device_id: form.deviceId || null,
+          year_event_folder: form.yearEventFolder,
+          category: form.category,
+          client_folder_name: form.clientFolder,
+          event_folder_name: form.eventFolder,
+          side: form.side,
+          card_label: currentCardKey,
+          format_type: form.formatType,
+          size_gb: form.sizeGb ? Number(form.sizeGb) : 0,
+          number_of_items: form.numberOfItems ? Number(form.numberOfItems) : 0,
+          who_copied: whoCopied,
+          notes,
+        };
+
+        // Save path to the correct backup slot with per-backup timestamp
+        const now = new Date().toISOString();
+        if (backupNumber === 1) {
+          updates.final_generated_path = path;
+          updates.backup_1_device_name = dev?.device_name || "";
+          updates.backup_1_recorded_at = now;
+        } else if (backupNumber === 2) {
+          updates.backup_2_path = path;
+          updates.backup_2_device_name = dev?.device_name || "";
+          updates.double_backup = true;
+          updates.backup_2_recorded_at = now;
+        } else if (backupNumber === 3) {
+          updates.backup_3_path = path;
+          updates.backup_3_device_name = dev?.device_name || "";
+          updates.triple_backup = true;
+          updates.backup_3_recorded_at = now;
+        }
+
+        await onSave(updates);
       }
-
-      await onSave(updates);
 
       // Save other card forms if they exist
       if (Object.keys(cardForms).length > 1 && allFiles) {
@@ -475,6 +493,9 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
           if (key === (fileRecord.card_label || "1")) continue;
           const cardForm = cardForms[key];
           if (!cardForm) continue;
+
+          // For 2nd/3rd backups, skip cards without storage location set
+          if (backupNumber >= 2 && (!cardForm.storageType || !cardForm.deviceId)) continue;
 
           // Try allFiles first, then fall back to locally tracked card IDs
           let cardFile = allFiles?.find(f =>
@@ -517,7 +538,7 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
             notes,
           };
 
-          const cardBackup = cardFile ? getNextBackupNumber(cardFile) : 1;
+          const cardBackup = backupNumber; // Use the same backup number for all cards in this session
           const cardNow = new Date().toISOString();
           if (cardBackup === 1) {
             cardUpdates.final_generated_path = cardPath;
