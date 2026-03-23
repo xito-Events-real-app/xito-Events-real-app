@@ -387,9 +387,18 @@ export async function ensureVideoEditRows(): Promise<number> {
 
   for (let i = 0; i < newRows.length; i += 100) {
     const batch = newRows.slice(i, i + 100);
-    const { error } = await supabase.from("video_edit_tracker").insert(batch);
-    if (error) {
-      console.error("[VIDEO-EDIT] Insert error:", error);
+    try {
+      const { error } = await supabase.from("video_edit_tracker").insert(batch);
+      if (error) {
+        // Unique constraint violation = duplicates, safe to ignore
+        if (error.code === '23505') {
+          console.log("[VIDEO-EDIT] Skipped duplicate rows in batch");
+        } else {
+          console.error("[VIDEO-EDIT] Insert error:", error);
+        }
+      }
+    } catch (err) {
+      console.error("[VIDEO-EDIT] Insert batch error:", err);
     }
   }
 

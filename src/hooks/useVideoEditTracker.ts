@@ -51,7 +51,7 @@ export interface DisplayRow extends VideoEditRow {
 }
 
 function makeMergeKey(row: VideoEditRow): string {
-  return `${row.registeredDateTimeAD}||${row.eventName}`;
+  return `${row.registeredDateTimeAD}||${row.eventName}||${row.subEventName || ''}`;
 }
 
 export function useVideoEditTracker() {
@@ -166,7 +166,7 @@ export function useVideoEditTracker() {
         byKey[key].push(r);
       }
 
-      // Find mergeable pairs per key
+      // Find mergeable pairs per key (same subEventName)
       const mergeablePairs: Record<string, { fv: VideoEditRow; hl: VideoEditRow }> = {};
       for (const [key, group] of Object.entries(byKey)) {
         const fv = group.find(r => r.editType === 'Full Video');
@@ -185,9 +185,10 @@ export function useVideoEditTracker() {
           // Merge: create synthetic row from Full Video data
           processed.add(pair.fv.id);
           processed.add(pair.hl.id);
+          const subLabel = pair.fv.subEventName ? `${pair.fv.subEventName}: ` : '';
           displayRows.push({
             ...pair.fv,
-            editType: 'Full Video + Highlights',
+            editType: `${subLabel}Full Video + Highlights`,
             isMerged: true,
             mergedIds: [pair.fv.id, pair.hl.id],
             mergeKey: key,
