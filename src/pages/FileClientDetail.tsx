@@ -157,11 +157,13 @@ export default function FileClientDetail() {
     navigate(`/files?${params.toString()}`);
   };
 
+  const toTB = (gb: number) => gb >= 1024 ? `${(gb / 1024).toFixed(2)} TB` : `${gb.toFixed(1)} GB`;
+
   const summaryCards = [
-    { label: "Total Size", value: `${stats.totalSize.toFixed(1)} GB`, sub: `${files.length} total files`, icon: HardDrive, colorClass: "text-blue-400", bgClass: "bg-blue-500/15", onClick: undefined as (() => void) | undefined },
-    { label: "Photo Size", value: `${stats.photoSize.toFixed(1)} GB`, sub: `Photo files`, icon: Camera, colorClass: "text-purple-400", bgClass: "bg-purple-500/15", onClick: undefined },
-    { label: "Video Size", value: `${stats.videoSize.toFixed(1)} GB`, sub: `Video files`, icon: Video, colorClass: "text-amber-400", bgClass: "bg-amber-500/15", onClick: undefined },
-    { label: "Remaining", value: String(stats.remaining), sub: showOnlyRemaining ? "Showing filtered" : "files to copy", icon: Clock, colorClass: "text-red-400", bgClass: "bg-red-500/15", onClick: () => setShowOnlyRemaining(prev => !prev) },
+    { label: "Total Size", value: toTB(stats.totalSize), sub: `${files.length} total files`, extra: `📷 ${toTB(stats.photoSize)}  🎬 ${toTB(stats.videoSize)}`, icon: HardDrive, colorClass: "text-blue-400", bgClass: "bg-blue-500/15", onClick: undefined as (() => void) | undefined },
+    { label: "Photo Size", value: toTB(stats.photoSize), sub: `Photo files`, extra: undefined as string | undefined, icon: Camera, colorClass: "text-purple-400", bgClass: "bg-purple-500/15", onClick: undefined },
+    { label: "Video Size", value: toTB(stats.videoSize), sub: `Video files`, extra: undefined, icon: Video, colorClass: "text-amber-400", bgClass: "bg-amber-500/15", onClick: undefined },
+    { label: "Remaining", value: String(stats.remaining), sub: showOnlyRemaining ? "Showing filtered" : "files to copy", extra: `📷 ${stats.remainingPhoto}  🎬 ${stats.remainingVideo}`, icon: Clock, colorClass: "text-red-400", bgClass: "bg-red-500/15", onClick: () => setShowOnlyRemaining(prev => !prev) },
   ];
 
   return (
