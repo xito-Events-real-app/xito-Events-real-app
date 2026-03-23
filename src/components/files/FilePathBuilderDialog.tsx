@@ -489,6 +489,9 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
           const cardForm = cardForms[key];
           if (!cardForm) continue;
 
+          // For 2nd/3rd backups, skip cards without storage location set
+          if (backupNumber >= 2 && (!cardForm.storageType || !cardForm.deviceId)) continue;
+
           // Try allFiles first, then fall back to locally tracked card IDs
           let cardFile = allFiles?.find(f =>
             f.registered_date_time_ad === fileRecord.registered_date_time_ad &&
@@ -530,7 +533,7 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
             notes,
           };
 
-          const cardBackup = cardFile ? getNextBackupNumber(cardFile) : 1;
+          const cardBackup = backupNumber; // Use the same backup number for all cards in this session
           const cardNow = new Date().toISOString();
           if (cardBackup === 1) {
             cardUpdates.final_generated_path = cardPath;
