@@ -115,13 +115,22 @@ export default function FileClientDetail() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const stats = useMemo(() => {
-    const totalSize = files.reduce((s, f) => s + (Number(f.size_gb) || 0), 0);
+    const PHOTO_ROLES = new Set(["PB", "PG", "EP"]);
+    const VIDEO_ROLES = new Set(["VB", "VG", "EV", "DRONE", "FPV", "IPHONE"]);
+    const isPhotoRole = (f: FileRecord) => PHOTO_ROLES.has((f.freelancer_type || "").toUpperCase());
+    const isVideoRole = (f: FileRecord) => VIDEO_ROLES.has((f.freelancer_type || "").toUpperCase());
+    const gb = (f: FileRecord) => Number(f.size_gb) || 0;
+    const sumGB = (arr: FileRecord[]) => arr.reduce((s, f) => s + gb(f), 0);
+
+    const totalSize = sumGB(files);
     const remaining = files.filter(f => !f.final_generated_path).length;
     const doubleBackupDone = files.filter(f => !!f.backup_2_path).length;
     const doubleBackupPending = files.filter(f => f.final_generated_path && !f.backup_2_path).length;
-    const photoSize = files.filter(f => (f.category || "").toLowerCase().includes("photo")).reduce((s, f) => s + (Number(f.size_gb) || 0), 0);
-    const videoSize = files.filter(f => (f.category || "").toLowerCase().includes("video")).reduce((s, f) => s + (Number(f.size_gb) || 0), 0);
-    return { totalSize, remaining, doubleBackupDone, doubleBackupPending, photoSize, videoSize };
+    const photoSize = sumGB(files.filter(isPhotoRole));
+    const videoSize = sumGB(files.filter(isVideoRole));
+    const remainingPhoto = files.filter(f => !f.final_generated_path && isPhotoRole(f)).length;
+    const remainingVideo = files.filter(f => !f.final_generated_path && isVideoRole(f)).length;
+    return { totalSize, remaining, doubleBackupDone, doubleBackupPending, photoSize, videoSize, remainingPhoto, remainingVideo };
   }, [files]);
 
   const eventGroups = useMemo(() => {
@@ -148,11 +157,13 @@ export default function FileClientDetail() {
     navigate(`/files?${params.toString()}`);
   };
 
+  const toTB = (gb: number) => gb >= 1024 ? `${(gb / 1024).toFixed(2)} TB` : `${gb.toFixed(1)} GB`;
+
   const summaryCards = [
-    { label: "Total Size", value: `${stats.totalSize.toFixed(1)} GB`, sub: `${files.length} total files`, icon: HardDrive, colorClass: "text-blue-400", bgClass: "bg-blue-500/15", onClick: undefined as (() => void) | undefined },
-    { label: "Photo Size", value: `${stats.photoSize.toFixed(1)} GB`, sub: `Photo files`, icon: Camera, colorClass: "text-purple-400", bgClass: "bg-purple-500/15", onClick: undefined },
-    { label: "Video Size", value: `${stats.videoSize.toFixed(1)} GB`, sub: `Video files`, icon: Video, colorClass: "text-amber-400", bgClass: "bg-amber-500/15", onClick: undefined },
-    { label: "Remaining", value: String(stats.remaining), sub: showOnlyRemaining ? "Showing filtered" : "files to copy", icon: Clock, colorClass: "text-red-400", bgClass: "bg-red-500/15", onClick: () => setShowOnlyRemaining(prev => !prev) },
+    { label: "Total Size", value: toTB(stats.totalSize), sub: `${files.length} total files`, extra: `📷 ${toTB(stats.photoSize)}  🎬 ${toTB(stats.videoSize)}`, icon: HardDrive, colorClass: "text-blue-400", bgClass: "bg-blue-500/15", onClick: undefined as (() => void) | undefined },
+    { label: "Photo Size", value: toTB(stats.photoSize), sub: `Photo files`, extra: undefined as string | undefined, icon: Camera, colorClass: "text-purple-400", bgClass: "bg-purple-500/15", onClick: undefined },
+    { label: "Video Size", value: toTB(stats.videoSize), sub: `Video files`, extra: undefined, icon: Video, colorClass: "text-amber-400", bgClass: "bg-amber-500/15", onClick: undefined },
+    { label: "Remaining", value: String(stats.remaining), sub: showOnlyRemaining ? "Showing filtered" : "files to copy", extra: `📷 ${stats.remainingPhoto}  🎬 ${stats.remainingVideo}`, icon: Clock, colorClass: "text-red-400", bgClass: "bg-red-500/15", onClick: () => setShowOnlyRemaining(prev => !prev) },
   ];
 
   return (
@@ -195,6 +206,7 @@ export default function FileClientDetail() {
                       <p className={cn("text-xs uppercase tracking-wider font-semibold mb-1", c.colorClass)}>{c.label}</p>
                       <p className="text-2xl font-black tabular-nums leading-tight text-white">{c.value}</p>
                       <p className="text-xs text-slate-500 mt-0.5">{c.sub}</p>
+                      {c.extra && <p className="text-[10px] font-semibold text-slate-400 mt-0.5">{c.extra}</p>}
                     </div>
                   </CardContent>
                 </Card>
