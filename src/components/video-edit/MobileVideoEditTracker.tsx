@@ -133,8 +133,7 @@ export function MobileVideoEditTracker() {
                       onUpdateField={updateField}
                       onPushToStatus={pushToStatus}
                       editors={editors}
-                      actionLabel={stage.nextLabel}
-                      nextStatus={stage.nextStatus}
+                      currentStageKey={stage.key}
                     />
                   ))}
                   {(rowsByStatus[stage.key]?.length || 0) === 0 && (

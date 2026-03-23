@@ -238,8 +238,7 @@ export function DesktopVideoEditTracker() {
                   onUpdateField={updateField}
                   onPushToStatus={pushToStatus}
                   editors={editors}
-                  actionLabel={stage.nextLabel}
-                  nextStatus={stage.nextStatus}
+                  currentStageKey={stage.key}
                 />
               </TabsContent>
             ))}
