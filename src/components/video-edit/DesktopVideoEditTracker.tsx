@@ -1,13 +1,12 @@
 import { useState, useEffect } from "react";
-import { useVideoEditTracker, STAGES } from "@/hooks/useVideoEditTracker";
+import { useVideoEditTracker, STAGES, DisplayRow } from "@/hooks/useVideoEditTracker";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { Video, MessageSquare, Music, ExternalLink, ChevronDown, Loader2 } from "lucide-react";
-import { VideoEditRow } from "@/lib/video-edit-api";
+import { Video, MessageSquare, Music, ExternalLink, ChevronDown, Loader2, Ungroup, Group } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 const URGENCY_COLORS: Record<string, string> = {
@@ -54,12 +53,16 @@ function VideoEditTable({
   rows,
   onUpdateField,
   onPushToStatus,
+  onSplit,
+  onMerge,
   editors,
   currentStageKey,
 }: {
-  rows: VideoEditRow[];
-  onUpdateField: (id: string, field: string, value: string) => void;
-  onPushToStatus?: (id: string, status: string) => void;
+  rows: DisplayRow[];
+  onUpdateField: (id: string, field: string, value: string, mergedIds?: string[]) => void;
+  onPushToStatus?: (id: string, status: string, mergedIds?: string[]) => void;
+  onSplit?: (mergeKey: string) => void;
+  onMerge?: (mergeKey: string) => void;
   editors: { name: string; isVideoEditor: boolean }[];
   currentStageKey: string;
 }) {
@@ -92,7 +95,7 @@ function VideoEditTable({
             <TableRow key={row.id} className="hover:bg-muted/30">
               <TableCell className="text-center text-muted-foreground text-xs font-mono">{idx + 1}</TableCell>
               <TableCell className="text-center">
-                <Select value={row.urgency || "0"} onValueChange={(v) => onUpdateField(row.id, "urgency", v)}>
+                <Select value={row.urgency || "0"} onValueChange={(v) => onUpdateField(row.id, "urgency", v, row.mergedIds)}>
                   <SelectTrigger className="w-16 h-8 p-0 border-0 bg-transparent justify-center">
                     <UrgencyBadge value={row.urgency || "0"} />
                   </SelectTrigger>
@@ -121,12 +124,40 @@ function VideoEditTable({
                 )}
               </TableCell>
               <TableCell>
-                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-accent/10 text-accent text-xs font-medium">
-                  {row.editType}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-accent/10 text-accent text-xs font-medium">
+                    {row.editType}
+                  </span>
+                  {row.isMerged && row.mergeKey && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => onSplit?.(row.mergeKey!)}
+                          className="inline-flex items-center justify-center w-6 h-6 rounded hover:bg-muted transition-colors"
+                        >
+                          <Ungroup className="w-3.5 h-3.5 text-muted-foreground" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent><p className="text-xs">Split into separate rows</p></TooltipContent>
+                    </Tooltip>
+                  )}
+                  {!row.isMerged && row.canMerge && row.mergeKey && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => onMerge?.(row.mergeKey!)}
+                          className="inline-flex items-center justify-center w-6 h-6 rounded hover:bg-muted transition-colors"
+                        >
+                          <Group className="w-3.5 h-3.5 text-muted-foreground" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent><p className="text-xs">Merge with partner</p></TooltipContent>
+                    </Tooltip>
+                  )}
+                </div>
               </TableCell>
               <TableCell>
-                <Select value={row.editor || "unassigned"} onValueChange={(v) => onUpdateField(row.id, "editor", v === "unassigned" ? "" : v)}>
+                <Select value={row.editor || "unassigned"} onValueChange={(v) => onUpdateField(row.id, "editor", v === "unassigned" ? "" : v, row.mergedIds)}>
                   <SelectTrigger className="w-36 h-8 text-xs">
                     <SelectValue placeholder="Assign..." />
                   </SelectTrigger>
@@ -163,7 +194,7 @@ function VideoEditTable({
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     {STAGES.filter(s => s.key !== currentStageKey).map(s => (
-                      <DropdownMenuItem key={s.key} onClick={() => onPushToStatus?.(row.id, s.key)}>
+                      <DropdownMenuItem key={s.key} onClick={() => onPushToStatus?.(row.id, s.key, row.mergedIds)}>
                         {s.label}
                       </DropdownMenuItem>
                     ))}
@@ -179,7 +210,7 @@ function VideoEditTable({
 }
 
 export function DesktopVideoEditTracker() {
-  const { rowsByStatus, isLoading, updateField, pushToStatus } = useVideoEditTracker();
+  const { rowsByStatus, isLoading, updateField, pushToStatus, splitRow, mergeRow } = useVideoEditTracker();
   const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean }[]>([]);
 
   useEffect(() => {
@@ -237,6 +268,8 @@ export function DesktopVideoEditTracker() {
                   rows={rowsByStatus[stage.key] || []}
                   onUpdateField={updateField}
                   onPushToStatus={pushToStatus}
+                  onSplit={splitRow}
+                  onMerge={mergeRow}
                   editors={editors}
                   currentStageKey={stage.key}
                 />
