@@ -1,37 +1,34 @@
 
 
-## Add Photo/Video Size Breakdown + TB Display to Dashboard Cards
+## Enhance Event Sections in Client File Detail Page
 
-### What changes
+### Changes to `src/pages/FileClientDetail.tsx`
 
-**1. `src/hooks/useFilesDashboardData.ts` — Expand `DashboardStats`**
+**1. Event header — add per-event stats**
 
-Add photo/video size fields for each card category. Use `freelancer_type` to classify:
-- PHOTO roles: `PB`, `PG`, `EP`
-- VIDEO roles: `VB`, `VG`, `EV`, `DRONE`, `FPV`, `IPHONE`
+In each event header bar, after the date badge and file count, add:
+- `📷 X.X GB (DeviceName)` — total photo size + device name from `backup_1_device_name`
+- `🎬 X.X GB (DeviceName)` — total video size + device name
+- `Remaining: N` — count of files without `final_generated_path`
 
-New stats fields:
-- `todayPhotoGB`, `todayVideoGB`
-- `totalPhotoGB`, `totalVideoGB`
-- `pendingPhotoCount`, `pendingVideoCount`
-- `backupDonePhotoGB`, `backupDoneVideoGB`, `backupRemainingPhotoGB`, `backupRemainingVideoGB`
+Compute these from the group's files using the same PHOTO/VIDEO role sets.
 
-All existing GB fields converted to display as TB (divide by 1024).
+**2. Sort files: photos first, then videos, grouped by name**
 
-**2. `src/components/files/FilesDashboard.tsx` — Update card display**
+Sort each group's files array:
+1. Photo roles first (PB, PG, EP), then video roles (VB, VG, EV, DRONE, FPV, IPHONE)
+2. Within each category, sort by `freelancer_name` so same names are sequential
 
-- `getCardDisplay()` returns additional lines for photo/video sizes in TB
-- Each card shows: main count → total size in TB → photo size in TB → video size in TB
-- Layout: keep primary number large, add a compact 2-line photo/video breakdown below the secondary text
+**3. Different row background for photo vs video**
 
-Example card layout:
-```text
-Today's Transfers
-42          1.2 TB
-📷 0.5 TB  🎬 0.7 TB
-```
+- Photo rows: `bg-purple-500/5` (subtle purple tint)
+- Video rows: `bg-amber-500/5` (subtle amber tint)
+- Applied to the `TableRow` className
+
+### Technical detail
+
+For device name in brackets, extract the unique `backup_1_device_name` values per category (photo/video) within each event group. If multiple devices, show comma-separated.
 
 ### Files changed
-1. `src/hooks/useFilesDashboardData.ts` — compute photo/video sizes per category
-2. `src/components/files/FilesDashboard.tsx` — render photo/video breakdown in cards, display TB
+1. `src/pages/FileClientDetail.tsx` — event header stats, sort order, row backgrounds
 
