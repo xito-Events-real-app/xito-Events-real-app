@@ -83,7 +83,7 @@ function VideoEditTable({
         <TableBody>
           {rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={actionLabel ? 10 : 9} className="text-center py-12 text-muted-foreground">
+              <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                 No rows found
               </TableCell>
             </TableRow>
