@@ -154,19 +154,22 @@ function VideoEditTable({
               <TableCell className="text-center">
                 <SongsCell songs={row.songs} />
               </TableCell>
-              {actionLabel && nextStatus && (
-                <TableCell className="text-center">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs gap-1"
-                    onClick={() => onPushToStatus?.(row.id, nextStatus)}
-                  >
-                    {actionLabel}
-                    <ArrowRight className="w-3 h-3" />
-                  </Button>
-                </TableCell>
-              )}
+              <TableCell className="text-center">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
+                      Move to <ChevronDown className="w-3 h-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {STAGES.filter(s => s.key !== currentStageKey).map(s => (
+                      <DropdownMenuItem key={s.key} onClick={() => onPushToStatus?.(row.id, s.key)}>
+                        {s.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
