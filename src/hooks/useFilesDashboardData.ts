@@ -5,12 +5,27 @@ import { FileRecord } from "@/lib/files-api";
 export interface DashboardStats {
   todayCopied: number;
   todayCopiedGB: number;
+  todayPhotoGB: number;
+  todayVideoGB: number;
   totalCopied: number;
   totalCopiedGB: number;
+  totalPhotoGB: number;
+  totalVideoGB: number;
   filesPending: number;
+  pendingPhotoCount: number;
+  pendingVideoCount: number;
   doubleBackupDone: number;
   doubleBackupRemaining: number;
+  backupDonePhotoGB: number;
+  backupDoneVideoGB: number;
+  backupRemainingPhotoGB: number;
+  backupRemainingVideoGB: number;
 }
+
+const PHOTO_ROLES = new Set(["PB", "PG", "EP"]);
+const VIDEO_ROLES = new Set(["VB", "VG", "EV", "DRONE", "FPV", "IPHONE"]);
+function isPhoto(f: FileRecord) { return PHOTO_ROLES.has((f.freelancer_type || "").toUpperCase()); }
+function isVideo(f: FileRecord) { return VIDEO_ROLES.has((f.freelancer_type || "").toUpperCase()); }
 
 export interface ActivityItem {
   id: string;
