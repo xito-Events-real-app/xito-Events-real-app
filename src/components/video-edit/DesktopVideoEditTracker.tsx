@@ -77,7 +77,7 @@ function VideoEditTable({
             <TableHead>Editor</TableHead>
             <TableHead className="w-12 text-center">Notes</TableHead>
             <TableHead className="w-12 text-center">Songs</TableHead>
-            {actionLabel && <TableHead className="w-32 text-center">Action</TableHead>}
+            <TableHead className="w-32 text-center">Action</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
