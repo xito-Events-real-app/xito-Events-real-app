@@ -229,6 +229,12 @@ export function FilesDashboard() {
                       </p>
                     )}
                   </div>
+                  {(display.photoInfo || display.videoInfo) && (
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {display.photoInfo && <span className="text-[10px] font-semibold text-[hsl(220,15%,50%)]">{display.photoInfo}</span>}
+                      {display.videoInfo && <span className="text-[10px] font-semibold text-[hsl(220,15%,50%)]">{display.videoInfo}</span>}
+                    </div>
+                  )}
                 </div>
                 <TrendingUp className="w-4 h-4" style={{ color: card.color, opacity: 0.4 }} />
               </CardContent>

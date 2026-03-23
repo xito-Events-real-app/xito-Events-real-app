@@ -89,20 +89,34 @@ export function useFilesDashboardData() {
   }, [fetchAll]);
 
   const stats = useMemo<DashboardStats>(() => {
+    const gb = (f: FileRecord) => Number(f.size_gb) || 0;
+    const sumGB = (arr: FileRecord[]) => arr.reduce((s, f) => s + gb(f), 0);
+
     const todayFiles = files.filter(f => f.backup_1_recorded_at && isToday(f.backup_1_recorded_at));
-    const todayCopied = todayFiles.length;
-    const todayCopiedGB = todayFiles.reduce((sum, f) => sum + (Number(f.size_gb) || 0), 0);
-
     const copiedFiles = files.filter(f => !!f.final_generated_path);
-    const totalCopied = copiedFiles.length;
-    const totalCopiedGB = copiedFiles.reduce((sum, f) => sum + (Number(f.size_gb) || 0), 0);
+    const pendingFiles = files.filter(f => !f.final_generated_path);
+    const backupDoneFiles = files.filter(f => !!f.backup_2_path);
+    const backupRemainingFiles = files.filter(f => f.final_generated_path && !f.backup_2_path);
 
-    const filesPending = files.filter(f => !f.final_generated_path).length;
-
-    const doubleBackupDone = files.filter(f => !!f.backup_2_path).length;
-    const doubleBackupRemaining = files.filter(f => f.final_generated_path && !f.backup_2_path).length;
-
-    return { todayCopied, todayCopiedGB, totalCopied, totalCopiedGB, filesPending, doubleBackupDone, doubleBackupRemaining };
+    return {
+      todayCopied: todayFiles.length,
+      todayCopiedGB: sumGB(todayFiles),
+      todayPhotoGB: sumGB(todayFiles.filter(isPhoto)),
+      todayVideoGB: sumGB(todayFiles.filter(isVideo)),
+      totalCopied: copiedFiles.length,
+      totalCopiedGB: sumGB(copiedFiles),
+      totalPhotoGB: sumGB(copiedFiles.filter(isPhoto)),
+      totalVideoGB: sumGB(copiedFiles.filter(isVideo)),
+      filesPending: pendingFiles.length,
+      pendingPhotoCount: pendingFiles.filter(isPhoto).length,
+      pendingVideoCount: pendingFiles.filter(isVideo).length,
+      doubleBackupDone: backupDoneFiles.length,
+      doubleBackupRemaining: backupRemainingFiles.length,
+      backupDonePhotoGB: sumGB(backupDoneFiles.filter(isPhoto)),
+      backupDoneVideoGB: sumGB(backupDoneFiles.filter(isVideo)),
+      backupRemainingPhotoGB: sumGB(backupRemainingFiles.filter(isPhoto)),
+      backupRemainingVideoGB: sumGB(backupRemainingFiles.filter(isVideo)),
+    };
   }, [files]);
 
   const filteredFiles = useMemo(() => {
