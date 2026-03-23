@@ -114,9 +114,10 @@ export default function FileClientDetail() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  const PHOTO_ROLES = useMemo(() => new Set(["PB", "PG", "EP"]), []);
+  const VIDEO_ROLES = useMemo(() => new Set(["VB", "VG", "EV", "DRONE", "FPV", "IPHONE"]), []);
+
   const stats = useMemo(() => {
-    const PHOTO_ROLES = new Set(["PB", "PG", "EP"]);
-    const VIDEO_ROLES = new Set(["VB", "VG", "EV", "DRONE", "FPV", "IPHONE"]);
     const isPhotoRole = (f: FileRecord) => PHOTO_ROLES.has((f.freelancer_type || "").toUpperCase());
     const isVideoRole = (f: FileRecord) => VIDEO_ROLES.has((f.freelancer_type || "").toUpperCase());
     const gb = (f: FileRecord) => Number(f.size_gb) || 0;
@@ -131,7 +132,7 @@ export default function FileClientDetail() {
     const remainingPhoto = files.filter(f => !f.final_generated_path && isPhotoRole(f)).length;
     const remainingVideo = files.filter(f => !f.final_generated_path && isVideoRole(f)).length;
     return { totalSize, remaining, doubleBackupDone, doubleBackupPending, photoSize, videoSize, remainingPhoto, remainingVideo };
-  }, [files]);
+  }, [files, PHOTO_ROLES, VIDEO_ROLES]);
 
   const eventGroups = useMemo(() => {
     const source = showOnlyRemaining ? files.filter(f => !f.final_generated_path) : files;
@@ -143,8 +144,19 @@ export default function FileClientDetail() {
       }
       map.get(key)!.files.push(f);
     }
+    // Sort files within each group: photos first, then videos, then by name
+    for (const group of map.values()) {
+      group.files.sort((a, b) => {
+        const aType = (a.freelancer_type || "").toUpperCase();
+        const bType = (b.freelancer_type || "").toUpperCase();
+        const aIsPhoto = PHOTO_ROLES.has(aType);
+        const bIsPhoto = PHOTO_ROLES.has(bType);
+        if (aIsPhoto !== bIsPhoto) return aIsPhoto ? -1 : 1;
+        return (a.freelancer_name || "").localeCompare(b.freelancer_name || "");
+      });
+    }
     return Array.from(map.values());
-  }, [files, showOnlyRemaining]);
+  }, [files, showOnlyRemaining, PHOTO_ROLES]);
 
   const handleSetPath = (f: FileRecord) => {
     const params = new URLSearchParams({
@@ -225,16 +237,38 @@ export default function FileClientDetail() {
             )}
 
             {/* Event Sections — Table Layout */}
-            {eventGroups.map((group, gi) => (
+            {eventGroups.map((group, gi) => {
+              const gb = (f: FileRecord) => Number(f.size_gb) || 0;
+              const photoFiles = group.files.filter(f => PHOTO_ROLES.has((f.freelancer_type || "").toUpperCase()));
+              const videoFiles = group.files.filter(f => VIDEO_ROLES.has((f.freelancer_type || "").toUpperCase()));
+              const photoGB = photoFiles.reduce((s, f) => s + gb(f), 0);
+              const videoGB = videoFiles.reduce((s, f) => s + gb(f), 0);
+              const remaining = group.files.filter(f => !f.final_generated_path).length;
+              const photoDevices = [...new Set(photoFiles.map(f => f.backup_1_device_name).filter(Boolean))].join(", ");
+              const videoDevices = [...new Set(videoFiles.map(f => f.backup_1_device_name).filter(Boolean))].join(", ");
+
+              return (
               <div key={gi} className="space-y-3">
-                {/* Event header with colored highlight */}
-                <div className="bg-blue-900/40 border-l-4 border-blue-500 px-4 py-2.5 rounded-r-lg flex items-center gap-3">
+                <div className="bg-blue-900/40 border-l-4 border-blue-500 px-4 py-2.5 rounded-r-lg flex flex-wrap items-center gap-3">
                   <FileText className="w-5 h-5 text-blue-400 shrink-0" />
                   <h3 className="text-base font-bold text-white">{group.eventName || "Event"}</h3>
                   <Badge className="text-xs bg-slate-800 text-slate-300 border-slate-700 px-3 py-1">
                     {formatNepaliDate(group.year, group.month, group.day)}
                   </Badge>
-                  <span className="text-xs text-slate-400 ml-auto">{group.files.length} files</span>
+                  <span className="text-xs text-slate-400">{group.files.length} files</span>
+                  {photoFiles.length > 0 && (
+                    <span className="text-xs font-semibold text-purple-400">
+                      📷 {toTB(photoGB)}{photoDevices ? ` (${photoDevices})` : ""}
+                    </span>
+                  )}
+                  {videoFiles.length > 0 && (
+                    <span className="text-xs font-semibold text-amber-400">
+                      🎬 {toTB(videoGB)}{videoDevices ? ` (${videoDevices})` : ""}
+                    </span>
+                  )}
+                  {remaining > 0 && (
+                    <span className="text-xs font-bold text-red-400 ml-auto">Remaining: {remaining}</span>
+                  )}
                 </div>
 
                 <Card className="border-slate-800 bg-slate-900 overflow-hidden">
@@ -258,8 +292,10 @@ export default function FileClientDetail() {
                         {group.files.map(f => {
                           const copied = !!f.final_generated_path;
                           const hasB2 = !!f.backup_2_path;
+                          const isPhoto = PHOTO_ROLES.has((f.freelancer_type || "").toUpperCase());
+                          const rowBg = isPhoto ? "bg-purple-500/5" : "bg-amber-500/5";
                           return (
-                            <TableRow key={f.id} className="border-slate-800/50 hover:bg-slate-800/30">
+                            <TableRow key={f.id} className={cn("border-slate-800/50 hover:bg-slate-800/30", rowBg)}>
                               <TableCell className="py-3">
                                 <span className="text-sm font-semibold text-white truncate block">{f.freelancer_name || "-"}</span>
                               </TableCell>
@@ -319,7 +355,8 @@ export default function FileClientDetail() {
                   </div>
                 </Card>
               </div>
-            ))}
+              );
+            })}
 
             {files.length === 0 && (
               <div className="text-center py-20 text-slate-500">
