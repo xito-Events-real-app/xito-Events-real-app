@@ -4,8 +4,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { Video, MessageSquare, Music, ExternalLink, ArrowRight, Loader2 } from "lucide-react";
+import { Video, MessageSquare, Music, ExternalLink, ChevronDown, Loader2 } from "lucide-react";
 import { VideoEditRow } from "@/lib/video-edit-api";
 import { supabase } from "@/integrations/supabase/client";
 
