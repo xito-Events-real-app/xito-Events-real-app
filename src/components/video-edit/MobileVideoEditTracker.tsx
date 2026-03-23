@@ -1,9 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useVideoEditTracker, STAGES, DisplayRow } from "@/hooks/useVideoEditTracker";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Video, Loader2, Ungroup, Group } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Video, Loader2, Ungroup, Group, X, Filter } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { adToBS, nepaliMonthsEnglish, getBSYearsRange } from "@/lib/nepali-date";
 
 const URGENCY_COLORS: Record<string, string> = {
   "1": "bg-muted text-muted-foreground",
@@ -13,6 +16,36 @@ const URGENCY_COLORS: Record<string, string> = {
   "5": "bg-red-100 text-red-800",
 };
 
+function getRowBSDate(row: DisplayRow): { year: number; month: number } | null {
+  if (!row.eventDateAD) return null;
+  try {
+    const d = new Date(row.eventDateAD);
+    if (isNaN(d.getTime())) return null;
+    const bs = adToBS(d);
+    return { year: bs.year, month: bs.month };
+  } catch { return null; }
+}
+
+function applyFilters(
+  rows: DisplayRow[],
+  filterClient: string | null,
+  filterEditType: string | null,
+  filterYear: number | null,
+  filterMonth: number | null,
+): DisplayRow[] {
+  return rows.filter(row => {
+    if (filterClient && row.clientName !== filterClient) return false;
+    if (filterEditType && row.editType !== filterEditType) return false;
+    if (filterYear || filterMonth) {
+      const bs = getRowBSDate(row);
+      if (!bs) return false;
+      if (filterYear && bs.year !== filterYear) return false;
+      if (filterMonth && bs.month !== filterMonth) return false;
+    }
+    return true;
+  });
+}
+
 function VideoCard({
   row,
   index,
@@ -20,6 +53,8 @@ function VideoCard({
   onPushToStatus,
   onSplit,
   onMerge,
+  onClickClient,
+  onClickEditType,
   editors,
   currentStageKey,
 }: {
@@ -29,6 +64,8 @@ function VideoCard({
   onPushToStatus?: (id: string, status: string, mergedIds?: string[]) => void;
   onSplit?: (mergeKey: string) => void;
   onMerge?: (mergeKey: string) => void;
+  onClickClient?: (name: string) => void;
+  onClickEditType?: (type: string) => void;
   editors: { name: string; isVideoEditor: boolean }[];
   currentStageKey: string;
 }) {
@@ -46,26 +83,25 @@ function VideoCard({
               {row.priority}
             </span>
           </div>
-          <p className="font-semibold text-sm truncate">{row.clientName}</p>
+          <button onClick={() => onClickClient?.(row.clientName)} className="font-semibold text-sm truncate hover:text-primary hover:underline text-left">
+            {row.clientName}
+          </button>
           <p className="text-xs text-muted-foreground truncate">{row.subEventName || row.eventName}</p>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-accent/10 text-accent text-xs font-medium">
+          <button
+            onClick={() => onClickEditType?.(row.editType)}
+            className="inline-flex items-center px-2 py-0.5 rounded-md bg-accent/10 text-accent text-xs font-medium hover:bg-accent/20"
+          >
             {row.editType}
-          </span>
+          </button>
           {row.isMerged && row.mergeKey && (
-            <button
-              onClick={() => onSplit?.(row.mergeKey!)}
-              className="inline-flex items-center justify-center w-6 h-6 rounded hover:bg-muted transition-colors"
-            >
+            <button onClick={() => onSplit?.(row.mergeKey!)} className="inline-flex items-center justify-center w-6 h-6 rounded hover:bg-muted transition-colors">
               <Ungroup className="w-3.5 h-3.5 text-muted-foreground" />
             </button>
           )}
           {!row.isMerged && row.canMerge && row.mergeKey && (
-            <button
-              onClick={() => onMerge?.(row.mergeKey!)}
-              className="inline-flex items-center justify-center w-6 h-6 rounded hover:bg-muted transition-colors"
-            >
+            <button onClick={() => onMerge?.(row.mergeKey!)} className="inline-flex items-center justify-center w-6 h-6 rounded hover:bg-muted transition-colors">
               <Group className="w-3.5 h-3.5 text-muted-foreground" />
             </button>
           )}
@@ -106,6 +142,13 @@ function VideoCard({
 export function MobileVideoEditTracker() {
   const { rowsByStatus, isLoading, updateField, pushToStatus, splitRow, mergeRow } = useVideoEditTracker();
   const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean }[]>([]);
+  const [filterClient, setFilterClient] = useState<string | null>(null);
+  const [filterEditType, setFilterEditType] = useState<string | null>(null);
+  const [filterYear, setFilterYear] = useState<number | null>(null);
+  const [filterMonth, setFilterMonth] = useState<number | null>(null);
+
+  const hasFilters = !!(filterClient || filterEditType || filterYear || filterMonth);
+  const years = getBSYearsRange(-2, 3);
 
   useEffect(() => {
     (async () => {
@@ -115,6 +158,32 @@ export function MobileVideoEditTracker() {
       }
     })();
   }, []);
+
+  const clientPipelineStats = useMemo(() => {
+    if (!filterClient) return null;
+    const stats: Record<string, number> = {};
+    for (const stage of STAGES) {
+      stats[stage.key] = (rowsByStatus[stage.key] || []).filter(r => r.clientName === filterClient).length;
+    }
+    return stats;
+  }, [filterClient, rowsByStatus]);
+
+  const filteredRowsByStatus = useMemo(() => {
+    const result: Record<string, DisplayRow[]> = {};
+    for (const stage of STAGES) {
+      result[stage.key] = applyFilters(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth);
+    }
+    return result;
+  }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth]);
+
+  const allFilteredRows = useMemo(() => {
+    if (!hasFilters) return [];
+    const combined: DisplayRow[] = [];
+    for (const stage of STAGES) combined.push(...(filteredRowsByStatus[stage.key] || []));
+    return combined;
+  }, [filteredRowsByStatus, hasFilters]);
+
+  const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); };
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -135,18 +204,67 @@ export function MobileVideoEditTracker() {
         ) : (
           <Tabs defaultValue="QUEUE">
             <div className="overflow-x-auto -mx-4 px-4">
-              <TabsList className="w-max mb-4">
+              <TabsList className="w-max mb-2">
                 {STAGES.map(stage => (
                   <TabsTrigger key={stage.key} value={stage.key} className="text-xs whitespace-nowrap">
-                    {stage.label} ({rowsByStatus[stage.key]?.length || 0})
+                    {stage.label} ({filteredRowsByStatus[stage.key]?.length || 0})
                   </TabsTrigger>
                 ))}
+                {hasFilters && (
+                  <TabsTrigger value="ALL" className="text-xs whitespace-nowrap">
+                    All ({allFilteredRows.length})
+                  </TabsTrigger>
+                )}
               </TabsList>
             </div>
+
+            {/* Filter Bar */}
+            <div className="mb-3 rounded-lg border bg-card p-2.5 space-y-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Filter className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                {filterClient && (
+                  <Badge variant="secondary" className="gap-1 text-[10px] cursor-pointer" onClick={() => setFilterClient(null)}>
+                    {filterClient} <X className="w-2.5 h-2.5" />
+                  </Badge>
+                )}
+                {filterEditType && (
+                  <Badge variant="secondary" className="gap-1 text-[10px] cursor-pointer" onClick={() => setFilterEditType(null)}>
+                    {filterEditType} <X className="w-2.5 h-2.5" />
+                  </Badge>
+                )}
+                <Select value={filterYear?.toString() || "all"} onValueChange={(v) => setFilterYear(v === "all" ? null : Number(v))}>
+                  <SelectTrigger className="w-20 h-6 text-[10px]"><SelectValue placeholder="Year" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {years.map(y => <SelectItem key={y} value={y.toString()}>{y}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={filterMonth?.toString() || "all"} onValueChange={(v) => setFilterMonth(v === "all" ? null : Number(v))}>
+                  <SelectTrigger className="w-20 h-6 text-[10px]"><SelectValue placeholder="Month" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {nepaliMonthsEnglish.map((m, i) => <SelectItem key={i} value={(i + 1).toString()}>{m}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {hasFilters && (
+                  <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={clearAll}>Clear</Button>
+                )}
+              </div>
+              {clientPipelineStats && (
+                <div className="flex items-center gap-1 flex-wrap text-[10px] text-muted-foreground border-t pt-1.5">
+                  {STAGES.filter(s => clientPipelineStats[s.key] > 0).map(s => (
+                    <span key={s.key} className="text-foreground font-medium">
+                      {s.label}: {clientPipelineStats[s.key]}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {STAGES.map(stage => (
               <TabsContent key={stage.key} value={stage.key}>
                 <div className="space-y-3">
-                  {(rowsByStatus[stage.key] || []).map((row, i) => (
+                  {(filteredRowsByStatus[stage.key] || []).map((row, i) => (
                     <VideoCard
                       key={row.id}
                       row={row}
@@ -155,16 +273,42 @@ export function MobileVideoEditTracker() {
                       onPushToStatus={pushToStatus}
                       onSplit={splitRow}
                       onMerge={mergeRow}
+                      onClickClient={(name) => setFilterClient(prev => prev === name ? null : name)}
+                      onClickEditType={(type) => setFilterEditType(prev => prev === type ? null : type)}
                       editors={editors}
                       currentStageKey={stage.key}
                     />
                   ))}
-                  {(rowsByStatus[stage.key]?.length || 0) === 0 && (
+                  {(filteredRowsByStatus[stage.key]?.length || 0) === 0 && (
                     <p className="text-center text-sm text-muted-foreground py-8">No items in {stage.label}</p>
                   )}
                 </div>
               </TabsContent>
             ))}
+            {hasFilters && (
+              <TabsContent value="ALL">
+                <div className="space-y-3">
+                  {allFilteredRows.map((row, i) => (
+                    <VideoCard
+                      key={row.id}
+                      row={row}
+                      index={i}
+                      onUpdateField={updateField}
+                      onPushToStatus={pushToStatus}
+                      onSplit={splitRow}
+                      onMerge={mergeRow}
+                      onClickClient={(name) => setFilterClient(prev => prev === name ? null : name)}
+                      onClickEditType={(type) => setFilterEditType(prev => prev === type ? null : type)}
+                      editors={editors}
+                      currentStageKey="ALL"
+                    />
+                  ))}
+                  {allFilteredRows.length === 0 && (
+                    <p className="text-center text-sm text-muted-foreground py-8">No items match filters</p>
+                  )}
+                </div>
+              </TabsContent>
+            )}
           </Tabs>
         )}
       </div>

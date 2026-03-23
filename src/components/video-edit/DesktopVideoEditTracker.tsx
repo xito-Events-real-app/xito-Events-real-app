@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useVideoEditTracker, STAGES, DisplayRow } from "@/hooks/useVideoEditTracker";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -6,8 +6,10 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { Video, MessageSquare, Music, ExternalLink, ChevronDown, Loader2, Ungroup, Group } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Video, MessageSquare, Music, ExternalLink, ChevronDown, Loader2, Ungroup, Group, X, Filter } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { adToBS, nepaliMonthsEnglish, getBSYearsRange } from "@/lib/nepali-date";
 
 const URGENCY_COLORS: Record<string, string> = {
   "1": "bg-muted text-muted-foreground",
@@ -49,12 +51,24 @@ function SongsCell({ songs }: { songs: string }) {
   );
 }
 
+function getRowBSDate(row: DisplayRow): { year: number; month: number } | null {
+  if (!row.eventDateAD) return null;
+  try {
+    const d = new Date(row.eventDateAD);
+    if (isNaN(d.getTime())) return null;
+    const bs = adToBS(d);
+    return { year: bs.year, month: bs.month };
+  } catch { return null; }
+}
+
 function VideoEditTable({
   rows,
   onUpdateField,
   onPushToStatus,
   onSplit,
   onMerge,
+  onClickClient,
+  onClickEditType,
   editors,
   currentStageKey,
 }: {
@@ -63,6 +77,8 @@ function VideoEditTable({
   onPushToStatus?: (id: string, status: string, mergedIds?: string[]) => void;
   onSplit?: (mergeKey: string) => void;
   onMerge?: (mergeKey: string) => void;
+  onClickClient?: (name: string) => void;
+  onClickEditType?: (type: string) => void;
   editors: { name: string; isVideoEditor: boolean }[];
   currentStageKey: string;
 }) {
@@ -116,7 +132,14 @@ function VideoEditTable({
                   {row.priority}
                 </span>
               </TableCell>
-              <TableCell className="font-medium text-sm">{row.clientName}</TableCell>
+              <TableCell>
+                <button
+                  onClick={() => onClickClient?.(row.clientName)}
+                  className="font-medium text-sm hover:text-primary hover:underline transition-colors text-left"
+                >
+                  {row.clientName}
+                </button>
+              </TableCell>
               <TableCell>
                 <div className="text-sm">{row.subEventName || row.eventName}</div>
                 {row.subEventName && (
@@ -125,9 +148,12 @@ function VideoEditTable({
               </TableCell>
               <TableCell>
                 <div className="flex items-center gap-1.5">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-accent/10 text-accent text-xs font-medium">
+                  <button
+                    onClick={() => onClickEditType?.(row.editType)}
+                    className="inline-flex items-center px-2 py-0.5 rounded-md bg-accent/10 text-accent text-xs font-medium hover:bg-accent/20 transition-colors"
+                  >
                     {row.editType}
-                  </span>
+                  </button>
                   {row.isMerged && row.mergeKey && (
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -209,9 +235,35 @@ function VideoEditTable({
   );
 }
 
+function applyFilters(
+  rows: DisplayRow[],
+  filterClient: string | null,
+  filterEditType: string | null,
+  filterYear: number | null,
+  filterMonth: number | null,
+): DisplayRow[] {
+  return rows.filter(row => {
+    if (filterClient && row.clientName !== filterClient) return false;
+    if (filterEditType && row.editType !== filterEditType) return false;
+    if (filterYear || filterMonth) {
+      const bs = getRowBSDate(row);
+      if (!bs) return false;
+      if (filterYear && bs.year !== filterYear) return false;
+      if (filterMonth && bs.month !== filterMonth) return false;
+    }
+    return true;
+  });
+}
+
 export function DesktopVideoEditTracker() {
-  const { rowsByStatus, isLoading, updateField, pushToStatus, splitRow, mergeRow } = useVideoEditTracker();
+  const { rowsByStatus, allRows, isLoading, updateField, pushToStatus, splitRow, mergeRow } = useVideoEditTracker();
   const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean }[]>([]);
+  const [filterClient, setFilterClient] = useState<string | null>(null);
+  const [filterEditType, setFilterEditType] = useState<string | null>(null);
+  const [filterYear, setFilterYear] = useState<number | null>(null);
+  const [filterMonth, setFilterMonth] = useState<number | null>(null);
+
+  const hasFilters = !!(filterClient || filterEditType || filterYear || filterMonth);
 
   useEffect(() => {
     (async () => {
@@ -226,7 +278,41 @@ export function DesktopVideoEditTracker() {
     })();
   }, []);
 
+  const years = getBSYearsRange(-2, 3);
+
+  // Cross-pipeline stats for client filter
+  const clientPipelineStats = useMemo(() => {
+    if (!filterClient) return null;
+    const stats: Record<string, number> = {};
+    for (const stage of STAGES) {
+      const count = (rowsByStatus[stage.key] || []).filter(r => r.clientName === filterClient).length;
+      stats[stage.key] = count;
+    }
+    return stats;
+  }, [filterClient, rowsByStatus]);
+
+  // Filtered rows per stage
+  const filteredRowsByStatus = useMemo(() => {
+    const result: Record<string, DisplayRow[]> = {};
+    for (const stage of STAGES) {
+      result[stage.key] = applyFilters(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth);
+    }
+    return result;
+  }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth]);
+
+  // "All" tab rows - combined from all stages when filters active
+  const allFilteredRows = useMemo(() => {
+    if (!hasFilters) return [];
+    const combined: DisplayRow[] = [];
+    for (const stage of STAGES) {
+      const stageRows = filteredRowsByStatus[stage.key] || [];
+      combined.push(...stageRows.map(r => ({ ...r, _stageName: stage.label } as any)));
+    }
+    return combined;
+  }, [filteredRowsByStatus, hasFilters]);
+
   const totalCount = STAGES.reduce((sum, s) => sum + (rowsByStatus[s.key]?.length || 0), 0);
+  const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); };
 
   return (
     <div className="min-h-screen bg-background">
@@ -254,27 +340,94 @@ export function DesktopVideoEditTracker() {
         ) : (
           <Tabs defaultValue="QUEUE">
             <div className="overflow-x-auto -mx-6 px-6">
-              <TabsList className="mb-4 w-max">
+              <TabsList className="mb-2 w-max">
                 {STAGES.map(stage => (
                   <TabsTrigger key={stage.key} value={stage.key} className="gap-1 text-xs whitespace-nowrap">
-                    {stage.label} ({rowsByStatus[stage.key]?.length || 0})
+                    {stage.label} ({filteredRowsByStatus[stage.key]?.length || 0})
                   </TabsTrigger>
                 ))}
+                {hasFilters && (
+                  <TabsTrigger value="ALL" className="gap-1 text-xs whitespace-nowrap">
+                    All ({allFilteredRows.length})
+                  </TabsTrigger>
+                )}
               </TabsList>
             </div>
+
+            {/* Filter Bar */}
+            <div className="mb-4 rounded-lg border bg-card p-3 space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
+                {filterClient && (
+                  <Badge variant="secondary" className="gap-1 text-xs cursor-pointer" onClick={() => setFilterClient(null)}>
+                    Client: {filterClient} <X className="w-3 h-3" />
+                  </Badge>
+                )}
+                {filterEditType && (
+                  <Badge variant="secondary" className="gap-1 text-xs cursor-pointer" onClick={() => setFilterEditType(null)}>
+                    Type: {filterEditType} <X className="w-3 h-3" />
+                  </Badge>
+                )}
+                <Select value={filterYear?.toString() || "all"} onValueChange={(v) => setFilterYear(v === "all" ? null : Number(v))}>
+                  <SelectTrigger className="w-28 h-7 text-xs"><SelectValue placeholder="Year" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Years</SelectItem>
+                    {years.map(y => <SelectItem key={y} value={y.toString()}>{y} BS</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={filterMonth?.toString() || "all"} onValueChange={(v) => setFilterMonth(v === "all" ? null : Number(v))}>
+                  <SelectTrigger className="w-28 h-7 text-xs"><SelectValue placeholder="Month" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Months</SelectItem>
+                    {nepaliMonthsEnglish.map((m, i) => <SelectItem key={i} value={(i + 1).toString()}>{m}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {hasFilters && (
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={clearAll}>Clear All</Button>
+                )}
+              </div>
+              {clientPipelineStats && (
+                <div className="flex items-center gap-1 flex-wrap text-xs text-muted-foreground border-t pt-2">
+                  <span className="font-medium text-foreground">Pipeline:</span>
+                  {STAGES.map(s => (
+                    <span key={s.key} className={clientPipelineStats[s.key] > 0 ? "text-foreground font-medium" : ""}>
+                      {s.label}: {clientPipelineStats[s.key]}{s.key !== 'FINALIZED' ? ' · ' : ''}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {STAGES.map(stage => (
               <TabsContent key={stage.key} value={stage.key}>
                 <VideoEditTable
-                  rows={rowsByStatus[stage.key] || []}
+                  rows={filteredRowsByStatus[stage.key] || []}
                   onUpdateField={updateField}
                   onPushToStatus={pushToStatus}
                   onSplit={splitRow}
                   onMerge={mergeRow}
+                  onClickClient={(name) => setFilterClient(prev => prev === name ? null : name)}
+                  onClickEditType={(type) => setFilterEditType(prev => prev === type ? null : type)}
                   editors={editors}
                   currentStageKey={stage.key}
                 />
               </TabsContent>
             ))}
+            {hasFilters && (
+              <TabsContent value="ALL">
+                <VideoEditTable
+                  rows={allFilteredRows}
+                  onUpdateField={updateField}
+                  onPushToStatus={pushToStatus}
+                  onSplit={splitRow}
+                  onMerge={mergeRow}
+                  onClickClient={(name) => setFilterClient(prev => prev === name ? null : name)}
+                  onClickEditType={(type) => setFilterEditType(prev => prev === type ? null : type)}
+                  editors={editors}
+                  currentStageKey="ALL"
+                />
+              </TabsContent>
+            )}
           </Tabs>
         )}
       </div>

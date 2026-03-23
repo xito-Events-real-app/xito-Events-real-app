@@ -259,6 +259,7 @@ export function useVideoEditTracker() {
 
   return {
     rowsByStatus: displayRowsByStatus,
+    allRows: rows,
     isLoading,
     updateField,
     pushToStatus,
