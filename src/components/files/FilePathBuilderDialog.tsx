@@ -142,10 +142,13 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
     setCardCount(maxCard);
     setActiveCard(fileRecord.card_label || "1");
 
+    // For 2nd/3rd backups, start with empty storage location so user picks per-card
+    const clearStorage = backupNumber >= 2;
+
     // Initialize form for the current card
     const formData: CardFormData = {
-      storageType: fileRecord.storage_type || "",
-      deviceId: fileRecord.storage_device_id || "",
+      storageType: clearStorage ? "" : (fileRecord.storage_type || ""),
+      deviceId: clearStorage ? "" : (fileRecord.storage_device_id || ""),
       yearEventFolder: defaultYearFolder,
       category: fileRecord.category || (isPhotoRole ? "PHOTOS" : "VIDEOS"),
       clientFolder: fileRecord.client_folder_name || fileRecord.client_name?.toUpperCase() || "",
@@ -164,8 +167,8 @@ export function FilePathBuilderDialog({ open, onOpenChange, fileRecord, devices,
         setCardForms(prev => ({
           ...prev,
           [card.card_label || "1"]: {
-            storageType: card.storage_type || "",
-            deviceId: card.storage_device_id || "",
+            storageType: clearStorage ? "" : (card.storage_type || ""),
+            deviceId: clearStorage ? "" : (card.storage_device_id || ""),
             yearEventFolder: getNormalizedYearEventFolder(card.year_event_folder, card.event_month, card.event_year),
             category: card.category || (isPhotoRole ? "PHOTOS" : "VIDEOS"),
             clientFolder: card.client_folder_name || card.client_name?.toUpperCase() || "",
