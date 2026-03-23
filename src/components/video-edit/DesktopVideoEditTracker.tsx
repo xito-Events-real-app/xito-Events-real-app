@@ -55,15 +55,13 @@ function VideoEditTable({
   onUpdateField,
   onPushToStatus,
   editors,
-  actionLabel,
-  nextStatus,
+  currentStageKey,
 }: {
   rows: VideoEditRow[];
   onUpdateField: (id: string, field: string, value: string) => void;
   onPushToStatus?: (id: string, status: string) => void;
   editors: { name: string; isVideoEditor: boolean }[];
-  actionLabel: string | null;
-  nextStatus: string | null;
+  currentStageKey: string;
 }) {
   return (
     <div className="rounded-xl border bg-card overflow-auto">
