@@ -51,7 +51,7 @@ export interface DisplayRow extends VideoEditRow {
 }
 
 function makeMergeKey(row: VideoEditRow): string {
-  return `${row.registeredDateTimeAD}||${row.eventName}`;
+  return `${row.registeredDateTimeAD}||${row.eventName}||${row.subEventName || ''}`;
 }
 
 export function useVideoEditTracker() {
