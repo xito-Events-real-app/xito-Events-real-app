@@ -39,6 +39,7 @@ export default function PotentialDelete() {
   const [filterPerson, setFilterPerson] = useState<string | null>(null);
   const [filterDevice, setFilterDevice] = useState<string | null>(null);
   const [showDeleted, setShowDeleted] = useState(false);
+  const [viewImage, setViewImage] = useState<PotentialDeleteRecord | null>(null);
 
   const [clientSuggestions, setClientSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
