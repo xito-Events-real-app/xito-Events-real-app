@@ -288,10 +288,12 @@ function applyFiltersAndSort(
   filterYear: number | null,
   filterMonth: number | null,
   sortMode: SortMode,
+  filterEditor: string | null = null,
 ): DisplayRow[] {
   let result = rows.filter(row => {
     if (filterClient && row.clientName !== filterClient) return false;
     if (filterEditType && row.editType !== filterEditType) return false;
+    if (filterEditor && row.editor !== filterEditor) return false;
     if (filterYear || filterMonth) {
       const bs = getRowBSDate(row);
       if (!bs) return false;
