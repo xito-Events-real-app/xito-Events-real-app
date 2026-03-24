@@ -198,6 +198,20 @@ export function MobileVideoEditTracker() {
     return result;
   }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, sortMode]);
 
+  const pipelinePosMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const stage of STAGES) {
+      const stageRows = [...(rowsByStatus[stage.key] || [])].sort(
+        (a, b) => (parseInt(b.urgency || '0') || 0) - (parseInt(a.urgency || '0') || 0)
+      );
+      stageRows.forEach((r, i) => { map[r.id] = i + 1; });
+    }
+    return map;
+  }, [rowsByStatus]);
+
+  const addPipelinePos = (rows: DisplayRow[]) =>
+    rows.map(r => ({ ...r, _pipelinePos: pipelinePosMap[r.id] || 0 }));
+
   const allFilteredRows = useMemo(() => {
     if (!hasFilters) return [];
     const combined: DisplayRow[] = [];
