@@ -90,6 +90,11 @@ function VideoCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs text-muted-foreground font-mono">#{index + 1}</span>
+            {(row as any)._pipelinePos && (
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 text-[10px] font-bold">
+                P{(row as any)._pipelinePos}
+              </span>
+            )}
             <span className={`inline-flex items-center justify-center w-6 h-6 rounded text-xs font-bold ${urgCls}`}>
               {row.urgency || "-"}
             </span>
