@@ -123,8 +123,19 @@ function VideoEditTable({
           {rows.map((row, idx) => {
             const isExpanded = expandedRows.has(row.id);
             return (
-              <>
-              <TableRow key={row.id} className="hover:bg-muted/30">
+              <React.Fragment key={row.id}>
+              <TableRow className="hover:bg-muted/30">
+              <TableCell className="text-center p-1">
+                <button
+                  onClick={() => toggleExpand(row.id)}
+                  className="inline-flex items-center justify-center w-6 h-6 rounded hover:bg-muted transition-colors"
+                >
+                  {isExpanded
+                    ? <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                    : <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                  }
+                </button>
+              </TableCell>
               <TableCell className="text-center text-muted-foreground text-xs font-mono">{idx + 1}</TableCell>
               <TableCell className="text-center">
                 <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 text-[10px] font-bold">
@@ -249,7 +260,17 @@ function VideoEditTable({
                 </DropdownMenu>
               </TableCell>
             </TableRow>
-          ))}
+            {isExpanded && (
+              <TableRow>
+                <TableCell colSpan={12} className="p-0 bg-muted/20 border-b-2 border-primary/20">
+                  <FileDetailsExpander
+                    registeredDateTimeAD={row.registeredDateTimeAD}
+                    eventName={row.subEventName || row.eventName}
+                  />
+                </TableCell>
+              </TableRow>
+            )}
+            </React.Fragment>
         </TableBody>
       </Table>
     </div>
