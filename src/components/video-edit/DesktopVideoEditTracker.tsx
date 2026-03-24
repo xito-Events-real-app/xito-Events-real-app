@@ -271,6 +271,8 @@ function VideoEditTable({
               </TableRow>
             )}
             </React.Fragment>
+            );
+          })}
         </TableBody>
       </Table>
     </div>
