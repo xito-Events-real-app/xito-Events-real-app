@@ -10,6 +10,7 @@ import {
   Building2,
   UserCog,
   KeyRound,
+  Trash2,
   LucideIcon,
 } from "lucide-react";
 
