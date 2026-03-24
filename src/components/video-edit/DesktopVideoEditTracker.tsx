@@ -73,7 +73,7 @@ function VideoEditTable({
   editors,
   currentStageKey,
 }: {
-  rows: DisplayRow[];
+  rows: (DisplayRow & { _pipelinePos?: number })[];
   onUpdateField: (id: string, field: string, value: string, mergedIds?: string[]) => void;
   onPushToStatus?: (id: string, status: string, mergedIds?: string[]) => void;
   onSplit?: (mergeKey: string) => void;
