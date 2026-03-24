@@ -538,6 +538,20 @@ export default function PotentialDelete() {
               )}
             </div>
 
+            {/* Size */}
+            <div className="space-y-2">
+              <label className="text-sm text-zinc-400">Size (GB)</label>
+              <Input
+                type="number"
+                placeholder="e.g. 128"
+                value={sizeGb}
+                onChange={e => setSizeGb(e.target.value)}
+                className="bg-zinc-800 border-zinc-700 text-zinc-200 placeholder:text-zinc-600"
+                min="0"
+                step="0.1"
+              />
+            </div>
+
             {/* Responsibility */}
             <div className="space-y-2">
               <label className="text-sm text-zinc-400">Responsibility *</label>
