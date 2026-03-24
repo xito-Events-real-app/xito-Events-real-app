@@ -133,6 +133,7 @@ export default function PotentialDelete() {
   const [clientSearch, setClientSearch] = useState("");
   const [responsibility, setResponsibility] = useState("");
   const [notes, setNotes] = useState("");
+  const [sizeGb, setSizeGb] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
   const [viewTab, setViewTab] = useState<ViewTab>("READY");
