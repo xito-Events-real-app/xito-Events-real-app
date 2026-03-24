@@ -1,67 +1,79 @@
 
 
-## Fix WTN Pipeline: Drag-and-Drop, Larger Text, Right-Side Event Filter, Stable Pipeline Numbers
+## Potential Delete — Netflix-Style Screenshot Manager
 
-### Problems
-1. **Drag-and-drop broken**: The `handlePointerUp` closure captures a stale `dropTargetIdx` because it reads React state inside a closure set during `onPointerDown`. The drop index is always `null` when the pointer lifts.
-2. **Card text too small**: Client name is `text-sm`, sub-event/edit-type are `text-xs`.
-3. **No event filter**: User wants a right-side rail listing all events (shown event name = subEventName or eventName) that acts as a clickable filter without changing pipeline order numbers.
-4. **Pipeline order numbers must never change**: They are computed from the unfiltered urgency-sorted list per stage. Filters only hide cards visually; numbers stay fixed.
+### Concept
+A fully independent module for pasting Windows screenshots (Win+Shift+S), tagging them to storage devices with client name and responsible person, and managing them in a Netflix-style dark card grid. Completely isolated — no changes to existing features.
 
-### Changes
+### Upload Flow
+1. User presses Ctrl+V anywhere on the page
+2. If clipboard has image → opens upload dialog with preview
+3. If no image → toast: "Nothing has been copied"
+4. Dialog fields:
+   - **Device Type**: PC / Hard Drive / SSD (buttons)
+   - **Device Name**: Dropdown populated from `storage_devices` table filtered by type
+   - **Client Name**: Searchable input — searches `clients_cache` for suggestions, or type anything custom
+   - **Responsibility**: Select from: Benzo / Nikit / Saugat / Barun / Arjun
+   - **Notes**: Optional text
+5. Save → uploads image to `potential-deletes` storage bucket, inserts row
 
-**1. `src/components/video-edit/WtnPipelineView.tsx` — Fix drag-and-drop + UI + event filter**
+### Dashboard (Netflix-style)
+- Dark themed cards with red accent (Netflix vibe)
+- **Stats bar**: Total | By Responsibility (Benzo: 12, Nikit: 8...) | Deleted count | Storage device breakdown
+- **Filter by responsibility** — click a person's name to filter their screenshots
+- **Filter by device** — click device name
+- Cards show: thumbnail, client name, device badge, responsibility badge, timestamp
+- Each card has a **Delete button** (moves to soft-deleted state, frees storage)
+- Toggle to show/hide deleted items (with "Restore" option)
 
-**Drag fix**: The core bug is that `handlePointerUp` captures `dropTargetIdx` from the closure scope at mount time. Fix by using a `useRef` for `dropTargetIdx` instead of `useState`, so the pointerup handler always reads the latest value. Keep a state mirror for rendering the drop indicator.
+### Database
 
-```text
-const dropTargetRef = useRef<number | null>(null);
-const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
-
-// In pointermove handler:
-dropTargetRef.current = closest;
-setDropTargetIdx(closest);
-
-// In pointerup handler:
-const targetIdx = dropTargetRef.current;  // always fresh
+**New table: `potential_deletes`**
+```sql
+id uuid PK default gen_random_uuid()
+image_url text NOT NULL
+device_type text NOT NULL default ''
+device_name text NOT NULL default ''
+client_name text default ''
+responsibility text default ''
+notes text default ''
+deleted boolean default false
+created_at timestamptz default now()
 ```
+RLS: Allow all (matches other tables).
 
-**Larger text on cards**:
-- Client name: `text-sm` → `text-base font-bold`
-- Sub-event: `text-xs` → `text-sm`
-- Edit type badge: `text-xs` → `text-sm`
-- Event date: `text-xs` → `text-sm`
-- Urgency/editor selects: `h-7 text-xs` → `h-8 text-sm`
-- Card width: `w-[280px]` → `w-[320px]`
+**New storage bucket: `potential-deletes`** (public, for screenshot images)
 
-**Right-side event filter rail**:
-- Change the main layout from single column to a flex row: `<div className="flex gap-4">` with the snake grid taking `flex-1` and a right sidebar `w-[220px]`
-- The sidebar lists all unique event names (using `subEventName || eventName` from the current stage's unfiltered rows) as clickable items
-- Clicking an event name sets a new `filterEvent` state that filters the visible cards (but does NOT change pipeline order numbers)
-- Active filter shown as highlighted item; click again to clear
-- Pipeline order numbers are computed from the full unfiltered urgency-sorted list BEFORE any filtering, stored in a `pipelinePosMap`, and attached to each card. Filtering only hides cards; visible cards keep their original position numbers.
+### Files
 
-**Pipeline number stability rule**:
-- Compute `pipelinePosMap` from `rowsByStatus` (unfiltered, urgency-sorted) per stage
-- Attach `_pipelinePos` to each card before filtering
-- Display `#N` on each card using `_pipelinePos` instead of the loop index
-- When a card moves to another stage via "Move to", it gets appended to the end of the new stage's ordered list (already handled)
+1. **DB Migration** — Create `potential_deletes` table + `potential-deletes` storage bucket with public RLS
+2. **New: `src/pages/PotentialDelete.tsx`**
+   - Global paste listener (`useEffect` on `paste` event)
+   - Upload dialog: image preview, device type buttons, device name dropdown (from `storage_devices`), client name searchable input (from `clients_cache`), responsibility selector (5 fixed names), notes
+   - Netflix-style dashboard: dark cards, stats bar (total, per-responsibility, deleted count), filters by responsibility and device
+   - Delete button on each card (soft delete: `deleted = true`), removes image from bucket
+   - "Show Deleted" toggle with restore option
+   - Responsive grid layout
+3. **New: `src/hooks/usePotentialDeletes.ts`**
+   - CRUD: load all records, upload image + insert, soft-delete (update `deleted=true` + remove from bucket), restore, hard-delete
+   - Realtime subscription on `potential_deletes`
+   - Uses `useStorageDevices()` for device list
+4. **Edit: `src/lib/suite-modules.ts`** — Add module: `{ id: 'potential-delete', name: 'Potential Delete', icon: Trash2, path: '/potential-delete', status: 'active', gradient: 'from-red-500 to-orange-600' }`
+5. **Edit: `src/App.tsx`** — Add route `/potential-delete` → `<PotentialDelete />`
 
-**2. Layout structure in WtnPipelineView**
-
+### Card Design (Netflix-style)
 ```text
-┌──────────────────────────────────────────────────────┬──────────┐
-│                Snake Pipeline (flex-1, scrollable)    │ Events   │
-│  Card #1 ── Card #2 ── Card #3 ── Card #4           │          │
-│                                          │           │ Event A  │
-│  Card #8 ── Card #7 ── Card #6 ── Card #5           │ Event B ◀│
-│  │                                                   │ Event C  │
-│  Card #9 ── ...                                      │ ...      │
-└──────────────────────────────────────────────────────┴──────────┘
+┌──────────────────────────┐
+│ [Screenshot Thumbnail]   │
+│                          │
+│ PABINA ADHIKARI          │  ← client name, bold white
+│ 🔴 WD 2TB  👤 Benzo     │  ← device + responsibility badges
+│ 2 hours ago    [🗑 Del]  │
+└──────────────────────────┘
 ```
+Dark background (`bg-zinc-900`), red/orange accent badges, hover glow effect.
 
-On mobile (< 768px), the event filter rail moves to a horizontal scrollable strip above the snake grid.
-
-### Files changed
-1. `src/components/video-edit/WtnPipelineView.tsx` — drag fix (useRef for dropTarget), larger card text, right-side event filter rail, stable pipeline numbers
+### Independence
+- No changes to File Management, Video Edit, or any existing module
+- Only touches: `suite-modules.ts` (add entry), `App.tsx` (add route), plus new files
 
