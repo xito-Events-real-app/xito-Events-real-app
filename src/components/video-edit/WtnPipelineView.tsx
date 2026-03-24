@@ -585,6 +585,11 @@ export function WtnPipelineView({ onClose }: { onClose: () => void }) {
                 Event: {filterEvent} <X className="w-2.5 h-2.5" />
               </Badge>
             )}
+            {filterEditor && (
+              <Badge variant="secondary" className="gap-1 text-[10px] cursor-pointer" onClick={() => setFilterEditor(null)}>
+                Editor: {filterEditor} <X className="w-2.5 h-2.5" />
+              </Badge>
+            )}
             <Select value={filterYear?.toString() || "all"} onValueChange={(v) => setFilterYear(v === "all" ? null : Number(v))}>
               <SelectTrigger className="w-24 h-6 text-[10px]"><SelectValue placeholder="Year" /></SelectTrigger>
               <SelectContent>
