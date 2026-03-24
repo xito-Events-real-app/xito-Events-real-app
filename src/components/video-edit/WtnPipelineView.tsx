@@ -88,10 +88,12 @@ function getRowBSDate(row: DisplayRow): { year: number; month: number } | null {
 function applyFiltersAndSort(
   rows: DisplayRow[], filterClient: string | null, filterEditType: string | null,
   filterYear: number | null, filterMonth: number | null, sortMode: SortMode,
+  filterEditor: string | null = null,
 ): DisplayRow[] {
   let result = rows.filter(row => {
     if (filterClient && row.clientName !== filterClient) return false;
     if (filterEditType && row.editType !== filterEditType) return false;
+    if (filterEditor && row.editor !== filterEditor) return false;
     if (filterYear || filterMonth) {
       const bs = getRowBSDate(row);
       if (!bs) return false;
@@ -425,10 +427,11 @@ export function WtnPipelineView({ onClose }: { onClose: () => void }) {
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
   const [filterEvent, setFilterEvent] = useState<string | null>(null);
+  const [filterEditor, setFilterEditor] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>('urgency');
   const isMobile = useIsMobile();
 
-  const hasFilters = !!(filterClient || filterEditType || filterYear || filterMonth || filterEvent);
+  const hasFilters = !!(filterClient || filterEditType || filterYear || filterMonth || filterEvent || filterEditor);
   const hasSortOrFilter = hasFilters || sortMode !== 'default';
   const years = getBSYearsRange(-2, 3);
 
@@ -465,15 +468,14 @@ export function WtnPipelineView({ onClose }: { onClose: () => void }) {
   const filteredRowsByStatus = useMemo(() => {
     const result: Record<string, (DisplayRow & { _pipelinePos?: number })[]> = {};
     for (const stage of STAGES) {
-      let filtered = applyFiltersAndSort(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth, sortMode);
-      // Apply edit type filter (visual only, doesn't change pipeline numbers)
+      let filtered = applyFiltersAndSort(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth, sortMode, filterEditor);
       if (filterEvent) {
         filtered = filtered.filter(r => r.editType === filterEvent);
       }
       result[stage.key] = filtered.map(r => ({ ...r, _pipelinePos: pipelinePosMap[r.id] || 0 }));
     }
     return result;
-  }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, filterEvent, sortMode, pipelinePosMap]);
+  }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, filterEvent, filterEditor, sortMode, pipelinePosMap]);
 
   // Get unique edit types for the right sidebar from current stage's UNFILTERED rows
   const editTypes = useMemo(() => {
@@ -488,7 +490,20 @@ export function WtnPipelineView({ onClose }: { onClose: () => void }) {
     return Array.from(types).sort();
   }, [activeTab, rowsByStatus]);
 
-  const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); setFilterEvent(null); setSortMode('urgency'); };
+  // Get unique editors for filter from current stage's UNFILTERED rows
+  const activeEditors = useMemo(() => {
+    const counts = new Map<string, number>();
+    if (activeTab === 'ALL') {
+      for (const stage of STAGES) {
+        (rowsByStatus[stage.key] || []).forEach(r => { if (r.editor) counts.set(r.editor, (counts.get(r.editor) || 0) + 1); });
+      }
+    } else {
+      (rowsByStatus[activeTab] || []).forEach(r => { if (r.editor) counts.set(r.editor, (counts.get(r.editor) || 0) + 1); });
+    }
+    return Array.from(counts.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [activeTab, rowsByStatus]);
+
+  const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); setFilterEvent(null); setFilterEditor(null); setSortMode('urgency'); };
 
   const activeRows = useMemo(() => {
     if (activeTab === 'ALL') {
@@ -568,6 +583,11 @@ export function WtnPipelineView({ onClose }: { onClose: () => void }) {
             {filterEvent && (
               <Badge variant="secondary" className="gap-1 text-[10px] cursor-pointer" onClick={() => setFilterEvent(null)}>
                 Event: {filterEvent} <X className="w-2.5 h-2.5" />
+              </Badge>
+            )}
+            {filterEditor && (
+              <Badge variant="secondary" className="gap-1 text-[10px] cursor-pointer" onClick={() => setFilterEditor(null)}>
+                Editor: {filterEditor} <X className="w-2.5 h-2.5" />
               </Badge>
             )}
             <Select value={filterYear?.toString() || "all"} onValueChange={(v) => setFilterYear(v === "all" ? null : Number(v))}>
@@ -709,6 +729,27 @@ export function WtnPipelineView({ onClose }: { onClose: () => void }) {
                     );
                   })}
                 </div>
+                {/* Editors section */}
+                {activeEditors.length > 0 && (
+                  <>
+                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 mt-5">Editors</h3>
+                    <div className="space-y-2">
+                      {activeEditors.map(({ name, count }) => (
+                        <button
+                          key={name}
+                          onClick={() => setFilterEditor(prev => prev === name ? null : name)}
+                          className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold transition-all border-2 ${
+                            filterEditor === name
+                              ? 'bg-teal-500 text-white border-teal-600 shadow-md'
+                              : 'bg-teal-100 text-teal-800 border-teal-300 dark:bg-teal-950 dark:text-teal-200 dark:border-teal-700 hover:shadow-sm'
+                          }`}
+                        >
+                          {name} ({count})
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}

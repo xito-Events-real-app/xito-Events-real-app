@@ -216,7 +216,7 @@ function VideoEditTable({
               </TableCell>
               <TableCell>
                 <Select value={row.editor || "unassigned"} onValueChange={(v) => onUpdateField(row.id, "editor", v === "unassigned" ? "" : v, row.mergedIds)}>
-                  <SelectTrigger className="w-36 h-8 text-xs">
+                  <SelectTrigger className="w-44 h-8 text-xs">
                     <SelectValue placeholder="Assign..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -288,10 +288,12 @@ function applyFiltersAndSort(
   filterYear: number | null,
   filterMonth: number | null,
   sortMode: SortMode,
+  filterEditor: string | null = null,
 ): DisplayRow[] {
   let result = rows.filter(row => {
     if (filterClient && row.clientName !== filterClient) return false;
     if (filterEditType && row.editType !== filterEditType) return false;
+    if (filterEditor && row.editor !== filterEditor) return false;
     if (filterYear || filterMonth) {
       const bs = getRowBSDate(row);
       if (!bs) return false;
@@ -321,8 +323,10 @@ export function DesktopVideoEditTracker() {
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>('default');
+  const [filterEditor, setFilterEditor] = useState<string | null>(null);
+  const [activeDesktopTab, setActiveDesktopTab] = useState<string>("QUEUE");
 
-  const hasFilters = !!(filterClient || filterEditType || filterYear || filterMonth);
+  const hasFilters = !!(filterClient || filterEditType || filterYear || filterMonth || filterEditor);
   const hasSortOrFilter = hasFilters || sortMode !== 'default';
 
   useEffect(() => {
@@ -351,14 +355,27 @@ export function DesktopVideoEditTracker() {
     return stats;
   }, [filterClient, rowsByStatus]);
 
+  // Active editors per stage (for filter pills)
+  const activeEditorsByStage = useMemo(() => {
+    const result: Record<string, { name: string; count: number }[]> = {};
+    for (const stage of STAGES) {
+      const counts = new Map<string, number>();
+      (rowsByStatus[stage.key] || []).forEach(r => {
+        if (r.editor) counts.set(r.editor, (counts.get(r.editor) || 0) + 1);
+      });
+      result[stage.key] = Array.from(counts.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name));
+    }
+    return result;
+  }, [rowsByStatus]);
+
   // Filtered rows per stage
   const filteredRowsByStatus = useMemo(() => {
     const result: Record<string, DisplayRow[]> = {};
     for (const stage of STAGES) {
-      result[stage.key] = applyFiltersAndSort(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth, sortMode);
+      result[stage.key] = applyFiltersAndSort(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth, sortMode, filterEditor);
     }
     return result;
-  }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, sortMode]);
+  }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, sortMode, filterEditor]);
 
   // Compute pipeline position (urgency-sorted rank within each stage)
   const pipelinePosMap = useMemo(() => {
@@ -387,7 +404,7 @@ export function DesktopVideoEditTracker() {
   }, [filteredRowsByStatus, hasFilters]);
 
   const totalCount = STAGES.reduce((sum, s) => sum + (rowsByStatus[s.key]?.length || 0), 0);
-  const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); setSortMode('default'); };
+  const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); setFilterEditor(null); setSortMode('default'); };
 
   return (
     <div className="min-h-screen bg-background">
@@ -440,6 +457,11 @@ export function DesktopVideoEditTracker() {
                       {filterEditType && (
                         <Badge variant="secondary" className="gap-1 text-xs cursor-pointer" onClick={() => setFilterEditType(null)}>
                           Type: {filterEditType} <X className="w-3 h-3" />
+                        </Badge>
+                      )}
+                      {filterEditor && (
+                        <Badge variant="secondary" className="gap-1 text-xs cursor-pointer" onClick={() => setFilterEditor(null)}>
+                          Editor: {filterEditor} <X className="w-3 h-3" />
                         </Badge>
                       )}
                       <Select value={filterYear?.toString() || "all"} onValueChange={(v) => setFilterYear(v === "all" ? null : Number(v))}>
@@ -517,7 +539,7 @@ export function DesktopVideoEditTracker() {
               );
             })()
           ) : (
-          <Tabs defaultValue="QUEUE">
+          <Tabs defaultValue="QUEUE" onValueChange={(v) => setActiveDesktopTab(v)}>
             <div className="overflow-x-auto -mx-6 px-6">
               <TabsList className="mb-2 w-max">
                 {STAGES.map(stage => (
@@ -535,6 +557,11 @@ export function DesktopVideoEditTracker() {
                 {filterEditType && (
                   <Badge variant="secondary" className="gap-1 text-xs cursor-pointer" onClick={() => setFilterEditType(null)}>
                     Type: {filterEditType} <X className="w-3 h-3" />
+                  </Badge>
+                )}
+                {filterEditor && (
+                  <Badge variant="secondary" className="gap-1 text-xs cursor-pointer" onClick={() => setFilterEditor(null)}>
+                    Editor: {filterEditor} <X className="w-3 h-3" />
                   </Badge>
                 )}
                 <Select value={filterYear?.toString() || "all"} onValueChange={(v) => setFilterYear(v === "all" ? null : Number(v))}>
@@ -572,6 +599,25 @@ export function DesktopVideoEditTracker() {
                   <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={clearAll}>Clear All</Button>
                 )}
               </div>
+              {/* Editor filter pills */}
+              {(activeEditorsByStage[activeDesktopTab] || []).length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Editors:</span>
+                  {(activeEditorsByStage[activeDesktopTab] || []).map(({ name, count }) => (
+                    <button
+                      key={name}
+                      onClick={() => setFilterEditor(prev => prev === name ? null : name)}
+                      className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-all border ${
+                        filterEditor === name
+                          ? 'bg-teal-500 text-white border-teal-600 shadow-sm'
+                          : 'bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-950 dark:text-teal-200 dark:border-teal-800 hover:shadow-sm'
+                      }`}
+                    >
+                      {name} ({count})
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {STAGES.map(stage => (
