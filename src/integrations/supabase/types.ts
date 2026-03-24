@@ -921,36 +921,48 @@ export type Database = {
       }
       potential_deletes: {
         Row: {
+          approved_by: string
           client_name: string | null
+          comments: string
           created_at: string | null
+          delete_approval: string
           deleted: boolean | null
           device_name: string
           device_type: string
           id: string
           image_url: string
           notes: string | null
+          permanently_deleted_at: string | null
           responsibility: string | null
         }
         Insert: {
+          approved_by?: string
           client_name?: string | null
+          comments?: string
           created_at?: string | null
+          delete_approval?: string
           deleted?: boolean | null
           device_name?: string
           device_type?: string
           id?: string
           image_url: string
           notes?: string | null
+          permanently_deleted_at?: string | null
           responsibility?: string | null
         }
         Update: {
+          approved_by?: string
           client_name?: string | null
+          comments?: string
           created_at?: string | null
+          delete_approval?: string
           deleted?: boolean | null
           device_name?: string
           device_type?: string
           id?: string
           image_url?: string
           notes?: string | null
+          permanently_deleted_at?: string | null
           responsibility?: string | null
         }
         Relationships: []
