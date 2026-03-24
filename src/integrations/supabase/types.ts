@@ -934,6 +934,7 @@ export type Database = {
           notes: string | null
           permanently_deleted_at: string | null
           responsibility: string | null
+          size_gb: number
         }
         Insert: {
           approved_by?: string
@@ -949,6 +950,7 @@ export type Database = {
           notes?: string | null
           permanently_deleted_at?: string | null
           responsibility?: string | null
+          size_gb?: number
         }
         Update: {
           approved_by?: string
@@ -964,6 +966,7 @@ export type Database = {
           notes?: string | null
           permanently_deleted_at?: string | null
           responsibility?: string | null
+          size_gb?: number
         }
         Relationships: []
       }
