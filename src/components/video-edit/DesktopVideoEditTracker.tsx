@@ -353,7 +353,7 @@ export function DesktopVideoEditTracker() {
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          {filterClient ? (
+          filterClient ? (
             /* ── Stacked Client Detail View ── */
             (() => {
               const total = STAGES.reduce((s, st) => s + (filteredRowsByStatus[st.key]?.length || 0), 0);
