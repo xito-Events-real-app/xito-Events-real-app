@@ -297,12 +297,7 @@ export default function PotentialDelete() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        {/* Stats Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-          <div className="bg-zinc-900 rounded-xl p-4 border border-zinc-800">
-            <div className="text-3xl font-bold text-red-500">{activeRecords.length}</div>
-            <div className="text-xs text-zinc-500 mt-1">Total Active</div>
-          </div>
+        {/* Stats */}
         {/* Storage Summary */}
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-zinc-900 rounded-xl p-4 border border-zinc-800 text-center">
