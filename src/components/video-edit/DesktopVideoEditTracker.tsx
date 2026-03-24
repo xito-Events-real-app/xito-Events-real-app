@@ -89,6 +89,7 @@ function VideoEditTable({
         <TableHeader>
           <TableRow className="bg-muted/50">
             <TableHead className="w-12 text-center">S.No</TableHead>
+            <TableHead className="w-12 text-center">Pipeline</TableHead>
             <TableHead className="w-16 text-center">Urgency</TableHead>
             <TableHead className="w-14 text-center">Priority</TableHead>
             <TableHead>Client Name</TableHead>
