@@ -1,52 +1,67 @@
 
 
-## Fix WTN Pipeline: Larger Cards, Status Info, Colors, Better Drag, Urgency Sort, Auto-append on Move, Pipeline Column in Main Table
+## Fix WTN Pipeline: Drag-and-Drop, Larger Text, Right-Side Event Filter, Stable Pipeline Numbers
+
+### Problems
+1. **Drag-and-drop broken**: The `handlePointerUp` closure captures a stale `dropTargetIdx` because it reads React state inside a closure set during `onPointerDown`. The drop index is always `null` when the pointer lifts.
+2. **Card text too small**: Client name is `text-sm`, sub-event/edit-type are `text-xs`.
+3. **No event filter**: User wants a right-side rail listing all events (shown event name = subEventName or eventName) that acts as a clickable filter without changing pipeline order numbers.
+4. **Pipeline order numbers must never change**: They are computed from the unfiltered urgency-sorted list per stage. Filters only hide cards visually; numbers stay fixed.
 
 ### Changes
 
-**1. `src/components/video-edit/WtnPipelineView.tsx` — Major card and drag improvements**
+**1. `src/components/video-edit/WtnPipelineView.tsx` — Fix drag-and-drop + UI + event filter**
 
-- **Larger cards**: Change from `w-[200px]` to `w-[280px]` with more padding and spacing
-- **Status badge on each card**: Show the current stage label (e.g. "Queue", "Edit on Progress") as a colored badge using stage-specific background colors
-- **Colorful cards**: Each card gets a subtle stage-colored background gradient (not just a left border) — e.g. light blue bg for Edit Lab, light purple for Color stages, light green for Finalized
-- **Better drag-and-drop**: Replace raw HTML5 drag with pointer-event-based approach using `onPointerDown`/`onPointerMove`/`onPointerUp` with visual feedback: dragged card gets elevated shadow + opacity, drop zone shows a bright insertion line between cards (not just ring on target card). Use `React.useRef` for drag state to avoid stutter.
-- **Default sort by urgency**: Initialize `sortMode` to `'urgency'` instead of `'default'` so pipeline opens sorted by urgency (highest first)
-- **Auto-append moved items**: When a card is moved to another stage via "Move to", it should appear at the end of that stage's ordered list. Already handled by `SnakeGrid`'s `useEffect` syncing new IDs to end.
+**Drag fix**: The core bug is that `handlePointerUp` captures `dropTargetIdx` from the closure scope at mount time. Fix by using a `useRef` for `dropTargetIdx` instead of `useState`, so the pointerup handler always reads the latest value. Keep a state mirror for rendering the drop indicator.
 
-Stage color map for card backgrounds:
-```
-QUEUE: bg-gray-50/80, EDIT_LAB: bg-blue-50/80, EDIT_ON_PROGRESS: bg-blue-100/60,
-COLOR_QUEUE: bg-purple-50/80, COLOR_LAB: bg-purple-100/60, etc.
-FINALIZED: bg-green-50/80
-```
-
-**2. `src/components/video-edit/DesktopVideoEditTracker.tsx` — Add "Pipeline" column to main table**
-
-- Add a new `<TableHead>Pipeline</TableHead>` column after "S.No" (or after Priority)
-- For each row, compute its position within its current stage's pipeline ordering (1-based index within that stage's rows sorted by urgency desc, matching the pipeline view order)
-- Display as a small numbered badge: `P1`, `P2`, `P3` etc.
-
-**3. `src/components/video-edit/MobileVideoEditTracker.tsx` — Same pipeline number in mobile cards**
-
-- Show the pipeline position number in the mobile card header
-
-### Card design (updated)
 ```text
-┌─────────────────────────────────┐
-│ #1  ⚡5        ┌──────────────┐ │
-│               │ Edit on Prog │ │  ← colored stage badge
-│               └──────────────┘ │
-│ SHAKTI NEUPANE                 │
-│ Bride Mehndi                   │
-│ Full Video + Highlights        │
-│ 2026-03-15                     │
-│ [Urgency ▾] [Editor ▾]        │
-│ [Move to... ▾]                 │
-└─────────────────────────────────┘
+const dropTargetRef = useRef<number | null>(null);
+const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
+
+// In pointermove handler:
+dropTargetRef.current = closest;
+setDropTargetIdx(closest);
+
+// In pointerup handler:
+const targetIdx = dropTargetRef.current;  // always fresh
 ```
+
+**Larger text on cards**:
+- Client name: `text-sm` → `text-base font-bold`
+- Sub-event: `text-xs` → `text-sm`
+- Edit type badge: `text-xs` → `text-sm`
+- Event date: `text-xs` → `text-sm`
+- Urgency/editor selects: `h-7 text-xs` → `h-8 text-sm`
+- Card width: `w-[280px]` → `w-[320px]`
+
+**Right-side event filter rail**:
+- Change the main layout from single column to a flex row: `<div className="flex gap-4">` with the snake grid taking `flex-1` and a right sidebar `w-[220px]`
+- The sidebar lists all unique event names (using `subEventName || eventName` from the current stage's unfiltered rows) as clickable items
+- Clicking an event name sets a new `filterEvent` state that filters the visible cards (but does NOT change pipeline order numbers)
+- Active filter shown as highlighted item; click again to clear
+- Pipeline order numbers are computed from the full unfiltered urgency-sorted list BEFORE any filtering, stored in a `pipelinePosMap`, and attached to each card. Filtering only hides cards; visible cards keep their original position numbers.
+
+**Pipeline number stability rule**:
+- Compute `pipelinePosMap` from `rowsByStatus` (unfiltered, urgency-sorted) per stage
+- Attach `_pipelinePos` to each card before filtering
+- Display `#N` on each card using `_pipelinePos` instead of the loop index
+- When a card moves to another stage via "Move to", it gets appended to the end of the new stage's ordered list (already handled)
+
+**2. Layout structure in WtnPipelineView**
+
+```text
+┌──────────────────────────────────────────────────────┬──────────┐
+│                Snake Pipeline (flex-1, scrollable)    │ Events   │
+│  Card #1 ── Card #2 ── Card #3 ── Card #4           │          │
+│                                          │           │ Event A  │
+│  Card #8 ── Card #7 ── Card #6 ── Card #5           │ Event B ◀│
+│  │                                                   │ Event C  │
+│  Card #9 ── ...                                      │ ...      │
+└──────────────────────────────────────────────────────┴──────────┘
+```
+
+On mobile (< 768px), the event filter rail moves to a horizontal scrollable strip above the snake grid.
 
 ### Files changed
-1. `src/components/video-edit/WtnPipelineView.tsx` — larger cards, status badge, colors, improved drag, urgency default sort
-2. `src/components/video-edit/DesktopVideoEditTracker.tsx` — add Pipeline column to table
-3. `src/components/video-edit/MobileVideoEditTracker.tsx` — add pipeline number to mobile cards
+1. `src/components/video-edit/WtnPipelineView.tsx` — drag fix (useRef for dropTarget), larger card text, right-side event filter rail, stable pipeline numbers
 
