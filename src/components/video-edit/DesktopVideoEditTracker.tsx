@@ -324,6 +324,7 @@ export function DesktopVideoEditTracker() {
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>('default');
   const [filterEditor, setFilterEditor] = useState<string | null>(null);
+  const [activeDesktopTab, setActiveDesktopTab] = useState<string>("QUEUE");
 
   const hasFilters = !!(filterClient || filterEditType || filterYear || filterMonth || filterEditor);
   const hasSortOrFilter = hasFilters || sortMode !== 'default';
