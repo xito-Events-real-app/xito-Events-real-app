@@ -73,7 +73,7 @@ function VideoEditTable({
   editors,
   currentStageKey,
 }: {
-  rows: DisplayRow[];
+  rows: (DisplayRow & { _pipelinePos?: number })[];
   onUpdateField: (id: string, field: string, value: string, mergedIds?: string[]) => void;
   onPushToStatus?: (id: string, status: string, mergedIds?: string[]) => void;
   onSplit?: (mergeKey: string) => void;
@@ -89,6 +89,7 @@ function VideoEditTable({
         <TableHeader>
           <TableRow className="bg-muted/50">
             <TableHead className="w-12 text-center">S.No</TableHead>
+            <TableHead className="w-12 text-center">Pipeline</TableHead>
             <TableHead className="w-16 text-center">Urgency</TableHead>
             <TableHead className="w-14 text-center">Priority</TableHead>
             <TableHead>Client Name</TableHead>
@@ -111,6 +112,11 @@ function VideoEditTable({
           {rows.map((row, idx) => (
             <TableRow key={row.id} className="hover:bg-muted/30">
               <TableCell className="text-center text-muted-foreground text-xs font-mono">{idx + 1}</TableCell>
+              <TableCell className="text-center">
+                <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 text-[10px] font-bold">
+                  P{row._pipelinePos || '-'}
+                </span>
+              </TableCell>
               <TableCell className="text-center">
                 <Select value={row.urgency || "0"} onValueChange={(v) => onUpdateField(row.id, "urgency", v, row.mergedIds)}>
                   <SelectTrigger className="w-16 h-8 p-0 border-0 bg-transparent justify-center">
@@ -317,6 +323,21 @@ export function DesktopVideoEditTracker() {
     return result;
   }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, sortMode]);
 
+  // Compute pipeline position (urgency-sorted rank within each stage)
+  const pipelinePosMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const stage of STAGES) {
+      const stageRows = [...(rowsByStatus[stage.key] || [])].sort(
+        (a, b) => (parseInt(b.urgency || '0') || 0) - (parseInt(a.urgency || '0') || 0)
+      );
+      stageRows.forEach((r, i) => { map[r.id] = i + 1; });
+    }
+    return map;
+  }, [rowsByStatus]);
+
+  const addPipelinePos = (rows: DisplayRow[]) =>
+    rows.map(r => ({ ...r, _pipelinePos: pipelinePosMap[r.id] || 0 }));
+
   // "All" tab rows - combined from all stages when filters active
   const allFilteredRows = useMemo(() => {
     if (!hasFilters) return [];
@@ -439,7 +460,7 @@ export function DesktopVideoEditTracker() {
                           <Badge variant="outline" className="text-xs">{stageRows.length}</Badge>
                         </h3>
                         <VideoEditTable
-                          rows={stageRows}
+                          rows={addPipelinePos(stageRows)}
                           onUpdateField={updateField}
                           onPushToStatus={pushToStatus}
                           onSplit={splitRow}
@@ -519,7 +540,7 @@ export function DesktopVideoEditTracker() {
             {STAGES.map(stage => (
               <TabsContent key={stage.key} value={stage.key}>
                 <VideoEditTable
-                  rows={filteredRowsByStatus[stage.key] || []}
+                  rows={addPipelinePos(filteredRowsByStatus[stage.key] || [])}
                   onUpdateField={updateField}
                   onPushToStatus={pushToStatus}
                   onSplit={splitRow}

@@ -90,6 +90,11 @@ function VideoCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs text-muted-foreground font-mono">#{index + 1}</span>
+            {(row as any)._pipelinePos && (
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 text-[10px] font-bold">
+                P{(row as any)._pipelinePos}
+              </span>
+            )}
             <span className={`inline-flex items-center justify-center w-6 h-6 rounded text-xs font-bold ${urgCls}`}>
               {row.urgency || "-"}
             </span>
@@ -193,6 +198,20 @@ export function MobileVideoEditTracker() {
     return result;
   }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, sortMode]);
 
+  const pipelinePosMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const stage of STAGES) {
+      const stageRows = [...(rowsByStatus[stage.key] || [])].sort(
+        (a, b) => (parseInt(b.urgency || '0') || 0) - (parseInt(a.urgency || '0') || 0)
+      );
+      stageRows.forEach((r, i) => { map[r.id] = i + 1; });
+    }
+    return map;
+  }, [rowsByStatus]);
+
+  const addPipelinePos = (rows: DisplayRow[]) =>
+    rows.map(r => ({ ...r, _pipelinePos: pipelinePosMap[r.id] || 0 }));
+
   const allFilteredRows = useMemo(() => {
     if (!hasFilters) return [];
     const combined: DisplayRow[] = [];
@@ -271,7 +290,7 @@ export function MobileVideoEditTracker() {
                           <Badge variant="outline" className="text-[10px]">{stageRows.length}</Badge>
                         </h3>
                         <div className="space-y-3">
-                          {stageRows.map((row, i) => (
+                          {addPipelinePos(stageRows).map((row, i) => (
                             <VideoCard
                               key={row.id}
                               row={row}
@@ -357,7 +376,7 @@ export function MobileVideoEditTracker() {
             {STAGES.map(stage => (
               <TabsContent key={stage.key} value={stage.key}>
                 <div className="space-y-3">
-                  {(filteredRowsByStatus[stage.key] || []).map((row, i) => (
+                  {addPipelinePos(filteredRowsByStatus[stage.key] || []).map((row, i) => (
                     <VideoCard
                       key={row.id}
                       row={row}
