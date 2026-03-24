@@ -1,44 +1,48 @@
 
 
-## Add Size Field to Potential Delete + Storage Summary Stats
+## Editor Name Filter — Video Edit Tracker + Pipeline
 
-### Database Migration
-Add `size_gb` column to `potential_deletes`:
-```sql
-ALTER TABLE potential_deletes ADD COLUMN size_gb numeric DEFAULT 0 NOT NULL;
+### What's changing
+
+1. **Pipeline (WtnPipelineView)**: Add an "Editors" filter section below the existing "Edit Types" rail on the right sidebar (desktop) and below the edit type strip (mobile). Shows only editors who have rows assigned in the current stage/view. Clicking filters to show only that editor's rows.
+
+2. **Main page (DesktopVideoEditTracker)**: Add editor name filter buttons in the filter bar — pill/button style showing editors present in the current tab's rows. Clicking filters by that editor.
+
+3. **Fix editor name truncation**: The editor `SelectTrigger` currently uses `w-36` which truncates long names. Widen it and ensure full name display.
+
+### Technical Details
+
+**New state in both components**: `filterEditor: string | null`
+
+**Derive active editors per stage** (same pattern as `editTypes`):
+```typescript
+const activeEditors = useMemo(() => {
+  const names = new Set<string>();
+  // collect editor names from current stage rows (unfiltered)
+  return Array.from(names).sort();
+}, [activeTab, rowsByStatus]);
 ```
 
-### Changes
+**Filter integration**: Add `filterEditor` to `applyFiltersAndSort` in both files — filter rows where `row.editor === filterEditor`.
 
-**1. DB Migration** — Add `size_gb` numeric column (default 0)
+### Files Changed
 
-**2. `src/hooks/usePotentialDeletes.ts`**
-- Add `size_gb: number` to `PotentialDelete` interface
-- Include `size_gb` in the `add()` method metadata parameter
+**1. `src/components/video-edit/DesktopVideoEditTracker.tsx`**
+- Add `filterEditor` state
+- Compute `activeEditors` from current tab's unfiltered rows (editors with at least 1 assigned row)
+- Add editor filter to `applyFiltersAndSort` call
+- Add editor pill buttons in the filter bar (after sort buttons, before Clear All)
+- Widen editor `SelectTrigger` from `w-36` to `w-44` and remove truncation
+- Include `filterEditor` in `clearAll` and `hasFilters`
 
-**3. `src/pages/PotentialDelete.tsx`**
+**2. `src/components/video-edit/WtnPipelineView.tsx`**
+- Add `filterEditor` state
+- Compute `activeEditors` from current stage's unfiltered rows
+- Add editor filter to the filtering logic
+- Desktop: Add "Editors" section below "Edit Types" in the right sidebar rail — same button style with different colors (teal/indigo palette)
+- Mobile: Add editor buttons below edit type strip
+- Include in `clearAll` and `hasFilters`
 
-**Upload dialog**: Add a "Size (GB)" number input field between the Client Name and Responsibility sections. Optional field, defaults to 0.
-
-**Card display**: Show size on each card as a badge (e.g., `📦 128 GB`) next to device and responsibility badges. Auto-converts to TB if >= 1024 GB.
-
-**Top stats summary** — Replace/enhance the stats bar with a new storage summary row showing:
-- **Total Size (Active)**: Sum of `size_gb` across all active records (not deleted)
-- **Ready to Delete**: Sum of `size_gb` for records with `delete_approval === "YES"` — this is the "possible pending deletion" size
-- **Permanently Deleted**: Sum of `size_gb` for records with `permanently_deleted_at` set — this is "what has been deleted till now"
-- All values auto-format GB/TB using the existing pattern (>= 1024 GB → TB)
-
-### Stats Row Layout
-```text
-┌─────────────┬──────────────────┬──────────────────┐
-│ 📦 TOTAL    │ 🟢 CAN DELETE    │ 🗑 DELETED       │
-│ 1.24 TB     │ 640 GB           │ 380 GB           │
-│ 45 files    │ 12 files         │ 8 files          │
-└─────────────┴──────────────────┴──────────────────┘
-```
-
-### Files changed
-1. DB migration — add `size_gb` column
-2. `src/hooks/usePotentialDeletes.ts` — add `size_gb` to interface and `add()` method
-3. `src/pages/PotentialDelete.tsx` — size input in upload dialog, size badge on cards, storage summary stats row
+### Editor Button Style (both views)
+Colored pill buttons matching the edit type style but with a distinct teal/indigo palette to differentiate. Shows editor name + count of rows in current stage.
 
