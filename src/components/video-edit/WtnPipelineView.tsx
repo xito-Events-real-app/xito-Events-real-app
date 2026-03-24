@@ -3,7 +3,8 @@ import { useVideoEditTracker, STAGES, DisplayRow } from "@/hooks/useVideoEditTra
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { X, Filter, Flame, ArrowUpDown, ArrowUp, ArrowDown, GripVertical } from "lucide-react";
+import { X, Filter, Flame, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, ChevronDown, ChevronRight, FolderOpen } from "lucide-react";
+import { FileDetailsExpander } from "./FileDetailsExpander";
 import { supabase } from "@/integrations/supabase/client";
 import { adToBS, nepaliMonthsEnglish, getBSYearsRange } from "@/lib/nepali-date";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -130,6 +131,7 @@ function PipelineCard({
   row, stageKey, editors, onUpdateField, onPushToStatus,
   isDropBefore, isDragging, onPointerDown,
 }: PipelineCardProps) {
+  const [expanded, setExpanded] = useState(false);
   const urgCls = URGENCY_COLORS[row.urgency] || URGENCY_COLORS["1"];
   const borderCls = STAGE_BORDER[stageKey] || "border-l-muted";
   const bgCls = STAGE_BG[stageKey] || "bg-card";
@@ -143,7 +145,7 @@ function PipelineCard({
       )}
       <div
         className={`
-          relative w-[320px] min-w-[320px] rounded-xl border-l-4 ${borderCls}
+          relative ${expanded ? 'w-[480px] min-w-[480px]' : 'w-[320px] min-w-[320px]'} rounded-xl border-l-4 ${borderCls}
           border border-border ${bgCls} shadow-sm hover:shadow-lg transition-all select-none
           ${isDragging ? 'opacity-40 scale-95 shadow-2xl' : ''}
         `}
@@ -223,12 +225,32 @@ function PipelineCard({
               ))}
             </SelectContent>
           </Select>
+
+          {/* Files expand button */}
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors w-full pt-1"
+          >
+            {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+            <FolderOpen className="w-3.5 h-3.5" />
+            <span>Files</span>
+          </button>
         </div>
+
+        {/* Expanded file details */}
+        {expanded && (
+          <div className="border-t border-border">
+            <FileDetailsExpander
+              registeredDateTimeAD={row.registeredDateTimeAD}
+              eventName={row.eventName}
+              compact
+            />
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
 // --- Snake Grid ---
 
 interface SnakeGridProps {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useVideoEditTracker, STAGES, DisplayRow } from "@/hooks/useVideoEditTracker";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -7,8 +7,9 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
-import { Video, MessageSquare, Music, ExternalLink, ChevronDown, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow } from "lucide-react";
+import { Video, MessageSquare, Music, ExternalLink, ChevronDown, ChevronRight, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, FolderOpen } from "lucide-react";
 import { WtnPipelineView } from "./WtnPipelineView";
+import { FileDetailsExpander } from "./FileDetailsExpander";
 import { supabase } from "@/integrations/supabase/client";
 import { adToBS, nepaliMonthsEnglish, getBSYearsRange } from "@/lib/nepali-date";
 
@@ -83,11 +84,21 @@ function VideoEditTable({
   editors: { name: string; isVideoEditor: boolean }[];
   currentStageKey: string;
 }) {
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const toggleExpand = (id: string) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
   return (
     <div className="rounded-xl border bg-card overflow-auto">
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/50">
+            <TableHead className="w-8 text-center"></TableHead>
             <TableHead className="w-12 text-center">S.No</TableHead>
             <TableHead className="w-12 text-center">Pipeline</TableHead>
             <TableHead className="w-16 text-center">Urgency</TableHead>
@@ -104,13 +115,27 @@ function VideoEditTable({
         <TableBody>
           {rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
+              <TableCell colSpan={12} className="text-center py-12 text-muted-foreground">
                 No rows found
               </TableCell>
             </TableRow>
           )}
-          {rows.map((row, idx) => (
-            <TableRow key={row.id} className="hover:bg-muted/30">
+          {rows.map((row, idx) => {
+            const isExpanded = expandedRows.has(row.id);
+            return (
+              <React.Fragment key={row.id}>
+              <TableRow className="hover:bg-muted/30">
+              <TableCell className="text-center p-1">
+                <button
+                  onClick={() => toggleExpand(row.id)}
+                  className="inline-flex items-center justify-center w-6 h-6 rounded hover:bg-muted transition-colors"
+                >
+                  {isExpanded
+                    ? <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                    : <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                  }
+                </button>
+              </TableCell>
               <TableCell className="text-center text-muted-foreground text-xs font-mono">{idx + 1}</TableCell>
               <TableCell className="text-center">
                 <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 text-[10px] font-bold">
@@ -235,7 +260,19 @@ function VideoEditTable({
                 </DropdownMenu>
               </TableCell>
             </TableRow>
-          ))}
+            {isExpanded && (
+              <TableRow>
+                <TableCell colSpan={12} className="p-0 bg-muted/20 border-b-2 border-primary/20">
+                  <FileDetailsExpander
+                    registeredDateTimeAD={row.registeredDateTimeAD}
+                    eventName={row.eventName}
+                  />
+                </TableCell>
+              </TableRow>
+            )}
+            </React.Fragment>
+            );
+          })}
         </TableBody>
       </Table>
     </div>
