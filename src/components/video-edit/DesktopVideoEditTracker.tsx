@@ -540,7 +540,7 @@ export function DesktopVideoEditTracker() {
             {STAGES.map(stage => (
               <TabsContent key={stage.key} value={stage.key}>
                 <VideoEditTable
-                  rows={filteredRowsByStatus[stage.key] || []}
+                  rows={addPipelinePos(filteredRowsByStatus[stage.key] || [])}
                   onUpdateField={updateField}
                   onPushToStatus={pushToStatus}
                   onSplit={splitRow}
