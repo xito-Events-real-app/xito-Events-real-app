@@ -468,15 +468,14 @@ export function WtnPipelineView({ onClose }: { onClose: () => void }) {
   const filteredRowsByStatus = useMemo(() => {
     const result: Record<string, (DisplayRow & { _pipelinePos?: number })[]> = {};
     for (const stage of STAGES) {
-      let filtered = applyFiltersAndSort(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth, sortMode);
-      // Apply edit type filter (visual only, doesn't change pipeline numbers)
+      let filtered = applyFiltersAndSort(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth, sortMode, filterEditor);
       if (filterEvent) {
         filtered = filtered.filter(r => r.editType === filterEvent);
       }
       result[stage.key] = filtered.map(r => ({ ...r, _pipelinePos: pipelinePosMap[r.id] || 0 }));
     }
     return result;
-  }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, filterEvent, sortMode, pipelinePosMap]);
+  }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, filterEvent, filterEditor, sortMode, pipelinePosMap]);
 
   // Get unique edit types for the right sidebar from current stage's UNFILTERED rows
   const editTypes = useMemo(() => {
