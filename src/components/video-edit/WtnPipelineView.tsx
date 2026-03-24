@@ -729,6 +729,27 @@ export function WtnPipelineView({ onClose }: { onClose: () => void }) {
                     );
                   })}
                 </div>
+                {/* Editors section */}
+                {activeEditors.length > 0 && (
+                  <>
+                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 mt-5">Editors</h3>
+                    <div className="space-y-2">
+                      {activeEditors.map(({ name, count }) => (
+                        <button
+                          key={name}
+                          onClick={() => setFilterEditor(prev => prev === name ? null : name)}
+                          className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold transition-all border-2 ${
+                            filterEditor === name
+                              ? 'bg-teal-500 text-white border-teal-600 shadow-md'
+                              : 'bg-teal-100 text-teal-800 border-teal-300 dark:bg-teal-950 dark:text-teal-200 dark:border-teal-700 hover:shadow-sm'
+                          }`}
+                        >
+                          {name} ({count})
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}
