@@ -198,7 +198,7 @@ export function MobileVideoEditTracker() {
     return combined;
   }, [filteredRowsByStatus, hasFilters]);
 
-  const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); };
+  const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); setSortMode('default'); };
 
   return (
     <div className="min-h-screen bg-background pb-20">
