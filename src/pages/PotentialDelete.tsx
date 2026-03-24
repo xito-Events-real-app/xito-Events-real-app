@@ -241,6 +241,15 @@ export default function PotentialDelete() {
 
   const uniqueDevices = useMemo(() => [...new Set(activeRecords.map(r => r.device_name).filter(Boolean))], [activeRecords]);
 
+  const formatSize = (gb: number) => {
+    if (gb >= 1024) return `${(gb / 1024).toFixed(2).replace(/\.?0+$/, '')} TB`;
+    return `${gb.toFixed(1).replace(/\.0$/, '')} GB`;
+  };
+
+  const totalActiveSize = useMemo(() => activeRecords.reduce((s, r) => s + (r.size_gb || 0), 0), [activeRecords]);
+  const readyToDeleteSize = useMemo(() => readyRecords.reduce((s, r) => s + (r.size_gb || 0), 0), [readyRecords]);
+  const permDeletedSize = useMemo(() => permDeletedRecords.reduce((s, r) => s + (r.size_gb || 0), 0), [permDeletedRecords]);
+
   const formatTime = (ts: string) => {
     const diff = Date.now() - new Date(ts).getTime();
     const mins = Math.floor(diff / 60000);
