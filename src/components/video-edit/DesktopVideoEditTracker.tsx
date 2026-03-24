@@ -323,6 +323,21 @@ export function DesktopVideoEditTracker() {
     return result;
   }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, sortMode]);
 
+  // Compute pipeline position (urgency-sorted rank within each stage)
+  const pipelinePosMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const stage of STAGES) {
+      const stageRows = [...(rowsByStatus[stage.key] || [])].sort(
+        (a, b) => (parseInt(b.urgency || '0') || 0) - (parseInt(a.urgency || '0') || 0)
+      );
+      stageRows.forEach((r, i) => { map[r.id] = i + 1; });
+    }
+    return map;
+  }, [rowsByStatus]);
+
+  const addPipelinePos = (rows: DisplayRow[]) =>
+    rows.map(r => ({ ...r, _pipelinePos: pipelinePosMap[r.id] || 0 }));
+
   // "All" tab rows - combined from all stages when filters active
   const allFilteredRows = useMemo(() => {
     if (!hasFilters) return [];
