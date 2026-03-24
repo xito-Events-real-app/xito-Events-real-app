@@ -1,79 +1,67 @@
 
 
-## Potential Delete — Netflix-Style Screenshot Manager
+## Potential Delete — Approval Workflow, Comments, Deletion Confirmation & Device Dedup Fix
 
-### Concept
-A fully independent module for pasting Windows screenshots (Win+Shift+S), tagging them to storage devices with client name and responsible person, and managing them in a Netflix-style dark card grid. Completely isolated — no changes to existing features.
+### Database Migration
 
-### Upload Flow
-1. User presses Ctrl+V anywhere on the page
-2. If clipboard has image → opens upload dialog with preview
-3. If no image → toast: "Nothing has been copied"
-4. Dialog fields:
-   - **Device Type**: PC / Hard Drive / SSD (buttons)
-   - **Device Name**: Dropdown populated from `storage_devices` table filtered by type
-   - **Client Name**: Searchable input — searches `clients_cache` for suggestions, or type anything custom
-   - **Responsibility**: Select from: Benzo / Nikit / Saugat / Barun / Arjun
-   - **Notes**: Optional text
-5. Save → uploads image to `potential-deletes` storage bucket, inserts row
-
-### Dashboard (Netflix-style)
-- Dark themed cards with red accent (Netflix vibe)
-- **Stats bar**: Total | By Responsibility (Benzo: 12, Nikit: 8...) | Deleted count | Storage device breakdown
-- **Filter by responsibility** — click a person's name to filter their screenshots
-- **Filter by device** — click device name
-- Cards show: thumbnail, client name, device badge, responsibility badge, timestamp
-- Each card has a **Delete button** (moves to soft-deleted state, frees storage)
-- Toggle to show/hide deleted items (with "Restore" option)
-
-### Database
-
-**New table: `potential_deletes`**
+Add 4 columns to `potential_deletes`:
 ```sql
-id uuid PK default gen_random_uuid()
-image_url text NOT NULL
-device_type text NOT NULL default ''
-device_name text NOT NULL default ''
-client_name text default ''
-responsibility text default ''
-notes text default ''
-deleted boolean default false
-created_at timestamptz default now()
+ALTER TABLE potential_deletes 
+  ADD COLUMN delete_approval text DEFAULT '' NOT NULL,
+  ADD COLUMN approved_by text DEFAULT '' NOT NULL,
+  ADD COLUMN comments text DEFAULT '' NOT NULL,
+  ADD COLUMN permanently_deleted_at timestamptz DEFAULT NULL;
 ```
-RLS: Allow all (matches other tables).
 
-**New storage bucket: `potential-deletes`** (public, for screenshot images)
+### Changes
 
-### Files
+**1. `src/hooks/usePotentialDeletes.ts`**
+- Add new fields to interface: `delete_approval`, `approved_by`, `comments`, `permanently_deleted_at`
+- Add `updateApproval(id, approval, approverName)` — updates `delete_approval` and `approved_by`
+- Add `confirmDeletion(id)` — sets `permanently_deleted_at = now()`, moves to permanently deleted state
+- Add `addComment(id, text, commenterName)` — prepends timestamped comment using `|||` delimiter
 
-1. **DB Migration** — Create `potential_deletes` table + `potential-deletes` storage bucket with public RLS
-2. **New: `src/pages/PotentialDelete.tsx`**
-   - Global paste listener (`useEffect` on `paste` event)
-   - Upload dialog: image preview, device type buttons, device name dropdown (from `storage_devices`), client name searchable input (from `clients_cache`), responsibility selector (5 fixed names), notes
-   - Netflix-style dashboard: dark cards, stats bar (total, per-responsibility, deleted count), filters by responsibility and device
-   - Delete button on each card (soft delete: `deleted = true`), removes image from bucket
-   - "Show Deleted" toggle with restore option
-   - Responsive grid layout
-3. **New: `src/hooks/usePotentialDeletes.ts`**
-   - CRUD: load all records, upload image + insert, soft-delete (update `deleted=true` + remove from bucket), restore, hard-delete
-   - Realtime subscription on `potential_deletes`
-   - Uses `useStorageDevices()` for device list
-4. **Edit: `src/lib/suite-modules.ts`** — Add module: `{ id: 'potential-delete', name: 'Potential Delete', icon: Trash2, path: '/potential-delete', status: 'active', gradient: 'from-red-500 to-orange-600' }`
-5. **Edit: `src/App.tsx`** — Add route `/potential-delete` → `<PotentialDelete />`
+**2. `src/pages/PotentialDelete.tsx` — Major overhaul**
 
-### Card Design (Netflix-style)
-```text
-┌──────────────────────────┐
-│ [Screenshot Thumbnail]   │
-│                          │
-│ PABINA ADHIKARI          │  ← client name, bold white
-│ 🔴 WD 2TB  👤 Benzo     │  ← device + responsibility badges
-│ 2 hours ago    [🗑 Del]  │
-└──────────────────────────┘
-```
-Dark background (`bg-zinc-900`), red/orange accent badges, hover glow effect.
+**Fix device dropdown duplicates**: Deduplicate `filteredDevices` using a `Set` on `device_name`.
 
-### Independence
-- No changes to File Management, Video Edit, or any existing module
-- Only touches: `suite-modules.ts` (add entry), `App.tsx` (add route), plus new files
+**New view tabs** (top filter bar): ALL / PENDING / READY TO DELETE (default) / DON'T DELETE / PERMANENTLY DELETED
+
+**Card approval section** (for pending cards):
+- Shows: "Can we delete it, [Responsibility]?" with 3 buttons: YES (green) / NO (red) / GIVE ME SOME TIME (yellow)
+- Clicking stores `delete_approval` + `approved_by` (the person who clicks, selected via a name picker)
+
+**Approved cards (READY TO DELETE section)** — Key change per user request:
+- Card asks: **"Saugat, did you delete [Client Name] from [Device Name] after [Approver]'s approval?"**
+- The name is always **Saugat** (hardcoded), not the responsibility person
+- Single YES button. Clicking sets `permanently_deleted_at = now()`
+
+**Permanently Deleted section**:
+- Shows cards with "Image will be removed in X days" countdown (7 days from `permanently_deleted_at`)
+- After 7 days, image placeholder shown instead
+
+**Comment system on each card**:
+- Expandable comment thread
+- Author selector (Benzo/Nikit/Saugat/Barun/Arjun) + text input + send
+- Comments displayed with name and timestamp
+
+**Card styling by approval status**:
+- Pending: default zinc border
+- YES: green left border + glow
+- NO: red left border
+- GIVE ME SOME TIME: yellow/amber left border
+- Permanently deleted: muted/gray
+
+**Stats bar update**: Show counts for each approval status + permanently deleted
+
+**3. `supabase/functions/cleanup-potential-deletes/index.ts`** — Edge function
+- Finds records where `permanently_deleted_at` is older than 7 days and `image_url` is not empty
+- Deletes image from `potential-deletes` storage bucket
+- Sets `image_url` to empty string (data row preserved)
+
+### Files changed
+1. DB migration — add 4 columns
+2. `src/hooks/usePotentialDeletes.ts` — new fields + methods
+3. `src/pages/PotentialDelete.tsx` — approval workflow, comments, dedup fix, view tabs
+4. `supabase/functions/cleanup-potential-deletes/index.ts` — auto-cleanup after 7 days
 
