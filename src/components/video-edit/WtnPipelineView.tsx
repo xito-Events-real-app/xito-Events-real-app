@@ -444,9 +444,9 @@ export function WtnPipelineView({ onClose }: { onClose: () => void }) {
     const result: Record<string, (DisplayRow & { _pipelinePos?: number })[]> = {};
     for (const stage of STAGES) {
       let filtered = applyFiltersAndSort(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth, sortMode);
-      // Apply event filter (visual only, doesn't change pipeline numbers)
+      // Apply edit type filter (visual only, doesn't change pipeline numbers)
       if (filterEvent) {
-        filtered = filtered.filter(r => (r.subEventName || r.eventName) === filterEvent);
+        filtered = filtered.filter(r => r.editType === filterEvent);
       }
       result[stage.key] = filtered.map(r => ({ ...r, _pipelinePos: pipelinePosMap[r.id] || 0 }));
     }
