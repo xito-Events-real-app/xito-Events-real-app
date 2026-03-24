@@ -217,6 +217,75 @@ export function MobileVideoEditTracker() {
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
+          {filterClient ? (
+            /* ── Stacked Client Detail View ── */
+            (() => {
+              const total = STAGES.reduce((s, st) => s + (filteredRowsByStatus[st.key]?.length || 0), 0);
+              const untouched = filteredRowsByStatus['QUEUE']?.length || 0;
+              const finalized = filteredRowsByStatus['FINALIZED']?.length || 0;
+              const onProgress = total - untouched - finalized;
+              return (
+                <div className="space-y-4">
+                  <div className="rounded-lg border bg-card p-2.5 space-y-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <Filter className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                      <Badge variant="secondary" className="gap-1 text-[10px] cursor-pointer" onClick={() => setFilterClient(null)}>
+                        {filterClient} <X className="w-2.5 h-2.5" />
+                      </Badge>
+                      {filterEditType && (
+                        <Badge variant="secondary" className="gap-1 text-[10px] cursor-pointer" onClick={() => setFilterEditType(null)}>
+                          {filterEditType} <X className="w-2.5 h-2.5" />
+                        </Badge>
+                      )}
+                      <Button variant="ghost" size="sm" className="h-5 text-[10px] px-1.5" onClick={clearAll}>Clear</Button>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs border-t pt-1.5 flex-wrap">
+                      <span className="font-semibold text-foreground">Total: {total}</span>
+                      <span className="text-muted-foreground">·</span>
+                      <span className={untouched > 0 ? "font-medium text-foreground" : "text-muted-foreground"}>Untouched: {untouched}</span>
+                      <span className="text-muted-foreground">·</span>
+                      <span className={onProgress > 0 ? "font-medium text-orange-600 dark:text-orange-400" : "text-muted-foreground"}>On Progress: {onProgress}</span>
+                      <span className="text-muted-foreground">·</span>
+                      <span className={finalized > 0 ? "font-medium text-green-600 dark:text-green-400" : "text-muted-foreground"}>Finalized: {finalized}</span>
+                    </div>
+                  </div>
+
+                  {STAGES.map(stage => {
+                    const stageRows = filteredRowsByStatus[stage.key] || [];
+                    if (stageRows.length === 0) return null;
+                    return (
+                      <div key={stage.key} className="space-y-2">
+                        <h3 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                          {stage.label}
+                          <Badge variant="outline" className="text-[10px]">{stageRows.length}</Badge>
+                        </h3>
+                        <div className="space-y-3">
+                          {stageRows.map((row, i) => (
+                            <VideoCard
+                              key={row.id}
+                              row={row}
+                              index={i}
+                              onUpdateField={updateField}
+                              onPushToStatus={pushToStatus}
+                              onSplit={splitRow}
+                              onMerge={mergeRow}
+                              onClickClient={(name) => setFilterClient(prev => prev === name ? null : name)}
+                              onClickEditType={(type) => setFilterEditType(prev => prev === type ? null : type)}
+                              editors={editors}
+                              currentStageKey={stage.key}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {total === 0 && (
+                    <p className="text-center text-sm text-muted-foreground py-8">No rows found for {filterClient}</p>
+                  )}
+                </div>
+              );
+            })()
+          ) : (
           <Tabs defaultValue="QUEUE">
             <div className="overflow-x-auto -mx-4 px-4">
               <TabsList className="w-max mb-2">
@@ -225,11 +294,6 @@ export function MobileVideoEditTracker() {
                     {stage.label} ({filteredRowsByStatus[stage.key]?.length || 0})
                   </TabsTrigger>
                 ))}
-                {hasFilters && (
-                  <TabsTrigger value="ALL" className="text-xs whitespace-nowrap">
-                    All ({allFilteredRows.length})
-                  </TabsTrigger>
-                )}
               </TabsList>
             </div>
 
@@ -237,11 +301,6 @@ export function MobileVideoEditTracker() {
             <div className="mb-3 rounded-lg border bg-card p-2.5 space-y-2">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <Filter className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                {filterClient && (
-                  <Badge variant="secondary" className="gap-1 text-[10px] cursor-pointer" onClick={() => setFilterClient(null)}>
-                    {filterClient} <X className="w-2.5 h-2.5" />
-                  </Badge>
-                )}
                 {filterEditType && (
                   <Badge variant="secondary" className="gap-1 text-[10px] cursor-pointer" onClick={() => setFilterEditType(null)}>
                     {filterEditType} <X className="w-2.5 h-2.5" />
@@ -263,40 +322,25 @@ export function MobileVideoEditTracker() {
                 </Select>
                 <Button
                   variant={sortMode === 'urgency' ? 'default' : 'outline'}
-                  size="sm"
-                  className="h-6 text-[10px] px-2 gap-0.5"
+                  size="sm" className="h-6 text-[10px] px-2 gap-0.5"
                   onClick={() => setSortMode(prev => prev === 'urgency' ? 'default' : 'urgency')}
                 >
                   <Flame className="w-2.5 h-2.5" /> Urgency
                 </Button>
                 <Button
                   variant={sortMode.startsWith('priority') ? 'default' : 'outline'}
-                  size="sm"
-                  className="h-6 text-[10px] px-2 gap-0.5"
+                  size="sm" className="h-6 text-[10px] px-2 gap-0.5"
                   onClick={() => setSortMode(prev =>
-                    prev === 'default' ? 'priority-asc' :
-                    prev === 'priority-asc' ? 'priority-desc' :
-                    prev === 'priority-desc' ? 'default' : 'priority-asc'
+                    prev === 'default' ? 'priority-asc' : prev === 'priority-asc' ? 'priority-desc' : prev === 'priority-desc' ? 'default' : 'priority-asc'
                   )}
                 >
-                  {sortMode === 'priority-asc' ? <ArrowUp className="w-2.5 h-2.5" /> :
-                   sortMode === 'priority-desc' ? <ArrowDown className="w-2.5 h-2.5" /> :
-                   <ArrowUpDown className="w-2.5 h-2.5" />}
+                  {sortMode === 'priority-asc' ? <ArrowUp className="w-2.5 h-2.5" /> : sortMode === 'priority-desc' ? <ArrowDown className="w-2.5 h-2.5" /> : <ArrowUpDown className="w-2.5 h-2.5" />}
                   Priority
                 </Button>
                 {hasSortOrFilter && (
                   <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={clearAll}>Clear</Button>
                 )}
               </div>
-              {clientPipelineStats && (
-                <div className="flex items-center gap-1 flex-wrap text-[10px] text-muted-foreground border-t pt-1.5">
-                  {STAGES.filter(s => clientPipelineStats[s.key] > 0).map(s => (
-                    <span key={s.key} className="text-foreground font-medium">
-                      {s.label}: {clientPipelineStats[s.key]}
-                    </span>
-                  ))}
-                </div>
-              )}
             </div>
 
             {STAGES.map(stage => (
@@ -323,31 +367,8 @@ export function MobileVideoEditTracker() {
                 </div>
               </TabsContent>
             ))}
-            {hasFilters && (
-              <TabsContent value="ALL">
-                <div className="space-y-3">
-                  {allFilteredRows.map((row, i) => (
-                    <VideoCard
-                      key={row.id}
-                      row={row}
-                      index={i}
-                      onUpdateField={updateField}
-                      onPushToStatus={pushToStatus}
-                      onSplit={splitRow}
-                      onMerge={mergeRow}
-                      onClickClient={(name) => setFilterClient(prev => prev === name ? null : name)}
-                      onClickEditType={(type) => setFilterEditType(prev => prev === type ? null : type)}
-                      editors={editors}
-                      currentStageKey="ALL"
-                    />
-                  ))}
-                  {allFilteredRows.length === 0 && (
-                    <p className="text-center text-sm text-muted-foreground py-8">No items match filters</p>
-                  )}
-                </div>
-              </TabsContent>
-            )}
           </Tabs>
+          )}
         )}
       </div>
     </div>
