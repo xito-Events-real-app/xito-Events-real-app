@@ -290,7 +290,7 @@ export function MobileVideoEditTracker() {
                           <Badge variant="outline" className="text-[10px]">{stageRows.length}</Badge>
                         </h3>
                         <div className="space-y-3">
-                          {stageRows.map((row, i) => (
+                          {addPipelinePos(stageRows).map((row, i) => (
                             <VideoCard
                               key={row.id}
                               row={row}
