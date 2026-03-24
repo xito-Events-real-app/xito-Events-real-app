@@ -12,6 +12,10 @@ export interface PotentialDelete {
   notes: string;
   deleted: boolean;
   created_at: string;
+  delete_approval: string;
+  approved_by: string;
+  comments: string;
+  permanently_deleted_at: string | null;
 }
 
 export function usePotentialDeletes() {
@@ -106,5 +110,41 @@ export function usePotentialDeletes() {
     toast({ title: "Permanently deleted" });
   };
 
-  return { records, isLoading, add, softDelete, restore, hardDelete, refresh: load };
+  const updateApproval = async (id: string, approval: string, approverName: string) => {
+    const { error } = await (supabase as any)
+      .from("potential_deletes")
+      .update({ delete_approval: approval, approved_by: approverName })
+      .eq("id", id);
+    if (error) throw error;
+    setRecords(prev => prev.map(r => r.id === id ? { ...r, delete_approval: approval, approved_by: approverName } : r));
+    toast({ title: `Marked as ${approval}` });
+  };
+
+  const confirmDeletion = async (id: string) => {
+    const { error } = await (supabase as any)
+      .from("potential_deletes")
+      .update({ permanently_deleted_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) throw error;
+    setRecords(prev => prev.map(r => r.id === id ? { ...r, permanently_deleted_at: new Date().toISOString() } : r));
+    toast({ title: "Marked as permanently deleted" });
+  };
+
+  const addComment = async (id: string, text: string, commenterName: string) => {
+    const record = records.find(r => r.id === id);
+    if (!record) return;
+    const now = new Date();
+    const dateStr = `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const newComment = `${text} [${commenterName} ${dateStr}]`;
+    const updated = record.comments ? `${newComment}|||${record.comments}` : newComment;
+    const { error } = await (supabase as any)
+      .from("potential_deletes")
+      .update({ comments: updated })
+      .eq("id", id);
+    if (error) throw error;
+    setRecords(prev => prev.map(r => r.id === id ? { ...r, comments: updated } : r));
+    toast({ title: "Comment added" });
+  };
+
+  return { records, isLoading, add, softDelete, restore, hardDelete, updateApproval, confirmDeletion, addComment, refresh: load };
 }
