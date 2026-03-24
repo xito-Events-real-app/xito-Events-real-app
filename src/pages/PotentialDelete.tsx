@@ -405,6 +405,7 @@ export default function PotentialDelete() {
                   <div className="flex flex-wrap gap-1.5">
                     <Badge className="bg-red-900/60 text-red-300 border-red-800 text-[10px]">{record.device_name}</Badge>
                     <Badge className="bg-orange-900/60 text-orange-300 border-orange-800 text-[10px]">👤 {record.responsibility}</Badge>
+                    {(record.size_gb || 0) > 0 && <Badge className="bg-blue-900/60 text-blue-300 border-blue-800 text-[10px]">📦 {formatSize(record.size_gb)}</Badge>}
                     {record.delete_approval === "YES" && <Badge className="bg-emerald-900/60 text-emerald-300 border-emerald-800 text-[10px]">✅ Approved by {record.approved_by}</Badge>}
                     {record.delete_approval === "NO" && <Badge className="bg-red-900/60 text-red-300 border-red-800 text-[10px]">❌ Don't Delete</Badge>}
                     {record.delete_approval === "GIVE_ME_SOME_TIME" && <Badge className="bg-amber-900/60 text-amber-300 border-amber-800 text-[10px]">⏳ Waiting</Badge>}
