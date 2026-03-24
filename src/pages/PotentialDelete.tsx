@@ -203,7 +203,7 @@ export default function PotentialDelete() {
     }
     setSaving(true);
     try {
-      await add(pastedFile, { device_type: deviceType, device_name: deviceName, client_name: clientName || clientSearch, responsibility, notes });
+      await add(pastedFile, { device_type: deviceType, device_name: deviceName, client_name: clientName || clientSearch, responsibility, notes, size_gb: parseFloat(sizeGb) || 0 });
       resetForm();
     } catch (err: any) {
       toast({ title: "Error saving", description: err.message, variant: "destructive" });
