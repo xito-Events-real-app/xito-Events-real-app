@@ -131,4 +131,13 @@ export const suiteModules: SuiteModule[] = [
     status: 'active',
     gradient: 'from-indigo-500 to-purple-600',
   },
+  {
+    id: 'potential-delete',
+    name: 'Potential Delete',
+    description: 'Manage screenshots for potential deletion',
+    icon: Trash2,
+    path: '/potential-delete',
+    status: 'active',
+    gradient: 'from-red-500 to-orange-600',
+  },
 ];

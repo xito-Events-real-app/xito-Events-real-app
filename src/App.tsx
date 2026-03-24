@@ -103,6 +103,7 @@ const App = () => (
               <Route path="/benzo-keep" element={<ProtectedRoute><BenzoKeepPage /></ProtectedRoute>} />
               <Route path="/freelancers" element={<ProtectedRoute><Freelancers /></ProtectedRoute>} />
               <Route path="/freelancer/:freelancerName" element={<ProtectedRoute><FreelancerProfile /></ProtectedRoute>} />
+              <Route path="/potential-delete" element={<ProtectedRoute><PotentialDelete /></ProtectedRoute>} />
               
               <Route path="*" element={<NotFound />} />
             </Routes>
