@@ -310,10 +310,10 @@ export function DesktopVideoEditTracker() {
   const filteredRowsByStatus = useMemo(() => {
     const result: Record<string, DisplayRow[]> = {};
     for (const stage of STAGES) {
-      result[stage.key] = applyFilters(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth);
+      result[stage.key] = applyFiltersAndSort(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth, sortMode);
     }
     return result;
-  }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth]);
+  }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, sortMode]);
 
   // "All" tab rows - combined from all stages when filters active
   const allFilteredRows = useMemo(() => {
