@@ -264,7 +264,10 @@ function SnakeGrid({ rows, stageKey, editors, onUpdateField, onPushToStatus, car
 
   const orderedRows = useMemo(() => {
     const rowMap = new Map(rows.map(r => [r.id, r]));
-    return orderedIds.map(id => rowMap.get(id)).filter(Boolean) as (DisplayRow & { _stageKey?: string; _pipelinePos?: number })[];
+    return orderedIds.map(id => rowMap.get(id)).filter(Boolean).map((r, i) => ({
+      ...r,
+      _pipelinePos: i + 1,
+    })) as (DisplayRow & { _stageKey?: string; _pipelinePos?: number })[];
   }, [orderedIds, rows]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent, id: string) => {
@@ -441,27 +444,26 @@ export function WtnPipelineView({ onClose }: { onClose: () => void }) {
     const result: Record<string, (DisplayRow & { _pipelinePos?: number })[]> = {};
     for (const stage of STAGES) {
       let filtered = applyFiltersAndSort(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth, sortMode);
-      // Apply event filter (visual only, doesn't change pipeline numbers)
+      // Apply edit type filter (visual only, doesn't change pipeline numbers)
       if (filterEvent) {
-        filtered = filtered.filter(r => (r.subEventName || r.eventName) === filterEvent);
+        filtered = filtered.filter(r => r.editType === filterEvent);
       }
       result[stage.key] = filtered.map(r => ({ ...r, _pipelinePos: pipelinePosMap[r.id] || 0 }));
     }
     return result;
   }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, filterEvent, sortMode, pipelinePosMap]);
 
-  // Get unique event names for the right sidebar from current stage's UNFILTERED rows
-  const eventNames = useMemo(() => {
-    const names = new Set<string>();
+  // Get unique edit types for the right sidebar from current stage's UNFILTERED rows
+  const editTypes = useMemo(() => {
+    const types = new Set<string>();
     if (activeTab === 'ALL') {
       for (const stage of STAGES) {
-        (rowsByStatus[stage.key] || []).forEach(r => names.add(r.subEventName || r.eventName || ''));
+        (rowsByStatus[stage.key] || []).forEach(r => { if (r.editType) types.add(r.editType); });
       }
     } else {
-      (rowsByStatus[activeTab] || []).forEach(r => names.add(r.subEventName || r.eventName || ''));
+      (rowsByStatus[activeTab] || []).forEach(r => { if (r.editType) types.add(r.editType); });
     }
-    names.delete('');
-    return Array.from(names).sort();
+    return Array.from(types).sort();
   }, [activeTab, rowsByStatus]);
 
   const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); setFilterEvent(null); setSortMode('urgency'); };
@@ -586,23 +588,40 @@ export function WtnPipelineView({ onClose }: { onClose: () => void }) {
 
       {/* Main content: Snake pipeline + Event sidebar */}
       <div className="flex-1 overflow-hidden flex flex-col">
-        {/* Mobile: horizontal event filter strip */}
-        {isMobile && eventNames.length > 0 && (
+        {/* Mobile: horizontal edit type filter strip */}
+        {isMobile && editTypes.length > 0 && (
           <div className="border-b bg-card/30 shrink-0 px-4 py-2 overflow-x-auto">
             <div className="flex gap-1.5 w-max">
-              {eventNames.map(name => (
-                <button
-                  key={name}
-                  onClick={() => setFilterEvent(prev => prev === name ? null : name)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors border ${
-                    filterEvent === name
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-card text-muted-foreground border-border hover:bg-muted'
-                  }`}
-                >
-                  {name}
-                </button>
-              ))}
+              {editTypes.map((type, i) => {
+                const colors = [
+                  'bg-blue-500 text-white border-blue-600',
+                  'bg-purple-500 text-white border-purple-600',
+                  'bg-amber-500 text-white border-amber-600',
+                  'bg-emerald-500 text-white border-emerald-600',
+                  'bg-rose-500 text-white border-rose-600',
+                  'bg-cyan-500 text-white border-cyan-600',
+                ];
+                const inactiveColors = [
+                  'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950 dark:text-blue-200 dark:border-blue-800',
+                  'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950 dark:text-purple-200 dark:border-purple-800',
+                  'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800',
+                  'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-200 dark:border-emerald-800',
+                  'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950 dark:text-rose-200 dark:border-rose-800',
+                  'bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-950 dark:text-cyan-200 dark:border-cyan-800',
+                ];
+                const colorIdx = i % colors.length;
+                return (
+                  <button
+                    key={type}
+                    onClick={() => setFilterEvent(prev => prev === type ? null : type)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all border-2 ${
+                      filterEvent === type ? colors[colorIdx] : inactiveColors[colorIdx]
+                    }`}
+                  >
+                    {type}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -628,25 +647,45 @@ export function WtnPipelineView({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
-          {/* Desktop: right-side event filter rail */}
-          {!isMobile && eventNames.length > 0 && (
+          {/* Desktop: right-side edit type filter rail */}
+          {!isMobile && editTypes.length > 0 && (
             <div className="w-[220px] shrink-0 border-l bg-card/50 overflow-y-auto">
               <div className="p-3">
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Events</h3>
-                <div className="space-y-1">
-                  {eventNames.map(name => (
-                    <button
-                      key={name}
-                      onClick={() => setFilterEvent(prev => prev === name ? null : name)}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        filterEvent === name
-                          ? 'bg-primary text-primary-foreground'
-                          : 'text-foreground hover:bg-muted'
-                      }`}
-                    >
-                      {name}
-                    </button>
-                  ))}
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Edit Types</h3>
+                <div className="space-y-2">
+                  {editTypes.map((type, i) => {
+                    const colors = [
+                      'bg-blue-500 text-white border-blue-600 shadow-blue-200 dark:shadow-blue-900',
+                      'bg-purple-500 text-white border-purple-600 shadow-purple-200 dark:shadow-purple-900',
+                      'bg-amber-500 text-white border-amber-600 shadow-amber-200 dark:shadow-amber-900',
+                      'bg-emerald-500 text-white border-emerald-600 shadow-emerald-200 dark:shadow-emerald-900',
+                      'bg-rose-500 text-white border-rose-600 shadow-rose-200 dark:shadow-rose-900',
+                      'bg-cyan-500 text-white border-cyan-600 shadow-cyan-200 dark:shadow-cyan-900',
+                    ];
+                    const inactiveColors = [
+                      'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950 dark:text-blue-200 dark:border-blue-700',
+                      'bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-950 dark:text-purple-200 dark:border-purple-700',
+                      'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-700',
+                      'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-200 dark:border-emerald-700',
+                      'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950 dark:text-rose-200 dark:border-rose-700',
+                      'bg-cyan-100 text-cyan-800 border-cyan-300 dark:bg-cyan-950 dark:text-cyan-200 dark:border-cyan-700',
+                    ];
+                    const colorIdx = i % colors.length;
+                    const isActive = filterEvent === type;
+                    return (
+                      <button
+                        key={type}
+                        onClick={() => setFilterEvent(prev => prev === type ? null : type)}
+                        className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold transition-all border-2 ${
+                          isActive
+                            ? `${colors[colorIdx]} shadow-md`
+                            : `${inactiveColors[colorIdx]} hover:shadow-sm`
+                        }`}
+                      >
+                        {type}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
