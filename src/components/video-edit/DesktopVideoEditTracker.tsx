@@ -460,7 +460,7 @@ export function DesktopVideoEditTracker() {
                           <Badge variant="outline" className="text-xs">{stageRows.length}</Badge>
                         </h3>
                         <VideoEditTable
-                          rows={stageRows}
+                          rows={addPipelinePos(stageRows)}
                           onUpdateField={updateField}
                           onPushToStatus={pushToStatus}
                           onSplit={splitRow}
