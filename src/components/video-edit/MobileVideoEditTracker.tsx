@@ -159,8 +159,10 @@ export function MobileVideoEditTracker() {
   const [filterEditType, setFilterEditType] = useState<string | null>(null);
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>('default');
 
   const hasFilters = !!(filterClient || filterEditType || filterYear || filterMonth);
+  const hasSortOrFilter = hasFilters || sortMode !== 'default';
   const years = getBSYearsRange(-2, 3);
 
   useEffect(() => {
