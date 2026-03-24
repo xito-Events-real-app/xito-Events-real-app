@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { X, Filter, Flame, ArrowUpDown, ArrowUp, ArrowDown, GripVertical } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { adToBS, nepaliMonthsEnglish, getBSYearsRange } from "@/lib/nepali-date";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const URGENCY_COLORS: Record<string, string> = {
   "1": "bg-muted text-muted-foreground",
@@ -112,86 +113,86 @@ function getStageLabel(key: string): string {
   return STAGES.find(s => s.key === key)?.label || key;
 }
 
+// --- Pipeline Card ---
+
 interface PipelineCardProps {
-  row: DisplayRow & { _stageKey?: string };
-  index: number;
+  row: DisplayRow & { _stageKey?: string; _pipelinePos?: number };
   stageKey: string;
   editors: { name: string; isVideoEditor: boolean }[];
   onUpdateField: (id: string, field: string, value: string, mergedIds?: string[]) => void;
   onPushToStatus?: (id: string, status: string, mergedIds?: string[]) => void;
   isDropBefore: boolean;
-  isDropAfter: boolean;
   isDragging: boolean;
   onPointerDown: (e: React.PointerEvent, id: string) => void;
 }
 
 function PipelineCard({
-  row, index, stageKey, editors, onUpdateField, onPushToStatus,
-  isDropBefore, isDropAfter, isDragging, onPointerDown,
+  row, stageKey, editors, onUpdateField, onPushToStatus,
+  isDropBefore, isDragging, onPointerDown,
 }: PipelineCardProps) {
   const urgCls = URGENCY_COLORS[row.urgency] || URGENCY_COLORS["1"];
   const borderCls = STAGE_BORDER[stageKey] || "border-l-muted";
   const bgCls = STAGE_BG[stageKey] || "bg-card";
   const badgeCls = STAGE_BADGE[stageKey] || "bg-muted text-muted-foreground";
+  const pipelineNum = row._pipelinePos ?? 0;
 
   return (
     <div className="relative flex items-stretch">
-      {/* Drop indicator before */}
       {isDropBefore && (
-        <div className="absolute -left-1 top-0 bottom-0 w-1 bg-primary rounded-full z-10" />
+        <div className="absolute -left-1.5 top-0 bottom-0 w-1.5 bg-primary rounded-full z-10 animate-pulse" />
       )}
       <div
         className={`
-          relative w-[280px] min-w-[280px] rounded-xl border-l-4 ${borderCls}
+          relative w-[320px] min-w-[320px] rounded-xl border-l-4 ${borderCls}
           border border-border ${bgCls} shadow-sm hover:shadow-lg transition-all select-none
-          ${isDragging ? 'opacity-40 scale-95' : ''}
+          ${isDragging ? 'opacity-40 scale-95 shadow-2xl' : ''}
         `}
       >
         {/* Drag handle */}
         <div
-          className="absolute top-2 right-2 cursor-grab active:cursor-grabbing text-muted-foreground/60 hover:text-muted-foreground touch-none"
+          className="absolute top-2 right-2 cursor-grab active:cursor-grabbing text-muted-foreground/60 hover:text-foreground touch-none p-1"
           onPointerDown={(e) => onPointerDown(e, row.id)}
         >
-          <GripVertical className="w-4 h-4" />
+          <GripVertical className="w-5 h-5" />
         </div>
 
-        <div className="p-4 space-y-2.5">
+        <div className="p-4 space-y-2">
           {/* Priority + Urgency + Stage Badge */}
-          <div className="flex items-center gap-1.5 flex-wrap pr-6">
-            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-foreground/10 text-xs font-bold">
-              #{index + 1}
+          <div className="flex items-center gap-2 flex-wrap pr-8">
+            <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-foreground/10 text-sm font-bold">
+              #{pipelineNum}
             </span>
-            <span className={`inline-flex items-center justify-center w-7 h-7 rounded-md text-xs font-bold ${urgCls}`}>
+            <span className={`inline-flex items-center justify-center w-8 h-8 rounded-md text-sm font-bold ${urgCls}`}>
               ⚡{row.urgency || "-"}
             </span>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${badgeCls}`}>
+            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${badgeCls}`}>
               {getStageLabel(stageKey)}
             </span>
           </div>
 
           {/* Client name */}
-          <p className="font-bold text-sm leading-tight truncate text-foreground">
+          <p className="font-bold text-base leading-tight truncate text-foreground">
             {row.clientName}
           </p>
 
           {/* Sub-event */}
-          <p className="text-xs text-muted-foreground truncate">
+          <p className="text-sm text-muted-foreground truncate">
             {row.subEventName || row.eventName}
           </p>
 
           {/* Edit type */}
-          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-accent/15 text-accent text-xs font-medium truncate max-w-full">
+          <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-accent/15 text-accent text-sm font-medium truncate max-w-full">
             {row.editType}
           </span>
 
           {/* Event date */}
           {row.eventDateAD && (
-            <p className="text-xs text-muted-foreground">📅 {row.eventDateAD}</p>
+            <p className="text-sm text-muted-foreground">📅 {row.eventDateAD}</p>
           )}
 
           {/* Urgency selector */}
           <Select value={row.urgency || "0"} onValueChange={(v) => onUpdateField(row.id, "urgency", v, row.mergedIds)}>
-            <SelectTrigger className="w-full h-7 text-xs"><SelectValue placeholder="Urgency" /></SelectTrigger>
+            <SelectTrigger className="w-full h-8 text-sm"><SelectValue placeholder="Urgency" /></SelectTrigger>
             <SelectContent>
               {["1", "2", "3", "4", "5"].map(u => (
                 <SelectItem key={u} value={u}>Urgency {u}</SelectItem>
@@ -201,7 +202,7 @@ function PipelineCard({
 
           {/* Editor selector */}
           <Select value={row.editor || "unassigned"} onValueChange={(v) => onUpdateField(row.id, "editor", v === "unassigned" ? "" : v, row.mergedIds)}>
-            <SelectTrigger className="w-full h-7 text-xs"><SelectValue placeholder="Editor..." /></SelectTrigger>
+            <SelectTrigger className="w-full h-8 text-sm"><SelectValue placeholder="Editor..." /></SelectTrigger>
             <SelectContent>
               <SelectItem value="unassigned">Unassigned</SelectItem>
               {editors.filter(e => e.isVideoEditor && e.name).map(e => (
@@ -215,7 +216,7 @@ function PipelineCard({
 
           {/* Move to */}
           <Select onValueChange={(v) => onPushToStatus?.(row.id, v, row.mergedIds)}>
-            <SelectTrigger className="w-full h-7 text-xs"><SelectValue placeholder="Move to..." /></SelectTrigger>
+            <SelectTrigger className="w-full h-8 text-sm"><SelectValue placeholder="Move to..." /></SelectTrigger>
             <SelectContent>
               {STAGES.filter(s => s.key !== stageKey).map(s => (
                 <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
@@ -224,16 +225,14 @@ function PipelineCard({
           </Select>
         </div>
       </div>
-      {/* Drop indicator after */}
-      {isDropAfter && (
-        <div className="absolute -right-1 top-0 bottom-0 w-1 bg-primary rounded-full z-10" />
-      )}
     </div>
   );
 }
 
+// --- Snake Grid ---
+
 interface SnakeGridProps {
-  rows: (DisplayRow & { _stageKey?: string })[];
+  rows: (DisplayRow & { _stageKey?: string; _pipelinePos?: number })[];
   stageKey: string;
   editors: { name: string; isVideoEditor: boolean }[];
   onUpdateField: (id: string, field: string, value: string, mergedIds?: string[]) => void;
@@ -243,11 +242,12 @@ interface SnakeGridProps {
 
 function SnakeGrid({ rows, stageKey, editors, onUpdateField, onPushToStatus, cardsPerRow }: SnakeGridProps) {
   const [orderedIds, setOrderedIds] = useState<string[]>([]);
-  const dragState = useRef<{
+  const dragStateRef = useRef<{
     dragId: string | null;
     startX: number; startY: number;
     active: boolean;
   }>({ dragId: null, startX: 0, startY: 0, active: false });
+  const dropTargetRef = useRef<number | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
 
@@ -264,23 +264,25 @@ function SnakeGrid({ rows, stageKey, editors, onUpdateField, onPushToStatus, car
 
   const orderedRows = useMemo(() => {
     const rowMap = new Map(rows.map(r => [r.id, r]));
-    return orderedIds.map(id => rowMap.get(id)).filter(Boolean) as (DisplayRow & { _stageKey?: string })[];
+    return orderedIds.map(id => rowMap.get(id)).filter(Boolean) as (DisplayRow & { _stageKey?: string; _pipelinePos?: number })[];
   }, [orderedIds, rows]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent, id: string) => {
     e.preventDefault();
-    dragState.current = { dragId: id, startX: e.clientX, startY: e.clientY, active: false };
+    e.stopPropagation();
+    dragStateRef.current = { dragId: id, startX: e.clientX, startY: e.clientY, active: false };
     setDragId(id);
+    dropTargetRef.current = null;
+    setDropTargetIdx(null);
 
     const handlePointerMove = (ev: PointerEvent) => {
-      const dx = ev.clientX - dragState.current.startX;
-      const dy = ev.clientY - dragState.current.startY;
-      if (!dragState.current.active && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
-        dragState.current.active = true;
+      const dx = ev.clientX - dragStateRef.current.startX;
+      const dy = ev.clientY - dragStateRef.current.startY;
+      if (!dragStateRef.current.active && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
+        dragStateRef.current.active = true;
       }
-      if (!dragState.current.active) return;
+      if (!dragStateRef.current.active) return;
 
-      // Find drop target based on pointer position
       const els = document.querySelectorAll('[data-pipeline-card-idx]');
       let closest: number | null = null;
       let closestDist = Infinity;
@@ -294,6 +296,7 @@ function SnakeGrid({ rows, stageKey, editors, onUpdateField, onPushToStatus, car
           closest = parseInt(el.getAttribute('data-pipeline-card-idx') || '-1');
         }
       });
+      dropTargetRef.current = closest;
       setDropTargetIdx(closest);
     };
 
@@ -301,34 +304,38 @@ function SnakeGrid({ rows, stageKey, editors, onUpdateField, onPushToStatus, car
       document.removeEventListener('pointermove', handlePointerMove);
       document.removeEventListener('pointerup', handlePointerUp);
 
-      if (dragState.current.active && dragState.current.dragId && dropTargetIdx !== null) {
+      const targetIdx = dropTargetRef.current;
+      const currentDragId = dragStateRef.current.dragId;
+
+      if (dragStateRef.current.active && currentDragId && targetIdx !== null) {
         setOrderedIds(prev => {
           const arr = [...prev];
-          const fromIdx = arr.indexOf(dragState.current.dragId!);
-          if (fromIdx === -1 || dropTargetIdx >= arr.length) return prev;
-          const targetId = arr[dropTargetIdx];
-          if (dragState.current.dragId === targetId) return prev;
+          const fromIdx = arr.indexOf(currentDragId);
+          if (fromIdx === -1 || targetIdx >= arr.length) return prev;
+          const targetId = arr[targetIdx];
+          if (currentDragId === targetId) return prev;
           arr.splice(fromIdx, 1);
           const toIdx = arr.indexOf(targetId);
-          arr.splice(toIdx, 0, dragState.current.dragId!);
+          arr.splice(toIdx, 0, currentDragId);
           return arr;
         });
       }
 
-      dragState.current = { dragId: null, startX: 0, startY: 0, active: false };
+      dragStateRef.current = { dragId: null, startX: 0, startY: 0, active: false };
+      dropTargetRef.current = null;
       setDragId(null);
       setDropTargetIdx(null);
     };
 
     document.addEventListener('pointermove', handlePointerMove);
     document.addEventListener('pointerup', handlePointerUp);
-  }, [dropTargetIdx]);
+  }, []);
 
   if (orderedRows.length === 0) {
     return <p className="text-center text-sm text-muted-foreground py-8">No items</p>;
   }
 
-  const gridRows: (DisplayRow & { _stageKey?: string })[][] = [];
+  const gridRows: (DisplayRow & { _stageKey?: string; _pipelinePos?: number })[][] = [];
   for (let i = 0; i < orderedRows.length; i += cardsPerRow) {
     gridRows.push(orderedRows.slice(i, i + cardsPerRow));
   }
@@ -354,14 +361,12 @@ function SnakeGrid({ rows, stageKey, editors, onUpdateField, onPushToStatus, car
                   <div key={card.id} className="flex items-stretch" data-pipeline-card-idx={globalIdx}>
                     <PipelineCard
                       row={card}
-                      index={globalIdx}
                       stageKey={card._stageKey || stageKey}
                       editors={editors}
                       onUpdateField={onUpdateField}
                       onPushToStatus={onPushToStatus}
                       isDragging={dragId === card.id}
                       isDropBefore={dropTargetIdx === globalIdx && dragId !== card.id}
-                      isDropAfter={false}
                       onPointerDown={handlePointerDown}
                     />
                     {cardIdx < displayCards.length - 1 && (
@@ -373,7 +378,7 @@ function SnakeGrid({ rows, stageKey, editors, onUpdateField, onPushToStatus, car
             </div>
 
             {!isLastRow && (
-              <div className={`flex ${isReversed ? 'justify-start pl-[140px]' : `justify-end pr-[140px]`}`}>
+              <div className={`flex ${isReversed ? 'justify-start pl-[160px]' : `justify-end pr-[160px]`}`}>
                 <div className={`w-1.5 h-10 rounded-full ${connectorCls}`} />
               </div>
             )}
@@ -384,6 +389,8 @@ function SnakeGrid({ rows, stageKey, editors, onUpdateField, onPushToStatus, car
   );
 }
 
+// --- Main Pipeline View ---
+
 export function WtnPipelineView({ onClose }: { onClose: () => void }) {
   const { rowsByStatus, isLoading, updateField, pushToStatus } = useVideoEditTracker();
   const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean }[]>([]);
@@ -392,9 +399,11 @@ export function WtnPipelineView({ onClose }: { onClose: () => void }) {
   const [filterEditType, setFilterEditType] = useState<string | null>(null);
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
+  const [filterEvent, setFilterEvent] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>('urgency');
+  const isMobile = useIsMobile();
 
-  const hasFilters = !!(filterClient || filterEditType || filterYear || filterMonth);
+  const hasFilters = !!(filterClient || filterEditType || filterYear || filterMonth || filterEvent);
   const hasSortOrFilter = hasFilters || sortMode !== 'default';
   const years = getBSYearsRange(-2, 3);
 
@@ -415,19 +424,51 @@ export function WtnPipelineView({ onClose }: { onClose: () => void }) {
     })();
   }, []);
 
-  const filteredRowsByStatus = useMemo(() => {
-    const result: Record<string, DisplayRow[]> = {};
+  // Compute stable pipeline positions from UNFILTERED urgency-sorted rows per stage
+  const pipelinePosMap = useMemo(() => {
+    const map: Record<string, number> = {};
     for (const stage of STAGES) {
-      result[stage.key] = applyFiltersAndSort(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth, sortMode);
+      const stageRows = [...(rowsByStatus[stage.key] || [])].sort(
+        (a, b) => (parseInt(b.urgency || '0') || 0) - (parseInt(a.urgency || '0') || 0)
+      );
+      stageRows.forEach((r, i) => { map[r.id] = i + 1; });
+    }
+    return map;
+  }, [rowsByStatus]);
+
+  // Apply filters (not event filter) and sort, then attach pipeline pos
+  const filteredRowsByStatus = useMemo(() => {
+    const result: Record<string, (DisplayRow & { _pipelinePos?: number })[]> = {};
+    for (const stage of STAGES) {
+      let filtered = applyFiltersAndSort(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth, sortMode);
+      // Apply event filter (visual only, doesn't change pipeline numbers)
+      if (filterEvent) {
+        filtered = filtered.filter(r => (r.subEventName || r.eventName) === filterEvent);
+      }
+      result[stage.key] = filtered.map(r => ({ ...r, _pipelinePos: pipelinePosMap[r.id] || 0 }));
     }
     return result;
-  }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, sortMode]);
+  }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, filterEvent, sortMode, pipelinePosMap]);
 
-  const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); setSortMode('urgency'); };
+  // Get unique event names for the right sidebar from current stage's UNFILTERED rows
+  const eventNames = useMemo(() => {
+    const names = new Set<string>();
+    if (activeTab === 'ALL') {
+      for (const stage of STAGES) {
+        (rowsByStatus[stage.key] || []).forEach(r => names.add(r.subEventName || r.eventName || ''));
+      }
+    } else {
+      (rowsByStatus[activeTab] || []).forEach(r => names.add(r.subEventName || r.eventName || ''));
+    }
+    names.delete('');
+    return Array.from(names).sort();
+  }, [activeTab, rowsByStatus]);
+
+  const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); setFilterEvent(null); setSortMode('urgency'); };
 
   const activeRows = useMemo(() => {
     if (activeTab === 'ALL') {
-      const combined: (DisplayRow & { _stageKey?: string })[] = [];
+      const combined: (DisplayRow & { _stageKey?: string; _pipelinePos?: number })[] = [];
       for (const stage of STAGES) {
         (filteredRowsByStatus[stage.key] || []).forEach(r => combined.push({ ...r, _stageKey: stage.key }));
       }
@@ -500,6 +541,11 @@ export function WtnPipelineView({ onClose }: { onClose: () => void }) {
                 Type: {filterEditType} <X className="w-2.5 h-2.5" />
               </Badge>
             )}
+            {filterEvent && (
+              <Badge variant="secondary" className="gap-1 text-[10px] cursor-pointer" onClick={() => setFilterEvent(null)}>
+                Event: {filterEvent} <X className="w-2.5 h-2.5" />
+              </Badge>
+            )}
             <Select value={filterYear?.toString() || "all"} onValueChange={(v) => setFilterYear(v === "all" ? null : Number(v))}>
               <SelectTrigger className="w-24 h-6 text-[10px]"><SelectValue placeholder="Year" /></SelectTrigger>
               <SelectContent>
@@ -538,22 +584,72 @@ export function WtnPipelineView({ onClose }: { onClose: () => void }) {
         </div>
       </div>
 
-      {/* Snake pipeline content */}
-      <div className="flex-1 overflow-auto">
-        <div className="max-w-[1800px] mx-auto px-4 md:px-6 py-6">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-24">
-              <div className="w-8 h-8 border-4 border-muted border-t-primary rounded-full animate-spin" />
+      {/* Main content: Snake pipeline + Event sidebar */}
+      <div className="flex-1 overflow-hidden flex flex-col">
+        {/* Mobile: horizontal event filter strip */}
+        {isMobile && eventNames.length > 0 && (
+          <div className="border-b bg-card/30 shrink-0 px-4 py-2 overflow-x-auto">
+            <div className="flex gap-1.5 w-max">
+              {eventNames.map(name => (
+                <button
+                  key={name}
+                  onClick={() => setFilterEvent(prev => prev === name ? null : name)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors border ${
+                    filterEvent === name
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-card text-muted-foreground border-border hover:bg-muted'
+                  }`}
+                >
+                  {name}
+                </button>
+              ))}
             </div>
-          ) : (
-            <SnakeGrid
-              rows={activeRows}
-              stageKey={activeTab}
-              editors={editors}
-              onUpdateField={updateField}
-              onPushToStatus={pushToStatus}
-              cardsPerRow={cardsPerRow}
-            />
+          </div>
+        )}
+
+        <div className="flex-1 flex overflow-hidden">
+          {/* Snake pipeline */}
+          <div className="flex-1 overflow-auto">
+            <div className="max-w-[1800px] mx-auto px-4 md:px-6 py-6">
+              {isLoading ? (
+                <div className="flex items-center justify-center py-24">
+                  <div className="w-8 h-8 border-4 border-muted border-t-primary rounded-full animate-spin" />
+                </div>
+              ) : (
+                <SnakeGrid
+                  rows={activeRows}
+                  stageKey={activeTab}
+                  editors={editors}
+                  onUpdateField={updateField}
+                  onPushToStatus={pushToStatus}
+                  cardsPerRow={cardsPerRow}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Desktop: right-side event filter rail */}
+          {!isMobile && eventNames.length > 0 && (
+            <div className="w-[220px] shrink-0 border-l bg-card/50 overflow-y-auto">
+              <div className="p-3">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Events</h3>
+                <div className="space-y-1">
+                  {eventNames.map(name => (
+                    <button
+                      key={name}
+                      onClick={() => setFilterEvent(prev => prev === name ? null : name)}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        filterEvent === name
+                          ? 'bg-primary text-primary-foreground'
+                          : 'text-foreground hover:bg-muted'
+                      }`}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>
