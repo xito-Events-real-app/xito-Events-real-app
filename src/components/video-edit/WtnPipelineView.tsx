@@ -427,10 +427,11 @@ export function WtnPipelineView({ onClose }: { onClose: () => void }) {
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
   const [filterEvent, setFilterEvent] = useState<string | null>(null);
+  const [filterEditor, setFilterEditor] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>('urgency');
   const isMobile = useIsMobile();
 
-  const hasFilters = !!(filterClient || filterEditType || filterYear || filterMonth || filterEvent);
+  const hasFilters = !!(filterClient || filterEditType || filterYear || filterMonth || filterEvent || filterEditor);
   const hasSortOrFilter = hasFilters || sortMode !== 'default';
   const years = getBSYearsRange(-2, 3);
 
