@@ -3,7 +3,8 @@ import { useVideoEditTracker, STAGES, DisplayRow } from "@/hooks/useVideoEditTra
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { X, Filter, Flame, ArrowUpDown, ArrowUp, ArrowDown, GripVertical } from "lucide-react";
+import { X, Filter, Flame, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, ChevronDown, ChevronRight, FolderOpen } from "lucide-react";
+import { FileDetailsExpander } from "./FileDetailsExpander";
 import { supabase } from "@/integrations/supabase/client";
 import { adToBS, nepaliMonthsEnglish, getBSYearsRange } from "@/lib/nepali-date";
 import { useIsMobile } from "@/hooks/use-mobile";
