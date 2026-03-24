@@ -186,10 +186,10 @@ export function MobileVideoEditTracker() {
   const filteredRowsByStatus = useMemo(() => {
     const result: Record<string, DisplayRow[]> = {};
     for (const stage of STAGES) {
-      result[stage.key] = applyFilters(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth);
+      result[stage.key] = applyFilters(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth, sortMode);
     }
     return result;
-  }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth]);
+  }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, sortMode]);
 
   const allFilteredRows = useMemo(() => {
     if (!hasFilters) return [];
