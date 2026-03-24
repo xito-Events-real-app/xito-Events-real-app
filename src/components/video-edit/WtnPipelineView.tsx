@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useVideoEditTracker, STAGES, DisplayRow } from "@/hooks/useVideoEditTracker";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,7 +15,7 @@ const URGENCY_COLORS: Record<string, string> = {
   "5": "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
 };
 
-const STAGE_COLORS: Record<string, string> = {
+const STAGE_BORDER: Record<string, string> = {
   QUEUE: "border-l-gray-400",
   EDIT_LAB: "border-l-blue-400",
   EDIT_ON_PROGRESS: "border-l-blue-600",
@@ -28,6 +27,34 @@ const STAGE_COLORS: Record<string, string> = {
   CLIENT_REVIEW: "border-l-orange-500",
   RE_EDIT_ON_PROGRESS: "border-l-red-500",
   FINALIZED: "border-l-green-500",
+};
+
+const STAGE_BG: Record<string, string> = {
+  QUEUE: "bg-gray-50/80 dark:bg-gray-900/40",
+  EDIT_LAB: "bg-blue-50/80 dark:bg-blue-950/40",
+  EDIT_ON_PROGRESS: "bg-blue-100/60 dark:bg-blue-900/40",
+  COLOR_QUEUE: "bg-purple-50/80 dark:bg-purple-950/40",
+  COLOR_LAB: "bg-purple-100/60 dark:bg-purple-900/40",
+  COLOR_ON_PROGRESS: "bg-violet-100/60 dark:bg-violet-900/40",
+  EXPORT_QUEUE: "bg-amber-50/80 dark:bg-amber-950/40",
+  EXPORTED: "bg-amber-100/60 dark:bg-amber-900/40",
+  CLIENT_REVIEW: "bg-orange-50/80 dark:bg-orange-950/40",
+  RE_EDIT_ON_PROGRESS: "bg-red-50/80 dark:bg-red-950/40",
+  FINALIZED: "bg-green-50/80 dark:bg-green-950/40",
+};
+
+const STAGE_BADGE: Record<string, string> = {
+  QUEUE: "bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200",
+  EDIT_LAB: "bg-blue-200 text-blue-800 dark:bg-blue-800 dark:text-blue-200",
+  EDIT_ON_PROGRESS: "bg-blue-300 text-blue-900 dark:bg-blue-700 dark:text-blue-100",
+  COLOR_QUEUE: "bg-purple-200 text-purple-800 dark:bg-purple-800 dark:text-purple-200",
+  COLOR_LAB: "bg-purple-300 text-purple-900 dark:bg-purple-700 dark:text-purple-100",
+  COLOR_ON_PROGRESS: "bg-violet-300 text-violet-900 dark:bg-violet-700 dark:text-violet-100",
+  EXPORT_QUEUE: "bg-amber-200 text-amber-800 dark:bg-amber-800 dark:text-amber-200",
+  EXPORTED: "bg-amber-300 text-amber-900 dark:bg-amber-700 dark:text-amber-100",
+  CLIENT_REVIEW: "bg-orange-200 text-orange-800 dark:bg-orange-800 dark:text-orange-200",
+  RE_EDIT_ON_PROGRESS: "bg-red-200 text-red-800 dark:bg-red-800 dark:text-red-200",
+  FINALIZED: "bg-green-200 text-green-800 dark:bg-green-800 dark:text-green-200",
 };
 
 const CONNECTOR_COLORS: Record<string, string> = {
@@ -57,12 +84,8 @@ function getRowBSDate(row: DisplayRow): { year: number; month: number } | null {
 }
 
 function applyFiltersAndSort(
-  rows: DisplayRow[],
-  filterClient: string | null,
-  filterEditType: string | null,
-  filterYear: number | null,
-  filterMonth: number | null,
-  sortMode: SortMode,
+  rows: DisplayRow[], filterClient: string | null, filterEditType: string | null,
+  filterYear: number | null, filterMonth: number | null, sortMode: SortMode,
 ): DisplayRow[] {
   let result = rows.filter(row => {
     if (filterClient && row.clientName !== filterClient) return false;
@@ -85,6 +108,10 @@ function applyFiltersAndSort(
   return result;
 }
 
+function getStageLabel(key: string): string {
+  return STAGES.find(s => s.key === key)?.label || key;
+}
+
 interface PipelineCardProps {
   row: DisplayRow & { _stageKey?: string };
   index: number;
@@ -92,103 +119,115 @@ interface PipelineCardProps {
   editors: { name: string; isVideoEditor: boolean }[];
   onUpdateField: (id: string, field: string, value: string, mergedIds?: string[]) => void;
   onPushToStatus?: (id: string, status: string, mergedIds?: string[]) => void;
-  isDragTarget: boolean;
-  onDragStart: (id: string) => void;
-  onDragOver: (e: React.DragEvent, id: string) => void;
-  onDragEnd: () => void;
-  onDrop: (e: React.DragEvent, id: string) => void;
+  isDropBefore: boolean;
+  isDropAfter: boolean;
+  isDragging: boolean;
+  onPointerDown: (e: React.PointerEvent, id: string) => void;
 }
 
 function PipelineCard({
   row, index, stageKey, editors, onUpdateField, onPushToStatus,
-  isDragTarget, onDragStart, onDragOver, onDragEnd, onDrop,
+  isDropBefore, isDropAfter, isDragging, onPointerDown,
 }: PipelineCardProps) {
   const urgCls = URGENCY_COLORS[row.urgency] || URGENCY_COLORS["1"];
-  const borderCls = STAGE_COLORS[stageKey] || "border-l-muted";
+  const borderCls = STAGE_BORDER[stageKey] || "border-l-muted";
+  const bgCls = STAGE_BG[stageKey] || "bg-card";
+  const badgeCls = STAGE_BADGE[stageKey] || "bg-muted text-muted-foreground";
 
   return (
-    <div
-      draggable
-      onDragStart={() => onDragStart(row.id)}
-      onDragOver={(e) => onDragOver(e, row.id)}
-      onDragEnd={onDragEnd}
-      onDrop={(e) => onDrop(e, row.id)}
-      className={`
-        relative w-[200px] min-w-[200px] rounded-xl border-l-4 ${borderCls}
-        border border-border bg-card shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing
-        ${isDragTarget ? 'ring-2 ring-primary scale-105' : ''}
-      `}
-    >
-      {/* Drag handle */}
-      <div className="absolute top-1 right-1 text-muted-foreground/40">
-        <GripVertical className="w-3.5 h-3.5" />
-      </div>
-
-      <div className="p-3 space-y-2">
-        {/* Priority + Urgency */}
-        <div className="flex items-center gap-1.5">
-          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-foreground/10 text-[10px] font-bold">
-            {index + 1}
-          </span>
-          <span className={`inline-flex items-center justify-center w-6 h-6 rounded text-[10px] font-bold ${urgCls}`}>
-            {row.urgency || "-"}
-          </span>
+    <div className="relative flex items-stretch">
+      {/* Drop indicator before */}
+      {isDropBefore && (
+        <div className="absolute -left-1 top-0 bottom-0 w-1 bg-primary rounded-full z-10" />
+      )}
+      <div
+        className={`
+          relative w-[280px] min-w-[280px] rounded-xl border-l-4 ${borderCls}
+          border border-border ${bgCls} shadow-sm hover:shadow-lg transition-all select-none
+          ${isDragging ? 'opacity-40 scale-95' : ''}
+        `}
+      >
+        {/* Drag handle */}
+        <div
+          className="absolute top-2 right-2 cursor-grab active:cursor-grabbing text-muted-foreground/60 hover:text-muted-foreground touch-none"
+          onPointerDown={(e) => onPointerDown(e, row.id)}
+        >
+          <GripVertical className="w-4 h-4" />
         </div>
 
-        {/* Client name */}
-        <p className="font-semibold text-xs leading-tight truncate text-foreground">
-          {row.clientName}
-        </p>
+        <div className="p-4 space-y-2.5">
+          {/* Priority + Urgency + Stage Badge */}
+          <div className="flex items-center gap-1.5 flex-wrap pr-6">
+            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-foreground/10 text-xs font-bold">
+              #{index + 1}
+            </span>
+            <span className={`inline-flex items-center justify-center w-7 h-7 rounded-md text-xs font-bold ${urgCls}`}>
+              ⚡{row.urgency || "-"}
+            </span>
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${badgeCls}`}>
+              {getStageLabel(stageKey)}
+            </span>
+          </div>
 
-        {/* Event */}
-        <p className="text-[10px] text-muted-foreground truncate">
-          {row.subEventName || row.eventName}
-        </p>
+          {/* Client name */}
+          <p className="font-bold text-sm leading-tight truncate text-foreground">
+            {row.clientName}
+          </p>
 
-        {/* Edit type */}
-        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-accent/10 text-accent text-[10px] font-medium truncate max-w-full">
-          {row.editType}
-        </span>
+          {/* Sub-event */}
+          <p className="text-xs text-muted-foreground truncate">
+            {row.subEventName || row.eventName}
+          </p>
 
-        {/* Event date */}
-        {row.eventDateAD && (
-          <p className="text-[10px] text-muted-foreground">{row.eventDateAD}</p>
-        )}
+          {/* Edit type */}
+          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-accent/15 text-accent text-xs font-medium truncate max-w-full">
+            {row.editType}
+          </span>
 
-        {/* Urgency selector */}
-        <Select value={row.urgency || "0"} onValueChange={(v) => onUpdateField(row.id, "urgency", v, row.mergedIds)}>
-          <SelectTrigger className="w-full h-6 text-[10px]"><SelectValue placeholder="Urgency" /></SelectTrigger>
-          <SelectContent>
-            {["1", "2", "3", "4", "5"].map(u => (
-              <SelectItem key={u} value={u}>Urgency {u}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          {/* Event date */}
+          {row.eventDateAD && (
+            <p className="text-xs text-muted-foreground">📅 {row.eventDateAD}</p>
+          )}
 
-        {/* Editor selector */}
-        <Select value={row.editor || "unassigned"} onValueChange={(v) => onUpdateField(row.id, "editor", v === "unassigned" ? "" : v, row.mergedIds)}>
-          <SelectTrigger className="w-full h-6 text-[10px]"><SelectValue placeholder="Editor..." /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="unassigned">Unassigned</SelectItem>
-            {editors.filter(e => e.isVideoEditor && e.name).map(e => (
-              <SelectItem key={`ve-${e.name}`} value={e.name}>⭐ {e.name}</SelectItem>
-            ))}
-            {editors.filter(e => !e.isVideoEditor && e.name).map(e => (
-              <SelectItem key={e.name} value={e.name}>{e.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          {/* Urgency selector */}
+          <Select value={row.urgency || "0"} onValueChange={(v) => onUpdateField(row.id, "urgency", v, row.mergedIds)}>
+            <SelectTrigger className="w-full h-7 text-xs"><SelectValue placeholder="Urgency" /></SelectTrigger>
+            <SelectContent>
+              {["1", "2", "3", "4", "5"].map(u => (
+                <SelectItem key={u} value={u}>Urgency {u}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-        {/* Move to */}
-        <Select onValueChange={(v) => onPushToStatus?.(row.id, v, row.mergedIds)}>
-          <SelectTrigger className="w-full h-6 text-[10px]"><SelectValue placeholder="Move to..." /></SelectTrigger>
-          <SelectContent>
-            {STAGES.filter(s => s.key !== stageKey).map(s => (
-              <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          {/* Editor selector */}
+          <Select value={row.editor || "unassigned"} onValueChange={(v) => onUpdateField(row.id, "editor", v === "unassigned" ? "" : v, row.mergedIds)}>
+            <SelectTrigger className="w-full h-7 text-xs"><SelectValue placeholder="Editor..." /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="unassigned">Unassigned</SelectItem>
+              {editors.filter(e => e.isVideoEditor && e.name).map(e => (
+                <SelectItem key={`ve-${e.name}`} value={e.name}>⭐ {e.name}</SelectItem>
+              ))}
+              {editors.filter(e => !e.isVideoEditor && e.name).map(e => (
+                <SelectItem key={e.name} value={e.name}>{e.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Move to */}
+          <Select onValueChange={(v) => onPushToStatus?.(row.id, v, row.mergedIds)}>
+            <SelectTrigger className="w-full h-7 text-xs"><SelectValue placeholder="Move to..." /></SelectTrigger>
+            <SelectContent>
+              {STAGES.filter(s => s.key !== stageKey).map(s => (
+                <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
+      {/* Drop indicator after */}
+      {isDropAfter && (
+        <div className="absolute -right-1 top-0 bottom-0 w-1 bg-primary rounded-full z-10" />
+      )}
     </div>
   );
 }
@@ -204,8 +243,13 @@ interface SnakeGridProps {
 
 function SnakeGrid({ rows, stageKey, editors, onUpdateField, onPushToStatus, cardsPerRow }: SnakeGridProps) {
   const [orderedIds, setOrderedIds] = useState<string[]>([]);
+  const dragState = useRef<{
+    dragId: string | null;
+    startX: number; startY: number;
+    active: boolean;
+  }>({ dragId: null, startX: 0, startY: 0, active: false });
   const [dragId, setDragId] = useState<string | null>(null);
-  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
 
   // Sync orderedIds with rows
   useEffect(() => {
@@ -223,35 +267,67 @@ function SnakeGrid({ rows, stageKey, editors, onUpdateField, onPushToStatus, car
     return orderedIds.map(id => rowMap.get(id)).filter(Boolean) as (DisplayRow & { _stageKey?: string })[];
   }, [orderedIds, rows]);
 
-  const handleDragStart = useCallback((id: string) => setDragId(id), []);
-  const handleDragOver = useCallback((e: React.DragEvent, id: string) => {
+  const handlePointerDown = useCallback((e: React.PointerEvent, id: string) => {
     e.preventDefault();
-    setDropTargetId(id);
-  }, []);
-  const handleDragEnd = useCallback(() => {
-    setDragId(null);
-    setDropTargetId(null);
-  }, []);
-  const handleDrop = useCallback((e: React.DragEvent, targetId: string) => {
-    e.preventDefault();
-    if (!dragId || dragId === targetId) { handleDragEnd(); return; }
-    setOrderedIds(prev => {
-      const arr = [...prev];
-      const fromIdx = arr.indexOf(dragId);
-      const toIdx = arr.indexOf(targetId);
-      if (fromIdx === -1 || toIdx === -1) return prev;
-      arr.splice(fromIdx, 1);
-      arr.splice(toIdx, 0, dragId);
-      return arr;
-    });
-    handleDragEnd();
-  }, [dragId, handleDragEnd]);
+    dragState.current = { dragId: id, startX: e.clientX, startY: e.clientY, active: false };
+    setDragId(id);
+
+    const handlePointerMove = (ev: PointerEvent) => {
+      const dx = ev.clientX - dragState.current.startX;
+      const dy = ev.clientY - dragState.current.startY;
+      if (!dragState.current.active && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
+        dragState.current.active = true;
+      }
+      if (!dragState.current.active) return;
+
+      // Find drop target based on pointer position
+      const els = document.querySelectorAll('[data-pipeline-card-idx]');
+      let closest: number | null = null;
+      let closestDist = Infinity;
+      els.forEach(el => {
+        const rect = el.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        const dist = Math.sqrt((ev.clientX - cx) ** 2 + (ev.clientY - cy) ** 2);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closest = parseInt(el.getAttribute('data-pipeline-card-idx') || '-1');
+        }
+      });
+      setDropTargetIdx(closest);
+    };
+
+    const handlePointerUp = () => {
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', handlePointerUp);
+
+      if (dragState.current.active && dragState.current.dragId && dropTargetIdx !== null) {
+        setOrderedIds(prev => {
+          const arr = [...prev];
+          const fromIdx = arr.indexOf(dragState.current.dragId!);
+          if (fromIdx === -1 || dropTargetIdx >= arr.length) return prev;
+          const targetId = arr[dropTargetIdx];
+          if (dragState.current.dragId === targetId) return prev;
+          arr.splice(fromIdx, 1);
+          const toIdx = arr.indexOf(targetId);
+          arr.splice(toIdx, 0, dragState.current.dragId!);
+          return arr;
+        });
+      }
+
+      dragState.current = { dragId: null, startX: 0, startY: 0, active: false };
+      setDragId(null);
+      setDropTargetIdx(null);
+    };
+
+    document.addEventListener('pointermove', handlePointerMove);
+    document.addEventListener('pointerup', handlePointerUp);
+  }, [dropTargetIdx]);
 
   if (orderedRows.length === 0) {
     return <p className="text-center text-sm text-muted-foreground py-8">No items</p>;
   }
 
-  // Build snake rows
   const gridRows: (DisplayRow & { _stageKey?: string })[][] = [];
   for (let i = 0; i < orderedRows.length; i += cardsPerRow) {
     gridRows.push(orderedRows.slice(i, i + cardsPerRow));
@@ -268,15 +344,14 @@ function SnakeGrid({ rows, stageKey, editors, onUpdateField, onPushToStatus, car
 
         return (
           <div key={rowIdx}>
-            {/* Card row */}
-            <div className="flex items-center gap-0">
+            <div className="flex items-stretch gap-0">
               {displayCards.map((card, cardIdx) => {
                 const globalIdx = isReversed
                   ? rowIdx * cardsPerRow + (rowCards.length - 1 - cardIdx)
                   : rowIdx * cardsPerRow + cardIdx;
 
                 return (
-                  <div key={card.id} className="flex items-center">
+                  <div key={card.id} className="flex items-stretch" data-pipeline-card-idx={globalIdx}>
                     <PipelineCard
                       row={card}
                       index={globalIdx}
@@ -284,25 +359,22 @@ function SnakeGrid({ rows, stageKey, editors, onUpdateField, onPushToStatus, car
                       editors={editors}
                       onUpdateField={onUpdateField}
                       onPushToStatus={onPushToStatus}
-                      isDragTarget={dropTargetId === card.id}
-                      onDragStart={handleDragStart}
-                      onDragOver={handleDragOver}
-                      onDragEnd={handleDragEnd}
-                      onDrop={handleDrop}
+                      isDragging={dragId === card.id}
+                      isDropBefore={dropTargetIdx === globalIdx && dragId !== card.id}
+                      isDropAfter={false}
+                      onPointerDown={handlePointerDown}
                     />
-                    {/* Horizontal connector between cards */}
                     {cardIdx < displayCards.length - 1 && (
-                      <div className={`w-6 h-1 rounded-full ${connectorCls} shrink-0`} />
+                      <div className={`w-8 h-1.5 rounded-full ${connectorCls} shrink-0 self-center`} />
                     )}
                   </div>
                 );
               })}
             </div>
 
-            {/* Vertical connector to next row */}
             {!isLastRow && (
-              <div className={`flex ${isReversed ? 'justify-start pl-[100px]' : `justify-end pr-[100px]`}`}>
-                <div className={`w-1 h-8 rounded-full ${connectorCls}`} />
+              <div className={`flex ${isReversed ? 'justify-start pl-[140px]' : `justify-end pr-[140px]`}`}>
+                <div className={`w-1.5 h-10 rounded-full ${connectorCls}`} />
               </div>
             )}
           </div>
@@ -320,13 +392,12 @@ export function WtnPipelineView({ onClose }: { onClose: () => void }) {
   const [filterEditType, setFilterEditType] = useState<string | null>(null);
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
-  const [sortMode, setSortMode] = useState<SortMode>('default');
+  const [sortMode, setSortMode] = useState<SortMode>('urgency');
 
   const hasFilters = !!(filterClient || filterEditType || filterYear || filterMonth);
   const hasSortOrFilter = hasFilters || sortMode !== 'default';
   const years = getBSYearsRange(-2, 3);
 
-  // Responsive cards per row
   const [cardsPerRow, setCardsPerRow] = useState(4);
   useEffect(() => {
     const update = () => setCardsPerRow(window.innerWidth < 768 ? 2 : window.innerWidth < 1200 ? 3 : 4);
@@ -352,7 +423,7 @@ export function WtnPipelineView({ onClose }: { onClose: () => void }) {
     return result;
   }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, sortMode]);
 
-  const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); setSortMode('default'); };
+  const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); setSortMode('urgency'); };
 
   const activeRows = useMemo(() => {
     if (activeTab === 'ALL') {

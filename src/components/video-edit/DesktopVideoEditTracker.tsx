@@ -113,6 +113,11 @@ function VideoEditTable({
             <TableRow key={row.id} className="hover:bg-muted/30">
               <TableCell className="text-center text-muted-foreground text-xs font-mono">{idx + 1}</TableCell>
               <TableCell className="text-center">
+                <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 text-[10px] font-bold">
+                  P{row._pipelinePos || '-'}
+                </span>
+              </TableCell>
+              <TableCell className="text-center">
                 <Select value={row.urgency || "0"} onValueChange={(v) => onUpdateField(row.id, "urgency", v, row.mergedIds)}>
                   <SelectTrigger className="w-16 h-8 p-0 border-0 bg-transparent justify-center">
                     <UrgencyBadge value={row.urgency || "0"} />
