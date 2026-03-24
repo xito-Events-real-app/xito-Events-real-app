@@ -376,7 +376,7 @@ export function MobileVideoEditTracker() {
             {STAGES.map(stage => (
               <TabsContent key={stage.key} value={stage.key}>
                 <div className="space-y-3">
-                  {(filteredRowsByStatus[stage.key] || []).map((row, i) => (
+                  {addPipelinePos(filteredRowsByStatus[stage.key] || []).map((row, i) => (
                     <VideoCard
                       key={row.id}
                       row={row}
