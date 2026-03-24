@@ -272,6 +272,7 @@ function applyFiltersAndSort(
 export function DesktopVideoEditTracker() {
   const { rowsByStatus, allRows, isLoading, updateField, pushToStatus, splitRow, mergeRow } = useVideoEditTracker();
   const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean }[]>([]);
+  const [showPipeline, setShowPipeline] = useState(false);
   const [filterClient, setFilterClient] = useState<string | null>(null);
   const [filterEditType, setFilterEditType] = useState<string | null>(null);
   const [filterYear, setFilterYear] = useState<number | null>(null);
