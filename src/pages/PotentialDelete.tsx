@@ -303,15 +303,29 @@ export default function PotentialDelete() {
             <div className="text-3xl font-bold text-red-500">{activeRecords.length}</div>
             <div className="text-xs text-zinc-500 mt-1">Total Active</div>
           </div>
-          <div className="bg-zinc-900 rounded-xl p-4 border border-zinc-800">
-            <div className="text-3xl font-bold text-emerald-400">{readyRecords.length}</div>
-            <div className="text-xs text-zinc-500 mt-1">Ready to Delete</div>
+        {/* Storage Summary */}
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-zinc-900 rounded-xl p-4 border border-zinc-800 text-center">
+            <div className="text-2xl font-bold text-blue-400">📦 {formatSize(totalActiveSize)}</div>
+            <div className="text-xs text-zinc-500 mt-1">Total Active ({activeRecords.length} files)</div>
           </div>
+          <div className="bg-zinc-900 rounded-xl p-4 border border-emerald-900/50 text-center">
+            <div className="text-2xl font-bold text-emerald-400">🟢 {formatSize(readyToDeleteSize)}</div>
+            <div className="text-xs text-zinc-500 mt-1">Can Delete ({readyRecords.length} files)</div>
+          </div>
+          <div className="bg-zinc-900 rounded-xl p-4 border border-zinc-800 text-center">
+            <div className="text-2xl font-bold text-zinc-400">🗑 {formatSize(permDeletedSize)}</div>
+            <div className="text-xs text-zinc-500 mt-1">Deleted ({permDeletedRecords.length} files)</div>
+          </div>
+        </div>
+
+        {/* Person Stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {RESPONSIBILITIES.map(name => (
             <button
               key={name}
               onClick={() => setFilterPerson(filterPerson === name ? null : name)}
-              className={`bg-zinc-900 rounded-xl p-4 border text-left transition-all ${
+              className={`bg-zinc-900 rounded-xl p-3 border text-left transition-all ${
                 filterPerson === name ? "border-red-500 ring-1 ring-red-500/50" : "border-zinc-800 hover:border-zinc-600"
               }`}
             >
