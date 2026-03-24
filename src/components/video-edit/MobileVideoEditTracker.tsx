@@ -4,7 +4,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Video, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame } from "lucide-react";
+import { Video, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow } from "lucide-react";
+import { WtnPipelineView } from "./WtnPipelineView";
 import { supabase } from "@/integrations/supabase/client";
 import { adToBS, nepaliMonthsEnglish, getBSYearsRange } from "@/lib/nepali-date";
 
@@ -155,6 +156,7 @@ function VideoCard({
 export function MobileVideoEditTracker() {
   const { rowsByStatus, isLoading, updateField, pushToStatus, splitRow, mergeRow } = useVideoEditTracker();
   const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean }[]>([]);
+  const [showPipeline, setShowPipeline] = useState(false);
   const [filterClient, setFilterClient] = useState<string | null>(null);
   const [filterEditType, setFilterEditType] = useState<string | null>(null);
   const [filterYear, setFilterYear] = useState<number | null>(null);
@@ -207,9 +209,18 @@ export function MobileVideoEditTracker() {
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center">
             <Video className="w-4 h-4 text-white" />
           </div>
-          <h1 className="text-base font-bold text-foreground">Video Edit</h1>
+          <h1 className="text-base font-bold text-foreground flex-1">Video Edit</h1>
+          <Button
+            onClick={() => setShowPipeline(true)}
+            className="rounded-full w-8 h-8 bg-green-600 hover:bg-green-500 text-white shadow-lg p-0"
+            size="icon"
+          >
+            <Workflow className="w-4 h-4" />
+          </Button>
         </div>
       </div>
+
+      {showPipeline && <WtnPipelineView onClose={() => setShowPipeline(false)} />}
 
       <div className="px-4 py-4">
         {isLoading ? (

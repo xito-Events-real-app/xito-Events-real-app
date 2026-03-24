@@ -7,7 +7,8 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
-import { Video, MessageSquare, Music, ExternalLink, ChevronDown, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame } from "lucide-react";
+import { Video, MessageSquare, Music, ExternalLink, ChevronDown, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow } from "lucide-react";
+import { WtnPipelineView } from "./WtnPipelineView";
 import { supabase } from "@/integrations/supabase/client";
 import { adToBS, nepaliMonthsEnglish, getBSYearsRange } from "@/lib/nepali-date";
 
@@ -271,6 +272,7 @@ function applyFiltersAndSort(
 export function DesktopVideoEditTracker() {
   const { rowsByStatus, allRows, isLoading, updateField, pushToStatus, splitRow, mergeRow } = useVideoEditTracker();
   const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean }[]>([]);
+  const [showPipeline, setShowPipeline] = useState(false);
   const [filterClient, setFilterClient] = useState<string | null>(null);
   const [filterEditType, setFilterEditType] = useState<string | null>(null);
   const [filterYear, setFilterYear] = useState<number | null>(null);
@@ -344,7 +346,15 @@ export function DesktopVideoEditTracker() {
               </p>
             </div>
           </div>
+          <Button
+            onClick={() => setShowPipeline(true)}
+            className="rounded-full w-10 h-10 bg-green-600 hover:bg-green-500 text-white shadow-lg p-0"
+          >
+            <Workflow className="w-5 h-5" />
+          </Button>
         </div>
+
+      {showPipeline && <WtnPipelineView onClose={() => setShowPipeline(false)} />}
       </div>
 
       <div className="max-w-[1600px] mx-auto px-6 py-6">
