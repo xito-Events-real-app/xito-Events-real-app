@@ -1,34 +1,33 @@
 
 
-## Fix: Duplicate Rows, Future Events in Queue, and Merge Key
+## Client Detail View in Video Edit Tracker
 
-### Problems identified
+### Problem
+When clicking a client name, the current pipeline stats bar only shows numbers per stage. User wants to see the actual row details for each stage the client has items in, all on the same page — no tab switching needed.
 
-1. **Duplicate DB rows**: BRIDE MEHNDI has 2 Highlights (should be 1), GROOM HALDI has 2 Full Videos + 2 Highlights (should be 1+1). Total 3 extra rows from race conditions in `ensureVideoEditRows`.
+### Solution
+When a client filter is active, replace the tab-based view with a **single-page stacked layout** showing:
 
-2. **POST SHOOT in queue**: This event is on 2026-04-13 (future) but has a tracker row. The `full_video` is explicitly disabled, but `highlights` has no record so default-ON logic created a row. The event date in the tracker row appears incorrect.
+1. **Summary bar** with grouped counts:
+   - **Untouched** = QUEUE count
+   - **On Progress** = Edit Lab + Edit on Progress + Color Queue + Color Lab + Color on Progress + Export Queue + Exported + Client Review + Re-Edit on Progress
+   - **Finalized** = FINALIZED count
+   - Format: `Total: 5 · Untouched: 3 · On Progress: 1 · Finalized: 1`
 
-3. **Merge key ignores subEventName**: Current key is `registeredDateTimeAD||eventName`, so BRIDE MEHNDI and GROOM HALDI (both under same event "BRIDE MEHNDI & GROOM HALDI") can't be independently merged. Need key to be `registeredDateTimeAD||eventName||subEventName`.
+2. **Stacked sections** — for each stage that has rows for this client, render a section header (stage name + count) followed by the full table with row details. Only stages with rows are shown.
 
-### Fixes
+### Changes to `src/components/video-edit/DesktopVideoEditTracker.tsx`
 
-**1. Database cleanup migration**
-- Soft-delete the 3 duplicate rows (keep earliest ID per unique combo of registered_date_time_ad, event_name, sub_event_name, edit_type)
-- Soft-delete POST SHOOT row (future event)
-- Add a unique partial index on `(registered_date_time_ad, event_name, sub_event_name, edit_type)` WHERE `deleted = false` to prevent future duplicates
+1. **Summary bar** (lines 427-436): Replace the per-stage pipeline stats with the 3-category grouping (Untouched / On Progress / Finalized) plus total.
 
-**2. `src/lib/video-edit-api.ts` — Prevent duplicates + fix future events**
-- In `ensureVideoEditRows()`: change `.insert(batch)` to `.upsert(batch, { onConflict: ... })` or add `ON CONFLICT DO NOTHING` behavior. Since we're adding a unique index, inserts of duplicates will be caught.
-- Actually, wrap inserts in try/catch per batch to gracefully handle unique constraint violations.
-- The existing `lte("event_date_ad", today)` filter on `event_details_cache` should already prevent future events. The POST SHOOT row likely snuck in from a previous bug or wrong date. The unique index + cleanup prevents recurrence.
+2. **Client detail view** (lines 439-468): When `filterClient` is active, instead of rendering `TabsContent` per stage, render a scrollable list of sections — each section has a stage header and the `VideoEditTable` for that stage's filtered rows. Skip stages with 0 rows. Keep the tabs visible but switch to this stacked view below.
 
-**3. `src/hooks/useVideoEditTracker.ts` — Fix merge key to include subEventName**
-- `makeMergeKey()`: change to `${row.registeredDateTimeAD}||${row.eventName}||${row.subEventName || ''}`
-- This ensures BRIDE MEHNDI Full Video merges only with BRIDE MEHNDI Highlights (not GROOM HALDI's)
-- Display: when merged and subEventName exists, show `"BRIDE MEHNDI: Full Video + Highlights"`
+3. **Auto-switch to "All" tab** when client is clicked so the stacked view is visible.
+
+### Changes to `src/components/video-edit/MobileVideoEditTracker.tsx`
+Same stacked layout when client filter is active.
 
 ### Files changed
-1. Database migration — cleanup duplicates + unique index
-2. `src/lib/video-edit-api.ts` — graceful duplicate handling in inserts
-3. `src/hooks/useVideoEditTracker.ts` — merge key includes subEventName
+1. `src/components/video-edit/DesktopVideoEditTracker.tsx`
+2. `src/components/video-edit/MobileVideoEditTracker.tsx`
 
