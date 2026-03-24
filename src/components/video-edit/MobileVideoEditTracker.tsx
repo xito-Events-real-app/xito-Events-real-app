@@ -220,6 +220,8 @@ export function MobileVideoEditTracker() {
         </div>
       </div>
 
+      {showPipeline && <WtnPipelineView onClose={() => setShowPipeline(false)} />}
+
       <div className="px-4 py-4">
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
