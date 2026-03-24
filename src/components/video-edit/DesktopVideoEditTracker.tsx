@@ -354,14 +354,27 @@ export function DesktopVideoEditTracker() {
     return stats;
   }, [filterClient, rowsByStatus]);
 
+  // Active editors per stage (for filter pills)
+  const activeEditorsByStage = useMemo(() => {
+    const result: Record<string, { name: string; count: number }[]> = {};
+    for (const stage of STAGES) {
+      const counts = new Map<string, number>();
+      (rowsByStatus[stage.key] || []).forEach(r => {
+        if (r.editor) counts.set(r.editor, (counts.get(r.editor) || 0) + 1);
+      });
+      result[stage.key] = Array.from(counts.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name));
+    }
+    return result;
+  }, [rowsByStatus]);
+
   // Filtered rows per stage
   const filteredRowsByStatus = useMemo(() => {
     const result: Record<string, DisplayRow[]> = {};
     for (const stage of STAGES) {
-      result[stage.key] = applyFiltersAndSort(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth, sortMode);
+      result[stage.key] = applyFiltersAndSort(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth, sortMode, filterEditor);
     }
     return result;
-  }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, sortMode]);
+  }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, sortMode, filterEditor]);
 
   // Compute pipeline position (urgency-sorted rank within each stage)
   const pipelinePosMap = useMemo(() => {
