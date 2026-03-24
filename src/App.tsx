@@ -39,6 +39,7 @@ import FreelancerProfile from "./pages/FreelancerProfile";
 import CrewSchedule from "./pages/CrewSchedule";
 import VideoEditTracker from "./pages/VideoEditTracker";
 import FileClientDetail from "./pages/FileClientDetail";
+import PotentialDelete from "./pages/PotentialDelete";
 
 const queryClient = new QueryClient();
 
