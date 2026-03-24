@@ -250,7 +250,7 @@ export default function PotentialDelete() {
                 key={record.id}
                 className="group bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden hover:border-zinc-600 hover:shadow-lg hover:shadow-red-950/20 transition-all"
               >
-                <div className="aspect-video bg-zinc-800 overflow-hidden">
+                <div className="aspect-video bg-zinc-800 overflow-hidden cursor-pointer" onClick={() => setViewImage(record)}>
                   <img src={record.image_url} alt="screenshot" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                 </div>
                 <div className="p-3 space-y-2">
