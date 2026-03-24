@@ -459,6 +459,11 @@ export function DesktopVideoEditTracker() {
                           Type: {filterEditType} <X className="w-3 h-3" />
                         </Badge>
                       )}
+                      {filterEditor && (
+                        <Badge variant="secondary" className="gap-1 text-xs cursor-pointer" onClick={() => setFilterEditor(null)}>
+                          Editor: {filterEditor} <X className="w-3 h-3" />
+                        </Badge>
+                      )}
                       <Select value={filterYear?.toString() || "all"} onValueChange={(v) => setFilterYear(v === "all" ? null : Number(v))}>
                         <SelectTrigger className="w-28 h-7 text-xs"><SelectValue placeholder="Year" /></SelectTrigger>
                         <SelectContent>
