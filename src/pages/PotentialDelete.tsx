@@ -39,6 +39,7 @@ export default function PotentialDelete() {
   const [filterPerson, setFilterPerson] = useState<string | null>(null);
   const [filterDevice, setFilterDevice] = useState<string | null>(null);
   const [showDeleted, setShowDeleted] = useState(false);
+  const [viewImage, setViewImage] = useState<PotentialDeleteRecord | null>(null);
 
   const [clientSuggestions, setClientSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -249,7 +250,7 @@ export default function PotentialDelete() {
                 key={record.id}
                 className="group bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden hover:border-zinc-600 hover:shadow-lg hover:shadow-red-950/20 transition-all"
               >
-                <div className="aspect-video bg-zinc-800 overflow-hidden">
+                <div className="aspect-video bg-zinc-800 overflow-hidden cursor-pointer" onClick={() => setViewImage(record)}>
                   <img src={record.image_url} alt="screenshot" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                 </div>
                 <div className="p-3 space-y-2">
@@ -284,6 +285,34 @@ export default function PotentialDelete() {
           </div>
         )}
       </div>
+
+      {/* Image Viewer */}
+      {viewImage && (
+        <div className="fixed inset-0 z-[600] bg-black/95 flex items-center justify-center" onClick={() => setViewImage(null)}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute top-4 right-4 text-zinc-400 hover:text-white hover:bg-zinc-800 z-10"
+            onClick={() => setViewImage(null)}
+          >
+            <X className="h-6 w-6" />
+          </Button>
+          <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {viewImage.client_name && <span className="text-white font-bold uppercase">{viewImage.client_name}</span>}
+              <Badge className="bg-red-900/60 text-red-300 border-red-800">{viewImage.device_name}</Badge>
+              <Badge className="bg-orange-900/60 text-orange-300 border-orange-800">👤 {viewImage.responsibility}</Badge>
+            </div>
+            {viewImage.notes && <span className="text-zinc-500 text-sm">{viewImage.notes}</span>}
+          </div>
+          <img
+            src={viewImage.image_url}
+            alt="screenshot"
+            className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg"
+            onClick={e => e.stopPropagation()}
+          />
+        </div>
+      )}
 
       {/* Upload Dialog */}
       <Dialog open={showUpload} onOpenChange={(open) => { if (!open) resetForm(); }}>
