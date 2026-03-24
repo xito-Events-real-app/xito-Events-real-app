@@ -919,6 +919,42 @@ export type Database = {
         }
         Relationships: []
       }
+      potential_deletes: {
+        Row: {
+          client_name: string | null
+          created_at: string | null
+          deleted: boolean | null
+          device_name: string
+          device_type: string
+          id: string
+          image_url: string
+          notes: string | null
+          responsibility: string | null
+        }
+        Insert: {
+          client_name?: string | null
+          created_at?: string | null
+          deleted?: boolean | null
+          device_name?: string
+          device_type?: string
+          id?: string
+          image_url: string
+          notes?: string | null
+          responsibility?: string | null
+        }
+        Update: {
+          client_name?: string | null
+          created_at?: string | null
+          deleted?: boolean | null
+          device_name?: string
+          device_type?: string
+          id?: string
+          image_url?: string
+          notes?: string | null
+          responsibility?: string | null
+        }
+        Relationships: []
+      }
       storage_devices: {
         Row: {
           cloud_type: string | null
