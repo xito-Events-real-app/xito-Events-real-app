@@ -264,7 +264,10 @@ function SnakeGrid({ rows, stageKey, editors, onUpdateField, onPushToStatus, car
 
   const orderedRows = useMemo(() => {
     const rowMap = new Map(rows.map(r => [r.id, r]));
-    return orderedIds.map(id => rowMap.get(id)).filter(Boolean) as (DisplayRow & { _stageKey?: string; _pipelinePos?: number })[];
+    return orderedIds.map(id => rowMap.get(id)).filter(Boolean).map((r, i) => ({
+      ...r,
+      _pipelinePos: i + 1,
+    })) as (DisplayRow & { _stageKey?: string; _pipelinePos?: number })[];
   }, [orderedIds, rows]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent, id: string) => {
