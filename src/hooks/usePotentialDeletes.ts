@@ -56,6 +56,7 @@ export function usePotentialDeletes() {
     client_name: string;
     responsibility: string;
     notes: string;
+    size_gb: number;
   }) => {
     const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.png`;
     const { error: uploadError } = await supabase.storage
