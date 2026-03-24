@@ -194,7 +194,7 @@ export default function PotentialDelete() {
 
   const resetForm = () => {
     setPastedFile(null); setPreviewUrl(""); setDeviceType(""); setDeviceName("");
-    setClientName(""); setClientSearch(""); setResponsibility(""); setNotes(""); setShowUpload(false);
+    setClientName(""); setClientSearch(""); setResponsibility(""); setNotes(""); setSizeGb(""); setShowUpload(false);
   };
 
   const handleSave = async () => {
