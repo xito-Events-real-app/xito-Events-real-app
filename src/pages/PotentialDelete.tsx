@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { usePotentialDeletes, PotentialDelete } from "@/hooks/usePotentialDeletes";
+import { usePotentialDeletes } from "@/hooks/usePotentialDeletes";
+import type { PotentialDelete as PotentialDeleteRecord } from "@/hooks/usePotentialDeletes";
 import { useStorageDevices } from "@/hooks/useStorageDevices";
 import { supabase } from "@/integrations/supabase/client";
 
