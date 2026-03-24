@@ -559,6 +559,11 @@ export function DesktopVideoEditTracker() {
                     Type: {filterEditType} <X className="w-3 h-3" />
                   </Badge>
                 )}
+                {filterEditor && (
+                  <Badge variant="secondary" className="gap-1 text-xs cursor-pointer" onClick={() => setFilterEditor(null)}>
+                    Editor: {filterEditor} <X className="w-3 h-3" />
+                  </Badge>
+                )}
                 <Select value={filterYear?.toString() || "all"} onValueChange={(v) => setFilterYear(v === "all" ? null : Number(v))}>
                   <SelectTrigger className="w-28 h-7 text-xs"><SelectValue placeholder="Year" /></SelectTrigger>
                   <SelectContent>
@@ -594,6 +599,25 @@ export function DesktopVideoEditTracker() {
                   <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={clearAll}>Clear All</Button>
                 )}
               </div>
+              {/* Editor filter pills */}
+              {(activeEditorsByStage[activeDesktopTab] || []).length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Editors:</span>
+                  {(activeEditorsByStage[activeDesktopTab] || []).map(({ name, count }) => (
+                    <button
+                      key={name}
+                      onClick={() => setFilterEditor(prev => prev === name ? null : name)}
+                      className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-all border ${
+                        filterEditor === name
+                          ? 'bg-teal-500 text-white border-teal-600 shadow-sm'
+                          : 'bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-950 dark:text-teal-200 dark:border-teal-800 hover:shadow-sm'
+                      }`}
+                    >
+                      {name} ({count})
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {STAGES.map(stage => (
