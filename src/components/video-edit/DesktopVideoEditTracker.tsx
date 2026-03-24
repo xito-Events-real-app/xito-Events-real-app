@@ -533,7 +533,7 @@ export function DesktopVideoEditTracker() {
               );
             })()
           ) : (
-          <Tabs defaultValue="QUEUE">
+          <Tabs defaultValue="QUEUE" onValueChange={(v) => setActiveDesktopTab(v)}>
             <div className="overflow-x-auto -mx-6 px-6">
               <TabsList className="mb-2 w-max">
                 {STAGES.map(stage => (
