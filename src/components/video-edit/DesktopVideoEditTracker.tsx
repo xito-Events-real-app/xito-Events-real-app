@@ -327,7 +327,7 @@ export function DesktopVideoEditTracker() {
   }, [filteredRowsByStatus, hasFilters]);
 
   const totalCount = STAGES.reduce((sum, s) => sum + (rowsByStatus[s.key]?.length || 0), 0);
-  const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); };
+  const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); setSortMode('default'); };
 
   return (
     <div className="min-h-screen bg-background">
