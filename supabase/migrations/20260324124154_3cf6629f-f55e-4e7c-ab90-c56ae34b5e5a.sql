@@ -1,0 +1,1 @@
+ALTER TABLE potential_deletes ADD COLUMN size_gb numeric DEFAULT 0 NOT NULL;

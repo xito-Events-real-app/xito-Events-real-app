@@ -16,6 +16,7 @@ export interface PotentialDelete {
   approved_by: string;
   comments: string;
   permanently_deleted_at: string | null;
+  size_gb: number;
 }
 
 export function usePotentialDeletes() {
@@ -55,6 +56,7 @@ export function usePotentialDeletes() {
     client_name: string;
     responsibility: string;
     notes: string;
+    size_gb: number;
   }) => {
     const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.png`;
     const { error: uploadError } = await supabase.storage
@@ -70,7 +72,12 @@ export function usePotentialDeletes() {
       .from("potential_deletes")
       .insert({
         image_url: urlData.publicUrl,
-        ...metadata,
+        device_type: metadata.device_type,
+        device_name: metadata.device_name,
+        client_name: metadata.client_name,
+        responsibility: metadata.responsibility,
+        notes: metadata.notes,
+        size_gb: metadata.size_gb || 0,
       });
     if (insertError) throw insertError;
     toast({ title: "Screenshot saved!" });

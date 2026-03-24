@@ -133,6 +133,7 @@ export default function PotentialDelete() {
   const [clientSearch, setClientSearch] = useState("");
   const [responsibility, setResponsibility] = useState("");
   const [notes, setNotes] = useState("");
+  const [sizeGb, setSizeGb] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
   const [viewTab, setViewTab] = useState<ViewTab>("READY");
@@ -193,7 +194,7 @@ export default function PotentialDelete() {
 
   const resetForm = () => {
     setPastedFile(null); setPreviewUrl(""); setDeviceType(""); setDeviceName("");
-    setClientName(""); setClientSearch(""); setResponsibility(""); setNotes(""); setShowUpload(false);
+    setClientName(""); setClientSearch(""); setResponsibility(""); setNotes(""); setSizeGb(""); setShowUpload(false);
   };
 
   const handleSave = async () => {
@@ -202,7 +203,7 @@ export default function PotentialDelete() {
     }
     setSaving(true);
     try {
-      await add(pastedFile, { device_type: deviceType, device_name: deviceName, client_name: clientName || clientSearch, responsibility, notes });
+      await add(pastedFile, { device_type: deviceType, device_name: deviceName, client_name: clientName || clientSearch, responsibility, notes, size_gb: parseFloat(sizeGb) || 0 });
       resetForm();
     } catch (err: any) {
       toast({ title: "Error saving", description: err.message, variant: "destructive" });
@@ -239,6 +240,15 @@ export default function PotentialDelete() {
   }, [activeRecords, pendingRecords, readyRecords, dontDeleteRecords, permDeletedRecords, viewTab, filterPerson, filterDevice]);
 
   const uniqueDevices = useMemo(() => [...new Set(activeRecords.map(r => r.device_name).filter(Boolean))], [activeRecords]);
+
+  const formatSize = (gb: number) => {
+    if (gb >= 1024) return `${(gb / 1024).toFixed(2).replace(/\.?0+$/, '')} TB`;
+    return `${gb.toFixed(1).replace(/\.0$/, '')} GB`;
+  };
+
+  const totalActiveSize = useMemo(() => activeRecords.reduce((s, r) => s + (r.size_gb || 0), 0), [activeRecords]);
+  const readyToDeleteSize = useMemo(() => readyRecords.reduce((s, r) => s + (r.size_gb || 0), 0), [readyRecords]);
+  const permDeletedSize = useMemo(() => permDeletedRecords.reduce((s, r) => s + (r.size_gb || 0), 0), [permDeletedRecords]);
 
   const formatTime = (ts: string) => {
     const diff = Date.now() - new Date(ts).getTime();
@@ -287,21 +297,30 @@ export default function PotentialDelete() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        {/* Stats Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-          <div className="bg-zinc-900 rounded-xl p-4 border border-zinc-800">
-            <div className="text-3xl font-bold text-red-500">{activeRecords.length}</div>
-            <div className="text-xs text-zinc-500 mt-1">Total Active</div>
+        {/* Stats */}
+        {/* Storage Summary */}
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-zinc-900 rounded-xl p-4 border border-zinc-800 text-center">
+            <div className="text-2xl font-bold text-blue-400">📦 {formatSize(totalActiveSize)}</div>
+            <div className="text-xs text-zinc-500 mt-1">Total Active ({activeRecords.length} files)</div>
           </div>
-          <div className="bg-zinc-900 rounded-xl p-4 border border-zinc-800">
-            <div className="text-3xl font-bold text-emerald-400">{readyRecords.length}</div>
-            <div className="text-xs text-zinc-500 mt-1">Ready to Delete</div>
+          <div className="bg-zinc-900 rounded-xl p-4 border border-emerald-900/50 text-center">
+            <div className="text-2xl font-bold text-emerald-400">🟢 {formatSize(readyToDeleteSize)}</div>
+            <div className="text-xs text-zinc-500 mt-1">Can Delete ({readyRecords.length} files)</div>
           </div>
+          <div className="bg-zinc-900 rounded-xl p-4 border border-zinc-800 text-center">
+            <div className="text-2xl font-bold text-zinc-400">🗑 {formatSize(permDeletedSize)}</div>
+            <div className="text-xs text-zinc-500 mt-1">Deleted ({permDeletedRecords.length} files)</div>
+          </div>
+        </div>
+
+        {/* Person Stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {RESPONSIBILITIES.map(name => (
             <button
               key={name}
               onClick={() => setFilterPerson(filterPerson === name ? null : name)}
-              className={`bg-zinc-900 rounded-xl p-4 border text-left transition-all ${
+              className={`bg-zinc-900 rounded-xl p-3 border text-left transition-all ${
                 filterPerson === name ? "border-red-500 ring-1 ring-red-500/50" : "border-zinc-800 hover:border-zinc-600"
               }`}
             >
@@ -386,6 +405,7 @@ export default function PotentialDelete() {
                   <div className="flex flex-wrap gap-1.5">
                     <Badge className="bg-red-900/60 text-red-300 border-red-800 text-[10px]">{record.device_name}</Badge>
                     <Badge className="bg-orange-900/60 text-orange-300 border-orange-800 text-[10px]">👤 {record.responsibility}</Badge>
+                    {(record.size_gb || 0) > 0 && <Badge className="bg-blue-900/60 text-blue-300 border-blue-800 text-[10px]">📦 {formatSize(record.size_gb)}</Badge>}
                     {record.delete_approval === "YES" && <Badge className="bg-emerald-900/60 text-emerald-300 border-emerald-800 text-[10px]">✅ Approved by {record.approved_by}</Badge>}
                     {record.delete_approval === "NO" && <Badge className="bg-red-900/60 text-red-300 border-red-800 text-[10px]">❌ Don't Delete</Badge>}
                     {record.delete_approval === "GIVE_ME_SOME_TIME" && <Badge className="bg-amber-900/60 text-amber-300 border-amber-800 text-[10px]">⏳ Waiting</Badge>}
@@ -516,6 +536,20 @@ export default function PotentialDelete() {
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Size */}
+            <div className="space-y-2">
+              <label className="text-sm text-zinc-400">Size (GB)</label>
+              <Input
+                type="number"
+                placeholder="e.g. 128"
+                value={sizeGb}
+                onChange={e => setSizeGb(e.target.value)}
+                className="bg-zinc-800 border-zinc-700 text-zinc-200 placeholder:text-zinc-600"
+                min="0"
+                step="0.1"
+              />
             </div>
 
             {/* Responsibility */}
