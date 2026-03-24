@@ -522,7 +522,7 @@ export function DesktopVideoEditTracker() {
               </TabsContent>
             ))}
           </Tabs>
-          )}
+          )
         )}
       </div>
     </div>
