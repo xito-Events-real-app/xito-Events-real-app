@@ -72,7 +72,12 @@ export function usePotentialDeletes() {
       .from("potential_deletes")
       .insert({
         image_url: urlData.publicUrl,
-        ...metadata,
+        device_type: metadata.device_type,
+        device_name: metadata.device_name,
+        client_name: metadata.client_name,
+        responsibility: metadata.responsibility,
+        notes: metadata.notes,
+        size_gb: metadata.size_gb || 0,
       });
     if (insertError) throw insertError;
     toast({ title: "Screenshot saved!" });
