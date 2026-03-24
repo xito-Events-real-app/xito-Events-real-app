@@ -490,7 +490,20 @@ export function WtnPipelineView({ onClose }: { onClose: () => void }) {
     return Array.from(types).sort();
   }, [activeTab, rowsByStatus]);
 
-  const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); setFilterEvent(null); setSortMode('urgency'); };
+  // Get unique editors for filter from current stage's UNFILTERED rows
+  const activeEditors = useMemo(() => {
+    const counts = new Map<string, number>();
+    if (activeTab === 'ALL') {
+      for (const stage of STAGES) {
+        (rowsByStatus[stage.key] || []).forEach(r => { if (r.editor) counts.set(r.editor, (counts.get(r.editor) || 0) + 1); });
+      }
+    } else {
+      (rowsByStatus[activeTab] || []).forEach(r => { if (r.editor) counts.set(r.editor, (counts.get(r.editor) || 0) + 1); });
+    }
+    return Array.from(counts.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [activeTab, rowsByStatus]);
+
+  const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); setFilterEvent(null); setFilterEditor(null); setSortMode('urgency'); };
 
   const activeRows = useMemo(() => {
     if (activeTab === 'ALL') {
