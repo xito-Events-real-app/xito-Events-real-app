@@ -368,7 +368,7 @@ export function MobileVideoEditTracker() {
               </TabsContent>
             ))}
           </Tabs>
-          )}
+          )
         )}
       </div>
     </div>
