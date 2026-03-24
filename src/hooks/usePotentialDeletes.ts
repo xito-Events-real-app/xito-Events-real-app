@@ -16,6 +16,7 @@ export interface PotentialDelete {
   approved_by: string;
   comments: string;
   permanently_deleted_at: string | null;
+  size_gb: number;
 }
 
 export function usePotentialDeletes() {
