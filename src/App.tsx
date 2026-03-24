@@ -39,6 +39,7 @@ import FreelancerProfile from "./pages/FreelancerProfile";
 import CrewSchedule from "./pages/CrewSchedule";
 import VideoEditTracker from "./pages/VideoEditTracker";
 import FileClientDetail from "./pages/FileClientDetail";
+import PotentialDelete from "./pages/PotentialDelete";
 
 const queryClient = new QueryClient();
 
@@ -102,6 +103,7 @@ const App = () => (
               <Route path="/benzo-keep" element={<ProtectedRoute><BenzoKeepPage /></ProtectedRoute>} />
               <Route path="/freelancers" element={<ProtectedRoute><Freelancers /></ProtectedRoute>} />
               <Route path="/freelancer/:freelancerName" element={<ProtectedRoute><FreelancerProfile /></ProtectedRoute>} />
+              <Route path="/potential-delete" element={<ProtectedRoute><PotentialDelete /></ProtectedRoute>} />
               
               <Route path="*" element={<NotFound />} />
             </Routes>
