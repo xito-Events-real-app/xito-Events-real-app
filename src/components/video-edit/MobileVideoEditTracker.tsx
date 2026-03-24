@@ -26,14 +26,17 @@ function getRowBSDate(row: DisplayRow): { year: number; month: number } | null {
   } catch { return null; }
 }
 
+type SortMode = 'default' | 'urgency' | 'priority-asc' | 'priority-desc';
+
 function applyFilters(
   rows: DisplayRow[],
   filterClient: string | null,
   filterEditType: string | null,
   filterYear: number | null,
   filterMonth: number | null,
+  sortMode: SortMode = 'default',
 ): DisplayRow[] {
-  return rows.filter(row => {
+  let result = rows.filter(row => {
     if (filterClient && row.clientName !== filterClient) return false;
     if (filterEditType && row.editType !== filterEditType) return false;
     if (filterYear || filterMonth) {
@@ -44,6 +47,16 @@ function applyFilters(
     }
     return true;
   });
+
+  if (sortMode === 'urgency') {
+    result = [...result].sort((a, b) => (parseInt(b.urgency || '0') || 0) - (parseInt(a.urgency || '0') || 0));
+  } else if (sortMode === 'priority-asc') {
+    result = [...result].sort((a, b) => (parseInt(a.priority || '999') || 999) - (parseInt(b.priority || '999') || 999));
+  } else if (sortMode === 'priority-desc') {
+    result = [...result].sort((a, b) => (parseInt(b.priority || '0') || 0) - (parseInt(a.priority || '0') || 0));
+  }
+
+  return result;
 }
 
 function VideoCard({
