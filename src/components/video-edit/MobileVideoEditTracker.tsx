@@ -217,7 +217,7 @@ export function MobileVideoEditTracker() {
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          {filterClient ? (
+          filterClient ? (
             /* ── Stacked Client Detail View ── */
             (() => {
               const total = STAGES.reduce((s, st) => s + (filteredRowsByStatus[st.key]?.length || 0), 0);
