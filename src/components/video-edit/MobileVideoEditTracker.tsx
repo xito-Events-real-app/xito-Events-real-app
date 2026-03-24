@@ -209,7 +209,14 @@ export function MobileVideoEditTracker() {
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center">
             <Video className="w-4 h-4 text-white" />
           </div>
-          <h1 className="text-base font-bold text-foreground">Video Edit</h1>
+          <h1 className="text-base font-bold text-foreground flex-1">Video Edit</h1>
+          <Button
+            onClick={() => setShowPipeline(true)}
+            className="rounded-full w-8 h-8 bg-green-600 hover:bg-green-500 text-white shadow-lg p-0"
+            size="icon"
+          >
+            <Workflow className="w-4 h-4" />
+          </Button>
         </div>
       </div>
 

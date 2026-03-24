@@ -346,7 +346,15 @@ export function DesktopVideoEditTracker() {
               </p>
             </div>
           </div>
+          <Button
+            onClick={() => setShowPipeline(true)}
+            className="rounded-full w-10 h-10 bg-green-600 hover:bg-green-500 text-white shadow-lg p-0"
+          >
+            <Workflow className="w-5 h-5" />
+          </Button>
         </div>
+
+      {showPipeline && <WtnPipelineView onClose={() => setShowPipeline(false)} />}
       </div>
 
       <div className="max-w-[1600px] mx-auto px-6 py-6">
