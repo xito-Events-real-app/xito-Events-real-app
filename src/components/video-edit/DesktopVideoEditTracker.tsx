@@ -7,7 +7,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
-import { Video, MessageSquare, Music, ExternalLink, ChevronDown, Loader2, Ungroup, Group, X, Filter } from "lucide-react";
+import { Video, MessageSquare, Music, ExternalLink, ChevronDown, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { adToBS, nepaliMonthsEnglish, getBSYearsRange } from "@/lib/nepali-date";
 
@@ -235,14 +235,17 @@ function VideoEditTable({
   );
 }
 
-function applyFilters(
+type SortMode = 'default' | 'urgency' | 'priority-asc' | 'priority-desc';
+
+function applyFiltersAndSort(
   rows: DisplayRow[],
   filterClient: string | null,
   filterEditType: string | null,
   filterYear: number | null,
   filterMonth: number | null,
+  sortMode: SortMode,
 ): DisplayRow[] {
-  return rows.filter(row => {
+  let result = rows.filter(row => {
     if (filterClient && row.clientName !== filterClient) return false;
     if (filterEditType && row.editType !== filterEditType) return false;
     if (filterYear || filterMonth) {
@@ -253,6 +256,16 @@ function applyFilters(
     }
     return true;
   });
+
+  if (sortMode === 'urgency') {
+    result = [...result].sort((a, b) => (parseInt(b.urgency || '0') || 0) - (parseInt(a.urgency || '0') || 0));
+  } else if (sortMode === 'priority-asc') {
+    result = [...result].sort((a, b) => (parseInt(a.priority || '999') || 999) - (parseInt(b.priority || '999') || 999));
+  } else if (sortMode === 'priority-desc') {
+    result = [...result].sort((a, b) => (parseInt(b.priority || '0') || 0) - (parseInt(a.priority || '0') || 0));
+  }
+
+  return result;
 }
 
 export function DesktopVideoEditTracker() {
@@ -262,8 +275,10 @@ export function DesktopVideoEditTracker() {
   const [filterEditType, setFilterEditType] = useState<string | null>(null);
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>('default');
 
   const hasFilters = !!(filterClient || filterEditType || filterYear || filterMonth);
+  const hasSortOrFilter = hasFilters || sortMode !== 'default';
 
   useEffect(() => {
     (async () => {
@@ -295,10 +310,10 @@ export function DesktopVideoEditTracker() {
   const filteredRowsByStatus = useMemo(() => {
     const result: Record<string, DisplayRow[]> = {};
     for (const stage of STAGES) {
-      result[stage.key] = applyFilters(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth);
+      result[stage.key] = applyFiltersAndSort(rowsByStatus[stage.key] || [], filterClient, filterEditType, filterYear, filterMonth, sortMode);
     }
     return result;
-  }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth]);
+  }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, sortMode]);
 
   // "All" tab rows - combined from all stages when filters active
   const allFilteredRows = useMemo(() => {
@@ -312,7 +327,7 @@ export function DesktopVideoEditTracker() {
   }, [filteredRowsByStatus, hasFilters]);
 
   const totalCount = STAGES.reduce((sum, s) => sum + (rowsByStatus[s.key]?.length || 0), 0);
-  const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); };
+  const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); setSortMode('default'); };
 
   return (
     <div className="min-h-screen bg-background">
@@ -382,7 +397,30 @@ export function DesktopVideoEditTracker() {
                     {nepaliMonthsEnglish.map((m, i) => <SelectItem key={i} value={(i + 1).toString()}>{m}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                {hasFilters && (
+                <Button
+                  variant={sortMode === 'urgency' ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => setSortMode(prev => prev === 'urgency' ? 'default' : 'urgency')}
+                >
+                  <Flame className="w-3 h-3" /> Urgency
+                </Button>
+                <Button
+                  variant={sortMode.startsWith('priority') ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => setSortMode(prev =>
+                    prev === 'default' ? 'priority-asc' :
+                    prev === 'priority-asc' ? 'priority-desc' :
+                    prev === 'priority-desc' ? 'default' : 'priority-asc'
+                  )}
+                >
+                  {sortMode === 'priority-asc' ? <ArrowUp className="w-3 h-3" /> :
+                   sortMode === 'priority-desc' ? <ArrowDown className="w-3 h-3" /> :
+                   <ArrowUpDown className="w-3 h-3" />}
+                  Priority
+                </Button>
+                {hasSortOrFilter && (
                   <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={clearAll}>Clear All</Button>
                 )}
               </div>
