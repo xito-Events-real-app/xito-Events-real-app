@@ -265,7 +265,7 @@ function VideoEditTable({
                 <TableCell colSpan={12} className="p-0 bg-muted/20 border-b-2 border-primary/20">
                   <FileDetailsExpander
                     registeredDateTimeAD={row.registeredDateTimeAD}
-                    eventName={row.subEventName || row.eventName}
+                    eventName={row.eventName}
                   />
                 </TableCell>
               </TableRow>
