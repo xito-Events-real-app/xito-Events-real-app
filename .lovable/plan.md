@@ -1,65 +1,52 @@
 
 
-## WTN Pipeline — Snake-Style Visual Pipeline View
+## Fix WTN Pipeline: Larger Cards, Status Info, Colors, Better Drag, Urgency Sort, Auto-append on Move, Pipeline Column in Main Table
 
-### Concept
-A green circular button in the Video Edit Tracker header opens a full-screen overlay showing video edit rows as a **snake/S-curve pipeline** instead of table rows. Each row becomes a **card/box** flowing left-to-right, wrapping in alternating directions (like a snake), creating the visual style shown in the reference images. Cards are **drag-and-drop reorderable** to set custom priority order. Each card shows client info, edit type, urgency, and has an editor selector.
+### Changes
 
-### Layout
-```text
-Header: [Pipeline tabs] [Filter bar same as main tracker] [X close]
+**1. `src/components/video-edit/WtnPipelineView.tsx` — Major card and drag improvements**
 
-Snake flow (scrollable):
-┌──────┐   ┌──────┐   ┌──────┐   ┌──────┐
-│Card 1│───│Card 2│───│Card 3│───│Card 4│
-└──────┘   └──────┘   └──────┘   └──────┘
-                                     │
-┌──────┐   ┌──────┐   ┌──────┐   ┌──────┐
-│Card 8│───│Card 7│───│Card 6│───│Card 5│
-└──────┘   └──────┘   └──────┘   └──────┘
-   │
-┌──────┐   ┌──────┐   ...
-│Card 9│───│Card10│───
-└──────┘   └──────┘
+- **Larger cards**: Change from `w-[200px]` to `w-[280px]` with more padding and spacing
+- **Status badge on each card**: Show the current stage label (e.g. "Queue", "Edit on Progress") as a colored badge using stage-specific background colors
+- **Colorful cards**: Each card gets a subtle stage-colored background gradient (not just a left border) — e.g. light blue bg for Edit Lab, light purple for Color stages, light green for Finalized
+- **Better drag-and-drop**: Replace raw HTML5 drag with pointer-event-based approach using `onPointerDown`/`onPointerMove`/`onPointerUp` with visual feedback: dragged card gets elevated shadow + opacity, drop zone shows a bright insertion line between cards (not just ring on target card). Use `React.useRef` for drag state to avoid stutter.
+- **Default sort by urgency**: Initialize `sortMode` to `'urgency'` instead of `'default'` so pipeline opens sorted by urgency (highest first)
+- **Auto-append moved items**: When a card is moved to another stage via "Move to", it should appear at the end of that stage's ordered list. Already handled by `SnakeGrid`'s `useEffect` syncing new IDs to end.
+
+Stage color map for card backgrounds:
+```
+QUEUE: bg-gray-50/80, EDIT_LAB: bg-blue-50/80, EDIT_ON_PROGRESS: bg-blue-100/60,
+COLOR_QUEUE: bg-purple-50/80, COLOR_LAB: bg-purple-100/60, etc.
+FINALIZED: bg-green-50/80
 ```
 
-Each card: client name, sub-event, edit type, event date, urgency badge, editor dropdown, "Move to" stage dropdown. Connected by colored pipe/connector lines between cards.
+**2. `src/components/video-edit/DesktopVideoEditTracker.tsx` — Add "Pipeline" column to main table**
 
-### Files
+- Add a new `<TableHead>Pipeline</TableHead>` column after "S.No" (or after Priority)
+- For each row, compute its position within its current stage's pipeline ordering (1-based index within that stage's rows sorted by urgency desc, matching the pipeline view order)
+- Display as a small numbered badge: `P1`, `P2`, `P3` etc.
 
-**1. New: `src/components/video-edit/WtnPipelineView.tsx`**
-- Full-screen overlay component
-- Reuses `useVideoEditTracker()` hook for data, filters, and actions
-- Same filter bar (client, edit type, year/month, urgency/priority sort) and pipeline tabs as main tracker
-- Snake grid layout: 4 cards per row, alternating direction (odd rows L→R, even rows R→L)
-- SVG/CSS connectors between cards (horizontal lines + vertical turns at row ends)
-- Each card is a styled box with: priority number, client name, edit type, event date, urgency badge, editor `<Select>`, "Move to" `<DropdownMenu>`
-- Drag-and-drop reordering using HTML5 drag events (`onDragStart`, `onDragOver`, `onDrop`) — purely local state reorder, no DB change (visual priority only within this view)
-- New cards from data changes append at the bottom automatically
-- Loads editors from `freelancers_cache` (same pattern as main tracker)
+**3. `src/components/video-edit/MobileVideoEditTracker.tsx` — Same pipeline number in mobile cards**
 
-**2. Edit: `src/components/video-edit/DesktopVideoEditTracker.tsx`**
-- Add a green circular button in the header (top-right): `<Button className="rounded-full bg-green-600 hover:bg-green-500 w-10 h-10">` with a pipeline/workflow icon
-- State: `showPipeline: boolean`
-- When true, render `<WtnPipelineView onClose={() => setShowPipeline(false)} />`
+- Show the pipeline position number in the mobile card header
 
-**3. Edit: `src/components/video-edit/MobileVideoEditTracker.tsx`**
-- Same green button in mobile header, opens `WtnPipelineView` (responsive: 2 cards per row on mobile)
+### Card design (updated)
+```text
+┌─────────────────────────────────┐
+│ #1  ⚡5        ┌──────────────┐ │
+│               │ Edit on Prog │ │  ← colored stage badge
+│               └──────────────┘ │
+│ SHAKTI NEUPANE                 │
+│ Bride Mehndi                   │
+│ Full Video + Highlights        │
+│ 2026-03-15                     │
+│ [Urgency ▾] [Editor ▾]        │
+│ [Move to... ▾]                 │
+└─────────────────────────────────┘
+```
 
-### Snake rendering approach
-- CSS Grid with 4 columns
-- Track row index: even rows render cards in normal order, odd rows in reverse order
-- After each row of 4, render a vertical connector on the appropriate side (right for even→odd, left for odd→even)
-- Connector styling: colored rounded divs/SVG paths matching the stage color
-
-### Drag-and-drop
-- Local `orderedIds` state initialized from priority-sorted row IDs
-- `onDragStart` stores dragged card ID
-- `onDragOver` with `preventDefault` + visual drop indicator
-- `onDrop` reorders `orderedIds` array, re-renders snake in new order
-- No DB persistence of custom order (session-only)
-
-### Card design
-- ~200px wide, rounded corners, subtle shadow, stage-colored left border
-- Compact layout: priority badge top-left, client name bold, edit type + date below, urgency dot, editor select, move-to dropdown
+### Files changed
+1. `src/components/video-edit/WtnPipelineView.tsx` — larger cards, status badge, colors, improved drag, urgency default sort
+2. `src/components/video-edit/DesktopVideoEditTracker.tsx` — add Pipeline column to table
+3. `src/components/video-edit/MobileVideoEditTracker.tsx` — add pipeline number to mobile cards
 
