@@ -84,11 +84,21 @@ function VideoEditTable({
   editors: { name: string; isVideoEditor: boolean }[];
   currentStageKey: string;
 }) {
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const toggleExpand = (id: string) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
   return (
     <div className="rounded-xl border bg-card overflow-auto">
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/50">
+            <TableHead className="w-8 text-center"></TableHead>
             <TableHead className="w-12 text-center">S.No</TableHead>
             <TableHead className="w-12 text-center">Pipeline</TableHead>
             <TableHead className="w-16 text-center">Urgency</TableHead>
@@ -105,13 +115,16 @@ function VideoEditTable({
         <TableBody>
           {rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
+              <TableCell colSpan={12} className="text-center py-12 text-muted-foreground">
                 No rows found
               </TableCell>
             </TableRow>
           )}
-          {rows.map((row, idx) => (
-            <TableRow key={row.id} className="hover:bg-muted/30">
+          {rows.map((row, idx) => {
+            const isExpanded = expandedRows.has(row.id);
+            return (
+              <>
+              <TableRow key={row.id} className="hover:bg-muted/30">
               <TableCell className="text-center text-muted-foreground text-xs font-mono">{idx + 1}</TableCell>
               <TableCell className="text-center">
                 <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 text-[10px] font-bold">
