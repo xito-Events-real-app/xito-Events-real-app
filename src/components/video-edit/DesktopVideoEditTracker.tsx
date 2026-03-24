@@ -397,7 +397,30 @@ export function DesktopVideoEditTracker() {
                     {nepaliMonthsEnglish.map((m, i) => <SelectItem key={i} value={(i + 1).toString()}>{m}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                {hasFilters && (
+                <Button
+                  variant={sortMode === 'urgency' ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => setSortMode(prev => prev === 'urgency' ? 'default' : 'urgency')}
+                >
+                  <Flame className="w-3 h-3" /> Urgency
+                </Button>
+                <Button
+                  variant={sortMode.startsWith('priority') ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => setSortMode(prev =>
+                    prev === 'default' ? 'priority-asc' :
+                    prev === 'priority-asc' ? 'priority-desc' :
+                    prev === 'priority-desc' ? 'default' : 'priority-asc'
+                  )}
+                >
+                  {sortMode === 'priority-asc' ? <ArrowUp className="w-3 h-3" /> :
+                   sortMode === 'priority-desc' ? <ArrowDown className="w-3 h-3" /> :
+                   <ArrowUpDown className="w-3 h-3" />}
+                  Priority
+                </Button>
+                {hasSortOrFilter && (
                   <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={clearAll}>Clear All</Button>
                 )}
               </div>
