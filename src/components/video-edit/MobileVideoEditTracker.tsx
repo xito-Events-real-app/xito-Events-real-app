@@ -261,7 +261,30 @@ export function MobileVideoEditTracker() {
                     {nepaliMonthsEnglish.map((m, i) => <SelectItem key={i} value={(i + 1).toString()}>{m}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                {hasFilters && (
+                <Button
+                  variant={sortMode === 'urgency' ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-6 text-[10px] px-2 gap-0.5"
+                  onClick={() => setSortMode(prev => prev === 'urgency' ? 'default' : 'urgency')}
+                >
+                  <Flame className="w-2.5 h-2.5" /> Urgency
+                </Button>
+                <Button
+                  variant={sortMode.startsWith('priority') ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-6 text-[10px] px-2 gap-0.5"
+                  onClick={() => setSortMode(prev =>
+                    prev === 'default' ? 'priority-asc' :
+                    prev === 'priority-asc' ? 'priority-desc' :
+                    prev === 'priority-desc' ? 'default' : 'priority-asc'
+                  )}
+                >
+                  {sortMode === 'priority-asc' ? <ArrowUp className="w-2.5 h-2.5" /> :
+                   sortMode === 'priority-desc' ? <ArrowDown className="w-2.5 h-2.5" /> :
+                   <ArrowUpDown className="w-2.5 h-2.5" />}
+                  Priority
+                </Button>
+                {hasSortOrFilter && (
                   <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={clearAll}>Clear</Button>
                 )}
               </div>
