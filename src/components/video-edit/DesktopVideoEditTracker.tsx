@@ -216,7 +216,7 @@ function VideoEditTable({
               </TableCell>
               <TableCell>
                 <Select value={row.editor || "unassigned"} onValueChange={(v) => onUpdateField(row.id, "editor", v === "unassigned" ? "" : v, row.mergedIds)}>
-                  <SelectTrigger className="w-36 h-8 text-xs">
+                  <SelectTrigger className="w-44 h-8 text-xs">
                     <SelectValue placeholder="Assign..." />
                   </SelectTrigger>
                   <SelectContent>
