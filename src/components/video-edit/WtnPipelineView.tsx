@@ -453,18 +453,17 @@ export function WtnPipelineView({ onClose }: { onClose: () => void }) {
     return result;
   }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, filterEvent, sortMode, pipelinePosMap]);
 
-  // Get unique event names for the right sidebar from current stage's UNFILTERED rows
-  const eventNames = useMemo(() => {
-    const names = new Set<string>();
+  // Get unique edit types for the right sidebar from current stage's UNFILTERED rows
+  const editTypes = useMemo(() => {
+    const types = new Set<string>();
     if (activeTab === 'ALL') {
       for (const stage of STAGES) {
-        (rowsByStatus[stage.key] || []).forEach(r => names.add(r.subEventName || r.eventName || ''));
+        (rowsByStatus[stage.key] || []).forEach(r => { if (r.editType) types.add(r.editType); });
       }
     } else {
-      (rowsByStatus[activeTab] || []).forEach(r => names.add(r.subEventName || r.eventName || ''));
+      (rowsByStatus[activeTab] || []).forEach(r => { if (r.editType) types.add(r.editType); });
     }
-    names.delete('');
-    return Array.from(names).sort();
+    return Array.from(types).sort();
   }, [activeTab, rowsByStatus]);
 
   const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); setFilterEvent(null); setSortMode('urgency'); };
