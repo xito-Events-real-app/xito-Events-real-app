@@ -1282,6 +1282,20 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, o
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
+                          {isProgressStage && (
+                            <button
+                              onClick={() => onTogglePlaying(row.id, row.isPlaying, row.mergedIds)}
+                              className={cn(
+                                "w-7 h-7 rounded-full flex items-center justify-center transition-colors",
+                                row.isPlaying
+                                  ? "bg-amber-100 dark:bg-amber-900/40 text-amber-600 hover:bg-amber-200"
+                                  : "bg-green-100 dark:bg-green-900/40 text-green-600 hover:bg-green-200"
+                              )}
+                              title={row.isPlaying ? "Pause" : "Resume"}
+                            >
+                              {row.isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                            </button>
+                          )}
                           <UrgencyBadge value={row.urgency || "0"} />
                           <Select onValueChange={(val) => onPushToStatus(row.id, val, row.mergedIds)}>
                             <SelectTrigger className="h-7 w-28 text-[10px]">
