@@ -11,6 +11,7 @@ import {
   UserCog,
   KeyRound,
   Trash2,
+  HardDrive,
   LucideIcon,
 } from "lucide-react";
 
