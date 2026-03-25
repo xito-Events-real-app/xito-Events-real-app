@@ -57,7 +57,8 @@ const App = () => (
     <TooltipProvider>
       <SaugatSearchProvider>
         <BookingCalendarPopupProvider>
-          <BenzoKeepPopupProvider>
+           <BenzoKeepPopupProvider>
+          <EditedFilesUploadProvider>
           <BrowserRouter>
             <AuthProvider>
               <WtnFilesAnnouncement />
