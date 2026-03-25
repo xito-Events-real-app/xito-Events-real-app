@@ -223,15 +223,18 @@ function PipelineCard({
             {row.editType}
           </span>
 
-          {/* Event date with age */}
+          {/* Event date stamp */}
           {(() => {
             const age = getEventAgePipeline(row.eventDateAD);
             return age ? (
-              <p className="text-xs text-muted-foreground">
-                📅 {age.bsDisplay} · <span className="font-medium">{age.days}d old</span>
-              </p>
-            ) : row.eventDateAD ? (
-              <p className="text-sm text-muted-foreground">📅 {row.eventDateAD}</p>
+              <div className="inline-flex flex-col items-center justify-center px-2 py-1 rounded border-2 border-red-500/60 bg-red-500/10 rotate-[-3deg] min-w-[64px] mt-1">
+                <span className="text-[11px] font-black text-red-600 dark:text-red-400 leading-tight tracking-tight">
+                  {age.days}D OLD
+                </span>
+                <span className="text-[9px] font-bold text-red-500/80 dark:text-red-400/70 leading-tight uppercase tracking-wide">
+                  {age.bsShort}
+                </span>
+              </div>
             ) : null;
           })()}
 
