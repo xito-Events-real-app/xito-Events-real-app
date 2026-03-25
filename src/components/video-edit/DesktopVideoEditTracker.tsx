@@ -1267,6 +1267,16 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField }:
                       </div>
                       <div className="flex items-center gap-2">
                         <UrgencyBadge value={row.urgency || "0"} />
+                        <Select onValueChange={(val) => onPushToStatus(row.id, val, row.mergedIds)}>
+                          <SelectTrigger className="h-7 w-28 text-[10px]">
+                            <SelectValue placeholder="Move to" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {STAGES.filter(s => s.key !== group.key).map(s => (
+                              <SelectItem key={s.key} value={s.key} className="text-xs">{s.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
                   </div>
