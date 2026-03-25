@@ -790,6 +790,7 @@ function VideoEditSidebar({
   editorCounts,
   activeProgressEditors,
   playingEditors,
+  editorStageGroups,
 }: {
   activeView: ActiveView;
   onViewChange: (view: ActiveView) => void;
@@ -797,6 +798,13 @@ function VideoEditSidebar({
   editorCounts: Record<string, number>;
   activeProgressEditors: Set<string>;
   playingEditors: Set<string>;
+  editorStageGroups: {
+    active: string[];
+    paused: string[];
+    onQueue: string[];
+    editLab: string[];
+    available: string[];
+  };
 }) {
   const navItems = [
     { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
@@ -804,8 +812,47 @@ function VideoEditSidebar({
     { id: 'pipeline' as const, label: 'Pipeline View', icon: GitBranch },
   ];
 
-  // Only show editors with rows in non-finalized stages
-  const videoEditors = editors.filter(e => e.isVideoEditor && e.name && (editorCounts[e.name] || 0) > 0);
+  const renderEditorBtn = (name: string, dotClass: string, nameClass: string) => {
+    const isActive = activeView === name;
+    const count = editorCounts[name] || 0;
+    return (
+      <button
+        key={name}
+        onClick={() => onViewChange(name)}
+        className={cn(
+          "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200",
+          isActive
+            ? "bg-teal-600/30 text-teal-300 font-semibold"
+            : "text-zinc-400 hover:text-white hover:bg-white/5"
+        )}
+      >
+        <span className={cn("w-2 h-2 rounded-full shrink-0", dotClass)} />
+        <span className={cn("flex-1 text-left truncate", nameClass)}>{name}</span>
+        {count > 0 && (
+          <span className={cn(
+            "text-[10px] px-1.5 py-0.5 rounded-full font-bold",
+            isActive ? "bg-teal-500/30 text-teal-200" : "bg-zinc-700 text-zinc-400"
+          )}>
+            {count}
+          </span>
+        )}
+      </button>
+    );
+  };
+
+  const renderGroup = (label: string, names: string[], dotClass: string, nameClass: string = "") => {
+    if (names.length === 0) return null;
+    return (
+      <div key={label}>
+        <div className="px-3 py-1.5">
+          <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">{label}</span>
+        </div>
+        <div className="space-y-0.5">
+          {names.map(name => renderEditorBtn(name, dotClass, nameClass))}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="w-56 min-h-screen bg-zinc-900 text-white border-r border-zinc-800 flex flex-col shrink-0">
@@ -826,14 +873,14 @@ function VideoEditSidebar({
       <nav className="p-3 space-y-1">
         {navItems.map(item => {
           const Icon = item.icon;
-          const isActive = activeView === item.id;
+          const isActiveNav = activeView === item.id;
           return (
             <button
               key={item.id}
               onClick={() => onViewChange(item.id)}
               className={cn(
                 "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
-                isActive
+                isActiveNav
                   ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-lg shadow-primary/25"
                   : "text-zinc-400 hover:text-white hover:bg-white/10"
               )}
@@ -848,47 +895,13 @@ function VideoEditSidebar({
       {/* Divider */}
       <div className="mx-4 border-t border-zinc-800" />
 
-      {/* Editors */}
-      <div className="p-3 flex-1 overflow-y-auto">
-        <div className="flex items-center gap-2 px-3 py-2">
-          <Users className="w-3.5 h-3.5 text-zinc-500" />
-          <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">Editors</span>
-        </div>
-        <div className="space-y-0.5">
-          {videoEditors.map(editor => {
-            const isActive = activeView === editor.name;
-            const count = editorCounts[editor.name] || 0;
-            const isInProgress = activeProgressEditors.has(editor.name);
-            const isPlaying = playingEditors.has(editor.name);
-            return (
-              <button
-                key={editor.name}
-                onClick={() => onViewChange(editor.name)}
-                className={cn(
-                  "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200",
-                  isActive
-                    ? "bg-teal-600/30 text-teal-300 font-semibold"
-                    : "text-zinc-400 hover:text-white hover:bg-white/5",
-                  !isInProgress && "italic"
-                )}
-              >
-                <span className={cn(
-                  "w-2 h-2 rounded-full shrink-0",
-                  isPlaying ? "bg-green-500 animate-editor-pulse" : isInProgress ? "bg-green-500" : count > 0 ? "bg-teal-400" : "bg-zinc-600"
-                )} />
-                <span className={cn("flex-1 text-left truncate", isPlaying && "animate-editor-wave")}>{editor.name}</span>
-                {count > 0 && (
-                  <span className={cn(
-                    "text-[10px] px-1.5 py-0.5 rounded-full font-bold",
-                    isActive ? "bg-teal-500/30 text-teal-200" : "bg-zinc-700 text-zinc-400"
-                  )}>
-                    {count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+      {/* Editor Groups */}
+      <div className="p-3 flex-1 overflow-y-auto space-y-2">
+        {renderGroup("Active Editors", editorStageGroups.active, "bg-green-500 animate-editor-pulse", "animate-editor-wave")}
+        {renderGroup("Paused Editors", editorStageGroups.paused, "bg-green-500", "")}
+        {renderGroup("On Queue", editorStageGroups.onQueue, "bg-yellow-500", "")}
+        {renderGroup("Edit Lab", editorStageGroups.editLab, "bg-amber-500", "")}
+        {renderGroup("Available", editorStageGroups.available, "bg-zinc-600", "italic")}
       </div>
 
       {/* Footer */}
