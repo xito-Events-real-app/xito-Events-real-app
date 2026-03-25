@@ -57,7 +57,12 @@ function makeMergeKey(row: VideoEditRow): string {
 export function useVideoEditTracker() {
   const [rows, setRows] = useState<VideoEditRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [splitKeys, setSplitKeys] = useState<Set<string>>(new Set());
+  const [splitKeys, setSplitKeys] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('video-edit-split-keys');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch { return new Set(); }
+  });
   const { toast } = useToast();
 
   const loadRows = useCallback(async () => {
