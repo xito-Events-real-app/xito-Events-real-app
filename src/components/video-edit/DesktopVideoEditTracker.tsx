@@ -815,8 +815,21 @@ export function DesktopVideoEditTracker() {
     for (const stage of STAGES) {
       (rowsByStatus[stage.key] || []).forEach(r => { if (r.editor) allEditorNames.add(r.editor); });
     }
-    return Array.from(allEditorNames).filter(name => !activeProgressEditors.has(name)).sort();
-  }, [rowsByStatus, activeProgressEditors]);
+    const available = Array.from(allEditorNames).filter(name => !activeProgressEditors.has(name)).sort();
+    return available.map(name => {
+      const editLabRows = (rowsByStatus['EDIT_LAB'] || []).filter(r => r.editor === name);
+      const queueRows = (rowsByStatus['QUEUE'] || []).filter(r => r.editor === name);
+      const editorInfo = editors.find(e => e.name === name);
+      const whatsapp = editorInfo?.whatsapp || '';
+      if (editLabRows.length > 0) {
+        return { name, stage: 'EDIT_LAB' as const, rows: editLabRows, whatsapp };
+      } else if (queueRows.length > 0) {
+        return { name, stage: 'QUEUE' as const, rows: queueRows, whatsapp };
+      } else {
+        return { name, stage: 'NONE' as const, rows: [] as DisplayRow[], whatsapp };
+      }
+    });
+  }, [rowsByStatus, activeProgressEditors, editors]);
 
   // Active editors per stage (for filter pills in classic view)
   const activeEditorsByStage = useMemo(() => {
