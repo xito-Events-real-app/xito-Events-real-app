@@ -556,6 +556,21 @@ function DashboardView({
     </div>
   );
 }
+
+/* ── Editor View ── */
+const EDITOR_STAGE_ORDER = ['EDIT_ON_PROGRESS', 'EDIT_LAB', 'QUEUE', 'COLOR_QUEUE', 'COLOR_LAB', 'COLOR_ON_PROGRESS', 'EXPORT_QUEUE', 'EXPORTED', 'CLIENT_REVIEW', 'RE_EDIT_ON_PROGRESS', 'FINALIZED'];
+
+function EditorView({ editorName, rowsByStatus }: { editorName: string; rowsByStatus: Record<string, DisplayRow[]> }) {
+  const groupedByStage = useMemo(() => {
+    const result: { key: string; label: string; rows: DisplayRow[] }[] = [];
+    for (const stageKey of EDITOR_STAGE_ORDER) {
+      const stage = STAGES.find(s => s.key === stageKey);
+      if (!stage) continue;
+      const rows = (rowsByStatus[stageKey] || []).filter(r => r.editor === editorName);
+      if (rows.length > 0) {
+        result.push({ key: stageKey, label: stage.label, rows });
+      }
+    }
     return result;
   }, [editorName, rowsByStatus]);
 
