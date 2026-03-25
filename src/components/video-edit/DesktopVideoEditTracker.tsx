@@ -10,7 +10,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Video, MessageSquare, Music, ExternalLink, ChevronDown, ChevronRight, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, FolderOpen, LayoutDashboard, List, GitBranch, Users, RefreshCcw, CheckCircle, Play, Clock, Phone, ArrowRight } from "lucide-react";
+import { Video, MessageSquare, Music, ExternalLink, ChevronDown, ChevronRight, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, FolderOpen, LayoutDashboard, List, GitBranch, Users, RefreshCcw, CheckCircle, Play, Pause, Clock, Phone, ArrowRight } from "lucide-react";
 import { WtnPipelineView } from "./WtnPipelineView";
 import { FileDetailsExpander } from "./FileDetailsExpander";
 import { supabase } from "@/integrations/supabase/client";
@@ -340,6 +340,7 @@ function DashboardView({
   onAssign,
   availableEditors,
   onPushToStatus,
+  onTogglePlaying,
 }: {
   rowsByStatus: Record<string, DisplayRow[]>;
   allRows: any[];
@@ -347,15 +348,23 @@ function DashboardView({
   onAssign: (rowId: string, editorName: string, mergedIds?: string[]) => void;
   availableEditors: { name: string; stage: 'EDIT_LAB' | 'QUEUE' | 'NONE'; rows: DisplayRow[]; whatsapp: string }[];
   onPushToStatus: (id: string, newStatus: string, mergedIds?: string[]) => void;
+  onTogglePlaying: (id: string, currentlyPlaying: boolean, mergedIds?: string[]) => void;
 }) {
   const [assignDialogEditor, setAssignDialogEditor] = useState<string | null>(null);
 
-  // Edit on Progress rows
-  const editOnProgressRows = useMemo(() => {
-    return [...(rowsByStatus['EDIT_ON_PROGRESS'] || [])].sort(
-      (a, b) => (parseInt(b.urgency || '0') || 0) - (parseInt(a.urgency || '0') || 0)
-    );
+  // Edit on Progress rows split into running and paused
+  const { runningRows, pausedRows } = useMemo(() => {
+    const all = [...(rowsByStatus['EDIT_ON_PROGRESS'] || [])];
+    const running = all
+      .filter(r => r.isPlaying)
+      .sort((a, b) => (a.playingSince || '').localeCompare(b.playingSince || ''));
+    const paused = all
+      .filter(r => !r.isPlaying)
+      .sort((a, b) => (parseInt(b.urgency || '0') || 0) - (parseInt(a.urgency || '0') || 0));
+    return { runningRows: running, pausedRows: paused };
   }, [rowsByStatus]);
+
+  const totalProgress = runningRows.length + pausedRows.length;
 
   // Top urgent unassigned QUEUE rows for assignment popup
   const urgentUnassigned = useMemo(() => {
@@ -372,28 +381,79 @@ function DashboardView({
         <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
           <Play className="w-4 h-4 text-blue-500" />
           Edit on Progress
-          <Badge variant="outline" className="text-xs">{editOnProgressRows.length}</Badge>
+          <Badge variant="outline" className="text-xs">{totalProgress}</Badge>
         </h3>
-        {editOnProgressRows.length === 0 ? (
+        {totalProgress === 0 ? (
           <div className="rounded-lg border bg-card p-6 text-center text-muted-foreground text-sm">
             No videos currently being edited
           </div>
         ) : (
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-            {editOnProgressRows.map(row => (
-              <div key={row.id} className="border-l-4 border-l-blue-600 rounded-lg bg-card p-3 shadow-sm">
-                <p className="font-bold text-sm text-foreground">{row.clientName}</p>
-                <p className="text-xs text-muted-foreground">{row.eventName} · {row.editType}</p>
-                <div className="flex items-center gap-2 mt-2">
-                  <UrgencyBadge value={row.urgency || "0"} />
-                  {row.editor && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-200 font-medium">
-                      {row.editor}
-                    </span>
-                  )}
+          <div className="space-y-4">
+            {/* Running Section */}
+            {runningRows.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Play className="w-3.5 h-3.5 text-green-500" />
+                  <span className="text-xs font-bold text-foreground uppercase tracking-wide">Running ({runningRows.length})</span>
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                  {runningRows.map(row => (
+                    <div key={row.id} className="border-l-4 border-l-blue-600 rounded-lg bg-card p-3 shadow-lg animate-editing-glow relative">
+                      <button
+                        onClick={() => onTogglePlaying(row.id, true, row.mergedIds)}
+                        className="absolute top-2 right-2 w-7 h-7 rounded-full bg-green-100 dark:bg-green-950 flex items-center justify-center hover:bg-green-200 dark:hover:bg-green-900 transition-colors"
+                        title="Pause editing"
+                      >
+                        <Pause className="w-3.5 h-3.5 text-green-700 dark:text-green-300" />
+                      </button>
+                      <p className="font-bold text-sm text-foreground">{row.clientName}</p>
+                      <p className="text-xs text-muted-foreground">{row.eventName} · {row.editType}</p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <UrgencyBadge value={row.urgency || "0"} />
+                        {row.editor && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-200 font-medium">
+                            {row.editor}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
+            )}
+
+            {/* Paused Section */}
+            {pausedRows.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Pause className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Paused ({pausedRows.length})</span>
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                  {pausedRows.map(row => (
+                    <div key={row.id} className="border-l-4 border-l-blue-600 rounded-lg bg-card p-3 shadow-sm opacity-60 relative">
+                      <button
+                        onClick={() => onTogglePlaying(row.id, false, row.mergedIds)}
+                        className="absolute top-2 right-2 w-7 h-7 rounded-full bg-muted flex items-center justify-center hover:bg-accent transition-colors"
+                        title="Resume editing"
+                      >
+                        <Play className="w-3.5 h-3.5 text-muted-foreground" />
+                      </button>
+                      <p className="font-bold text-sm text-foreground">{row.clientName}</p>
+                      <p className="text-xs text-muted-foreground">{row.eventName} · {row.editType}</p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <UrgencyBadge value={row.urgency || "0"} />
+                        {row.editor && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-200 font-medium">
+                            {row.editor}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -723,12 +783,14 @@ function VideoEditSidebar({
   editors,
   editorCounts,
   activeProgressEditors,
+  playingEditors,
 }: {
   activeView: ActiveView;
   onViewChange: (view: ActiveView) => void;
   editors: { name: string; isVideoEditor: boolean }[];
   editorCounts: Record<string, number>;
   activeProgressEditors: Set<string>;
+  playingEditors: Set<string>;
 }) {
   const navItems = [
     { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
@@ -790,6 +852,8 @@ function VideoEditSidebar({
           {videoEditors.map(editor => {
             const isActive = activeView === editor.name;
             const count = editorCounts[editor.name] || 0;
+            const isInProgress = activeProgressEditors.has(editor.name);
+            const isPlaying = playingEditors.has(editor.name);
             return (
               <button
                 key={editor.name}
@@ -798,14 +862,15 @@ function VideoEditSidebar({
                   "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200",
                   isActive
                     ? "bg-teal-600/30 text-teal-300 font-semibold"
-                    : "text-zinc-400 hover:text-white hover:bg-white/5"
+                    : "text-zinc-400 hover:text-white hover:bg-white/5",
+                  !isInProgress && "italic"
                 )}
               >
                 <span className={cn(
                   "w-2 h-2 rounded-full shrink-0",
-                  activeProgressEditors.has(editor.name) ? "bg-green-500" : count > 0 ? "bg-teal-400" : "bg-zinc-600"
+                  isPlaying ? "bg-green-500 animate-editor-pulse" : isInProgress ? "bg-green-500" : count > 0 ? "bg-teal-400" : "bg-zinc-600"
                 )} />
-                <span className="flex-1 text-left truncate">{editor.name}</span>
+                <span className={cn("flex-1 text-left truncate", isPlaying && "animate-editor-wave")}>{editor.name}</span>
                 {count > 0 && (
                   <span className={cn(
                     "text-[10px] px-1.5 py-0.5 rounded-full font-bold",
@@ -830,7 +895,7 @@ function VideoEditSidebar({
 
 /* ── Main Component ── */
 export function DesktopVideoEditTracker() {
-  const { rowsByStatus, allRows, isLoading, updateField, pushToStatus, splitRow, mergeRow } = useVideoEditTracker();
+  const { rowsByStatus, allRows, isLoading, updateField, pushToStatus, splitRow, mergeRow, togglePlaying } = useVideoEditTracker();
   const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean; whatsapp?: string }[]>([]);
   const [activeView, setActiveView] = useState<ActiveView>('dashboard');
   const [filterClient, setFilterClient] = useState<string | null>(null);
@@ -888,6 +953,16 @@ export function DesktopVideoEditTracker() {
       (rowsByStatus[stageKey] || []).forEach(r => { if (r.editor) editors.add(r.editor); });
     }
     return editors;
+  }, [rowsByStatus]);
+
+  // Editors with actively playing rows
+  const playingEditors = useMemo(() => {
+    const progressStages = ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'];
+    const playing = new Set<string>();
+    for (const stageKey of progressStages) {
+      (rowsByStatus[stageKey] || []).forEach(r => { if (r.editor && r.isPlaying) playing.add(r.editor); });
+    }
+    return playing;
   }, [rowsByStatus]);
 
   // Available editors: have been assigned before but NOT in any active progress stage
@@ -980,6 +1055,7 @@ export function DesktopVideoEditTracker() {
         editors={editors}
         editorCounts={editorCounts}
         activeProgressEditors={activeProgressEditors}
+        playingEditors={playingEditors}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -1001,6 +1077,7 @@ export function DesktopVideoEditTracker() {
                 onAssign={(id, editor, mergedIds) => updateField(id, 'editor', editor, mergedIds)}
                 availableEditors={availableEditors}
                 onPushToStatus={pushToStatus}
+                onTogglePlaying={togglePlaying}
               />
             </div>
           </div>
