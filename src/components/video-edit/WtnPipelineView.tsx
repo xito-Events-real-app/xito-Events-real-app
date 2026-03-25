@@ -19,7 +19,9 @@ function getEventAgePipeline(eventDateAD: string): { days: number; bsDisplay: st
     const diffMs = now.getTime() - eventDate.getTime();
     const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
     const bs = adToBS(eventDate);
-    return { days, bsDisplay: formatBSDate(bs) };
+    const monthNames = ["Baisakh","Jestha","Ashar","Shrawan","Bhadra","Ashwin","Kartik","Mangsir","Poush","Magh","Falgun","Chaitra"];
+    const bsShort = `${monthNames[bs.month - 1]} ${bs.day}`;
+    return { days, bsDisplay: formatBSDate(bs), bsShort };
   } catch { return null; }
 }
 
