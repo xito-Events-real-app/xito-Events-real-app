@@ -43,7 +43,7 @@ const STAGE_CARD_COLORS: Record<string, string> = {
 };
 
 /* ── Date/time helper functions ── */
-function getEventAge(eventDateAD: string): { days: number; bsDisplay: string } | null {
+function getEventAge(eventDateAD: string): { days: number; bsDisplay: string; bsShort: string } | null {
   if (!eventDateAD) return null;
   try {
     const eventDate = new Date(eventDateAD);
@@ -53,8 +53,23 @@ function getEventAge(eventDateAD: string): { days: number; bsDisplay: string } |
     const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
     const bs = adToBS(eventDate);
     const bsDisplay = formatBSDate(bs);
-    return { days, bsDisplay };
+    const monthNames = ["Baisakh","Jestha","Ashar","Shrawan","Bhadra","Ashwin","Kartik","Mangsir","Poush","Magh","Falgun","Chaitra"];
+    const bsShort = `${monthNames[bs.month - 1]} ${bs.day}`;
+    return { days, bsDisplay, bsShort };
   } catch { return null; }
+}
+
+function EventAgeStamp({ age }: { age: { days: number; bsShort: string } }) {
+  return (
+    <div className="inline-flex flex-col items-center justify-center px-2 py-1 rounded border-2 border-red-500/60 bg-red-500/10 rotate-[-3deg] min-w-[64px]">
+      <span className="text-[11px] font-black text-red-600 dark:text-red-400 leading-tight tracking-tight">
+        {age.days}D OLD
+      </span>
+      <span className="text-[9px] font-bold text-red-500/80 dark:text-red-400/70 leading-tight uppercase tracking-wide">
+        {age.bsShort}
+      </span>
+    </div>
+  );
 }
 
 function getTimeAgo(isoDate: string): string | null {
