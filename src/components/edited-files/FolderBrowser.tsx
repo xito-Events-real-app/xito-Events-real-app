@@ -9,7 +9,8 @@ import {
 } from "@/lib/edited-files-api";
 import { ClientLinksSection } from "./ClientLinksSection";
 import { Button } from "@/components/ui/button";
-import { Folder, FileImage, FileVideo, ArrowLeft, Download, Trash2, Link2 } from "lucide-react";
+import { Folder, FileImage, FileVideo, ArrowLeft, Download, Trash2, Link2, LayoutGrid, List } from "lucide-react";
+import { FilePreviewCard } from "./FilePreviewCard";
 import { toast } from "@/hooks/use-toast";
 
 interface ClientFolder {
