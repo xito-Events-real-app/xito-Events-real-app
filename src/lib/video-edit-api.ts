@@ -200,6 +200,7 @@ export async function updateVideoEditField(id: string, field: string, value: str
     songs: "songs",
     subEventName: "sub_event_name",
     editType: "edit_type",
+    deadline: "deadline",
   };
   const dbField = fieldMap[field] || field;
 
