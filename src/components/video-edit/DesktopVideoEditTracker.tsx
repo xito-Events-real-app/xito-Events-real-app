@@ -772,12 +772,12 @@ export function DesktopVideoEditTracker() {
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from("freelancers_cache").select("name, video_editor").order("name");
+      const { data } = await supabase.from("freelancers_cache").select("name, video_editor, whatsapp_no").order("name");
       if (data) {
         setEditors(
           data
             .filter(f => f.name)
-            .map(f => ({ name: f.name!, isVideoEditor: f.video_editor?.toUpperCase() === "YES" }))
+            .map(f => ({ name: f.name!, isVideoEditor: f.video_editor?.toUpperCase() === "YES", whatsapp: f.whatsapp_no || '' }))
         );
       }
     })();
