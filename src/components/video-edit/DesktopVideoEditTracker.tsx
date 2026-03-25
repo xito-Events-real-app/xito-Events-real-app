@@ -1075,11 +1075,12 @@ const NEXT_UP_STAGE_COLORS: Record<string, string> = {
   'QUEUE': 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
 };
 
-function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField }: {
+function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, onTogglePlaying }: {
   editorName: string;
   rowsByStatus: Record<string, DisplayRow[]>;
   onPushToStatus: (id: string, newStatus: string, mergedIds?: string[]) => void;
   onUpdateField: (id: string, field: string, value: string, mergedIds?: string[]) => void;
+  onTogglePlaying: (id: string, currentlyPlaying: boolean, mergedIds?: string[]) => void;
 }) {
   const [nextUpOpen, setNextUpOpen] = useState(false);
   const groupedByStage = useMemo(() => {
@@ -1281,6 +1282,20 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField }:
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
+                          {isProgressStage && (
+                            <button
+                              onClick={() => onTogglePlaying(row.id, row.isPlaying, row.mergedIds)}
+                              className={cn(
+                                "w-7 h-7 rounded-full flex items-center justify-center transition-colors",
+                                row.isPlaying
+                                  ? "bg-amber-100 dark:bg-amber-900/40 text-amber-600 hover:bg-amber-200"
+                                  : "bg-green-100 dark:bg-green-900/40 text-green-600 hover:bg-green-200"
+                              )}
+                              title={row.isPlaying ? "Pause" : "Resume"}
+                            >
+                              {row.isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                            </button>
+                          )}
                           <UrgencyBadge value={row.urgency || "0"} />
                           <Select onValueChange={(val) => onPushToStatus(row.id, val, row.mergedIds)}>
                             <SelectTrigger className="h-7 w-28 text-[10px]">
@@ -1664,7 +1679,7 @@ export function DesktopVideoEditTracker() {
         ) : isEditorView ? (
           <div className="flex-1 overflow-y-auto p-6">
             <div className="max-w-[1200px] mx-auto">
-              <EditorView editorName={activeView} rowsByStatus={rowsByStatus} onPushToStatus={pushToStatus} onUpdateField={updateField} />
+              <EditorView editorName={activeView} rowsByStatus={rowsByStatus} onPushToStatus={pushToStatus} onUpdateField={updateField} onTogglePlaying={togglePlaying} />
             </div>
           </div>
         ) : (
