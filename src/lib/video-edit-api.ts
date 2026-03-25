@@ -170,6 +170,8 @@ function dbToRow(r: any): VideoEditRow {
     forceSplit: r.force_split || false,
     isPlaying: r.is_playing || false,
     playingSince: r.playing_since || "",
+    editStartedAt: r.edit_started_at || "",
+    deadline: r.deadline || "",
   };
 }
 
