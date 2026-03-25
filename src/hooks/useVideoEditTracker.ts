@@ -241,6 +241,7 @@ export function useVideoEditTracker() {
     setSplitKeys(prev => {
       const next = new Set(prev);
       next.add(mergeKey);
+      try { localStorage.setItem('video-edit-split-keys', JSON.stringify([...next])); } catch {}
       return next;
     });
   }, []);
@@ -249,6 +250,7 @@ export function useVideoEditTracker() {
     setSplitKeys(prev => {
       const next = new Set(prev);
       next.delete(mergeKey);
+      try { localStorage.setItem('video-edit-split-keys', JSON.stringify([...next])); } catch {}
       return next;
     });
   }, []);
