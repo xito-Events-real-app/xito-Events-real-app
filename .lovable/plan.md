@@ -1,36 +1,48 @@
 
 
-## Enhanced Available Editors — Show Stage, Tasks & Actions
+## Fix Available Editors — Per-Row "Ask [FirstName]" Button + Contact Fallback
 
-### What's Changing
+### Problems
+1. Ramesh missing WhatsApp button — `whatsapp_no` is empty, need `contact_no` as fallback
+2. EDIT_LAB editors need per-row "Ask [FirstName]" text buttons instead of a single phone icon
+3. QUEUE editors already have "Move to Edit Lab" — confirmed working
 
-Update the "Available Editors" section in `DashboardView` to show contextual info per editor based on their current stage:
+### Changes — `src/components/video-edit/DesktopVideoEditTracker.tsx`
 
-- **EDIT_LAB editors**: Show "Edit Lab" badge + their assigned tasks (client, event, edit type) + WhatsApp button with pre-filled message
-- **QUEUE editors**: Show "Queue" badge + their assigned tasks + "Move to Edit Lab" button
-- **NO ROWS editors**: Show just the name + click to assign from unassigned queue (existing behavior)
+**1. Editor fetch (line ~849)**: Also select `contact_no` from `freelancers_cache`. Update editor type to include `contactNo?: string`.
+
+```typescript
+const { data } = await supabase.from("freelancers_cache")
+  .select("name, video_editor, whatsapp_no, contact_no").order("name");
+// map: contactNo: f.contact_no || ''
+```
+
+**2. Available editors computation (line ~897)**: Use `whatsapp || contactNo` as phone number.
+
+```typescript
+const whatsapp = editorInfo?.whatsapp || editorInfo?.contactNo || '';
+```
+
+**3. EDIT_LAB card rendering (lines ~434-468)**:
+- Remove the single WhatsApp icon button from the card header
+- For each task row, add an **"Ask [FirstName]"** green pill button
+- First name extracted via `editor.name.split(' ')[0]`
+- Each button sends a WhatsApp message specific to that row: `"Hi [FirstName], have you started editing [ClientName] - [EventName] ([EditType])?"`
+
+**Result:**
+```text
+┌──────────────────────────────────────┐
+│ Amreet Pandey              [Edit Lab]│
+│ • Client · Event · FV   [Ask Amreet]│
+│ • Client · Event · HL   [Ask Amreet]│
+└──────────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│ Ramesh Chaudhary           [Edit Lab]│
+│ • Client · Event · FV   [Ask Ramesh]│
+└──────────────────────────────────────┘
+```
 
 ### Files Changed
-
-**1. `src/components/video-edit/DesktopVideoEditTracker.tsx`**
-
-**Editor fetch** (line ~774): Also select `whatsapp_no` from `freelancers_cache`. Update editor state type to include `whatsapp?: string`.
-
-**`availableEditors` computation** (line ~812): Change from `string[]` to objects:
-```typescript
-{ name: string; stage: 'EDIT_LAB' | 'QUEUE' | 'NONE'; rows: DisplayRow[]; whatsapp: string }
-```
-- Check if editor has rows in EDIT_LAB → stage = 'EDIT_LAB', collect those rows
-- Else if editor has rows in QUEUE → stage = 'QUEUE', collect those rows  
-- Else → stage = 'NONE', no rows
-
-**`DashboardView` props**: Change `availableEditors` from `string[]` to the new object type. Add `onPushToStatus` prop for "Move to Edit Lab".
-
-**Available Editors cards**: Render differently per stage:
-
-- **EDIT_LAB**: Amber border, "Edit Lab" badge, list tasks (client · event · edit type), WhatsApp icon button using `openWhatsApp(whatsapp, "Hi [name], have you started editing [client] - [event] ([editType])?")`. Click card still opens assign dialog.
-- **QUEUE**: Yellow border, "Queue" badge, list tasks, green "Move to Edit Lab" button that calls `onPushToStatus` for each of the editor's QUEUE rows.
-- **NONE**: Current plain card style — just name, click to open assignment dialog.
-
-**Import** `openWhatsApp` from `@/lib/whatsapp-utils`.
+1. `src/components/video-edit/DesktopVideoEditTracker.tsx` — fetch `contact_no`, use as fallback phone, replace single WhatsApp icon with per-row "Ask [FirstName]" buttons
 
