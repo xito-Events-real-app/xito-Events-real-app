@@ -380,7 +380,13 @@ function DashboardView({
 
   const totalProgress = runningRows.length + pausedRows.length;
 
-  const renderOngoingCard = (row: DisplayRow & { _progressStage: string }, isRunning: boolean) => (
+  // Top urgent unassigned QUEUE rows for assignment popup
+  const urgentUnassigned = useMemo(() => {
+    return [...(rowsByStatus['QUEUE'] || [])]
+      .filter(r => !r.editor)
+      .sort((a, b) => (parseInt(b.urgency || '0') || 0) - (parseInt(a.urgency || '0') || 0))
+      .slice(0, 5);
+  }, [rowsByStatus]);
     <div
       key={row.id}
       className={cn(
