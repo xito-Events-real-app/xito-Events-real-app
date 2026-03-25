@@ -457,7 +457,7 @@ function VideoEditTable({
             </TableRow>
             {isExpanded && (
               <TableRow>
-                <TableCell colSpan={12} className="p-0 bg-muted/20 border-b-2 border-primary/20">
+                <TableCell colSpan={15} className="p-0 bg-muted/20 border-b-2 border-primary/20">
                   <FileDetailsExpander
                     registeredDateTimeAD={row.registeredDateTimeAD}
                     eventName={row.eventName}
