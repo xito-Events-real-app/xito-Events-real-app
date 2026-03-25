@@ -1,0 +1,2 @@
+ALTER TABLE public.video_edit_tracker ADD COLUMN IF NOT EXISTS edit_started_at timestamptz DEFAULT NULL;
+ALTER TABLE public.video_edit_tracker ADD COLUMN IF NOT EXISTS deadline timestamptz DEFAULT NULL;
