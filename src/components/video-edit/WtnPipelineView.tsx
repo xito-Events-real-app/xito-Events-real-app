@@ -3,6 +3,7 @@ import { useVideoEditTracker, STAGES, DisplayRow } from "@/hooks/useVideoEditTra
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { X, Filter, Flame, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, ChevronDown, ChevronRight, FolderOpen, Timer, CalendarIcon } from "lucide-react";
 import { FileDetailsExpander } from "./FileDetailsExpander";
 import { supabase } from "@/integrations/supabase/client";
@@ -41,6 +42,47 @@ function getDeadlineInfoPipeline(deadline: string): { text: string; isCrossed: b
   } catch { return null; }
 }
 
+const NO_TIMER_STAGES_PIPELINE = new Set(['QUEUE', 'EDIT_LAB']);
+
+function PipelineLiveTimer({ editStartedAt, stageKey }: { editStartedAt: string; stageKey: string }) {
+  const [now, setNow] = useState(Date.now());
+  const isFinalized = stageKey === 'FINALIZED';
+
+  useEffect(() => {
+    if (isFinalized || NO_TIMER_STAGES_PIPELINE.has(stageKey)) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [isFinalized, stageKey]);
+
+  if (!editStartedAt || NO_TIMER_STAGES_PIPELINE.has(stageKey)) return null;
+  const startTime = new Date(editStartedAt).getTime();
+  if (isNaN(startTime)) return null;
+
+  const diffMs = Math.max(0, now - startTime);
+  const totalSecs = Math.floor(diffMs / 1000);
+  const days = Math.floor(totalSecs / 86400);
+  const hrs = Math.floor((totalSecs % 86400) / 3600);
+  const mins = Math.floor((totalSecs % 3600) / 60);
+  const secs = totalSecs % 60;
+  const isOverdue = diffMs >= 2 * 24 * 60 * 60 * 1000;
+  const colorCls = isOverdue ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400";
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className={cn("flex items-center gap-1 text-xs font-medium cursor-default", colorCls, isOverdue ? "animate-pulse" : "")}>
+          <Timer className="w-3 h-3" />
+          {days > 0 ? `${days}d ${hrs}h` : `${hrs}h ${mins}m`}
+        </div>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p className={cn("text-sm font-mono font-bold", colorCls)}>
+          {days}D {hrs}H {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
+        </p>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 const URGENCY_COLORS: Record<string, string> = {
   "1": "bg-muted text-muted-foreground",
   "2": "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
@@ -253,6 +295,9 @@ function PipelineCard({
               </div>
             ) : null;
           })()}
+
+          {/* Live timer */}
+          <PipelineLiveTimer editStartedAt={row.editStartedAt} stageKey={stageKey} />
 
           {/* Urgency selector */}
           <Select value={row.urgency || "0"} onValueChange={(v) => onUpdateField(row.id, "urgency", v, row.mergedIds)}>

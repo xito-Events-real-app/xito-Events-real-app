@@ -1,0 +1,1 @@
+ALTER TABLE public.video_edit_tracker ADD COLUMN IF NOT EXISTS stage_history text NOT NULL DEFAULT '';

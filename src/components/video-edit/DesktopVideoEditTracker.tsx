@@ -90,6 +90,159 @@ function getTimeAgo(isoDate: string): string | null {
   } catch { return null; }
 }
 
+/* ── Live Edit Timer ── */
+const NO_TIMER_STAGES = ['QUEUE', 'EDIT_LAB'];
+const PROGRESS_STAGES_SET = new Set(['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS', 'COLOR_QUEUE', 'COLOR_LAB', 'EXPORT_QUEUE', 'EXPORTED', 'CLIENT_REVIEW', 'FINALIZED']);
+
+function LiveEditTimer({
+  editStartedAt,
+  stageHistory,
+  size,
+  stageKey,
+}: {
+  editStartedAt: string;
+  stageHistory?: string;
+  size: 'card' | 'table';
+  stageKey?: string;
+}) {
+  const [now, setNow] = useState(Date.now());
+  const isFinalized = stageKey === 'FINALIZED';
+
+  useEffect(() => {
+    if (isFinalized) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [isFinalized]);
+
+  if (!editStartedAt) return <span className="text-muted-foreground text-xs">-</span>;
+
+  const startTime = new Date(editStartedAt).getTime();
+  if (isNaN(startTime)) return <span className="text-muted-foreground text-xs">-</span>;
+
+  // For finalized, compute end time from last stage_history entry
+  let endTime = now;
+  if (isFinalized && stageHistory) {
+    const lines = stageHistory.trim().split('\n');
+    const lastLine = lines[lines.length - 1];
+    const match = lastLine?.match(/\[(.+)\]/);
+    if (match) {
+      const parsed = new Date(match[1]).getTime();
+      if (!isNaN(parsed)) endTime = parsed;
+    }
+  }
+
+  const diffMs = Math.max(0, endTime - startTime);
+  const totalSecs = Math.floor(diffMs / 1000);
+  const days = Math.floor(totalSecs / 86400);
+  const hrs = Math.floor((totalSecs % 86400) / 3600);
+  const mins = Math.floor((totalSecs % 3600) / 60);
+  const secs = totalSecs % 60;
+
+  const isOverdue = diffMs >= 2 * 24 * 60 * 60 * 1000;
+  const colorCls = isOverdue ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400";
+  const pulseCls = isOverdue && !isFinalized ? "animate-pulse" : "";
+
+  if (size === 'table') {
+    const shortText = days > 0 ? `${days}d ${hrs}h` : hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+    const fullText = `${days}D ${hrs}H ${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className={cn("flex items-center gap-1 text-xs font-medium cursor-default", colorCls, pulseCls)}>
+            <Timer className="w-3 h-3" />
+            {isFinalized ? `Total: ${shortText}` : shortText}
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p className={cn("text-sm font-mono font-bold", colorCls)}>{fullText}</p>
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  // Card size - big display
+  return (
+    <div className={cn("flex items-center gap-1.5", colorCls, pulseCls)}>
+      <Timer className="w-4 h-4" />
+      <span className="text-base font-black tracking-tight font-mono">
+        {days > 0 && <>{days}D </>}
+        {hrs}H{' '}
+        <span className="text-sm">
+          {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+/* ── Stage History Dialog ── */
+function StageHistoryDialog({ stageHistory, editStartedAt }: { stageHistory: string; editStartedAt: string }) {
+  const [open, setOpen] = useState(false);
+  if (!stageHistory) return null;
+
+  const lines = stageHistory.trim().split('\n').filter(Boolean);
+  const entries: { stage: string; timestamp: Date }[] = [];
+  for (const line of lines) {
+    const match = line.match(/^(.+?)\s+\[(.+)\]$/);
+    if (match) {
+      const ts = new Date(match[2]);
+      if (!isNaN(ts.getTime())) {
+        entries.push({ stage: match[1], timestamp: ts });
+      }
+    }
+  }
+
+  const stageLabel = (key: string) => STAGES.find(s => s.key === key)?.label || key;
+
+  const formatDuration = (ms: number) => {
+    const totalMins = Math.floor(ms / 60000);
+    const d = Math.floor(totalMins / 1440);
+    const h = Math.floor((totalMins % 1440) / 60);
+    const m = totalMins % 60;
+    if (d > 0) return `${d}d ${h}h ${m}m`;
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+  };
+
+  return (
+    <>
+      <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => setOpen(true)}>
+        History
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Stage Transition History</DialogTitle>
+            <DialogDescription>Timeline of stage transitions for this edit</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-0 max-h-80 overflow-y-auto">
+            {entries.map((entry, i) => {
+              const prevTime = i === 0 ? new Date(editStartedAt) : entries[i - 1].timestamp;
+              const duration = entry.timestamp.getTime() - prevTime.getTime();
+              return (
+                <div key={i} className="flex items-start gap-3 py-2 border-b border-border/50 last:border-0">
+                  <div className="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground">{stageLabel(entry.stage)}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {entry.timestamp.toLocaleString()}
+                    </p>
+                    {i > 0 && (
+                      <p className="text-[10px] text-muted-foreground">
+                        ↑ {formatDuration(duration)} in {stageLabel(entries[i - 1].stage)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 function getDeadlineInfo(deadline: string): { text: string; isCrossed: boolean; isClose: boolean } | null {
   if (!deadline) return null;
   try {
@@ -392,16 +545,13 @@ function VideoEditTable({
               </TableCell>
               {/* Edit Started */}
               <TableCell>
-                {(() => {
-                  const ago = getTimeAgo(row.editStartedAt);
-                  if (!ago) return <span className="text-muted-foreground text-xs">-</span>;
-                  return (
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Timer className="w-3 h-3" />
-                      {ago}
-                    </div>
-                  );
-                })()}
+                {NO_TIMER_STAGES.includes(currentStageKey)
+                  ? <span className="text-muted-foreground text-xs">-</span>
+                  : <LiveEditTimer editStartedAt={row.editStartedAt} stageHistory={row.stageHistory} size="table" stageKey={currentStageKey} />
+                }
+                {currentStageKey === 'FINALIZED' && row.stageHistory && (
+                  <StageHistoryDialog stageHistory={row.stageHistory} editStartedAt={row.editStartedAt} />
+                )}
               </TableCell>
               {/* Deadline */}
               <TableCell>
@@ -606,16 +756,12 @@ function DashboardView({
           </div>
         ) : null;
       })()}
-      {/* Edit started */}
-      {(() => {
-        const ago = getTimeAgo(row.editStartedAt);
-        return ago ? (
-          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-            <Timer className="w-3 h-3" />
-            Started {ago}
-          </div>
-        ) : null;
-      })()}
+      {/* Live edit timer */}
+      {row.editStartedAt && (
+        <div className="mt-1">
+          <LiveEditTimer editStartedAt={row.editStartedAt} stageHistory={row.stageHistory} size="card" stageKey={row._progressStage} />
+        </div>
+      )}
       {/* Deadline */}
       {(() => {
         const dl = getDeadlineInfo(row.deadline);
