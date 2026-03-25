@@ -2,11 +2,12 @@ import { useState, useEffect } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { FolderBrowser } from "@/components/edited-files/FolderBrowser";
+import { PCloudBrowser } from "@/components/edited-files/PCloudBrowser";
 import { UploadWizard } from "@/components/edited-files/UploadWizard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getEditedFiles, getEditedFilesClients, getEditedFileUrl, formatFileSize, EditedFile } from "@/lib/edited-files-api";
-import { Upload, HardDrive, FolderOpen, Clock, FileImage, FileVideo, Play } from "lucide-react";
+import { Upload, HardDrive, FolderOpen, Clock, FileImage, FileVideo, Play, Cloud } from "lucide-react";
 import { FilePreviewDialog } from "@/components/edited-files/FilePreviewDialog";
 
 export default function EditedFiles() {
@@ -15,7 +16,7 @@ export default function EditedFiles() {
   const [recentFiles, setRecentFiles] = useState<EditedFile[]>([]);
   const [totalSize, setTotalSize] = useState(0);
   const [totalClients, setTotalClients] = useState(0);
-  const [view, setView] = useState<'dashboard' | 'browse'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'browse' | 'pcloud'>('dashboard');
   const [previewFile, setPreviewFile] = useState<EditedFile | null>(null);
 
   const loadStats = async () => {
@@ -49,6 +50,13 @@ export default function EditedFiles() {
             onClick={() => setView('browse')}
           >
             <FolderOpen className="h-4 w-4 mr-1" /> Browse
+          </Button>
+          <Button
+            variant={view === 'pcloud' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setView('pcloud')}
+          >
+            <Cloud className="h-4 w-4 mr-1" /> pCloud
           </Button>
           <Button size="sm" onClick={() => setWizardOpen(true)} className="gap-1">
             <Upload className="h-4 w-4" /> Upload
@@ -135,6 +143,7 @@ export default function EditedFiles() {
       )}
 
       {view === 'browse' && <FolderBrowser />}
+      {view === 'pcloud' && <PCloudBrowser />}
 
       <UploadWizard open={wizardOpen} onOpenChange={setWizardOpen} onUploadStarted={loadStats} />
 

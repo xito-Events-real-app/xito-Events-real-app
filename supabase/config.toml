@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.sync-deliverables-to-sheets]
 verify_jwt = false
+
+[functions.pcloud-api]
+verify_jwt = false
