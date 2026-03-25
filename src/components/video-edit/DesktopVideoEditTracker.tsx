@@ -1264,12 +1264,39 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, o
                 {group.rows.map(row => {
                   const isProgressStage = ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'].includes(group.key);
                   const isPaused = isProgressStage && !row.isPlaying;
+                  const isRunning = isProgressStage && row.isPlaying;
                   const age = getEventAge(row.eventDateAD);
                   return (
                     <div key={row.id} className={cn(
-                      `border-l-4 ${borderColor} rounded-lg bg-card p-3 shadow-sm`,
-                      isPaused && "opacity-50"
+                      `border-l-4 ${borderColor} rounded-lg p-4 shadow-sm transition-all duration-300`,
+                      isRunning && "bg-green-50/80 dark:bg-green-950/30 ring-2 ring-green-400/60 dark:ring-green-500/40 shadow-[0_0_20px_rgba(34,197,94,0.25)] dark:shadow-[0_0_20px_rgba(34,197,94,0.15)]",
+                      isPaused && "bg-amber-50/50 dark:bg-amber-950/20 opacity-60",
+                      !isProgressStage && "bg-card"
                     )}>
+                      {/* Status Banner */}
+                      {isProgressStage && (
+                        <div className={cn(
+                          "flex items-center gap-2 mb-3 px-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider",
+                          isRunning
+                            ? "bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300"
+                            : "bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300"
+                        )}>
+                          {isRunning ? (
+                            <>
+                              <span className="relative flex h-2.5 w-2.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75" />
+                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+                              </span>
+                              CURRENTLY IN PROGRESS
+                            </>
+                          ) : (
+                            <>
+                              <Pause className="w-3 h-3" />
+                              PAUSED
+                            </>
+                          )}
+                        </div>
+                      )}
                       <div className="flex items-center justify-between">
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-sm text-foreground">{row.clientName}</p>
@@ -1286,14 +1313,14 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, o
                             <button
                               onClick={() => onTogglePlaying(row.id, row.isPlaying, row.mergedIds)}
                               className={cn(
-                                "w-7 h-7 rounded-full flex items-center justify-center transition-colors",
+                                "w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200",
                                 row.isPlaying
-                                  ? "bg-amber-100 dark:bg-amber-900/40 text-amber-600 hover:bg-amber-200"
-                                  : "bg-green-100 dark:bg-green-900/40 text-green-600 hover:bg-green-200"
+                                  ? "bg-amber-200 dark:bg-amber-800/60 text-amber-700 dark:text-amber-300 hover:bg-amber-300 shadow-md"
+                                  : "bg-green-200 dark:bg-green-800/60 text-green-700 dark:text-green-300 hover:bg-green-300 shadow-md"
                               )}
                               title={row.isPlaying ? "Pause" : "Resume"}
                             >
-                              {row.isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                              {row.isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
                             </button>
                           )}
                           <UrgencyBadge value={row.urgency || "0"} />
