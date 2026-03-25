@@ -694,7 +694,7 @@ function DashboardView({
   const STAGE_SHORT_LABEL: Record<string, string> = {
     EDIT_ON_PROGRESS: 'Edit on Progress',
     COLOR_ON_PROGRESS: 'Color on Progress',
-    RE_EDIT_ON_PROGRESS: 'Re-Edit',
+    RE_EDIT_ON_PROGRESS: 'Re-Edit on Progress',
   };
 
   const { runningRows, pausedRows } = useMemo(() => {
