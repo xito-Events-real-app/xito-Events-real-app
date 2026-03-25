@@ -28,10 +28,10 @@ interface Props {
   compact?: boolean;
 }
 
-const VIDEO_ROLES = ["VB", "VG", "EV", "DRONE", "FPV"];
+const VIDEO_ROLES = ["VB", "VG", "EV", "DRONE", "FPV", "IPHONE"];
 
 const VIDEO_ROLE_ORDER: Record<string, number> = {
-  VB: 1, VG: 2, EV: 3, DRONE: 4, FPV: 5,
+  VB: 1, VG: 2, EV: 3, DRONE: 4, FPV: 5, IPHONE: 6,
 };
 
 const ROLE_LABELS: Record<string, string> = {
