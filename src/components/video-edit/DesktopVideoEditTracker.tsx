@@ -142,7 +142,11 @@ function VideoEditTable({
             const isExpanded = expandedRows.has(row.id);
             return (
               <React.Fragment key={row.id}>
-              <TableRow className="hover:bg-muted/30">
+              <TableRow className={cn(
+                "hover:bg-muted/30",
+                ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'].includes(currentStageKey) && row.isPlaying && "animate-editing-glow",
+                ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'].includes(currentStageKey) && !row.isPlaying && "opacity-60"
+              )}>
               <TableCell className="text-center p-1">
                 <button
                   onClick={() => toggleExpand(row.id)}
