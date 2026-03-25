@@ -387,6 +387,8 @@ function DashboardView({
       .sort((a, b) => (parseInt(b.urgency || '0') || 0) - (parseInt(a.urgency || '0') || 0))
       .slice(0, 5);
   }, [rowsByStatus]);
+
+  const renderOngoingCard = (row: DisplayRow & { _progressStage: string }, isRunning: boolean) => (
     <div
       key={row.id}
       className={cn(
