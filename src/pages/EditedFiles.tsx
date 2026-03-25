@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { FolderBrowser } from "@/components/edited-files/FolderBrowser";
+import { PCloudBrowser } from "@/components/edited-files/PCloudBrowser";
 import { UploadWizard } from "@/components/edited-files/UploadWizard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
