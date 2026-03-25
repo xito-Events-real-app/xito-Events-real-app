@@ -728,7 +728,7 @@ function VideoEditSidebar({
               >
                 <span className={cn(
                   "w-2 h-2 rounded-full shrink-0",
-                  count > 0 ? "bg-teal-400" : "bg-zinc-600"
+                  activeProgressEditors.has(editor.name) ? "bg-green-500" : count > 0 ? "bg-teal-400" : "bg-zinc-600"
                 )} />
                 <span className="flex-1 text-left truncate">{editor.name}</span>
                 {count > 0 && (
