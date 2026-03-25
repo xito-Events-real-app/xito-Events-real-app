@@ -898,7 +898,7 @@ export function DesktopVideoEditTracker() {
             </div>
           </div>
         ) : activeView === 'pipeline' ? (
-          <WtnPipelineView onClose={() => setActiveView('dashboard')} inline />
+          <WtnPipelineView onClose={() => setActiveView('dashboard')} inline initialStage={pipelineInitialStage} />
         ) : isEditorView ? (
           <div className="flex-1 overflow-y-auto p-6">
             <div className="max-w-[1200px] mx-auto">
