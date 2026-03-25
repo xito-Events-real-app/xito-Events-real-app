@@ -426,48 +426,48 @@ function DashboardView({
   );
 
   return (
-    <div>
+    <div className="space-y-6">
       {/* WTN Ongoing Edits */}
-      <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-        <Play className="w-4 h-4 text-blue-500" />
-        WTN Ongoing Edits
-        <Badge variant="outline" className="text-xs">{totalProgress}</Badge>
-      </h3>
-      {totalProgress === 0 ? (
-        <div className="rounded-lg border bg-card p-6 text-center text-muted-foreground text-sm">
-          No videos currently being edited
-        </div>
-      ) : (
-        <div className="space-y-5">
-          {/* Running Section */}
-          {runningRows.length > 0 && (
-            <div>
-              <div className="flex items-center justify-center gap-2 mb-3">
-                <Play className="w-4 h-4 text-green-500" />
-                <span className="text-base font-bold text-foreground uppercase tracking-wide">Running ({runningRows.length})</span>
+      <div>
+        <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+          <Play className="w-4 h-4 text-blue-500" />
+          WTN Ongoing Edits
+          <Badge variant="outline" className="text-xs">{totalProgress}</Badge>
+        </h3>
+        {totalProgress === 0 ? (
+          <div className="rounded-lg border bg-card p-6 text-center text-muted-foreground text-sm">
+            No videos currently being edited
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {/* Running Section */}
+            {runningRows.length > 0 && (
+              <div>
+                <div className="flex items-center justify-center gap-2 mb-3">
+                  <Play className="w-4 h-4 text-green-500" />
+                  <span className="text-base font-bold text-foreground uppercase tracking-wide">Running ({runningRows.length})</span>
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                  {runningRows.map(row => renderOngoingCard(row, true))}
+                </div>
               </div>
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                {runningRows.map(row => renderOngoingCard(row, true))}
-              </div>
-            </div>
-          )}
+            )}
 
-          {/* Paused Section */}
-          {pausedRows.length > 0 && (
-            <div>
-              <div className="flex items-center justify-center gap-2 mb-3">
-                <Pause className="w-4 h-4 text-muted-foreground" />
-                <span className="text-base font-bold text-muted-foreground uppercase tracking-wide">Paused ({pausedRows.length})</span>
+            {/* Paused Section */}
+            {pausedRows.length > 0 && (
+              <div>
+                <div className="flex items-center justify-center gap-2 mb-3">
+                  <Pause className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-base font-bold text-muted-foreground uppercase tracking-wide">Paused ({pausedRows.length})</span>
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                  {pausedRows.map(row => renderOngoingCard(row, false))}
+                </div>
               </div>
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                {pausedRows.map(row => renderOngoingCard(row, false))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-
+            )}
+          </div>
+        )}
+      </div>
       {/* Pipeline Overview — clickable */}
       <div>
         <h3 className="text-sm font-semibold text-foreground mb-3">Pipeline Overview</h3>
