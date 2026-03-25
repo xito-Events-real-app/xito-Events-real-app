@@ -1076,8 +1076,6 @@ export function DesktopVideoEditTracker() {
 
   const isEditorView = activeView !== 'dashboard' && activeView !== 'classic' && activeView !== 'pipeline';
 
-  return (
-    <div className="flex min-h-screen bg-background">
   // Compute editor stage groups for sidebar
   const editorStageGroups = useMemo(() => {
     const progressStages = ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'];
@@ -1110,6 +1108,8 @@ export function DesktopVideoEditTracker() {
     return { active, paused, onQueue, editLab, available };
   }, [editors, rowsByStatus]);
 
+  return (
+    <div className="flex min-h-screen bg-background">
       <VideoEditSidebar
         activeView={activeView}
         onViewChange={setActiveView}
