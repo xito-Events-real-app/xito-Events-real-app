@@ -1169,13 +1169,15 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField }:
                     {stageRows.map(r => (
                       <button
                         key={r.id}
-                        className="w-full text-left px-2 py-1.5 rounded hover:bg-accent flex items-center gap-2 text-xs"
-                        onClick={() => {
+                        className="w-full text-left px-2 py-2 rounded hover:bg-accent flex items-center gap-2 text-sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
                           onUpdateField(r.id, 'urgency', '5', r.mergedIds);
                           setNextUpOpen(false);
                         }}
                       >
-                        <Badge className={cn("text-[9px] px-1.5 py-0", NEXT_UP_STAGE_COLORS[stageKey] || '')}>{stageLabel}</Badge>
+                        <Badge className={cn("text-[10px] px-2 py-0.5 shrink-0", NEXT_UP_STAGE_COLORS[stageKey] || '')}>{stageLabel}</Badge>
                         <span className="font-semibold truncate">{r.clientName}</span>
                         <span className="text-muted-foreground truncate">{r.editType}</span>
                         <UrgencyBadge value={r.urgency || "0"} />
