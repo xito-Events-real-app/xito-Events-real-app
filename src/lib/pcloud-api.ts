@@ -60,6 +60,13 @@ export async function getPCloudThumbUrl(fileid: number, size: string = '200x200'
   throw new Error('Could not get thumb link');
 }
 
+// Batch fetch thumbnails for multiple files in one call
+export async function getPCloudThumbsBatch(fileids: number[], size: string = '200x200'): Promise<Record<number, string>> {
+  if (fileids.length === 0) return {};
+  const data = await callPCloud('getthumbslinks', { fileids, size });
+  return data.thumbs || {};
+}
+
 export async function deletePCloudFile(fileid: number): Promise<void> {
   await callPCloud('deletefile', { fileid });
 }
@@ -73,7 +80,6 @@ export async function renamePCloudFolder(folderid: number, newName: string): Pro
 }
 
 export async function uploadToPCloud(folderId: number, file: File): Promise<any> {
-  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
@@ -105,4 +111,15 @@ export function formatPCloudSize(bytes: number): string {
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+// Check if a file is an image based on content type
+export function isPCloudImage(item: PCloudItem): boolean {
+  const ct = item.contenttype || '';
+  return ct.startsWith('image/');
+}
+
+export function isPCloudVideo(item: PCloudItem): boolean {
+  const ct = item.contenttype || '';
+  return ct.startsWith('video/');
 }
