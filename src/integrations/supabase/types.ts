@@ -350,10 +350,12 @@ export type Database = {
           folder_event_name: string
           id: string
           mime_type: string
+          pcloud_file_id: number | null
           photographer_name: string
           registered_date_time_ad: string
           side_folder: string
           storage_path: string
+          storage_type: string
           updated_at: string
           upload_progress: number
           upload_status: string
@@ -369,10 +371,12 @@ export type Database = {
           folder_event_name?: string
           id?: string
           mime_type?: string
+          pcloud_file_id?: number | null
           photographer_name?: string
           registered_date_time_ad: string
           side_folder?: string
           storage_path?: string
+          storage_type?: string
           updated_at?: string
           upload_progress?: number
           upload_status?: string
@@ -388,10 +392,12 @@ export type Database = {
           folder_event_name?: string
           id?: string
           mime_type?: string
+          pcloud_file_id?: number | null
           photographer_name?: string
           registered_date_time_ad?: string
           side_folder?: string
           storage_path?: string
+          storage_type?: string
           updated_at?: string
           upload_progress?: number
           upload_status?: string
