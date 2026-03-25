@@ -7,11 +7,13 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
-import { Video, MessageSquare, Music, ExternalLink, ChevronDown, ChevronRight, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, FolderOpen } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Video, MessageSquare, Music, ExternalLink, ChevronDown, ChevronRight, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, FolderOpen, LayoutDashboard, List, GitBranch, Users, RefreshCcw, CheckCircle, Play, Clock } from "lucide-react";
 import { WtnPipelineView } from "./WtnPipelineView";
 import { FileDetailsExpander } from "./FileDetailsExpander";
 import { supabase } from "@/integrations/supabase/client";
 import { adToBS, nepaliMonthsEnglish, getBSYearsRange } from "@/lib/nepali-date";
+import { cn } from "@/lib/utils";
 
 const URGENCY_COLORS: Record<string, string> = {
   "1": "bg-muted text-muted-foreground",
@@ -19,6 +21,20 @@ const URGENCY_COLORS: Record<string, string> = {
   "3": "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
   "4": "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
   "5": "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+};
+
+const STAGE_CARD_COLORS: Record<string, string> = {
+  QUEUE: "border-l-gray-400",
+  EDIT_LAB: "border-l-blue-400",
+  EDIT_ON_PROGRESS: "border-l-blue-600",
+  COLOR_QUEUE: "border-l-purple-400",
+  COLOR_LAB: "border-l-purple-600",
+  COLOR_ON_PROGRESS: "border-l-violet-600",
+  EXPORT_QUEUE: "border-l-amber-400",
+  EXPORTED: "border-l-amber-600",
+  CLIENT_REVIEW: "border-l-orange-500",
+  RE_EDIT_ON_PROGRESS: "border-l-red-500",
+  FINALIZED: "border-l-green-500",
 };
 
 function UrgencyBadge({ value }: { value: string }) {
@@ -314,10 +330,326 @@ function applyFiltersAndSort(
   return result;
 }
 
+/* ── Dashboard View ── */
+function DashboardView({ rowsByStatus, allRows }: { rowsByStatus: Record<string, DisplayRow[]>; allRows: DisplayRow[] }) {
+  // Current: highest urgency in EDIT_ON_PROGRESS
+  const currentEdit = useMemo(() => {
+    const rows = rowsByStatus['EDIT_ON_PROGRESS'] || [];
+    if (rows.length === 0) return null;
+    return [...rows].sort((a, b) => (parseInt(b.urgency || '0') || 0) - (parseInt(a.urgency || '0') || 0))[0];
+  }, [rowsByStatus]);
+
+  // Next: highest urgency in EDIT_LAB, fallback to QUEUE
+  const nextEdit = useMemo(() => {
+    const labRows = rowsByStatus['EDIT_LAB'] || [];
+    const queueRows = rowsByStatus['QUEUE'] || [];
+    const combined = [...labRows, ...queueRows];
+    if (combined.length === 0) return null;
+    return [...combined].sort((a, b) => (parseInt(b.urgency || '0') || 0) - (parseInt(a.urgency || '0') || 0))[0];
+  }, [rowsByStatus]);
+
+  // Last finalized: most recent by updated_at
+  const lastFinalized = useMemo(() => {
+    const rows = rowsByStatus['FINALIZED'] || [];
+    if (rows.length === 0) return null;
+    return [...rows].sort((a, b) => (b.registeredDateTimeAD || '').localeCompare(a.registeredDateTimeAD || ''))[0];
+  }, [rowsByStatus]);
+
+  const finalizedCount = (rowsByStatus['FINALIZED'] || []).length;
+  const reEditRows = rowsByStatus['RE_EDIT_ON_PROGRESS'] || [];
+  const reEditCount = reEditRows.length;
+
+  const statCards = [
+    {
+      title: "Current",
+      icon: Play,
+      color: "text-blue-600 dark:text-blue-400",
+      bg: "bg-blue-50 dark:bg-blue-950/50",
+      content: currentEdit ? (
+        <div>
+          <p className="font-bold text-sm text-foreground">{currentEdit.clientName}</p>
+          <p className="text-xs text-muted-foreground">{currentEdit.eventName} · {currentEdit.editType}</p>
+        </div>
+      ) : <p className="text-xs text-muted-foreground">Nothing in progress</p>
+    },
+    {
+      title: "Next Up",
+      icon: Clock,
+      color: "text-amber-600 dark:text-amber-400",
+      bg: "bg-amber-50 dark:bg-amber-950/50",
+      content: nextEdit ? (
+        <div>
+          <p className="font-bold text-sm text-foreground">{nextEdit.clientName}</p>
+          <p className="text-xs text-muted-foreground">{nextEdit.eventName} · {nextEdit.editType}</p>
+        </div>
+      ) : <p className="text-xs text-muted-foreground">Queue is empty</p>
+    },
+    {
+      title: "Last Finalized",
+      icon: CheckCircle,
+      color: "text-green-600 dark:text-green-400",
+      bg: "bg-green-50 dark:bg-green-950/50",
+      content: lastFinalized ? (
+        <div>
+          <p className="font-bold text-sm text-foreground">{lastFinalized.clientName}</p>
+          <p className="text-xs text-muted-foreground">{lastFinalized.eventName} · {lastFinalized.editType}</p>
+        </div>
+      ) : <p className="text-xs text-muted-foreground">None yet</p>
+    },
+    {
+      title: "Finalized",
+      icon: CheckCircle,
+      color: "text-emerald-600 dark:text-emerald-400",
+      bg: "bg-emerald-50 dark:bg-emerald-950/50",
+      content: (
+        <div>
+          <p className="font-bold text-2xl text-foreground">{finalizedCount}</p>
+          <p className="text-xs text-muted-foreground">Total completed</p>
+        </div>
+      )
+    },
+    {
+      title: "Re-Edits",
+      icon: RefreshCcw,
+      color: "text-red-600 dark:text-red-400",
+      bg: "bg-red-50 dark:bg-red-950/50",
+      content: (
+        <div>
+          <p className="font-bold text-2xl text-foreground">{reEditCount}</p>
+          {reEditRows.slice(0, 3).map(r => (
+            <p key={r.id} className="text-xs text-muted-foreground truncate">{r.clientName} · {r.editType}</p>
+          ))}
+        </div>
+      )
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-5 gap-4">
+        {statCards.map(card => {
+          const Icon = card.icon;
+          return (
+            <Card key={card.title} className={`${card.bg} border-none shadow-sm`}>
+              <CardHeader className="pb-2 pt-4 px-4">
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                  <Icon className={`w-4 h-4 ${card.color}`} />
+                  <span className={card.color}>{card.title}</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                {card.content}
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Stage Summary Grid */}
+      <div>
+        <h3 className="text-sm font-semibold text-foreground mb-3">Pipeline Overview</h3>
+        <div className="grid grid-cols-3 lg:grid-cols-4 gap-3">
+          {STAGES.map(stage => {
+            const count = (rowsByStatus[stage.key] || []).length;
+            const borderColor = STAGE_CARD_COLORS[stage.key] || "border-l-gray-400";
+            return (
+              <div key={stage.key} className={`border-l-4 ${borderColor} rounded-lg bg-card p-3 shadow-sm`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground">{stage.label}</span>
+                  <span className="text-lg font-bold text-foreground">{count}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Editor View ── */
+const EDITOR_STAGE_ORDER = ['EDIT_ON_PROGRESS', 'EDIT_LAB', 'QUEUE', 'COLOR_QUEUE', 'COLOR_LAB', 'COLOR_ON_PROGRESS', 'EXPORT_QUEUE', 'EXPORTED', 'CLIENT_REVIEW', 'RE_EDIT_ON_PROGRESS', 'FINALIZED'];
+
+function EditorView({ editorName, rowsByStatus }: { editorName: string; rowsByStatus: Record<string, DisplayRow[]> }) {
+  const groupedByStage = useMemo(() => {
+    const result: { key: string; label: string; rows: DisplayRow[] }[] = [];
+    for (const stageKey of EDITOR_STAGE_ORDER) {
+      const stage = STAGES.find(s => s.key === stageKey);
+      if (!stage) continue;
+      const rows = (rowsByStatus[stageKey] || []).filter(r => r.editor === editorName);
+      if (rows.length > 0) {
+        result.push({ key: stageKey, label: stage.label, rows });
+      }
+    }
+    return result;
+  }, [editorName, rowsByStatus]);
+
+  const totalAssigned = groupedByStage.reduce((sum, g) => sum + g.rows.length, 0);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-teal-600 flex items-center justify-center">
+          <span className="text-white font-bold text-sm">{editorName.charAt(0).toUpperCase()}</span>
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-foreground">{editorName}</h2>
+          <p className="text-xs text-muted-foreground">{totalAssigned} assigned videos</p>
+        </div>
+      </div>
+
+      {groupedByStage.length === 0 ? (
+        <p className="text-center text-muted-foreground py-12">No videos assigned to {editorName}</p>
+      ) : (
+        groupedByStage.map(group => {
+          const borderColor = STAGE_CARD_COLORS[group.key] || "border-l-gray-400";
+          return (
+            <div key={group.key} className="space-y-2">
+              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${borderColor.replace('border-l-', 'bg-')}`} />
+                {group.label}
+                <Badge variant="outline" className="text-xs">{group.rows.length}</Badge>
+              </h3>
+              <div className="grid gap-2">
+                {group.rows.map(row => (
+                  <div key={row.id} className={`border-l-4 ${borderColor} rounded-lg bg-card p-3 shadow-sm`}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold text-sm text-foreground">{row.clientName}</p>
+                        <p className="text-xs text-muted-foreground">{row.eventName} · {row.editType}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <UrgencyBadge value={row.urgency || "0"} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+/* ── Sidebar ── */
+type ActiveView = 'dashboard' | 'classic' | 'pipeline' | string;
+
+function VideoEditSidebar({
+  activeView,
+  onViewChange,
+  editors,
+  editorCounts,
+}: {
+  activeView: ActiveView;
+  onViewChange: (view: ActiveView) => void;
+  editors: { name: string; isVideoEditor: boolean }[];
+  editorCounts: Record<string, number>;
+}) {
+  const navItems = [
+    { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'classic' as const, label: 'Classic View', icon: List },
+    { id: 'pipeline' as const, label: 'Pipeline View', icon: GitBranch },
+  ];
+
+  const videoEditors = editors.filter(e => e.isVideoEditor && e.name);
+
+  return (
+    <div className="w-56 min-h-screen bg-zinc-900 text-white border-r border-zinc-800 flex flex-col shrink-0">
+      {/* Header */}
+      <div className="p-4 border-b border-zinc-800">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center">
+            <Video className="w-4 h-4 text-white" />
+          </div>
+          <div>
+            <div className="font-semibold text-sm">Video Edit</div>
+            <div className="text-[10px] text-zinc-400">Tracker</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Nav */}
+      <nav className="p-3 space-y-1">
+        {navItems.map(item => {
+          const Icon = item.icon;
+          const isActive = activeView === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => onViewChange(item.id)}
+              className={cn(
+                "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+                isActive
+                  ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-lg shadow-primary/25"
+                  : "text-zinc-400 hover:text-white hover:bg-white/10"
+              )}
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Divider */}
+      <div className="mx-4 border-t border-zinc-800" />
+
+      {/* Editors */}
+      <div className="p-3 flex-1 overflow-y-auto">
+        <div className="flex items-center gap-2 px-3 py-2">
+          <Users className="w-3.5 h-3.5 text-zinc-500" />
+          <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">Editors</span>
+        </div>
+        <div className="space-y-0.5">
+          {videoEditors.map(editor => {
+            const isActive = activeView === editor.name;
+            const count = editorCounts[editor.name] || 0;
+            return (
+              <button
+                key={editor.name}
+                onClick={() => onViewChange(editor.name)}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200",
+                  isActive
+                    ? "bg-teal-600/30 text-teal-300 font-semibold"
+                    : "text-zinc-400 hover:text-white hover:bg-white/5"
+                )}
+              >
+                <span className={cn(
+                  "w-2 h-2 rounded-full shrink-0",
+                  count > 0 ? "bg-teal-400" : "bg-zinc-600"
+                )} />
+                <span className="flex-1 text-left truncate">{editor.name}</span>
+                {count > 0 && (
+                  <span className={cn(
+                    "text-[10px] px-1.5 py-0.5 rounded-full font-bold",
+                    isActive ? "bg-teal-500/30 text-teal-200" : "bg-zinc-700 text-zinc-400"
+                  )}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="p-4 border-t border-zinc-800">
+        <div className="text-[10px] text-zinc-600 text-center">Video Edit Tracker v2.0</div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Main Component ── */
 export function DesktopVideoEditTracker() {
   const { rowsByStatus, allRows, isLoading, updateField, pushToStatus, splitRow, mergeRow } = useVideoEditTracker();
   const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean }[]>([]);
-  const [showPipeline, setShowPipeline] = useState(false);
+  const [activeView, setActiveView] = useState<ActiveView>('dashboard');
   const [filterClient, setFilterClient] = useState<string | null>(null);
   const [filterEditType, setFilterEditType] = useState<string | null>(null);
   const [filterYear, setFilterYear] = useState<number | null>(null);
@@ -344,18 +676,20 @@ export function DesktopVideoEditTracker() {
 
   const years = getBSYearsRange(-2, 3);
 
-  // Cross-pipeline stats for client filter
-  const clientPipelineStats = useMemo(() => {
-    if (!filterClient) return null;
-    const stats: Record<string, number> = {};
+  // Editor assignment counts (across all stages)
+  const editorCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
     for (const stage of STAGES) {
-      const count = (rowsByStatus[stage.key] || []).filter(r => r.clientName === filterClient).length;
-      stats[stage.key] = count;
+      for (const row of (rowsByStatus[stage.key] || [])) {
+        if (row.editor) {
+          counts[row.editor] = (counts[row.editor] || 0) + 1;
+        }
+      }
     }
-    return stats;
-  }, [filterClient, rowsByStatus]);
+    return counts;
+  }, [rowsByStatus]);
 
-  // Active editors per stage (for filter pills)
+  // Active editors per stage (for filter pills in classic view)
   const activeEditorsByStage = useMemo(() => {
     const result: Record<string, { name: string; count: number }[]> = {};
     for (const stage of STAGES) {
@@ -377,7 +711,7 @@ export function DesktopVideoEditTracker() {
     return result;
   }, [rowsByStatus, filterClient, filterEditType, filterYear, filterMonth, sortMode, filterEditor]);
 
-  // Compute pipeline position (urgency-sorted rank within each stage)
+  // Pipeline position map
   const pipelinePosMap = useMemo(() => {
     const map: Record<string, number> = {};
     for (const stage of STAGES) {
@@ -392,68 +726,171 @@ export function DesktopVideoEditTracker() {
   const addPipelinePos = (rows: DisplayRow[]) =>
     rows.map(r => ({ ...r, _pipelinePos: pipelinePosMap[r.id] || 0 }));
 
-  // "All" tab rows - combined from all stages when filters active
-  const allFilteredRows = useMemo(() => {
-    if (!hasFilters) return [];
-    const combined: DisplayRow[] = [];
-    for (const stage of STAGES) {
-      const stageRows = filteredRowsByStatus[stage.key] || [];
-      combined.push(...stageRows.map(r => ({ ...r, _stageName: stage.label } as any)));
-    }
-    return combined;
-  }, [filteredRowsByStatus, hasFilters]);
-
   const totalCount = STAGES.reduce((sum, s) => sum + (rowsByStatus[s.key]?.length || 0), 0);
   const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); setFilterEditor(null); setSortMode('default'); };
 
+  const isEditorView = activeView !== 'dashboard' && activeView !== 'classic' && activeView !== 'pipeline';
+
   return (
-    <div className="min-h-screen bg-background">
-      <div className="border-b bg-card">
-        <div className="max-w-[1600px] mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center">
-              <Video className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-foreground">Video Edit Tracker</h1>
-              <p className="text-xs text-muted-foreground">
-                Total: {totalCount} · {STAGES.filter(s => (rowsByStatus[s.key]?.length || 0) > 0).map(s => `${s.label}: ${rowsByStatus[s.key]?.length}`).join(' · ')}
-              </p>
-            </div>
-          </div>
-          <Button
-            onClick={() => setShowPipeline(true)}
-            className="rounded-full w-10 h-10 bg-green-600 hover:bg-green-500 text-white shadow-lg p-0"
-          >
-            <Workflow className="w-5 h-5" />
-          </Button>
-        </div>
+    <div className="flex min-h-screen bg-background">
+      <VideoEditSidebar
+        activeView={activeView}
+        onViewChange={setActiveView}
+        editors={editors}
+        editorCounts={editorCounts}
+      />
 
-      {showPipeline && <WtnPipelineView onClose={() => setShowPipeline(false)} />}
-      </div>
-
-      <div className="max-w-[1600px] mx-auto px-6 py-6">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {isLoading ? (
-          <div className="flex items-center justify-center py-24">
+          <div className="flex items-center justify-center flex-1">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
           </div>
+        ) : activeView === 'dashboard' ? (
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="max-w-[1400px] mx-auto">
+              <div className="mb-6">
+                <h1 className="text-xl font-bold text-foreground">Dashboard</h1>
+                <p className="text-sm text-muted-foreground">Total: {totalCount} videos across {STAGES.length} stages</p>
+              </div>
+              <DashboardView rowsByStatus={rowsByStatus} allRows={allRows} />
+            </div>
+          </div>
+        ) : activeView === 'pipeline' ? (
+          <WtnPipelineView onClose={() => setActiveView('dashboard')} inline />
+        ) : isEditorView ? (
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="max-w-[1200px] mx-auto">
+              <EditorView editorName={activeView} rowsByStatus={rowsByStatus} />
+            </div>
+          </div>
         ) : (
-          filterClient ? (
-            /* ── Stacked Client Detail View ── */
-            (() => {
-              const total = STAGES.reduce((s, st) => s + (filteredRowsByStatus[st.key]?.length || 0), 0);
-              const untouched = filteredRowsByStatus['QUEUE']?.length || 0;
-              const finalized = filteredRowsByStatus['FINALIZED']?.length || 0;
-              const onProgress = total - untouched - finalized;
-              return (
-                <div className="space-y-6">
+          /* ── Classic View ── */
+          <div className="flex-1 overflow-y-auto">
+            <div className="border-b bg-card">
+              <div className="max-w-[1600px] mx-auto px-6 py-4 flex items-center justify-between">
+                <div>
+                  <h1 className="text-lg font-bold text-foreground">Classic View</h1>
+                  <p className="text-xs text-muted-foreground">
+                    Total: {totalCount} · {STAGES.filter(s => (rowsByStatus[s.key]?.length || 0) > 0).map(s => `${s.label}: ${rowsByStatus[s.key]?.length}`).join(' · ')}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="max-w-[1600px] mx-auto px-6 py-6">
+              {filterClient ? (
+                /* ── Stacked Client Detail View ── */
+                (() => {
+                  const total = STAGES.reduce((s, st) => s + (filteredRowsByStatus[st.key]?.length || 0), 0);
+                  const untouched = filteredRowsByStatus['QUEUE']?.length || 0;
+                  const finalized = filteredRowsByStatus['FINALIZED']?.length || 0;
+                  const onProgress = total - untouched - finalized;
+                  return (
+                    <div className="space-y-6">
+                      <div className="rounded-lg border bg-card p-3 space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
+                          <Badge variant="secondary" className="gap-1 text-xs cursor-pointer" onClick={() => setFilterClient(null)}>
+                            Client: {filterClient} <X className="w-3 h-3" />
+                          </Badge>
+                          {filterEditType && (
+                            <Badge variant="secondary" className="gap-1 text-xs cursor-pointer" onClick={() => setFilterEditType(null)}>
+                              Type: {filterEditType} <X className="w-3 h-3" />
+                            </Badge>
+                          )}
+                          {filterEditor && (
+                            <Badge variant="secondary" className="gap-1 text-xs cursor-pointer" onClick={() => setFilterEditor(null)}>
+                              Editor: {filterEditor} <X className="w-3 h-3" />
+                            </Badge>
+                          )}
+                          <Select value={filterYear?.toString() || "all"} onValueChange={(v) => setFilterYear(v === "all" ? null : Number(v))}>
+                            <SelectTrigger className="w-28 h-7 text-xs"><SelectValue placeholder="Year" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">All Years</SelectItem>
+                              {years.map(y => <SelectItem key={y} value={y.toString()}>{y} BS</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          <Select value={filterMonth?.toString() || "all"} onValueChange={(v) => setFilterMonth(v === "all" ? null : Number(v))}>
+                            <SelectTrigger className="w-28 h-7 text-xs"><SelectValue placeholder="Month" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">All Months</SelectItem>
+                              {nepaliMonthsEnglish.map((m, i) => <SelectItem key={i} value={(i + 1).toString()}>{m}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            variant={sortMode === 'urgency' ? 'default' : 'outline'}
+                            size="sm" className="h-7 text-xs gap-1"
+                            onClick={() => setSortMode(prev => prev === 'urgency' ? 'default' : 'urgency')}
+                          >
+                            <Flame className="w-3 h-3" /> Urgency
+                          </Button>
+                          <Button
+                            variant={sortMode.startsWith('priority') ? 'default' : 'outline'}
+                            size="sm" className="h-7 text-xs gap-1"
+                            onClick={() => setSortMode(prev =>
+                              prev === 'default' ? 'priority-asc' : prev === 'priority-asc' ? 'priority-desc' : prev === 'priority-desc' ? 'default' : 'priority-asc'
+                            )}
+                          >
+                            {sortMode === 'priority-asc' ? <ArrowUp className="w-3 h-3" /> : sortMode === 'priority-desc' ? <ArrowDown className="w-3 h-3" /> : <ArrowUpDown className="w-3 h-3" />}
+                            Priority
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={clearAll}>Clear All</Button>
+                        </div>
+                        <div className="flex items-center gap-3 text-sm border-t pt-2">
+                          <span className="font-semibold text-foreground">Total: {total}</span>
+                          <span className="text-muted-foreground">·</span>
+                          <span className={untouched > 0 ? "font-medium text-foreground" : "text-muted-foreground"}>Untouched: {untouched}</span>
+                          <span className="text-muted-foreground">·</span>
+                          <span className={onProgress > 0 ? "font-medium text-orange-600 dark:text-orange-400" : "text-muted-foreground"}>On Progress: {onProgress}</span>
+                          <span className="text-muted-foreground">·</span>
+                          <span className={finalized > 0 ? "font-medium text-green-600 dark:text-green-400" : "text-muted-foreground"}>Finalized: {finalized}</span>
+                        </div>
+                      </div>
+                      {STAGES.map(stage => {
+                        const stageRows = filteredRowsByStatus[stage.key] || [];
+                        if (stageRows.length === 0) return null;
+                        return (
+                          <div key={stage.key} className="space-y-2">
+                            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                              {stage.label}
+                              <Badge variant="outline" className="text-xs">{stageRows.length}</Badge>
+                            </h3>
+                            <VideoEditTable
+                              rows={addPipelinePos(stageRows)}
+                              onUpdateField={updateField}
+                              onPushToStatus={pushToStatus}
+                              onSplit={splitRow}
+                              onMerge={mergeRow}
+                              onClickClient={(name) => setFilterClient(prev => prev === name ? null : name)}
+                              onClickEditType={(type) => setFilterEditType(prev => prev === type ? null : type)}
+                              editors={editors}
+                              currentStageKey={stage.key}
+                            />
+                          </div>
+                        );
+                      })}
+                      {total === 0 && (
+                        <p className="text-center text-muted-foreground py-12">No rows found for {filterClient}</p>
+                      )}
+                    </div>
+                  );
+                })()
+              ) : (
+                <Tabs defaultValue="QUEUE" onValueChange={(v) => setActiveDesktopTab(v)}>
+                  <div className="overflow-x-auto -mx-6 px-6">
+                    <TabsList className="mb-2 w-max">
+                      {STAGES.map(stage => (
+                        <TabsTrigger key={stage.key} value={stage.key} className="gap-1 text-xs whitespace-nowrap">
+                          {stage.label} ({filteredRowsByStatus[stage.key]?.length || 0})
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                  </div>
+
                   {/* Filter Bar */}
-                  <div className="rounded-lg border bg-card p-3 space-y-2">
+                  <div className="mb-4 rounded-lg border bg-card p-3 space-y-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <Badge variant="secondary" className="gap-1 text-xs cursor-pointer" onClick={() => setFilterClient(null)}>
-                        Client: {filterClient} <X className="w-3 h-3" />
-                      </Badge>
                       {filterEditType && (
                         <Badge variant="secondary" className="gap-1 text-xs cursor-pointer" onClick={() => setFilterEditType(null)}>
                           Type: {filterEditType} <X className="w-3 h-3" />
@@ -495,148 +932,50 @@ export function DesktopVideoEditTracker() {
                         {sortMode === 'priority-asc' ? <ArrowUp className="w-3 h-3" /> : sortMode === 'priority-desc' ? <ArrowDown className="w-3 h-3" /> : <ArrowUpDown className="w-3 h-3" />}
                         Priority
                       </Button>
-                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={clearAll}>Clear All</Button>
+                      {hasSortOrFilter && (
+                        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={clearAll}>Clear All</Button>
+                      )}
                     </div>
-                    <div className="flex items-center gap-3 text-sm border-t pt-2">
-                      <span className="font-semibold text-foreground">Total: {total}</span>
-                      <span className="text-muted-foreground">·</span>
-                      <span className={untouched > 0 ? "font-medium text-foreground" : "text-muted-foreground"}>Untouched: {untouched}</span>
-                      <span className="text-muted-foreground">·</span>
-                      <span className={onProgress > 0 ? "font-medium text-orange-600 dark:text-orange-400" : "text-muted-foreground"}>On Progress: {onProgress}</span>
-                      <span className="text-muted-foreground">·</span>
-                      <span className={finalized > 0 ? "font-medium text-green-600 dark:text-green-400" : "text-muted-foreground"}>Finalized: {finalized}</span>
-                    </div>
+                    {/* Editor filter pills */}
+                    {(activeEditorsByStage[activeDesktopTab] || []).length > 0 && (
+                      <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Editors:</span>
+                        {(activeEditorsByStage[activeDesktopTab] || []).map(({ name, count }) => (
+                          <button
+                            key={name}
+                            onClick={() => setFilterEditor(prev => prev === name ? null : name)}
+                            className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-all border ${
+                              filterEditor === name
+                                ? 'bg-teal-500 text-white border-teal-600 shadow-sm'
+                                : 'bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-950 dark:text-teal-200 dark:border-teal-800 hover:shadow-sm'
+                            }`}
+                          >
+                            {name} ({count})
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
-                  {/* Stacked sections per stage */}
-                  {STAGES.map(stage => {
-                    const stageRows = filteredRowsByStatus[stage.key] || [];
-                    if (stageRows.length === 0) return null;
-                    return (
-                      <div key={stage.key} className="space-y-2">
-                        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                          {stage.label}
-                          <Badge variant="outline" className="text-xs">{stageRows.length}</Badge>
-                        </h3>
-                        <VideoEditTable
-                          rows={addPipelinePos(stageRows)}
-                          onUpdateField={updateField}
-                          onPushToStatus={pushToStatus}
-                          onSplit={splitRow}
-                          onMerge={mergeRow}
-                          onClickClient={(name) => setFilterClient(prev => prev === name ? null : name)}
-                          onClickEditType={(type) => setFilterEditType(prev => prev === type ? null : type)}
-                          editors={editors}
-                          currentStageKey={stage.key}
-                        />
-                      </div>
-                    );
-                  })}
-                  {total === 0 && (
-                    <p className="text-center text-muted-foreground py-12">No rows found for {filterClient}</p>
-                  )}
-                </div>
-              );
-            })()
-          ) : (
-          <Tabs defaultValue="QUEUE" onValueChange={(v) => setActiveDesktopTab(v)}>
-            <div className="overflow-x-auto -mx-6 px-6">
-              <TabsList className="mb-2 w-max">
-                {STAGES.map(stage => (
-                  <TabsTrigger key={stage.key} value={stage.key} className="gap-1 text-xs whitespace-nowrap">
-                    {stage.label} ({filteredRowsByStatus[stage.key]?.length || 0})
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </div>
-
-            {/* Filter Bar */}
-            <div className="mb-4 rounded-lg border bg-card p-3 space-y-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
-                {filterEditType && (
-                  <Badge variant="secondary" className="gap-1 text-xs cursor-pointer" onClick={() => setFilterEditType(null)}>
-                    Type: {filterEditType} <X className="w-3 h-3" />
-                  </Badge>
-                )}
-                {filterEditor && (
-                  <Badge variant="secondary" className="gap-1 text-xs cursor-pointer" onClick={() => setFilterEditor(null)}>
-                    Editor: {filterEditor} <X className="w-3 h-3" />
-                  </Badge>
-                )}
-                <Select value={filterYear?.toString() || "all"} onValueChange={(v) => setFilterYear(v === "all" ? null : Number(v))}>
-                  <SelectTrigger className="w-28 h-7 text-xs"><SelectValue placeholder="Year" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Years</SelectItem>
-                    {years.map(y => <SelectItem key={y} value={y.toString()}>{y} BS</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Select value={filterMonth?.toString() || "all"} onValueChange={(v) => setFilterMonth(v === "all" ? null : Number(v))}>
-                  <SelectTrigger className="w-28 h-7 text-xs"><SelectValue placeholder="Month" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Months</SelectItem>
-                    {nepaliMonthsEnglish.map((m, i) => <SelectItem key={i} value={(i + 1).toString()}>{m}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Button
-                  variant={sortMode === 'urgency' ? 'default' : 'outline'}
-                  size="sm" className="h-7 text-xs gap-1"
-                  onClick={() => setSortMode(prev => prev === 'urgency' ? 'default' : 'urgency')}
-                >
-                  <Flame className="w-3 h-3" /> Urgency
-                </Button>
-                <Button
-                  variant={sortMode.startsWith('priority') ? 'default' : 'outline'}
-                  size="sm" className="h-7 text-xs gap-1"
-                  onClick={() => setSortMode(prev =>
-                    prev === 'default' ? 'priority-asc' : prev === 'priority-asc' ? 'priority-desc' : prev === 'priority-desc' ? 'default' : 'priority-asc'
-                  )}
-                >
-                  {sortMode === 'priority-asc' ? <ArrowUp className="w-3 h-3" /> : sortMode === 'priority-desc' ? <ArrowDown className="w-3 h-3" /> : <ArrowUpDown className="w-3 h-3" />}
-                  Priority
-                </Button>
-                {hasSortOrFilter && (
-                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={clearAll}>Clear All</Button>
-                )}
-              </div>
-              {/* Editor filter pills */}
-              {(activeEditorsByStage[activeDesktopTab] || []).length > 0 && (
-                <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Editors:</span>
-                  {(activeEditorsByStage[activeDesktopTab] || []).map(({ name, count }) => (
-                    <button
-                      key={name}
-                      onClick={() => setFilterEditor(prev => prev === name ? null : name)}
-                      className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-all border ${
-                        filterEditor === name
-                          ? 'bg-teal-500 text-white border-teal-600 shadow-sm'
-                          : 'bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-950 dark:text-teal-200 dark:border-teal-800 hover:shadow-sm'
-                      }`}
-                    >
-                      {name} ({count})
-                    </button>
+                  {STAGES.map(stage => (
+                    <TabsContent key={stage.key} value={stage.key}>
+                      <VideoEditTable
+                        rows={addPipelinePos(filteredRowsByStatus[stage.key] || [])}
+                        onUpdateField={updateField}
+                        onPushToStatus={pushToStatus}
+                        onSplit={splitRow}
+                        onMerge={mergeRow}
+                        onClickClient={(name) => setFilterClient(prev => prev === name ? null : name)}
+                        onClickEditType={(type) => setFilterEditType(prev => prev === type ? null : type)}
+                        editors={editors}
+                        currentStageKey={stage.key}
+                      />
+                    </TabsContent>
                   ))}
-                </div>
+                </Tabs>
               )}
             </div>
-
-            {STAGES.map(stage => (
-              <TabsContent key={stage.key} value={stage.key}>
-                <VideoEditTable
-                  rows={addPipelinePos(filteredRowsByStatus[stage.key] || [])}
-                  onUpdateField={updateField}
-                  onPushToStatus={pushToStatus}
-                  onSplit={splitRow}
-                  onMerge={mergeRow}
-                  onClickClient={(name) => setFilterClient(prev => prev === name ? null : name)}
-                  onClickEditType={(type) => setFilterEditType(prev => prev === type ? null : type)}
-                  editors={editors}
-                  currentStageKey={stage.key}
-                />
-              </TabsContent>
-            ))}
-          </Tabs>
-          )
+          </div>
         )}
       </div>
     </div>
