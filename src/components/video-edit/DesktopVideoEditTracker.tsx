@@ -1238,6 +1238,7 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField }:
               </CardHeader>
               <CardContent className="px-4 pb-4">
                 {card.content}
+                {'extra' in card && card.extra}
               </CardContent>
             </Card>
           );
