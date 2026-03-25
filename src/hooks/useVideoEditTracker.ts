@@ -331,6 +331,7 @@ export function useVideoEditTracker() {
     refresh: loadRows,
     splitRow,
     mergeRow,
+    togglePlaying,
     STAGES,
   };
 }

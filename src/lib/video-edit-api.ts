@@ -166,6 +166,8 @@ function dbToRow(r: any): VideoEditRow {
     reference: r.reference || "",
     songs: r.songs || "",
     forceSplit: r.force_split || false,
+    isPlaying: r.is_playing || false,
+    playingSince: r.playing_since || "",
   };
 }
 
