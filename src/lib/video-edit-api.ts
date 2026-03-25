@@ -227,19 +227,24 @@ export async function pushToStatus(id: string, newStatus: string): Promise<void>
     updated_at: new Date().toISOString(),
   };
 
+  // Fetch current row for edit_started_at and stage_history
+  const { data: existing } = await supabase
+    .from("video_edit_tracker")
+    .select("edit_started_at, stage_history")
+    .eq("id", id)
+    .single();
+
   // Auto-set edit_started_at when first moving to a progress stage
   if (PROGRESS_STAGES.includes(newStatus)) {
-    // Only set if not already set - we'll do a conditional update
-    const { data: existing } = await supabase
-      .from("video_edit_tracker")
-      .select("edit_started_at")
-      .eq("id", id)
-      .single();
-
     if (!existing?.edit_started_at) {
       updateData.edit_started_at = new Date().toISOString();
     }
   }
+
+  // Append to stage_history
+  const historyEntry = `${newStatus} [${new Date().toISOString()}]`;
+  const currentHistory = existing?.stage_history || "";
+  updateData.stage_history = currentHistory ? `${currentHistory}\n${historyEntry}` : historyEntry;
 
   const { error } = await supabase
     .from("video_edit_tracker")
