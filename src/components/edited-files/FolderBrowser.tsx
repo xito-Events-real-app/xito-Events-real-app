@@ -127,21 +127,39 @@ export function FolderBrowser() {
 
   return (
     <div className="space-y-4">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-1 text-sm flex-wrap">
-        {breadcrumb.map((b, i) => (
-          <span key={i} className="flex items-center gap-1">
-            {i > 0 && <span className="text-muted-foreground">\</span>}
+      {/* Breadcrumb + View toggle */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1 text-sm flex-wrap">
+          {breadcrumb.map((b, i) => (
+            <span key={i} className="flex items-center gap-1">
+              {i > 0 && <span className="text-muted-foreground">\</span>}
+              <button
+                onClick={() => navigateTo(b.level)}
+                className={`hover:text-primary transition-colors ${
+                  i === breadcrumb.length - 1 ? 'font-semibold text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                {b.label}
+              </button>
+            </span>
+          ))}
+        </div>
+        {selectedClient && !showLinks && (
+          <div className="flex items-center gap-1 border rounded-lg p-0.5">
             <button
-              onClick={() => navigateTo(b.level)}
-              className={`hover:text-primary transition-colors ${
-                i === breadcrumb.length - 1 ? 'font-semibold text-foreground' : 'text-muted-foreground'
-              }`}
+              onClick={() => setViewMode('grid')}
+              className={`p-1.5 rounded ${viewMode === 'grid' ? 'bg-muted' : ''}`}
             >
-              {b.label}
+              <LayoutGrid className="h-4 w-4" />
             </button>
-          </span>
-        ))}
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-1.5 rounded ${viewMode === 'list' ? 'bg-muted' : ''}`}
+            >
+              <List className="h-4 w-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Root level: Client folders */}
