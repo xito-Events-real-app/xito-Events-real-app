@@ -1,52 +1,70 @@
 
 
-## Event Age, Edit Started, and Deadline System
+## Live Running Timer + Stage Transition History
 
 ### Summary
-Add three key data points to each video edit row: **event age** (how old the event is), **edit started** (when row entered a progress stage), and **deadline** (user-set target with calendar+time picker). Show these on dashboard cards, classic view columns, and a new "Deadlines" section on the dashboard home.
+1. Show a **live running timer** on cards for stages Edit on Progress → Re-Edit on Progress, showing `2D 3H 22:23` with seconds ticking in real-time. Color turns red after 2 days.
+2. In **Classic View**, show abbreviated `2d 3h` with hover showing live time.
+3. In **Finalized** section, show total time (stopped) with option to see timing history.
+4. Store **stage transition timestamps** in a new DB column for history tracking.
+5. Auto-seed `edit_started_at` with random values (up to 1d 12h ago) for rows currently in Edit on Progress through Re-Edit on Progress that don't have it set.
+6. No timer for Queue or Edit Lab stages.
 
-### Database Migration
-Add two columns to `video_edit_tracker`:
-- `edit_started_at` (timestamptz, nullable) — auto-set when row first moves to EDIT_ON_PROGRESS
-- `deadline` (timestamptz, nullable) — user-set deadline with date+time
+### Database Changes
+
+**Migration 1**: Add `stage_history` column (text, default `''`) to `video_edit_tracker` — stores stage transitions as newline-delimited log entries like `EDIT_ON_PROGRESS [2026-03-25T10:30:00Z]\nCOLOR_QUEUE [2026-03-25T12:00:00Z]`.
+
+**Data update**: Set random `edit_started_at` for rows in EDIT_ON_PROGRESS, COLOR_ON_PROGRESS, RE_EDIT_ON_PROGRESS, COLOR_QUEUE, COLOR_LAB, EXPORT_QUEUE, EXPORTED, CLIENT_REVIEW that currently have null `edit_started_at`. Random values between now minus 0–36 hours.
 
 ### Files Changed
 
 **1. `src/lib/video-edit-api.ts`**
-- Add `editStartedAt: string` and `deadline: string` to `VideoEditRow` interface
-- Map in `dbToRow`: `editStartedAt: r.edit_started_at || ""`, `deadline: r.deadline || ""`
-- Add `deadline` to `fieldMap` in `updateVideoEditField`
-- In `pushToStatus`: when `newStatus` is `EDIT_ON_PROGRESS`, also set `edit_started_at = now()` if not already set
+- Add `stageHistory: string` to `VideoEditRow` interface and `dbToRow` mapper.
+- In `pushToStatus`: append new entry to `stage_history` column: `"STAGE_KEY [ISO_TIMESTAMP]"`.
 
 **2. `src/hooks/useVideoEditTracker.ts`**
-- `DisplayRow` inherits new fields automatically
-- Add `updateDeadline(id, deadline, mergedIds?)` function
+- `DisplayRow` inherits `stageHistory` automatically.
 
 **3. `src/components/video-edit/DesktopVideoEditTracker.tsx`**
 
-**Helper functions** (top of file):
-- `getEventAge(eventDateAD)` → returns `{ days: number, bsDisplay: string }` e.g. "Magh 24, 2082 · 32 days old"
-- `getEditStartedAgo(editStartedAt)` → returns "12 days 5 hrs ago"
-- `getDeadlineRemaining(deadline)` → returns `{ text: string, isCrossed: boolean, isClose: boolean }` e.g. "3 days 2 hrs remaining" or "Crossed 2 days ago"
+**New component `LiveEditTimer`**:
+- Props: `editStartedAt: string`, `size: 'card' | 'table'`
+- Uses `useState` + `useEffect` with 1-second `setInterval` to tick
+- Computes days, hours, minutes, seconds from `editStartedAt` to now
+- Card size: renders `2D 3H 22:23` in big bold text (text-base font-black)
+- Table size: renders `2d 3h` only, with `Tooltip` on hover showing full `2D 3H 22:23` live
+- Color: green/normal if < 2 days, **red** if >= 2 days
+- For FINALIZED: no ticking, compute total time from `editStartedAt` to last transition timestamp in `stageHistory`
 
-**Dashboard cards** (renderOngoingCard ~line 391):
-- Below editor badge row, add:
-  - Event age line: `"Magh 24 · 32 days old"` in small muted text
-  - Edit started line: `"Started 12d 5h ago"` with Clock icon
-  - Deadline line (if set): `"Deadline: 3d 2h remaining"` — green if >3 days, amber if ≤3 days, red if crossed
+**Dashboard cards** (`renderOngoingCard`):
+- Replace the `getTimeAgo` + "Started X ago" with the `LiveEditTimer` component (card size)
+- Shows prominently below event age stamp
 
-**Classic View table** (VideoEditTable ~line 114):
-- Add 3 new column headers: **Event Date**, **Edit Started**, **Deadline**
-- Event Date cell: BS date + "(X days old)" 
-- Edit Started cell: relative time since `editStartedAt`
-- Deadline cell: clickable button that opens a Popover with Calendar + time select. Shows remaining time or "Set" if empty. Red text if crossed.
+**Classic View table** (`VideoEditTable`):
+- Replace the static `getTimeAgo` Edit Started cell with `LiveEditTimer` (table size)
+- Only render for progress stages (EDIT_ON_PROGRESS through FINALIZED), show `-` for QUEUE/EDIT_LAB
 
-**Dashboard home — new "Deadlines" section** (after Pipeline Overview ~line 500):
-- Header: "Deadlines" with a Clock icon
-- Two sub-sections:
-  - **Crossed** (red): rows where deadline < now, sorted by how much overdue
-  - **Approaching** (amber): rows where deadline is within 3 days, sorted by closest first
-- Each item: card showing client · event · edit type · editor · "Crossed X days ago" or "Due in X hrs"
+**Finalized rows** in Classic View:
+- Show stopped total time
+- Add a small "History" button that opens a Dialog showing all stage transitions with timestamps and durations between each stage
+
+**New component `StageHistoryDialog`**:
+- Props: `stageHistory: string`, `editStartedAt: string`
+- Parses the newline-delimited log
+- Shows timeline: each stage entry with timestamp, and duration spent in each stage
+- Example: `EDIT_ON_PROGRESS → 2d 3h → COLOR_QUEUE → 1h 30m → ...`
 
 **4. `src/components/video-edit/WtnPipelineView.tsx`**
-- Show event age and deadline remaining on pipeline cards if set
+- Show `LiveEditTimer` on pipeline cards for progress stages
+
+### Timer Display Format
+```text
+Cards (big):     2D 3H 22:23     (seconds ticking live)
+Table (compact): 2d 3h           (hover shows 2D 3H 22:23 live)
+Finalized:       Total: 5D 12H   (stopped, with History button)
+```
+
+### Color Rules
+- < 2 days: green text (`text-green-600`)
+- >= 2 days: red text (`text-red-600`) with subtle pulse
+
