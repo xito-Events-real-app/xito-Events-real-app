@@ -1163,6 +1163,8 @@ const ClientDetail = () => {
                   { id: 'financials', label: 'Financials' },
                   { id: 'keepNotes', label: 'Keep' },
                   { id: 'files', label: 'Files' },
+                  { id: 'deliverables', label: 'Deliverables' },
+                  { id: 'edit', label: 'Edit' },
                 ] as { id: SectionType; label: string }[]).map((section) => (
                   <Button
                     key={section.id}
