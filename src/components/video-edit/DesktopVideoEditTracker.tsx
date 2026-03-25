@@ -352,9 +352,19 @@ function DashboardView({
 }) {
   const [assignDialogEditor, setAssignDialogEditor] = useState<string | null>(null);
 
-  // Edit on Progress rows split into running and paused
+  // WTN Ongoing Edits: combine EDIT_ON_PROGRESS, COLOR_ON_PROGRESS, RE_EDIT_ON_PROGRESS
+  const PROGRESS_STAGES = ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'] as const;
+  const STAGE_SHORT_LABEL: Record<string, string> = {
+    EDIT_ON_PROGRESS: 'Edit',
+    COLOR_ON_PROGRESS: 'Color',
+    RE_EDIT_ON_PROGRESS: 'Re-Edit',
+  };
+
   const { runningRows, pausedRows } = useMemo(() => {
-    const all = [...(rowsByStatus['EDIT_ON_PROGRESS'] || [])];
+    const all: (DisplayRow & { _progressStage: string })[] = [];
+    for (const sk of PROGRESS_STAGES) {
+      (rowsByStatus[sk] || []).forEach(r => all.push({ ...r, _progressStage: sk }));
+    }
     const running = all
       .filter(r => r.isPlaying)
       .sort((a, b) => (a.playingSince || '').localeCompare(b.playingSince || ''));
@@ -366,97 +376,93 @@ function DashboardView({
 
   const totalProgress = runningRows.length + pausedRows.length;
 
-  // Top urgent unassigned QUEUE rows for assignment popup
-  const urgentUnassigned = useMemo(() => {
-    return [...(rowsByStatus['QUEUE'] || [])]
-      .filter(r => !r.editor)
-      .sort((a, b) => (parseInt(b.urgency || '0') || 0) - (parseInt(a.urgency || '0') || 0))
-      .slice(0, 5);
-  }, [rowsByStatus]);
+  const renderOngoingCard = (row: DisplayRow & { _progressStage: string }, isRunning: boolean) => (
+    <div
+      key={row.id}
+      className={cn(
+        "border-l-4 rounded-lg bg-card p-3 relative",
+        STAGE_CARD_COLORS[row._progressStage] || "border-l-blue-600",
+        isRunning ? "shadow-lg animate-editing-glow" : "shadow-sm opacity-60"
+      )}
+    >
+      <button
+        onClick={() => onTogglePlaying(row.id, isRunning, row.mergedIds)}
+        className={cn(
+          "absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center transition-colors",
+          isRunning
+            ? "bg-green-100 dark:bg-green-950 hover:bg-green-200 dark:hover:bg-green-900"
+            : "bg-muted hover:bg-accent"
+        )}
+        title={isRunning ? "Pause editing" : "Resume editing"}
+      >
+        {isRunning
+          ? <Pause className="w-3.5 h-3.5 text-green-700 dark:text-green-300" />
+          : <Play className="w-3.5 h-3.5 text-muted-foreground" />
+        }
+      </button>
+      <p className="font-bold text-sm text-foreground">{row.clientName}</p>
+      <p className="text-xs text-muted-foreground">{row.eventName} · {row.editType}</p>
+      <div className="flex items-center gap-2 mt-2">
+        <UrgencyBadge value={row.urgency || "0"} />
+        {row.editor && (
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-200 font-medium">
+            {row.editor}
+          </span>
+        )}
+        <span className={cn(
+          "text-[9px] px-1.5 py-0.5 rounded-full font-semibold",
+          row._progressStage === 'EDIT_ON_PROGRESS' ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" :
+          row._progressStage === 'COLOR_ON_PROGRESS' ? "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300" :
+          "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
+        )}>
+          {STAGE_SHORT_LABEL[row._progressStage] || row._progressStage}
+        </span>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="space-y-6">
-      {/* Edit on Progress Section */}
-      <div>
-        <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-          <Play className="w-4 h-4 text-blue-500" />
-          Edit on Progress
-          <Badge variant="outline" className="text-xs">{totalProgress}</Badge>
-        </h3>
-        {totalProgress === 0 ? (
-          <div className="rounded-lg border bg-card p-6 text-center text-muted-foreground text-sm">
-            No videos currently being edited
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {/* Running Section */}
-            {runningRows.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Play className="w-3.5 h-3.5 text-green-500" />
-                  <span className="text-xs font-bold text-foreground uppercase tracking-wide">Running ({runningRows.length})</span>
-                </div>
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                  {runningRows.map(row => (
-                    <div key={row.id} className="border-l-4 border-l-blue-600 rounded-lg bg-card p-3 shadow-lg animate-editing-glow relative">
-                      <button
-                        onClick={() => onTogglePlaying(row.id, true, row.mergedIds)}
-                        className="absolute top-2 right-2 w-7 h-7 rounded-full bg-green-100 dark:bg-green-950 flex items-center justify-center hover:bg-green-200 dark:hover:bg-green-900 transition-colors"
-                        title="Pause editing"
-                      >
-                        <Pause className="w-3.5 h-3.5 text-green-700 dark:text-green-300" />
-                      </button>
-                      <p className="font-bold text-sm text-foreground">{row.clientName}</p>
-                      <p className="text-xs text-muted-foreground">{row.eventName} · {row.editType}</p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <UrgencyBadge value={row.urgency || "0"} />
-                        {row.editor && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-200 font-medium">
-                            {row.editor}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+    <div>
+      {/* WTN Ongoing Edits */}
+      <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+        <Play className="w-4 h-4 text-blue-500" />
+        WTN Ongoing Edits
+        <Badge variant="outline" className="text-xs">{totalProgress}</Badge>
+      </h3>
+      {totalProgress === 0 ? (
+        <div className="rounded-lg border bg-card p-6 text-center text-muted-foreground text-sm">
+          No videos currently being edited
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {/* Running Section */}
+          {runningRows.length > 0 && (
+            <div>
+              <div className="flex items-center justify-center gap-2 mb-3">
+                <Play className="w-4 h-4 text-green-500" />
+                <span className="text-base font-bold text-foreground uppercase tracking-wide">Running ({runningRows.length})</span>
               </div>
-            )}
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                {runningRows.map(row => renderOngoingCard(row, true))}
+              </div>
+            </div>
+          )}
 
-            {/* Paused Section */}
-            {pausedRows.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Pause className="w-3.5 h-3.5 text-muted-foreground" />
-                  <span className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Paused ({pausedRows.length})</span>
-                </div>
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                  {pausedRows.map(row => (
-                    <div key={row.id} className="border-l-4 border-l-blue-600 rounded-lg bg-card p-3 shadow-sm opacity-60 relative">
-                      <button
-                        onClick={() => onTogglePlaying(row.id, false, row.mergedIds)}
-                        className="absolute top-2 right-2 w-7 h-7 rounded-full bg-muted flex items-center justify-center hover:bg-accent transition-colors"
-                        title="Resume editing"
-                      >
-                        <Play className="w-3.5 h-3.5 text-muted-foreground" />
-                      </button>
-                      <p className="font-bold text-sm text-foreground">{row.clientName}</p>
-                      <p className="text-xs text-muted-foreground">{row.eventName} · {row.editType}</p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <UrgencyBadge value={row.urgency || "0"} />
-                        {row.editor && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-200 font-medium">
-                            {row.editor}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+          {/* Paused Section */}
+          {pausedRows.length > 0 && (
+            <div>
+              <div className="flex items-center justify-center gap-2 mb-3">
+                <Pause className="w-4 h-4 text-muted-foreground" />
+                <span className="text-base font-bold text-muted-foreground uppercase tracking-wide">Paused ({pausedRows.length})</span>
               </div>
-            )}
-          </div>
-        )}
-      </div>
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                {pausedRows.map(row => renderOngoingCard(row, false))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
 
       {/* Pipeline Overview — clickable */}
       <div>
