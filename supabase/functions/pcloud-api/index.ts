@@ -7,14 +7,22 @@ const corsHeaders = {
 
 const PCLOUD_API = 'https://api.pcloud.com';
 
+// Cache auth token in memory to avoid re-login on every request
+let cachedAuth: { token: string; expiresAt: number } | null = null;
+
 async function getAuthToken(): Promise<string> {
+  // Return cached token if still valid (with 60s buffer)
+  if (cachedAuth && Date.now() < cachedAuth.expiresAt - 60000) {
+    return cachedAuth.token;
+  }
+
   const email = Deno.env.get('PCLOUD_EMAIL');
   const password = Deno.env.get('PCLOUD_PASSWORD');
   if (!email || !password) throw new Error('pCloud credentials not configured');
 
   const params = new URLSearchParams({
     getauth: '1',
-    logout: '1',
+    logout: '0',
     username: email,
     password: password,
     authexpire: '3600',
@@ -23,7 +31,13 @@ async function getAuthToken(): Promise<string> {
   const res = await fetch(`${PCLOUD_API}/userinfo?${params}`);
   const data = await res.json();
   if (data.result !== 0) throw new Error(`pCloud login failed: ${data.error || 'Unknown error'}`);
-  return data.auth as string;
+
+  cachedAuth = {
+    token: data.auth as string,
+    expiresAt: Date.now() + 3600 * 1000,
+  };
+
+  return cachedAuth.token;
 }
 
 serve(async (req) => {
@@ -45,7 +59,6 @@ serve(async (req) => {
       const file = formData.get('file') as File;
       if (!file) throw new Error('No file in request');
 
-      // Build pCloud upload form
       const pcloudForm = new FormData();
       pcloudForm.append('file', file, filename);
 
@@ -90,6 +103,36 @@ serve(async (req) => {
         query.set('fileid', String(params.fileid));
         query.set('size', params.size || '200x200');
         break;
+
+      case 'getthumbslinks': {
+        // Batch thumbnail fetching - get multiple thumbs in one edge function call
+        const fileids = params.fileids as number[];
+        const size = params.size || '200x200';
+        const results: Record<number, string> = {};
+        
+        // Fetch thumbs in parallel (max 10 at a time)
+        const chunks: number[][] = [];
+        for (let i = 0; i < fileids.length; i += 10) {
+          chunks.push(fileids.slice(i, i + 10));
+        }
+        
+        for (const chunk of chunks) {
+          const promises = chunk.map(async (fid) => {
+            try {
+              const r = await fetch(`${PCLOUD_API}/getthumblink?auth=${auth}&fileid=${fid}&size=${size}`);
+              const d = await r.json();
+              if (d.hosts && d.path) {
+                results[fid] = `https://${d.hosts[0]}${d.path}`;
+              }
+            } catch { /* skip failed thumbs */ }
+          });
+          await Promise.all(promises);
+        }
+        
+        return new Response(JSON.stringify({ result: 0, thumbs: results }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
 
       case 'stat':
         endpoint = '/stat';

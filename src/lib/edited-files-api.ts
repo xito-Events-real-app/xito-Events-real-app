@@ -16,6 +16,8 @@ export interface EditedFile {
   mime_type: string;
   upload_status: string;
   upload_progress: number;
+  storage_type: string;
+  pcloud_file_id: number | null;
   created_at: string;
   updated_at: string;
 }
