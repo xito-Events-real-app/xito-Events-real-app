@@ -9,7 +9,8 @@ import {
 } from "@/lib/edited-files-api";
 import { ClientLinksSection } from "./ClientLinksSection";
 import { Button } from "@/components/ui/button";
-import { Folder, FileImage, FileVideo, ArrowLeft, Download, Trash2, Link2 } from "lucide-react";
+import { Folder, FileImage, FileVideo, ArrowLeft, Download, Trash2, Link2, LayoutGrid, List } from "lucide-react";
+import { FilePreviewCard } from "./FilePreviewCard";
 import { toast } from "@/hooks/use-toast";
 
 interface ClientFolder {
@@ -32,7 +33,7 @@ export function FolderBrowser() {
   const [filterEvent, setFilterEvent] = useState<string | null>(null);
   const [filterSide, setFilterSide] = useState<string | null>(null);
   const [showLinks, setShowLinks] = useState(false);
-
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const loadClients = async () => {
     const data = await getEditedFilesClients();
     setClientFolders(data);
@@ -126,21 +127,39 @@ export function FolderBrowser() {
 
   return (
     <div className="space-y-4">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-1 text-sm flex-wrap">
-        {breadcrumb.map((b, i) => (
-          <span key={i} className="flex items-center gap-1">
-            {i > 0 && <span className="text-muted-foreground">\</span>}
+      {/* Breadcrumb + View toggle */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1 text-sm flex-wrap">
+          {breadcrumb.map((b, i) => (
+            <span key={i} className="flex items-center gap-1">
+              {i > 0 && <span className="text-muted-foreground">\</span>}
+              <button
+                onClick={() => navigateTo(b.level)}
+                className={`hover:text-primary transition-colors ${
+                  i === breadcrumb.length - 1 ? 'font-semibold text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                {b.label}
+              </button>
+            </span>
+          ))}
+        </div>
+        {selectedClient && !showLinks && (
+          <div className="flex items-center gap-1 border rounded-lg p-0.5">
             <button
-              onClick={() => navigateTo(b.level)}
-              className={`hover:text-primary transition-colors ${
-                i === breadcrumb.length - 1 ? 'font-semibold text-foreground' : 'text-muted-foreground'
-              }`}
+              onClick={() => setViewMode('grid')}
+              className={`p-1.5 rounded ${viewMode === 'grid' ? 'bg-muted' : ''}`}
             >
-              {b.label}
+              <LayoutGrid className="h-4 w-4" />
             </button>
-          </span>
-        ))}
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-1.5 rounded ${viewMode === 'list' ? 'bg-muted' : ''}`}
+            >
+              <List className="h-4 w-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Root level: Client folders */}
@@ -236,63 +255,27 @@ export function FolderBrowser() {
         </div>
       )}
 
-      {/* File list: show when at leaf level or for videos */}
       {selectedClient && !showLinks && filterType && (
         (filterType === 'video' || (filterType === 'photo' && (filterSide || (uniqueEvents.length === 0 && uniqueSides.length === 0)))) && (
-          <div className="space-y-2">
+          <div className={viewMode === 'grid' ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3' : 'space-y-2'}>
             {displayFiles.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-6">No files here</p>
+              <p className="text-sm text-muted-foreground text-center py-6 col-span-full">No files here</p>
             )}
             {displayFiles.map(file => (
-              <div key={file.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card">
-                {file.file_type === 'photo' ? (
-                  <FileImage className="h-8 w-8 text-amber-500 shrink-0" />
-                ) : (
-                  <FileVideo className="h-8 w-8 text-red-500 shrink-0" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{file.file_name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatFileSize(file.file_size_bytes)} · {file.upload_status}
-                  </p>
-                </div>
-                <a
-                  href={getEditedFileUrl(file.storage_path)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0"
-                >
-                  <Download className="h-4 w-4 text-primary" />
-                </a>
-                <button onClick={() => handleDelete(file)} className="shrink-0 text-muted-foreground hover:text-destructive">
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
+              <FilePreviewCard key={file.id} file={file} onDelete={handleDelete} viewMode={viewMode} />
             ))}
           </div>
         )
       )}
 
-      {/* Photo type with events but no event selected yet — show files if no subfolders */}
+      {/* Photo type with no subfolders */}
       {selectedClient && filterType === 'photo' && !filterEvent && !showLinks && uniqueEvents.length === 0 && (
-        <div className="space-y-2">
+        <div className={viewMode === 'grid' ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3' : 'space-y-2'}>
           {displayFiles.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-6">No photo files</p>
+            <p className="text-sm text-muted-foreground text-center py-6 col-span-full">No photo files</p>
           )}
           {displayFiles.map(file => (
-            <div key={file.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card">
-              <FileImage className="h-8 w-8 text-amber-500 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{file.file_name}</p>
-                <p className="text-xs text-muted-foreground">{formatFileSize(file.file_size_bytes)}</p>
-              </div>
-              <a href={getEditedFileUrl(file.storage_path)} target="_blank" rel="noopener noreferrer">
-                <Download className="h-4 w-4 text-primary" />
-              </a>
-              <button onClick={() => handleDelete(file)} className="text-muted-foreground hover:text-destructive">
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
+            <FilePreviewCard key={file.id} file={file} onDelete={handleDelete} viewMode={viewMode} />
           ))}
         </div>
       )}
