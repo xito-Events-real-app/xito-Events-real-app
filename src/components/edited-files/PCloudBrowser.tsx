@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Folder, FileImage, FileVideo, File, FolderPlus, Download, Loader2, RefreshCw, Upload, Clock, User } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-
+import { PCloudPreviewDialog } from "./PCloudPreviewDialog";
 interface BreadcrumbEntry {
   name: string;
   folderId: number;
