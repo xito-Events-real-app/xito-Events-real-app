@@ -135,6 +135,7 @@ export default function EditedFiles() {
       )}
 
       {view === 'browse' && <FolderBrowser />}
+      {view === 'pcloud' && <PCloudBrowser />}
 
       <UploadWizard open={wizardOpen} onOpenChange={setWizardOpen} onUploadStarted={loadStats} />
 
