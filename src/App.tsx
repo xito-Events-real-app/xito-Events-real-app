@@ -67,6 +67,7 @@ const App = () => (
               <FloatingBenzoKeep />
               <Toaster />
               <Sonner />
+              <UploadProgressTracker />
             <Routes>
               {/* Public routes - no auth required */}
               <Route path="/client-form/:clientName/:clientId" element={<ClientContactForm />} />
