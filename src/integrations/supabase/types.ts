@@ -1125,6 +1125,7 @@ export type Database = {
           event_month: string | null
           event_name: string | null
           event_year: string | null
+          force_split: boolean
           id: string
           reference: string | null
           registered_date_bs: string | null
@@ -1149,6 +1150,7 @@ export type Database = {
           event_month?: string | null
           event_name?: string | null
           event_year?: string | null
+          force_split?: boolean
           id?: string
           reference?: string | null
           registered_date_bs?: string | null
@@ -1173,6 +1175,7 @@ export type Database = {
           event_month?: string | null
           event_name?: string | null
           event_year?: string | null
+          force_split?: boolean
           id?: string
           reference?: string | null
           registered_date_bs?: string | null

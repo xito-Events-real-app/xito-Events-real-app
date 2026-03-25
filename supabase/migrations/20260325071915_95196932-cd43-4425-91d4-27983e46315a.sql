@@ -1,0 +1,1 @@
+ALTER TABLE public.video_edit_tracker ADD COLUMN force_split boolean NOT NULL DEFAULT false;
