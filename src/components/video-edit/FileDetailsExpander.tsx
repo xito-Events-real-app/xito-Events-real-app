@@ -40,6 +40,7 @@ const ROLE_LABELS: Record<string, string> = {
   EV: "Extra Videographer",
   DRONE: "Drone",
   FPV: "FPV",
+  IPHONE: "iPhone Shooter",
 };
 
 function isVideoRole(code: string) {
