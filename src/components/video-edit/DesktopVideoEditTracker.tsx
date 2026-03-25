@@ -830,7 +830,7 @@ function VideoEditSidebar({
 
 /* ── Main Component ── */
 export function DesktopVideoEditTracker() {
-  const { rowsByStatus, allRows, isLoading, updateField, pushToStatus, splitRow, mergeRow } = useVideoEditTracker();
+  const { rowsByStatus, allRows, isLoading, updateField, pushToStatus, splitRow, mergeRow, togglePlaying } = useVideoEditTracker();
   const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean; whatsapp?: string }[]>([]);
   const [activeView, setActiveView] = useState<ActiveView>('dashboard');
   const [filterClient, setFilterClient] = useState<string | null>(null);
