@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Folder, FileImage, FileVideo, File, FolderPlus, Download, Loader2, RefreshCw, Upload, Clock, User } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-
+import { PCloudPreviewDialog } from "./PCloudPreviewDialog";
 interface BreadcrumbEntry {
   name: string;
   folderId: number;
@@ -23,6 +23,10 @@ export function PCloudBrowser() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
   const [recentPCloudFiles, setRecentPCloudFiles] = useState<EditedFile[]>([]);
+  const [previewItem, setPreviewItem] = useState<PCloudItem | null>(null);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentFolderId = breadcrumb[breadcrumb.length - 1].folderId;
@@ -83,13 +87,22 @@ export function PCloudBrowser() {
     }
   };
 
-  const handleDownload = async (item: PCloudItem) => {
+  const handleFileClick = async (item: PCloudItem) => {
     if (!item.fileid) return;
+    setPreviewLoading(item.fileid);
     try {
       const url = await getPCloudFileLink(item.fileid);
-      window.open(url, '_blank');
+      if (isPCloudImage(item) || isPCloudVideo(item)) {
+        setPreviewItem(item);
+        setPreviewUrl(url);
+        setPreviewOpen(true);
+      } else {
+        window.open(url, '_blank');
+      }
     } catch (err: any) {
-      toast({ title: "Failed to get download link", description: err.message, variant: "destructive" });
+      toast({ title: "Failed to get file link", description: err.message, variant: "destructive" });
+    } finally {
+      setPreviewLoading(null);
     }
   };
 
@@ -252,9 +265,14 @@ export function PCloudBrowser() {
           {files.map(item => (
             <button
               key={item.fileid}
-              onClick={() => handleDownload(item)}
-              className="flex flex-col items-center gap-2 rounded-xl border bg-card hover:bg-muted/50 transition-colors group overflow-hidden"
+              onClick={() => handleFileClick(item)}
+              className="flex flex-col items-center gap-2 rounded-xl border bg-card hover:bg-muted/50 transition-colors group overflow-hidden relative"
             >
+              {previewLoading === item.fileid && (
+                <div className="absolute inset-0 bg-background/60 flex items-center justify-center z-10">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                </div>
+              )}
               {/* Thumbnail or icon */}
               {thumbs[item.fileid!] ? (
                 <div className="w-full aspect-square bg-muted overflow-hidden">
@@ -272,7 +290,6 @@ export function PCloudBrowser() {
               <div className="px-2 pb-3 w-full text-center">
                 <span className="text-xs font-medium truncate block">{item.name}</span>
                 <span className="text-[10px] text-muted-foreground">{formatPCloudSize(item.size || 0)}</span>
-                <Download className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mx-auto mt-1" />
               </div>
             </button>
           ))}
@@ -280,6 +297,19 @@ export function PCloudBrowser() {
             <p className="text-sm text-muted-foreground col-span-full text-center py-8">This folder is empty</p>
           )}
         </div>
+      )}
+
+      {/* In-app preview dialog */}
+      {previewItem && (
+        <PCloudPreviewDialog
+          item={previewItem}
+          url={previewUrl}
+          open={previewOpen}
+          onOpenChange={(open) => {
+            setPreviewOpen(open);
+            if (!open) setPreviewItem(null);
+          }}
+        />
       )}
     </div>
   );

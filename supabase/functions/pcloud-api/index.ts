@@ -110,10 +110,10 @@ serve(async (req) => {
         const size = params.size || '200x200';
         const results: Record<number, string> = {};
         
-        // Fetch thumbs in parallel (max 10 at a time)
+        // Fetch thumbs in parallel (max 50 at a time)
         const chunks: number[][] = [];
-        for (let i = 0; i < fileids.length; i += 10) {
-          chunks.push(fileids.slice(i, i + 10));
+        for (let i = 0; i < fileids.length; i += 50) {
+          chunks.push(fileids.slice(i, i + 50));
         }
         
         for (const chunk of chunks) {
