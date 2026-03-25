@@ -418,7 +418,7 @@ function SnakeGrid({ rows, stageKey, editors, onUpdateField, onPushToStatus, car
 
 // --- Main Pipeline View ---
 
-export function WtnPipelineView({ onClose }: { onClose: () => void }) {
+export function WtnPipelineView({ onClose, inline = false }: { onClose: () => void; inline?: boolean }) {
   const { rowsByStatus, isLoading, updateField, pushToStatus } = useVideoEditTracker();
   const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean }[]>([]);
   const [activeTab, setActiveTab] = useState("QUEUE");
@@ -519,7 +519,7 @@ export function WtnPipelineView({ onClose }: { onClose: () => void }) {
   const totalCount = STAGES.reduce((sum, s) => sum + (rowsByStatus[s.key]?.length || 0), 0);
 
   return (
-    <div className="fixed inset-0 z-[500] bg-background flex flex-col">
+    <div className={inline ? "flex flex-col h-full" : "fixed inset-0 z-[500] bg-background flex flex-col"}>
       {/* Header */}
       <div className="border-b bg-card shrink-0">
         <div className="max-w-[1800px] mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
@@ -532,9 +532,11 @@ export function WtnPipelineView({ onClose }: { onClose: () => void }) {
               <p className="text-[10px] text-muted-foreground">Total: {totalCount}</p>
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full">
-            <X className="w-5 h-5" />
-          </Button>
+          {!inline && (
+            <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full">
+              <X className="w-5 h-5" />
+            </Button>
+          )}
         </div>
       </div>
 
