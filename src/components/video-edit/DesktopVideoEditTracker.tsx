@@ -784,10 +784,11 @@ export function DesktopVideoEditTracker() {
 
   const years = getBSYearsRange(-2, 3);
 
-  // Editor assignment counts (across all stages)
+  // Editor assignment counts (across non-finalized stages)
   const editorCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    for (const stage of STAGES) {
+    const nonFinalizedStages = STAGES.filter(s => s.key !== 'FINALIZED');
+    for (const stage of nonFinalizedStages) {
       for (const row of (rowsByStatus[stage.key] || [])) {
         if (row.editor) {
           counts[row.editor] = (counts[row.editor] || 0) + 1;
@@ -796,6 +797,25 @@ export function DesktopVideoEditTracker() {
     }
     return counts;
   }, [rowsByStatus]);
+
+  // Editors currently in active progress (green dot)
+  const activeProgressEditors = useMemo(() => {
+    const progressStages = ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'];
+    const editors = new Set<string>();
+    for (const stageKey of progressStages) {
+      (rowsByStatus[stageKey] || []).forEach(r => { if (r.editor) editors.add(r.editor); });
+    }
+    return editors;
+  }, [rowsByStatus]);
+
+  // Available editors: have been assigned before but NOT in any active progress stage
+  const availableEditors = useMemo(() => {
+    const allEditorNames = new Set<string>();
+    for (const stage of STAGES) {
+      (rowsByStatus[stage.key] || []).forEach(r => { if (r.editor) allEditorNames.add(r.editor); });
+    }
+    return Array.from(allEditorNames).filter(name => !activeProgressEditors.has(name)).sort();
+  }, [rowsByStatus, activeProgressEditors]);
 
   // Active editors per stage (for filter pills in classic view)
   const activeEditorsByStage = useMemo(() => {
@@ -837,6 +857,13 @@ export function DesktopVideoEditTracker() {
   const totalCount = STAGES.reduce((sum, s) => sum + (rowsByStatus[s.key]?.length || 0), 0);
   const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); setFilterEditor(null); setSortMode('default'); };
 
+  const [pipelineInitialStage, setPipelineInitialStage] = useState<string | undefined>();
+
+  const handleStageClick = (stageKey: string) => {
+    setPipelineInitialStage(stageKey);
+    setActiveView('pipeline');
+  };
+
   const isEditorView = activeView !== 'dashboard' && activeView !== 'classic' && activeView !== 'pipeline';
 
   return (
@@ -846,6 +873,7 @@ export function DesktopVideoEditTracker() {
         onViewChange={setActiveView}
         editors={editors}
         editorCounts={editorCounts}
+        activeProgressEditors={activeProgressEditors}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -860,7 +888,15 @@ export function DesktopVideoEditTracker() {
                 <h1 className="text-xl font-bold text-foreground">Dashboard</h1>
                 <p className="text-sm text-muted-foreground">Total: {totalCount} videos across {STAGES.length} stages</p>
               </div>
-              <DashboardView rowsByStatus={rowsByStatus} />
+              <DashboardView
+                rowsByStatus={rowsByStatus}
+                allRows={allRows}
+                onStageClick={handleStageClick}
+                onAssign={(id, editor, mergedIds) => updateField(id, 'editor', editor, mergedIds)}
+                availableEditors={availableEditors}
+              />
+            </div>
+          </div>
             </div>
           </div>
         ) : activeView === 'pipeline' ? (
