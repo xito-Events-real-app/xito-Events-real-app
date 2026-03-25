@@ -51,6 +51,13 @@ export default function EditedFiles() {
           >
             <FolderOpen className="h-4 w-4 mr-1" /> Browse
           </Button>
+          <Button
+            variant={view === 'pcloud' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setView('pcloud')}
+          >
+            <Cloud className="h-4 w-4 mr-1" /> pCloud
+          </Button>
           <Button size="sm" onClick={() => setWizardOpen(true)} className="gap-1">
             <Upload className="h-4 w-4" /> Upload
           </Button>
