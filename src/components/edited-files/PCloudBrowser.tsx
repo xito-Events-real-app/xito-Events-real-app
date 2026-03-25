@@ -23,6 +23,10 @@ export function PCloudBrowser() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
   const [recentPCloudFiles, setRecentPCloudFiles] = useState<EditedFile[]>([]);
+  const [previewItem, setPreviewItem] = useState<PCloudItem | null>(null);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentFolderId = breadcrumb[breadcrumb.length - 1].folderId;
