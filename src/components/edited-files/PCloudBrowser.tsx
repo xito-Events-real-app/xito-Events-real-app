@@ -87,13 +87,22 @@ export function PCloudBrowser() {
     }
   };
 
-  const handleDownload = async (item: PCloudItem) => {
+  const handleFileClick = async (item: PCloudItem) => {
     if (!item.fileid) return;
+    setPreviewLoading(item.fileid);
     try {
       const url = await getPCloudFileLink(item.fileid);
-      window.open(url, '_blank');
+      if (isPCloudImage(item) || isPCloudVideo(item)) {
+        setPreviewItem(item);
+        setPreviewUrl(url);
+        setPreviewOpen(true);
+      } else {
+        window.open(url, '_blank');
+      }
     } catch (err: any) {
-      toast({ title: "Failed to get download link", description: err.message, variant: "destructive" });
+      toast({ title: "Failed to get file link", description: err.message, variant: "destructive" });
+    } finally {
+      setPreviewLoading(null);
     }
   };
 
