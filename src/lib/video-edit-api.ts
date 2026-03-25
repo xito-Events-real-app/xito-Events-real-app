@@ -173,6 +173,7 @@ function dbToRow(r: any): VideoEditRow {
     playingSince: r.playing_since || "",
     editStartedAt: r.edit_started_at || "",
     deadline: r.deadline || "",
+    stageHistory: r.stage_history || "",
   };
 }
 
