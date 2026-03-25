@@ -35,6 +35,7 @@ const sidebarItems: { id: SectionType; label: string; icon: React.ElementType }[
   { id: 'keepNotes', label: 'Benzo Keep', icon: StickyNote },
   { id: 'files', label: 'Files', icon: FolderOpen },
   { id: 'deliverables', label: 'Deliverables', icon: Package },
+  { id: 'edit', label: 'Edit', icon: Film },
 ];
 
 const ClientDetailSidebar = ({

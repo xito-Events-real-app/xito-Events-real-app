@@ -16,3 +16,4 @@ export { default as FreelancerAssignmentSection } from './FreelancerAssignmentSe
 export { default as DeleteClientDialog } from './DeleteClientDialog';
 export { default as ClientFilesSection } from './ClientFilesSection';
 export { default as DeliverablesSection } from './DeliverablesSection';
+export { default as EditProductionSection } from './EditProductionSection';
