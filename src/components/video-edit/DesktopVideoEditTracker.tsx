@@ -1067,7 +1067,21 @@ function DashboardView({
 /* ── Editor View ── */
 const EDITOR_STAGE_ORDER = ['EDIT_ON_PROGRESS', 'EDIT_LAB', 'QUEUE', 'COLOR_QUEUE', 'COLOR_LAB', 'COLOR_ON_PROGRESS', 'EXPORT_QUEUE', 'EXPORTED', 'CLIENT_REVIEW', 'RE_EDIT_ON_PROGRESS', 'FINALIZED'];
 
-function EditorView({ editorName, rowsByStatus }: { editorName: string; rowsByStatus: Record<string, DisplayRow[]> }) {
+const NEXT_UP_PRIORITY_STAGES = ['EDIT_LAB', 'RE_EDIT_ON_PROGRESS', 'COLOR_QUEUE', 'QUEUE'];
+const NEXT_UP_STAGE_COLORS: Record<string, string> = {
+  'EDIT_LAB': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
+  'RE_EDIT_ON_PROGRESS': 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200',
+  'COLOR_QUEUE': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+  'QUEUE': 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
+};
+
+function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField }: {
+  editorName: string;
+  rowsByStatus: Record<string, DisplayRow[]>;
+  onPushToStatus: (id: string, newStatus: string, mergedIds?: string[]) => void;
+  onUpdateField: (id: string, field: string, value: string, mergedIds?: string[]) => void;
+}) {
+  const [nextUpOpen, setNextUpOpen] = useState(false);
   const groupedByStage = useMemo(() => {
     const result: { key: string; label: string; rows: DisplayRow[] }[] = [];
     for (const stageKey of EDITOR_STAGE_ORDER) {
