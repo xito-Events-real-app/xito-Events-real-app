@@ -367,6 +367,64 @@ function VideoEditTable({
                   </SelectContent>
                 </Select>
               </TableCell>
+              {/* Event Date */}
+              <TableCell>
+                {(() => {
+                  const age = getEventAge(row.eventDateAD);
+                  if (!age) return <span className="text-muted-foreground text-xs">-</span>;
+                  return (
+                    <div className="text-xs">
+                      <span className="text-foreground font-medium">{age.bsDisplay}</span>
+                      <span className="text-muted-foreground ml-1">({age.days}d old)</span>
+                    </div>
+                  );
+                })()}
+              </TableCell>
+              {/* Edit Started */}
+              <TableCell>
+                {(() => {
+                  const ago = getTimeAgo(row.editStartedAt);
+                  if (!ago) return <span className="text-muted-foreground text-xs">-</span>;
+                  return (
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Timer className="w-3 h-3" />
+                      {ago}
+                    </div>
+                  );
+                })()}
+              </TableCell>
+              {/* Deadline */}
+              <TableCell>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    {(() => {
+                      const dl = getDeadlineInfo(row.deadline);
+                      if (!dl) return (
+                        <button className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+                          <CalendarIcon className="w-3 h-3" /> Set
+                        </button>
+                      );
+                      return (
+                        <button className={cn(
+                          "text-xs font-medium flex items-center gap-1 transition-colors",
+                          dl.isCrossed ? "text-red-600 dark:text-red-400" :
+                          dl.isClose ? "text-amber-600 dark:text-amber-400" :
+                          "text-green-600 dark:text-green-400"
+                        )}>
+                          <CalendarIcon className="w-3 h-3" />
+                          {dl.text}
+                        </button>
+                      );
+                    })()}
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <DeadlinePicker
+                      value={row.deadline}
+                      onChange={(val) => onUpdateDeadline?.(row.id, val, row.mergedIds)}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </TableCell>
               <TableCell className="text-center">
                 {row.companyNotes ? (
                   <Tooltip>
