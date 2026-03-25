@@ -752,7 +752,7 @@ export function DesktopVideoEditTracker() {
                 <h1 className="text-xl font-bold text-foreground">Dashboard</h1>
                 <p className="text-sm text-muted-foreground">Total: {totalCount} videos across {STAGES.length} stages</p>
               </div>
-              <DashboardView rowsByStatus={rowsByStatus} allRows={allRows} />
+              <DashboardView rowsByStatus={rowsByStatus} />
             </div>
           </div>
         ) : activeView === 'pipeline' ? (
