@@ -26,6 +26,7 @@ export interface VideoEditRow {
   playingSince: string;
   editStartedAt: string;
   deadline: string;
+  stageHistory: string;
 }
 
 const VIDEO_DELIVERABLE_SECTIONS = ["video", "videos"] as const;
