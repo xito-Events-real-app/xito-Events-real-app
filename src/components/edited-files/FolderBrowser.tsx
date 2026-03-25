@@ -33,7 +33,7 @@ export function FolderBrowser() {
   const [filterEvent, setFilterEvent] = useState<string | null>(null);
   const [filterSide, setFilterSide] = useState<string | null>(null);
   const [showLinks, setShowLinks] = useState(false);
-
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const loadClients = async () => {
     const data = await getEditedFilesClients();
     setClientFolders(data);
