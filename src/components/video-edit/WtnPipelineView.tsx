@@ -150,6 +150,8 @@ function PipelineCard({
           relative ${expanded ? 'w-[480px] min-w-[480px]' : 'w-[320px] min-w-[320px]'} rounded-xl border-l-4 ${borderCls}
           border border-border ${bgCls} shadow-sm hover:shadow-lg transition-all select-none
           ${isDragging ? 'opacity-40 scale-95 shadow-2xl' : ''}
+          ${['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'].includes(stageKey) && row.isPlaying ? 'animate-editing-glow' : ''}
+          ${['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'].includes(stageKey) && !row.isPlaying ? 'opacity-60' : ''}
         `}
       >
         {/* Drag handle */}

@@ -142,7 +142,11 @@ function VideoEditTable({
             const isExpanded = expandedRows.has(row.id);
             return (
               <React.Fragment key={row.id}>
-              <TableRow className="hover:bg-muted/30">
+              <TableRow className={cn(
+                "hover:bg-muted/30",
+                ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'].includes(currentStageKey) && row.isPlaying && "animate-editing-glow",
+                ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'].includes(currentStageKey) && !row.isPlaying && "opacity-60"
+              )}>
               <TableCell className="text-center p-1">
                 <button
                   onClick={() => toggleExpand(row.id)}
@@ -352,9 +356,19 @@ function DashboardView({
 }) {
   const [assignDialogEditor, setAssignDialogEditor] = useState<string | null>(null);
 
-  // Edit on Progress rows split into running and paused
+  // WTN Ongoing Edits: combine EDIT_ON_PROGRESS, COLOR_ON_PROGRESS, RE_EDIT_ON_PROGRESS
+  const PROGRESS_STAGES = ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'] as const;
+  const STAGE_SHORT_LABEL: Record<string, string> = {
+    EDIT_ON_PROGRESS: 'Edit',
+    COLOR_ON_PROGRESS: 'Color',
+    RE_EDIT_ON_PROGRESS: 'Re-Edit',
+  };
+
   const { runningRows, pausedRows } = useMemo(() => {
-    const all = [...(rowsByStatus['EDIT_ON_PROGRESS'] || [])];
+    const all: (DisplayRow & { _progressStage: string })[] = [];
+    for (const sk of PROGRESS_STAGES) {
+      (rowsByStatus[sk] || []).forEach(r => all.push({ ...r, _progressStage: sk }));
+    }
     const running = all
       .filter(r => r.isPlaying)
       .sort((a, b) => (a.playingSince || '').localeCompare(b.playingSince || ''));
@@ -374,13 +388,58 @@ function DashboardView({
       .slice(0, 5);
   }, [rowsByStatus]);
 
+  const renderOngoingCard = (row: DisplayRow & { _progressStage: string }, isRunning: boolean) => (
+    <div
+      key={row.id}
+      className={cn(
+        "border-l-4 rounded-lg bg-card p-3 relative",
+        STAGE_CARD_COLORS[row._progressStage] || "border-l-blue-600",
+        isRunning ? "shadow-lg animate-editing-glow" : "shadow-sm opacity-60"
+      )}
+    >
+      <button
+        onClick={() => onTogglePlaying(row.id, isRunning, row.mergedIds)}
+        className={cn(
+          "absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center transition-colors",
+          isRunning
+            ? "bg-green-100 dark:bg-green-950 hover:bg-green-200 dark:hover:bg-green-900"
+            : "bg-muted hover:bg-accent"
+        )}
+        title={isRunning ? "Pause editing" : "Resume editing"}
+      >
+        {isRunning
+          ? <Pause className="w-3.5 h-3.5 text-green-700 dark:text-green-300" />
+          : <Play className="w-3.5 h-3.5 text-muted-foreground" />
+        }
+      </button>
+      <p className="font-bold text-sm text-foreground">{row.clientName}</p>
+      <p className="text-xs text-muted-foreground">{row.eventName} · {row.editType}</p>
+      <div className="flex items-center gap-2 mt-2">
+        <UrgencyBadge value={row.urgency || "0"} />
+        {row.editor && (
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-200 font-medium">
+            {row.editor}
+          </span>
+        )}
+        <span className={cn(
+          "text-[9px] px-1.5 py-0.5 rounded-full font-semibold",
+          row._progressStage === 'EDIT_ON_PROGRESS' ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" :
+          row._progressStage === 'COLOR_ON_PROGRESS' ? "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300" :
+          "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
+        )}>
+          {STAGE_SHORT_LABEL[row._progressStage] || row._progressStage}
+        </span>
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
-      {/* Edit on Progress Section */}
+      {/* WTN Ongoing Edits */}
       <div>
         <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
           <Play className="w-4 h-4 text-blue-500" />
-          Edit on Progress
+          WTN Ongoing Edits
           <Badge variant="outline" className="text-xs">{totalProgress}</Badge>
         </h3>
         {totalProgress === 0 ? (
@@ -388,36 +447,16 @@ function DashboardView({
             No videos currently being edited
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-5">
             {/* Running Section */}
             {runningRows.length > 0 && (
               <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Play className="w-3.5 h-3.5 text-green-500" />
-                  <span className="text-xs font-bold text-foreground uppercase tracking-wide">Running ({runningRows.length})</span>
+                <div className="flex items-center justify-center gap-2 mb-3">
+                  <Play className="w-4 h-4 text-green-500" />
+                  <span className="text-base font-bold text-foreground uppercase tracking-wide">Running ({runningRows.length})</span>
                 </div>
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                  {runningRows.map(row => (
-                    <div key={row.id} className="border-l-4 border-l-blue-600 rounded-lg bg-card p-3 shadow-lg animate-editing-glow relative">
-                      <button
-                        onClick={() => onTogglePlaying(row.id, true, row.mergedIds)}
-                        className="absolute top-2 right-2 w-7 h-7 rounded-full bg-green-100 dark:bg-green-950 flex items-center justify-center hover:bg-green-200 dark:hover:bg-green-900 transition-colors"
-                        title="Pause editing"
-                      >
-                        <Pause className="w-3.5 h-3.5 text-green-700 dark:text-green-300" />
-                      </button>
-                      <p className="font-bold text-sm text-foreground">{row.clientName}</p>
-                      <p className="text-xs text-muted-foreground">{row.eventName} · {row.editType}</p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <UrgencyBadge value={row.urgency || "0"} />
-                        {row.editor && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-200 font-medium">
-                            {row.editor}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                  {runningRows.map(row => renderOngoingCard(row, true))}
                 </div>
               </div>
             )}
@@ -425,39 +464,18 @@ function DashboardView({
             {/* Paused Section */}
             {pausedRows.length > 0 && (
               <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Pause className="w-3.5 h-3.5 text-muted-foreground" />
-                  <span className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Paused ({pausedRows.length})</span>
+                <div className="flex items-center justify-center gap-2 mb-3">
+                  <Pause className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-base font-bold text-muted-foreground uppercase tracking-wide">Paused ({pausedRows.length})</span>
                 </div>
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                  {pausedRows.map(row => (
-                    <div key={row.id} className="border-l-4 border-l-blue-600 rounded-lg bg-card p-3 shadow-sm opacity-60 relative">
-                      <button
-                        onClick={() => onTogglePlaying(row.id, false, row.mergedIds)}
-                        className="absolute top-2 right-2 w-7 h-7 rounded-full bg-muted flex items-center justify-center hover:bg-accent transition-colors"
-                        title="Resume editing"
-                      >
-                        <Play className="w-3.5 h-3.5 text-muted-foreground" />
-                      </button>
-                      <p className="font-bold text-sm text-foreground">{row.clientName}</p>
-                      <p className="text-xs text-muted-foreground">{row.eventName} · {row.editType}</p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <UrgencyBadge value={row.urgency || "0"} />
-                        {row.editor && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-200 font-medium">
-                            {row.editor}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                  {pausedRows.map(row => renderOngoingCard(row, false))}
                 </div>
               </div>
             )}
           </div>
         )}
       </div>
-
       {/* Pipeline Overview — clickable */}
       <div>
         <h3 className="text-sm font-semibold text-foreground mb-3">Pipeline Overview</h3>
@@ -784,6 +802,7 @@ function VideoEditSidebar({
   editorCounts,
   activeProgressEditors,
   playingEditors,
+  editorStageGroups,
 }: {
   activeView: ActiveView;
   onViewChange: (view: ActiveView) => void;
@@ -791,6 +810,13 @@ function VideoEditSidebar({
   editorCounts: Record<string, number>;
   activeProgressEditors: Set<string>;
   playingEditors: Set<string>;
+  editorStageGroups: {
+    active: string[];
+    paused: string[];
+    onQueue: string[];
+    editLab: string[];
+    available: string[];
+  };
 }) {
   const navItems = [
     { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
@@ -798,8 +824,47 @@ function VideoEditSidebar({
     { id: 'pipeline' as const, label: 'Pipeline View', icon: GitBranch },
   ];
 
-  // Only show editors with rows in non-finalized stages
-  const videoEditors = editors.filter(e => e.isVideoEditor && e.name && (editorCounts[e.name] || 0) > 0);
+  const renderEditorBtn = (name: string, dotClass: string, nameClass: string) => {
+    const isActive = activeView === name;
+    const count = editorCounts[name] || 0;
+    return (
+      <button
+        key={name}
+        onClick={() => onViewChange(name)}
+        className={cn(
+          "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200",
+          isActive
+            ? "bg-teal-600/30 text-teal-300 font-semibold"
+            : "text-zinc-400 hover:text-white hover:bg-white/5"
+        )}
+      >
+        <span className={cn("w-2 h-2 rounded-full shrink-0", dotClass)} />
+        <span className={cn("flex-1 text-left truncate", nameClass)}>{name}</span>
+        {count > 0 && (
+          <span className={cn(
+            "text-[10px] px-1.5 py-0.5 rounded-full font-bold",
+            isActive ? "bg-teal-500/30 text-teal-200" : "bg-zinc-700 text-zinc-400"
+          )}>
+            {count}
+          </span>
+        )}
+      </button>
+    );
+  };
+
+  const renderGroup = (label: string, names: string[], dotClass: string, nameClass: string = "") => {
+    if (names.length === 0) return null;
+    return (
+      <div key={label}>
+        <div className="px-3 py-1.5">
+          <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">{label}</span>
+        </div>
+        <div className="space-y-0.5">
+          {names.map(name => renderEditorBtn(name, dotClass, nameClass))}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="w-56 min-h-screen bg-zinc-900 text-white border-r border-zinc-800 flex flex-col shrink-0">
@@ -820,14 +885,14 @@ function VideoEditSidebar({
       <nav className="p-3 space-y-1">
         {navItems.map(item => {
           const Icon = item.icon;
-          const isActive = activeView === item.id;
+          const isActiveNav = activeView === item.id;
           return (
             <button
               key={item.id}
               onClick={() => onViewChange(item.id)}
               className={cn(
                 "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
-                isActive
+                isActiveNav
                   ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-lg shadow-primary/25"
                   : "text-zinc-400 hover:text-white hover:bg-white/10"
               )}
@@ -842,47 +907,13 @@ function VideoEditSidebar({
       {/* Divider */}
       <div className="mx-4 border-t border-zinc-800" />
 
-      {/* Editors */}
-      <div className="p-3 flex-1 overflow-y-auto">
-        <div className="flex items-center gap-2 px-3 py-2">
-          <Users className="w-3.5 h-3.5 text-zinc-500" />
-          <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">Editors</span>
-        </div>
-        <div className="space-y-0.5">
-          {videoEditors.map(editor => {
-            const isActive = activeView === editor.name;
-            const count = editorCounts[editor.name] || 0;
-            const isInProgress = activeProgressEditors.has(editor.name);
-            const isPlaying = playingEditors.has(editor.name);
-            return (
-              <button
-                key={editor.name}
-                onClick={() => onViewChange(editor.name)}
-                className={cn(
-                  "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200",
-                  isActive
-                    ? "bg-teal-600/30 text-teal-300 font-semibold"
-                    : "text-zinc-400 hover:text-white hover:bg-white/5",
-                  !isInProgress && "italic"
-                )}
-              >
-                <span className={cn(
-                  "w-2 h-2 rounded-full shrink-0",
-                  isPlaying ? "bg-green-500 animate-editor-pulse" : isInProgress ? "bg-green-500" : count > 0 ? "bg-teal-400" : "bg-zinc-600"
-                )} />
-                <span className={cn("flex-1 text-left truncate", isPlaying && "animate-editor-wave")}>{editor.name}</span>
-                {count > 0 && (
-                  <span className={cn(
-                    "text-[10px] px-1.5 py-0.5 rounded-full font-bold",
-                    isActive ? "bg-teal-500/30 text-teal-200" : "bg-zinc-700 text-zinc-400"
-                  )}>
-                    {count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+      {/* Editor Groups */}
+      <div className="p-3 flex-1 overflow-y-auto space-y-2">
+        {renderGroup("Active Editors", editorStageGroups.active, "bg-green-500 animate-editor-pulse", "animate-editor-wave")}
+        {renderGroup("Paused Editors", editorStageGroups.paused, "bg-green-500", "")}
+        {renderGroup("On Queue", editorStageGroups.onQueue, "bg-yellow-500", "")}
+        {renderGroup("Edit Lab", editorStageGroups.editLab, "bg-amber-500", "")}
+        {renderGroup("Available", editorStageGroups.available, "bg-zinc-600", "italic")}
       </div>
 
       {/* Footer */}
@@ -1047,6 +1078,38 @@ export function DesktopVideoEditTracker() {
 
   const isEditorView = activeView !== 'dashboard' && activeView !== 'classic' && activeView !== 'pipeline';
 
+  // Compute editor stage groups for sidebar
+  const editorStageGroups = useMemo(() => {
+    const progressStages = ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'];
+    const videoEditorNames = editors.filter(e => e.isVideoEditor && e.name).map(e => e.name);
+    
+    const active: string[] = [];
+    const paused: string[] = [];
+    const onQueue: string[] = [];
+    const editLab: string[] = [];
+    const available: string[] = [];
+
+    for (const name of videoEditorNames) {
+      const inProgress = progressStages.some(sk => (rowsByStatus[sk] || []).some(r => r.editor === name));
+      const isPlayingAny = progressStages.some(sk => (rowsByStatus[sk] || []).some(r => r.editor === name && r.isPlaying));
+      const inQueue = (rowsByStatus['QUEUE'] || []).some(r => r.editor === name);
+      const inEditLab = (rowsByStatus['EDIT_LAB'] || []).some(r => r.editor === name);
+
+      if (inProgress && isPlayingAny) {
+        active.push(name);
+      } else if (inProgress) {
+        paused.push(name);
+      } else if (inQueue) {
+        onQueue.push(name);
+      } else if (inEditLab) {
+        editLab.push(name);
+      } else {
+        available.push(name);
+      }
+    }
+    return { active, paused, onQueue, editLab, available };
+  }, [editors, rowsByStatus]);
+
   return (
     <div className="flex min-h-screen bg-background">
       <VideoEditSidebar
@@ -1056,6 +1119,7 @@ export function DesktopVideoEditTracker() {
         editorCounts={editorCounts}
         activeProgressEditors={activeProgressEditors}
         playingEditors={playingEditors}
+        editorStageGroups={editorStageGroups}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">
