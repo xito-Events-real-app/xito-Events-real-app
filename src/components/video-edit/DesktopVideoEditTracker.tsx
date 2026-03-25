@@ -1061,6 +1061,7 @@ export function DesktopVideoEditTracker() {
                 onAssign={(id, editor, mergedIds) => updateField(id, 'editor', editor, mergedIds)}
                 availableEditors={availableEditors}
                 onPushToStatus={pushToStatus}
+                onTogglePlaying={togglePlaying}
               />
             </div>
           </div>
