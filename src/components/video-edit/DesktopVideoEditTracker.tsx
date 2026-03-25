@@ -42,6 +42,113 @@ const STAGE_CARD_COLORS: Record<string, string> = {
   FINALIZED: "border-l-green-500",
 };
 
+/* ── Date/time helper functions ── */
+function getEventAge(eventDateAD: string): { days: number; bsDisplay: string } | null {
+  if (!eventDateAD) return null;
+  try {
+    const eventDate = new Date(eventDateAD);
+    if (isNaN(eventDate.getTime())) return null;
+    const now = new Date();
+    const diffMs = now.getTime() - eventDate.getTime();
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const bs = adToBS(eventDate);
+    const bsDisplay = formatBSDate(bs);
+    return { days, bsDisplay };
+  } catch { return null; }
+}
+
+function getTimeAgo(isoDate: string): string | null {
+  if (!isoDate) return null;
+  try {
+    const date = new Date(isoDate);
+    if (isNaN(date.getTime())) return null;
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    if (diffMs < 0) return null;
+    const totalHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const days = Math.floor(totalHours / 24);
+    const hrs = totalHours % 24;
+    if (days > 0) return `${days}d ${hrs}h ago`;
+    if (hrs > 0) return `${hrs}h ago`;
+    const mins = Math.floor(diffMs / (1000 * 60));
+    return `${mins}m ago`;
+  } catch { return null; }
+}
+
+function getDeadlineInfo(deadline: string): { text: string; isCrossed: boolean; isClose: boolean } | null {
+  if (!deadline) return null;
+  try {
+    const dl = new Date(deadline);
+    if (isNaN(dl.getTime())) return null;
+    const now = new Date();
+    const diffMs = dl.getTime() - now.getTime();
+    const totalHours = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60));
+    const days = Math.floor(totalHours / 24);
+    const hrs = totalHours % 24;
+    const timeStr = days > 0 ? `${days}d ${hrs}h` : `${hrs}h`;
+
+    if (diffMs < 0) {
+      return { text: `Crossed ${timeStr} ago`, isCrossed: true, isClose: false };
+    }
+    const isClose = diffMs < 3 * 24 * 60 * 60 * 1000; // within 3 days
+    return { text: `${timeStr} remaining`, isCrossed: false, isClose };
+  } catch { return null; }
+}
+
+function DeadlinePicker({ value, onChange }: { value: string; onChange: (val: string | null) => void }) {
+  const [date, setDate] = useState<Date | undefined>(value ? new Date(value) : undefined);
+  const [hour, setHour] = useState(value ? new Date(value).getHours().toString() : "12");
+  const [minute, setMinute] = useState(value ? new Date(value).getMinutes().toString().padStart(2, '0') : "00");
+
+  const handleSave = () => {
+    if (!date) return;
+    const d = new Date(date);
+    d.setHours(parseInt(hour), parseInt(minute), 0, 0);
+    onChange(d.toISOString());
+  };
+
+  return (
+    <div className="space-y-3 p-1">
+      <Calendar
+        mode="single"
+        selected={date}
+        onSelect={setDate}
+        className="p-3 pointer-events-auto"
+      />
+      <div className="flex items-center gap-2 px-3">
+        <Clock className="w-4 h-4 text-muted-foreground" />
+        <Select value={hour} onValueChange={setHour}>
+          <SelectTrigger className="w-16 h-7 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {Array.from({ length: 24 }, (_, i) => (
+              <SelectItem key={i} value={i.toString()}>{i.toString().padStart(2, '0')}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <span className="text-sm font-bold">:</span>
+        <Select value={minute} onValueChange={setMinute}>
+          <SelectTrigger className="w-16 h-7 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {["00", "15", "30", "45"].map(m => (
+              <SelectItem key={m} value={m}>{m}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex gap-2 px-3 pb-1">
+        <Button size="sm" className="h-7 text-xs flex-1" onClick={handleSave} disabled={!date}>
+          Set Deadline
+        </Button>
+        {value && (
+          <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={() => onChange(null)}>
+            Clear
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function UrgencyBadge({ value }: { value: string }) {
   const cls = URGENCY_COLORS[value] || URGENCY_COLORS["1"];
   return (
