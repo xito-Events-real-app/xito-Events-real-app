@@ -692,8 +692,8 @@ function DashboardView({
   // WTN Ongoing Edits: combine EDIT_ON_PROGRESS, COLOR_ON_PROGRESS, RE_EDIT_ON_PROGRESS
   const PROGRESS_STAGES = ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'] as const;
   const STAGE_SHORT_LABEL: Record<string, string> = {
-    EDIT_ON_PROGRESS: 'Edit',
-    COLOR_ON_PROGRESS: 'Color',
+    EDIT_ON_PROGRESS: 'Edit on Progress',
+    COLOR_ON_PROGRESS: 'Color on Progress',
     RE_EDIT_ON_PROGRESS: 'Re-Edit',
   };
 
