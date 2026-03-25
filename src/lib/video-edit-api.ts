@@ -163,6 +163,7 @@ function dbToRow(r: any): VideoEditRow {
     clientDemand: r.client_demand || "",
     reference: r.reference || "",
     songs: r.songs || "",
+    forceSplit: r.force_split || false,
   };
 }
 
