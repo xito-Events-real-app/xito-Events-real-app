@@ -340,7 +340,7 @@ function DashboardView({
   availableEditors,
 }: {
   rowsByStatus: Record<string, DisplayRow[]>;
-  allRows: DisplayRow[];
+  allRows: any[];
   onStageClick: (stageKey: string) => void;
   onAssign: (rowId: string, editorName: string, mergedIds?: string[]) => void;
   availableEditors: string[];
