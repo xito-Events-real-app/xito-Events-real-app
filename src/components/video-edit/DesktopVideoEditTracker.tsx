@@ -587,6 +587,40 @@ function DashboardView({
       </button>
       <p className="font-bold text-sm text-foreground">{row.clientName}</p>
       <p className="text-xs text-muted-foreground">{row.eventName} · {row.editType}</p>
+      {/* Event age */}
+      {(() => {
+        const age = getEventAge(row.eventDateAD);
+        return age ? (
+          <p className="text-[10px] text-muted-foreground mt-1">
+            {age.bsDisplay} · <span className="font-medium">{age.days}d old</span>
+          </p>
+        ) : null;
+      })()}
+      {/* Edit started */}
+      {(() => {
+        const ago = getTimeAgo(row.editStartedAt);
+        return ago ? (
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            <Timer className="w-3 h-3" />
+            Started {ago}
+          </div>
+        ) : null;
+      })()}
+      {/* Deadline */}
+      {(() => {
+        const dl = getDeadlineInfo(row.deadline);
+        return dl ? (
+          <div className={cn(
+            "flex items-center gap-1 text-[10px] font-medium mt-0.5",
+            dl.isCrossed ? "text-red-600 dark:text-red-400" :
+            dl.isClose ? "text-amber-600 dark:text-amber-400" :
+            "text-green-600 dark:text-green-400"
+          )}>
+            <CalendarIcon className="w-3 h-3" />
+            Deadline: {dl.text}
+          </div>
+        ) : null;
+      })()}
       <div className="flex items-center gap-2 mt-2">
         <UrgencyBadge value={row.urgency || "0"} />
         {row.editor && (
