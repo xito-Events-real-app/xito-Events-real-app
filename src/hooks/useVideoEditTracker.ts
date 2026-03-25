@@ -112,8 +112,10 @@ export function useVideoEditTracker() {
         { event: '*', schema: 'public', table: 'video_edit_tracker' },
         () => {
           setTimeout(() => {
-            loadRows();
-          }, 0);
+            if (!pendingLocalEdit.current) {
+              loadRows();
+            }
+          }, 300);
         }
       )
       .subscribe();
