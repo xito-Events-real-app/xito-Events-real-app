@@ -1075,11 +1075,12 @@ const NEXT_UP_STAGE_COLORS: Record<string, string> = {
   'QUEUE': 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
 };
 
-function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField }: {
+function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, onTogglePlaying }: {
   editorName: string;
   rowsByStatus: Record<string, DisplayRow[]>;
   onPushToStatus: (id: string, newStatus: string, mergedIds?: string[]) => void;
   onUpdateField: (id: string, field: string, value: string, mergedIds?: string[]) => void;
+  onTogglePlaying: (id: string, currentlyPlaying: boolean, mergedIds?: string[]) => void;
 }) {
   const [nextUpOpen, setNextUpOpen] = useState(false);
   const groupedByStage = useMemo(() => {
