@@ -10,11 +10,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { adToBS, nepaliMonthsEnglish, getBSYearsRange, formatBSDate } from "@/lib/nepali-date";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import { FileDetailsExpander } from "./FileDetailsExpander";
-import { supabase } from "@/integrations/supabase/client";
-import { adToBS, nepaliMonthsEnglish, getBSYearsRange, formatBSDate } from "@/lib/nepali-date";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { cn } from "@/lib/utils";
 
 function getEventAgePipeline(eventDateAD: string): { days: number; bsDisplay: string; bsShort: string } | null {
   if (!eventDateAD) return null;
