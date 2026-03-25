@@ -296,6 +296,9 @@ function PipelineCard({
             ) : null;
           })()}
 
+          {/* Live timer */}
+          <PipelineLiveTimer editStartedAt={row.editStartedAt} stageKey={stageKey} />
+
           {/* Urgency selector */}
           <Select value={row.urgency || "0"} onValueChange={(v) => onUpdateField(row.id, "urgency", v, row.mergedIds)}>
             <SelectTrigger className="w-full h-8 text-sm"><SelectValue placeholder="Urgency" /></SelectTrigger>
