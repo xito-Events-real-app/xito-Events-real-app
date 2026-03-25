@@ -1135,6 +1135,7 @@ export type Database = {
           registered_date_bs: string | null
           registered_date_time_ad: string
           songs: string | null
+          stage_history: string
           sub_event_name: string | null
           synced_to_sheet: boolean | null
           updated_at: string | null
@@ -1164,6 +1165,7 @@ export type Database = {
           registered_date_bs?: string | null
           registered_date_time_ad: string
           songs?: string | null
+          stage_history?: string
           sub_event_name?: string | null
           synced_to_sheet?: boolean | null
           updated_at?: string | null
@@ -1193,6 +1195,7 @@ export type Database = {
           registered_date_bs?: string | null
           registered_date_time_ad?: string
           songs?: string | null
+          stage_history?: string
           sub_event_name?: string | null
           synced_to_sheet?: boolean | null
           updated_at?: string | null
