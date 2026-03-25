@@ -498,7 +498,78 @@ function EditorView({ editorName, rowsByStatus }: { editorName: string; rowsBySt
     return result;
   }, [editorName, rowsByStatus]);
 
-  const totalAssigned = groupedByStage.reduce((sum, g) => sum + g.rows.length, 0);
+  const allEditorRows = useMemo(() => {
+    const rows: DisplayRow[] = [];
+    for (const stage of STAGES) {
+      (rowsByStatus[stage.key] || []).filter(r => r.editor === editorName).forEach(r => rows.push({ ...r, videoEditStatus: stage.key }));
+    }
+    return rows;
+  }, [editorName, rowsByStatus]);
+
+  const totalAssigned = allEditorRows.length;
+
+  // Current: highest urgency in EDIT_ON_PROGRESS for this editor
+  const currentEdit = useMemo(() => {
+    const rows = (rowsByStatus['EDIT_ON_PROGRESS'] || []).filter(r => r.editor === editorName);
+    if (!rows.length) return null;
+    return [...rows].sort((a, b) => (parseInt(b.urgency || '0') || 0) - (parseInt(a.urgency || '0') || 0))[0];
+  }, [rowsByStatus, editorName]);
+
+  // Next: highest urgency in EDIT_LAB/QUEUE for this editor
+  const nextEdit = useMemo(() => {
+    const combined = [
+      ...(rowsByStatus['EDIT_LAB'] || []).filter(r => r.editor === editorName),
+      ...(rowsByStatus['QUEUE'] || []).filter(r => r.editor === editorName),
+    ];
+    if (!combined.length) return null;
+    return [...combined].sort((a, b) => (parseInt(b.urgency || '0') || 0) - (parseInt(a.urgency || '0') || 0))[0];
+  }, [rowsByStatus, editorName]);
+
+  // Last finalized
+  const lastFinalized = useMemo(() => {
+    const rows = (rowsByStatus['FINALIZED'] || []).filter(r => r.editor === editorName);
+    if (!rows.length) return null;
+    return [...rows].sort((a, b) => (b.registeredDateTimeAD || '').localeCompare(a.registeredDateTimeAD || ''))[0];
+  }, [rowsByStatus, editorName]);
+
+  const finalizedCount = (rowsByStatus['FINALIZED'] || []).filter(r => r.editor === editorName).length;
+  const reEditRows = (rowsByStatus['RE_EDIT_ON_PROGRESS'] || []).filter(r => r.editor === editorName);
+
+  const statCards = [
+    {
+      title: "Current", icon: Play, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-950/50",
+      content: currentEdit ? (
+        <div><p className="font-bold text-sm text-foreground">{currentEdit.clientName}</p><p className="text-xs text-muted-foreground">{currentEdit.eventName} · {currentEdit.editType}</p></div>
+      ) : <p className="text-xs text-muted-foreground">Nothing in progress</p>
+    },
+    {
+      title: "Next Up", icon: Clock, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/50",
+      content: nextEdit ? (
+        <div><p className="font-bold text-sm text-foreground">{nextEdit.clientName}</p><p className="text-xs text-muted-foreground">{nextEdit.eventName} · {nextEdit.editType}</p></div>
+      ) : <p className="text-xs text-muted-foreground">Queue is empty</p>
+    },
+    {
+      title: "Last Finalized", icon: CheckCircle, color: "text-green-600 dark:text-green-400", bg: "bg-green-50 dark:bg-green-950/50",
+      content: lastFinalized ? (
+        <div><p className="font-bold text-sm text-foreground">{lastFinalized.clientName}</p><p className="text-xs text-muted-foreground">{lastFinalized.eventName} · {lastFinalized.editType}</p></div>
+      ) : <p className="text-xs text-muted-foreground">None yet</p>
+    },
+    {
+      title: "Finalized", icon: CheckCircle, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-950/50",
+      content: <div><p className="font-bold text-2xl text-foreground">{finalizedCount}</p><p className="text-xs text-muted-foreground">Total completed</p></div>
+    },
+    {
+      title: "Re-Edits", icon: RefreshCcw, color: "text-red-600 dark:text-red-400", bg: "bg-red-50 dark:bg-red-950/50",
+      content: (
+        <div>
+          <p className="font-bold text-2xl text-foreground">{reEditRows.length}</p>
+          {reEditRows.slice(0, 3).map(r => (
+            <p key={r.id} className="text-xs text-muted-foreground truncate">{r.clientName} · {r.editType}</p>
+          ))}
+        </div>
+      )
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -510,6 +581,26 @@ function EditorView({ editorName, rowsByStatus }: { editorName: string; rowsBySt
           <h2 className="text-lg font-bold text-foreground">{editorName}</h2>
           <p className="text-xs text-muted-foreground">{totalAssigned} assigned videos</p>
         </div>
+      </div>
+
+      {/* Stat Cards */}
+      <div className="grid grid-cols-5 gap-4">
+        {statCards.map(card => {
+          const Icon = card.icon;
+          return (
+            <Card key={card.title} className={`${card.bg} border-none shadow-sm`}>
+              <CardHeader className="pb-2 pt-4 px-4">
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                  <Icon className={`w-4 h-4 ${card.color}`} />
+                  <span className={card.color}>{card.title}</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                {card.content}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       {groupedByStage.length === 0 ? (
