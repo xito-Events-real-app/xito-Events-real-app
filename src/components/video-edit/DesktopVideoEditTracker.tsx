@@ -725,7 +725,7 @@ function DashboardView({
     <div
       key={row.id}
       className={cn(
-        "border-l-4 rounded-lg bg-card p-3 relative",
+        "border-l-4 rounded-xl bg-card p-4 relative min-h-[140px] flex flex-col",
         STAGE_CARD_COLORS[row._progressStage] || "border-l-blue-600",
         isRunning ? "shadow-lg animate-editing-glow" : "shadow-sm opacity-60"
       )}
@@ -733,7 +733,7 @@ function DashboardView({
       <button
         onClick={() => onTogglePlaying(row.id, isRunning, row.mergedIds)}
         className={cn(
-          "absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center transition-colors",
+          "absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center transition-colors",
           isRunning
             ? "bg-green-100 dark:bg-green-950 hover:bg-green-200 dark:hover:bg-green-900"
             : "bg-muted hover:bg-accent"
@@ -741,33 +741,27 @@ function DashboardView({
         title={isRunning ? "Pause editing" : "Resume editing"}
       >
         {isRunning
-          ? <Pause className="w-3.5 h-3.5 text-green-700 dark:text-green-300" />
-          : <Play className="w-3.5 h-3.5 text-muted-foreground" />
+          ? <Pause className="w-4 h-4 text-green-700 dark:text-green-300" />
+          : <Play className="w-4 h-4 text-muted-foreground" />
         }
       </button>
-      <p className="font-bold text-sm text-foreground">{row.clientName}</p>
-      <p className="text-xs text-muted-foreground">{row.eventName} · {row.editType}</p>
+      <p className="font-bold text-base text-foreground pr-10">{row.clientName}</p>
+      <p className="text-sm text-muted-foreground">{row.eventName} · {row.editType}</p>
       {/* Event age stamp */}
       {(() => {
         const age = getEventAge(row.eventDateAD);
         return age ? (
-          <div className="mt-1.5">
+          <div className="mt-2">
             <EventAgeStamp age={age} />
           </div>
         ) : null;
       })()}
-      {/* Live edit timer */}
-      {row.editStartedAt && (
-        <div className="mt-1">
-          <LiveEditTimer editStartedAt={row.editStartedAt} stageHistory={row.stageHistory} size="card" stageKey={row._progressStage} />
-        </div>
-      )}
       {/* Deadline */}
       {(() => {
         const dl = getDeadlineInfo(row.deadline);
         return dl ? (
           <div className={cn(
-            "flex items-center gap-1 text-[10px] font-medium mt-0.5",
+            "flex items-center gap-1 text-xs font-medium mt-1",
             dl.isCrossed ? "text-red-600 dark:text-red-400" :
             dl.isClose ? "text-amber-600 dark:text-amber-400" :
             "text-green-600 dark:text-green-400"
@@ -780,12 +774,12 @@ function DashboardView({
       <div className="flex items-center gap-2 mt-2">
         <UrgencyBadge value={row.urgency || "0"} />
         {row.editor && (
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-200 font-medium">
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-200 font-medium">
             {row.editor}
           </span>
         )}
         <span className={cn(
-          "text-[9px] px-1.5 py-0.5 rounded-full font-semibold",
+          "text-[10px] px-1.5 py-0.5 rounded-full font-semibold",
           row._progressStage === 'EDIT_ON_PROGRESS' ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" :
           row._progressStage === 'COLOR_ON_PROGRESS' ? "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300" :
           "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
@@ -793,6 +787,12 @@ function DashboardView({
           {STAGE_SHORT_LABEL[row._progressStage] || row._progressStage}
         </span>
       </div>
+      {/* Live timer - bottom right */}
+      {row.editStartedAt && (
+        <div className="mt-auto pt-2 flex justify-end">
+          <LiveEditTimer editStartedAt={row.editStartedAt} stageHistory={row.stageHistory} size="card" stageKey={row._progressStage} />
+        </div>
+      )}
     </div>
   );
 
