@@ -1093,11 +1093,11 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, o
         result.push({ key: stageKey, label: stage.label, rows });
       }
     }
-    // Sort: stages with any running (isPlaying) row float to top
+    // Running progress cards on top, then paused progress, then rest
     const PROGRESS_KEYS = new Set(['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS']);
     result.sort((a, b) => {
-      const aHasRunning = PROGRESS_KEYS.has(a.key) && a.rows.some(r => r.isPlaying) ? 1 : 0;
-      const bHasRunning = PROGRESS_KEYS.has(b.key) && b.rows.some(r => r.isPlaying) ? 1 : 0;
+      const aHasRunning = PROGRESS_KEYS.has(a.key) && a.rows.some(r => r.isPlaying) ? 2 : PROGRESS_KEYS.has(a.key) ? 1 : 0;
+      const bHasRunning = PROGRESS_KEYS.has(b.key) && b.rows.some(r => r.isPlaying) ? 2 : PROGRESS_KEYS.has(b.key) ? 1 : 0;
       return bHasRunning - aHasRunning;
     });
     return result;
@@ -1273,57 +1273,55 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, o
                   const isPaused = isProgressStage && !row.isPlaying;
                   const isRunning = isProgressStage && row.isPlaying;
                   const age = getEventAge(row.eventDateAD);
+
+                  // Stage-specific colors for progress cards
+                  const stageColors: Record<string, { running: string; paused: string; label: string }> = {
+                    EDIT_ON_PROGRESS: {
+                      running: "bg-blue-50/90 dark:bg-blue-950/40 ring-2 ring-blue-400/70 shadow-[0_0_24px_rgba(59,130,246,0.3)]",
+                      paused: "bg-blue-50/40 dark:bg-blue-950/20 opacity-55",
+                      label: "EDIT ON PROGRESS",
+                    },
+                    COLOR_ON_PROGRESS: {
+                      running: "bg-purple-50/90 dark:bg-purple-950/40 ring-2 ring-purple-400/70 shadow-[0_0_24px_rgba(168,85,247,0.3)]",
+                      paused: "bg-purple-50/40 dark:bg-purple-950/20 opacity-55",
+                      label: "COLOR ON PROGRESS",
+                    },
+                    RE_EDIT_ON_PROGRESS: {
+                      running: "bg-rose-50/90 dark:bg-rose-950/40 ring-2 ring-rose-400/70 shadow-[0_0_24px_rgba(244,63,94,0.3)]",
+                      paused: "bg-rose-50/40 dark:bg-rose-950/20 opacity-55",
+                      label: "RE-EDIT ON PROGRESS",
+                    },
+                  };
+                  const sc = stageColors[group.key];
+
+                  const stageLabelColors: Record<string, string> = {
+                    EDIT_ON_PROGRESS: "text-blue-600 dark:text-blue-400",
+                    COLOR_ON_PROGRESS: "text-purple-600 dark:text-purple-400",
+                    RE_EDIT_ON_PROGRESS: "text-rose-600 dark:text-rose-400",
+                  };
+
                   return (
                     <div key={row.id} className={cn(
-                      `border-l-4 ${borderColor} rounded-lg p-4 shadow-sm transition-all duration-300`,
-                      isRunning && "bg-green-50/80 dark:bg-green-950/30 ring-2 ring-green-400/60 dark:ring-green-500/40 shadow-[0_0_20px_rgba(34,197,94,0.25)] dark:shadow-[0_0_20px_rgba(34,197,94,0.15)]",
-                      isPaused && "bg-amber-50/50 dark:bg-amber-950/20 opacity-60",
+                      `border-l-4 ${borderColor} rounded-xl p-4 shadow-sm transition-all duration-300`,
+                      isRunning && sc?.running,
+                      isPaused && sc?.paused,
                       !isProgressStage && "bg-card"
                     )}>
-                      {/* Status Banner */}
-                      {isProgressStage && (
-                        <div className={cn(
-                          "flex items-center gap-2 mb-3 px-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider",
-                          isRunning
-                            ? "bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300"
-                            : "bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300"
-                        )}>
-                          {isRunning ? (
-                            <>
-                              <span className="relative flex h-2.5 w-2.5">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75" />
-                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
-                              </span>
-                              CURRENTLY IN PROGRESS
-                            </>
-                          ) : (
-                            <>
-                              <Pause className="w-3 h-3" />
-                              PAUSED
-                            </>
-                          )}
-                        </div>
-                      )}
+                      {/* Top row: client + controls */}
                       <div className="flex items-center justify-between">
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-sm text-foreground">{row.clientName}</p>
                           <p className="text-xs text-muted-foreground">{row.eventName} · {row.editType}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            {age && <EventAgeStamp age={age} />}
-                            {isProgressStage && row.editStartedAt && (
-                              <LiveEditTimer editStartedAt={row.editStartedAt} stageHistory={row.stageHistory} size="card" stageKey={group.key} />
-                            )}
-                          </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           {isProgressStage && (
                             <button
                               onClick={() => onTogglePlaying(row.id, row.isPlaying, row.mergedIds)}
                               className={cn(
-                                "w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200",
+                                "w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 shadow-md",
                                 row.isPlaying
-                                  ? "bg-amber-200 dark:bg-amber-800/60 text-amber-700 dark:text-amber-300 hover:bg-amber-300 shadow-md"
-                                  : "bg-green-200 dark:bg-green-800/60 text-green-700 dark:text-green-300 hover:bg-green-300 shadow-md"
+                                  ? "bg-amber-200 dark:bg-amber-800/60 text-amber-700 dark:text-amber-300 hover:bg-amber-300"
+                                  : "bg-green-200 dark:bg-green-800/60 text-green-700 dark:text-green-300 hover:bg-green-300"
                               )}
                               title={row.isPlaying ? "Pause" : "Resume"}
                             >
@@ -1342,6 +1340,33 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, o
                             </SelectContent>
                           </Select>
                         </div>
+                      </div>
+
+                      {/* Big center stage label for progress cards */}
+                      {isProgressStage && (
+                        <div className="flex items-center justify-center gap-3 my-3">
+                          {isRunning && (
+                            <span className="relative flex h-3 w-3">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75" />
+                              <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500" />
+                            </span>
+                          )}
+                          {isPaused && <Pause className="w-4 h-4 text-amber-500" />}
+                          <span className={cn(
+                            "text-lg font-extrabold uppercase tracking-wider",
+                            isRunning ? (stageLabelColors[group.key] || "text-foreground") : "text-amber-600 dark:text-amber-400"
+                          )}>
+                            {isRunning ? sc?.label : "PAUSED"}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Bottom: age + timer */}
+                      <div className="flex items-center gap-2 mt-1">
+                        {age && <EventAgeStamp age={age} />}
+                        {isProgressStage && row.editStartedAt && (
+                          <LiveEditTimer editStartedAt={row.editStartedAt} stageHistory={row.stageHistory} size="card" stageKey={group.key} />
+                        )}
                       </div>
                     </div>
                   );
