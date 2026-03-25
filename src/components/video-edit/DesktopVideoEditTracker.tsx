@@ -1624,6 +1624,7 @@ export function DesktopVideoEditTracker() {
                         onClickEditType={(type) => setFilterEditType(prev => prev === type ? null : type)}
                         editors={editors}
                         currentStageKey={stage.key}
+                        onUpdateDeadline={updateDeadline}
                       />
                     </TabsContent>
                   ))}
