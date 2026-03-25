@@ -1127,6 +1127,8 @@ export type Database = {
           event_year: string | null
           force_split: boolean
           id: string
+          is_playing: boolean
+          playing_since: string | null
           reference: string | null
           registered_date_bs: string | null
           registered_date_time_ad: string
@@ -1152,6 +1154,8 @@ export type Database = {
           event_year?: string | null
           force_split?: boolean
           id?: string
+          is_playing?: boolean
+          playing_since?: string | null
           reference?: string | null
           registered_date_bs?: string | null
           registered_date_time_ad: string
@@ -1177,6 +1181,8 @@ export type Database = {
           event_year?: string | null
           force_split?: boolean
           id?: string
+          is_playing?: boolean
+          playing_since?: string | null
           reference?: string | null
           registered_date_bs?: string | null
           registered_date_time_ad?: string
