@@ -85,7 +85,7 @@ export function useVideoEditTracker() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    const channel = supabase
+    const deliverablesChannel = supabase
       .channel('video-edit-deliverables-sync')
       .on(
         'postgres_changes',
@@ -104,8 +104,23 @@ export function useVideoEditTracker() {
       )
       .subscribe();
 
+    // Live updates from video_edit_tracker table (cross-system sync)
+    const trackerChannel = supabase
+      .channel('video-edit-tracker-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'video_edit_tracker' },
+        () => {
+          setTimeout(() => {
+            loadRows();
+          }, 0);
+        }
+      )
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(deliverablesChannel);
+      supabase.removeChannel(trackerChannel);
     };
   }, [loadRows]);
 
