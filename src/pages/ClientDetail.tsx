@@ -1755,6 +1755,11 @@ const ClientDetail = () => {
             <DeliverablesSection events={events.map(e => ({ name: e.name, month: e.month, day: e.day }))} assignments={freelancerAssignments} registeredDateTimeAD={client.registeredDateTimeAD} />
           )}
 
+          {/* Edit & Production Section */}
+          {activeSection === 'edit' && client?.registeredDateTimeAD && (
+            <EditProductionSection registeredDateTimeAD={client.registeredDateTimeAD} clientName={client.clientName} />
+          )}
+
           {/* Freelancers Section */}
           {activeSection === 'freelancers' && client?.registeredDateTimeAD && (
             <FreelancerAssignmentSection registeredDateTimeAD={client.registeredDateTimeAD} />
