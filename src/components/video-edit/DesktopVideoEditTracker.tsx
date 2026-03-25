@@ -597,13 +597,13 @@ function DashboardView({
       </button>
       <p className="font-bold text-sm text-foreground">{row.clientName}</p>
       <p className="text-xs text-muted-foreground">{row.eventName} · {row.editType}</p>
-      {/* Event age */}
+      {/* Event age stamp */}
       {(() => {
         const age = getEventAge(row.eventDateAD);
         return age ? (
-          <p className="text-[10px] text-muted-foreground mt-1">
-            {age.bsDisplay} · <span className="font-medium">{age.days}d old</span>
-          </p>
+          <div className="mt-1.5">
+            <EventAgeStamp age={age} />
+          </div>
         ) : null;
       })()}
       {/* Edit started */}

@@ -10,7 +10,7 @@ import { adToBS, nepaliMonthsEnglish, getBSYearsRange, formatBSDate } from "@/li
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
-function getEventAgePipeline(eventDateAD: string): { days: number; bsDisplay: string } | null {
+function getEventAgePipeline(eventDateAD: string): { days: number; bsDisplay: string; bsShort: string } | null {
   if (!eventDateAD) return null;
   try {
     const eventDate = new Date(eventDateAD);
