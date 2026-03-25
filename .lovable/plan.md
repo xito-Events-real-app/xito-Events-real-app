@@ -1,62 +1,63 @@
 
 
-## Play/Pause Real-Time Editing Status for Edit on Progress
+## WTN Ongoing Edits + Sidebar Editor Groups + Play/Pause Everywhere
 
-### Concept
-Add a play/pause toggle to each Edit on Progress card on the Dashboard. This tracks which edits are actively being worked on *right now*. The dashboard splits into "Running" and "Paused" sections, and the sidebar editors reflect this state with animated indicators.
+### Summary
 
-### Database Change
-Add two columns to `video_edit_tracker`:
-- `is_playing` (boolean, default false) — whether actively being edited right now
-- `playing_since` (timestamptz, nullable) — when play was started (for sequential ordering)
+1. Rename "Edit on Progress" section on dashboard to **"WTN Ongoing Edits"** and include rows from EDIT_ON_PROGRESS, COLOR_ON_PROGRESS, and RE_EDIT_ON_PROGRESS (with stage badge on each card).
+2. Make Running/Paused headers larger and centered.
+3. Show play/pause glow effects in Classic and Pipeline views for EDIT_ON_PROGRESS rows too (not just dashboard).
+4. Restructure sidebar editors into grouped sections: **Active Editors** → **Paused Editors** → **On Queue** → **Edit Lab Editors** → **Available Editors**.
 
-### Dashboard — Edit on Progress Section
+### Changes
 
-Split into two sub-sections:
+**1. `src/components/video-edit/DesktopVideoEditTracker.tsx`**
 
+**DashboardView changes (lines ~355-458):**
+- Rename header from "Edit on Progress" to **"WTN Ongoing Edits"**
+- Combine rows from `EDIT_ON_PROGRESS`, `COLOR_ON_PROGRESS`, `RE_EDIT_ON_PROGRESS` into the running/paused split
+- Add a small stage badge on each card (e.g., "Edit", "Color", "Re-Edit")
+- Make "RUNNING" and "PAUSED" headers `text-base font-bold` instead of `text-xs`
+
+**VideoEditSidebar changes (lines ~780-893):**
+- Replace single "Editors" list with 5 grouped sections:
+  - **Active Editors**: editors with `isPlaying` rows in progress stages → pulsing green dot + wave animation, listed first
+  - **Paused Editors**: editors in progress stages but NOT playing → static green dot
+  - **On Queue**: editors only in QUEUE stage (not in progress, not in edit lab)
+  - **Edit Lab**: editors only in EDIT_LAB (not in progress, not in queue)
+  - **Available**: editors with no rows in any of the above stages
+- Props: pass `rowsByStatus` to sidebar so it can compute groupings, or compute groups in parent and pass as structured data
+- Each group has a small label header (text-[10px] uppercase)
+
+**Classic/Pipeline view effects:**
+- In `VideoEditTable` (Classic view): for EDIT_ON_PROGRESS stage rows, add `animate-editing-glow` class to running rows and `opacity-60` to paused rows
+- In `WtnPipelineView`: same glow/dim treatment for EDIT_ON_PROGRESS cards based on `isPlaying`
+
+**2. `src/components/video-edit/WtnPipelineView.tsx`**
+- In `PipelineCard`: if `stageKey` is a progress stage and `row.isPlaying`, add glow class. If paused, add `opacity-60`.
+
+### Sidebar Structure
 ```text
-▶ RUNNING (2)                          [bold, glowing cards]
-┌──────────────────────┐  ┌──────────────────────┐
-│ ▶ PABINA · Full Video│  │ ▶ JIGYASHA · HL      │
-│   Nikit · Urgency 5  │  │   Amreet · Urgency 4 │
-│   [glow + pulse]     │  │   [glow + pulse]      │
-└──────────────────────┘  └──────────────────────┘
+── Active Editors ──
+  🟢~ Phurba          (3)
+  🟢~ Deepak          (2)
+  🟢~ Sabin           (1)
 
-⏸ PAUSED (3)                           [greyed, still cards]
-┌──────────────────────┐  ┌──────────────────────┐
-│ ⏸ RIYA · Reel        │  │ ⏸ SITA · Full Video  │
-│   Barun · Urgency 3  │  │   Ramesh · Urgency 2 │
-│   [muted/greyed]     │  │   [muted/greyed]      │
-└──────────────────────┘  └──────────────────────┘
+── Paused Editors ──
+  🟢  Ayushman        (2)
+  🟢  Saugat          (1)
+
+── On Queue ──
+  ⚪  Ramesh          (4)
+
+── Edit Lab ──
+  ⚪  Amreet          (2)
+
+── Available ──
+  ⚪  Barun           (0)
 ```
 
-- **Running cards**: Blue glow border animation, subtle pulse effect
-- **Paused cards**: Slightly greyed (`opacity-60`), no animation
-- Play/Pause toggle button on each card
-- Running cards sorted by `playing_since` ascending (who started first appears first)
-
-### Sidebar Editor Effects
-
-- **Editors with running rows**: Green dot + CSS wave/pulse animation on their name (e.g., `animate-pulse` or custom wave keyframe)
-- **Editors with only paused/non-running progress rows**: Green dot but static, no animation
-- **Editors NOT in any progress stage**: Shown in *italic* text
-
 ### Files Changed
-
-**1. Database migration** — Add `is_playing` and `playing_since` columns to `video_edit_tracker`.
-
-**2. `src/lib/video-edit-api.ts`** — Add `isPlaying: boolean` and `playingSince: string` to `VideoEditRow` interface and `dbToRow` mapper.
-
-**3. `src/hooks/useVideoEditTracker.ts`** — Pass through `isPlaying`/`playingSince` in `DisplayRow`. Add `togglePlaying(id, mergedIds?)` function that flips `is_playing` and sets/clears `playing_since`.
-
-**4. `src/components/video-edit/DesktopVideoEditTracker.tsx`**:
-- **DashboardView**: Split `editOnProgressRows` into `runningRows` (is_playing=true, sorted by playing_since asc) and `pausedRows`. Render two sections with bold headers. Add play/pause icon button to each card. Running cards get `animate-pulse shadow-blue-500/30 shadow-lg` classes. Paused cards get `opacity-60`.
-- **VideoEditSidebar**: Editors with running rows get a pulsing wave animation class on their name. Editors in progress but not running are static. Editors not in any progress stage get `italic` text style.
-
-**5. `src/index.css`** — Add a subtle wave/glow keyframe animation for the sidebar editor names who are actively editing.
-
-### Toggle Behavior
-- Click Play → sets `is_playing=true`, `playing_since=now()` in DB
-- Click Pause → sets `is_playing=false`, `playing_since=null` in DB
-- Real-time sync ensures all systems see the change instantly
+1. `src/components/video-edit/DesktopVideoEditTracker.tsx` — Dashboard section rename + combine 3 progress stages, sidebar restructure into 5 groups, classic view glow/dim
+2. `src/components/video-edit/WtnPipelineView.tsx` — Glow/dim on progress-stage cards based on isPlaying
 
