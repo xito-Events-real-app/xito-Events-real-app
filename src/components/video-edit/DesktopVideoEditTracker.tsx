@@ -1067,7 +1067,21 @@ function DashboardView({
 /* ── Editor View ── */
 const EDITOR_STAGE_ORDER = ['EDIT_ON_PROGRESS', 'EDIT_LAB', 'QUEUE', 'COLOR_QUEUE', 'COLOR_LAB', 'COLOR_ON_PROGRESS', 'EXPORT_QUEUE', 'EXPORTED', 'CLIENT_REVIEW', 'RE_EDIT_ON_PROGRESS', 'FINALIZED'];
 
-function EditorView({ editorName, rowsByStatus }: { editorName: string; rowsByStatus: Record<string, DisplayRow[]> }) {
+const NEXT_UP_PRIORITY_STAGES = ['EDIT_LAB', 'RE_EDIT_ON_PROGRESS', 'COLOR_QUEUE', 'QUEUE'];
+const NEXT_UP_STAGE_COLORS: Record<string, string> = {
+  'EDIT_LAB': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
+  'RE_EDIT_ON_PROGRESS': 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200',
+  'COLOR_QUEUE': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+  'QUEUE': 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
+};
+
+function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField }: {
+  editorName: string;
+  rowsByStatus: Record<string, DisplayRow[]>;
+  onPushToStatus: (id: string, newStatus: string, mergedIds?: string[]) => void;
+  onUpdateField: (id: string, field: string, value: string, mergedIds?: string[]) => void;
+}) {
+  const [nextUpOpen, setNextUpOpen] = useState(false);
   const groupedByStage = useMemo(() => {
     const result: { key: string; label: string; rows: DisplayRow[] }[] = [];
     for (const stageKey of EDITOR_STAGE_ORDER) {
@@ -1129,7 +1143,51 @@ function EditorView({ editorName, rowsByStatus }: { editorName: string; rowsBySt
       title: "Next Up", icon: Clock, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/50",
       content: nextEdit ? (
         <div><p className="font-bold text-sm text-foreground">{nextEdit.clientName}</p><p className="text-xs text-muted-foreground">{nextEdit.eventName} · {nextEdit.editType}</p></div>
-      ) : <p className="text-xs text-muted-foreground">Queue is empty</p>
+      ) : <p className="text-xs text-muted-foreground">Queue is empty</p>,
+      extra: (() => {
+        const candidates = NEXT_UP_PRIORITY_STAGES.flatMap(stageKey => {
+          const stage = STAGES.find(s => s.key === stageKey);
+          return (rowsByStatus[stageKey] || [])
+            .filter(r => r.editor === editorName)
+            .map(r => ({ ...r, _stageKey: stageKey, _stageLabel: stage?.label || stageKey }));
+        });
+        if (!candidates.length) return null;
+        return (
+          <Popover open={nextUpOpen} onOpenChange={setNextUpOpen}>
+            <PopoverTrigger asChild>
+              <Button size="sm" variant="outline" className="h-6 text-[10px] mt-1 w-full">Set Next Edit</Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 p-2 max-h-72 overflow-y-auto" align="start">
+              <p className="text-xs font-semibold text-muted-foreground mb-2">Pick the next edit for {editorName}</p>
+              {NEXT_UP_PRIORITY_STAGES.map(stageKey => {
+                const stageRows = candidates.filter(r => r._stageKey === stageKey);
+                if (!stageRows.length) return null;
+                const stageLabel = STAGES.find(s => s.key === stageKey)?.label || stageKey;
+                return (
+                  <div key={stageKey} className="mb-2">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-1">{stageLabel}</p>
+                    {stageRows.map(r => (
+                      <button
+                        key={r.id}
+                        className="w-full text-left px-2 py-1.5 rounded hover:bg-accent flex items-center gap-2 text-xs"
+                        onClick={() => {
+                          onUpdateField(r.id, 'urgency', '5', r.mergedIds);
+                          setNextUpOpen(false);
+                        }}
+                      >
+                        <Badge className={cn("text-[9px] px-1.5 py-0", NEXT_UP_STAGE_COLORS[stageKey] || '')}>{stageLabel}</Badge>
+                        <span className="font-semibold truncate">{r.clientName}</span>
+                        <span className="text-muted-foreground truncate">{r.editType}</span>
+                        <UrgencyBadge value={r.urgency || "0"} />
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
+            </PopoverContent>
+          </Popover>
+        );
+      })()
     },
     {
       title: "Last Finalized", icon: CheckCircle, color: "text-green-600 dark:text-green-400", bg: "bg-green-50 dark:bg-green-950/50",
@@ -1180,6 +1238,7 @@ function EditorView({ editorName, rowsByStatus }: { editorName: string; rowsBySt
               </CardHeader>
               <CardContent className="px-4 pb-4">
                 {card.content}
+                {'extra' in card && card.extra}
               </CardContent>
             </Card>
           );
@@ -1208,6 +1267,16 @@ function EditorView({ editorName, rowsByStatus }: { editorName: string; rowsBySt
                       </div>
                       <div className="flex items-center gap-2">
                         <UrgencyBadge value={row.urgency || "0"} />
+                        <Select onValueChange={(val) => onPushToStatus(row.id, val, row.mergedIds)}>
+                          <SelectTrigger className="h-7 w-28 text-[10px]">
+                            <SelectValue placeholder="Move to" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {STAGES.filter(s => s.key !== group.key).map(s => (
+                              <SelectItem key={s.key} value={s.key} className="text-xs">{s.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
                   </div>
@@ -1579,7 +1648,7 @@ export function DesktopVideoEditTracker() {
         ) : isEditorView ? (
           <div className="flex-1 overflow-y-auto p-6">
             <div className="max-w-[1200px] mx-auto">
-              <EditorView editorName={activeView} rowsByStatus={rowsByStatus} />
+              <EditorView editorName={activeView} rowsByStatus={rowsByStatus} onPushToStatus={pushToStatus} onUpdateField={updateField} />
             </div>
           </div>
         ) : (
