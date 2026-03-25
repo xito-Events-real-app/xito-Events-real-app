@@ -1078,6 +1078,38 @@ export function DesktopVideoEditTracker() {
 
   return (
     <div className="flex min-h-screen bg-background">
+  // Compute editor stage groups for sidebar
+  const editorStageGroups = useMemo(() => {
+    const progressStages = ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'];
+    const videoEditorNames = editors.filter(e => e.isVideoEditor && e.name).map(e => e.name);
+    
+    const active: string[] = [];
+    const paused: string[] = [];
+    const onQueue: string[] = [];
+    const editLab: string[] = [];
+    const available: string[] = [];
+
+    for (const name of videoEditorNames) {
+      const inProgress = progressStages.some(sk => (rowsByStatus[sk] || []).some(r => r.editor === name));
+      const isPlayingAny = progressStages.some(sk => (rowsByStatus[sk] || []).some(r => r.editor === name && r.isPlaying));
+      const inQueue = (rowsByStatus['QUEUE'] || []).some(r => r.editor === name);
+      const inEditLab = (rowsByStatus['EDIT_LAB'] || []).some(r => r.editor === name);
+
+      if (inProgress && isPlayingAny) {
+        active.push(name);
+      } else if (inProgress) {
+        paused.push(name);
+      } else if (inQueue) {
+        onQueue.push(name);
+      } else if (inEditLab) {
+        editLab.push(name);
+      } else {
+        available.push(name);
+      }
+    }
+    return { active, paused, onQueue, editLab, available };
+  }, [editors, rowsByStatus]);
+
       <VideoEditSidebar
         activeView={activeView}
         onViewChange={setActiveView}
@@ -1085,6 +1117,7 @@ export function DesktopVideoEditTracker() {
         editorCounts={editorCounts}
         activeProgressEditors={activeProgressEditors}
         playingEditors={playingEditors}
+        editorStageGroups={editorStageGroups}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">
