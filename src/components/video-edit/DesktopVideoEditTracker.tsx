@@ -237,6 +237,9 @@ function VideoEditTable({
             <TableHead>Event</TableHead>
             <TableHead>Edit Type</TableHead>
             <TableHead>Editor</TableHead>
+            <TableHead className="w-28">Event Date</TableHead>
+            <TableHead className="w-24">Edit Started</TableHead>
+            <TableHead className="w-28">Deadline</TableHead>
             <TableHead className="w-12 text-center">Notes</TableHead>
             <TableHead className="w-12 text-center">Songs</TableHead>
             <TableHead className="w-32 text-center">Action</TableHead>
