@@ -545,16 +545,13 @@ function VideoEditTable({
               </TableCell>
               {/* Edit Started */}
               <TableCell>
-                {(() => {
-                  const ago = getTimeAgo(row.editStartedAt);
-                  if (!ago) return <span className="text-muted-foreground text-xs">-</span>;
-                  return (
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Timer className="w-3 h-3" />
-                      {ago}
-                    </div>
-                  );
-                })()}
+                {NO_TIMER_STAGES.includes(currentStageKey)
+                  ? <span className="text-muted-foreground text-xs">-</span>
+                  : <LiveEditTimer editStartedAt={row.editStartedAt} stageHistory={row.stageHistory} size="table" stageKey={currentStageKey} />
+                }
+                {currentStageKey === 'FINALIZED' && row.stageHistory && (
+                  <StageHistoryDialog stageHistory={row.stageHistory} editStartedAt={row.editStartedAt} />
+                )}
               </TableCell>
               {/* Deadline */}
               <TableCell>
