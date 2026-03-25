@@ -387,12 +387,7 @@ function VideoEditTable({
                 {(() => {
                   const age = getEventAge(row.eventDateAD);
                   if (!age) return <span className="text-muted-foreground text-xs">-</span>;
-                  return (
-                    <div className="text-xs">
-                      <span className="text-foreground font-medium">{age.bsDisplay}</span>
-                      <span className="text-muted-foreground ml-1">({age.days}d old)</span>
-                    </div>
-                  );
+                  return <EventAgeStamp age={age} />;
                 })()}
               </TableCell>
               {/* Edit Started */}
