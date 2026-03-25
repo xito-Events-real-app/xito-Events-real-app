@@ -201,6 +201,7 @@ function VideoEditTable({
   onClickEditType,
   editors,
   currentStageKey,
+  onUpdateDeadline,
 }: {
   rows: (DisplayRow & { _pipelinePos?: number })[];
   onUpdateField: (id: string, field: string, value: string, mergedIds?: string[]) => void;
@@ -211,6 +212,7 @@ function VideoEditTable({
   onClickEditType?: (type: string) => void;
   editors: { name: string; isVideoEditor: boolean }[];
   currentStageKey: string;
+  onUpdateDeadline?: (id: string, deadline: string | null, mergedIds?: string[]) => void;
 }) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const toggleExpand = (id: string) => {
