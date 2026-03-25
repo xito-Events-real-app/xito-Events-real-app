@@ -57,12 +57,6 @@ function makeMergeKey(row: VideoEditRow): string {
 export function useVideoEditTracker() {
   const [rows, setRows] = useState<VideoEditRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [splitKeys, setSplitKeys] = useState<Set<string>>(() => {
-    try {
-      const stored = localStorage.getItem('video-edit-split-keys');
-      return stored ? new Set(JSON.parse(stored)) : new Set();
-    } catch { return new Set(); }
-  });
   const { toast } = useToast();
 
   const loadRows = useCallback(async () => {
@@ -169,7 +163,7 @@ export function useVideoEditTracker() {
     return map;
   }, [rows, withPriority, today]);
 
-  // Build display rows with merge/split logic
+  // Build display rows with merge/split logic using DB force_split flag
   const displayRowsByStatus = useMemo(() => {
     const result: Record<string, DisplayRow[]> = {};
 
@@ -201,7 +195,10 @@ export function useVideoEditTracker() {
         const key = makeMergeKey(r);
         const pair = mergeablePairs[key];
 
-        if (pair && !splitKeys.has(key)) {
+        // Use force_split from DB: if either row has forceSplit=true, show split
+        const isForceSplit = pair ? (pair.fv.forceSplit || pair.hl.forceSplit) : false;
+
+        if (pair && !isForceSplit) {
           // Merge: create synthetic row from Full Video data
           processed.add(pair.fv.id);
           processed.add(pair.hl.id);
@@ -213,7 +210,7 @@ export function useVideoEditTracker() {
             mergedIds: [pair.fv.id, pair.hl.id],
             mergeKey: key,
           });
-        } else if (pair && splitKeys.has(key)) {
+        } else if (pair && isForceSplit) {
           // Split: show individually with canMerge flag
           displayRows.push({
             ...r,
@@ -235,25 +232,46 @@ export function useVideoEditTracker() {
     }
 
     return result;
-  }, [rowsByStatus, splitKeys]);
+  }, [rowsByStatus]);
 
-  const splitRow = useCallback((mergeKey: string) => {
-    setSplitKeys(prev => {
-      const next = new Set(prev);
-      next.add(mergeKey);
-      try { localStorage.setItem('video-edit-split-keys', JSON.stringify([...next])); } catch {}
-      return next;
-    });
-  }, []);
+  const splitRow = useCallback(async (mergeKey: string) => {
+    // Find the pair of row IDs for this merge key and set force_split=true in DB
+    const allStageRows = Object.values(rowsByStatus).flat();
+    const pairRows = allStageRows.filter(r => makeMergeKey(r) === mergeKey && (r.editType === 'Full Video' || r.editType === 'Highlights'));
+    const ids = pairRows.map(r => r.id);
 
-  const mergeRow = useCallback((mergeKey: string) => {
-    setSplitKeys(prev => {
-      const next = new Set(prev);
-      next.delete(mergeKey);
-      try { localStorage.setItem('video-edit-split-keys', JSON.stringify([...next])); } catch {}
-      return next;
-    });
-  }, []);
+    // Optimistic local update
+    setRows(prev => prev.map(r => ids.includes(r.id) ? { ...r, forceSplit: true } : r));
+
+    try {
+      await supabase
+        .from("video_edit_tracker")
+        .update({ force_split: true, updated_at: new Date().toISOString() })
+        .in("id", ids);
+    } catch (err: any) {
+      console.error("[VIDEO-EDIT] Split error:", err);
+      loadRows();
+    }
+  }, [rowsByStatus, loadRows]);
+
+  const mergeRow = useCallback(async (mergeKey: string) => {
+    const allStageRows = Object.values(rowsByStatus).flat();
+    const pairRows = allStageRows.filter(r => makeMergeKey(r) === mergeKey && (r.editType === 'Full Video' || r.editType === 'Highlights'));
+    const ids = pairRows.map(r => r.id);
+
+    // Optimistic local update
+    setRows(prev => prev.map(r => ids.includes(r.id) ? { ...r, forceSplit: false } : r));
+
+    try {
+      await supabase
+        .from("video_edit_tracker")
+        .update({ force_split: false, updated_at: new Date().toISOString() })
+        .in("id", ids);
+    } catch (err: any) {
+      console.error("[VIDEO-EDIT] Merge error:", err);
+      loadRows();
+    }
+  }, [rowsByStatus, loadRows]);
 
   const updateField = useCallback(async (id: string, field: string, value: string, mergedIds?: string[]) => {
     const ids = mergedIds || [id];
