@@ -265,9 +265,14 @@ export function PCloudBrowser() {
           {files.map(item => (
             <button
               key={item.fileid}
-              onClick={() => handleDownload(item)}
-              className="flex flex-col items-center gap-2 rounded-xl border bg-card hover:bg-muted/50 transition-colors group overflow-hidden"
+              onClick={() => handleFileClick(item)}
+              className="flex flex-col items-center gap-2 rounded-xl border bg-card hover:bg-muted/50 transition-colors group overflow-hidden relative"
             >
+              {previewLoading === item.fileid && (
+                <div className="absolute inset-0 bg-background/60 flex items-center justify-center z-10">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                </div>
+              )}
               {/* Thumbnail or icon */}
               {thumbs[item.fileid!] ? (
                 <div className="w-full aspect-square bg-muted overflow-hidden">
@@ -285,7 +290,6 @@ export function PCloudBrowser() {
               <div className="px-2 pb-3 w-full text-center">
                 <span className="text-xs font-medium truncate block">{item.name}</span>
                 <span className="text-[10px] text-muted-foreground">{formatPCloudSize(item.size || 0)}</span>
-                <Download className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mx-auto mt-1" />
               </div>
             </button>
           ))}
