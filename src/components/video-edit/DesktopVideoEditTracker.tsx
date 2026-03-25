@@ -647,11 +647,13 @@ function VideoEditSidebar({
   onViewChange,
   editors,
   editorCounts,
+  activeProgressEditors,
 }: {
   activeView: ActiveView;
   onViewChange: (view: ActiveView) => void;
   editors: { name: string; isVideoEditor: boolean }[];
   editorCounts: Record<string, number>;
+  activeProgressEditors: Set<string>;
 }) {
   const navItems = [
     { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
@@ -659,7 +661,8 @@ function VideoEditSidebar({
     { id: 'pipeline' as const, label: 'Pipeline View', icon: GitBranch },
   ];
 
-  const videoEditors = editors.filter(e => e.isVideoEditor && e.name);
+  // Only show editors with rows in non-finalized stages
+  const videoEditors = editors.filter(e => e.isVideoEditor && e.name && (editorCounts[e.name] || 0) > 0);
 
   return (
     <div className="w-56 min-h-screen bg-zinc-900 text-white border-r border-zinc-800 flex flex-col shrink-0">
