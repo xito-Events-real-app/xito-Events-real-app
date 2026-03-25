@@ -221,10 +221,33 @@ function PipelineCard({
             {row.editType}
           </span>
 
-          {/* Event date */}
-          {row.eventDateAD && (
-            <p className="text-sm text-muted-foreground">📅 {row.eventDateAD}</p>
-          )}
+          {/* Event date with age */}
+          {(() => {
+            const age = getEventAgePipeline(row.eventDateAD);
+            return age ? (
+              <p className="text-xs text-muted-foreground">
+                📅 {age.bsDisplay} · <span className="font-medium">{age.days}d old</span>
+              </p>
+            ) : row.eventDateAD ? (
+              <p className="text-sm text-muted-foreground">📅 {row.eventDateAD}</p>
+            ) : null;
+          })()}
+
+          {/* Deadline */}
+          {(() => {
+            const dl = getDeadlineInfoPipeline(row.deadline);
+            return dl ? (
+              <div className={cn(
+                "flex items-center gap-1 text-xs font-medium",
+                dl.isCrossed ? "text-red-600 dark:text-red-400" :
+                dl.isClose ? "text-amber-600 dark:text-amber-400" :
+                "text-green-600 dark:text-green-400"
+              )}>
+                <CalendarIcon className="w-3 h-3" />
+                {dl.text}
+              </div>
+            ) : null;
+          })()}
 
           {/* Urgency selector */}
           <Select value={row.urgency || "0"} onValueChange={(v) => onUpdateField(row.id, "urgency", v, row.mergedIds)}>
