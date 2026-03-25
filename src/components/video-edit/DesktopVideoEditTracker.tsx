@@ -783,12 +783,14 @@ function VideoEditSidebar({
   editors,
   editorCounts,
   activeProgressEditors,
+  playingEditors,
 }: {
   activeView: ActiveView;
   onViewChange: (view: ActiveView) => void;
   editors: { name: string; isVideoEditor: boolean }[];
   editorCounts: Record<string, number>;
   activeProgressEditors: Set<string>;
+  playingEditors: Set<string>;
 }) {
   const navItems = [
     { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
