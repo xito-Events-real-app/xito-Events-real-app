@@ -58,7 +58,6 @@ export function useVideoEditTracker() {
   const [rows, setRows] = useState<VideoEditRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
-  const pendingLocalEdit = useRef(false);
 
   const loadRows = useCallback(async () => {
     try {
