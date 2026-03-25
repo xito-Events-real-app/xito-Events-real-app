@@ -303,6 +303,25 @@ export function useVideoEditTracker() {
     }
   }, [toast, loadRows]);
 
+  const togglePlaying = useCallback(async (id: string, currentlyPlaying: boolean, mergedIds?: string[]) => {
+    const ids = mergedIds || [id];
+    const newIsPlaying = !currentlyPlaying;
+    try {
+      await supabase
+        .from("video_edit_tracker")
+        .update({
+          is_playing: newIsPlaying,
+          playing_since: newIsPlaying ? new Date().toISOString() : null,
+          updated_at: new Date().toISOString(),
+        })
+        .in("id", ids);
+      setTimeout(() => { loadRows(); }, 0);
+    } catch (err: any) {
+      toast({ title: "Toggle failed", description: err.message, variant: "destructive" });
+      loadRows();
+    }
+  }, [toast, loadRows]);
+
   return {
     rowsByStatus: displayRowsByStatus,
     allRows: rows,
