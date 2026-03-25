@@ -83,7 +83,7 @@ function PipelineLiveTimer({ editStartedAt, stageKey }: { editStartedAt: string;
     </Tooltip>
   );
 }
-
+const URGENCY_COLORS: Record<string, string> = {
   "1": "bg-muted text-muted-foreground",
   "2": "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
   "3": "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
