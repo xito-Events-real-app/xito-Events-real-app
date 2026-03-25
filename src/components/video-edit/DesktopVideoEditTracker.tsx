@@ -1055,6 +1055,7 @@ export function DesktopVideoEditTracker() {
         editors={editors}
         editorCounts={editorCounts}
         activeProgressEditors={activeProgressEditors}
+        playingEditors={playingEditors}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">
