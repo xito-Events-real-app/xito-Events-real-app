@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { useVideoEditTracker, STAGES, DisplayRow } from "@/hooks/useVideoEditTracker";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Video, MessageSquare, Music, ExternalLink, ChevronDown, ChevronRight, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, FolderOpen, LayoutDashboard, List, GitBranch, Users, RefreshCcw, CheckCircle, Play, Clock } from "lucide-react";
+import { Video, MessageSquare, Music, ExternalLink, ChevronDown, ChevronRight, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, FolderOpen, LayoutDashboard, List, GitBranch, Users, RefreshCcw, CheckCircle, Play, Clock, Phone, ArrowRight } from "lucide-react";
 import { WtnPipelineView } from "./WtnPipelineView";
 import { FileDetailsExpander } from "./FileDetailsExpander";
 import { supabase } from "@/integrations/supabase/client";
@@ -338,12 +339,14 @@ function DashboardView({
   onStageClick,
   onAssign,
   availableEditors,
+  onPushToStatus,
 }: {
   rowsByStatus: Record<string, DisplayRow[]>;
   allRows: any[];
   onStageClick: (stageKey: string) => void;
   onAssign: (rowId: string, editorName: string, mergedIds?: string[]) => void;
-  availableEditors: string[];
+  availableEditors: { name: string; stage: 'EDIT_LAB' | 'QUEUE' | 'NONE'; rows: DisplayRow[]; whatsapp: string }[];
+  onPushToStatus: (id: string, newStatus: string, mergedIds?: string[]) => void;
 }) {
   const [assignDialogEditor, setAssignDialogEditor] = useState<string | null>(null);
 
@@ -425,17 +428,89 @@ function DashboardView({
             <Users className="w-4 h-4 text-zinc-500" />
             Available Editors
           </h3>
-          <p className="text-xs text-muted-foreground mb-3">Editors not currently on any active progress — click to assign from queue</p>
-          <div className="flex flex-wrap gap-2">
-            {availableEditors.map(name => (
-              <button
-                key={name}
-                onClick={() => setAssignDialogEditor(name)}
-                className="px-4 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-sm font-semibold text-foreground hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-all hover:shadow-sm"
-              >
-                {name}
-              </button>
-            ))}
+          <p className="text-xs text-muted-foreground mb-3">Editors not currently on any active progress</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {availableEditors.map(editor => {
+              if (editor.stage === 'EDIT_LAB') {
+                // EDIT_LAB: amber border, tasks, WhatsApp button
+                return (
+                  <div key={editor.name} className="rounded-xl border-2 border-amber-400 dark:border-amber-600 bg-card p-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-semibold text-sm text-foreground">{editor.name}</span>
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200 text-[10px]">Edit Lab</Badge>
+                        {editor.whatsapp && (
+                          <button
+                            onClick={() => {
+                              const topRow = editor.rows[0];
+                              const msg = topRow
+                                ? `Hi ${editor.name}, have you started editing ${topRow.clientName} - ${topRow.eventName} (${topRow.editType})?`
+                                : `Hi ${editor.name}, have you started editing?`;
+                              openWhatsApp(editor.whatsapp, msg);
+                            }}
+                            className="p-1.5 rounded-lg bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900 transition-colors"
+                            title="Ask on WhatsApp"
+                          >
+                            <Phone className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      {editor.rows.map(row => (
+                        <div key={row.id} className="text-xs text-muted-foreground flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                          {row.clientName} · {row.eventName} · {row.editType}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+              if (editor.stage === 'QUEUE') {
+                // QUEUE: yellow border, tasks, Move to Edit Lab button
+                return (
+                  <div key={editor.name} className="rounded-xl border-2 border-yellow-400 dark:border-yellow-600 bg-card p-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-semibold text-sm text-foreground">{editor.name}</span>
+                      <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-200 text-[10px]">Queue</Badge>
+                    </div>
+                    <div className="space-y-1.5 mb-3">
+                      {editor.rows.map(row => (
+                        <div key={row.id} className="text-xs text-muted-foreground flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 shrink-0" />
+                          {row.clientName} · {row.eventName} · {row.editType}
+                        </div>
+                      ))}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full h-7 text-xs border-green-500 text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-950"
+                      onClick={() => {
+                        editor.rows.forEach(row => {
+                          onPushToStatus(row.id, 'EDIT_LAB', row.mergedIds);
+                        });
+                      }}
+                    >
+                      <ArrowRight className="w-3 h-3 mr-1" />
+                      Move to Edit Lab
+                    </Button>
+                  </div>
+                );
+              }
+              // NONE: plain card, click to assign
+              return (
+                <button
+                  key={editor.name}
+                  onClick={() => setAssignDialogEditor(editor.name)}
+                  className="rounded-xl border border-zinc-300 dark:border-zinc-700 bg-card p-4 text-left hover:bg-muted/30 hover:shadow-sm transition-all"
+                >
+                  <span className="font-semibold text-sm text-foreground">{editor.name}</span>
+                  <p className="text-[10px] text-muted-foreground mt-1">Click to assign from queue</p>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -756,7 +831,7 @@ function VideoEditSidebar({
 /* ── Main Component ── */
 export function DesktopVideoEditTracker() {
   const { rowsByStatus, allRows, isLoading, updateField, pushToStatus, splitRow, mergeRow } = useVideoEditTracker();
-  const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean }[]>([]);
+  const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean; whatsapp?: string }[]>([]);
   const [activeView, setActiveView] = useState<ActiveView>('dashboard');
   const [filterClient, setFilterClient] = useState<string | null>(null);
   const [filterEditType, setFilterEditType] = useState<string | null>(null);
@@ -771,12 +846,12 @@ export function DesktopVideoEditTracker() {
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from("freelancers_cache").select("name, video_editor").order("name");
+      const { data } = await supabase.from("freelancers_cache").select("name, video_editor, whatsapp_no").order("name");
       if (data) {
         setEditors(
           data
             .filter(f => f.name)
-            .map(f => ({ name: f.name!, isVideoEditor: f.video_editor?.toUpperCase() === "YES" }))
+            .map(f => ({ name: f.name!, isVideoEditor: f.video_editor?.toUpperCase() === "YES", whatsapp: f.whatsapp_no || '' }))
         );
       }
     })();
@@ -814,8 +889,21 @@ export function DesktopVideoEditTracker() {
     for (const stage of STAGES) {
       (rowsByStatus[stage.key] || []).forEach(r => { if (r.editor) allEditorNames.add(r.editor); });
     }
-    return Array.from(allEditorNames).filter(name => !activeProgressEditors.has(name)).sort();
-  }, [rowsByStatus, activeProgressEditors]);
+    const available = Array.from(allEditorNames).filter(name => !activeProgressEditors.has(name)).sort();
+    return available.map(name => {
+      const editLabRows = (rowsByStatus['EDIT_LAB'] || []).filter(r => r.editor === name);
+      const queueRows = (rowsByStatus['QUEUE'] || []).filter(r => r.editor === name);
+      const editorInfo = editors.find(e => e.name === name);
+      const whatsapp = editorInfo?.whatsapp || '';
+      if (editLabRows.length > 0) {
+        return { name, stage: 'EDIT_LAB' as const, rows: editLabRows, whatsapp };
+      } else if (queueRows.length > 0) {
+        return { name, stage: 'QUEUE' as const, rows: queueRows, whatsapp };
+      } else {
+        return { name, stage: 'NONE' as const, rows: [] as DisplayRow[], whatsapp };
+      }
+    });
+  }, [rowsByStatus, activeProgressEditors, editors]);
 
   // Active editors per stage (for filter pills in classic view)
   const activeEditorsByStage = useMemo(() => {
@@ -894,6 +982,7 @@ export function DesktopVideoEditTracker() {
                 onStageClick={handleStageClick}
                 onAssign={(id, editor, mergedIds) => updateField(id, 'editor', editor, mergedIds)}
                 availableEditors={availableEditors}
+                onPushToStatus={pushToStatus}
               />
             </div>
           </div>
