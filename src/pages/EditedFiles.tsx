@@ -6,7 +6,7 @@ import { UploadWizard } from "@/components/edited-files/UploadWizard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getEditedFiles, getEditedFilesClients, getEditedFileUrl, formatFileSize, EditedFile } from "@/lib/edited-files-api";
-import { Upload, HardDrive, FolderOpen, Clock, FileImage, FileVideo, Play } from "lucide-react";
+import { Upload, HardDrive, FolderOpen, Clock, FileImage, FileVideo, Play, Cloud } from "lucide-react";
 import { FilePreviewDialog } from "@/components/edited-files/FilePreviewDialog";
 
 export default function EditedFiles() {
