@@ -1648,7 +1648,7 @@ export function DesktopVideoEditTracker() {
         ) : isEditorView ? (
           <div className="flex-1 overflow-y-auto p-6">
             <div className="max-w-[1200px] mx-auto">
-              <EditorView editorName={activeView} rowsByStatus={rowsByStatus} />
+              <EditorView editorName={activeView} rowsByStatus={rowsByStatus} onPushToStatus={pushToStatus} onUpdateField={updateField} />
             </div>
           </div>
         ) : (
