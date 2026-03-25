@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { DesktopAppLayout } from "@/components/desktop/DesktopAppLayout";
 import { FolderBrowser } from "@/components/edited-files/FolderBrowser";
 import { UploadWizard } from "@/components/edited-files/UploadWizard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { getEditedFiles, getEditedFilesClients, formatFileSize, EditedFile } from "@/lib/edited-files-api";
-import { Upload, HardDrive, FolderOpen, Clock } from "lucide-react";
+import { getEditedFiles, getEditedFilesClients, getEditedFileUrl, formatFileSize, EditedFile } from "@/lib/edited-files-api";
+import { Upload, HardDrive, FolderOpen, Clock, FileImage, FileVideo, Play } from "lucide-react";
+import { FilePreviewDialog } from "@/components/edited-files/FilePreviewDialog";
 
 export default function EditedFiles() {
   const isMobile = useIsMobile();
@@ -16,10 +16,11 @@ export default function EditedFiles() {
   const [totalSize, setTotalSize] = useState(0);
   const [totalClients, setTotalClients] = useState(0);
   const [view, setView] = useState<'dashboard' | 'browse'>('dashboard');
+  const [previewFile, setPreviewFile] = useState<EditedFile | null>(null);
 
   const loadStats = async () => {
     const [files, clients] = await Promise.all([getEditedFiles(), getEditedFilesClients()]);
-    setRecentFiles(files.slice(0, 5));
+    setRecentFiles(files.slice(0, 10));
     setTotalSize(files.reduce((s, f) => s + Number(f.file_size_bytes || 0), 0));
     setTotalClients(clients.length);
   };
@@ -27,7 +28,7 @@ export default function EditedFiles() {
   useEffect(() => { loadStats(); }, []);
 
   const content = (
-    <div className="p-4 space-y-5">
+    <div className="p-4 space-y-5 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -73,34 +74,60 @@ export default function EditedFiles() {
             </Card>
             <Card>
               <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold">{recentFiles.reduce((_, __, ___, arr) => arr.length, 0)}</p>
+                <p className="text-2xl font-bold">{recentFiles.length}</p>
                 <p className="text-xs text-muted-foreground">Recent Files</p>
               </CardContent>
             </Card>
           </div>
 
-          {/* Recent uploads */}
+          {/* Recent uploads with thumbnails */}
           <div>
-            <h2 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
               <Clock className="h-4 w-4 text-muted-foreground" /> Recent Uploads
             </h2>
             {recentFiles.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">No files uploaded yet. Click Upload to get started.</p>
             ) : (
-              <div className="space-y-2">
-                {recentFiles.map(f => (
-                  <div key={f.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{f.file_name}</p>
-                      <p className="text-xs text-muted-foreground">{f.client_name} · {formatFileSize(f.file_size_bytes)}</p>
-                    </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${
-                      f.upload_status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
-                    }`}>
-                      {f.upload_status}
-                    </span>
-                  </div>
-                ))}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                {recentFiles.map(f => {
+                  const url = getEditedFileUrl(f.storage_path);
+                  const isPhoto = f.file_type === 'photo';
+                  return (
+                    <button
+                      key={f.id}
+                      onClick={() => setPreviewFile(f)}
+                      className="group rounded-xl border bg-card overflow-hidden hover:shadow-md transition-shadow text-left"
+                    >
+                      {/* Thumbnail */}
+                      <div className="relative w-full aspect-square bg-muted overflow-hidden">
+                        {isPhoto ? (
+                          <img src={url} alt={f.file_name} className="w-full h-full object-cover" loading="lazy" />
+                        ) : (
+                          <div className="relative w-full h-full">
+                            <video src={url} className="w-full h-full object-cover" preload="metadata" muted />
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                              <Play className="h-10 w-10 text-white fill-white/80" />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      {/* Info */}
+                      <div className="p-2.5">
+                        <p className="text-xs font-medium truncate">{f.file_name}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                          {f.client_name} · {formatFileSize(f.file_size_bytes)}
+                        </p>
+                        <span className={`inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded-full ${
+                          f.upload_status === 'completed'
+                            ? 'bg-green-500/10 text-green-600'
+                            : 'bg-yellow-500/10 text-yellow-600'
+                        }`}>
+                          {f.upload_status}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -110,11 +137,17 @@ export default function EditedFiles() {
       {view === 'browse' && <FolderBrowser />}
 
       <UploadWizard open={wizardOpen} onOpenChange={setWizardOpen} onUploadStarted={loadStats} />
+
+      {previewFile && (
+        <FilePreviewDialog
+          file={previewFile}
+          open={!!previewFile}
+          onOpenChange={(open) => { if (!open) setPreviewFile(null); }}
+        />
+      )}
     </div>
   );
 
-  if (isMobile) {
-    return <AppLayout>{content}</AppLayout>;
-  }
-  return <DesktopAppLayout>{content}</DesktopAppLayout>;
+  // Use simple AppLayout for both mobile and desktop — no client tracker sidebar
+  return <AppLayout>{content}</AppLayout>;
 }
