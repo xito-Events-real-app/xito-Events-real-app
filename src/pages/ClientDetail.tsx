@@ -53,7 +53,7 @@ import { nepaliMonthsEnglish, NepaliDateObject, bsToAD, isUnknownDay, getDayForS
 import { getMonthName } from "@/lib/nepali-months";
 import NepaliDate from "nepali-date-converter";
 import PaymentDrawer from "@/components/finance/PaymentDrawer";
-import { ClientDetailSidebar, ClientHeroSection, SectionType, EventDetailsSummaryCard, FullScreenEventCard, ClientDetailsCard, BenzoKeepDialog, BenzoKeepViewer, DeleteClientDialog, ClientFilesSection, DeliverablesSection } from "@/components/client-detail";
+import { ClientDetailSidebar, ClientHeroSection, SectionType, EventDetailsSummaryCard, FullScreenEventCard, ClientDetailsCard, BenzoKeepDialog, BenzoKeepViewer, DeleteClientDialog, ClientFilesSection, DeliverablesSection, EditProductionSection } from "@/components/client-detail";
 import FreelancerAssignmentSection from "@/components/client-detail/FreelancerAssignmentSection";
 import { updateRequiredCrewCategories } from "@/lib/freelancer-assignment-api";
 import { EventDetailCard } from "@/components/client-detail/EventDetailCard";
@@ -1163,6 +1163,8 @@ const ClientDetail = () => {
                   { id: 'financials', label: 'Financials' },
                   { id: 'keepNotes', label: 'Keep' },
                   { id: 'files', label: 'Files' },
+                  { id: 'deliverables', label: 'Deliverables' },
+                  { id: 'edit', label: 'Edit' },
                 ] as { id: SectionType; label: string }[]).map((section) => (
                   <Button
                     key={section.id}
@@ -1753,6 +1755,11 @@ const ClientDetail = () => {
           {/* Deliverables Section */}
           {activeSection === 'deliverables' && (
             <DeliverablesSection events={events.map(e => ({ name: e.name, month: e.month, day: e.day }))} assignments={freelancerAssignments} registeredDateTimeAD={client.registeredDateTimeAD} />
+          )}
+
+          {/* Edit & Production Section */}
+          {activeSection === 'edit' && client?.registeredDateTimeAD && (
+            <EditProductionSection registeredDateTimeAD={client.registeredDateTimeAD} clientName={client.clientName} />
           )}
 
           {/* Freelancers Section */}
