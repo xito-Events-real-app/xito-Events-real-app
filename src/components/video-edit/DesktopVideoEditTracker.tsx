@@ -1155,10 +1155,10 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField }:
         return (
           <Popover open={nextUpOpen} onOpenChange={setNextUpOpen}>
             <PopoverTrigger asChild>
-              <Button size="sm" variant="outline" className="h-6 text-[10px] mt-1 w-full">Set Next Edit</Button>
+              <Button size="sm" variant="outline" className="h-8 text-xs mt-1 w-full font-semibold">Set Next Edit</Button>
             </PopoverTrigger>
-            <PopoverContent className="w-80 p-2 max-h-72 overflow-y-auto" align="start">
-              <p className="text-xs font-semibold text-muted-foreground mb-2">Pick the next edit for {editorName}</p>
+            <PopoverContent className="w-96 p-3 max-h-80 overflow-y-auto" align="start">
+              <p className="text-sm font-semibold text-muted-foreground mb-3">Pick the next edit for {editorName}</p>
               {NEXT_UP_PRIORITY_STAGES.map(stageKey => {
                 const stageRows = candidates.filter(r => r._stageKey === stageKey);
                 if (!stageRows.length) return null;
@@ -1169,13 +1169,15 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField }:
                     {stageRows.map(r => (
                       <button
                         key={r.id}
-                        className="w-full text-left px-2 py-1.5 rounded hover:bg-accent flex items-center gap-2 text-xs"
-                        onClick={() => {
+                        className="w-full text-left px-2 py-2 rounded hover:bg-accent flex items-center gap-2 text-sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
                           onUpdateField(r.id, 'urgency', '5', r.mergedIds);
                           setNextUpOpen(false);
                         }}
                       >
-                        <Badge className={cn("text-[9px] px-1.5 py-0", NEXT_UP_STAGE_COLORS[stageKey] || '')}>{stageLabel}</Badge>
+                        <Badge className={cn("text-[10px] px-2 py-0.5 shrink-0", NEXT_UP_STAGE_COLORS[stageKey] || '')}>{stageLabel}</Badge>
                         <span className="font-semibold truncate">{r.clientName}</span>
                         <span className="text-muted-foreground truncate">{r.editType}</span>
                         <UrgencyBadge value={r.urgency || "0"} />
@@ -1258,29 +1260,43 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField }:
                 <Badge variant="outline" className="text-xs">{group.rows.length}</Badge>
               </h3>
               <div className="grid gap-2">
-                {group.rows.map(row => (
-                  <div key={row.id} className={`border-l-4 ${borderColor} rounded-lg bg-card p-3 shadow-sm`}>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-semibold text-sm text-foreground">{row.clientName}</p>
-                        <p className="text-xs text-muted-foreground">{row.eventName} · {row.editType}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <UrgencyBadge value={row.urgency || "0"} />
-                        <Select onValueChange={(val) => onPushToStatus(row.id, val, row.mergedIds)}>
-                          <SelectTrigger className="h-7 w-28 text-[10px]">
-                            <SelectValue placeholder="Move to" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {STAGES.filter(s => s.key !== group.key).map(s => (
-                              <SelectItem key={s.key} value={s.key} className="text-xs">{s.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                {group.rows.map(row => {
+                  const isProgressStage = ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'].includes(group.key);
+                  const isPaused = isProgressStage && !row.isPlaying;
+                  const age = getEventAge(row.eventDateAD);
+                  return (
+                    <div key={row.id} className={cn(
+                      `border-l-4 ${borderColor} rounded-lg bg-card p-3 shadow-sm`,
+                      isPaused && "opacity-50"
+                    )}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm text-foreground">{row.clientName}</p>
+                          <p className="text-xs text-muted-foreground">{row.eventName} · {row.editType}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            {age && <EventAgeStamp age={age} />}
+                            {isProgressStage && row.editStartedAt && (
+                              <LiveEditTimer editStartedAt={row.editStartedAt} stageHistory={row.stageHistory} size="card" stageKey={group.key} />
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <UrgencyBadge value={row.urgency || "0"} />
+                          <Select onValueChange={(val) => onPushToStatus(row.id, val, row.mergedIds)}>
+                            <SelectTrigger className="h-7 w-28 text-[10px]">
+                              <SelectValue placeholder="Move to" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {STAGES.filter(s => s.key !== group.key).map(s => (
+                                <SelectItem key={s.key} value={s.key} className="text-xs">{s.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           );
