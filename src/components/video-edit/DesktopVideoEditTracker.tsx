@@ -774,19 +774,21 @@ function DashboardView({
       <div className="flex items-center gap-2 mt-2">
         <UrgencyBadge value={row.urgency || "0"} />
         {row.editor && (
-          <span className="text-[11px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-200 font-medium">
+          <span className="text-sm px-2.5 py-1 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-200 font-bold">
             {row.editor}
           </span>
         )}
+      </div>
+      {/* Stage tag - bottom left large */}
+      <div className="mt-auto pt-3 flex items-end justify-between">
         <span className={cn(
-          "text-[10px] px-1.5 py-0.5 rounded-full font-semibold",
+          "text-sm px-3 py-1 rounded-lg font-bold",
           row._progressStage === 'EDIT_ON_PROGRESS' ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" :
           row._progressStage === 'COLOR_ON_PROGRESS' ? "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300" :
           "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
         )}>
           {STAGE_SHORT_LABEL[row._progressStage] || row._progressStage}
         </span>
-      </div>
       {/* Live timer - bottom right */}
       {row.editStartedAt && (
         <div className="mt-auto pt-2 flex justify-end">
