@@ -896,6 +896,7 @@ export function DesktopVideoEditTracker() {
                 availableEditors={availableEditors}
               />
             </div>
+          </div>
         ) : activeView === 'pipeline' ? (
           <WtnPipelineView onClose={() => setActiveView('dashboard')} inline />
         ) : isEditorView ? (
