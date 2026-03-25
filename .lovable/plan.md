@@ -1,70 +1,143 @@
 
 
-# New "Edit" Section in Client Detail Page
+# New Module: Edited Files (Drive-style File Storage with Links)
 
 ## Overview
-Add a new "Edit" sidebar section (after Deliverables) in the Client Detail page that combines two collapsible sub-sections: **Files Status** and **Video Edits**. Each shows a compact summary when collapsed and detailed views when expanded.
+A new "Edited Files" module — a Google Drive-style interface for uploading edited photos/videos per client, organized in a folder hierarchy. Also supports saving external links (YouTube, Google Drive, pCloud, etc.) inside each client folder. Files upload to Supabase Storage for now (pCloud later).
 
-## Architecture
+## Folder Structure
+```text
+Root/
+├── Client A/
+│   ├── Photos/
+│   │   └── Wedding/
+│   │       ├── Bride Side/
+│   │       │   └── file1.jpg, file2.jpg...
+│   │       └── Groom Side/
+│   └── Videos/
+│   │   └── video1.mp4...
+│   └── Links/        (virtual — stored in DB, shown in UI)
+│       ├── YouTube: https://youtube.com/...
+│       ├── Google Drive: https://drive.google.com/...
+│       └── pCloud: https://pcloud.com/...
+├── Client B/
+│   └── ...
+```
 
-New component: `src/components/client-detail/EditProductionSection.tsx`
+## Database
 
-### Props
-- `registeredDateTimeAD: string`
-- `clientName: string`
+### Table: `edited_files`
+| Column | Type | Default |
+|--------|------|---------|
+| id | uuid | gen_random_uuid() |
+| registered_date_time_ad | text | NOT NULL |
+| client_name | text | '' |
+| file_type | text | 'photo' (photo/video) |
+| event_name | text | '' |
+| folder_event_name | text | '' |
+| side_folder | text | '' |
+| photographer_name | text | '' |
+| file_name | text | '' |
+| file_path | text | '' (virtual display path) |
+| storage_path | text | '' (bucket path) |
+| file_size_bytes | bigint | 0 |
+| mime_type | text | '' |
+| upload_status | text | 'uploading' |
+| upload_progress | integer | 0 |
+| created_at | timestamptz | now() |
+| updated_at | timestamptz | now() |
 
-### Sub-Section 1: Files Status (Collapsible)
+### Table: `edited_files_links`
+| Column | Type | Default |
+|--------|------|---------|
+| id | uuid | gen_random_uuid() |
+| registered_date_time_ad | text | NOT NULL |
+| client_name | text | '' |
+| link_type | text | '' (youtube/gdrive/pcloud/other) |
+| link_url | text | '' |
+| link_title | text | '' |
+| notes | text | '' |
+| created_at | timestamptz | now() |
+| updated_at | timestamptz | now() |
 
-**Collapsed view:**
-- Summary cards: Total Photo Size, Total Video Size, Total Files count
-- Copy status: "ALL COPIED" (green) or "X files remaining" (red) with names of whose files are missing
+### Storage Bucket: `edited-files`
+Public bucket for JPG/MP4 uploads.
 
-**Expanded view:**
-- Reuse the same UI pattern from `FileClientDetail.tsx`: event-grouped table with photo/video role separation, background tints (purple for photo, amber for video), device pills, backup status columns
-- Read-only, same as the existing Files Client Detail page
+RLS: Allow all access (matching existing pattern).
 
-**Data loading:** Query `files_management` by `registered_date_time_ad`, same as `FileClientDetail.tsx`
+## Files to Create
 
-### Sub-Section 2: Video Edits (Collapsible)
+### 1. `src/pages/EditedFiles.tsx`
+Main page with:
+- Dashboard view: recent uploads, storage stats, client folder cards
+- Folder browser: click client → Photos/Videos/Links → subfolders → files
+- Upload button (opens wizard)
+- Add Link button (inside client folders)
 
-**Collapsed view:**
-- Summary line: "X Finalized, Y Remaining, Z in Client Review"
-- Remaining = total non-finalized, non-deleted rows
+### 2. `src/components/edited-files/FolderBrowser.tsx`
+Drive-style navigation with breadcrumb path. Shows folders as cards/icons. At file level shows thumbnails/filenames with download buttons.
 
-**Expanded view:**
-- Reuse the EditorView card style from `DesktopVideoEditTracker.tsx`
-- Group rows by stage, sort with in-progress stages first (running on top)
-- Each card shows: client name, event, edit type, stage label (big colored text), play/pause status, event age stamp, live timer
-- "Move to" dropdown for stage transitions
-- Stage-specific colors (blue for Edit, purple for Color, rose for Re-Edit)
+### 3. `src/components/edited-files/UploadWizard.tsx`
+Step-by-step dialog:
+1. Select client (search from `clients_cache` where `sheet_source='booked'`)
+2. Photo or Video (two big buttons)
+3. **Photo path**: Select event → suggest folder name (strip "BS"/"GS") → select photographer/side → confirm path
+4. **Video path**: Just `Client \ Videos` — skip to confirm
+5. File picker (multi-file drag-drop) + upload with progress
 
-**Data loading:** Query `video_edit_tracker` by `registered_date_time_ad`, filter `deleted = false`
+### 4. `src/components/edited-files/UploadProgressTracker.tsx`
+Fixed bottom-right widget showing active uploads with progress bars. Persists across navigation via React Context.
 
-## Files to Change
+### 5. `src/components/edited-files/EditedFilesUploadContext.tsx`
+React Context to hold upload queue state across page navigation.
 
-1. **Create `src/components/client-detail/EditProductionSection.tsx`**
-   - Main component with two `Collapsible` sections
-   - Files sub-section: loads from `files_management`, computes photo/video stats, renders event-grouped tables when expanded
-   - Video Edits sub-section: loads from `video_edit_tracker`, computes finalized/remaining/client-review counts, renders EditorView-style cards when expanded with stage colors, play/pause indicators, and move-to dropdowns
+### 6. `src/components/edited-files/AddLinkDialog.tsx`
+Dialog to add external links to a client folder:
+- Link type selector: YouTube, Google Drive, pCloud, Other
+- URL input
+- Title/label input
+- Notes (optional)
+- Each link type gets a colored icon (red for YouTube, blue for Drive, green for pCloud)
 
-2. **Update `src/components/client-detail/ClientDetailSidebar.tsx`**
-   - Add `'edit'` to `SectionType`
-   - Add sidebar item `{ id: 'edit', label: 'Edit', icon: Film }` after `deliverables`
+### 7. `src/components/edited-files/ClientLinksSection.tsx`
+Renders saved links inside a client's folder view — clickable cards with icons, titles, and open-in-new-tab buttons. Edit/delete options.
 
-3. **Update `src/components/client-detail/index.ts`**
-   - Export `EditProductionSection`
+### 8. `src/lib/edited-files-api.ts`
+CRUD for `edited_files` and `edited_files_links` tables. Upload to Supabase Storage bucket. Helper to generate storage paths.
 
-4. **Update `src/pages/ClientDetail.tsx`**
-   - Import `EditProductionSection`
-   - Add `{activeSection === 'edit' && <EditProductionSection ... />}` block after deliverables
-   - Add `'edit'` tab to mobile section tabs
-   - Update `SectionType` import
+## Files to Edit
 
-## Technical Details
+### 9. `src/App.tsx`
+- Import `EditedFiles` page
+- Add route: `/edited-files`
 
-- Uses `Collapsible`, `CollapsibleTrigger`, `CollapsibleContent` from existing UI components
-- Video edit status updates use direct Supabase calls (same pattern as `useVideoEditTracker`)
-- Reuses `LiveEditTimer`, `EventAgeStamp` utilities -- these will be extracted or imported from the video-edit module
-- `STAGES` constant imported from `useVideoEditTracker` for stage metadata
-- Stage sorting logic: running progress cards first, then paused progress, then backlog stages
+### 10. `src/lib/suite-modules.ts`
+- Add module entry with `HardDrive` icon, path `/edited-files`, teal gradient, status `active`
+
+## Upload Flow Detail
+
+**Event name suggestion logic:**
+- "Wedding BS" → suggest "Wedding" (strip trailing BS/GS/day suffixes)
+- "Mehndi" → suggest "Mehndi" (no change needed)
+
+**Side folder suggestion logic:**
+- From `freelancer_assignments`: photographer with role containing "PB" or "EP" → "Bride Side"
+- Role containing "PG" → "Groom Side"
+
+**Path preview:** `Prasanna Mainali \ Photos \ Wedding \ Bride Side \` — editable before upload
+
+## Links Feature Detail
+
+Inside each client's folder view, a "Links" tab/section shows:
+- Saved external links grouped by type (YouTube, Google Drive, pCloud, Other)
+- Each link: colored icon + title + URL (truncated) + open button
+- "Add Link" button opens `AddLinkDialog`
+- Can edit title/notes or delete links
+
+## Technical Notes
+- Storage path format: `{registered_date_time_ad}/{photo|video}/{event_folder}/{side_folder}/{filename}`
+- Upload uses `supabase.storage.from('edited-files').upload()` with progress tracking via `XMLHttpRequest`
+- Context provider wraps the app in `App.tsx` to persist uploads across navigation
+- Data from `clients_cache` (booked), `event_details_cache`, and `freelancer_assignments` used in wizard
+- For now limited to JPG and MP4; storage is Supabase (pCloud integration later)
 
