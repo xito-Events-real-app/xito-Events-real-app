@@ -1155,10 +1155,10 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField }:
         return (
           <Popover open={nextUpOpen} onOpenChange={setNextUpOpen}>
             <PopoverTrigger asChild>
-              <Button size="sm" variant="outline" className="h-6 text-[10px] mt-1 w-full">Set Next Edit</Button>
+              <Button size="sm" variant="outline" className="h-8 text-xs mt-1 w-full font-semibold">Set Next Edit</Button>
             </PopoverTrigger>
-            <PopoverContent className="w-80 p-2 max-h-72 overflow-y-auto" align="start">
-              <p className="text-xs font-semibold text-muted-foreground mb-2">Pick the next edit for {editorName}</p>
+            <PopoverContent className="w-96 p-3 max-h-80 overflow-y-auto" align="start">
+              <p className="text-sm font-semibold text-muted-foreground mb-3">Pick the next edit for {editorName}</p>
               {NEXT_UP_PRIORITY_STAGES.map(stageKey => {
                 const stageRows = candidates.filter(r => r._stageKey === stageKey);
                 if (!stageRows.length) return null;
