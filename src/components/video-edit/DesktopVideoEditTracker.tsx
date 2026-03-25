@@ -1093,6 +1093,13 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, o
         result.push({ key: stageKey, label: stage.label, rows });
       }
     }
+    // Sort: stages with any running (isPlaying) row float to top
+    const PROGRESS_KEYS = new Set(['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS']);
+    result.sort((a, b) => {
+      const aHasRunning = PROGRESS_KEYS.has(a.key) && a.rows.some(r => r.isPlaying) ? 1 : 0;
+      const bHasRunning = PROGRESS_KEYS.has(b.key) && b.rows.some(r => r.isPlaying) ? 1 : 0;
+      return bHasRunning - aHasRunning;
+    });
     return result;
   }, [editorName, rowsByStatus]);
 
