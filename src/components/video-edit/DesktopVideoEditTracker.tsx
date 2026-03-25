@@ -1260,29 +1260,43 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField }:
                 <Badge variant="outline" className="text-xs">{group.rows.length}</Badge>
               </h3>
               <div className="grid gap-2">
-                {group.rows.map(row => (
-                  <div key={row.id} className={`border-l-4 ${borderColor} rounded-lg bg-card p-3 shadow-sm`}>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-semibold text-sm text-foreground">{row.clientName}</p>
-                        <p className="text-xs text-muted-foreground">{row.eventName} · {row.editType}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <UrgencyBadge value={row.urgency || "0"} />
-                        <Select onValueChange={(val) => onPushToStatus(row.id, val, row.mergedIds)}>
-                          <SelectTrigger className="h-7 w-28 text-[10px]">
-                            <SelectValue placeholder="Move to" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {STAGES.filter(s => s.key !== group.key).map(s => (
-                              <SelectItem key={s.key} value={s.key} className="text-xs">{s.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                {group.rows.map(row => {
+                  const isProgressStage = ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'].includes(group.key);
+                  const isPaused = isProgressStage && !row.isPlaying;
+                  const age = getEventAge(row.eventDateAD);
+                  return (
+                    <div key={row.id} className={cn(
+                      `border-l-4 ${borderColor} rounded-lg bg-card p-3 shadow-sm`,
+                      isPaused && "opacity-50"
+                    )}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm text-foreground">{row.clientName}</p>
+                          <p className="text-xs text-muted-foreground">{row.eventName} · {row.editType}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            {age && <EventAgeStamp age={age} />}
+                            {isProgressStage && row.editStartedAt && (
+                              <LiveEditTimer editStartedAt={row.editStartedAt} stageHistory={row.stageHistory} size="card" stageKey={group.key} />
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <UrgencyBadge value={row.urgency || "0"} />
+                          <Select onValueChange={(val) => onPushToStatus(row.id, val, row.mergedIds)}>
+                            <SelectTrigger className="h-7 w-28 text-[10px]">
+                              <SelectValue placeholder="Move to" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {STAGES.filter(s => s.key !== group.key).map(s => (
+                                <SelectItem key={s.key} value={s.key} className="text-xs">{s.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           );
