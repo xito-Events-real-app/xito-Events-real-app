@@ -955,6 +955,16 @@ export function DesktopVideoEditTracker() {
     return editors;
   }, [rowsByStatus]);
 
+  // Editors with actively playing rows
+  const playingEditors = useMemo(() => {
+    const progressStages = ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'];
+    const playing = new Set<string>();
+    for (const stageKey of progressStages) {
+      (rowsByStatus[stageKey] || []).forEach(r => { if (r.editor && r.isPlaying) playing.add(r.editor); });
+    }
+    return playing;
+  }, [rowsByStatus]);
+
   // Available editors: have been assigned before but NOT in any active progress stage
   const availableEditors = useMemo(() => {
     const allEditorNames = new Set<string>();
