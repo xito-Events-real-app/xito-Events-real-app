@@ -21,6 +21,7 @@ export interface VideoEditRow {
   clientDemand: string;
   reference: string;
   songs: string;
+  forceSplit: boolean;
 }
 
 const VIDEO_DELIVERABLE_SECTIONS = ["video", "videos"] as const;
@@ -162,6 +163,7 @@ function dbToRow(r: any): VideoEditRow {
     clientDemand: r.client_demand || "",
     reference: r.reference || "",
     songs: r.songs || "",
+    forceSplit: r.force_split || false,
   };
 }
 
