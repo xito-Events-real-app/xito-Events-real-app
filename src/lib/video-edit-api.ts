@@ -24,6 +24,8 @@ export interface VideoEditRow {
   forceSplit: boolean;
   isPlaying: boolean;
   playingSince: string;
+  editStartedAt: string;
+  deadline: string;
 }
 
 const VIDEO_DELIVERABLE_SECTIONS = ["video", "videos"] as const;
