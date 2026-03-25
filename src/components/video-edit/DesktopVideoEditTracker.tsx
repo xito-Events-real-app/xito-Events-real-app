@@ -331,7 +331,7 @@ function applyFiltersAndSort(
 }
 
 /* ── Dashboard View ── */
-function DashboardView({ rowsByStatus, allRows }: { rowsByStatus: Record<string, DisplayRow[]>; allRows: DisplayRow[] }) {
+function DashboardView({ rowsByStatus }: { rowsByStatus: Record<string, DisplayRow[]> }) {
   // Current: highest urgency in EDIT_ON_PROGRESS
   const currentEdit = useMemo(() => {
     const rows = rowsByStatus['EDIT_ON_PROGRESS'] || [];
