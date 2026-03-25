@@ -852,6 +852,8 @@ function VideoEditSidebar({
           {videoEditors.map(editor => {
             const isActive = activeView === editor.name;
             const count = editorCounts[editor.name] || 0;
+            const isInProgress = activeProgressEditors.has(editor.name);
+            const isPlaying = playingEditors.has(editor.name);
             return (
               <button
                 key={editor.name}
@@ -860,14 +862,15 @@ function VideoEditSidebar({
                   "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200",
                   isActive
                     ? "bg-teal-600/30 text-teal-300 font-semibold"
-                    : "text-zinc-400 hover:text-white hover:bg-white/5"
+                    : "text-zinc-400 hover:text-white hover:bg-white/5",
+                  !isInProgress && "italic"
                 )}
               >
                 <span className={cn(
                   "w-2 h-2 rounded-full shrink-0",
-                  activeProgressEditors.has(editor.name) ? "bg-green-500" : count > 0 ? "bg-teal-400" : "bg-zinc-600"
+                  isPlaying ? "bg-green-500 animate-editor-pulse" : isInProgress ? "bg-green-500" : count > 0 ? "bg-teal-400" : "bg-zinc-600"
                 )} />
-                <span className="flex-1 text-left truncate">{editor.name}</span>
+                <span className={cn("flex-1 text-left truncate", isPlaying && "animate-editor-wave")}>{editor.name}</span>
                 {count > 0 && (
                   <span className={cn(
                     "text-[10px] px-1.5 py-0.5 rounded-full font-bold",
