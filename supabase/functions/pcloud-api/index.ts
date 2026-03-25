@@ -1,0 +1,133 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+};
+
+const PCLOUD_API = 'https://api.pcloud.com';
+
+async function getAuthToken(): Promise<string> {
+  const email = Deno.env.get('PCLOUD_EMAIL');
+  const password = Deno.env.get('PCLOUD_PASSWORD');
+  if (!email || !password) throw new Error('pCloud credentials not configured');
+
+  const params = new URLSearchParams({
+    getauth: '1',
+    logout: '1',
+    username: email,
+    password: password,
+    authexpire: '3600',
+  });
+
+  const res = await fetch(`${PCLOUD_API}/userinfo?${params}`);
+  const data = await res.json();
+  if (data.result !== 0) throw new Error(`pCloud login failed: ${data.error || 'Unknown error'}`);
+  return data.auth as string;
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const auth = await getAuthToken();
+    const contentType = req.headers.get('content-type') || '';
+
+    // For file uploads, handle multipart forwarding
+    if (contentType.includes('multipart/form-data')) {
+      const url = new URL(req.url);
+      const folderId = url.searchParams.get('folderid') || '0';
+      const filename = url.searchParams.get('filename') || 'file';
+
+      const formData = await req.formData();
+      const file = formData.get('file') as File;
+      if (!file) throw new Error('No file in request');
+
+      // Build pCloud upload form
+      const pcloudForm = new FormData();
+      pcloudForm.append('file', file, filename);
+
+      const uploadRes = await fetch(
+        `${PCLOUD_API}/uploadfile?auth=${auth}&folderid=${folderId}&filename=${encodeURIComponent(filename)}&nopartial=1`,
+        { method: 'POST', body: pcloudForm }
+      );
+      const uploadData = await uploadRes.json();
+
+      return new Response(JSON.stringify(uploadData), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // JSON body for other actions
+    const { action, params } = await req.json();
+
+    let endpoint = '';
+    const query = new URLSearchParams({ auth });
+
+    switch (action) {
+      case 'listfolder':
+        endpoint = '/listfolder';
+        query.set('folderid', String(params.folderid ?? 0));
+        query.set('recursive', '0');
+        query.set('showdeleted', '0');
+        break;
+
+      case 'createfolder':
+        endpoint = '/createfolder';
+        query.set('folderid', String(params.folderid ?? 0));
+        query.set('name', params.name);
+        break;
+
+      case 'getfilelink':
+        endpoint = '/getfilelink';
+        query.set('fileid', String(params.fileid));
+        break;
+
+      case 'getthumblink':
+        endpoint = '/getthumblink';
+        query.set('fileid', String(params.fileid));
+        query.set('size', params.size || '200x200');
+        break;
+
+      case 'stat':
+        endpoint = '/stat';
+        query.set('fileid', String(params.fileid));
+        break;
+
+      case 'deletefile':
+        endpoint = '/deletefile';
+        query.set('fileid', String(params.fileid));
+        break;
+
+      case 'deletefolder':
+        endpoint = '/deletefolderrecursive';
+        query.set('folderid', String(params.folderid));
+        break;
+
+      case 'renamefolder':
+        endpoint = '/renamefolder';
+        query.set('folderid', String(params.folderid));
+        query.set('toname', params.toname);
+        break;
+
+      default:
+        throw new Error(`Unknown action: ${action}`);
+    }
+
+    const res = await fetch(`${PCLOUD_API}${endpoint}?${query}`);
+    const data = await res.json();
+
+    return new Response(JSON.stringify(data), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error('pcloud-api error:', message);
+    return new Response(JSON.stringify({ error: message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});
