@@ -1,48 +1,62 @@
 
 
-## Fix Available Editors — Per-Row "Ask [FirstName]" Button + Contact Fallback
+## Play/Pause Real-Time Editing Status for Edit on Progress
 
-### Problems
-1. Ramesh missing WhatsApp button — `whatsapp_no` is empty, need `contact_no` as fallback
-2. EDIT_LAB editors need per-row "Ask [FirstName]" text buttons instead of a single phone icon
-3. QUEUE editors already have "Move to Edit Lab" — confirmed working
+### Concept
+Add a play/pause toggle to each Edit on Progress card on the Dashboard. This tracks which edits are actively being worked on *right now*. The dashboard splits into "Running" and "Paused" sections, and the sidebar editors reflect this state with animated indicators.
 
-### Changes — `src/components/video-edit/DesktopVideoEditTracker.tsx`
+### Database Change
+Add two columns to `video_edit_tracker`:
+- `is_playing` (boolean, default false) — whether actively being edited right now
+- `playing_since` (timestamptz, nullable) — when play was started (for sequential ordering)
 
-**1. Editor fetch (line ~849)**: Also select `contact_no` from `freelancers_cache`. Update editor type to include `contactNo?: string`.
+### Dashboard — Edit on Progress Section
 
-```typescript
-const { data } = await supabase.from("freelancers_cache")
-  .select("name, video_editor, whatsapp_no, contact_no").order("name");
-// map: contactNo: f.contact_no || ''
-```
+Split into two sub-sections:
 
-**2. Available editors computation (line ~897)**: Use `whatsapp || contactNo` as phone number.
-
-```typescript
-const whatsapp = editorInfo?.whatsapp || editorInfo?.contactNo || '';
-```
-
-**3. EDIT_LAB card rendering (lines ~434-468)**:
-- Remove the single WhatsApp icon button from the card header
-- For each task row, add an **"Ask [FirstName]"** green pill button
-- First name extracted via `editor.name.split(' ')[0]`
-- Each button sends a WhatsApp message specific to that row: `"Hi [FirstName], have you started editing [ClientName] - [EventName] ([EditType])?"`
-
-**Result:**
 ```text
-┌──────────────────────────────────────┐
-│ Amreet Pandey              [Edit Lab]│
-│ • Client · Event · FV   [Ask Amreet]│
-│ • Client · Event · HL   [Ask Amreet]│
-└──────────────────────────────────────┘
+▶ RUNNING (2)                          [bold, glowing cards]
+┌──────────────────────┐  ┌──────────────────────┐
+│ ▶ PABINA · Full Video│  │ ▶ JIGYASHA · HL      │
+│   Nikit · Urgency 5  │  │   Amreet · Urgency 4 │
+│   [glow + pulse]     │  │   [glow + pulse]      │
+└──────────────────────┘  └──────────────────────┘
 
-┌──────────────────────────────────────┐
-│ Ramesh Chaudhary           [Edit Lab]│
-│ • Client · Event · FV   [Ask Ramesh]│
-└──────────────────────────────────────┘
+⏸ PAUSED (3)                           [greyed, still cards]
+┌──────────────────────┐  ┌──────────────────────┐
+│ ⏸ RIYA · Reel        │  │ ⏸ SITA · Full Video  │
+│   Barun · Urgency 3  │  │   Ramesh · Urgency 2 │
+│   [muted/greyed]     │  │   [muted/greyed]      │
+└──────────────────────┘  └──────────────────────┘
 ```
+
+- **Running cards**: Blue glow border animation, subtle pulse effect
+- **Paused cards**: Slightly greyed (`opacity-60`), no animation
+- Play/Pause toggle button on each card
+- Running cards sorted by `playing_since` ascending (who started first appears first)
+
+### Sidebar Editor Effects
+
+- **Editors with running rows**: Green dot + CSS wave/pulse animation on their name (e.g., `animate-pulse` or custom wave keyframe)
+- **Editors with only paused/non-running progress rows**: Green dot but static, no animation
+- **Editors NOT in any progress stage**: Shown in *italic* text
 
 ### Files Changed
-1. `src/components/video-edit/DesktopVideoEditTracker.tsx` — fetch `contact_no`, use as fallback phone, replace single WhatsApp icon with per-row "Ask [FirstName]" buttons
+
+**1. Database migration** — Add `is_playing` and `playing_since` columns to `video_edit_tracker`.
+
+**2. `src/lib/video-edit-api.ts`** — Add `isPlaying: boolean` and `playingSince: string` to `VideoEditRow` interface and `dbToRow` mapper.
+
+**3. `src/hooks/useVideoEditTracker.ts`** — Pass through `isPlaying`/`playingSince` in `DisplayRow`. Add `togglePlaying(id, mergedIds?)` function that flips `is_playing` and sets/clears `playing_since`.
+
+**4. `src/components/video-edit/DesktopVideoEditTracker.tsx`**:
+- **DashboardView**: Split `editOnProgressRows` into `runningRows` (is_playing=true, sorted by playing_since asc) and `pausedRows`. Render two sections with bold headers. Add play/pause icon button to each card. Running cards get `animate-pulse shadow-blue-500/30 shadow-lg` classes. Paused cards get `opacity-60`.
+- **VideoEditSidebar**: Editors with running rows get a pulsing wave animation class on their name. Editors in progress but not running are static. Editors not in any progress stage get `italic` text style.
+
+**5. `src/index.css`** — Add a subtle wave/glow keyframe animation for the sidebar editor names who are actively editing.
+
+### Toggle Behavior
+- Click Play → sets `is_playing=true`, `playing_since=now()` in DB
+- Click Pause → sets `is_playing=false`, `playing_since=null` in DB
+- Real-time sync ensures all systems see the change instantly
 
