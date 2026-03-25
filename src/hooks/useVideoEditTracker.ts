@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   VideoEditRow,
   getVideoEditRows,
@@ -58,7 +58,6 @@ export function useVideoEditTracker() {
   const [rows, setRows] = useState<VideoEditRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
-  const pendingLocalEdit = useRef(false);
 
   const loadRows = useCallback(async () => {
     try {
@@ -112,10 +111,8 @@ export function useVideoEditTracker() {
         { event: '*', schema: 'public', table: 'video_edit_tracker' },
         () => {
           setTimeout(() => {
-            if (!pendingLocalEdit.current) {
-              loadRows();
-            }
-          }, 300);
+            loadRows();
+          }, 0);
         }
       )
       .subscribe();
@@ -237,80 +234,74 @@ export function useVideoEditTracker() {
     return result;
   }, [rowsByStatus]);
 
-  const guardLocalEdit = useCallback((fn: () => void) => {
-    pendingLocalEdit.current = true;
-    fn();
-    setTimeout(() => { pendingLocalEdit.current = false; }, 3000);
-  }, []);
-
   const splitRow = useCallback(async (mergeKey: string) => {
     const allStageRows = Object.values(rowsByStatus).flat();
     const pairRows = allStageRows.filter(r => makeMergeKey(r) === mergeKey && (r.editType === 'Full Video' || r.editType === 'Highlights'));
     const ids = pairRows.map(r => r.id);
-
-    guardLocalEdit(() => {
-      setRows(prev => prev.map(r => ids.includes(r.id) ? { ...r, forceSplit: true } : r));
-    });
 
     try {
       await supabase
         .from("video_edit_tracker")
         .update({ force_split: true, updated_at: new Date().toISOString() })
         .in("id", ids);
+
+      setTimeout(() => {
+        loadRows();
+      }, 0);
     } catch (err: any) {
       console.error("[VIDEO-EDIT] Split error:", err);
       loadRows();
     }
-  }, [rowsByStatus, loadRows, guardLocalEdit]);
+  }, [rowsByStatus, loadRows]);
 
   const mergeRow = useCallback(async (mergeKey: string) => {
     const allStageRows = Object.values(rowsByStatus).flat();
     const pairRows = allStageRows.filter(r => makeMergeKey(r) === mergeKey && (r.editType === 'Full Video' || r.editType === 'Highlights'));
     const ids = pairRows.map(r => r.id);
 
-    guardLocalEdit(() => {
-      setRows(prev => prev.map(r => ids.includes(r.id) ? { ...r, forceSplit: false } : r));
-    });
-
     try {
       await supabase
         .from("video_edit_tracker")
         .update({ force_split: false, updated_at: new Date().toISOString() })
         .in("id", ids);
+
+      setTimeout(() => {
+        loadRows();
+      }, 0);
     } catch (err: any) {
       console.error("[VIDEO-EDIT] Merge error:", err);
       loadRows();
     }
-  }, [rowsByStatus, loadRows, guardLocalEdit]);
+  }, [rowsByStatus, loadRows]);
 
   const updateField = useCallback(async (id: string, field: string, value: string, mergedIds?: string[]) => {
     const ids = mergedIds || [id];
-    guardLocalEdit(() => {
-      setRows(prev => prev.map(r => ids.includes(r.id) ? { ...r, [field]: value } : r));
-    });
     try {
       await Promise.all(ids.map(i => apiUpdateField(i, field, value)));
       scheduleVideoEditPush();
+      setTimeout(() => {
+        loadRows();
+      }, 0);
     } catch (err: any) {
       toast({ title: "Update failed", description: err.message, variant: "destructive" });
       loadRows();
     }
-  }, [toast, loadRows, guardLocalEdit]);
+  }, [toast, loadRows]);
 
   const pushToStatus = useCallback(async (id: string, newStatus: string, mergedIds?: string[]) => {
     const ids = mergedIds || [id];
-    guardLocalEdit(() => {
-      setRows(prev => prev.map(r => ids.includes(r.id) ? { ...r, videoEditStatus: newStatus } : r));
-    });
     try {
       await Promise.all(ids.map(i => apiPushToStatus(i, newStatus)));
       scheduleVideoEditPush();
       toast({ title: `Moved to ${STAGES.find(s => s.key === newStatus)?.label || newStatus}` });
+      setTimeout(() => {
+        loadRows();
+      }, 0);
     } catch (err: any) {
       toast({ title: "Move failed", description: err.message, variant: "destructive" });
       loadRows();
     }
-  }, [toast, loadRows, guardLocalEdit]);
+  }, [toast, loadRows]);
 
   return {
     rowsByStatus: displayRowsByStatus,
