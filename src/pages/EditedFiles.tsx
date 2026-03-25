@@ -114,7 +114,7 @@ export default function EditedFiles() {
   );
 
   if (isMobile) {
-    return <AppLayout title="Edited Files" showBackButton>{content}</AppLayout>;
+    return <AppLayout>{content}</AppLayout>;
   }
   return <DesktopAppLayout>{content}</DesktopAppLayout>;
 }

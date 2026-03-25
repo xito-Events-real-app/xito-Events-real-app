@@ -141,4 +141,13 @@ export const suiteModules: SuiteModule[] = [
     status: 'active',
     gradient: 'from-red-500 to-orange-600',
   },
+  {
+    id: 'edited-files',
+    name: 'Edited Files',
+    description: 'Store and organize edited photos & videos',
+    icon: HardDrive,
+    path: '/edited-files',
+    status: 'active',
+    gradient: 'from-teal-500 to-cyan-600',
+  },
 ];
