@@ -339,12 +339,14 @@ function DashboardView({
   onStageClick,
   onAssign,
   availableEditors,
+  onPushToStatus,
 }: {
   rowsByStatus: Record<string, DisplayRow[]>;
   allRows: any[];
   onStageClick: (stageKey: string) => void;
   onAssign: (rowId: string, editorName: string, mergedIds?: string[]) => void;
-  availableEditors: string[];
+  availableEditors: { name: string; stage: 'EDIT_LAB' | 'QUEUE' | 'NONE'; rows: DisplayRow[]; whatsapp: string }[];
+  onPushToStatus: (id: string, newStatus: string, mergedIds?: string[]) => void;
 }) {
   const [assignDialogEditor, setAssignDialogEditor] = useState<string | null>(null);
 
@@ -426,17 +428,89 @@ function DashboardView({
             <Users className="w-4 h-4 text-zinc-500" />
             Available Editors
           </h3>
-          <p className="text-xs text-muted-foreground mb-3">Editors not currently on any active progress — click to assign from queue</p>
-          <div className="flex flex-wrap gap-2">
-            {availableEditors.map(name => (
-              <button
-                key={name}
-                onClick={() => setAssignDialogEditor(name)}
-                className="px-4 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-sm font-semibold text-foreground hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-all hover:shadow-sm"
-              >
-                {name}
-              </button>
-            ))}
+          <p className="text-xs text-muted-foreground mb-3">Editors not currently on any active progress</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {availableEditors.map(editor => {
+              if (editor.stage === 'EDIT_LAB') {
+                // EDIT_LAB: amber border, tasks, WhatsApp button
+                return (
+                  <div key={editor.name} className="rounded-xl border-2 border-amber-400 dark:border-amber-600 bg-card p-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-semibold text-sm text-foreground">{editor.name}</span>
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200 text-[10px]">Edit Lab</Badge>
+                        {editor.whatsapp && (
+                          <button
+                            onClick={() => {
+                              const topRow = editor.rows[0];
+                              const msg = topRow
+                                ? `Hi ${editor.name}, have you started editing ${topRow.clientName} - ${topRow.eventName} (${topRow.editType})?`
+                                : `Hi ${editor.name}, have you started editing?`;
+                              openWhatsApp(editor.whatsapp, msg);
+                            }}
+                            className="p-1.5 rounded-lg bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900 transition-colors"
+                            title="Ask on WhatsApp"
+                          >
+                            <Phone className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      {editor.rows.map(row => (
+                        <div key={row.id} className="text-xs text-muted-foreground flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                          {row.clientName} · {row.eventName} · {row.editType}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+              if (editor.stage === 'QUEUE') {
+                // QUEUE: yellow border, tasks, Move to Edit Lab button
+                return (
+                  <div key={editor.name} className="rounded-xl border-2 border-yellow-400 dark:border-yellow-600 bg-card p-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-semibold text-sm text-foreground">{editor.name}</span>
+                      <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-200 text-[10px]">Queue</Badge>
+                    </div>
+                    <div className="space-y-1.5 mb-3">
+                      {editor.rows.map(row => (
+                        <div key={row.id} className="text-xs text-muted-foreground flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 shrink-0" />
+                          {row.clientName} · {row.eventName} · {row.editType}
+                        </div>
+                      ))}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full h-7 text-xs border-green-500 text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-950"
+                      onClick={() => {
+                        editor.rows.forEach(row => {
+                          onPushToStatus(row.id, 'EDIT_LAB', row.mergedIds);
+                        });
+                      }}
+                    >
+                      <ArrowRight className="w-3 h-3 mr-1" />
+                      Move to Edit Lab
+                    </Button>
+                  </div>
+                );
+              }
+              // NONE: plain card, click to assign
+              return (
+                <button
+                  key={editor.name}
+                  onClick={() => setAssignDialogEditor(editor.name)}
+                  className="rounded-xl border border-zinc-300 dark:border-zinc-700 bg-card p-4 text-left hover:bg-muted/30 hover:shadow-sm transition-all"
+                >
+                  <span className="font-semibold text-sm text-foreground">{editor.name}</span>
+                  <p className="text-[10px] text-muted-foreground mt-1">Click to assign from queue</p>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -482,21 +556,6 @@ function DashboardView({
     </div>
   );
 }
-
-/* ── Editor View ── */
-const EDITOR_STAGE_ORDER = ['EDIT_ON_PROGRESS', 'EDIT_LAB', 'QUEUE', 'COLOR_QUEUE', 'COLOR_LAB', 'COLOR_ON_PROGRESS', 'EXPORT_QUEUE', 'EXPORTED', 'CLIENT_REVIEW', 'RE_EDIT_ON_PROGRESS', 'FINALIZED'];
-
-function EditorView({ editorName, rowsByStatus }: { editorName: string; rowsByStatus: Record<string, DisplayRow[]> }) {
-  const groupedByStage = useMemo(() => {
-    const result: { key: string; label: string; rows: DisplayRow[] }[] = [];
-    for (const stageKey of EDITOR_STAGE_ORDER) {
-      const stage = STAGES.find(s => s.key === stageKey);
-      if (!stage) continue;
-      const rows = (rowsByStatus[stageKey] || []).filter(r => r.editor === editorName);
-      if (rows.length > 0) {
-        result.push({ key: stageKey, label: stage.label, rows });
-      }
-    }
     return result;
   }, [editorName, rowsByStatus]);
 
