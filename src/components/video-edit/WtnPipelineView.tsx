@@ -418,7 +418,7 @@ function SnakeGrid({ rows, stageKey, editors, onUpdateField, onPushToStatus, car
 
 // --- Main Pipeline View ---
 
-export function WtnPipelineView({ onClose }: { onClose: () => void }) {
+export function WtnPipelineView({ onClose, inline = false }: { onClose: () => void; inline?: boolean }) {
   const { rowsByStatus, isLoading, updateField, pushToStatus } = useVideoEditTracker();
   const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean }[]>([]);
   const [activeTab, setActiveTab] = useState("QUEUE");
