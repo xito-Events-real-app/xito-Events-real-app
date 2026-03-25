@@ -789,12 +789,11 @@ function DashboardView({
         )}>
           {STAGE_SHORT_LABEL[row._progressStage] || row._progressStage}
         </span>
-      {/* Live timer - bottom right */}
-      {row.editStartedAt && (
-        <div className="mt-auto pt-2 flex justify-end">
+        {/* Live timer - bottom right */}
+        {row.editStartedAt && (
           <LiveEditTimer editStartedAt={row.editStartedAt} stageHistory={row.stageHistory} size="card" stageKey={row._progressStage} />
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 
