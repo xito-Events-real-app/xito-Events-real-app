@@ -1,48 +1,67 @@
 
 
-## Editor Name Filter — Video Edit Tracker + Pipeline
+## Video Edit Tracker — Dashboard with Left Sidebar Navigation
 
-### What's changing
+### Concept
+Transform the Video Edit Tracker page into a sidebar-based layout. The left sidebar contains navigation tabs: **Dashboard** (new), **Classic View** (current table UI), **Pipeline View** (current pipeline overlay, now inline), and individual **Editor names** (dynamically listed). Clicking an editor shows their personal workload view.
 
-1. **Pipeline (WtnPipelineView)**: Add an "Editors" filter section below the existing "Edit Types" rail on the right sidebar (desktop) and below the edit type strip (mobile). Shows only editors who have rows assigned in the current stage/view. Clicking filters to show only that editor's rows.
-
-2. **Main page (DesktopVideoEditTracker)**: Add editor name filter buttons in the filter bar — pill/button style showing editors present in the current tab's rows. Clicking filters by that editor.
-
-3. **Fix editor name truncation**: The editor `SelectTrigger` currently uses `w-36` which truncates long names. Widen it and ensure full name display.
-
-### Technical Details
-
-**New state in both components**: `filterEditor: string | null`
-
-**Derive active editors per stage** (same pattern as `editTypes`):
-```typescript
-const activeEditors = useMemo(() => {
-  const names = new Set<string>();
-  // collect editor names from current stage rows (unfiltered)
-  return Array.from(names).sort();
-}, [activeTab, rowsByStatus]);
+### Layout
+```text
+┌──────────────┬──────────────────────────────────────────┐
+│  SIDEBAR     │  MAIN CONTENT                            │
+│              │                                          │
+│  📊 Dashboard│  (changes based on sidebar selection)    │
+│  📋 Classic  │                                          │
+│  🔀 Pipeline │                                          │
+│  ──────────  │                                          │
+│  EDITORS     │                                          │
+│  • Nikit     │                                          │
+│  • Saugat    │                                          │
+│  • Arjun     │                                          │
+│  ...         │                                          │
+└──────────────┴──────────────────────────────────────────┘
 ```
 
-**Filter integration**: Add `filterEditor` to `applyFiltersAndSort` in both files — filter rows where `row.editor === filterEditor`.
+### Dashboard View (new default)
+**Top stats cards row:**
+- **Current**: The row in EDIT_ON_PROGRESS or EDIT_LAB with highest urgency — shows client name, event name, edit type
+- **Next**: Next row in queue after current — same details
+- **Last**: Most recently finalized row — client name, event name
+- **Finalized**: Total count of finalized items + last few names
+- **Re-Edits**: Total count in RE_EDIT_ON_PROGRESS + current re-edit client names
+
+**Below stats**: Summary of all stages as compact cards with counts, color-coded by stage.
+
+### Editor View (when clicking an editor name)
+Shows that editor's assigned videos grouped by status priority:
+1. **Edit on Progress** (what they're actively editing)
+2. **Edit Lab** (preparing to edit)
+3. **Queue** (waiting)
+4. Remaining stages in pipeline order
+
+Each section shows a compact table/card list with client name, event, edit type, urgency, and stage badge.
 
 ### Files Changed
 
-**1. `src/components/video-edit/DesktopVideoEditTracker.tsx`**
-- Add `filterEditor` state
-- Compute `activeEditors` from current tab's unfiltered rows (editors with at least 1 assigned row)
-- Add editor filter to `applyFiltersAndSort` call
-- Add editor pill buttons in the filter bar (after sort buttons, before Clear All)
-- Widen editor `SelectTrigger` from `w-36` to `w-44` and remove truncation
-- Include `filterEditor` in `clearAll` and `hasFilters`
+**1. `src/components/video-edit/DesktopVideoEditTracker.tsx`** — Major restructure
+- Add `activeView` state: `'dashboard' | 'classic' | 'pipeline' | string` (editor name)
+- Extract current table UI into the `classic` view branch
+- Render `WtnPipelineView` inline (not overlay) when `activeView === 'pipeline'`
+- Add left sidebar (`w-56`, dark theme matching `ClientDetailSidebar` style):
+  - Dashboard button (default active)
+  - Classic View button
+  - Pipeline View button
+  - Divider
+  - "EDITORS" label + dynamically listed editor names from `editors` state (filtered to `isVideoEditor`)
+  - Each editor button shows count of their assigned rows
+- **Dashboard view**: Compute `currentEdit` (highest urgency in EDIT_ON_PROGRESS), `nextEdit` (next in queue/edit_lab), `lastFinalized` (most recent finalized by `updated_at`), finalized total, re-edit count. Render as stat cards + stage summary grid.
+- **Editor view**: Filter `allRows` by `row.editor === selectedEditor`, group by status with priority order (EDIT_ON_PROGRESS first, then EDIT_LAB, QUEUE, rest). Render as compact card/table sections.
 
 **2. `src/components/video-edit/WtnPipelineView.tsx`**
-- Add `filterEditor` state
-- Compute `activeEditors` from current stage's unfiltered rows
-- Add editor filter to the filtering logic
-- Desktop: Add "Editors" section below "Edit Types" in the right sidebar rail — same button style with different colors (teal/indigo palette)
-- Mobile: Add editor buttons below edit type strip
-- Include in `clearAll` and `hasFilters`
+- Add optional `inline?: boolean` prop. When `true`, skip the fixed overlay wrapper and render content directly (no close button needed, no `fixed inset-0` wrapper).
 
-### Editor Button Style (both views)
-Colored pill buttons matching the edit type style but with a distinct teal/indigo palette to differentiate. Shows editor name + count of rows in current stage.
+### Sidebar Design
+Dark background (`bg-zinc-900`), white text, active item highlighted with gradient (matching existing `ClientDetailSidebar` pattern). Editor names shown with a colored dot and assignment count badge.
+
+### No database changes needed — all data comes from existing `useVideoEditTracker` hook and `freelancers_cache`.
 
