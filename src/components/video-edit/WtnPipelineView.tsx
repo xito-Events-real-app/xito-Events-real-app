@@ -3,11 +3,41 @@ import { useVideoEditTracker, STAGES, DisplayRow } from "@/hooks/useVideoEditTra
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { X, Filter, Flame, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, ChevronDown, ChevronRight, FolderOpen } from "lucide-react";
+import { X, Filter, Flame, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, ChevronDown, ChevronRight, FolderOpen, Timer, CalendarIcon } from "lucide-react";
 import { FileDetailsExpander } from "./FileDetailsExpander";
 import { supabase } from "@/integrations/supabase/client";
-import { adToBS, nepaliMonthsEnglish, getBSYearsRange } from "@/lib/nepali-date";
+import { adToBS, nepaliMonthsEnglish, getBSYearsRange, formatBSDate } from "@/lib/nepali-date";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
+
+function getEventAgePipeline(eventDateAD: string): { days: number; bsDisplay: string } | null {
+  if (!eventDateAD) return null;
+  try {
+    const eventDate = new Date(eventDateAD);
+    if (isNaN(eventDate.getTime())) return null;
+    const now = new Date();
+    const diffMs = now.getTime() - eventDate.getTime();
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const bs = adToBS(eventDate);
+    return { days, bsDisplay: formatBSDate(bs) };
+  } catch { return null; }
+}
+
+function getDeadlineInfoPipeline(deadline: string): { text: string; isCrossed: boolean; isClose: boolean } | null {
+  if (!deadline) return null;
+  try {
+    const dl = new Date(deadline);
+    if (isNaN(dl.getTime())) return null;
+    const now = new Date();
+    const diffMs = dl.getTime() - now.getTime();
+    const totalHours = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60));
+    const days = Math.floor(totalHours / 24);
+    const hrs = totalHours % 24;
+    const timeStr = days > 0 ? `${days}d ${hrs}h` : `${hrs}h`;
+    if (diffMs < 0) return { text: `Crossed ${timeStr} ago`, isCrossed: true, isClose: false };
+    return { text: `${timeStr} left`, isCrossed: false, isClose: diffMs < 3 * 24 * 60 * 60 * 1000 };
+  } catch { return null; }
+}
 
 const URGENCY_COLORS: Record<string, string> = {
   "1": "bg-muted text-muted-foreground",
@@ -191,10 +221,33 @@ function PipelineCard({
             {row.editType}
           </span>
 
-          {/* Event date */}
-          {row.eventDateAD && (
-            <p className="text-sm text-muted-foreground">📅 {row.eventDateAD}</p>
-          )}
+          {/* Event date with age */}
+          {(() => {
+            const age = getEventAgePipeline(row.eventDateAD);
+            return age ? (
+              <p className="text-xs text-muted-foreground">
+                📅 {age.bsDisplay} · <span className="font-medium">{age.days}d old</span>
+              </p>
+            ) : row.eventDateAD ? (
+              <p className="text-sm text-muted-foreground">📅 {row.eventDateAD}</p>
+            ) : null;
+          })()}
+
+          {/* Deadline */}
+          {(() => {
+            const dl = getDeadlineInfoPipeline(row.deadline);
+            return dl ? (
+              <div className={cn(
+                "flex items-center gap-1 text-xs font-medium",
+                dl.isCrossed ? "text-red-600 dark:text-red-400" :
+                dl.isClose ? "text-amber-600 dark:text-amber-400" :
+                "text-green-600 dark:text-green-400"
+              )}>
+                <CalendarIcon className="w-3 h-3" />
+                {dl.text}
+              </div>
+            ) : null;
+          })()}
 
           {/* Urgency selector */}
           <Select value={row.urgency || "0"} onValueChange={(v) => onUpdateField(row.id, "urgency", v, row.mergedIds)}>

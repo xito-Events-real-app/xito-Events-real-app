@@ -10,12 +10,15 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Video, MessageSquare, Music, ExternalLink, ChevronDown, ChevronRight, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, FolderOpen, LayoutDashboard, List, GitBranch, Users, RefreshCcw, CheckCircle, Play, Pause, Clock, Phone, ArrowRight } from "lucide-react";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Video, MessageSquare, Music, ExternalLink, ChevronDown, ChevronRight, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, FolderOpen, LayoutDashboard, List, GitBranch, Users, RefreshCcw, CheckCircle, Play, Pause, Clock, Phone, ArrowRight, CalendarIcon, AlertTriangle, Timer } from "lucide-react";
 import { WtnPipelineView } from "./WtnPipelineView";
 import { FileDetailsExpander } from "./FileDetailsExpander";
 import { supabase } from "@/integrations/supabase/client";
-import { adToBS, nepaliMonthsEnglish, getBSYearsRange } from "@/lib/nepali-date";
+import { adToBS, nepaliMonthsEnglish, getBSYearsRange, formatBSDate } from "@/lib/nepali-date";
 import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 
 const URGENCY_COLORS: Record<string, string> = {
   "1": "bg-muted text-muted-foreground",
@@ -38,6 +41,113 @@ const STAGE_CARD_COLORS: Record<string, string> = {
   RE_EDIT_ON_PROGRESS: "border-l-red-500",
   FINALIZED: "border-l-green-500",
 };
+
+/* ── Date/time helper functions ── */
+function getEventAge(eventDateAD: string): { days: number; bsDisplay: string } | null {
+  if (!eventDateAD) return null;
+  try {
+    const eventDate = new Date(eventDateAD);
+    if (isNaN(eventDate.getTime())) return null;
+    const now = new Date();
+    const diffMs = now.getTime() - eventDate.getTime();
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const bs = adToBS(eventDate);
+    const bsDisplay = formatBSDate(bs);
+    return { days, bsDisplay };
+  } catch { return null; }
+}
+
+function getTimeAgo(isoDate: string): string | null {
+  if (!isoDate) return null;
+  try {
+    const date = new Date(isoDate);
+    if (isNaN(date.getTime())) return null;
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    if (diffMs < 0) return null;
+    const totalHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const days = Math.floor(totalHours / 24);
+    const hrs = totalHours % 24;
+    if (days > 0) return `${days}d ${hrs}h ago`;
+    if (hrs > 0) return `${hrs}h ago`;
+    const mins = Math.floor(diffMs / (1000 * 60));
+    return `${mins}m ago`;
+  } catch { return null; }
+}
+
+function getDeadlineInfo(deadline: string): { text: string; isCrossed: boolean; isClose: boolean } | null {
+  if (!deadline) return null;
+  try {
+    const dl = new Date(deadline);
+    if (isNaN(dl.getTime())) return null;
+    const now = new Date();
+    const diffMs = dl.getTime() - now.getTime();
+    const totalHours = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60));
+    const days = Math.floor(totalHours / 24);
+    const hrs = totalHours % 24;
+    const timeStr = days > 0 ? `${days}d ${hrs}h` : `${hrs}h`;
+
+    if (diffMs < 0) {
+      return { text: `Crossed ${timeStr} ago`, isCrossed: true, isClose: false };
+    }
+    const isClose = diffMs < 3 * 24 * 60 * 60 * 1000; // within 3 days
+    return { text: `${timeStr} remaining`, isCrossed: false, isClose };
+  } catch { return null; }
+}
+
+function DeadlinePicker({ value, onChange }: { value: string; onChange: (val: string | null) => void }) {
+  const [date, setDate] = useState<Date | undefined>(value ? new Date(value) : undefined);
+  const [hour, setHour] = useState(value ? new Date(value).getHours().toString() : "12");
+  const [minute, setMinute] = useState(value ? new Date(value).getMinutes().toString().padStart(2, '0') : "00");
+
+  const handleSave = () => {
+    if (!date) return;
+    const d = new Date(date);
+    d.setHours(parseInt(hour), parseInt(minute), 0, 0);
+    onChange(d.toISOString());
+  };
+
+  return (
+    <div className="space-y-3 p-1">
+      <Calendar
+        mode="single"
+        selected={date}
+        onSelect={setDate}
+        className="p-3 pointer-events-auto"
+      />
+      <div className="flex items-center gap-2 px-3">
+        <Clock className="w-4 h-4 text-muted-foreground" />
+        <Select value={hour} onValueChange={setHour}>
+          <SelectTrigger className="w-16 h-7 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {Array.from({ length: 24 }, (_, i) => (
+              <SelectItem key={i} value={i.toString()}>{i.toString().padStart(2, '0')}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <span className="text-sm font-bold">:</span>
+        <Select value={minute} onValueChange={setMinute}>
+          <SelectTrigger className="w-16 h-7 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {["00", "15", "30", "45"].map(m => (
+              <SelectItem key={m} value={m}>{m}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex gap-2 px-3 pb-1">
+        <Button size="sm" className="h-7 text-xs flex-1" onClick={handleSave} disabled={!date}>
+          Set Deadline
+        </Button>
+        {value && (
+          <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={() => onChange(null)}>
+            Clear
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function UrgencyBadge({ value }: { value: string }) {
   const cls = URGENCY_COLORS[value] || URGENCY_COLORS["1"];
@@ -91,6 +201,7 @@ function VideoEditTable({
   onClickEditType,
   editors,
   currentStageKey,
+  onUpdateDeadline,
 }: {
   rows: (DisplayRow & { _pipelinePos?: number })[];
   onUpdateField: (id: string, field: string, value: string, mergedIds?: string[]) => void;
@@ -101,6 +212,7 @@ function VideoEditTable({
   onClickEditType?: (type: string) => void;
   editors: { name: string; isVideoEditor: boolean }[];
   currentStageKey: string;
+  onUpdateDeadline?: (id: string, deadline: string | null, mergedIds?: string[]) => void;
 }) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const toggleExpand = (id: string) => {
@@ -125,6 +237,9 @@ function VideoEditTable({
             <TableHead>Event</TableHead>
             <TableHead>Edit Type</TableHead>
             <TableHead>Editor</TableHead>
+            <TableHead className="w-28">Event Date</TableHead>
+            <TableHead className="w-24">Edit Started</TableHead>
+            <TableHead className="w-28">Deadline</TableHead>
             <TableHead className="w-12 text-center">Notes</TableHead>
             <TableHead className="w-12 text-center">Songs</TableHead>
             <TableHead className="w-32 text-center">Action</TableHead>
@@ -133,7 +248,7 @@ function VideoEditTable({
         <TableBody>
           {rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={12} className="text-center py-12 text-muted-foreground">
+              <TableCell colSpan={15} className="text-center py-12 text-muted-foreground">
                 No rows found
               </TableCell>
             </TableRow>
@@ -252,6 +367,64 @@ function VideoEditTable({
                   </SelectContent>
                 </Select>
               </TableCell>
+              {/* Event Date */}
+              <TableCell>
+                {(() => {
+                  const age = getEventAge(row.eventDateAD);
+                  if (!age) return <span className="text-muted-foreground text-xs">-</span>;
+                  return (
+                    <div className="text-xs">
+                      <span className="text-foreground font-medium">{age.bsDisplay}</span>
+                      <span className="text-muted-foreground ml-1">({age.days}d old)</span>
+                    </div>
+                  );
+                })()}
+              </TableCell>
+              {/* Edit Started */}
+              <TableCell>
+                {(() => {
+                  const ago = getTimeAgo(row.editStartedAt);
+                  if (!ago) return <span className="text-muted-foreground text-xs">-</span>;
+                  return (
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Timer className="w-3 h-3" />
+                      {ago}
+                    </div>
+                  );
+                })()}
+              </TableCell>
+              {/* Deadline */}
+              <TableCell>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    {(() => {
+                      const dl = getDeadlineInfo(row.deadline);
+                      if (!dl) return (
+                        <button className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+                          <CalendarIcon className="w-3 h-3" /> Set
+                        </button>
+                      );
+                      return (
+                        <button className={cn(
+                          "text-xs font-medium flex items-center gap-1 transition-colors",
+                          dl.isCrossed ? "text-red-600 dark:text-red-400" :
+                          dl.isClose ? "text-amber-600 dark:text-amber-400" :
+                          "text-green-600 dark:text-green-400"
+                        )}>
+                          <CalendarIcon className="w-3 h-3" />
+                          {dl.text}
+                        </button>
+                      );
+                    })()}
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <DeadlinePicker
+                      value={row.deadline}
+                      onChange={(val) => onUpdateDeadline?.(row.id, val, row.mergedIds)}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </TableCell>
               <TableCell className="text-center">
                 {row.companyNotes ? (
                   <Tooltip>
@@ -284,7 +457,7 @@ function VideoEditTable({
             </TableRow>
             {isExpanded && (
               <TableRow>
-                <TableCell colSpan={12} className="p-0 bg-muted/20 border-b-2 border-primary/20">
+                <TableCell colSpan={15} className="p-0 bg-muted/20 border-b-2 border-primary/20">
                   <FileDetailsExpander
                     registeredDateTimeAD={row.registeredDateTimeAD}
                     eventName={row.eventName}
@@ -414,6 +587,40 @@ function DashboardView({
       </button>
       <p className="font-bold text-sm text-foreground">{row.clientName}</p>
       <p className="text-xs text-muted-foreground">{row.eventName} · {row.editType}</p>
+      {/* Event age */}
+      {(() => {
+        const age = getEventAge(row.eventDateAD);
+        return age ? (
+          <p className="text-[10px] text-muted-foreground mt-1">
+            {age.bsDisplay} · <span className="font-medium">{age.days}d old</span>
+          </p>
+        ) : null;
+      })()}
+      {/* Edit started */}
+      {(() => {
+        const ago = getTimeAgo(row.editStartedAt);
+        return ago ? (
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            <Timer className="w-3 h-3" />
+            Started {ago}
+          </div>
+        ) : null;
+      })()}
+      {/* Deadline */}
+      {(() => {
+        const dl = getDeadlineInfo(row.deadline);
+        return dl ? (
+          <div className={cn(
+            "flex items-center gap-1 text-[10px] font-medium mt-0.5",
+            dl.isCrossed ? "text-red-600 dark:text-red-400" :
+            dl.isClose ? "text-amber-600 dark:text-amber-400" :
+            "text-green-600 dark:text-green-400"
+          )}>
+            <CalendarIcon className="w-3 h-3" />
+            Deadline: {dl.text}
+          </div>
+        ) : null;
+      })()}
       <div className="flex items-center gap-2 mt-2">
         <UrgencyBadge value={row.urgency || "0"} />
         {row.editor && (
@@ -498,6 +705,71 @@ function DashboardView({
           })}
         </div>
       </div>
+
+      {/* Deadlines Section */}
+      {(() => {
+        const allNonFinalized = STAGES
+          .filter(s => s.key !== 'FINALIZED')
+          .flatMap(s => (rowsByStatus[s.key] || []).map(r => ({ ...r, _stage: s.key })));
+
+        const withDeadline = allNonFinalized.filter(r => r.deadline);
+        const crossed = withDeadline
+          .filter(r => { const dl = getDeadlineInfo(r.deadline); return dl?.isCrossed; })
+          .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
+        const approaching = withDeadline
+          .filter(r => { const dl = getDeadlineInfo(r.deadline); return dl && !dl.isCrossed && dl.isClose; })
+          .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
+
+        if (crossed.length === 0 && approaching.length === 0) return null;
+
+        return (
+          <div>
+            <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              Deadlines
+              <Badge variant="outline" className="text-xs">{crossed.length + approaching.length}</Badge>
+            </h3>
+            <div className="space-y-4">
+              {crossed.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-2 uppercase tracking-wide">Crossed ({crossed.length})</p>
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+                    {crossed.map(row => {
+                      const dl = getDeadlineInfo(row.deadline);
+                      return (
+                        <div key={row.id} className="border-l-4 border-l-red-500 rounded-lg bg-card p-3 shadow-sm">
+                          <p className="font-semibold text-sm text-foreground">{row.clientName}</p>
+                          <p className="text-xs text-muted-foreground">{row.eventName} · {row.editType}</p>
+                          {row.editor && <p className="text-[10px] text-muted-foreground">{row.editor}</p>}
+                          <p className="text-xs font-medium text-red-600 dark:text-red-400 mt-1">{dl?.text}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {approaching.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 mb-2 uppercase tracking-wide">Approaching ({approaching.length})</p>
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+                    {approaching.map(row => {
+                      const dl = getDeadlineInfo(row.deadline);
+                      return (
+                        <div key={row.id} className="border-l-4 border-l-amber-500 rounded-lg bg-card p-3 shadow-sm">
+                          <p className="font-semibold text-sm text-foreground">{row.clientName}</p>
+                          <p className="text-xs text-muted-foreground">{row.eventName} · {row.editType}</p>
+                          {row.editor && <p className="text-[10px] text-muted-foreground">{row.editor}</p>}
+                          <p className="text-xs font-medium text-amber-600 dark:text-amber-400 mt-1">{dl?.text}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Available Editors */}
       {availableEditors.length > 0 && (
@@ -926,7 +1198,7 @@ function VideoEditSidebar({
 
 /* ── Main Component ── */
 export function DesktopVideoEditTracker() {
-  const { rowsByStatus, allRows, isLoading, updateField, pushToStatus, splitRow, mergeRow, togglePlaying } = useVideoEditTracker();
+  const { rowsByStatus, allRows, isLoading, updateField, pushToStatus, splitRow, mergeRow, togglePlaying, updateDeadline } = useVideoEditTracker();
   const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean; whatsapp?: string }[]>([]);
   const [activeView, setActiveView] = useState<ActiveView>('dashboard');
   const [filterClient, setFilterClient] = useState<string | null>(null);
@@ -1249,6 +1521,7 @@ export function DesktopVideoEditTracker() {
                           onClickEditType={(type) => setFilterEditType(prev => prev === type ? null : type)}
                           editors={editors}
                           currentStageKey={stage.key}
+                          onUpdateDeadline={updateDeadline}
                         />
                       </div>
                     );
@@ -1351,6 +1624,7 @@ export function DesktopVideoEditTracker() {
                         onClickEditType={(type) => setFilterEditType(prev => prev === type ? null : type)}
                         editors={editors}
                         currentStageKey={stage.key}
+                        onUpdateDeadline={updateDeadline}
                       />
                     </TabsContent>
                   ))}

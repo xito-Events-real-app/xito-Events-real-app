@@ -1117,7 +1117,9 @@ export type Database = {
           client_name: string | null
           company_notes: string | null
           created_at: string | null
+          deadline: string | null
           deleted: boolean | null
+          edit_started_at: string | null
           edit_type: string | null
           editor: string | null
           event_date_ad: string | null
@@ -1144,7 +1146,9 @@ export type Database = {
           client_name?: string | null
           company_notes?: string | null
           created_at?: string | null
+          deadline?: string | null
           deleted?: boolean | null
+          edit_started_at?: string | null
           edit_type?: string | null
           editor?: string | null
           event_date_ad?: string | null
@@ -1171,7 +1175,9 @@ export type Database = {
           client_name?: string | null
           company_notes?: string | null
           created_at?: string | null
+          deadline?: string | null
           deleted?: boolean | null
+          edit_started_at?: string | null
           edit_type?: string | null
           editor?: string | null
           event_date_ad?: string | null

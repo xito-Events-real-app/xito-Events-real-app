@@ -24,6 +24,8 @@ export interface VideoEditRow {
   forceSplit: boolean;
   isPlaying: boolean;
   playingSince: string;
+  editStartedAt: string;
+  deadline: string;
 }
 
 const VIDEO_DELIVERABLE_SECTIONS = ["video", "videos"] as const;
@@ -168,6 +170,8 @@ function dbToRow(r: any): VideoEditRow {
     forceSplit: r.force_split || false,
     isPlaying: r.is_playing || false,
     playingSince: r.playing_since || "",
+    editStartedAt: r.edit_started_at || "",
+    deadline: r.deadline || "",
   };
 }
 
@@ -196,6 +200,7 @@ export async function updateVideoEditField(id: string, field: string, value: str
     songs: "songs",
     subEventName: "sub_event_name",
     editType: "edit_type",
+    deadline: "deadline",
   };
   const dbField = fieldMap[field] || field;
 
@@ -213,9 +218,30 @@ export async function updateVideoEditField(id: string, field: string, value: str
 }
 
 export async function pushToStatus(id: string, newStatus: string): Promise<void> {
+  const PROGRESS_STAGES = ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'];
+  const updateData: Record<string, any> = {
+    video_edit_status: newStatus,
+    synced_to_sheet: false,
+    updated_at: new Date().toISOString(),
+  };
+
+  // Auto-set edit_started_at when first moving to a progress stage
+  if (PROGRESS_STAGES.includes(newStatus)) {
+    // Only set if not already set - we'll do a conditional update
+    const { data: existing } = await supabase
+      .from("video_edit_tracker")
+      .select("edit_started_at")
+      .eq("id", id)
+      .single();
+
+    if (!existing?.edit_started_at) {
+      updateData.edit_started_at = new Date().toISOString();
+    }
+  }
+
   const { error } = await supabase
     .from("video_edit_tracker")
-    .update({ video_edit_status: newStatus, synced_to_sheet: false, updated_at: new Date().toISOString() })
+    .update(updateData)
     .eq("id", id);
 
   if (error) {

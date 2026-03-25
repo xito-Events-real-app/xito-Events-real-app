@@ -322,6 +322,23 @@ export function useVideoEditTracker() {
     }
   }, [toast, loadRows]);
 
+  const updateDeadline = useCallback(async (id: string, deadline: string | null, mergedIds?: string[]) => {
+    const ids = mergedIds || [id];
+    try {
+      await supabase
+        .from("video_edit_tracker")
+        .update({
+          deadline: deadline,
+          updated_at: new Date().toISOString(),
+        })
+        .in("id", ids);
+      setTimeout(() => { loadRows(); }, 0);
+    } catch (err: any) {
+      toast({ title: "Deadline update failed", description: err.message, variant: "destructive" });
+      loadRows();
+    }
+  }, [toast, loadRows]);
+
   return {
     rowsByStatus: displayRowsByStatus,
     allRows: rows,
@@ -332,6 +349,7 @@ export function useVideoEditTracker() {
     splitRow,
     mergeRow,
     togglePlaying,
+    updateDeadline,
     STAGES,
   };
 }
