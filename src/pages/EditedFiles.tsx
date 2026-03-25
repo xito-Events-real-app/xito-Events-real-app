@@ -15,7 +15,7 @@ export default function EditedFiles() {
   const [recentFiles, setRecentFiles] = useState<EditedFile[]>([]);
   const [totalSize, setTotalSize] = useState(0);
   const [totalClients, setTotalClients] = useState(0);
-  const [view, setView] = useState<'dashboard' | 'browse'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'browse' | 'pcloud'>('dashboard');
   const [previewFile, setPreviewFile] = useState<EditedFile | null>(null);
 
   const loadStats = async () => {
