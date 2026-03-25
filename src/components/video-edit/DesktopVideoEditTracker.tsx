@@ -706,6 +706,71 @@ function DashboardView({
         </div>
       </div>
 
+      {/* Deadlines Section */}
+      {(() => {
+        const allNonFinalized = STAGES
+          .filter(s => s.key !== 'FINALIZED')
+          .flatMap(s => (rowsByStatus[s.key] || []).map(r => ({ ...r, _stage: s.key })));
+
+        const withDeadline = allNonFinalized.filter(r => r.deadline);
+        const crossed = withDeadline
+          .filter(r => { const dl = getDeadlineInfo(r.deadline); return dl?.isCrossed; })
+          .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
+        const approaching = withDeadline
+          .filter(r => { const dl = getDeadlineInfo(r.deadline); return dl && !dl.isCrossed && dl.isClose; })
+          .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
+
+        if (crossed.length === 0 && approaching.length === 0) return null;
+
+        return (
+          <div>
+            <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              Deadlines
+              <Badge variant="outline" className="text-xs">{crossed.length + approaching.length}</Badge>
+            </h3>
+            <div className="space-y-4">
+              {crossed.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-2 uppercase tracking-wide">Crossed ({crossed.length})</p>
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+                    {crossed.map(row => {
+                      const dl = getDeadlineInfo(row.deadline);
+                      return (
+                        <div key={row.id} className="border-l-4 border-l-red-500 rounded-lg bg-card p-3 shadow-sm">
+                          <p className="font-semibold text-sm text-foreground">{row.clientName}</p>
+                          <p className="text-xs text-muted-foreground">{row.eventName} · {row.editType}</p>
+                          {row.editor && <p className="text-[10px] text-muted-foreground">{row.editor}</p>}
+                          <p className="text-xs font-medium text-red-600 dark:text-red-400 mt-1">{dl?.text}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {approaching.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 mb-2 uppercase tracking-wide">Approaching ({approaching.length})</p>
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+                    {approaching.map(row => {
+                      const dl = getDeadlineInfo(row.deadline);
+                      return (
+                        <div key={row.id} className="border-l-4 border-l-amber-500 rounded-lg bg-card p-3 shadow-sm">
+                          <p className="font-semibold text-sm text-foreground">{row.clientName}</p>
+                          <p className="text-xs text-muted-foreground">{row.eventName} · {row.editType}</p>
+                          {row.editor && <p className="text-[10px] text-muted-foreground">{row.editor}</p>}
+                          <p className="text-xs font-medium text-amber-600 dark:text-amber-400 mt-1">{dl?.text}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Available Editors */}
       {availableEditors.length > 0 && (
         <div>
