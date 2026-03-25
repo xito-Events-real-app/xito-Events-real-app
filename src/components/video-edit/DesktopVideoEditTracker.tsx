@@ -1143,7 +1143,51 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField }:
       title: "Next Up", icon: Clock, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/50",
       content: nextEdit ? (
         <div><p className="font-bold text-sm text-foreground">{nextEdit.clientName}</p><p className="text-xs text-muted-foreground">{nextEdit.eventName} · {nextEdit.editType}</p></div>
-      ) : <p className="text-xs text-muted-foreground">Queue is empty</p>
+      ) : <p className="text-xs text-muted-foreground">Queue is empty</p>,
+      extra: (() => {
+        const candidates = NEXT_UP_PRIORITY_STAGES.flatMap(stageKey => {
+          const stage = STAGES.find(s => s.key === stageKey);
+          return (rowsByStatus[stageKey] || [])
+            .filter(r => r.editor === editorName)
+            .map(r => ({ ...r, _stageKey: stageKey, _stageLabel: stage?.label || stageKey }));
+        });
+        if (!candidates.length) return null;
+        return (
+          <Popover open={nextUpOpen} onOpenChange={setNextUpOpen}>
+            <PopoverTrigger asChild>
+              <Button size="sm" variant="outline" className="h-6 text-[10px] mt-1 w-full">Set Next Edit</Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 p-2 max-h-72 overflow-y-auto" align="start">
+              <p className="text-xs font-semibold text-muted-foreground mb-2">Pick the next edit for {editorName}</p>
+              {NEXT_UP_PRIORITY_STAGES.map(stageKey => {
+                const stageRows = candidates.filter(r => r._stageKey === stageKey);
+                if (!stageRows.length) return null;
+                const stageLabel = STAGES.find(s => s.key === stageKey)?.label || stageKey;
+                return (
+                  <div key={stageKey} className="mb-2">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-1">{stageLabel}</p>
+                    {stageRows.map(r => (
+                      <button
+                        key={r.id}
+                        className="w-full text-left px-2 py-1.5 rounded hover:bg-accent flex items-center gap-2 text-xs"
+                        onClick={() => {
+                          onUpdateField(r.id, 'urgency', '5', r.mergedIds);
+                          setNextUpOpen(false);
+                        }}
+                      >
+                        <Badge className={cn("text-[9px] px-1.5 py-0", NEXT_UP_STAGE_COLORS[stageKey] || '')}>{stageLabel}</Badge>
+                        <span className="font-semibold truncate">{r.clientName}</span>
+                        <span className="text-muted-foreground truncate">{r.editType}</span>
+                        <UrgencyBadge value={r.urgency || "0"} />
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
+            </PopoverContent>
+          </Popover>
+        );
+      })()
     },
     {
       title: "Last Finalized", icon: CheckCircle, color: "text-green-600 dark:text-green-400", bg: "bg-green-50 dark:bg-green-950/50",
