@@ -3,11 +3,41 @@ import { useVideoEditTracker, STAGES, DisplayRow } from "@/hooks/useVideoEditTra
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { X, Filter, Flame, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, ChevronDown, ChevronRight, FolderOpen } from "lucide-react";
+import { X, Filter, Flame, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, ChevronDown, ChevronRight, FolderOpen, Timer, CalendarIcon } from "lucide-react";
 import { FileDetailsExpander } from "./FileDetailsExpander";
 import { supabase } from "@/integrations/supabase/client";
-import { adToBS, nepaliMonthsEnglish, getBSYearsRange } from "@/lib/nepali-date";
+import { adToBS, nepaliMonthsEnglish, getBSYearsRange, formatBSDate } from "@/lib/nepali-date";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
+
+function getEventAgePipeline(eventDateAD: string): { days: number; bsDisplay: string } | null {
+  if (!eventDateAD) return null;
+  try {
+    const eventDate = new Date(eventDateAD);
+    if (isNaN(eventDate.getTime())) return null;
+    const now = new Date();
+    const diffMs = now.getTime() - eventDate.getTime();
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const bs = adToBS(eventDate);
+    return { days, bsDisplay: formatBSDate(bs) };
+  } catch { return null; }
+}
+
+function getDeadlineInfoPipeline(deadline: string): { text: string; isCrossed: boolean; isClose: boolean } | null {
+  if (!deadline) return null;
+  try {
+    const dl = new Date(deadline);
+    if (isNaN(dl.getTime())) return null;
+    const now = new Date();
+    const diffMs = dl.getTime() - now.getTime();
+    const totalHours = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60));
+    const days = Math.floor(totalHours / 24);
+    const hrs = totalHours % 24;
+    const timeStr = days > 0 ? `${days}d ${hrs}h` : `${hrs}h`;
+    if (diffMs < 0) return { text: `Crossed ${timeStr} ago`, isCrossed: true, isClose: false };
+    return { text: `${timeStr} left`, isCrossed: false, isClose: diffMs < 3 * 24 * 60 * 60 * 1000 };
+  } catch { return null; }
+}
 
 const URGENCY_COLORS: Record<string, string> = {
   "1": "bg-muted text-muted-foreground",
