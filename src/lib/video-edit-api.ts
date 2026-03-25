@@ -21,6 +21,7 @@ export interface VideoEditRow {
   clientDemand: string;
   reference: string;
   songs: string;
+  forceSplit: boolean;
 }
 
 const VIDEO_DELIVERABLE_SECTIONS = ["video", "videos"] as const;
