@@ -239,6 +239,11 @@ export async function pushToStatus(id: string, newStatus: string): Promise<void>
     if (!existing?.edit_started_at) {
       updateData.edit_started_at = new Date().toISOString();
     }
+    // Auto-start playing when moving to EDIT_ON_PROGRESS
+    if (newStatus === 'EDIT_ON_PROGRESS') {
+      updateData.is_playing = true;
+      updateData.playing_since = new Date().toISOString();
+    }
   }
 
   // Append to stage_history
