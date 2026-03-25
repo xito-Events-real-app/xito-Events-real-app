@@ -338,6 +338,102 @@ export type Database = {
         }
         Relationships: []
       }
+      edited_files: {
+        Row: {
+          client_name: string
+          created_at: string
+          event_name: string
+          file_name: string
+          file_path: string
+          file_size_bytes: number
+          file_type: string
+          folder_event_name: string
+          id: string
+          mime_type: string
+          photographer_name: string
+          registered_date_time_ad: string
+          side_folder: string
+          storage_path: string
+          updated_at: string
+          upload_progress: number
+          upload_status: string
+        }
+        Insert: {
+          client_name?: string
+          created_at?: string
+          event_name?: string
+          file_name?: string
+          file_path?: string
+          file_size_bytes?: number
+          file_type?: string
+          folder_event_name?: string
+          id?: string
+          mime_type?: string
+          photographer_name?: string
+          registered_date_time_ad: string
+          side_folder?: string
+          storage_path?: string
+          updated_at?: string
+          upload_progress?: number
+          upload_status?: string
+        }
+        Update: {
+          client_name?: string
+          created_at?: string
+          event_name?: string
+          file_name?: string
+          file_path?: string
+          file_size_bytes?: number
+          file_type?: string
+          folder_event_name?: string
+          id?: string
+          mime_type?: string
+          photographer_name?: string
+          registered_date_time_ad?: string
+          side_folder?: string
+          storage_path?: string
+          updated_at?: string
+          upload_progress?: number
+          upload_status?: string
+        }
+        Relationships: []
+      }
+      edited_files_links: {
+        Row: {
+          client_name: string
+          created_at: string
+          id: string
+          link_title: string
+          link_type: string
+          link_url: string
+          notes: string
+          registered_date_time_ad: string
+          updated_at: string
+        }
+        Insert: {
+          client_name?: string
+          created_at?: string
+          id?: string
+          link_title?: string
+          link_type?: string
+          link_url?: string
+          notes?: string
+          registered_date_time_ad: string
+          updated_at?: string
+        }
+        Update: {
+          client_name?: string
+          created_at?: string
+          id?: string
+          link_title?: string
+          link_type?: string
+          link_url?: string
+          notes?: string
+          registered_date_time_ad?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       event_details_cache: {
         Row: {
           do_groom_come_in_mehndi: string | null

@@ -40,6 +40,9 @@ import CrewSchedule from "./pages/CrewSchedule";
 import VideoEditTracker from "./pages/VideoEditTracker";
 import FileClientDetail from "./pages/FileClientDetail";
 import PotentialDelete from "./pages/PotentialDelete";
+import EditedFiles from "./pages/EditedFiles";
+import { EditedFilesUploadProvider } from "./components/edited-files/EditedFilesUploadContext";
+import { UploadProgressTracker } from "./components/edited-files/UploadProgressTracker";
 
 const queryClient = new QueryClient();
 
@@ -54,7 +57,8 @@ const App = () => (
     <TooltipProvider>
       <SaugatSearchProvider>
         <BookingCalendarPopupProvider>
-          <BenzoKeepPopupProvider>
+           <BenzoKeepPopupProvider>
+          <EditedFilesUploadProvider>
           <BrowserRouter>
             <AuthProvider>
               <WtnFilesAnnouncement />
@@ -63,6 +67,7 @@ const App = () => (
               <FloatingBenzoKeep />
               <Toaster />
               <Sonner />
+              <UploadProgressTracker />
             <Routes>
               {/* Public routes - no auth required */}
               <Route path="/client-form/:clientName/:clientId" element={<ClientContactForm />} />
@@ -104,12 +109,14 @@ const App = () => (
               <Route path="/freelancers" element={<ProtectedRoute><Freelancers /></ProtectedRoute>} />
               <Route path="/freelancer/:freelancerName" element={<ProtectedRoute><FreelancerProfile /></ProtectedRoute>} />
               <Route path="/potential-delete" element={<ProtectedRoute><PotentialDelete /></ProtectedRoute>} />
+              <Route path="/edited-files" element={<ProtectedRoute><EditedFiles /></ProtectedRoute>} />
               
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AuthProvider>
           </BrowserRouter>
-          </BenzoKeepPopupProvider>
+          </EditedFilesUploadProvider>
+           </BenzoKeepPopupProvider>
         </BookingCalendarPopupProvider>
       </SaugatSearchProvider>
       </TooltipProvider>
