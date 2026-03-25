@@ -298,6 +298,19 @@ export function PCloudBrowser() {
           )}
         </div>
       )}
+
+      {/* In-app preview dialog */}
+      {previewItem && (
+        <PCloudPreviewDialog
+          item={previewItem}
+          url={previewUrl}
+          open={previewOpen}
+          onOpenChange={(open) => {
+            setPreviewOpen(open);
+            if (!open) setPreviewItem(null);
+          }}
+        />
+      )}
     </div>
   );
 }
