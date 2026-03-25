@@ -437,32 +437,32 @@ function DashboardView({
                   <div key={editor.name} className="rounded-xl border-2 border-amber-400 dark:border-amber-600 bg-card p-4 shadow-sm">
                     <div className="flex items-center justify-between mb-2">
                       <span className="font-semibold text-sm text-foreground">{editor.name}</span>
-                      <div className="flex items-center gap-2">
-                        <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200 text-[10px]">Edit Lab</Badge>
-                        {editor.whatsapp && (
-                          <button
-                            onClick={() => {
-                              const topRow = editor.rows[0];
-                              const msg = topRow
-                                ? `Hi ${editor.name}, have you started editing ${topRow.clientName} - ${topRow.eventName} (${topRow.editType})?`
-                                : `Hi ${editor.name}, have you started editing?`;
-                              openWhatsApp(editor.whatsapp, msg);
-                            }}
-                            className="p-1.5 rounded-lg bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900 transition-colors"
-                            title="Ask on WhatsApp"
-                          >
-                            <Phone className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
+                      <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200 text-[10px]">Edit Lab</Badge>
                     </div>
                     <div className="space-y-1.5">
-                      {editor.rows.map(row => (
-                        <div key={row.id} className="text-xs text-muted-foreground flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-                          {row.clientName} · {row.eventName} · {row.editType}
-                        </div>
-                      ))}
+                      {editor.rows.map(row => {
+                        const firstName = editor.name.split(' ')[0];
+                        const phone = editor.whatsapp;
+                        return (
+                          <div key={row.id} className="text-xs text-muted-foreground flex items-center justify-between gap-1">
+                            <div className="flex items-center gap-1 min-w-0">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                              <span className="truncate">{row.clientName} · {row.eventName} · {row.editType}</span>
+                            </div>
+                            {phone && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openWhatsApp(phone, `Hi ${firstName}, have you started editing ${row.clientName} - ${row.eventName} (${row.editType})?`);
+                                }}
+                                className="shrink-0 px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900 transition-colors text-[10px] font-medium whitespace-nowrap"
+                              >
+                                Ask {firstName}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 );
@@ -846,12 +846,12 @@ export function DesktopVideoEditTracker() {
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from("freelancers_cache").select("name, video_editor, whatsapp_no").order("name");
+      const { data } = await supabase.from("freelancers_cache").select("name, video_editor, whatsapp_no, contact_no").order("name");
       if (data) {
         setEditors(
           data
             .filter(f => f.name)
-            .map(f => ({ name: f.name!, isVideoEditor: f.video_editor?.toUpperCase() === "YES", whatsapp: f.whatsapp_no || '' }))
+            .map(f => ({ name: f.name!, isVideoEditor: f.video_editor?.toUpperCase() === "YES", whatsapp: f.whatsapp_no || f.contact_no || '' }))
         );
       }
     })();
