@@ -982,6 +982,7 @@ export function DesktopVideoEditTracker() {
                 onStageClick={handleStageClick}
                 onAssign={(id, editor, mergedIds) => updateField(id, 'editor', editor, mergedIds)}
                 availableEditors={availableEditors}
+                onPushToStatus={pushToStatus}
               />
             </div>
           </div>
