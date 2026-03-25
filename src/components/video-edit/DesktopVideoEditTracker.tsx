@@ -759,16 +759,12 @@ function DashboardView({
           </div>
         ) : null;
       })()}
-      {/* Edit started */}
-      {(() => {
-        const ago = getTimeAgo(row.editStartedAt);
-        return ago ? (
-          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-            <Timer className="w-3 h-3" />
-            Started {ago}
-          </div>
-        ) : null;
-      })()}
+      {/* Live edit timer */}
+      {row.editStartedAt && (
+        <div className="mt-1">
+          <LiveEditTimer editStartedAt={row.editStartedAt} stageHistory={row.stageHistory} size="card" stageKey={row._progressStage} />
+        </div>
+      )}
       {/* Deadline */}
       {(() => {
         const dl = getDeadlineInfo(row.deadline);
