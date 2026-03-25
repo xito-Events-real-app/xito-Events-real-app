@@ -1,4 +1,4 @@
-import { Calendar, FileText, Users, Clock, DollarSign, Activity, MessageSquare, CreditCard, ArrowLeft, ChevronLeft, ChevronRight, LayoutDashboard, StickyNote, UserCog, FolderOpen, Package } from "lucide-react";
+import { Calendar, FileText, Users, Clock, DollarSign, Activity, MessageSquare, CreditCard, ArrowLeft, ChevronLeft, ChevronRight, LayoutDashboard, StickyNote, UserCog, FolderOpen, Package, Film } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
