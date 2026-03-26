@@ -192,6 +192,8 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
       currentGroup.clients.forEach(c => names.add(c.clientName));
     } else if (currentLevel === 2) {
       PCLOUD_CATEGORIES.forEach(cat => names.add(cat.name));
+      // Also hide research folders that exist in pCloud but belong to Barun's Research
+      RESEARCH_CATEGORIES.forEach(cat => names.add(cat.name));
     } else if (currentLevel === 3 && currentClientFolder) {
       if (selectedCategory === "Photos") {
         [...currentClientFolder.events, "Selected"].forEach(e => names.add(e));
