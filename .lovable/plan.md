@@ -1,70 +1,72 @@
 
 
-## Plan: Use Majority Month for Client Folder Grouping
+## Plan: Direct pCloud API Access (Bypass Edge Function Proxy)
 
-### Problem
-A client like Shakti Neupane has events across multiple months (e.g., 3 events in Falgun, 1 in Chaitra). The current logic adds the client to **every** month group, creating duplicate folders. This also breaks the Album section because it constructs the S3 prefix using per-assignment year/month — if the photos were uploaded under one month folder but the album looks up a different month, it finds nothing.
+### Why It's Slow
 
-### Solution: Majority-Month Logic
-Instead of adding a client to every unique month group, determine **one** canonical month-year by majority vote:
-1. Count occurrences of each `year-month` combo across all events
-2. Pick the one with the highest count
-3. If tied, pick the one that appears first (earliest index in the event list)
+Every pCloud call currently follows this path:
 
-This affects **two places**:
+```text
+Browser → Supabase Edge Function → pCloud API → Edge Function → Browser
+```
+
+This adds 200-500ms latency per request. For thumbnails, the edge function fetches each one individually in a sequential loop, compounding the delay.
+
+### Solution: Get Auth Token Once, Then Call pCloud Directly
+
+pCloud's API is designed for direct browser access (they have a JS SDK). We can eliminate the proxy for read operations by:
+
+1. **Add a `getauth` action** to the edge function that returns just the cached auth token
+2. **Call pCloud API directly from the browser** for `listfolder`, `getfilelink`, `getthumblink`, etc.
+3. **Cache the token client-side** (valid for ~1 hour) so subsequent calls skip the edge function entirely
+
+New flow:
+```text
+Browser → Edge Function (once, get token)
+Browser → pCloud API directly (all subsequent calls)
+```
 
 ### Files to Modify
 
-**1. `src/lib/xito-drive-utils.ts` — `buildMonthYearGroups()`**
+**1. `supabase/functions/pcloud-api/index.ts`**
+- Add a `getauth` action that returns the cached auth token to the browser
 
-Replace the current loop (lines 84-116) that adds the client to every month group. New logic:
+**2. `src/lib/pcloud-api.ts`**
+- Add `getPCloudAuthToken()` that fetches the token from the edge function once and caches it in memory
+- Change `listPCloudFolder`, `getPCloudFileLink`, `getPCloudThumbUrl`, `getPCloudThumbsBatch` to call `https://api.pcloud.com` directly using the cached token
+- For `getthumbslinks`, fetch all thumbs in parallel directly from the browser instead of sequentially through the edge function
+- Keep `uploadToPCloud` and write operations through the edge function (they need server-side handling)
 
-```text
-For each client:
-  1. Parse years[], months[] from newline-separated fields
-  2. Count frequency of each "year-month" combo
-  3. Pick the combo with max frequency (ties → first occurrence)
-  4. Add client to ONLY that one group
-```
-
-**2. `src/components/client-detail/AlbumSection.tsx` — tabs `useMemo`**
-
-Currently each assignment's own `eventYear`/`eventMonth` is used to build the S3 prefix. This means events in different months get different prefixes, but the actual files live under the majority-month folder.
-
-Fix: compute the majority month once from all assignments for this client, then use that single `yearMonth` for ALL tabs.
-
-```text
-Before building tabs:
-  1. Count frequency of each year-month across all assignments
-  2. Determine majorityYearMonth (same logic as xito-drive-utils)
-  3. Use majorityYearMonth for every tab's s3Prefix instead of per-assignment month
-```
+**3. `src/components/edited-files/PCloudBrowser.tsx`**
+- No changes needed — the API layer handles it transparently
 
 ### Technical Details
 
-Majority month helper (shared or inline):
+Client-side token cache:
 ```typescript
-function getMajorityYearMonth(years: string[], months: string[]): string {
-  const freq = new Map<string, number>();
-  const order: string[] = [];
-  for (let i = 0; i < Math.max(years.length, months.length, 1); i++) {
-    const y = String(parseInt(years[i] || years[0] || "0"));
-    const m = String(parseInt(months[i] || months[0] || "0")).padStart(2, "0");
-    const key = `${y}-${m}`;
-    if (!freq.has(key)) order.push(key);
-    freq.set(key, (freq.get(key) || 0) + 1);
+let cachedToken: { token: string; expiresAt: number } | null = null;
+
+async function getAuthToken(): Promise<string> {
+  if (cachedToken && Date.now() < cachedToken.expiresAt - 60000) {
+    return cachedToken.token;
   }
-  let best = order[0] || "0-00";
-  let bestCount = 0;
-  for (const k of order) {
-    if ((freq.get(k) || 0) > bestCount) {
-      best = k;
-      bestCount = freq.get(k) || 0;
-    }
-  }
-  return best;
+  const { data } = await supabase.functions.invoke('pcloud-api', {
+    body: { action: 'getauth', params: {} }
+  });
+  cachedToken = { token: data.auth, expiresAt: Date.now() + 3500000 };
+  return cachedToken.token;
 }
 ```
 
-This ensures each client appears in exactly one folder in XITO DRIVE, and the Album section looks up the correct S3 path matching where files were actually uploaded.
+Direct pCloud call:
+```typescript
+async function callPCloudDirect(endpoint: string, params: Record<string, string>) {
+  const auth = await getAuthToken();
+  const query = new URLSearchParams({ auth, ...params });
+  const res = await fetch(`https://api.pcloud.com${endpoint}?${query}`);
+  return res.json();
+}
+```
+
+This eliminates the edge function round-trip for every browse/preview action, making it as fast as native pCloud.
 
