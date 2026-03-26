@@ -393,7 +393,7 @@ serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ error: "Unknown action. Use: list, createFolder, upload, delete, getSignedUrl, getSignedUrls" }), {
+    return new Response(JSON.stringify({ error: "Unknown action. Use: list, createFolder, upload, delete, getSignedUrl, getSignedUrls, getUploadUrl" }), {
       status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
