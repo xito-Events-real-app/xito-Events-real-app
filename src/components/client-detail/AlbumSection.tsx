@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { BookOpen, Image as ImageIcon, Loader2, FolderOpen } from "lucide-react";
+import { BookOpen, Image as ImageIcon, Loader2, FolderOpen, Camera } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -36,6 +36,7 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, eventYear, eventMonth,
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [tabPhotoCounts, setTabPhotoCounts] = useState<Record<string, number>>({});
 
   // Load deliverables
   useEffect(() => {
@@ -48,9 +49,7 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, eventYear, eventMonth,
 
   // Album summary from deliverables
   const albumSummary = useMemo(() => {
-    const albumRows = deliverables.filter(
-      (d) => d.section === "album" && d.enabled
-    );
+    const albumRows = deliverables.filter((d) => d.section === "album" && d.enabled);
     const sides: string[] = [];
     const types: string[] = [];
     albumRows.forEach((r) => {
@@ -69,17 +68,17 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, eventYear, eventMonth,
     const result: TabDef[] = [];
 
     assignments.forEach((a) => {
-      const photographers: { name: string; role: string }[] = [];
-      if (a.photographerBride) photographers.push({ name: a.photographerBride, role: "PB" });
-      if (a.photographerGroom) photographers.push({ name: a.photographerGroom, role: "PG" });
-      if (a.extraPhotographer) photographers.push({ name: a.extraPhotographer, role: "EP" });
+      const photographers: { name: string }[] = [];
+      if (a.photographerBride) photographers.push({ name: a.photographerBride });
+      if (a.photographerGroom) photographers.push({ name: a.photographerGroom });
+      if (a.extraPhotographer) photographers.push({ name: a.extraPhotographer });
 
       photographers.forEach((p) => {
         const tabId = `${a.event}-${p.name}`;
         const prefix = `${yearMonth}/${clientName}/Photos/${a.event}/${p.name}/`;
         result.push({
           id: tabId,
-          label: photographers.length > 1 ? `${a.event} (${p.name})` : a.event,
+          label: `${a.event} (${p.name})`,
           eventName: a.event,
           photographerName: p.name,
           s3Prefix: prefix,
@@ -88,6 +87,26 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, eventYear, eventMonth,
     });
     return result;
   }, [assignments, eventYear, eventMonth, clientName]);
+
+  // Fetch photo counts for all tabs on mount
+  useEffect(() => {
+    if (tabs.length === 0) return;
+    tabs.forEach((tab) => {
+      listE2Folder(tab.s3Prefix)
+        .then((result) => {
+          const count = result.files.filter((f) => isImage(f.key)).length;
+          setTabPhotoCounts((prev) => ({ ...prev, [tab.id]: count }));
+        })
+        .catch(() => {
+          setTabPhotoCounts((prev) => ({ ...prev, [tab.id]: 0 }));
+        });
+    });
+  }, [tabs]);
+
+  // Total photos across all tabs
+  const totalPhotos = useMemo(() => {
+    return Object.values(tabPhotoCounts).reduce((sum, c) => sum + c, 0);
+  }, [tabPhotoCounts]);
 
   // Auto-select first tab
   useEffect(() => {
@@ -106,9 +125,14 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, eventYear, eventMonth,
       .then(async (result) => {
         const imageFiles = result.files.filter((f) => isImage(f.key));
         setPhotos(imageFiles);
+        // Batch URLs in chunks of 20
         if (imageFiles.length > 0) {
-          const urls = await getE2FileUrls(imageFiles.map((f) => f.key));
-          setPhotoUrls(urls);
+          const chunkSize = 20;
+          for (let i = 0; i < imageFiles.length; i += chunkSize) {
+            const chunk = imageFiles.slice(i, i + chunkSize);
+            const urls = await getE2FileUrls(chunk.map((f) => f.key));
+            setPhotoUrls((prev) => ({ ...prev, ...urls }));
+          }
         }
       })
       .catch((err) => console.error("Failed to load album photos:", err))
@@ -130,7 +154,7 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, eventYear, eventMonth,
             <div className="p-2 rounded-lg bg-primary/20">
               <BookOpen className="h-5 w-5 text-primary" />
             </div>
-            <div>
+            <div className="flex-1">
               <h3 className="text-lg font-semibold text-white">Album Overview</h3>
               {deliverablesLoaded && (
                 <p className="text-sm text-white/50">
@@ -140,6 +164,12 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, eventYear, eventMonth,
                 </p>
               )}
             </div>
+            {tabs.length > 0 && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10">
+                <Camera className="h-3.5 w-3.5 text-white/50" />
+                <span className="text-sm font-medium text-white/70">{totalPhotos} photos</span>
+              </div>
+            )}
           </div>
 
           {albumSummary.count > 0 && (
@@ -170,15 +200,18 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, eventYear, eventMonth,
       ) : (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="w-full flex-wrap h-auto gap-1 bg-[hsl(220,25%,10%)] p-1.5">
-            {tabs.map((tab) => (
-              <TabsTrigger
-                key={tab.id}
-                value={tab.id}
-                className="text-xs px-3 py-1.5 data-[state=active]:bg-primary data-[state=active]:text-white text-white/60"
-              >
-                {tab.label}
-              </TabsTrigger>
-            ))}
+            {tabs.map((tab) => {
+              const count = tabPhotoCounts[tab.id];
+              return (
+                <TabsTrigger
+                  key={tab.id}
+                  value={tab.id}
+                  className="text-xs px-3 py-1.5 data-[state=active]:bg-primary data-[state=active]:text-white text-white/60"
+                >
+                  {tab.label}{count !== undefined ? ` · ${count}` : ""}
+                </TabsTrigger>
+              );
+            })}
           </TabsList>
 
           {tabs.map((tab) => (
@@ -215,7 +248,7 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, eventYear, eventMonth,
                           {url ? (
                             <img
                               src={url}
-                              alt={file.key.split("/").pop() || ""}
+                              alt=""
                               className="w-full h-full object-cover"
                               loading="lazy"
                             />
