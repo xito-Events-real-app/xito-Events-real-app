@@ -10,24 +10,18 @@ interface XitoImageViewerProps {
 
 const XitoImageViewer = ({ images, initialIndex, onClose }: XitoImageViewerProps) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const [loaded, setLoaded] = useState<Record<number, boolean>>({});
-  const [fadeIn, setFadeIn] = useState(true);
   const touchStartX = useRef(0);
   const total = images.length;
   const isLast = currentIndex === total - 1;
   const isFirst = currentIndex === 0;
 
-  const goTo = useCallback((idx: number) => {
-    if (idx < 0 || idx >= total) return;
-    setFadeIn(false);
-    setTimeout(() => {
-      setCurrentIndex(idx);
-      setFadeIn(true);
-    }, 120);
-  }, [total]);
+  const goPrev = useCallback(() => {
+    if (currentIndex > 0) setCurrentIndex(currentIndex - 1);
+  }, [currentIndex]);
 
-  const goPrev = useCallback(() => goTo(currentIndex - 1), [currentIndex, goTo]);
-  const goNext = useCallback(() => goTo(currentIndex + 1), [currentIndex, goTo]);
+  const goNext = useCallback(() => {
+    if (currentIndex < total - 1) setCurrentIndex(currentIndex + 1);
+  }, [currentIndex, total]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -39,17 +33,6 @@ const XitoImageViewer = ({ images, initialIndex, onClose }: XitoImageViewerProps
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [goPrev, goNext, onClose]);
-
-  // Preload adjacent images
-  useEffect(() => {
-    [currentIndex - 1, currentIndex, currentIndex + 1].forEach((i) => {
-      if (i >= 0 && i < total && images[i]?.url) {
-        const img = new Image();
-        img.src = images[i].url;
-        img.onload = () => setLoaded((p) => ({ ...p, [i]: true }));
-      }
-    });
-  }, [currentIndex, total, images]);
 
   // Touch swipe
   const onTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
@@ -68,7 +51,10 @@ const XitoImageViewer = ({ images, initialIndex, onClose }: XitoImageViewerProps
     a.click();
   };
 
-  const fileName = images[currentIndex]?.key.split("/").pop() || "";
+  // Determine which indices to render (prev, current, next)
+  const renderIndices = [currentIndex - 1, currentIndex, currentIndex + 1].filter(
+    (i) => i >= 0 && i < total
+  );
 
   return (
     <div
@@ -105,24 +91,19 @@ const XitoImageViewer = ({ images, initialIndex, onClose }: XitoImageViewerProps
           </button>
         )}
 
-        {/* Image */}
-        <img
-          src={images[currentIndex]?.url}
-          alt={fileName}
-          className={cn(
-            "max-h-full max-w-full object-contain transition-opacity duration-200",
-            fadeIn ? "opacity-100" : "opacity-0"
-          )}
-          draggable={false}
-          onLoad={() => setLoaded((p) => ({ ...p, [currentIndex]: true }))}
-        />
-
-        {/* Loading spinner */}
-        {!loaded[currentIndex] && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="h-10 w-10 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-          </div>
-        )}
+        {/* Preloaded images: prev, current, next rendered in DOM */}
+        {renderIndices.map((idx) => (
+          <img
+            key={images[idx]?.key || idx}
+            src={images[idx]?.url}
+            alt=""
+            className={cn(
+              "absolute inset-0 m-auto max-h-full max-w-full object-contain transition-opacity duration-150",
+              idx === currentIndex ? "opacity-100 z-[1]" : "opacity-0 z-0 pointer-events-none"
+            )}
+            draggable={false}
+          />
+        ))}
 
         {/* Right Arrow */}
         {!isLast && (
@@ -137,18 +118,13 @@ const XitoImageViewer = ({ images, initialIndex, onClose }: XitoImageViewerProps
 
       {/* End of folder message */}
       {isLast && (
-        <div className="absolute bottom-20 left-0 right-0 text-center">
+        <div className="absolute bottom-6 left-0 right-0 text-center">
           <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/10 backdrop-blur-md text-white/80 text-sm">
             <ImageIcon className="h-4 w-4" />
             You've viewed all {total} photos from this folder
           </div>
         </div>
       )}
-
-      {/* Bottom file name */}
-      <div className="px-4 py-2 bg-black/80 text-center">
-        <div className="text-xs text-white/40 truncate">{fileName}</div>
-      </div>
     </div>
   );
 };
