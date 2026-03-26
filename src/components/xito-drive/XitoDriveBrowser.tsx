@@ -514,6 +514,29 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
         </div>
       </div>
 
+      {/* Upload progress indicator */}
+      {uploadProgress.length > 0 && (
+        <div className="space-y-1.5 bg-muted/50 rounded-lg px-3 py-2 border border-border/50">
+          <p className="text-xs font-medium text-foreground">
+            Uploading {uploadProgress.filter(p => p.percent < 100).length > 0
+              ? `${uploadProgress.filter(p => p.percent >= 100).length}/${uploadProgress.length} files...`
+              : "Complete!"}
+          </p>
+          {uploadProgress.map((item, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <p className="text-[11px] text-muted-foreground truncate min-w-0 flex-1 max-w-[200px]">{item.name}</p>
+              <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary rounded-full transition-all duration-300"
+                  style={{ width: `${item.percent}%` }}
+                />
+              </div>
+              <span className="text-[11px] text-muted-foreground w-9 text-right">{item.percent}%</span>
+            </div>
+          ))}
+        </div>
+      )
+
       {/* Breadcrumb */}
       <div className="flex items-center gap-1 text-sm flex-wrap bg-muted/50 rounded-lg px-3 py-2 border border-border/50">
         <button onClick={() => navigateTo(-1)} className="flex items-center gap-1 text-primary hover:underline font-medium">
