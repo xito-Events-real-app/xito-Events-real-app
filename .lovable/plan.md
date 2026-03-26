@@ -1,40 +1,28 @@
 
 
-## Plan: Fix Album Photo Loading, Viewer UX & UI Improvements
+## Plan: Fix Album Loading Performance and Data Sanitization
 
-### Issues to Fix
+### Problems Found in Network Requests
 
-1. **Slow photo loading** — All signed URLs are fetched in one batch, but thumbnails load simultaneously causing congestion. Fix: batch URLs in chunks + use progressive loading.
-2. **Preloaded photos visible in background** — The preloading `new Image()` approach is correct but the viewer shows a fade transition that briefly shows the old image behind. Fix: use a hidden preload layer and only swap when the next image is fully loaded, no fade-out gap.
-3. **Tab labels missing photographer name** — Currently only shows photographer name when multiple photographers exist. Fix: always show `Event (Photographer)` format.
-4. **Remove filename from viewer bottom bar** — User doesn't want the file name shown.
-5. **Add total photo count in Album header** — Show total photos across all tabs.
-6. **Add per-tab photo count in tab label** — Show count next to each tab.
+1. **Year sanitization** — The `parseInt(aYear)` fix will handle newline-corrupted years. For PRASANNA MAINALI the year is already clean ("2082"), so this isn't the bottleneck here.
+
+2. **Duplicate tabs** — No deduplication exists, so the same `tabId` can appear multiple times, doubling API calls. Fix: add a `Set<string>` to skip duplicate tab IDs.
+
+3. **Massive file sizes** — The real slowness: photos are **3-7MB each** (full-res JPEGs). Loading 14 of these as grid thumbnails = ~70MB of downloads. The `listE2Folder` API calls themselves return in under 1 second. Fix: the grid thumbnails should not load all at once — use `loading="lazy"` (already present) but also limit initial URL fetching to the **first 12 photos** and load more on scroll.
+
+4. **Double list calls** — Each tab fires `listE2Folder` twice: once for count (on mount for all tabs) and once when the tab is active. Fix: cache the list result from the count fetch and reuse it when the tab becomes active instead of re-fetching.
 
 ### Files to Modify
 
-**1. `src/components/client-detail/AlbumSection.tsx`**
-- Store per-tab photo counts in state: `tabPhotoCounts: Record<string, number>`
-- When photos load for a tab, update that tab's count
-- Fetch counts for ALL tabs on mount (parallel `listE2Folder` calls, just for file count)
-- Show total across all tabs in Album Overview header: "Total Photos: 245"
-- Update tab labels to always include photographer: `{event} ({photographer}) · {count}`
-- Always show `{event} ({photographerName})` in tab label regardless of photographer count
+**`src/components/client-detail/AlbumSection.tsx`**
+- Sanitize year with `parseInt()` (line 70)
+- Deduplicate tabs using a `Set<string>` for seen tab IDs
+- Cache `listE2Folder` results from count-fetching into a `useRef<Record<string, E2File[]>>` so the active tab reuses cached file lists instead of re-fetching
+- Limit initial `getE2FileUrls` batch to first 12 photos; fetch remaining URLs when user scrolls down (intersection observer or "Load more" button)
 
-**2. `src/components/client-detail/XitoImageViewer.tsx`**
-- Remove bottom filename bar entirely (lines 148-151)
-- Fix preloading: render prev/next images as hidden `<img>` elements in the DOM (not `new Image()`) so they're truly cached and ready
-- Remove the fade-out/fade-in gap: instead of `setFadeIn(false) → setTimeout → setFadeIn(true)`, instantly swap images since adjacent ones are preloaded. Use a crossfade approach where the new image renders on top immediately.
-
-### Technical Approach
-
-**Preloading fix (XitoImageViewer):**
-- Render 3 `<img>` tags: previous, current, next — only current is visible (`opacity-100`), prev/next are `opacity-0 absolute` but still in DOM loading
-- On navigate: instantly update `currentIndex` — since the image is already loaded in DOM, it appears immediately
-- No setTimeout fade needed
-
-**Photo count per tab (AlbumSection):**
-- On component mount, fire `listE2Folder` for each tab's prefix in parallel
-- Store `{ [tabId]: number }` counts
-- Display in tab trigger and in header as sum
+### This will fix all clients and years because:
+- `parseInt()` strips any garbage characters from year/month fields universally
+- Tab deduplication prevents redundant API calls regardless of how many assignment rows exist
+- Cached list results cut API calls in half for every client
+- Lazy URL fetching reduces initial bandwidth from ~70MB to ~15MB
 
