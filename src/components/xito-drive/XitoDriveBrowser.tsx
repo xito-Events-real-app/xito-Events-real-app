@@ -3,6 +3,7 @@ import { ChevronRight, HardDrive, FolderPlus, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { XitoDriveFolderCard } from "./XitoDriveFolderCard";
+import { XitoDrivePhotoGallery } from "./XitoDrivePhotoGallery";
 import {
   MonthYearGroup,
   buildMonthYearGroups,
