@@ -20,31 +20,58 @@ async function batchCreateFolders(
   paths: string[],
   onProgress?: (progress: SyncProgress) => void
 ): Promise<{ created: number; errors: string[] }> {
-  const total = paths.length;
+  // Sort paths by depth so parents are always created before children
+  const sorted = [...paths].sort((a, b) => {
+    const depthA = a.split("/").length;
+    const depthB = b.split("/").length;
+    return depthA - depthB;
+  });
+
+  // Group by depth level
+  const depthGroups = new Map<number, string[]>();
+  for (const p of sorted) {
+    const depth = p.split("/").length;
+    if (!depthGroups.has(depth)) depthGroups.set(depth, []);
+    depthGroups.get(depth)!.push(p);
+  }
+
+  const total = sorted.length;
   let created = 0;
+  let processed = 0;
   const errors: string[] = [];
 
-  for (let i = 0; i < paths.length; i += BATCH_SIZE) {
-    const batch = paths.slice(i, i + BATCH_SIZE);
-    const results = await Promise.allSettled(
-      batch.map(path => createPCloudFolderByPath(`/${path}`))
-    );
+  // Process each depth level sequentially, but parallelize within each level
+  const depths = Array.from(depthGroups.keys()).sort((a, b) => a - b);
 
-    for (let j = 0; j < results.length; j++) {
-      const result = results[j];
-      const path = batch[j];
-      if (result.status === "fulfilled") {
-        created++;
-      } else {
-        console.warn(`Failed to create pCloud folder: ${path}`, result.reason);
-        errors.push(path);
+  for (const depth of depths) {
+    const levelPaths = depthGroups.get(depth)!;
+
+    for (let i = 0; i < levelPaths.length; i += BATCH_SIZE) {
+      const batch = levelPaths.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map(path => createPCloudFolderByPath(`/${path}`))
+      );
+
+      for (let j = 0; j < results.length; j++) {
+        const result = results[j];
+        const path = batch[j];
+        if (result.status === "fulfilled") {
+          created++;
+        } else {
+          console.warn(`Failed to create pCloud folder: ${path}`, result.reason);
+          errors.push(path);
+        }
+        processed++;
+        onProgress?.({ current: processed, total, currentPath: path });
       }
-      onProgress?.({ current: i + j + 1, total, currentPath: path });
+
+      if (i + BATCH_SIZE < levelPaths.length) {
+        await new Promise(r => setTimeout(r, 200));
+      }
     }
 
-    if (i + BATCH_SIZE < paths.length) {
-      await new Promise(r => setTimeout(r, 200));
-    }
+    // Small delay between depth levels
+    await new Promise(r => setTimeout(r, 300));
   }
 
   return { created, errors };
