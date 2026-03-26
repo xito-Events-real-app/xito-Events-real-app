@@ -134,6 +134,8 @@ async function generatePresignedUrl(opts: {
   endpoint: string; bucket: string; objectKey: string;
   region: string; accessKey: string; secretKey: string;
   expiresIn?: number;
+  method?: string;
+  contentType?: string;
 }): Promise<string> {
   const now = new Date();
   const amzDate = now.toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
@@ -144,6 +146,7 @@ async function generatePresignedUrl(opts: {
   const rawPath = `/${opts.bucket}/${opts.objectKey}`.replace(/\/+/g, "/");
   const path = s3UriEncode(rawPath, false);
   const expires = opts.expiresIn || 3600;
+  const httpMethod = opts.method || "GET";
 
   const qp: Record<string, string> = {
     "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
@@ -155,7 +158,7 @@ async function generatePresignedUrl(opts: {
 
   const sortedQP = Object.keys(qp).sort().map(k => `${encodeURIComponent(k)}=${encodeURIComponent(qp[k])}`).join("&");
   const canonicalHeaders = `host:${host}\n`;
-  const canonicalRequest = ["GET", path, sortedQP, canonicalHeaders, "host", "UNSIGNED-PAYLOAD"].join("\n");
+  const canonicalRequest = [httpMethod, path, sortedQP, canonicalHeaders, "host", "UNSIGNED-PAYLOAD"].join("\n");
   const stringToSign = ["AWS4-HMAC-SHA256", amzDate, scope, await sha256Hex(canonicalRequest)].join("\n");
   const signingKey = await getSignatureKey(opts.secretKey, dateStamp, opts.region, service);
   const signature = hexEncode(new Uint8Array(await hmacSha256(signingKey, stringToSign)));
@@ -351,6 +354,25 @@ serve(async (req) => {
       });
     }
 
+    // ACTION: getUploadUrl - returns a presigned PUT URL so client uploads directly to S3
+    if (action === "getUploadUrl") {
+      const body = await req.json();
+      const { path: filePath, fileName, contentType } = body;
+      if (!filePath || !fileName) {
+        return new Response(JSON.stringify({ error: "path and fileName required" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const objectKey = `${filePath}${filePath.endsWith("/") ? "" : "/"}${fileName}`;
+      const presignedUrl = await generatePresignedUrl({
+        endpoint, bucket, objectKey, region, accessKey, secretKey,
+        expiresIn: 3600, method: "PUT", contentType: contentType || "application/octet-stream",
+      });
+      return new Response(JSON.stringify({ url: presignedUrl, key: objectKey }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // ACTION: getSignedUrls (batch - multiple keys at once)
     if (action === "getSignedUrls") {
       const body = await req.json();
@@ -371,7 +393,7 @@ serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ error: "Unknown action. Use: list, createFolder, upload, delete, getSignedUrl, getSignedUrls" }), {
+    return new Response(JSON.stringify({ error: "Unknown action. Use: list, createFolder, upload, delete, getSignedUrl, getSignedUrls, getUploadUrl" }), {
       status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {

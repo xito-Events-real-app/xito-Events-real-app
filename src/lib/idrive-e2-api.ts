@@ -48,19 +48,28 @@ export async function createE2Folder(path: string): Promise<{ success: boolean; 
 }
 
 export async function uploadToE2(path: string, file: File): Promise<{ success: boolean; key: string }> {
-  const buffer = await file.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  const fileBase64 = btoa(binary);
-  return callE2("upload", {
+  // Get a presigned PUT URL from the edge function (no file data sent to edge fn)
+  const data = await callE2("getUploadUrl", {
     path,
     fileName: file.name,
     contentType: file.type || "application/octet-stream",
-    fileBase64,
   });
+  
+  // Upload directly to iDrive E2 using the presigned URL
+  const resp = await fetch(data.url, {
+    method: "PUT",
+    headers: {
+      "Content-Type": file.type || "application/octet-stream",
+    },
+    body: file,
+  });
+  
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`Direct upload failed: ${text}`);
+  }
+  
+  return { success: true, key: data.key };
 }
 
 export async function deleteE2Object(key: string): Promise<{ success: boolean }> {
