@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { ChevronRight, HardDrive, FolderPlus, Upload } from "lucide-react";
+import { ChevronRight, HardDrive, FolderPlus, Upload, CloudUpload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { XitoDriveFolderCard } from "./XitoDriveFolderCard";
@@ -14,6 +14,8 @@ import {
   FreelancerAssignment,
 } from "@/lib/xito-drive-utils";
 import { listE2Folder, createE2Folder, uploadToE2, getE2FileUrl, E2File } from "@/lib/idrive-e2-api";
+import { createPCloudFolderByPath } from "@/lib/pcloud-api";
+import { syncAllFoldersToPCloud } from "@/lib/pcloud-sync";
 import { BookedClientData } from "@/lib/sheets-api";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
 import { toast } from "sonner";
