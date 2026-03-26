@@ -68,3 +68,10 @@ export async function getE2FileUrl(key: string): Promise<string> {
   const data = await callE2("getSignedUrl", { key });
   return data.url;
 }
+
+/** Batch-fetch signed URLs for multiple keys in a single call */
+export async function getE2FileUrls(keys: string[]): Promise<Record<string, string>> {
+  if (keys.length === 0) return {};
+  const data = await callE2("getSignedUrls", { keys });
+  return data.urls;
+}
