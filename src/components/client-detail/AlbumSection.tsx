@@ -26,7 +26,7 @@ interface TabDef {
   s3Prefix: string;
 }
 
-const AlbumSection = ({ registeredDateTimeAD, clientName, eventYear, eventMonth, assignments }: AlbumSectionProps) => {
+const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSectionProps) => {
   const [deliverables, setDeliverables] = useState<DeliverableRow[]>([]);
   const [deliverablesLoaded, setDeliverablesLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState("");
