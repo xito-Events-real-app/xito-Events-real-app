@@ -80,9 +80,9 @@ async function signS3Request(opts: SignedRequestOpts): Promise<{ url: string; he
   const rawPath = `/${opts.bucket}/${opts.objectKey}`.replace(/\/+/g, "/");
   const path = s3UriEncode(rawPath, false);
 
-  // Build query string
+  // Build query string — must use S3-compatible encoding (encodeURIComponent misses ' ! ( ) *)
   const qp = opts.queryParams || {};
-  const sortedQP = Object.keys(qp).sort().map(k => `${encodeURIComponent(k)}=${encodeURIComponent(qp[k])}`).join("&");
+  const sortedQP = Object.keys(qp).sort().map(k => `${s3UriEncode(k)}=${s3UriEncode(qp[k])}`).join("&");
 
   const payloadHash = opts.payloadHash || (opts.body
     ? await sha256Hex(typeof opts.body === "string" ? opts.body : opts.body)
@@ -198,6 +198,19 @@ serve(async (req) => {
       const s3Resp = await fetch(signed.url, { headers: signed.headers });
       const xml = await s3Resp.text();
 
+      if (!s3Resp.ok) {
+        console.error("S3 list error:", xml);
+        return new Response(JSON.stringify({ error: "S3 list failed", details: xml }), {
+          status: s3Resp.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Decode XML entities
+      const decodeXmlEntities = (s: string) =>
+        s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+         .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n)))
+         .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+
       // Parse XML simply
       const folders: string[] = [];
       const files: { key: string; size: number; lastModified: string }[] = [];
@@ -205,7 +218,7 @@ serve(async (req) => {
       // CommonPrefixes -> folders
       const prefixMatches = xml.matchAll(/<Prefix>([^<]+)<\/Prefix>/g);
       for (const m of prefixMatches) {
-        const p = m[1];
+        const p = decodeXmlEntities(m[1]);
         if (p && p !== prefix) folders.push(p);
       }
 
@@ -216,7 +229,7 @@ serve(async (req) => {
         const sizeMatch = block[1].match(/<Size>([^<]+)<\/Size>/);
         const modMatch = block[1].match(/<LastModified>([^<]+)<\/LastModified>/);
         if (keyMatch) {
-          const key = keyMatch[1];
+          const key = decodeXmlEntities(keyMatch[1]);
           // Skip folder markers
           if (key.endsWith("/")) continue;
           files.push({
