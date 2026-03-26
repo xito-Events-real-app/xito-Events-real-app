@@ -45,7 +45,7 @@ export default function XitoDrive() {
   );
 
   if (isMobile) {
-    return <AppLayout title="XITO DRIVE">{content}</AppLayout>;
+    return <AppLayout>{content}</AppLayout>;
   }
 
   return <DesktopAppLayout>{content}</DesktopAppLayout>;

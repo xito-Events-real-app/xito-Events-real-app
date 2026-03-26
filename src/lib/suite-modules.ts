@@ -150,4 +150,13 @@ export const suiteModules: SuiteModule[] = [
     status: 'active',
     gradient: 'from-teal-500 to-cyan-600',
   },
+  {
+    id: 'xito-drive',
+    name: 'XITO DRIVE',
+    description: 'Virtual file explorer for booked events',
+    icon: HardDrive,
+    path: '/xito-drive',
+    status: 'active',
+    gradient: 'from-sky-500 to-blue-600',
+  },
 ];
