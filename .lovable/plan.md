@@ -1,72 +1,33 @@
 
 
-## Plan: Direct pCloud API Access (Bypass Edge Function Proxy)
+## Plan: Fix pCloud Thumbnails and File Preview
 
-### Why It's Slow
+### Root Cause
+The `isPCloudImage()` and `isPCloudVideo()` functions only check `item.contenttype`. When pCloud's `listfolder` response doesn't include `contenttype` for some files (common in nested folders), every file is treated as "unknown" — so no thumbnails are fetched and clicking a photo tries `window.open()` instead of the in-app preview.
 
-Every pCloud call currently follows this path:
+### Fix
 
-```text
-Browser → Supabase Edge Function → pCloud API → Edge Function → Browser
-```
+**`src/lib/pcloud-api.ts`** — Add file extension fallback to `isPCloudImage` and `isPCloudVideo`:
 
-This adds 200-500ms latency per request. For thumbnails, the edge function fetches each one individually in a sequential loop, compounding the delay.
-
-### Solution: Get Auth Token Once, Then Call pCloud Directly
-
-pCloud's API is designed for direct browser access (they have a JS SDK). We can eliminate the proxy for read operations by:
-
-1. **Add a `getauth` action** to the edge function that returns just the cached auth token
-2. **Call pCloud API directly from the browser** for `listfolder`, `getfilelink`, `getthumblink`, etc.
-3. **Cache the token client-side** (valid for ~1 hour) so subsequent calls skip the edge function entirely
-
-New flow:
-```text
-Browser → Edge Function (once, get token)
-Browser → pCloud API directly (all subsequent calls)
-```
-
-### Files to Modify
-
-**1. `supabase/functions/pcloud-api/index.ts`**
-- Add a `getauth` action that returns the cached auth token to the browser
-
-**2. `src/lib/pcloud-api.ts`**
-- Add `getPCloudAuthToken()` that fetches the token from the edge function once and caches it in memory
-- Change `listPCloudFolder`, `getPCloudFileLink`, `getPCloudThumbUrl`, `getPCloudThumbsBatch` to call `https://api.pcloud.com` directly using the cached token
-- For `getthumbslinks`, fetch all thumbs in parallel directly from the browser instead of sequentially through the edge function
-- Keep `uploadToPCloud` and write operations through the edge function (they need server-side handling)
-
-**3. `src/components/edited-files/PCloudBrowser.tsx`**
-- No changes needed — the API layer handles it transparently
-
-### Technical Details
-
-Client-side token cache:
 ```typescript
-let cachedToken: { token: string; expiresAt: number } | null = null;
+export function isPCloudImage(item: PCloudItem): boolean {
+  const ct = item.contenttype || '';
+  if (ct.startsWith('image/')) return true;
+  const ext = item.name.split('.').pop()?.toLowerCase() || '';
+  return ['jpg','jpeg','png','gif','webp','bmp','tiff','svg','heic'].includes(ext);
+}
 
-async function getAuthToken(): Promise<string> {
-  if (cachedToken && Date.now() < cachedToken.expiresAt - 60000) {
-    return cachedToken.token;
-  }
-  const { data } = await supabase.functions.invoke('pcloud-api', {
-    body: { action: 'getauth', params: {} }
-  });
-  cachedToken = { token: data.auth, expiresAt: Date.now() + 3500000 };
-  return cachedToken.token;
+export function isPCloudVideo(item: PCloudItem): boolean {
+  const ct = item.contenttype || '';
+  if (ct.startsWith('video/')) return true;
+  const ext = item.name.split('.').pop()?.toLowerCase() || '';
+  return ['mp4','mov','avi','mkv','webm','m4v','wmv','flv'].includes(ext);
 }
 ```
 
-Direct pCloud call:
-```typescript
-async function callPCloudDirect(endpoint: string, params: Record<string, string>) {
-  const auth = await getAuthToken();
-  const query = new URLSearchParams({ auth, ...params });
-  const res = await fetch(`https://api.pcloud.com${endpoint}?${query}`);
-  return res.json();
-}
-```
+This single change fixes both issues:
+- **Thumbnails**: Files will now be recognized as images, so `getPCloudThumbsBatch` will be called for them
+- **Preview**: Clicking a photo will open the in-app `PCloudPreviewDialog` instead of trying `window.open`
 
-This eliminates the edge function round-trip for every browse/preview action, making it as fast as native pCloud.
+No other files need changes.
 
