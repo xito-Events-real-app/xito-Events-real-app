@@ -128,14 +128,20 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
     input.type = "file";
     input.multiple = true;
     input.onchange = async () => {
-      const files = input.files;
-      if (!files?.length) return;
+      const fileList = input.files;
+      if (!fileList?.length) return;
+      const filesToUpload = Array.from(fileList);
       setUploading(true);
+      setUploadProgress(filesToUpload.map(f => ({ name: f.name, percent: 0 })));
       try {
-        for (const file of Array.from(files)) {
-          await uploadToE2(currentS3Prefix, file);
-          toast.success(`Uploaded "${file.name}"`);
+        for (let i = 0; i < filesToUpload.length; i++) {
+          const file = filesToUpload[i];
+          await uploadToE2(currentS3Prefix, file, (percent) => {
+            setUploadProgress(prev => prev.map((p, idx) => idx === i ? { ...p, percent } : p));
+          });
+          setUploadProgress(prev => prev.map((p, idx) => idx === i ? { ...p, percent: 100 } : p));
         }
+        toast.success(`Uploaded ${filesToUpload.length} file(s)`);
         const result = await listE2Folder(currentS3Prefix);
         setE2Files(result.files);
         setE2Folders(result.folders);
@@ -144,6 +150,7 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
         console.error(err);
       } finally {
         setUploading(false);
+        setTimeout(() => setUploadProgress([]), 2000);
       }
     };
     input.click();
