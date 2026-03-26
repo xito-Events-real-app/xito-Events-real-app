@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Download, CheckSquare, Square, Image, Loader2, Eye, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { E2File, getE2FileUrl } from "@/lib/idrive-e2-api";
+import { E2File, getE2FileUrl, getE2FileUrls } from "@/lib/idrive-e2-api";
 import { toast } from "sonner";
 
 interface Props {
@@ -22,152 +22,30 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
 }
 
-function PhotoThumbnail({ file, selected, onToggle, onPreview }: {
-  file: E2File;
-  selected: boolean;
-  onToggle: () => void;
-  onPreview: () => void;
-}) {
-  const [thumbUrl, setThumbUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const fileName = file.key.split("/").pop() || file.key;
-  const isImage = isImageFile(file.key);
-
-  useEffect(() => {
-    if (!isImage) {
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    getE2FileUrl(file.key)
-      .then(url => { if (!cancelled) setThumbUrl(url); })
-      .catch(() => { if (!cancelled) setError(true); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [file.key, isImage]);
-
-  return (
-    <div className="group relative rounded-xl border border-border/50 bg-card overflow-hidden hover:border-primary/40 transition-all">
-      {/* Selection checkbox */}
-      <div
-        className="absolute top-2 left-2 z-10 cursor-pointer"
-        onClick={(e) => { e.stopPropagation(); onToggle(); }}
-      >
-        <Checkbox checked={selected} className="h-5 w-5 bg-background/80 backdrop-blur-sm" />
-      </div>
-
-      {/* Preview button */}
-      {isImage && thumbUrl && (
-        <button
-          onClick={onPreview}
-          className="absolute top-2 right-2 z-10 p-1.5 rounded-lg bg-background/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background"
-        >
-          <Eye className="h-4 w-4 text-foreground" />
-        </button>
-      )}
-
-      {/* Thumbnail */}
-      <div
-        className="aspect-square bg-muted flex items-center justify-center cursor-pointer overflow-hidden"
-        onClick={onPreview}
-      >
-        {loading ? (
-          <Loader2 className="h-6 w-6 text-muted-foreground animate-spin" />
-        ) : isImage && thumbUrl && !error ? (
-          <img
-            src={thumbUrl}
-            alt={fileName}
-            className="w-full h-full object-cover transition-transform group-hover:scale-105"
-            loading="lazy"
-            onError={() => setError(true)}
-          />
-        ) : (
-          <Image className="h-8 w-8 text-muted-foreground" />
-        )}
-      </div>
-
-      {/* Info */}
-      <div className="p-2 space-y-0.5">
-        <p className="text-[11px] font-medium truncate" title={fileName}>{fileName}</p>
-        <p className="text-[10px] text-muted-foreground">{formatFileSize(file.size)}</p>
-      </div>
-
-      {/* Selected overlay */}
-      {selected && (
-        <div className="absolute inset-0 bg-primary/10 border-2 border-primary rounded-xl pointer-events-none" />
-      )}
-    </div>
-  );
-}
-
-function FullScreenPreview({ file, url, onClose, onPrev, onNext, hasPrev, hasNext }: {
-  file: E2File;
-  url: string;
-  onClose: () => void;
-  onPrev: () => void;
-  onNext: () => void;
-  hasPrev: boolean;
-  hasNext: boolean;
-}) {
-  const fileName = file.key.split("/").pop() || file.key;
-
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-      if (e.key === "ArrowLeft" && hasPrev) onPrev();
-      if (e.key === "ArrowRight" && hasNext) onNext();
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [onClose, onPrev, onNext, hasPrev, hasNext]);
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/95 flex flex-col" onClick={onClose}>
-      <div className="flex items-center justify-between p-4" onClick={e => e.stopPropagation()}>
-        <p className="text-white text-sm font-medium truncate max-w-[60%]">{fileName}</p>
-        <div className="flex items-center gap-2">
-          <a
-            href={url}
-            download={fileName}
-            target="_blank"
-            rel="noopener"
-            className="p-2 rounded-lg hover:bg-white/10 text-white"
-          >
-            <Download className="h-5 w-5" />
-          </a>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-white/10 text-white">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-      </div>
-
-      <div className="flex-1 flex items-center justify-center relative" onClick={e => e.stopPropagation()}>
-        {hasPrev && (
-          <button onClick={onPrev} className="absolute left-4 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white text-2xl">
-            ‹
-          </button>
-        )}
-        <img src={url} alt={fileName} className="max-h-[80vh] max-w-[90vw] object-contain" />
-        {hasNext && (
-          <button onClick={onNext} className="absolute right-4 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white text-2xl">
-            ›
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export function XitoDrivePhotoGallery({ files, prefix }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [downloading, setDownloading] = useState(false);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [urlMap, setUrlMap] = useState<Record<string, string>>({});
+  const [urlsLoading, setUrlsLoading] = useState(false);
 
-  const imageFiles = files.filter(f => isImageFile(f.key));
-  const nonImageFiles = files.filter(f => !isImageFile(f.key));
+  const imageFiles = useMemo(() => files.filter(f => isImageFile(f.key)), [files]);
+  const nonImageFiles = useMemo(() => files.filter(f => !isImageFile(f.key)), [files]);
   const allSelected = imageFiles.length > 0 && imageFiles.every(f => selected.has(f.key));
+
+  // Batch-load all signed URLs in one call
+  useEffect(() => {
+    if (imageFiles.length === 0) return;
+    let cancelled = false;
+    setUrlsLoading(true);
+    const keys = imageFiles.map(f => f.key);
+    getE2FileUrls(keys)
+      .then(urls => { if (!cancelled) setUrlMap(urls); })
+      .catch(err => { console.warn("Batch URL fetch failed:", err); })
+      .finally(() => { if (!cancelled) setUrlsLoading(false); });
+    return () => { cancelled = true; };
+  }, [imageFiles]);
 
   const toggleSelect = (key: string) => {
     setSelected(prev => {
@@ -179,19 +57,25 @@ export function XitoDrivePhotoGallery({ files, prefix }: Props) {
   };
 
   const toggleAll = () => {
-    if (allSelected) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(imageFiles.map(f => f.key)));
-    }
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(imageFiles.map(f => f.key)));
   };
 
   const downloadFiles = useCallback(async (filesToDownload: E2File[]) => {
     if (filesToDownload.length === 0) return;
     setDownloading(true);
     try {
+      // Get URLs for any files not already in urlMap
+      const missingKeys = filesToDownload.filter(f => !urlMap[f.key]).map(f => f.key);
+      let allUrls = { ...urlMap };
+      if (missingKeys.length > 0) {
+        const extra = await getE2FileUrls(missingKeys);
+        allUrls = { ...allUrls, ...extra };
+      }
+
       for (const file of filesToDownload) {
-        const url = await getE2FileUrl(file.key);
+        const url = allUrls[file.key];
+        if (!url) continue;
         const resp = await fetch(url);
         const blob = await resp.blob();
         const a = document.createElement("a");
@@ -199,10 +83,7 @@ export function XitoDrivePhotoGallery({ files, prefix }: Props) {
         a.download = file.key.split("/").pop() || "file";
         a.click();
         URL.revokeObjectURL(a.href);
-        // Small delay between downloads
-        if (filesToDownload.length > 1) {
-          await new Promise(r => setTimeout(r, 300));
-        }
+        if (filesToDownload.length > 1) await new Promise(r => setTimeout(r, 300));
       }
       toast.success(`Downloaded ${filesToDownload.length} file(s)`);
     } catch (err) {
@@ -211,29 +92,32 @@ export function XitoDrivePhotoGallery({ files, prefix }: Props) {
     } finally {
       setDownloading(false);
     }
-  }, []);
+  }, [urlMap]);
 
-  const openPreview = useCallback(async (index: number) => {
+  const openPreview = useCallback((index: number) => {
     setPreviewIndex(index);
-    try {
-      const url = await getE2FileUrl(imageFiles[index].key);
+    const url = urlMap[imageFiles[index]?.key];
+    if (url) {
       setPreviewUrl(url);
-    } catch {
-      toast.error("Failed to load preview");
-      setPreviewIndex(null);
+    } else {
+      getE2FileUrl(imageFiles[index].key)
+        .then(u => setPreviewUrl(u))
+        .catch(() => { toast.error("Failed to load preview"); setPreviewIndex(null); });
     }
-  }, [imageFiles]);
+  }, [imageFiles, urlMap]);
 
-  const navigatePreview = useCallback(async (newIndex: number) => {
-    setPreviewUrl(null);
+  const navigatePreview = useCallback((newIndex: number) => {
     setPreviewIndex(newIndex);
-    try {
-      const url = await getE2FileUrl(imageFiles[newIndex].key);
+    const url = urlMap[imageFiles[newIndex]?.key];
+    if (url) {
       setPreviewUrl(url);
-    } catch {
-      toast.error("Failed to load preview");
+    } else {
+      setPreviewUrl(null);
+      getE2FileUrl(imageFiles[newIndex].key)
+        .then(u => setPreviewUrl(u))
+        .catch(() => toast.error("Failed to load preview"));
     }
-  }, [imageFiles]);
+  }, [imageFiles, urlMap]);
 
   return (
     <div className="space-y-3">
@@ -280,19 +164,71 @@ export function XitoDrivePhotoGallery({ files, prefix }: Props) {
       <p className="text-xs text-muted-foreground">
         {imageFiles.length} photo{imageFiles.length !== 1 ? "s" : ""}
         {nonImageFiles.length > 0 ? ` • ${nonImageFiles.length} other file${nonImageFiles.length !== 1 ? "s" : ""}` : ""}
+        {urlsLoading && " • Loading thumbnails..."}
       </p>
 
       {/* Photo Grid */}
       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2">
-        {imageFiles.map((file, idx) => (
-          <PhotoThumbnail
-            key={file.key}
-            file={file}
-            selected={selected.has(file.key)}
-            onToggle={() => toggleSelect(file.key)}
-            onPreview={() => openPreview(idx)}
-          />
-        ))}
+        {imageFiles.map((file, idx) => {
+          const fileName = file.key.split("/").pop() || file.key;
+          const thumbUrl = urlMap[file.key];
+          const isSelected = selected.has(file.key);
+
+          return (
+            <div
+              key={file.key}
+              className="group relative rounded-xl border border-border/50 bg-card overflow-hidden hover:border-primary/40 transition-all"
+            >
+              {/* Selection checkbox */}
+              <div
+                className="absolute top-2 left-2 z-10 cursor-pointer"
+                onClick={(e) => { e.stopPropagation(); toggleSelect(file.key); }}
+              >
+                <Checkbox checked={isSelected} className="h-5 w-5 bg-background/80 backdrop-blur-sm" />
+              </div>
+
+              {/* Preview button */}
+              {thumbUrl && (
+                <button
+                  onClick={() => openPreview(idx)}
+                  className="absolute top-2 right-2 z-10 p-1.5 rounded-lg bg-background/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background"
+                >
+                  <Eye className="h-4 w-4 text-foreground" />
+                </button>
+              )}
+
+              {/* Thumbnail */}
+              <div
+                className="aspect-square bg-muted flex items-center justify-center cursor-pointer overflow-hidden"
+                onClick={() => openPreview(idx)}
+              >
+                {urlsLoading && !thumbUrl ? (
+                  <Loader2 className="h-6 w-6 text-muted-foreground animate-spin" />
+                ) : thumbUrl ? (
+                  <img
+                    src={thumbUrl}
+                    alt={fileName}
+                    className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                    loading="lazy"
+                  />
+                ) : (
+                  <Image className="h-8 w-8 text-muted-foreground" />
+                )}
+              </div>
+
+              {/* Info */}
+              <div className="p-2 space-y-0.5">
+                <p className="text-[11px] font-medium truncate" title={fileName}>{fileName}</p>
+                <p className="text-[10px] text-muted-foreground">{formatFileSize(file.size)}</p>
+              </div>
+
+              {/* Selected overlay */}
+              {isSelected && (
+                <div className="absolute inset-0 bg-primary/10 border-2 border-primary rounded-xl pointer-events-none" />
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Non-image files below */}
@@ -322,15 +258,41 @@ export function XitoDrivePhotoGallery({ files, prefix }: Props) {
 
       {/* Full screen preview */}
       {previewIndex !== null && previewUrl && (
-        <FullScreenPreview
-          file={imageFiles[previewIndex]}
-          url={previewUrl}
-          onClose={() => { setPreviewIndex(null); setPreviewUrl(null); }}
-          onPrev={() => navigatePreview(previewIndex - 1)}
-          onNext={() => navigatePreview(previewIndex + 1)}
-          hasPrev={previewIndex > 0}
-          hasNext={previewIndex < imageFiles.length - 1}
-        />
+        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col" onClick={() => { setPreviewIndex(null); setPreviewUrl(null); }}>
+          <div className="flex items-center justify-between p-4" onClick={e => e.stopPropagation()}>
+            <p className="text-white text-sm font-medium truncate max-w-[60%]">
+              {imageFiles[previewIndex]?.key.split("/").pop()}
+            </p>
+            <div className="flex items-center gap-2">
+              <a
+                href={previewUrl}
+                download={imageFiles[previewIndex]?.key.split("/").pop()}
+                target="_blank"
+                rel="noopener"
+                className="p-2 rounded-lg hover:bg-white/10 text-white"
+              >
+                <Download className="h-5 w-5" />
+              </a>
+              <button onClick={() => { setPreviewIndex(null); setPreviewUrl(null); }} className="p-2 rounded-lg hover:bg-white/10 text-white">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 flex items-center justify-center relative" onClick={e => e.stopPropagation()}>
+            {previewIndex > 0 && (
+              <button onClick={() => navigatePreview(previewIndex - 1)} className="absolute left-4 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white text-2xl">
+                ‹
+              </button>
+            )}
+            <img src={previewUrl} alt="" className="max-h-[80vh] max-w-[90vw] object-contain" />
+            {previewIndex < imageFiles.length - 1 && (
+              <button onClick={() => navigatePreview(previewIndex + 1)} className="absolute right-4 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white text-2xl">
+                ›
+              </button>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
