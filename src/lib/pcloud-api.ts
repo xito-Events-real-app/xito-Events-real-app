@@ -257,15 +257,3 @@ export async function listPCloudFolderRecursive(
   await walk(cleanRoot, 1);
   return paths;
 }
-  const cleanPath = path.startsWith('/') ? path : `/${path}`;
-  const data = await callPCloudDirect('/listfolder', {
-    path: cleanPath,
-    recursive: '0',
-    showdeleted: '0',
-  });
-  const metadata = data.metadata || {};
-  return {
-    metadata,
-    contents: (metadata.contents || []) as PCloudItem[],
-  };
-}
