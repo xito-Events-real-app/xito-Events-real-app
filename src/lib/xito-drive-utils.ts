@@ -181,3 +181,66 @@ export function getFreelancersForEvent(
 export function buildStoragePath(segments: string[]): string {
   return "/" + segments.map(s => s.replace(/[/\\]/g, "_")).join("/");
 }
+
+const PCLOUD_ROOT = "wedding-tales-nepal";
+
+/**
+ * Build the complete folder tree that should exist in storage (iDrive E2 / pCloud).
+ * Returns an array of path strings like "wedding-tales-nepal/2082-10/ClientName/Photos/Wedding/Nikit"
+ */
+export function buildFullFolderTree(
+  clients: BookedClientData[],
+  assignments: FreelancerAssignment[]
+): string[] {
+  const paths: string[] = [PCLOUD_ROOT];
+  const groups = buildMonthYearGroups(clients);
+
+  for (const group of groups) {
+    const groupPath = `${PCLOUD_ROOT}/${group.key}`;
+    paths.push(groupPath);
+
+    for (const client of group.clients) {
+      const clientPath = `${groupPath}/${client.clientName.replace(/[/\\]/g, "_")}`;
+      paths.push(clientPath);
+
+      for (const cat of CLIENT_CATEGORIES) {
+        const catPath = `${clientPath}/${cat.name}`;
+        paths.push(catPath);
+
+        if (cat.name === "Photos") {
+          // Event subfolders + Selected
+          for (const ev of client.events) {
+            const evPath = `${catPath}/${ev.replace(/[/\\]/g, "_")}`;
+            paths.push(evPath);
+            // Photographer subfolders
+            const { photographers } = getFreelancersForEvent(assignments, client.registeredDateTimeAD, ev);
+            for (const p of photographers) {
+              paths.push(`${evPath}/${p.replace(/[/\\]/g, "_")}`);
+            }
+          }
+          paths.push(`${catPath}/Selected`);
+        } else if (cat.name === "Videos") {
+          for (const sub of VIDEO_SUBFOLDERS) {
+            paths.push(`${catPath}/${sub}`);
+          }
+        } else if (cat.name === "Project Managers") {
+          for (const ev of client.events) {
+            paths.push(`${catPath}/${ev.replace(/[/\\]/g, "_")}`);
+          }
+        } else if (cat.name === "Lightroom Catalog") {
+          for (const ev of client.events) {
+            const evPath = `${catPath}/${ev.replace(/[/\\]/g, "_")}`;
+            paths.push(evPath);
+            const { photographers } = getFreelancersForEvent(assignments, client.registeredDateTimeAD, ev);
+            for (const p of photographers) {
+              paths.push(`${evPath}/${p.replace(/[/\\]/g, "_")}`);
+            }
+          }
+        }
+        // Quotation and Payments are leaf folders — no subfolders
+      }
+    }
+  }
+
+  return paths;
+}

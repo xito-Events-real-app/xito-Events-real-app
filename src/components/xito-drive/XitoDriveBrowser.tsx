@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { ChevronRight, HardDrive, FolderPlus, Upload } from "lucide-react";
+import { ChevronRight, HardDrive, FolderPlus, Upload, CloudUpload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { XitoDriveFolderCard } from "./XitoDriveFolderCard";
@@ -14,6 +14,8 @@ import {
   FreelancerAssignment,
 } from "@/lib/xito-drive-utils";
 import { listE2Folder, createE2Folder, uploadToE2, getE2FileUrl, E2File } from "@/lib/idrive-e2-api";
+import { createPCloudFolderByPath } from "@/lib/pcloud-api";
+import { syncAllFoldersToPCloud } from "@/lib/pcloud-sync";
 import { BookedClientData } from "@/lib/sheets-api";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
 import { toast } from "sonner";
@@ -35,7 +37,8 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
   const [e2Loading, setE2Loading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ name: string; percent: number }[]>([]);
-
+  const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
   const groups = useMemo(() => buildMonthYearGroups(clients), [clients]);
   const uniqueYears = useMemo(() => getUniqueYears(groups), [groups]);
 
@@ -111,7 +114,14 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
     const name = prompt("Enter folder name:");
     if (!name?.trim()) return;
     try {
+      // Create in iDrive E2
       await createE2Folder(currentS3Prefix + name.trim());
+      // Also create in pCloud (dual-write)
+      try {
+        await createPCloudFolderByPath(`/wedding-tales-nepal/${currentS3Prefix}${name.trim()}`);
+      } catch (pcloudErr) {
+        console.warn("pCloud folder creation failed (non-blocking):", pcloudErr);
+      }
       toast.success(`Folder "${name.trim()}" created`);
       // Refresh listing
       const result = await listE2Folder(currentS3Prefix);
@@ -122,6 +132,35 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
       console.error(err);
     }
   }, [currentS3Prefix]);
+
+  const handleSyncToPCloud = useCallback(async () => {
+    if (syncing) return;
+    setSyncing(true);
+    setSyncProgress({ current: 0, total: 0 });
+    const toastId = toast.loading("Syncing folders to pCloud...");
+    try {
+      const { created, errors } = await syncAllFoldersToPCloud(
+        clients,
+        assignments,
+        (progress) => {
+          setSyncProgress({ current: progress.current, total: progress.total });
+        }
+      );
+      toast.dismiss(toastId);
+      if (errors.length === 0) {
+        toast.success(`Synced ${created} folders to pCloud`);
+      } else {
+        toast.warning(`Synced ${created} folders, ${errors.length} failed`);
+      }
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error("pCloud sync failed");
+      console.error(err);
+    } finally {
+      setSyncing(false);
+      setSyncProgress(null);
+    }
+  }, [syncing, clients, assignments]);
 
   const handleUpload = useCallback(async () => {
     const input = document.createElement("input");
@@ -493,6 +532,18 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
         )}
 
         <div className="ml-auto flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs"
+            disabled={syncing}
+            onClick={handleSyncToPCloud}
+          >
+            <CloudUpload className="h-3.5 w-3.5 mr-1" /> 
+            {syncing 
+              ? `Syncing ${syncProgress?.current || 0}/${syncProgress?.total || 0}...` 
+              : "Sync to pCloud"}
+          </Button>
           <Button
             variant="outline"
             size="sm"
