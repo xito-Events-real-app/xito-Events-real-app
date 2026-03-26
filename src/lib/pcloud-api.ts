@@ -188,3 +188,30 @@ export function isPCloudVideo(item: PCloudItem): boolean {
   const ext = item.name.split('.').pop()?.toLowerCase() || '';
   return ['mp4','mov','avi','mkv','webm','m4v','wmv','flv'].includes(ext);
 }
+
+/**
+ * Create a folder by full path, creating parent directories as needed.
+ * Uses pCloud's createfolderifnotexists which is idempotent.
+ */
+export async function createPCloudFolderByPath(path: string): Promise<PCloudItem> {
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  const data = await callPCloudDirect('/createfolderifnotexists', { path: cleanPath });
+  return data.metadata as PCloudItem;
+}
+
+/**
+ * List a folder by path instead of folder ID.
+ */
+export async function listPCloudFolderByPath(path: string): Promise<PCloudFolder> {
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  const data = await callPCloudDirect('/listfolder', {
+    path: cleanPath,
+    recursive: '0',
+    showdeleted: '0',
+  });
+  const metadata = data.metadata || {};
+  return {
+    metadata,
+    contents: (metadata.contents || []) as PCloudItem[],
+  };
+}
