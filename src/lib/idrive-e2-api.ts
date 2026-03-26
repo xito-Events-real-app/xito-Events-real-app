@@ -47,28 +47,36 @@ export async function createE2Folder(path: string): Promise<{ success: boolean; 
   return callE2("createFolder", { path });
 }
 
-export async function uploadToE2(path: string, file: File): Promise<{ success: boolean; key: string }> {
+export async function uploadToE2(
+  path: string,
+  file: File,
+  onProgress?: (percent: number) => void
+): Promise<{ success: boolean; key: string }> {
   // Get a presigned PUT URL from the edge function (no file data sent to edge fn)
   const data = await callE2("getUploadUrl", {
     path,
     fileName: file.name,
     contentType: file.type || "application/octet-stream",
   });
-  
-  // Upload directly to iDrive E2 using the presigned URL
-  const resp = await fetch(data.url, {
-    method: "PUT",
-    headers: {
-      "Content-Type": file.type || "application/octet-stream",
-    },
-    body: file,
+
+  // Upload directly to iDrive E2 using XMLHttpRequest for progress tracking
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", data.url);
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`Direct upload failed: ${xhr.statusText}`));
+    };
+    xhr.onerror = () => reject(new Error("Upload network error"));
+    xhr.send(file);
   });
-  
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`Direct upload failed: ${text}`);
-  }
-  
+
   return { success: true, key: data.key };
 }
 
