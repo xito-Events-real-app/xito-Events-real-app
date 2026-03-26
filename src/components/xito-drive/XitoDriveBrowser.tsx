@@ -190,8 +190,34 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
       .filter(name => name && !virtualFolderNames.has(name));
   }, [e2Folders, currentS3Prefix, virtualFolderNames]);
 
+  // Check if current files contain images (for gallery view)
+  const hasImageFiles = useMemo(() => {
+    const imageExts = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "heic"];
+    return e2Files.some(f => {
+      const ext = f.key.split(".").pop()?.toLowerCase() || "";
+      return imageExts.includes(ext);
+    });
+  }, [e2Files]);
+
   const renderE2Files = () => {
     if (e2Files.length === 0 && extraE2Folders.length === 0) return null;
+
+    // If we have image files, use the photo gallery
+    if (hasImageFiles) {
+      return (
+        <>
+          {extraE2Folders.map(folderName => (
+            <XitoDriveFolderCard
+              key={`e2-folder-${folderName}`}
+              name={folderName}
+              type="leaf"
+              onClick={() => navigate(folderName, folderName)}
+            />
+          ))}
+        </>
+      );
+    }
+
     return (
       <>
         {extraE2Folders.map(folderName => (
@@ -216,6 +242,12 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
         })}
       </>
     );
+  };
+
+  // Render photo gallery separately for image-containing folders
+  const renderPhotoGallery = () => {
+    if (!hasImageFiles || e2Files.length === 0) return null;
+    return <XitoDrivePhotoGallery files={e2Files} prefix={currentS3Prefix} />;
   };
 
   const renderContent = () => {
