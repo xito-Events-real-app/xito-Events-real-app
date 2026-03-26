@@ -3,15 +3,15 @@ import { NEPALI_MONTHS } from "@/lib/nepali-months";
 
 export interface XitoDriveFolder {
   name: string;
-  path: string; // e.g. "/2082-10/Ishan Shakya/Photos/Wedding/Nikit"
+  path: string;
   childCount: number;
   type: "month-year" | "client" | "category" | "event" | "freelancer" | "leaf";
   colorAccent?: string;
 }
 
 export interface MonthYearGroup {
-  key: string; // "2082-10"
-  label: string; // "MAGH EVENTS 2082"
+  key: string;
+  label: string;
   year: string;
   month: string;
   monthNum: number;
@@ -40,9 +40,21 @@ export interface FreelancerAssignment {
   iphone_shooter: string | null;
 }
 
-const CLIENT_CATEGORIES = [
+// ── Category definitions per module ──
+
+/** XITO DRIVE (iDrive E2) — compressed photos only */
+export const XITO_CATEGORIES = [
+  { name: "Photos", color: "amber" },
+] as const;
+
+/** pCloud module — high-quality photos + videos */
+export const PCLOUD_CATEGORIES = [
   { name: "Photos", color: "amber" },
   { name: "Videos", color: "red" },
+] as const;
+
+/** Barun's Research (pCloud CLIENT DETAILS) — admin/project folders */
+export const RESEARCH_CATEGORIES = [
   { name: "Quotation", color: "blue" },
   { name: "Payments", color: "green" },
   { name: "Project Managers", color: "purple" },
@@ -60,18 +72,16 @@ export const CATEGORY_COLORS: Record<string, string> = {
 
 const VIDEO_SUBFOLDERS = ["Highlights", "Reels", "Full Videos"];
 
+/** @deprecated Use XITO_CATEGORIES / PCLOUD_CATEGORIES / RESEARCH_CATEGORIES */
 export function getClientCategories() {
-  return CLIENT_CATEGORIES;
+  return [...XITO_CATEGORIES, ...PCLOUD_CATEGORIES, ...RESEARCH_CATEGORIES]
+    .filter((v, i, a) => a.findIndex(x => x.name === v.name) === i);
 }
 
 export function getVideoSubfolders() {
   return VIDEO_SUBFOLDERS;
 }
 
-/**
- * Get the majority year-month from parallel arrays of years and months.
- * Picks the most frequent combo; ties go to first occurrence.
- */
 export function getMajorityYearMonth(years: string[], months: string[]): string {
   const freq = new Map<string, number>();
   const order: string[] = [];
@@ -94,10 +104,6 @@ export function getMajorityYearMonth(years: string[], months: string[]): string 
   return best;
 }
 
-/**
- * Build month-year groups from booked clients.
- * Each client is placed in exactly ONE group based on their majority month.
- */
 export function buildMonthYearGroups(clients: BookedClientData[]): MonthYearGroup[] {
   const groupMap = new Map<string, MonthYearGroup>();
 
@@ -129,7 +135,6 @@ export function buildMonthYearGroups(clients: BookedClientData[]): MonthYearGrou
     });
   }
 
-  // Sort: by year desc, then month desc
   return Array.from(groupMap.values()).sort((a, b) => {
     const yearDiff = parseInt(b.year) - parseInt(a.year);
     if (yearDiff !== 0) return yearDiff;
@@ -137,17 +142,11 @@ export function buildMonthYearGroups(clients: BookedClientData[]): MonthYearGrou
   });
 }
 
-/**
- * Get unique years from groups for filter
- */
 export function getUniqueYears(groups: MonthYearGroup[]): string[] {
   const years = new Set(groups.map(g => g.year));
   return Array.from(years).sort((a, b) => parseInt(b) - parseInt(a));
 }
 
-/**
- * Get photographers/videographers assigned to a specific client+event
- */
 export function getFreelancersForEvent(
   assignments: FreelancerAssignment[],
   registeredDateTimeAD: string,
@@ -175,20 +174,19 @@ export function getFreelancersForEvent(
   };
 }
 
-/**
- * Build iDrive E2-compatible path for a given folder level
- */
 export function buildStoragePath(segments: string[]): string {
   return "/" + segments.map(s => s.replace(/[/\\]/g, "_")).join("/");
 }
 
+// ── Folder tree builders per module ──
+
 const PCLOUD_ROOT = "wedding-tales-nepal";
+const RESEARCH_ROOT = "CLIENT DETAILS";
 
 /**
- * Build the complete folder tree that should exist in storage (iDrive E2 / pCloud).
- * Returns an array of path strings like "wedding-tales-nepal/2082-10/ClientName/Photos/Wedding/Nikit"
+ * Build iDrive E2 folder tree — Photos only (XITO DRIVE).
  */
-export function buildFullFolderTree(
+export function buildXitoFolderTree(
   clients: BookedClientData[],
   assignments: FreelancerAssignment[]
 ): string[] {
@@ -203,44 +201,116 @@ export function buildFullFolderTree(
       const clientPath = `${groupPath}/${client.clientName.replace(/[/\\]/g, "_")}`;
       paths.push(clientPath);
 
-      for (const cat of CLIENT_CATEGORIES) {
-        const catPath = `${clientPath}/${cat.name}`;
-        paths.push(catPath);
-
-        if (cat.name === "Photos") {
-          // Event subfolders + Selected
-          for (const ev of client.events) {
-            const evPath = `${catPath}/${ev.replace(/[/\\]/g, "_")}`;
-            paths.push(evPath);
-            // Photographer subfolders
-            const { photographers } = getFreelancersForEvent(assignments, client.registeredDateTimeAD, ev);
-            for (const p of photographers) {
-              paths.push(`${evPath}/${p.replace(/[/\\]/g, "_")}`);
-            }
-          }
-          paths.push(`${catPath}/Selected`);
-        } else if (cat.name === "Videos") {
-          for (const sub of VIDEO_SUBFOLDERS) {
-            paths.push(`${catPath}/${sub}`);
-          }
-        } else if (cat.name === "Project Managers") {
-          for (const ev of client.events) {
-            paths.push(`${catPath}/${ev.replace(/[/\\]/g, "_")}`);
-          }
-        } else if (cat.name === "Lightroom Catalog") {
-          for (const ev of client.events) {
-            const evPath = `${catPath}/${ev.replace(/[/\\]/g, "_")}`;
-            paths.push(evPath);
-            const { photographers } = getFreelancersForEvent(assignments, client.registeredDateTimeAD, ev);
-            for (const p of photographers) {
-              paths.push(`${evPath}/${p.replace(/[/\\]/g, "_")}`);
-            }
-          }
+      // Photos only
+      const photosPath = `${clientPath}/Photos`;
+      paths.push(photosPath);
+      for (const ev of client.events) {
+        const evPath = `${photosPath}/${ev.replace(/[/\\]/g, "_")}`;
+        paths.push(evPath);
+        const { photographers } = getFreelancersForEvent(assignments, client.registeredDateTimeAD, ev);
+        for (const p of photographers) {
+          paths.push(`${evPath}/${p.replace(/[/\\]/g, "_")}`);
         }
-        // Quotation and Payments are leaf folders — no subfolders
+      }
+      paths.push(`${photosPath}/Selected`);
+    }
+  }
+
+  return paths;
+}
+
+/**
+ * Build pCloud folder tree — Photos + Videos under wedding-tales-nepal.
+ */
+export function buildPCloudFolderTree(
+  clients: BookedClientData[],
+  assignments: FreelancerAssignment[]
+): string[] {
+  const paths: string[] = [PCLOUD_ROOT];
+  const groups = buildMonthYearGroups(clients);
+
+  for (const group of groups) {
+    const groupPath = `${PCLOUD_ROOT}/${group.key}`;
+    paths.push(groupPath);
+
+    for (const client of group.clients) {
+      const clientPath = `${groupPath}/${client.clientName.replace(/[/\\]/g, "_")}`;
+      paths.push(clientPath);
+
+      // Photos
+      const photosPath = `${clientPath}/Photos`;
+      paths.push(photosPath);
+      for (const ev of client.events) {
+        const evPath = `${photosPath}/${ev.replace(/[/\\]/g, "_")}`;
+        paths.push(evPath);
+        const { photographers } = getFreelancersForEvent(assignments, client.registeredDateTimeAD, ev);
+        for (const p of photographers) {
+          paths.push(`${evPath}/${p.replace(/[/\\]/g, "_")}`);
+        }
+      }
+      paths.push(`${photosPath}/Selected`);
+
+      // Videos
+      const videosPath = `${clientPath}/Videos`;
+      paths.push(videosPath);
+      for (const sub of VIDEO_SUBFOLDERS) {
+        paths.push(`${videosPath}/${sub}`);
       }
     }
   }
 
   return paths;
+}
+
+/**
+ * Build pCloud folder tree — Research categories under CLIENT DETAILS.
+ */
+export function buildResearchFolderTree(
+  clients: BookedClientData[],
+  assignments: FreelancerAssignment[]
+): string[] {
+  const paths: string[] = [RESEARCH_ROOT];
+  const groups = buildMonthYearGroups(clients);
+
+  for (const group of groups) {
+    const groupPath = `${RESEARCH_ROOT}/${group.key}`;
+    paths.push(groupPath);
+
+    for (const client of group.clients) {
+      const clientPath = `${groupPath}/${client.clientName.replace(/[/\\]/g, "_")}`;
+      paths.push(clientPath);
+
+      // Quotation (leaf)
+      paths.push(`${clientPath}/Quotation`);
+      // Payments (leaf)
+      paths.push(`${clientPath}/Payments`);
+      // Project Managers > events
+      const pmPath = `${clientPath}/Project Managers`;
+      paths.push(pmPath);
+      for (const ev of client.events) {
+        paths.push(`${pmPath}/${ev.replace(/[/\\]/g, "_")}`);
+      }
+      // Lightroom Catalog > events > photographers
+      const lrPath = `${clientPath}/Lightroom Catalog`;
+      paths.push(lrPath);
+      for (const ev of client.events) {
+        const evPath = `${lrPath}/${ev.replace(/[/\\]/g, "_")}`;
+        paths.push(evPath);
+        const { photographers } = getFreelancersForEvent(assignments, client.registeredDateTimeAD, ev);
+        for (const p of photographers) {
+          paths.push(`${evPath}/${p.replace(/[/\\]/g, "_")}`);
+        }
+      }
+    }
+  }
+
+  return paths;
+}
+
+/** @deprecated Use buildXitoFolderTree, buildPCloudFolderTree, or buildResearchFolderTree */
+export function buildFullFolderTree(
+  clients: BookedClientData[],
+  assignments: FreelancerAssignment[]
+): string[] {
+  return buildXitoFolderTree(clients, assignments);
 }

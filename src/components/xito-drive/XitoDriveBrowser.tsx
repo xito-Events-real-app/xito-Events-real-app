@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { ChevronRight, HardDrive, FolderPlus, Upload, CloudUpload } from "lucide-react";
+import { ChevronRight, HardDrive, FolderPlus, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { XitoDriveFolderCard } from "./XitoDriveFolderCard";
@@ -8,14 +8,10 @@ import {
   MonthYearGroup,
   buildMonthYearGroups,
   getUniqueYears,
-  getClientCategories,
-  getVideoSubfolders,
   getFreelancersForEvent,
   FreelancerAssignment,
 } from "@/lib/xito-drive-utils";
 import { listE2Folder, createE2Folder, uploadToE2, getE2FileUrl, E2File } from "@/lib/idrive-e2-api";
-import { createPCloudFolderByPath } from "@/lib/pcloud-api";
-import { syncAllFoldersToPCloud } from "@/lib/pcloud-sync";
 import { BookedClientData } from "@/lib/sheets-api";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
 import { toast } from "sonner";
@@ -28,6 +24,14 @@ interface Props {
 
 type BreadcrumbSegment = { label: string; level: string };
 
+/**
+ * XITO DRIVE — Photos only (iDrive E2).
+ * Level 0: Month-Year groups
+ * Level 1: Clients
+ * Level 2: Events + Selected (skip category level since Photos is the only one)
+ * Level 3: Photographers
+ * Level 4+: Leaf
+ */
 export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
   const [breadcrumb, setBreadcrumb] = useState<BreadcrumbSegment[]>([]);
   const [yearFilter, setYearFilter] = useState("all");
@@ -37,8 +41,6 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
   const [e2Loading, setE2Loading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ name: string; percent: number }[]>([]);
-  const [syncing, setSyncing] = useState(false);
-  const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
   const groups = useMemo(() => buildMonthYearGroups(clients), [clients]);
   const uniqueYears = useMemo(() => getUniqueYears(groups), [groups]);
 
@@ -53,26 +55,25 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
   const currentLevel = breadcrumb.length;
   const selectedGroupKey = breadcrumb[0]?.level;
   const selectedClient = breadcrumb[1]?.label;
-  const selectedCategory = breadcrumb[2]?.label;
-  const selectedEvent = breadcrumb[3]?.label;
+  const selectedEvent = breadcrumb[2]?.label; // Level 2 is now events (Photos is implicit)
 
   const currentGroup = groups.find(g => g.key === selectedGroupKey);
   const currentClientFolder = currentGroup?.clients.find(c => c.clientName === selectedClient);
 
-  // Build S3 prefix from breadcrumb
+  // Build S3 prefix — inject "Photos" between client and event
   const currentS3Prefix = useMemo(() => {
     if (breadcrumb.length === 0) return "";
     const segments: string[] = [];
-    // Level 0: month-year group key (e.g. "2082-10")
     if (breadcrumb[0]) segments.push(breadcrumb[0].level);
-    // Level 1+: use labels
-    for (let i = 1; i < breadcrumb.length; i++) {
+    if (breadcrumb[1]) segments.push(breadcrumb[1].label.replace(/[/\\]/g, "_"));
+    // Insert Photos folder implicitly
+    if (breadcrumb.length >= 2) segments.push("Photos");
+    for (let i = 2; i < breadcrumb.length; i++) {
       segments.push(breadcrumb[i].label.replace(/[/\\]/g, "_"));
     }
     return segments.join("/") + "/";
   }, [breadcrumb]);
 
-  // Fetch E2 contents when navigating
   useEffect(() => {
     if (breadcrumb.length === 0) {
       setE2Files([]);
@@ -114,16 +115,8 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
     const name = prompt("Enter folder name:");
     if (!name?.trim()) return;
     try {
-      // Create in iDrive E2
       await createE2Folder(currentS3Prefix + name.trim());
-      // Also create in pCloud (dual-write)
-      try {
-        await createPCloudFolderByPath(`/wedding-tales-nepal/${currentS3Prefix}${name.trim()}`);
-      } catch (pcloudErr) {
-        console.warn("pCloud folder creation failed (non-blocking):", pcloudErr);
-      }
       toast.success(`Folder "${name.trim()}" created`);
-      // Refresh listing
       const result = await listE2Folder(currentS3Prefix);
       setE2Files(result.files);
       setE2Folders(result.folders);
@@ -132,35 +125,6 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
       console.error(err);
     }
   }, [currentS3Prefix]);
-
-  const handleSyncToPCloud = useCallback(async () => {
-    if (syncing) return;
-    setSyncing(true);
-    setSyncProgress({ current: 0, total: 0 });
-    const toastId = toast.loading("Syncing folders to pCloud...");
-    try {
-      const { created, errors } = await syncAllFoldersToPCloud(
-        clients,
-        assignments,
-        (progress) => {
-          setSyncProgress({ current: progress.current, total: progress.total });
-        }
-      );
-      toast.dismiss(toastId);
-      if (errors.length === 0) {
-        toast.success(`Synced ${created} folders to pCloud`);
-      } else {
-        toast.warning(`Synced ${created} folders, ${errors.length} failed`);
-      }
-    } catch (err) {
-      toast.dismiss(toastId);
-      toast.error("pCloud sync failed");
-      console.error(err);
-    } finally {
-      setSyncing(false);
-      setSyncProgress(null);
-    }
-  }, [syncing, clients, assignments]);
 
   const handleUpload = useCallback(async () => {
     const input = document.createElement("input");
@@ -205,41 +169,29 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
     }
   }, []);
 
-  // Compute virtual folder names at current level to filter duplicates from E2
+  // Virtual folder names at current level
   const virtualFolderNames = useMemo(() => {
     const names = new Set<string>();
     if (currentLevel === 0) {
       filteredGroups.forEach(g => names.add(g.key));
     } else if (currentLevel === 1 && currentGroup) {
       currentGroup.clients.forEach(c => names.add(c.clientName));
-    } else if (currentLevel === 2) {
-      getClientCategories().forEach(cat => names.add(cat.name));
-    } else if (currentLevel === 3 && currentClientFolder) {
-      if (selectedCategory === "Photos") {
-        [...currentClientFolder.events, "Selected"].forEach(e => names.add(e));
-      } else if (selectedCategory === "Videos") {
-        getVideoSubfolders().forEach(s => names.add(s));
-      } else if (selectedCategory === "Project Managers" || selectedCategory === "Lightroom Catalog") {
-        currentClientFolder.events.forEach(e => names.add(e));
-      }
-    } else if (currentLevel === 4 && currentClientFolder && (selectedCategory === "Photos" || selectedCategory === "Lightroom Catalog") && selectedEvent !== "Selected") {
+    } else if (currentLevel === 2 && currentClientFolder) {
+      // Events + Selected (Photos is implicit)
+      [...currentClientFolder.events, "Selected"].forEach(e => names.add(e));
+    } else if (currentLevel === 3 && currentClientFolder && selectedEvent !== "Selected") {
       const { photographers } = getFreelancersForEvent(assignments, currentClientFolder.registeredDateTimeAD, selectedEvent!);
       photographers.forEach(p => names.add(p));
     }
     return names;
-  }, [currentLevel, filteredGroups, currentGroup, currentClientFolder, selectedCategory, selectedEvent, assignments]);
+  }, [currentLevel, filteredGroups, currentGroup, currentClientFolder, selectedEvent, assignments]);
 
-  // Extra folders from E2 that aren't virtual
   const extraE2Folders = useMemo(() => {
     return e2Folders
-      .map(f => {
-        const stripped = f.replace(currentS3Prefix, "").replace(/\/$/, "");
-        return stripped;
-      })
+      .map(f => f.replace(currentS3Prefix, "").replace(/\/$/, ""))
       .filter(name => name && !virtualFolderNames.has(name));
   }, [e2Folders, currentS3Prefix, virtualFolderNames]);
 
-  // Check if current files contain images (for gallery view)
   const hasImageFiles = useMemo(() => {
     const imageExts = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "heic"];
     return e2Files.some(f => {
@@ -250,54 +202,55 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
 
   const renderE2Files = () => {
     if (e2Files.length === 0 && extraE2Folders.length === 0) return null;
-
-    // If we have image files, use the photo gallery
     if (hasImageFiles) {
       return (
         <>
           {extraE2Folders.map(folderName => (
-            <XitoDriveFolderCard
-              key={`e2-folder-${folderName}`}
-              name={folderName}
-              type="leaf"
-              onClick={() => navigate(folderName, folderName)}
-            />
+            <XitoDriveFolderCard key={`e2-folder-${folderName}`} name={folderName} type="leaf" onClick={() => navigate(folderName, folderName)} />
           ))}
         </>
       );
     }
-
     return (
       <>
         {extraE2Folders.map(folderName => (
-          <XitoDriveFolderCard
-            key={`e2-folder-${folderName}`}
-            name={folderName}
-            type="leaf"
-            onClick={() => navigate(folderName, folderName)}
-          />
+          <XitoDriveFolderCard key={`e2-folder-${folderName}`} name={folderName} type="leaf" onClick={() => navigate(folderName, folderName)} />
         ))}
         {e2Files.map(file => {
           const fileName = file.key.split("/").pop() || file.key;
           return (
-            <XitoDriveFolderCard
-              key={`e2-file-${file.key}`}
-              name={fileName}
-              type="file"
-              fileSize={file.size}
-              onClick={() => handleFileClick(file)}
-            />
+            <XitoDriveFolderCard key={`e2-file-${file.key}`} name={fileName} type="file" fileSize={file.size} onClick={() => handleFileClick(file)} />
           );
         })}
       </>
     );
   };
 
-  // Render photo gallery separately for image-containing folders
   const renderPhotoGallery = () => {
     if (!hasImageFiles || e2Files.length === 0) return null;
     return <XitoDrivePhotoGallery files={e2Files} prefix={currentS3Prefix} />;
   };
+
+  const renderLeafContent = () => (
+    <div className="space-y-3">
+      {extraE2Folders.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+          {renderE2Files()}
+        </div>
+      )}
+      {renderPhotoGallery()}
+      {!hasImageFiles && e2Files.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+          {renderE2Files()}
+        </div>
+      )}
+      {e2Files.length === 0 && extraE2Folders.length === 0 && !e2Loading && (
+        <div className="flex items-center justify-center h-48">
+          <p className="text-muted-foreground text-sm">This folder is empty. Use Upload or New Folder above.</p>
+        </div>
+      )}
+    </div>
+  );
 
   const renderContent = () => {
     if (isLoading) {
@@ -327,27 +280,24 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
       return (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
           {currentGroup.clients.map(c => (
-            <XitoDriveFolderCard key={c.registeredDateTimeAD} name={c.clientName} itemCount={6} type="client" onClick={() => navigate(c.clientName, c.registeredDateTimeAD)} />
+            <XitoDriveFolderCard key={c.registeredDateTimeAD} name={c.clientName} itemCount={c.events.length + 1} type="client" onClick={() => navigate(c.clientName, c.registeredDateTimeAD)} />
           ))}
           {renderE2Files()}
         </div>
       );
     }
 
-    // Level 2: Category folders
-    if (currentLevel === 2) {
-      const categories = getClientCategories();
+    // Level 2: Events + Selected (Photos is implicit — no category level)
+    if (currentLevel === 2 && currentClientFolder) {
+      const items = [...currentClientFolder.events, "Selected"];
       return (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-          {categories.map(cat => {
-            let count: number | undefined;
-            if (cat.name === "Photos" || cat.name === "Project Managers" || cat.name === "Lightroom Catalog") {
-              count = (currentClientFolder?.events.length || 0) + (cat.name === "Photos" ? 1 : 0);
-            } else if (cat.name === "Videos") {
-              count = 3;
-            }
+          {items.map(ev => {
+            const freelancers = ev !== "Selected"
+              ? getFreelancersForEvent(assignments, currentClientFolder.registeredDateTimeAD, ev)
+              : { photographers: [], videographers: [] };
             return (
-              <XitoDriveFolderCard key={cat.name} name={cat.name} itemCount={count} type="category" categoryName={cat.name} onClick={() => navigate(cat.name, cat.name)} />
+              <XitoDriveFolderCard key={ev} name={ev} itemCount={ev === "Selected" ? undefined : freelancers.photographers.length || undefined} type="event" categoryName="Photos" onClick={() => navigate(ev, ev)} />
             );
           })}
           {renderE2Files()}
@@ -355,149 +305,29 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
       );
     }
 
-    // Level 3: Inside a category
-    if (currentLevel === 3 && currentClientFolder) {
-      if (selectedCategory === "Photos") {
-        const items = [...currentClientFolder.events, "Selected"];
-        return (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-            {items.map(ev => {
-              const freelancers = ev !== "Selected"
-                ? getFreelancersForEvent(assignments, currentClientFolder.registeredDateTimeAD, ev)
-                : { photographers: [], videographers: [] };
-              return (
-                <XitoDriveFolderCard key={ev} name={ev} itemCount={ev === "Selected" ? undefined : freelancers.photographers.length || undefined} type="event" categoryName="Photos" onClick={() => navigate(ev, ev)} />
-              );
-            })}
-            {renderE2Files()}
-          </div>
-        );
-      }
-
-      if (selectedCategory === "Videos") {
-        return (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-            {getVideoSubfolders().map(sub => (
-              <XitoDriveFolderCard key={sub} name={sub} type="leaf" categoryName="Videos" onClick={() => navigate(sub, sub)} />
-            ))}
-            {renderE2Files()}
-          </div>
-        );
-      }
-
-      if (selectedCategory === "Project Managers") {
-        return (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-            {currentClientFolder.events.map(ev => (
-              <XitoDriveFolderCard key={ev} name={ev} type="leaf" categoryName="Project Managers" onClick={() => navigate(ev, ev)} />
-            ))}
-            {renderE2Files()}
-          </div>
-        );
-      }
-
-      if (selectedCategory === "Lightroom Catalog") {
-        return (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-            {currentClientFolder.events.map(ev => {
-              const freelancers = getFreelancersForEvent(assignments, currentClientFolder.registeredDateTimeAD, ev);
-              return (
-                <XitoDriveFolderCard key={ev} name={ev} itemCount={freelancers.photographers.length || undefined} type="event" categoryName="Lightroom Catalog" onClick={() => navigate(ev, ev)} />
-              );
-            })}
-            {renderE2Files()}
-          </div>
-        );
-      }
-
-      // Quotation / Payments: show E2 files only
+    // Level 3: Photographer folders
+    if (currentLevel === 3 && currentClientFolder && selectedEvent !== "Selected") {
+      const { photographers } = getFreelancersForEvent(assignments, currentClientFolder.registeredDateTimeAD, selectedEvent!);
       return (
         <div className="space-y-3">
-          {extraE2Folders.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-              {renderE2Files()}
-            </div>
-          )}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+            {photographers.map(name => (
+              <XitoDriveFolderCard key={name} name={name} type="freelancer" onClick={() => navigate(name, name)} />
+            ))}
+            {renderE2Files()}
+          </div>
           {renderPhotoGallery()}
-          {!hasImageFiles && e2Files.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-              {renderE2Files()}
-            </div>
-          )}
-          {e2Files.length === 0 && extraE2Folders.length === 0 && !e2Loading && (
+          {photographers.length === 0 && e2Files.length === 0 && extraE2Folders.length === 0 && !e2Loading && (
             <div className="flex items-center justify-center h-48">
-              <p className="text-muted-foreground text-sm">This folder is empty. Use Upload or New Folder above.</p>
+              <p className="text-muted-foreground text-sm">No freelancers assigned. Use Upload or New Folder above.</p>
             </div>
           )}
         </div>
       );
     }
 
-    // Level 4: Inside event under Photos/Lightroom -> freelancer folders
-    if (currentLevel === 4 && currentClientFolder) {
-      if ((selectedCategory === "Photos" || selectedCategory === "Lightroom Catalog") && selectedEvent !== "Selected") {
-        const { photographers } = getFreelancersForEvent(assignments, currentClientFolder.registeredDateTimeAD, selectedEvent!);
-        return (
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-              {photographers.map(name => (
-                <XitoDriveFolderCard key={name} name={name} type="freelancer" onClick={() => navigate(name, name)} />
-              ))}
-              {renderE2Files()}
-            </div>
-            {renderPhotoGallery()}
-            {photographers.length === 0 && e2Files.length === 0 && extraE2Folders.length === 0 && !e2Loading && (
-              <div className="flex items-center justify-center h-48">
-                <p className="text-muted-foreground text-sm">No freelancers assigned. Use Upload or New Folder above.</p>
-              </div>
-            )}
-          </div>
-        );
-      }
-
-      return (
-        <div className="space-y-3">
-          {extraE2Folders.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-              {renderE2Files()}
-            </div>
-          )}
-          {renderPhotoGallery()}
-          {!hasImageFiles && e2Files.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-              {renderE2Files()}
-            </div>
-          )}
-          {e2Files.length === 0 && extraE2Folders.length === 0 && !e2Loading && (
-            <div className="flex items-center justify-center h-48">
-              <p className="text-muted-foreground text-sm">This folder is empty. Use Upload or New Folder above.</p>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // Level 5+: Leaf - show only E2 content
-    return (
-      <div className="space-y-3">
-        {extraE2Folders.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-            {renderE2Files()}
-          </div>
-        )}
-        {renderPhotoGallery()}
-        {!hasImageFiles && e2Files.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-            {renderE2Files()}
-          </div>
-        )}
-        {e2Files.length === 0 && extraE2Folders.length === 0 && !e2Loading && (
-          <div className="flex items-center justify-center h-48">
-            <p className="text-muted-foreground text-sm">This folder is empty. Use Upload or New Folder above.</p>
-          </div>
-        )}
-      </div>
-    );
+    // Level 3+ (Selected) or Level 4+ (leaf)
+    return renderLeafContent();
   };
 
   return (
@@ -532,40 +362,16 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
         )}
 
         <div className="ml-auto flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-xs"
-            disabled={syncing}
-            onClick={handleSyncToPCloud}
-          >
-            <CloudUpload className="h-3.5 w-3.5 mr-1" /> 
-            {syncing 
-              ? `Syncing ${syncProgress?.current || 0}/${syncProgress?.total || 0}...` 
-              : "Sync to pCloud"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-xs"
-            disabled={currentLevel === 0}
-            onClick={handleCreateFolder}
-          >
+          <Button variant="outline" size="sm" className="text-xs" disabled={currentLevel === 0} onClick={handleCreateFolder}>
             <FolderPlus className="h-3.5 w-3.5 mr-1" /> New Folder
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-xs"
-            disabled={currentLevel === 0 || uploading}
-            onClick={handleUpload}
-          >
+          <Button variant="outline" size="sm" className="text-xs" disabled={currentLevel === 0 || uploading} onClick={handleUpload}>
             <Upload className="h-3.5 w-3.5 mr-1" /> {uploading ? "Uploading..." : "Upload"}
           </Button>
         </div>
       </div>
 
-      {/* Upload progress indicator */}
+      {/* Upload progress */}
       {uploadProgress.length > 0 && (
         <div className="space-y-1.5 bg-muted/50 rounded-lg px-3 py-2 border border-border/50">
           <p className="text-xs font-medium text-foreground">
@@ -577,10 +383,7 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
             <div key={i} className="flex items-center gap-2">
               <p className="text-[11px] text-muted-foreground truncate min-w-0 flex-1 max-w-[200px]">{item.name}</p>
               <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-primary rounded-full transition-all duration-300"
-                  style={{ width: `${item.percent}%` }}
-                />
+                <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${item.percent}%` }} />
               </div>
               <span className="text-[11px] text-muted-foreground w-9 text-right">{item.percent}%</span>
             </div>
@@ -608,7 +411,6 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
         {e2Loading && <span className="ml-2 text-[10px] text-muted-foreground animate-pulse">loading files...</span>}
       </div>
 
-      {/* Content */}
       {renderContent()}
     </div>
   );
