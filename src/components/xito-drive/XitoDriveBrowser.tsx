@@ -3,6 +3,7 @@ import { ChevronRight, HardDrive, FolderPlus, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { XitoDriveFolderCard } from "./XitoDriveFolderCard";
+import { XitoDrivePhotoGallery } from "./XitoDrivePhotoGallery";
 import {
   MonthYearGroup,
   buildMonthYearGroups,
@@ -155,19 +156,68 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
     }
   }, []);
 
+  // Compute virtual folder names at current level to filter duplicates from E2
+  const virtualFolderNames = useMemo(() => {
+    const names = new Set<string>();
+    if (currentLevel === 0) {
+      filteredGroups.forEach(g => names.add(g.key));
+    } else if (currentLevel === 1 && currentGroup) {
+      currentGroup.clients.forEach(c => names.add(c.clientName));
+    } else if (currentLevel === 2) {
+      getClientCategories().forEach(cat => names.add(cat.name));
+    } else if (currentLevel === 3 && currentClientFolder) {
+      if (selectedCategory === "Photos") {
+        [...currentClientFolder.events, "Selected"].forEach(e => names.add(e));
+      } else if (selectedCategory === "Videos") {
+        getVideoSubfolders().forEach(s => names.add(s));
+      } else if (selectedCategory === "Project Managers" || selectedCategory === "Lightroom Catalog") {
+        currentClientFolder.events.forEach(e => names.add(e));
+      }
+    } else if (currentLevel === 4 && currentClientFolder && (selectedCategory === "Photos" || selectedCategory === "Lightroom Catalog") && selectedEvent !== "Selected") {
+      const { photographers } = getFreelancersForEvent(assignments, currentClientFolder.registeredDateTimeAD, selectedEvent!);
+      photographers.forEach(p => names.add(p));
+    }
+    return names;
+  }, [currentLevel, filteredGroups, currentGroup, currentClientFolder, selectedCategory, selectedEvent, assignments]);
+
   // Extra folders from E2 that aren't virtual
   const extraE2Folders = useMemo(() => {
-    // Strip prefix to get folder names
     return e2Folders
       .map(f => {
         const stripped = f.replace(currentS3Prefix, "").replace(/\/$/, "");
         return stripped;
       })
-      .filter(Boolean);
-  }, [e2Folders, currentS3Prefix]);
+      .filter(name => name && !virtualFolderNames.has(name));
+  }, [e2Folders, currentS3Prefix, virtualFolderNames]);
+
+  // Check if current files contain images (for gallery view)
+  const hasImageFiles = useMemo(() => {
+    const imageExts = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "heic"];
+    return e2Files.some(f => {
+      const ext = f.key.split(".").pop()?.toLowerCase() || "";
+      return imageExts.includes(ext);
+    });
+  }, [e2Files]);
 
   const renderE2Files = () => {
     if (e2Files.length === 0 && extraE2Folders.length === 0) return null;
+
+    // If we have image files, use the photo gallery
+    if (hasImageFiles) {
+      return (
+        <>
+          {extraE2Folders.map(folderName => (
+            <XitoDriveFolderCard
+              key={`e2-folder-${folderName}`}
+              name={folderName}
+              type="leaf"
+              onClick={() => navigate(folderName, folderName)}
+            />
+          ))}
+        </>
+      );
+    }
+
     return (
       <>
         {extraE2Folders.map(folderName => (
@@ -192,6 +242,12 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
         })}
       </>
     );
+  };
+
+  // Render photo gallery separately for image-containing folders
+  const renderPhotoGallery = () => {
+    if (!hasImageFiles || e2Files.length === 0) return null;
+    return <XitoDrivePhotoGallery files={e2Files} prefix={currentS3Prefix} />;
   };
 
   const renderContent = () => {
@@ -307,10 +363,20 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
 
       // Quotation / Payments: show E2 files only
       return (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-          {renderE2Files()}
+        <div className="space-y-3">
+          {extraE2Folders.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+              {renderE2Files()}
+            </div>
+          )}
+          {renderPhotoGallery()}
+          {!hasImageFiles && e2Files.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+              {renderE2Files()}
+            </div>
+          )}
           {e2Files.length === 0 && extraE2Folders.length === 0 && !e2Loading && (
-            <div className="col-span-full flex items-center justify-center h-48">
+            <div className="flex items-center justify-center h-48">
               <p className="text-muted-foreground text-sm">This folder is empty. Use Upload or New Folder above.</p>
             </div>
           )}
@@ -323,13 +389,16 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
       if ((selectedCategory === "Photos" || selectedCategory === "Lightroom Catalog") && selectedEvent !== "Selected") {
         const { photographers } = getFreelancersForEvent(assignments, currentClientFolder.registeredDateTimeAD, selectedEvent!);
         return (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-            {photographers.map(name => (
-              <XitoDriveFolderCard key={name} name={name} type="freelancer" onClick={() => navigate(name, name)} />
-            ))}
-            {renderE2Files()}
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+              {photographers.map(name => (
+                <XitoDriveFolderCard key={name} name={name} type="freelancer" onClick={() => navigate(name, name)} />
+              ))}
+              {renderE2Files()}
+            </div>
+            {renderPhotoGallery()}
             {photographers.length === 0 && e2Files.length === 0 && extraE2Folders.length === 0 && !e2Loading && (
-              <div className="col-span-full flex items-center justify-center h-48">
+              <div className="flex items-center justify-center h-48">
                 <p className="text-muted-foreground text-sm">No freelancers assigned. Use Upload or New Folder above.</p>
               </div>
             )}
@@ -338,10 +407,20 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
       }
 
       return (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-          {renderE2Files()}
+        <div className="space-y-3">
+          {extraE2Folders.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+              {renderE2Files()}
+            </div>
+          )}
+          {renderPhotoGallery()}
+          {!hasImageFiles && e2Files.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+              {renderE2Files()}
+            </div>
+          )}
           {e2Files.length === 0 && extraE2Folders.length === 0 && !e2Loading && (
-            <div className="col-span-full flex items-center justify-center h-48">
+            <div className="flex items-center justify-center h-48">
               <p className="text-muted-foreground text-sm">This folder is empty. Use Upload or New Folder above.</p>
             </div>
           )}
@@ -351,10 +430,20 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
 
     // Level 5+: Leaf - show only E2 content
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-        {renderE2Files()}
+      <div className="space-y-3">
+        {extraE2Folders.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+            {renderE2Files()}
+          </div>
+        )}
+        {renderPhotoGallery()}
+        {!hasImageFiles && e2Files.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+            {renderE2Files()}
+          </div>
+        )}
         {e2Files.length === 0 && extraE2Folders.length === 0 && !e2Loading && (
-          <div className="col-span-full flex items-center justify-center h-48">
+          <div className="flex items-center justify-center h-48">
             <p className="text-muted-foreground text-sm">This folder is empty. Use Upload or New Folder above.</p>
           </div>
         )}
