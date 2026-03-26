@@ -70,9 +70,9 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, eventYear, eventMonth,
 
     assignments.forEach((a) => {
       const photographers: { name: string; role: string }[] = [];
-      if (a.photographer_bride) photographers.push({ name: a.photographer_bride, role: "PB" });
-      if (a.photographer_groom) photographers.push({ name: a.photographer_groom, role: "PG" });
-      if (a.extra_photographer) photographers.push({ name: a.extra_photographer, role: "EP" });
+      if (a.photographerBride) photographers.push({ name: a.photographerBride, role: "PB" });
+      if (a.photographerGroom) photographers.push({ name: a.photographerGroom, role: "PG" });
+      if (a.extraPhotographer) photographers.push({ name: a.extraPhotographer, role: "EP" });
 
       photographers.forEach((p) => {
         const tabId = `${a.event}-${p.name}`;
