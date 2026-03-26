@@ -535,7 +535,7 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
             </div>
           ))}
         </div>
-      )
+      )}
 
       {/* Breadcrumb */}
       <div className="flex items-center gap-1 text-sm flex-wrap bg-muted/50 rounded-lg px-3 py-2 border border-border/50">
