@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { BookOpen, Image as ImageIcon, Loader2, FolderOpen, Camera } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,7 @@ interface AlbumSectionProps {
 
 const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".tiff", ".bmp", ".heic"];
 const isImage = (key: string) => IMAGE_EXTS.some((e) => key.toLowerCase().endsWith(e));
+const INITIAL_URL_BATCH = 12;
 
 interface TabDef {
   id: string;
@@ -35,6 +36,10 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [tabPhotoCounts, setTabPhotoCounts] = useState<Record<string, number>>({});
+  const [urlsFetchedCount, setUrlsFetchedCount] = useState(0);
+
+  // Cache listE2Folder results to avoid double-fetching
+  const listCacheRef = useRef<Record<string, E2File[]>>({});
 
   // Load deliverables
   useEffect(() => {
@@ -59,15 +64,18 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     return { count: albumRows.length, sides, types };
   }, [deliverables]);
 
-  // Build tabs from assignments — derive year/month per assignment
+  // Build tabs from assignments — deduplicated, sanitized
   const tabs: TabDef[] = useMemo(() => {
     const result: TabDef[] = [];
+    const seen = new Set<string>();
 
     assignments.forEach((a) => {
       const aYear = a.eventYear;
       const aMonth = a.eventMonth;
       if (!aYear || !aMonth) return;
-      const yearMonth = `${aYear}-${String(parseInt(aMonth)).padStart(2, "0")}`;
+      const cleanYear = String(parseInt(aYear));
+      const cleanMonth = String(parseInt(aMonth)).padStart(2, "0");
+      const yearMonth = `${cleanYear}-${cleanMonth}`;
 
       const photographers: { name: string }[] = [];
       if (a.photographerBride) photographers.push({ name: a.photographerBride });
@@ -76,6 +84,8 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
 
       photographers.forEach((p) => {
         const tabId = `${a.event}-${p.name}`;
+        if (seen.has(tabId)) return;
+        seen.add(tabId);
         const prefix = `${yearMonth}/${clientName}/Photos/${a.event}/${p.name}/`;
         result.push({
           id: tabId,
@@ -89,14 +99,15 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     return result;
   }, [assignments, clientName]);
 
-  // Fetch photo counts for all tabs on mount
+  // Fetch photo counts for all tabs on mount & cache results
   useEffect(() => {
     if (tabs.length === 0) return;
     tabs.forEach((tab) => {
       listE2Folder(tab.s3Prefix)
         .then((result) => {
-          const count = result.files.filter((f) => isImage(f.key)).length;
-          setTabPhotoCounts((prev) => ({ ...prev, [tab.id]: count }));
+          const imageFiles = result.files.filter((f) => isImage(f.key));
+          listCacheRef.current[tab.id] = imageFiles;
+          setTabPhotoCounts((prev) => ({ ...prev, [tab.id]: imageFiles.length }));
         })
         .catch(() => {
           setTabPhotoCounts((prev) => ({ ...prev, [tab.id]: 0 }));
@@ -114,37 +125,61 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     if (tabs.length > 0 && !activeTab) setActiveTab(tabs[0].id);
   }, [tabs, activeTab]);
 
-  // Load photos when tab changes
+  // Load photos when tab changes — use cache if available
   useEffect(() => {
     const tab = tabs.find((t) => t.id === activeTab);
     if (!tab) return;
     setIsLoadingPhotos(true);
     setPhotos([]);
     setPhotoUrls({});
+    setUrlsFetchedCount(0);
 
-    listE2Folder(tab.s3Prefix)
-      .then(async (result) => {
-        const imageFiles = result.files.filter((f) => isImage(f.key));
-        setPhotos(imageFiles);
-        // Batch URLs in chunks of 20
-        if (imageFiles.length > 0) {
-          const chunkSize = 20;
-          for (let i = 0; i < imageFiles.length; i += chunkSize) {
-            const chunk = imageFiles.slice(i, i + chunkSize);
-            const urls = await getE2FileUrls(chunk.map((f) => f.key));
-            setPhotoUrls((prev) => ({ ...prev, ...urls }));
-          }
-        }
-      })
-      .catch((err) => console.error("Failed to load album photos:", err))
-      .finally(() => setIsLoadingPhotos(false));
+    const loadPhotos = async (imageFiles: E2File[]) => {
+      setPhotos(imageFiles);
+      // Only fetch URLs for first batch
+      if (imageFiles.length > 0) {
+        const firstBatch = imageFiles.slice(0, INITIAL_URL_BATCH);
+        const urls = await getE2FileUrls(firstBatch.map((f) => f.key));
+        setPhotoUrls(urls);
+        setUrlsFetchedCount(firstBatch.length);
+      }
+      setIsLoadingPhotos(false);
+    };
+
+    const cached = listCacheRef.current[tab.id];
+    if (cached) {
+      loadPhotos(cached);
+    } else {
+      listE2Folder(tab.s3Prefix)
+        .then((result) => {
+          const imageFiles = result.files.filter((f) => isImage(f.key));
+          listCacheRef.current[tab.id] = imageFiles;
+          return loadPhotos(imageFiles);
+        })
+        .catch((err) => {
+          console.error("Failed to load album photos:", err);
+          setIsLoadingPhotos(false);
+        });
+    }
   }, [activeTab, tabs]);
+
+  // Load more URLs
+  const loadMoreUrls = useCallback(async () => {
+    if (urlsFetchedCount >= photos.length) return;
+    const nextBatch = photos.slice(urlsFetchedCount, urlsFetchedCount + INITIAL_URL_BATCH);
+    if (nextBatch.length === 0) return;
+    const urls = await getE2FileUrls(nextBatch.map((f) => f.key));
+    setPhotoUrls((prev) => ({ ...prev, ...urls }));
+    setUrlsFetchedCount((prev) => prev + nextBatch.length);
+  }, [photos, urlsFetchedCount]);
 
   // Viewer data
   const viewerImages = useMemo(
     () => photos.map((p) => ({ key: p.key, url: photoUrls[p.key] || "" })).filter((i) => i.url),
     [photos, photoUrls]
   );
+
+  const hasMore = urlsFetchedCount < photos.length;
 
   return (
     <div className="space-y-4">
@@ -263,6 +298,14 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
                       );
                     })}
                   </div>
+                  {hasMore && (
+                    <button
+                      onClick={loadMoreUrls}
+                      className="mt-4 w-full py-2.5 rounded-lg bg-white/5 border border-white/10 text-sm text-white/60 hover:bg-white/10 hover:text-white/80 transition-all"
+                    >
+                      Load more photos ({photos.length - urlsFetchedCount} remaining)
+                    </button>
+                  )}
                 </>
               )}
             </TabsContent>
