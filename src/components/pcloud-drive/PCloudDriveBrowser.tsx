@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { ChevronRight, Cloud, FolderPlus, Upload, CloudUpload } from "lucide-react";
+import { ChevronRight, Cloud, FolderPlus, Upload, CloudUpload, AlertTriangle, RefreshCw, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { XitoDriveFolderCard } from "@/components/xito-drive/XitoDriveFolderCard";
@@ -19,10 +19,8 @@ import {
   uploadToPCloud,
   getPCloudFileLink,
   PCloudItem,
-  formatPCloudSize,
-  isPCloudImage,
 } from "@/lib/pcloud-api";
-import { syncPCloudDriveFolders } from "@/lib/pcloud-sync";
+import { checkPCloudSyncStatus, syncPendingFolders, PendingSyncStatus } from "@/lib/pcloud-sync";
 import { BookedClientData } from "@/lib/sheets-api";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
 import { toast } from "sonner";
@@ -35,9 +33,11 @@ interface Props {
 
 type BreadcrumbSegment = { label: string; level: string };
 
+const PCLOUD_ROOT = "WEDDING TALES NEPAL";
+
 /**
  * pCloud Drive — Photos + Videos browser.
- * Browses pCloud under /wedding-tales-nepal.
+ * Browses pCloud under /WEDDING TALES NEPAL.
  */
 export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
   const [breadcrumb, setBreadcrumb] = useState<BreadcrumbSegment[]>([]);
@@ -48,6 +48,10 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
   const [currentFolderId, setCurrentFolderId] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
+
+  // Pending sync status
+  const [pendingStatus, setPendingStatus] = useState<PendingSyncStatus | null>(null);
+  const [checkingSync, setCheckingSync] = useState(false);
 
   const groups = useMemo(() => buildMonthYearGroups(clients), [clients]);
   const uniqueYears = useMemo(() => getUniqueYears(groups), [groups]);
@@ -71,13 +75,31 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
 
   // Build pCloud path
   const currentPCloudPath = useMemo(() => {
-    const segments = ["wedding-tales-nepal"];
+    const segments = [PCLOUD_ROOT];
     if (breadcrumb[0]) segments.push(breadcrumb[0].level);
     for (let i = 1; i < breadcrumb.length; i++) {
       segments.push(breadcrumb[i].label.replace(/[/\\]/g, "_"));
     }
     return "/" + segments.join("/");
   }, [breadcrumb]);
+
+  // Check pending sync status on mount when clients are loaded
+  useEffect(() => {
+    if (clients.length === 0 || isLoading) return;
+    let cancelled = false;
+    setCheckingSync(true);
+    checkPCloudSyncStatus(clients, assignments)
+      .then(status => {
+        if (!cancelled) setPendingStatus(status);
+      })
+      .catch(err => {
+        console.warn("Sync status check failed:", err);
+      })
+      .finally(() => {
+        if (!cancelled) setCheckingSync(false);
+      });
+    return () => { cancelled = true; };
+  }, [clients, assignments, isLoading]);
 
   // Fetch pCloud contents when navigating deeper than root
   useEffect(() => {
@@ -163,17 +185,20 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
     }
   }, []);
 
-  const handleSync = useCallback(async () => {
-    if (syncing) return;
+  const handleSyncPending = useCallback(async () => {
+    if (syncing || !pendingStatus || pendingStatus.pending === 0) return;
     setSyncing(true);
-    setSyncProgress({ current: 0, total: 0 });
-    const toastId = toast.loading("Syncing folders to pCloud...");
+    setSyncProgress({ current: 0, total: pendingStatus.pending });
+    const toastId = toast.loading("Syncing new folders to pCloud...");
     try {
-      const { created, errors } = await syncPCloudDriveFolders(clients, assignments, (p) => {
+      const { created, errors } = await syncPendingFolders(pendingStatus.paths, (p) => {
         setSyncProgress({ current: p.current, total: p.total });
       });
       toast.dismiss(toastId);
-      toast.success(errors.length === 0 ? `Synced ${created} folders` : `Synced ${created}, ${errors.length} failed`);
+      toast.success(errors.length === 0 ? `Synced ${created} new folders` : `Synced ${created}, ${errors.length} failed`);
+      // Re-check status
+      const newStatus = await checkPCloudSyncStatus(clients, assignments);
+      setPendingStatus(newStatus);
     } catch (err) {
       toast.dismiss(toastId);
       toast.error("Sync failed");
@@ -182,7 +207,23 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
       setSyncing(false);
       setSyncProgress(null);
     }
-  }, [syncing, clients, assignments]);
+  }, [syncing, pendingStatus, clients, assignments]);
+
+  const handleRefreshStatus = useCallback(async () => {
+    setCheckingSync(true);
+    try {
+      const status = await checkPCloudSyncStatus(clients, assignments);
+      setPendingStatus(status);
+      if (status.pending === 0) {
+        toast.success("Everything is in sync!");
+      }
+    } catch (err) {
+      toast.error("Failed to check sync status");
+      console.error(err);
+    } finally {
+      setCheckingSync(false);
+    }
+  }, [clients, assignments]);
 
   // Virtual folder names at current level
   const virtualFolderNames = useMemo(() => {
@@ -193,7 +234,6 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
       currentGroup.clients.forEach(c => names.add(c.clientName));
     } else if (currentLevel === 2) {
       PCLOUD_CATEGORIES.forEach(cat => names.add(cat.name));
-      // Also hide research folders that exist in pCloud but belong to Barun's Research
       RESEARCH_CATEGORIES.forEach(cat => names.add(cat.name));
     } else if (currentLevel === 3 && currentClientFolder) {
       if (selectedCategory === "Photos") {
@@ -218,6 +258,71 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
   const pcloudFiles = useMemo(() => {
     return pcloudItems.filter(item => !item.isfolder);
   }, [pcloudItems]);
+
+  // Pending sync banner
+  const renderPendingBanner = () => {
+    if (checkingSync) {
+      return (
+        <div className="flex items-center gap-2 bg-muted/60 border border-border rounded-lg px-4 py-3 text-sm animate-pulse">
+          <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
+          <span className="text-muted-foreground">Checking for pending changes...</span>
+        </div>
+      );
+    }
+
+    if (!pendingStatus) return null;
+
+    if (pendingStatus.pending === 0) {
+      return (
+        <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-lg px-4 py-3 text-sm">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          <span className="text-emerald-700 dark:text-emerald-300 font-medium">All folders in sync</span>
+          <Button variant="ghost" size="sm" className="ml-auto h-7 text-xs" onClick={handleRefreshStatus}>
+            <RefreshCw className="h-3 w-3 mr-1" /> Recheck
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3 space-y-2">
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+              {pendingStatus.pending} new {pendingStatus.pending === 1 ? "folder" : "folders"} pending sync
+            </p>
+            {pendingStatus.summaries.length > 0 && (
+              <ul className="mt-1 space-y-0.5">
+                {pendingStatus.summaries.slice(0, 4).map((s, i) => (
+                  <li key={i} className="text-xs text-amber-700 dark:text-amber-300">• {s}</li>
+                ))}
+                {pendingStatus.summaries.length > 4 && (
+                  <li className="text-xs text-amber-600 dark:text-amber-400 italic">
+                    ...and {pendingStatus.summaries.length - 4} more
+                  </li>
+                )}
+              </ul>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleRefreshStatus} disabled={checkingSync}>
+              <RefreshCw className="h-3 w-3" />
+            </Button>
+            <Button
+              size="sm"
+              className="h-7 text-xs bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={handleSyncPending}
+              disabled={syncing}
+            >
+              <CloudUpload className="h-3 w-3 mr-1" />
+              {syncing ? `Syncing ${syncProgress?.current || 0}/${syncProgress?.total || 0}...` : "Sync Now"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderContent = () => {
     if (isLoading) {
@@ -344,6 +449,9 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Pending sync banner */}
+      {renderPendingBanner()}
+
       <div className="flex flex-wrap items-center gap-2">
         {currentLevel === 0 && (
           <>
@@ -364,10 +472,6 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
           </>
         )}
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="outline" size="sm" className="text-xs" disabled={syncing} onClick={handleSync}>
-            <CloudUpload className="h-3.5 w-3.5 mr-1" />
-            {syncing ? `Syncing ${syncProgress?.current || 0}/${syncProgress?.total || 0}...` : "Sync Folders"}
-          </Button>
           <Button variant="outline" size="sm" className="text-xs" disabled={currentLevel === 0} onClick={handleCreateFolder}>
             <FolderPlus className="h-3.5 w-3.5 mr-1" /> New Folder
           </Button>
@@ -380,7 +484,7 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
       <div className="flex items-center gap-1 text-sm flex-wrap bg-muted/50 rounded-lg px-3 py-2 border border-border/50">
         <button onClick={() => navigateTo(-1)} className="flex items-center gap-1 text-primary hover:underline font-medium">
           <Cloud className="h-4 w-4" />
-          pCloud
+          {PCLOUD_ROOT}
         </button>
         {breadcrumb.map((seg, i) => (
           <span key={i} className="flex items-center gap-1">
