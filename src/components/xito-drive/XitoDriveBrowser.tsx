@@ -77,6 +77,8 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
     }
     let cancelled = false;
     setE2Loading(true);
+    setE2Files([]);
+    setE2Folders([]);
     listE2Folder(currentS3Prefix)
       .then(result => {
         if (!cancelled) {
