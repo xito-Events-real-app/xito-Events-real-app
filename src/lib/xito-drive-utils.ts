@@ -180,7 +180,7 @@ export function buildStoragePath(segments: string[]): string {
 
 // ── Folder tree builders per module ──
 
-const PCLOUD_ROOT = "wedding-tales-nepal";
+const PCLOUD_ROOT = "WEDDING TALES NEPAL";
 const RESEARCH_ROOT = "CLIENT DETAILS";
 
 /**
