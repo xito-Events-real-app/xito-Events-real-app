@@ -76,45 +76,56 @@ export async function createPCloudFolder(parentId: number, name: string): Promis
   return data.metadata as PCloudItem;
 }
 
+async function invokePCloudAction<T>(action: string, params: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke('pcloud-api', {
+    body: { action, params },
+  });
+
+  if (error) {
+    throw new Error(`pCloud ${action} error: ${error.message}`);
+  }
+
+  if (!data || (typeof data.result === 'number' && data.result !== 0)) {
+    throw new Error(data?.error || `pCloud ${action} failed`);
+  }
+
+  return data as T;
+}
+
 export async function getPCloudFileLink(fileid: number): Promise<string> {
-  const data = await callPCloudDirect('/getfilelink', { fileid: String(fileid) });
+  const data = await invokePCloudAction<{ hosts?: string[]; path?: string }>('getfilelink', {
+    fileid,
+  });
+
   if (data.hosts && data.path) {
     return `https://${data.hosts[0]}${data.path}`;
   }
+
   throw new Error('Could not get file link');
 }
 
 export async function getPCloudThumbUrl(fileid: number, size: string = '200x200'): Promise<string> {
-  const data = await callPCloudDirect('/getthumblink', { fileid: String(fileid), size });
+  const data = await invokePCloudAction<{ hosts?: string[]; path?: string }>('getthumblink', {
+    fileid,
+    size,
+  });
+
   if (data.hosts && data.path) {
     return `https://${data.hosts[0]}${data.path}`;
   }
+
   throw new Error('Could not get thumb link');
 }
 
-// Batch fetch thumbnails — all in parallel directly from pCloud
 export async function getPCloudThumbsBatch(fileids: number[], size: string = '200x200'): Promise<Record<number, string>> {
   if (fileids.length === 0) return {};
-  const auth = await getAuthToken();
-  const results: Record<number, string> = {};
 
-  // Fetch all thumbs in parallel (batches of 50)
-  for (let i = 0; i < fileids.length; i += 50) {
-    const chunk = fileids.slice(i, i + 50);
-    const promises = chunk.map(async (fid) => {
-      try {
-        const query = new URLSearchParams({ auth, fileid: String(fid), size });
-        const res = await fetch(`${PCLOUD_API}/getthumblink?${query}`);
-        const d = await res.json();
-        if (d.hosts && d.path) {
-          results[fid] = `https://${d.hosts[0]}${d.path}`;
-        }
-      } catch { /* skip failed thumbs */ }
-    });
-    await Promise.all(promises);
-  }
+  const data = await invokePCloudAction<{ thumbs?: Record<number, string> }>('getthumbslinks', {
+    fileids,
+    size,
+  });
 
-  return results;
+  return data.thumbs || {};
 }
 
 export async function deletePCloudFile(fileid: number): Promise<void> {
