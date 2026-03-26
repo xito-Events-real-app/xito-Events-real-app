@@ -354,6 +354,25 @@ serve(async (req) => {
       });
     }
 
+    // ACTION: getUploadUrl - returns a presigned PUT URL so client uploads directly to S3
+    if (action === "getUploadUrl") {
+      const body = await req.json();
+      const { path: filePath, fileName, contentType } = body;
+      if (!filePath || !fileName) {
+        return new Response(JSON.stringify({ error: "path and fileName required" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const objectKey = `${filePath}${filePath.endsWith("/") ? "" : "/"}${fileName}`;
+      const presignedUrl = await generatePresignedUrl({
+        endpoint, bucket, objectKey, region, accessKey, secretKey,
+        expiresIn: 3600, method: "PUT", contentType: contentType || "application/octet-stream",
+      });
+      return new Response(JSON.stringify({ url: presignedUrl, key: objectKey }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // ACTION: getSignedUrls (batch - multiple keys at once)
     if (action === "getSignedUrls") {
       const body = await req.json();
