@@ -17,3 +17,5 @@ export { default as DeleteClientDialog } from './DeleteClientDialog';
 export { default as ClientFilesSection } from './ClientFilesSection';
 export { default as DeliverablesSection } from './DeliverablesSection';
 export { default as EditProductionSection } from './EditProductionSection';
+export { default as AlbumSection } from './AlbumSection';
+export { default as XitoImageViewer } from './XitoImageViewer';

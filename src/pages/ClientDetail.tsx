@@ -53,7 +53,7 @@ import { nepaliMonthsEnglish, NepaliDateObject, bsToAD, isUnknownDay, getDayForS
 import { getMonthName } from "@/lib/nepali-months";
 import NepaliDate from "nepali-date-converter";
 import PaymentDrawer from "@/components/finance/PaymentDrawer";
-import { ClientDetailSidebar, ClientHeroSection, SectionType, EventDetailsSummaryCard, FullScreenEventCard, ClientDetailsCard, BenzoKeepDialog, BenzoKeepViewer, DeleteClientDialog, ClientFilesSection, DeliverablesSection, EditProductionSection } from "@/components/client-detail";
+import { ClientDetailSidebar, ClientHeroSection, SectionType, EventDetailsSummaryCard, FullScreenEventCard, ClientDetailsCard, BenzoKeepDialog, BenzoKeepViewer, DeleteClientDialog, ClientFilesSection, DeliverablesSection, EditProductionSection, AlbumSection } from "@/components/client-detail";
 import FreelancerAssignmentSection from "@/components/client-detail/FreelancerAssignmentSection";
 import { updateRequiredCrewCategories } from "@/lib/freelancer-assignment-api";
 import { EventDetailCard } from "@/components/client-detail/EventDetailCard";
@@ -1165,6 +1165,7 @@ const ClientDetail = () => {
                   { id: 'files', label: 'Files' },
                   { id: 'deliverables', label: 'Deliverables' },
                   { id: 'edit', label: 'Edit' },
+                  { id: 'album', label: 'Album' },
                 ] as { id: SectionType; label: string }[]).map((section) => (
                   <Button
                     key={section.id}
@@ -1760,6 +1761,17 @@ const ClientDetail = () => {
           {/* Edit & Production Section */}
           {activeSection === 'edit' && client?.registeredDateTimeAD && (
             <EditProductionSection registeredDateTimeAD={client.registeredDateTimeAD} clientName={client.clientName} />
+          )}
+
+          {/* Album Section */}
+          {activeSection === 'album' && client?.registeredDateTimeAD && (
+            <AlbumSection
+              registeredDateTimeAD={client.registeredDateTimeAD}
+              clientName={client.clientName || ''}
+              eventYear={client.eventYear || ''}
+              eventMonth={client.eventMonth || ''}
+              assignments={freelancerAssignments}
+            />
           )}
 
           {/* Freelancers Section */}
