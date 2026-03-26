@@ -41,6 +41,7 @@ import VideoEditTracker from "./pages/VideoEditTracker";
 import FileClientDetail from "./pages/FileClientDetail";
 import PotentialDelete from "./pages/PotentialDelete";
 import EditedFiles from "./pages/EditedFiles";
+import XitoDrive from "./pages/XitoDrive";
 import { EditedFilesUploadProvider } from "./components/edited-files/EditedFilesUploadContext";
 import { UploadProgressTracker } from "./components/edited-files/UploadProgressTracker";
 
