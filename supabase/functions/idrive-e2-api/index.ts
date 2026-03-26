@@ -26,6 +26,27 @@ function hexEncode(buf: Uint8Array): string {
   return Array.from(buf).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
+// S3-compatible URI encoding: encode everything except unreserved chars (A-Z a-z 0-9 - . _ ~)
+function s3UriEncode(str: string, encodeSlash = true): string {
+  let result = "";
+  for (const ch of str) {
+    if ((ch >= "A" && ch <= "Z") || (ch >= "a" && ch <= "z") || (ch >= "0" && ch <= "9") || ch === "_" || ch === "-" || ch === "~" || ch === ".") {
+      result += ch;
+    } else if (ch === "/" && !encodeSlash) {
+      result += ch;
+    } else {
+      const encoded = encodeURIComponent(ch);
+      // encodeURIComponent may not encode some chars like ' ! ( ) *
+      if (encoded === ch) {
+        result += "%" + ch.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
+      } else {
+        result += encoded.toUpperCase().replace(/%([0-9A-F]{2})/g, (_, hex) => "%" + hex);
+      }
+    }
+  }
+  return result;
+}
+
 async function getSignatureKey(secretKey: string, dateStamp: string, region: string, service: string) {
   let key = await hmacSha256(encoder.encode("AWS4" + secretKey), dateStamp);
   key = await hmacSha256(key, region);
@@ -56,7 +77,8 @@ async function signS3Request(opts: SignedRequestOpts): Promise<{ url: string; he
   const scope = `${dateStamp}/${opts.region}/${service}/aws4_request`;
 
   const host = opts.endpoint.replace(/^https?:\/\//, "");
-  const path = `/${opts.bucket}/${opts.objectKey}`.replace(/\/+/g, "/");
+  const rawPath = `/${opts.bucket}/${opts.objectKey}`.replace(/\/+/g, "/");
+  const path = s3UriEncode(rawPath, false);
 
   // Build query string
   const qp = opts.queryParams || {};
@@ -119,7 +141,8 @@ async function generatePresignedUrl(opts: {
   const service = "s3";
   const scope = `${dateStamp}/${opts.region}/${service}/aws4_request`;
   const host = opts.endpoint.replace(/^https?:\/\//, "");
-  const path = `/${opts.bucket}/${opts.objectKey}`.replace(/\/+/g, "/");
+  const rawPath = `/${opts.bucket}/${opts.objectKey}`.replace(/\/+/g, "/");
+  const path = s3UriEncode(rawPath, false);
   const expires = opts.expiresIn || 3600;
 
   const qp: Record<string, string> = {
