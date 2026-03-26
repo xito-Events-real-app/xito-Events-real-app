@@ -12,8 +12,6 @@ import XitoImageViewer from "./XitoImageViewer";
 interface AlbumSectionProps {
   registeredDateTimeAD: string;
   clientName: string;
-  eventYear?: string;
-  eventMonth?: string;
   assignments: FreelancerAssignment[];
 }
 
