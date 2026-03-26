@@ -64,19 +64,39 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     return { count: albumRows.length, sides, types };
   }, [deliverables]);
 
-  // Build tabs from assignments — deduplicated, sanitized
+  // Compute majority year-month once for all assignments
+  const majorityYearMonth = useMemo(() => {
+    const years = assignments.map(a => a.eventYear || "").filter(Boolean);
+    const months = assignments.map(a => a.eventMonth || "").filter(Boolean);
+    if (years.length === 0 || months.length === 0) return null;
+
+    const freq = new Map<string, number>();
+    const order: string[] = [];
+    for (let i = 0; i < Math.max(years.length, months.length, 1); i++) {
+      const y = String(parseInt(years[i] || years[0] || "0"));
+      const m = String(parseInt(months[i] || months[0] || "0")).padStart(2, "0");
+      const key = `${y}-${m}`;
+      if (!freq.has(key)) order.push(key);
+      freq.set(key, (freq.get(key) || 0) + 1);
+    }
+    let best = order[0] || "0-00";
+    let bestCount = 0;
+    for (const k of order) {
+      if ((freq.get(k) || 0) > bestCount) {
+        best = k;
+        bestCount = freq.get(k) || 0;
+      }
+    }
+    return best;
+  }, [assignments]);
+
+  // Build tabs from assignments — deduplicated, using majority month for S3 prefix
   const tabs: TabDef[] = useMemo(() => {
+    if (!majorityYearMonth) return [];
     const result: TabDef[] = [];
     const seen = new Set<string>();
 
     assignments.forEach((a) => {
-      const aYear = a.eventYear;
-      const aMonth = a.eventMonth;
-      if (!aYear || !aMonth) return;
-      const cleanYear = String(parseInt(aYear));
-      const cleanMonth = String(parseInt(aMonth)).padStart(2, "0");
-      const yearMonth = `${cleanYear}-${cleanMonth}`;
-
       const photographers: { name: string }[] = [];
       if (a.photographerBride) photographers.push({ name: a.photographerBride });
       if (a.photographerGroom) photographers.push({ name: a.photographerGroom });
@@ -86,7 +106,7 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
         const tabId = `${a.event}-${p.name}`;
         if (seen.has(tabId)) return;
         seen.add(tabId);
-        const prefix = `${yearMonth}/${clientName}/Photos/${a.event}/${p.name}/`;
+        const prefix = `${majorityYearMonth}/${clientName}/Photos/${a.event}/${p.name}/`;
         result.push({
           id: tabId,
           label: `${a.event} (${p.name})`,
@@ -97,7 +117,7 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
       });
     });
     return result;
-  }, [assignments, clientName]);
+  }, [assignments, clientName, majorityYearMonth]);
 
   // Fetch photo counts for all tabs on mount & cache results
   useEffect(() => {

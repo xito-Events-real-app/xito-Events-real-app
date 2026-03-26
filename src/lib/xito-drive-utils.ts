@@ -69,9 +69,34 @@ export function getVideoSubfolders() {
 }
 
 /**
+ * Get the majority year-month from parallel arrays of years and months.
+ * Picks the most frequent combo; ties go to first occurrence.
+ */
+export function getMajorityYearMonth(years: string[], months: string[]): string {
+  const freq = new Map<string, number>();
+  const order: string[] = [];
+  const maxLen = Math.max(years.length, months.length, 1);
+  for (let i = 0; i < maxLen; i++) {
+    const y = String(parseInt(years[i] || years[0] || "0"));
+    const m = String(parseInt(months[i] || months[0] || "0")).padStart(2, "0");
+    const key = `${y}-${m}`;
+    if (!freq.has(key)) order.push(key);
+    freq.set(key, (freq.get(key) || 0) + 1);
+  }
+  let best = order[0] || "0-00";
+  let bestCount = 0;
+  for (const k of order) {
+    if ((freq.get(k) || 0) > bestCount) {
+      best = k;
+      bestCount = freq.get(k) || 0;
+    }
+  }
+  return best;
+}
+
+/**
  * Build month-year groups from booked clients.
- * Each client may have multi-line event_year / event_month fields.
- * We group by unique year-month combos.
+ * Each client is placed in exactly ONE group based on their majority month.
  */
 export function buildMonthYearGroups(clients: BookedClientData[]): MonthYearGroup[] {
   const groupMap = new Map<string, MonthYearGroup>();
@@ -81,39 +106,27 @@ export function buildMonthYearGroups(clients: BookedClientData[]): MonthYearGrou
     const months = (client.eventMonth || "").split("\n").filter(Boolean);
     const events = (client.events || "").split("\n").filter(Boolean);
 
-    // Use first year/month as primary grouping (most clients have one)
-    const maxLen = Math.max(years.length, months.length, 1);
+    const key = getMajorityYearMonth(years, months);
+    const [yearStr, monthStr] = key.split("-");
+    const monthNum = parseInt(monthStr, 10);
 
-    // Track which groups this client was added to (avoid duplicates)
-    const addedGroups = new Set<string>();
-
-    for (let i = 0; i < maxLen; i++) {
-      const year = years[i] || years[0] || "Unknown";
-      const monthStr = months[i] || months[0] || "0";
-      const monthNum = parseInt(monthStr, 10);
-      const key = `${year}-${monthStr}`;
-
-      if (addedGroups.has(key)) continue;
-      addedGroups.add(key);
-
-      if (!groupMap.has(key)) {
-        const monthName = NEPALI_MONTHS[monthNum] || `MONTH ${monthStr}`;
-        groupMap.set(key, {
-          key,
-          label: `${monthName} EVENTS ${year}`,
-          year,
-          month: monthStr,
-          monthNum,
-          clients: [],
-        });
-      }
-
-      groupMap.get(key)!.clients.push({
-        clientName: client.clientName || "Unknown Client",
-        registeredDateTimeAD: client.registeredDateTimeAD || "",
-        events,
+    if (!groupMap.has(key)) {
+      const monthName = NEPALI_MONTHS[monthNum] || `MONTH ${monthStr}`;
+      groupMap.set(key, {
+        key,
+        label: `${monthName} EVENTS ${yearStr}`,
+        year: yearStr,
+        month: monthStr,
+        monthNum,
+        clients: [],
       });
     }
+
+    groupMap.get(key)!.clients.push({
+      clientName: client.clientName || "Unknown Client",
+      registeredDateTimeAD: client.registeredDateTimeAD || "",
+      events,
+    });
   }
 
   // Sort: by year desc, then month desc
