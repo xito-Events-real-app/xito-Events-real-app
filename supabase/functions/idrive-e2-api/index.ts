@@ -142,7 +142,7 @@ async function generatePresignedUrl(opts: {
   const scope = `${dateStamp}/${opts.region}/${service}/aws4_request`;
   const host = opts.endpoint.replace(/^https?:\/\//, "");
   const rawPath = `/${opts.bucket}/${opts.objectKey}`.replace(/\/+/g, "/");
-  const path = rawPath.split("/").map(seg => seg ? encodeURIComponent(seg).replace(/%2F/g, "/") : "").join("/");
+  const path = s3UriEncode(rawPath, false);
   const expires = opts.expiresIn || 3600;
 
   const qp: Record<string, string> = {
