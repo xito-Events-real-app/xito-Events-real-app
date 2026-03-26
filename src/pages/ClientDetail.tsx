@@ -1768,8 +1768,6 @@ const ClientDetail = () => {
             <AlbumSection
               registeredDateTimeAD={client.registeredDateTimeAD}
               clientName={client.clientName || ''}
-              eventYear={client.eventYear || ''}
-              eventMonth={client.eventMonth || ''}
               assignments={freelancerAssignments}
             />
           )}
