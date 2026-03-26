@@ -156,16 +156,39 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
     }
   }, []);
 
+  // Compute virtual folder names at current level to filter duplicates from E2
+  const virtualFolderNames = useMemo(() => {
+    const names = new Set<string>();
+    if (currentLevel === 0) {
+      filteredGroups.forEach(g => names.add(g.key));
+    } else if (currentLevel === 1 && currentGroup) {
+      currentGroup.clients.forEach(c => names.add(c.clientName));
+    } else if (currentLevel === 2) {
+      getClientCategories().forEach(cat => names.add(cat.name));
+    } else if (currentLevel === 3 && currentClientFolder) {
+      if (selectedCategory === "Photos") {
+        [...currentClientFolder.events, "Selected"].forEach(e => names.add(e));
+      } else if (selectedCategory === "Videos") {
+        getVideoSubfolders().forEach(s => names.add(s));
+      } else if (selectedCategory === "Project Managers" || selectedCategory === "Lightroom Catalog") {
+        currentClientFolder.events.forEach(e => names.add(e));
+      }
+    } else if (currentLevel === 4 && currentClientFolder && (selectedCategory === "Photos" || selectedCategory === "Lightroom Catalog") && selectedEvent !== "Selected") {
+      const { photographers } = getFreelancersForEvent(assignments, currentClientFolder.registeredDateTimeAD, selectedEvent!);
+      photographers.forEach(p => names.add(p));
+    }
+    return names;
+  }, [currentLevel, filteredGroups, currentGroup, currentClientFolder, selectedCategory, selectedEvent, assignments]);
+
   // Extra folders from E2 that aren't virtual
   const extraE2Folders = useMemo(() => {
-    // Strip prefix to get folder names
     return e2Folders
       .map(f => {
         const stripped = f.replace(currentS3Prefix, "").replace(/\/$/, "");
         return stripped;
       })
-      .filter(Boolean);
-  }, [e2Folders, currentS3Prefix]);
+      .filter(name => name && !virtualFolderNames.has(name));
+  }, [e2Folders, currentS3Prefix, virtualFolderNames]);
 
   const renderE2Files = () => {
     if (e2Files.length === 0 && extraE2Folders.length === 0) return null;
