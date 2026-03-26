@@ -1,4 +1,4 @@
-import { createPCloudFolderByPath } from "@/lib/pcloud-api";
+import { createPCloudFolderByPath, listPCloudFolderRecursive } from "@/lib/pcloud-api";
 import { buildPCloudFolderTree, buildResearchFolderTree, FreelancerAssignment } from "@/lib/xito-drive-utils";
 import { BookedClientData } from "@/lib/sheets-api";
 
@@ -8,6 +8,12 @@ export interface SyncProgress {
   current: number;
   total: number;
   currentPath: string;
+}
+
+export interface PendingSyncStatus {
+  pending: number;
+  paths: string[];
+  summaries: string[];
 }
 
 async function batchCreateFolders(
@@ -45,7 +51,80 @@ async function batchCreateFolders(
 }
 
 /**
- * Sync Photos + Videos folders to pCloud under /wedding-tales-nepal.
+ * Generate human-readable summaries from pending paths.
+ */
+function generateSummaries(pendingPaths: string[]): string[] {
+  const summaries: string[] = [];
+  const seenClients = new Set<string>();
+  const seenFreelancers = new Set<string>();
+
+  for (const p of pendingPaths) {
+    const parts = p.split("/");
+    // WEDDING TALES NEPAL / 2082-10 / ClientName / Photos / Event / Freelancer
+    if (parts.length >= 3) {
+      const clientName = parts[2];
+      const monthKey = parts[1];
+      if (!seenClients.has(clientName)) {
+        seenClients.add(clientName);
+        summaries.push(`New client: ${clientName} (${monthKey})`);
+      }
+    }
+    if (parts.length >= 6 && parts[3] === "Photos") {
+      const freelancer = parts[5];
+      const event = parts[4];
+      const key = `${freelancer}-${event}`;
+      if (!seenFreelancers.has(key)) {
+        seenFreelancers.add(key);
+        summaries.push(`New freelancer: ${freelancer} for ${event}`);
+      }
+    }
+  }
+
+  return summaries;
+}
+
+/**
+ * Check what folders are missing in pCloud vs expected tree.
+ */
+export async function checkPCloudSyncStatus(
+  clients: BookedClientData[],
+  assignments: FreelancerAssignment[]
+): Promise<PendingSyncStatus> {
+  const expectedPaths = buildPCloudFolderTree(clients, assignments);
+  
+  let existingPaths: Set<string>;
+  try {
+    existingPaths = await listPCloudFolderRecursive("WEDDING TALES NEPAL", 5);
+  } catch {
+    // Root folder doesn't exist — everything is pending
+    return {
+      pending: expectedPaths.length,
+      paths: expectedPaths,
+      summaries: [`Root folder not found — full sync needed (${expectedPaths.length} folders)`],
+    };
+  }
+
+  const missing = expectedPaths.filter(p => !existingPaths.has(p));
+  
+  return {
+    pending: missing.length,
+    paths: missing,
+    summaries: generateSummaries(missing),
+  };
+}
+
+/**
+ * Sync only missing folders to pCloud.
+ */
+export async function syncPendingFolders(
+  pendingPaths: string[],
+  onProgress?: (progress: SyncProgress) => void
+): Promise<{ created: number; errors: string[] }> {
+  return batchCreateFolders(pendingPaths, onProgress);
+}
+
+/**
+ * Sync Photos + Videos folders to pCloud under /WEDDING TALES NEPAL.
  */
 export async function syncPCloudDriveFolders(
   clients: BookedClientData[],

@@ -215,3 +215,45 @@ export async function listPCloudFolderByPath(path: string): Promise<PCloudFolder
     contents: (metadata.contents || []) as PCloudItem[],
   };
 }
+
+/**
+ * Recursively list all folder paths under a given root path.
+ * Returns a flat Set of relative paths (e.g. "WEDDING TALES NEPAL/2082-10/Client/Photos").
+ * Depth-limited for performance.
+ */
+export async function listPCloudFolderRecursive(
+  rootPath: string,
+  maxDepth: number = 5
+): Promise<Set<string>> {
+  const paths = new Set<string>();
+  const cleanRoot = rootPath.startsWith('/') ? rootPath : `/${rootPath}`;
+
+  async function walk(path: string, depth: number) {
+    if (depth > maxDepth) return;
+    try {
+      const data = await callPCloudDirect('/listfolder', {
+        path,
+        recursive: '0',
+        showdeleted: '0',
+      });
+      const contents = (data.metadata?.contents || []) as PCloudItem[];
+      for (const item of contents) {
+        if (item.isfolder) {
+          const itemPath = `${path}/${item.name}`;
+          // Store relative path (strip leading /)
+          const rel = itemPath.startsWith('/') ? itemPath.slice(1) : itemPath;
+          paths.add(rel);
+          await walk(itemPath, depth + 1);
+        }
+      }
+    } catch {
+      // Folder may not exist yet
+    }
+  }
+
+  // Add root itself
+  const relRoot = cleanRoot.startsWith('/') ? cleanRoot.slice(1) : cleanRoot;
+  paths.add(relRoot);
+  await walk(cleanRoot, 1);
+  return paths;
+}
