@@ -1,90 +1,76 @@
 
 
-## Plan: Mirror XITO DRIVE Folder Structure in pCloud
+## Plan: Restructure Storage Modules (XITO DRIVE, pCloud, Barun's Research)
 
-### What This Does
+### Summary
 
-Creates the exact same folder hierarchy in pCloud that exists in XITO DRIVE (iDrive E2), under a root folder called `wedding-tales-nepal`. New clients and events will automatically get folders created in both storages going forward.
+Split the current XITO DRIVE into three separate modules with distinct storage backends and folder structures:
 
 ```text
-pCloud Root/
-  wedding-tales-nepal/
-    2082-10/
-      Client Name/
-        Photos/
-          Wedding/
-            Photographer Name/
-          Selected/
-        Videos/
-          Highlights/
-          Reels/
-          Full Videos/
-        Quotation/
-        Payments/
-        Project Managers/
-          Wedding/
-        Lightroom Catalog/
-          Wedding/
-            Photographer Name/
+1. XITO DRIVE (iDrive E2) — Photos only
+   wedding-tales-nepal / YYYY-MM / Client / Photos / Event / Photographer
+                                                   / Selected
+
+2. pCloud (new module, browses pCloud) — Photos + Videos
+   wedding-tales-nepal / YYYY-MM / Client / Photos / Event / Photographer
+                                                   / Selected
+                                          / Videos / Highlights
+                                                   / Reels
+                                                   / Full Videos
+
+3. Barun's Research (new module, browses pCloud) — Client admin folders
+   CLIENT DETAILS / YYYY-MM / Client / Quotation
+                                     / Payments
+                                     / Project Managers / Event
+                                     / Lightroom Catalog / Event / Photographer
 ```
 
 ### Files to Modify
 
-**1. `src/lib/pcloud-api.ts`** — Add path-based folder creation
-- Add `createPCloudFolderByPath(path: string)` using pCloud's `/createfolderifnotexists` API which accepts full paths (e.g. `/wedding-tales-nepal/2082-10/ClientName/Photos`)
-- Add `listPCloudFolderByPath(path: string)` for path-based listing
-- These use the direct browser API (already have auth token cached)
+**1. `src/lib/xito-drive-utils.ts`** — Split category definitions
+- Add separate category arrays: `XITO_CATEGORIES` (Photos only), `PCLOUD_CATEGORIES` (Photos + Videos), `RESEARCH_CATEGORIES` (Quotation, Payments, Project Managers, Lightroom Catalog)
+- Update `buildFullFolderTree` to accept a `mode` parameter for generating the right tree per module
+- Add `buildResearchFolderTree` for the `CLIENT DETAILS` pCloud root
 
-**2. `src/lib/xito-drive-utils.ts`** — Add folder tree builder
-- Add `buildFullFolderTree(clients, assignments)` that returns an array of all folder paths that should exist (e.g. `["wedding-tales-nepal/2082-10", "wedding-tales-nepal/2082-10/ClientName", ...]`)
-- Reuses existing `buildMonthYearGroups`, `getClientCategories`, `getFreelancersForEvent` logic
+**2. `src/components/xito-drive/XitoDriveBrowser.tsx`** — Photos only
+- Remove Videos, Quotation, Payments, Project Managers, Lightroom Catalog rendering
+- At Level 2 (categories), skip straight to Photos content (events + Selected)
+- Remove the "Sync to pCloud" button (no longer relevant here)
+- Remove dual-write to pCloud on folder creation
 
-**3. `src/lib/pcloud-sync.ts`** — New file for sync logic
-- `syncAllFoldersToPCloud(clients, assignments, onProgress?)` — iterates through the full folder tree and calls `createfolderifnotexists` for each path
-- Uses batched parallel requests (5-10 at a time) to avoid rate limiting
-- Reports progress (e.g. "Creating folder 15/120...")
+**3. `src/lib/pcloud-sync.ts`** — Update sync logic
+- Update to create two separate trees: `wedding-tales-nepal` (Photos + Videos) and `CLIENT DETAILS` (admin folders)
 
-**4. `src/components/xito-drive/XitoDriveBrowser.tsx`** — Dual-write + sync button
-- Add a "Sync to pCloud" button in the toolbar (cloud icon)
-- When user clicks "New Folder" in XITO DRIVE, also create the same folder in pCloud under `wedding-tales-nepal/` prefix
-- Show sync progress toast/indicator
+**4. New: `src/components/pcloud-drive/PCloudDriveBrowser.tsx`** — pCloud Photos+Videos browser
+- Similar virtual folder structure as XITO DRIVE but browsing pCloud via `listPCloudFolderByPath`
+- Shows Month > Client > Photos/Videos hierarchy
+- Uses pCloud API for thumbnails and file preview (already working)
+
+**5. New: `src/pages/PCloudDrive.tsx`** — pCloud module page
+- Same layout pattern as XitoDrive.tsx with pCloud branding (sky/blue gradient, Cloud icon)
+
+**6. New: `src/components/research/ResearchBrowser.tsx`** — Barun's Research browser
+- Browses pCloud under `CLIENT DETAILS` root
+- Shows Month > Client > Quotation/Payments/Project Managers/Lightroom Catalog
+- Creates `CLIENT DETAILS` folder in pCloud if it doesn't exist
+
+**7. New: `src/pages/BarunsResearch.tsx`** — Barun's Research module page
+
+**8. `src/lib/suite-modules.ts`** — Add two new modules
+- "pCloud" module with cloud icon, path `/pcloud-drive`, gradient from-sky-500
+- "Barun's Research" module with search/book icon, path `/baruns-research`
+- Update XITO DRIVE description to "Compressed photos for album (iDrive)"
+
+**9. `src/App.tsx`** — Add routes
+- `/pcloud-drive` → PCloudDrive
+- `/baruns-research` → BarunsResearch
 
 ### Technical Details
 
-pCloud's `createfolderifnotexists` API:
-```typescript
-// Creates folder at path, creating parents as needed — returns existing folder if already there
-await callPCloudDirect('/createfolderifnotexists', { path: '/wedding-tales-nepal/2082-10/ClientName/Photos' });
-```
-
-Dual-write on folder creation:
-```typescript
-const handleCreateFolder = async () => {
-  const name = prompt("Enter folder name:");
-  // Create in iDrive E2 (existing)
-  await createE2Folder(currentS3Prefix + name);
-  // Also create in pCloud (new)
-  await createPCloudFolderByPath(`/wedding-tales-nepal/${currentS3Prefix}${name}`);
-};
-```
-
-Full sync builds paths from client data:
-```typescript
-function buildFullFolderTree(clients, assignments): string[] {
-  const paths: string[] = [];
-  const groups = buildMonthYearGroups(clients);
-  for (const group of groups) {
-    paths.push(`wedding-tales-nepal/${group.key}`);
-    for (const client of group.clients) {
-      const base = `wedding-tales-nepal/${group.key}/${client.clientName}`;
-      paths.push(base);
-      for (const cat of getClientCategories()) {
-        paths.push(`${base}/${cat.name}`);
-        // Add event/freelancer subfolders per category...
-      }
-    }
-  }
-  return paths;
-}
-```
+- **pCloud browsing**: Uses existing `listPCloudFolderByPath('/wedding-tales-nepal/...')` — no new API needed
+- **CLIENT DETAILS folder creation**: On first sync or first visit, call `createPCloudFolderByPath('/CLIENT DETAILS')` 
+- **XITO DRIVE simplification**: Since it's Photos-only, Level 2 (categories) is eliminated — goes directly from Client → Events+Selected
+- **iDrive E2 folder tree**: Updated `buildFullFolderTree` will only generate Photos paths for iDrive
+- **pCloud folder tree**: Separate function generates Photos+Videos paths under `wedding-tales-nepal` and admin paths under `CLIENT DETAILS`
+- The `PRE+RECEPTION` issue visible in network requests (+ encoding) will be fixed by using `encodeURIComponent` properly
 
