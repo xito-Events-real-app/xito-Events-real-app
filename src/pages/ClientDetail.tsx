@@ -1770,7 +1770,7 @@ const ClientDetail = () => {
               clientName={client.clientName || ''}
               eventYear={client.eventYear || ''}
               eventMonth={client.eventMonth || ''}
-              assignments={assignments}
+              assignments={freelancerAssignments}
             />
           )}
 
