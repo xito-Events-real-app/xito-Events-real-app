@@ -1,76 +1,59 @@
 
 
-## Plan: Restructure Storage Modules (XITO DRIVE, pCloud, Barun's Research)
+## Plan: Rename Root Folder + Add Smart Sync with Pending Changes Banner
 
-### Summary
+### What Changes
 
-Split the current XITO DRIVE into three separate modules with distinct storage backends and folder structures:
-
-```text
-1. XITO DRIVE (iDrive E2) — Photos only
-   wedding-tales-nepal / YYYY-MM / Client / Photos / Event / Photographer
-                                                   / Selected
-
-2. pCloud (new module, browses pCloud) — Photos + Videos
-   wedding-tales-nepal / YYYY-MM / Client / Photos / Event / Photographer
-                                                   / Selected
-                                          / Videos / Highlights
-                                                   / Reels
-                                                   / Full Videos
-
-3. Barun's Research (new module, browses pCloud) — Client admin folders
-   CLIENT DETAILS / YYYY-MM / Client / Quotation
-                                     / Payments
-                                     / Project Managers / Event
-                                     / Lightroom Catalog / Event / Photographer
-```
+1. **Rename root folder** from `wedding-tales-nepal` to `WEDDING TALES NEPAL` everywhere
+2. **Track pending changes** — detect when new clients/events/freelancers exist that don't have pCloud folders yet
+3. **Show a banner** at the top of the pCloud module showing "X new changes pending sync" with a sync button
+4. **First sync** creates the entire `WEDDING TALES NEPAL` folder tree from scratch
+5. **Subsequent syncs** only create the missing folders (the API is already idempotent — `createfolderifnotexists` skips existing folders)
 
 ### Files to Modify
 
-**1. `src/lib/xito-drive-utils.ts`** — Split category definitions
-- Add separate category arrays: `XITO_CATEGORIES` (Photos only), `PCLOUD_CATEGORIES` (Photos + Videos), `RESEARCH_CATEGORIES` (Quotation, Payments, Project Managers, Lightroom Catalog)
-- Update `buildFullFolderTree` to accept a `mode` parameter for generating the right tree per module
-- Add `buildResearchFolderTree` for the `CLIENT DETAILS` pCloud root
+**1. `src/lib/xito-drive-utils.ts`** — Change `PCLOUD_ROOT`
+- Change `const PCLOUD_ROOT = "wedding-tales-nepal"` to `const PCLOUD_ROOT = "WEDDING TALES NEPAL"`
+- Everything downstream (tree builders, paths) automatically uses the new name
 
-**2. `src/components/xito-drive/XitoDriveBrowser.tsx`** — Photos only
-- Remove Videos, Quotation, Payments, Project Managers, Lightroom Catalog rendering
-- At Level 2 (categories), skip straight to Photos content (events + Selected)
-- Remove the "Sync to pCloud" button (no longer relevant here)
-- Remove dual-write to pCloud on folder creation
+**2. `src/components/pcloud-drive/PCloudDriveBrowser.tsx`** — Add pending changes detection + banner
+- On mount, call `listPCloudFolderByPath("/WEDDING TALES NEPAL")` to get existing folder structure
+- Compare `buildPCloudFolderTree(clients, assignments)` paths against what actually exists in pCloud
+- Count the difference as "pending changes"
+- Show a sticky banner: "5 new folders pending sync — Freelancer X added, Client Y added" with a "Sync Now" button
+- After sync completes, re-check and hide banner if 0 pending
+- Update breadcrumb root label from "wedding-tales-nepal" to "WEDDING TALES NEPAL"
+- Update the path builder from `"wedding-tales-nepal"` to `"WEDDING TALES NEPAL"`
 
-**3. `src/lib/pcloud-sync.ts`** — Update sync logic
-- Update to create two separate trees: `wedding-tales-nepal` (Photos + Videos) and `CLIENT DETAILS` (admin folders)
+**3. `src/lib/pcloud-sync.ts`** — Add a function to detect pending changes
+- Add `getPendingSyncPaths(clients, assignments, existingPaths): string[]` that returns only paths not yet in pCloud
+- Add `checkPCloudSyncStatus(clients, assignments): Promise<{ pending: number; paths: string[]; summary: string[] }>` that:
+  1. Recursively lists the `WEDDING TALES NEPAL` folder in pCloud
+  2. Builds the expected tree from client data
+  3. Returns the diff (missing paths) with human-readable summaries like "New client: Karishma Shrestha", "New freelancer: Ram for Wedding"
 
-**4. New: `src/components/pcloud-drive/PCloudDriveBrowser.tsx`** — pCloud Photos+Videos browser
-- Similar virtual folder structure as XITO DRIVE but browsing pCloud via `listPCloudFolderByPath`
-- Shows Month > Client > Photos/Videos hierarchy
-- Uses pCloud API for thumbnails and file preview (already working)
+**4. `src/lib/pcloud-api.ts`** — Add recursive listing helper
+- Add `listPCloudFolderRecursive(path): Promise<Set<string>>` that walks the pCloud tree and returns all existing folder paths as a flat set (used for diff detection)
 
-**5. New: `src/pages/PCloudDrive.tsx`** — pCloud module page
-- Same layout pattern as XitoDrive.tsx with pCloud branding (sky/blue gradient, Cloud icon)
+### How the Banner Works
 
-**6. New: `src/components/research/ResearchBrowser.tsx`** — Barun's Research browser
-- Browses pCloud under `CLIENT DETAILS` root
-- Shows Month > Client > Quotation/Payments/Project Managers/Lightroom Catalog
-- Creates `CLIENT DETAILS` folder in pCloud if it doesn't exist
+```text
+┌─────────────────────────────────────────────────┐
+│ ⚠ 5 new changes pending sync                   │
+│   • New client: Karishma Shrestha (2082-10)     │
+│   • New freelancer: Ram added to Wedding        │
+│                              [Sync Now]         │
+└─────────────────────────────────────────────────┘
+```
 
-**7. New: `src/pages/BarunsResearch.tsx`** — Barun's Research module page
+- Checked on page load (async, non-blocking)
+- Re-checked after each sync completes
+- Shows count + up to 3 change summaries
+- "Sync Now" triggers the existing `syncPCloudDriveFolders` but only with the missing paths
 
-**8. `src/lib/suite-modules.ts`** — Add two new modules
-- "pCloud" module with cloud icon, path `/pcloud-drive`, gradient from-sky-500
-- "Barun's Research" module with search/book icon, path `/baruns-research`
-- Update XITO DRIVE description to "Compressed photos for album (iDrive)"
+### Technical Notes
 
-**9. `src/App.tsx`** — Add routes
-- `/pcloud-drive` → PCloudDrive
-- `/baruns-research` → BarunsResearch
-
-### Technical Details
-
-- **pCloud browsing**: Uses existing `listPCloudFolderByPath('/wedding-tales-nepal/...')` — no new API needed
-- **CLIENT DETAILS folder creation**: On first sync or first visit, call `createPCloudFolderByPath('/CLIENT DETAILS')` 
-- **XITO DRIVE simplification**: Since it's Photos-only, Level 2 (categories) is eliminated — goes directly from Client → Events+Selected
-- **iDrive E2 folder tree**: Updated `buildFullFolderTree` will only generate Photos paths for iDrive
-- **pCloud folder tree**: Separate function generates Photos+Videos paths under `wedding-tales-nepal` and admin paths under `CLIENT DETAILS`
-- The `PRE+RECEPTION` issue visible in network requests (+ encoding) will be fixed by using `encodeURIComponent` properly
+- `createfolderifnotexists` is idempotent — running sync on already-existing folders is harmless but wastes API calls. The diff check avoids this.
+- Recursive listing depth is limited to 3 levels (root → year-month → client) for speed. Deeper checks happen per-client only when needed.
+- The root folder name `WEDDING TALES NEPAL` will be created automatically on first sync if it doesn't exist.
 
