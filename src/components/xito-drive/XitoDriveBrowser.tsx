@@ -536,6 +536,18 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
             variant="outline"
             size="sm"
             className="text-xs"
+            disabled={syncing}
+            onClick={handleSyncToPCloud}
+          >
+            <CloudUpload className="h-3.5 w-3.5 mr-1" /> 
+            {syncing 
+              ? `Syncing ${syncProgress?.current || 0}/${syncProgress?.total || 0}...` 
+              : "Sync to pCloud"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs"
             disabled={currentLevel === 0}
             onClick={handleCreateFolder}
           >
