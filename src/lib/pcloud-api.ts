@@ -166,10 +166,14 @@ export function formatPCloudSize(bytes: number): string {
 
 export function isPCloudImage(item: PCloudItem): boolean {
   const ct = item.contenttype || '';
-  return ct.startsWith('image/');
+  if (ct.startsWith('image/')) return true;
+  const ext = item.name.split('.').pop()?.toLowerCase() || '';
+  return ['jpg','jpeg','png','gif','webp','bmp','tiff','svg','heic'].includes(ext);
 }
 
 export function isPCloudVideo(item: PCloudItem): boolean {
   const ct = item.contenttype || '';
-  return ct.startsWith('video/');
+  if (ct.startsWith('video/')) return true;
+  const ext = item.name.split('.').pop()?.toLowerCase() || '';
+  return ['mp4','mov','avi','mkv','webm','m4v','wmv','flv'].includes(ext);
 }
