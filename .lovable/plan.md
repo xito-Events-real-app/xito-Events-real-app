@@ -1,89 +1,78 @@
 
 
-# XITO DRIVE Module
+# iDrive E2 Integration for XITO DRIVE
 
-A new module that presents a Windows "This PC" style file explorer for booked clients, organized by Nepali month/year folders. Future-proofed for iDrive E2 (S3-compatible) storage integration.
+Connect the `wedding-tales-nepal` bucket on iDrive E2 to XITO DRIVE, enabling real folder creation, file uploads, and file browsing — mirroring the virtual folder structure into actual S3-compatible cloud storage.
 
-## Folder Hierarchy
+## Architecture
 
 ```text
-XITO DRIVE (root)
-├── MAGH EVENTS 2082/
-│   ├── Ishan Shakya/
-│   │   ├── Photos/
-│   │   │   ├── Wedding/
-│   │   │   │   ├── Nikit/
-│   │   │   │   └── Arjun/
-│   │   │   ├── Pre + Reception/
-│   │   │   │   └── ...freelancers
-│   │   │   └── Selected/
-│   │   ├── Videos/
-│   │   │   ├── Highlights/
-│   │   │   ├── Reels/
-│   │   │   └── Full Videos/
-│   │   ├── Quotation/          (empty)
-│   │   ├── Payments/           (empty)
-│   │   ├── Project Managers/
-│   │   │   ├── Wedding/
-│   │   │   └── Pre + Reception/
-│   │   └── Lightroom Catalog/
-│   │       ├── Wedding/
-│   │       │   ├── Nikit/
-│   │       │   └── Arjun/
-│   │       └── Pre + Reception/
-│   │           └── ...freelancers
-│   └── Another Client/
-├── FALGUN EVENTS 2082/
-└── ...
+Browser  →  Edge Function (idrive-e2-api)  →  iDrive E2 S3 API
+              ├── ListObjects (list folders/files)
+              ├── PutObject (upload files)
+              ├── PutObject with "/" suffix (create folder)
+              └── DeleteObject
 ```
 
-## Data Source
+The edge function acts as a secure proxy — credentials never reach the browser.
 
-- Pull booked clients from `clients_cache` (where `sheet_source = 'booked'` and status is BOOKED)
-- Parse `event_year`, `event_month` (Nepali) to group into month folders using `NEPALI_MONTHS` map
-- Pull `freelancer_assignments` for photographer/videographer names per event
-- Pull event names from multi-line `events` field on each client
+## What Gets Built
 
-## Files to Create/Edit
+### 1. Store iDrive E2 Credentials as Secrets
+- `IDRIVE_E2_ENDPOINT` = `https://s3.eu-central-2.idrivee2.com`
+- `IDRIVE_E2_ACCESS_KEY` = (provided)
+- `IDRIVE_E2_SECRET_KEY` = (provided)
+- `IDRIVE_E2_BUCKET` = `wedding-tales-nepal`
+- `IDRIVE_E2_REGION` = `eu-central-2`
 
-### 1. `src/pages/XitoDrive.tsx`
-- Main page with year/month filter bar at top
-- Root view: grid of month-year folder cards (e.g., "MAGH EVENTS 2082") styled like Windows folders with event count badges
-- Breadcrumb navigation for drill-down
-- "Create Folder" and "Upload Files" buttons (UI-only for now, will connect to iDrive E2 later)
+### 2. Create Edge Function: `supabase/functions/idrive-e2-api/index.ts`
+A Deno edge function that signs S3 requests (AWS Signature V4) and proxies to iDrive E2. Supported actions:
+- **list** — `GET /?prefix=...&delimiter=/` to list folders and files at a path
+- **createFolder** — `PUT /{path}/` with empty body (S3 folder convention)
+- **upload** — `PUT /{path}/{filename}` with file body (multipart forwarding)
+- **delete** — `DELETE /{path}` to remove a file
+- **getSignedUrl** — generate a pre-signed URL for direct file download/preview
 
-### 2. `src/components/xito-drive/XitoDriveBrowser.tsx`
-- Core browser component managing breadcrumb state and folder navigation
-- Levels: root -> month-year -> client -> category (Photos/Videos/etc.) -> event -> freelancer
-- Each level renders appropriate folder grid
-- Virtual folder structure computed from cached data (no DB table needed yet)
+S3 Signature V4 will be implemented manually in Deno (no AWS SDK needed — just HMAC-SHA256 signing).
 
-### 3. `src/components/xito-drive/XitoDriveFolderCard.tsx`
-- Windows-style folder card component with icon, name, item count
-- Different color accents per category (Photos=amber, Videos=red, Quotation=blue, etc.)
+### 3. Create Client API: `src/lib/idrive-e2-api.ts`
+Frontend helpers that call the edge function:
+- `listE2Folder(prefix: string)` — returns folders and files at a path
+- `createE2Folder(path: string)` — creates a folder marker object
+- `uploadToE2(path: string, file: File)` — uploads a file
+- `deleteE2Object(path: string)` — deletes a file
+- `getE2FileUrl(path: string)` — gets a signed download URL
 
-### 4. `src/lib/xito-drive-utils.ts`
-- `buildXitoDriveFolders(clients, assignments)` - computes the virtual folder tree from booked client data
-- Grouping logic by Nepali month/year
-- Helper to map freelancer assignment fields to photographer/videographer names per event
+### 4. Update `XitoDriveBrowser.tsx`
+- Enable the "New Folder" button — prompts for folder name, calls `createE2Folder`
+- Enable the "Upload" button — opens file picker, uploads to current path via `uploadToE2`
+- At leaf levels (and all levels), merge virtual folders with real S3 objects from `listE2Folder`
+- Show uploaded files as file cards (with download/preview on click)
+- Auto-create the virtual folder structure in E2 on first navigation (lazy creation)
 
-### 5. `src/lib/suite-modules.ts`
-- Add XITO DRIVE module entry with path `/xito-drive`, HardDrive icon, gradient
+### 5. Update `XitoDriveFolderCard.tsx`
+- Add file type support (not just folders) — show file icons for images/videos/documents
+- Add file size display for real files from E2
 
-### 6. `src/App.tsx`
-- Add route `/xito-drive` pointing to `XitoDrive` page
+### 6. Add to `supabase/config.toml`
+```toml
+[functions.idrive-e2-api]
+verify_jwt = false
+```
+
+## S3 Path Mapping
+
+Virtual breadcrumb path maps to S3 prefix:
+```text
+XITO DRIVE / MAGH EVENTS 2082 / Ishan Shakya / Photos / Wedding / Nikit
+    →  S3 prefix: "2082-10/Ishan Shakya/Photos/Wedding/Nikit/"
+```
+
+The existing `buildStoragePath()` in `xito-drive-utils.ts` already sanitizes segments — it will be used to construct S3 prefixes.
 
 ## Key Design Decisions
 
-- **Virtual folders only** - no new DB tables. The folder structure is computed from existing `clients_cache` and `freelancer_assignments` data. This keeps it lightweight and ready for iDrive E2 integration later, where real file storage will be added.
-- **iDrive E2 ready** - all folder path building uses a consistent path schema (`/{year}-{month}/{clientName}/photos/{event}/{freelancer}/`) that maps directly to S3 bucket prefixes when iDrive E2 is connected.
-- **Windows This PC aesthetic** - folder icons with colored accents, breadcrumb bar, grid layout, file count badges.
-
-## Technical Details
-
-- Uses `useBookedCachedData()` for booked clients
-- Loads `freelancer_assignments` from Supabase for crew names
-- Parses multi-line `events`, `event_year`, `event_month` fields via `parseEventDetails()`
-- Year filter defaults to current BS year, month filter defaults to "All"
-- No database migration needed
+- **Lazy folder creation**: Folders are only created in E2 when the user navigates into them or explicitly creates one — avoids mass-creating empty folders for every client
+- **Hybrid view**: Virtual folders (from booked data) are always shown; real E2 contents are overlaid when present
+- **Pre-signed URLs**: For file preview/download, the edge function generates time-limited signed URLs so the browser can stream directly from E2
 
