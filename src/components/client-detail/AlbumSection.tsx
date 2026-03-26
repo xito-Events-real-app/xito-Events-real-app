@@ -12,8 +12,6 @@ import XitoImageViewer from "./XitoImageViewer";
 interface AlbumSectionProps {
   registeredDateTimeAD: string;
   clientName: string;
-  eventYear?: string;
-  eventMonth?: string;
   assignments: FreelancerAssignment[];
 }
 
@@ -28,7 +26,7 @@ interface TabDef {
   s3Prefix: string;
 }
 
-const AlbumSection = ({ registeredDateTimeAD, clientName, eventYear, eventMonth, assignments }: AlbumSectionProps) => {
+const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSectionProps) => {
   const [deliverables, setDeliverables] = useState<DeliverableRow[]>([]);
   const [deliverablesLoaded, setDeliverablesLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState("");
@@ -61,13 +59,16 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, eventYear, eventMonth,
     return { count: albumRows.length, sides, types };
   }, [deliverables]);
 
-  // Build tabs from assignments
+  // Build tabs from assignments — derive year/month per assignment
   const tabs: TabDef[] = useMemo(() => {
-    if (!eventYear || !eventMonth) return [];
-    const yearMonth = `${eventYear}-${String(parseInt(eventMonth)).padStart(2, "0")}`;
     const result: TabDef[] = [];
 
     assignments.forEach((a) => {
+      const aYear = a.eventYear;
+      const aMonth = a.eventMonth;
+      if (!aYear || !aMonth) return;
+      const yearMonth = `${aYear}-${String(parseInt(aMonth)).padStart(2, "0")}`;
+
       const photographers: { name: string }[] = [];
       if (a.photographerBride) photographers.push({ name: a.photographerBride });
       if (a.photographerGroom) photographers.push({ name: a.photographerGroom });
@@ -86,7 +87,7 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, eventYear, eventMonth,
       });
     });
     return result;
-  }, [assignments, eventYear, eventMonth, clientName]);
+  }, [assignments, clientName]);
 
   // Fetch photo counts for all tabs on mount
   useEffect(() => {
