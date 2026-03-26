@@ -80,9 +80,9 @@ async function signS3Request(opts: SignedRequestOpts): Promise<{ url: string; he
   const rawPath = `/${opts.bucket}/${opts.objectKey}`.replace(/\/+/g, "/");
   const path = s3UriEncode(rawPath, false);
 
-  // Build query string
+  // Build query string — must use S3-compatible encoding (encodeURIComponent misses ' ! ( ) *)
   const qp = opts.queryParams || {};
-  const sortedQP = Object.keys(qp).sort().map(k => `${encodeURIComponent(k)}=${encodeURIComponent(qp[k])}`).join("&");
+  const sortedQP = Object.keys(qp).sort().map(k => `${s3UriEncode(k)}=${s3UriEncode(qp[k])}`).join("&");
 
   const payloadHash = opts.payloadHash || (opts.body
     ? await sha256Hex(typeof opts.body === "string" ? opts.body : opts.body)
