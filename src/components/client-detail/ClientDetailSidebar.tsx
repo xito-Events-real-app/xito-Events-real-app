@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
-export type SectionType = 'dashboard' | 'events' | 'freelancers' | 'clientDetails' | 'registration' | 'inquiry' | 'sales' | 'activity' | 'comments' | 'financials' | 'keepNotes' | 'files' | 'deliverables' | 'edit';
+export type SectionType = 'dashboard' | 'events' | 'freelancers' | 'clientDetails' | 'registration' | 'inquiry' | 'sales' | 'activity' | 'comments' | 'financials' | 'keepNotes' | 'files' | 'deliverables' | 'edit' | 'album';
 
 interface ClientDetailSidebarProps {
   activeSection: SectionType;
