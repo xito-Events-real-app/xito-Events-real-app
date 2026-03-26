@@ -195,8 +195,12 @@ serve(async (req) => {
         queryParams: { "list-type": "2", prefix, delimiter: "/" },
       });
 
+      console.log("LIST signed URL:", signed.url);
+      console.log("LIST prefix param:", prefix);
       const s3Resp = await fetch(signed.url, { headers: signed.headers });
       const xml = await s3Resp.text();
+      console.log("LIST S3 response status:", s3Resp.status);
+      console.log("LIST S3 XML (first 2000 chars):", xml.substring(0, 2000));
 
       // Parse XML simply
       const folders: string[] = [];
