@@ -1,61 +1,40 @@
 
 
-## Plan: Add "Album" Section to Client Detail Page
+## Plan: Fix Album Photo Loading, Viewer UX & UI Improvements
 
-### What It Does
-A new **Album** sidebar section below "Edit" that:
-1. Shows an album summary header derived from deliverables data (e.g., "Total Albums: 1 • Bride Side Album • Type: Karizma")
-2. Below that, event tabs with photographer sub-tabs (e.g., "Christian Wedding (Nikit)" | "Christian Wedding (Safal)")
-3. Each tab loads photos from iDrive E2 using the XITO DRIVE path: `{year}-{month}/{clientName}/Photos/{eventName}/{photographerName}/`
-4. Premium "XITO IMAGE VIEWER" full-screen gallery with preloading, swipe, keyboard nav, and counter
+### Issues to Fix
 
-### Technical Details
+1. **Slow photo loading** — All signed URLs are fetched in one batch, but thumbnails load simultaneously causing congestion. Fix: batch URLs in chunks + use progressive loading.
+2. **Preloaded photos visible in background** — The preloading `new Image()` approach is correct but the viewer shows a fade transition that briefly shows the old image behind. Fix: use a hidden preload layer and only swap when the next image is fully loaded, no fade-out gap.
+3. **Tab labels missing photographer name** — Currently only shows photographer name when multiple photographers exist. Fix: always show `Event (Photographer)` format.
+4. **Remove filename from viewer bottom bar** — User doesn't want the file name shown.
+5. **Add total photo count in Album header** — Show total photos across all tabs.
+6. **Add per-tab photo count in tab label** — Show count next to each tab.
 
-**1. Add `album` to SectionType and sidebar**
-- File: `src/components/client-detail/ClientDetailSidebar.tsx`
-- Add `'album'` to `SectionType` union
-- Add sidebar item `{ id: 'album', label: 'Album', icon: BookOpen }` after `edit`
+### Files to Modify
 
-**2. Add mobile tab for Album**
-- File: `src/pages/ClientDetail.tsx`
-- Add `{ id: 'album', label: 'Album' }` to mobile section tabs array
-- Add rendering block: `{activeSection === 'album' && <AlbumSection ... />}`
-- Pass: `registeredDateTimeAD`, `clientName`, `events` (parsed), `freelancerAssignments`
+**1. `src/components/client-detail/AlbumSection.tsx`**
+- Store per-tab photo counts in state: `tabPhotoCounts: Record<string, number>`
+- When photos load for a tab, update that tab's count
+- Fetch counts for ALL tabs on mount (parallel `listE2Folder` calls, just for file count)
+- Show total across all tabs in Album Overview header: "Total Photos: 245"
+- Update tab labels to always include photographer: `{event} ({photographer}) · {count}`
+- Always show `{event} ({photographerName})` in tab label regardless of photographer count
 
-**3. Create `src/components/client-detail/AlbumSection.tsx`** (new file ~400 lines)
+**2. `src/components/client-detail/XitoImageViewer.tsx`**
+- Remove bottom filename bar entirely (lines 148-151)
+- Fix preloading: render prev/next images as hidden `<img>` elements in the DOM (not `new Image()`) so they're truly cached and ready
+- Remove the fade-out/fade-in gap: instead of `setFadeIn(false) → setTimeout → setFadeIn(true)`, instantly swap images since adjacent ones are preloaded. Use a crossfade approach where the new image renders on top immediately.
 
-**Album Summary Header:**
-- Load deliverables from `loadDeliverables(registeredDateTimeAD)` 
-- Filter for `section === 'album'` and `enabled === true` (bride_album, groom_album, other_album)
-- Display: total count, which sides are enabled, album type names
+### Technical Approach
 
-**Event + Photographer Tabs:**
-- For each event, get photographers from `freelancerAssignments` (PB, PG, EP fields)
-- Render tabs: `{eventName} ({photographerName})` for each photographer per event
-- When a tab is selected, build S3 prefix: `{year}-{month}/{clientName}/Photos/{eventName}/{photographerName}/`
-- Call `listE2Folder(prefix)` to get photos
-- Call `getE2FileUrls(keys)` for batch signed URLs
-- Display photo grid with thumbnails
+**Preloading fix (XitoImageViewer):**
+- Render 3 `<img>` tags: previous, current, next — only current is visible (`opacity-100`), prev/next are `opacity-0 absolute` but still in DOM loading
+- On navigate: instantly update `currentIndex` — since the image is already loaded in DOM, it appears immediately
+- No setTimeout fade needed
 
-**4. Create `src/components/client-detail/XitoImageViewer.tsx`** (new file ~300 lines)
-
-Premium full-screen image viewer with:
-- **Title**: "XITO IMAGE VIEWER" in a modern serif/display font (using Tailwind's `font-serif` + tracking)
-- **Counter**: "12 of 45" at top center
-- **Navigation**: Left/right arrows always visible at edges; keyboard ArrowLeft/ArrowRight/Escape
-- **Touch swipe**: `touchstart`/`touchend` gesture detection
-- **Preloading**: When viewing image N, preload N-1 and N+1 signed URLs into hidden `<img>` tags
-- **Smooth transitions**: CSS transition on opacity for image swaps (no layout shift)
-- **End-of-folder message**: When reaching the last photo, show "You've viewed all X photos from this folder"
-- **Download button**: Single-click download for current image
-
-### Files to Create/Modify
-
-| File | Action |
-|------|--------|
-| `src/components/client-detail/ClientDetailSidebar.tsx` | Add `'album'` to type + sidebar items |
-| `src/components/client-detail/AlbumSection.tsx` | **Create** — album summary + event/photographer tabs + photo grid |
-| `src/components/client-detail/XitoImageViewer.tsx` | **Create** — premium full-screen viewer with preloading |
-| `src/pages/ClientDetail.tsx` | Add album section rendering + mobile tab |
-| `src/components/client-detail/index.ts` | Export new components |
+**Photo count per tab (AlbumSection):**
+- On component mount, fire `listE2Folder` for each tab's prefix in parallel
+- Store `{ [tabId]: number }` counts
+- Display in tab trigger and in header as sum
 
