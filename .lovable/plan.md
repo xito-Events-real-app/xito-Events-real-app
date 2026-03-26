@@ -1,78 +1,48 @@
 
 
-# iDrive E2 Integration for XITO DRIVE
+## Plan: Fix XITO DRIVE Issues
 
-Connect the `wedding-tales-nepal` bucket on iDrive E2 to XITO DRIVE, enabling real folder creation, file uploads, and file browsing — mirroring the virtual folder structure into actual S3-compatible cloud storage.
+### Issues to Address
 
-## Architecture
+1. **Folder flickering** -- Extra E2 folders flash briefly before virtual folders settle
+2. **Videos not playing inline** -- Video files open in new tab / download instead of playing
+3. **Mobile gallery experience** -- Need swipe gestures, photo counter (3 of 45), proper full-screen gallery
+4. **"Direct to iDrive" concern** -- The edge function is required because S3 secret keys cannot be exposed in browser code. It only acts as a URL signer (generates presigned URLs), then the browser talks directly to iDrive for actual file data. No file data passes through the middleware.
 
-```text
-Browser  →  Edge Function (idrive-e2-api)  →  iDrive E2 S3 API
-              ├── ListObjects (list folders/files)
-              ├── PutObject (upload files)
-              ├── PutObject with "/" suffix (create folder)
-              └── DeleteObject
-```
+### Technical Details
 
-The edge function acts as a secure proxy — credentials never reach the browser.
+**Fix 1: Folder Flickering**
+- In `XitoDriveBrowser.tsx`, the `useEffect` that fetches E2 data sets `e2Loading = true` but does NOT clear `e2Folders` and `e2Files` immediately when breadcrumb changes
+- Old E2 data from previous folder persists during the async fetch, causing mismatched virtual vs E2 names to flash
+- Fix: Add `setE2Files([]); setE2Folders([]);` at the start of the fetch effect, before the API call
 
-## What Gets Built
+**Fix 2: Inline Video Playback**
+- In `XitoDrivePhotoGallery.tsx`, add video file detection (mp4, mov, avi, mkv, webm)
+- Include video files in the gallery alongside images with proper thumbnails (play icon overlay)
+- In the full-screen preview, render a `<video>` tag with controls instead of `<img>` when the file is a video
+- Batch-fetch signed URLs for video files too
 
-### 1. Store iDrive E2 Credentials as Secrets
-- `IDRIVE_E2_ENDPOINT` = `https://s3.eu-central-2.idrivee2.com`
-- `IDRIVE_E2_ACCESS_KEY` = (provided)
-- `IDRIVE_E2_SECRET_KEY` = (provided)
-- `IDRIVE_E2_BUCKET` = `wedding-tales-nepal`
-- `IDRIVE_E2_REGION` = `eu-central-2`
+**Fix 3: Mobile Gallery with Swipe**
+- Replace the current full-screen preview with a proper touch-enabled gallery
+- Add touch swipe detection using `touchstart`/`touchend` events (no extra library needed)
+- Add photo counter: "3 of 45" displayed at the top
+- Add keyboard navigation (arrow keys, Escape)
+- Make the preview truly full-screen with `safe-area-inset` padding for notched phones
+- Smooth transitions between photos
 
-### 2. Create Edge Function: `supabase/functions/idrive-e2-api/index.ts`
-A Deno edge function that signs S3 requests (AWS Signature V4) and proxies to iDrive E2. Supported actions:
-- **list** — `GET /?prefix=...&delimiter=/` to list folders and files at a path
-- **createFolder** — `PUT /{path}/` with empty body (S3 folder convention)
-- **upload** — `PUT /{path}/{filename}` with file body (multipart forwarding)
-- **delete** — `DELETE /{path}` to remove a file
-- **getSignedUrl** — generate a pre-signed URL for direct file download/preview
+### Files to Modify
 
-S3 Signature V4 will be implemented manually in Deno (no AWS SDK needed — just HMAC-SHA256 signing).
+1. **`src/components/xito-drive/XitoDriveBrowser.tsx`**
+   - Clear `e2Files` and `e2Folders` immediately when breadcrumb changes (line ~79, add two setState calls before the API call)
 
-### 3. Create Client API: `src/lib/idrive-e2-api.ts`
-Frontend helpers that call the edge function:
-- `listE2Folder(prefix: string)` — returns folders and files at a path
-- `createE2Folder(path: string)` — creates a folder marker object
-- `uploadToE2(path: string, file: File)` — uploads a file
-- `deleteE2Object(path: string)` — deletes a file
-- `getE2FileUrl(path: string)` — gets a signed download URL
-
-### 4. Update `XitoDriveBrowser.tsx`
-- Enable the "New Folder" button — prompts for folder name, calls `createE2Folder`
-- Enable the "Upload" button — opens file picker, uploads to current path via `uploadToE2`
-- At leaf levels (and all levels), merge virtual folders with real S3 objects from `listE2Folder`
-- Show uploaded files as file cards (with download/preview on click)
-- Auto-create the virtual folder structure in E2 on first navigation (lazy creation)
-
-### 5. Update `XitoDriveFolderCard.tsx`
-- Add file type support (not just folders) — show file icons for images/videos/documents
-- Add file size display for real files from E2
-
-### 6. Add to `supabase/config.toml`
-```toml
-[functions.idrive-e2-api]
-verify_jwt = false
-```
-
-## S3 Path Mapping
-
-Virtual breadcrumb path maps to S3 prefix:
-```text
-XITO DRIVE / MAGH EVENTS 2082 / Ishan Shakya / Photos / Wedding / Nikit
-    →  S3 prefix: "2082-10/Ishan Shakya/Photos/Wedding/Nikit/"
-```
-
-The existing `buildStoragePath()` in `xito-drive-utils.ts` already sanitizes segments — it will be used to construct S3 prefixes.
-
-## Key Design Decisions
-
-- **Lazy folder creation**: Folders are only created in E2 when the user navigates into them or explicitly creates one — avoids mass-creating empty folders for every client
-- **Hybrid view**: Virtual folders (from booked data) are always shown; real E2 contents are overlaid when present
-- **Pre-signed URLs**: For file preview/download, the edge function generates time-limited signed URLs so the browser can stream directly from E2
+2. **`src/components/xito-drive/XitoDrivePhotoGallery.tsx`** -- Major rewrite:
+   - Add `isVideoFile()` helper alongside `isImageFile()`
+   - Combine image + video files as "media files" for the gallery
+   - Batch-fetch URLs for all media (images + videos)
+   - Video thumbnails: show play icon overlay on a dark placeholder
+   - Full-screen preview: render `<video controls autoPlay>` for video files, `<img>` for images
+   - Add touch swipe: track `touchStartX` on `touchstart`, calculate delta on `touchend`, navigate if delta > 50px
+   - Add counter: `"{currentIndex + 1} of {totalMedia}"` in the top bar
+   - Add keyboard listeners for ArrowLeft, ArrowRight, Escape
+   - Mobile-optimized layout: full viewport, safe-area padding, larger touch targets for prev/next
 
