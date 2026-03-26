@@ -10,6 +10,7 @@ import {
   getFreelancersForEvent,
   getVideoSubfolders,
   PCLOUD_CATEGORIES,
+  RESEARCH_CATEGORIES,
   FreelancerAssignment,
 } from "@/lib/xito-drive-utils";
 import {
