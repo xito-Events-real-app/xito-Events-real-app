@@ -334,7 +334,7 @@ serve(async (req) => {
       });
     }
 
-    // ACTION: getSignedUrl
+    // ACTION: getSignedUrl (single key)
     if (action === "getSignedUrl") {
       const body = await req.json();
       const key = body.key as string;
@@ -347,6 +347,26 @@ serve(async (req) => {
         endpoint, bucket, objectKey: key, region, accessKey, secretKey, expiresIn: 3600,
       });
       return new Response(JSON.stringify({ url: presignedUrl }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ACTION: getSignedUrls (batch - multiple keys at once)
+    if (action === "getSignedUrls") {
+      const body = await req.json();
+      const keys = body.keys as string[];
+      if (!keys || !Array.isArray(keys) || keys.length === 0) {
+        return new Response(JSON.stringify({ error: "keys array required" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const urls: Record<string, string> = {};
+      await Promise.all(keys.map(async (key) => {
+        urls[key] = await generatePresignedUrl({
+          endpoint, bucket, objectKey: key, region, accessKey, secretKey, expiresIn: 3600,
+        });
+      }));
+      return new Response(JSON.stringify({ urls }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
