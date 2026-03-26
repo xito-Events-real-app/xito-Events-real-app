@@ -114,7 +114,14 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
     const name = prompt("Enter folder name:");
     if (!name?.trim()) return;
     try {
+      // Create in iDrive E2
       await createE2Folder(currentS3Prefix + name.trim());
+      // Also create in pCloud (dual-write)
+      try {
+        await createPCloudFolderByPath(`/wedding-tales-nepal/${currentS3Prefix}${name.trim()}`);
+      } catch (pcloudErr) {
+        console.warn("pCloud folder creation failed (non-blocking):", pcloudErr);
+      }
       toast.success(`Folder "${name.trim()}" created`);
       // Refresh listing
       const result = await listE2Folder(currentS3Prefix);
@@ -125,6 +132,35 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
       console.error(err);
     }
   }, [currentS3Prefix]);
+
+  const handleSyncToPCloud = useCallback(async () => {
+    if (syncing) return;
+    setSyncing(true);
+    setSyncProgress({ current: 0, total: 0 });
+    const toastId = toast.loading("Syncing folders to pCloud...");
+    try {
+      const { created, errors } = await syncAllFoldersToPCloud(
+        clients,
+        assignments,
+        (progress) => {
+          setSyncProgress({ current: progress.current, total: progress.total });
+        }
+      );
+      toast.dismiss(toastId);
+      if (errors.length === 0) {
+        toast.success(`Synced ${created} folders to pCloud`);
+      } else {
+        toast.warning(`Synced ${created} folders, ${errors.length} failed`);
+      }
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error("pCloud sync failed");
+      console.error(err);
+    } finally {
+      setSyncing(false);
+      setSyncProgress(null);
+    }
+  }, [syncing, clients, assignments]);
 
   const handleUpload = useCallback(async () => {
     const input = document.createElement("input");
