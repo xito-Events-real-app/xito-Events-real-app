@@ -1763,6 +1763,17 @@ const ClientDetail = () => {
             <EditProductionSection registeredDateTimeAD={client.registeredDateTimeAD} clientName={client.clientName} />
           )}
 
+          {/* Album Section */}
+          {activeSection === 'album' && client?.registeredDateTimeAD && (
+            <AlbumSection
+              registeredDateTimeAD={client.registeredDateTimeAD}
+              clientName={client.clientName || ''}
+              eventYear={client.eventYear || ''}
+              eventMonth={client.eventMonth || ''}
+              assignments={assignments}
+            />
+          )}
+
           {/* Freelancers Section */}
           {activeSection === 'freelancers' && client?.registeredDateTimeAD && (
             <FreelancerAssignmentSection registeredDateTimeAD={client.registeredDateTimeAD} />
