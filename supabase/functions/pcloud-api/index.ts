@@ -80,6 +80,11 @@ serve(async (req) => {
     const query = new URLSearchParams({ auth });
 
     switch (action) {
+      case 'getauth':
+        return new Response(JSON.stringify({ result: 0, auth }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+
       case 'listfolder':
         endpoint = '/listfolder';
         query.set('folderid', String(params.folderid ?? 0));
