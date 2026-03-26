@@ -3,26 +3,29 @@ import { supabase } from "@/integrations/supabase/client";
 const FUNCTION_NAME = "idrive-e2-api";
 
 async function callE2(action: string, params: Record<string, unknown> = {}, method: "GET" | "POST" = "POST") {
+  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+  const { data: { session } } = await supabase.auth.getSession();
+  const headers: Record<string, string> = {
+    apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+    ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+  };
+
   if (method === "GET") {
     const qp = new URLSearchParams({ action, ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])) });
-    const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
     const url = `https://${projectId}.supabase.co/functions/v1/${FUNCTION_NAME}?${qp}`;
-    const { data: { session } } = await supabase.auth.getSession();
-    const resp = await fetch(url, {
-      headers: {
-        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-      },
-    });
+    const resp = await fetch(url, { headers });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json();
   }
 
-  const { data, error } = await supabase.functions.invoke(FUNCTION_NAME + `?action=${action}`, {
-    body: params,
+  const url = `https://${projectId}.supabase.co/functions/v1/${FUNCTION_NAME}?action=${encodeURIComponent(action)}`;
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: JSON.stringify(params),
   });
-  if (error) throw error;
-  return data;
+  if (!resp.ok) throw new Error(await resp.text());
+  return resp.json();
 }
 
 export interface E2File {
