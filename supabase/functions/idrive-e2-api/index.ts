@@ -195,12 +195,21 @@ serve(async (req) => {
         queryParams: { "list-type": "2", prefix, delimiter: "/" },
       });
 
-      console.log("LIST signed URL:", signed.url);
-      console.log("LIST prefix param:", prefix);
       const s3Resp = await fetch(signed.url, { headers: signed.headers });
       const xml = await s3Resp.text();
-      console.log("LIST S3 response status:", s3Resp.status);
-      console.log("LIST S3 XML (first 2000 chars):", xml.substring(0, 2000));
+
+      if (!s3Resp.ok) {
+        console.error("S3 list error:", xml);
+        return new Response(JSON.stringify({ error: "S3 list failed", details: xml }), {
+          status: s3Resp.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Decode XML entities
+      const decodeXmlEntities = (s: string) =>
+        s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+         .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n)))
+         .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
 
       // Parse XML simply
       const folders: string[] = [];
@@ -209,7 +218,7 @@ serve(async (req) => {
       // CommonPrefixes -> folders
       const prefixMatches = xml.matchAll(/<Prefix>([^<]+)<\/Prefix>/g);
       for (const m of prefixMatches) {
-        const p = m[1];
+        const p = decodeXmlEntities(m[1]);
         if (p && p !== prefix) folders.push(p);
       }
 
@@ -220,7 +229,7 @@ serve(async (req) => {
         const sizeMatch = block[1].match(/<Size>([^<]+)<\/Size>/);
         const modMatch = block[1].match(/<LastModified>([^<]+)<\/LastModified>/);
         if (keyMatch) {
-          const key = keyMatch[1];
+          const key = decodeXmlEntities(keyMatch[1]);
           // Skip folder markers
           if (key.endsWith("/")) continue;
           files.push({
