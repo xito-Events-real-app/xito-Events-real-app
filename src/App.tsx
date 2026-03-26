@@ -42,6 +42,8 @@ import FileClientDetail from "./pages/FileClientDetail";
 import PotentialDelete from "./pages/PotentialDelete";
 import EditedFiles from "./pages/EditedFiles";
 import XitoDrive from "./pages/XitoDrive";
+import PCloudDrive from "./pages/PCloudDrive";
+import BarunsResearch from "./pages/BarunsResearch";
 import { EditedFilesUploadProvider } from "./components/edited-files/EditedFilesUploadContext";
 import { UploadProgressTracker } from "./components/edited-files/UploadProgressTracker";
 

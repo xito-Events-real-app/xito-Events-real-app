@@ -12,6 +12,8 @@ import {
   KeyRound,
   Trash2,
   HardDrive,
+  Cloud,
+  BookOpen,
   LucideIcon,
 } from "lucide-react";
 
@@ -153,10 +155,28 @@ export const suiteModules: SuiteModule[] = [
   {
     id: 'xito-drive',
     name: 'XITO DRIVE',
-    description: 'Virtual file explorer for booked events',
+    description: 'Compressed photos for album (iDrive)',
     icon: HardDrive,
     path: '/xito-drive',
     status: 'active',
     gradient: 'from-sky-500 to-blue-600',
+  },
+  {
+    id: 'pcloud-drive',
+    name: 'pCloud',
+    description: 'High-quality photos & videos',
+    icon: Cloud,
+    path: '/pcloud-drive',
+    status: 'active',
+    gradient: 'from-sky-400 to-indigo-500',
+  },
+  {
+    id: 'baruns-research',
+    name: "Barun's Research",
+    description: 'Quotation, payments & project files',
+    icon: BookOpen,
+    path: '/baruns-research',
+    status: 'active',
+    gradient: 'from-violet-500 to-purple-600',
   },
 ];
