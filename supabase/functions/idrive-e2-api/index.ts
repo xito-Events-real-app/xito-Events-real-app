@@ -56,7 +56,9 @@ async function signS3Request(opts: SignedRequestOpts): Promise<{ url: string; he
   const scope = `${dateStamp}/${opts.region}/${service}/aws4_request`;
 
   const host = opts.endpoint.replace(/^https?:\/\//, "");
-  const path = `/${opts.bucket}/${opts.objectKey}`.replace(/\/+/g, "/");
+  // URI-encode each path segment for S3 Sig V4 (spaces, apostrophes, colons, etc.)
+  const rawPath = `/${opts.bucket}/${opts.objectKey}`.replace(/\/+/g, "/");
+  const path = rawPath.split("/").map(seg => seg ? encodeURIComponent(seg).replace(/%2F/g, "/") : "").join("/");
 
   // Build query string
   const qp = opts.queryParams || {};
