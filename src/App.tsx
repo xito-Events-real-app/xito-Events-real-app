@@ -114,6 +114,8 @@ const App = () => (
               <Route path="/potential-delete" element={<ProtectedRoute><PotentialDelete /></ProtectedRoute>} />
               <Route path="/edited-files" element={<ProtectedRoute><EditedFiles /></ProtectedRoute>} />
               <Route path="/xito-drive" element={<ProtectedRoute><XitoDrive /></ProtectedRoute>} />
+              <Route path="/pcloud-drive" element={<ProtectedRoute><PCloudDrive /></ProtectedRoute>} />
+              <Route path="/baruns-research" element={<ProtectedRoute><BarunsResearch /></ProtectedRoute>} />
               
               <Route path="*" element={<NotFound />} />
             </Routes>
