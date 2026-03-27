@@ -46,6 +46,8 @@ import PCloudDrive from "./pages/PCloudDrive";
 import BarunsResearch from "./pages/BarunsResearch";
 import { EditedFilesUploadProvider } from "./components/edited-files/EditedFilesUploadContext";
 import { UploadProgressTracker } from "./components/edited-files/UploadProgressTracker";
+import { PCloudUploadProvider } from "./contexts/PCloudUploadContext";
+import { PCloudUploadTracker } from "./components/pcloud-drive/PCloudUploadTracker";
 
 const queryClient = new QueryClient();
 
@@ -62,6 +64,7 @@ const App = () => (
         <BookingCalendarPopupProvider>
            <BenzoKeepPopupProvider>
           <EditedFilesUploadProvider>
+          <PCloudUploadProvider>
           <BrowserRouter>
             <AuthProvider>
               <WtnFilesAnnouncement />
@@ -71,6 +74,7 @@ const App = () => (
               <Toaster />
               <Sonner />
               <UploadProgressTracker />
+              <PCloudUploadTracker />
             <Routes>
               {/* Public routes - no auth required */}
               <Route path="/client-form/:clientName/:clientId" element={<ClientContactForm />} />
@@ -121,6 +125,7 @@ const App = () => (
             </Routes>
           </AuthProvider>
           </BrowserRouter>
+          </PCloudUploadProvider>
           </EditedFilesUploadProvider>
            </BenzoKeepPopupProvider>
         </BookingCalendarPopupProvider>
