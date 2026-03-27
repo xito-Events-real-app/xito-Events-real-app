@@ -65,7 +65,7 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
   }, [groups, yearFilter, monthFilter]);
 
   const currentLevel = breadcrumb.length;
-  const selectedGroupKey = breadcrumb[0]?.level;
+  const selectedGroupLabel = breadcrumb[0]?.label;
   const selectedClient = breadcrumb[1]?.label;
   const selectedCategory = breadcrumb[2]?.label;
   const selectedEvent = breadcrumb[3]?.label;
