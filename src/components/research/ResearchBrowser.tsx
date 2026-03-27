@@ -31,7 +31,7 @@ interface Props {
 
 type BreadcrumbSegment = { label: string; level: string };
 
-const RESEARCH_ROOT = "CLIENT DETAILS";
+const RESEARCH_ROOT = "WEDDING TALES NEPAL CLIENT DETAILS";
 
 /**
  * Barun's Research — browses pCloud under /CLIENT DETAILS.
