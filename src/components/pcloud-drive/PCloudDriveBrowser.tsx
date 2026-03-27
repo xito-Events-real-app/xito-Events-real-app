@@ -229,7 +229,7 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
   const virtualFolderNames = useMemo(() => {
     const names = new Set<string>();
     if (currentLevel === 0) {
-      filteredGroups.forEach(g => names.add(g.key));
+      filteredGroups.forEach(g => names.add(g.label));
     } else if (currentLevel === 1 && currentGroup) {
       currentGroup.clients.forEach(c => names.add(c.clientName));
     } else if (currentLevel === 2) {
