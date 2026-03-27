@@ -215,45 +215,48 @@ export async function listPCloudFolderByPath(path: string): Promise<PCloudFolder
     contents: (metadata.contents || []) as PCloudItem[],
   };
 }
-
 /**
  * Recursively list all folder paths under a given root path.
- * Returns a flat Set of relative paths (e.g. "WEDDING TALES NEPAL/2082-10/Client/Photos").
- * Depth-limited for performance.
+ * Returns a flat Set of relative paths (e.g. "WEDDING TALES NEPAL/MAGH EVENTS 2082/Client/Photos").
+ * Uses pCloud's native recursive listing for a single API call.
  */
 export async function listPCloudFolderRecursive(
   rootPath: string,
-  maxDepth: number = 5
+  _maxDepth: number = 5
 ): Promise<Set<string>> {
   const paths = new Set<string>();
   const cleanRoot = rootPath.startsWith('/') ? rootPath : `/${rootPath}`;
 
-  async function walk(path: string, depth: number) {
-    if (depth > maxDepth) return;
-    try {
-      const data = await callPCloudDirect('/listfolder', {
-        path,
-        recursive: '0',
-        showdeleted: '0',
-      });
-      const contents = (data.metadata?.contents || []) as PCloudItem[];
-      for (const item of contents) {
-        if (item.isfolder) {
-          const itemPath = `${path}/${item.name}`;
-          // Store relative path (strip leading /)
-          const rel = itemPath.startsWith('/') ? itemPath.slice(1) : itemPath;
-          paths.add(rel);
-          await walk(itemPath, depth + 1);
-        }
-      }
-    } catch {
-      // Folder may not exist yet
-    }
-  }
-
   // Add root itself
   const relRoot = cleanRoot.startsWith('/') ? cleanRoot.slice(1) : cleanRoot;
   paths.add(relRoot);
-  await walk(cleanRoot, 1);
+
+  try {
+    const data = await callPCloudDirect('/listfolder', {
+      path: cleanRoot,
+      recursive: '1',
+      showdeleted: '0',
+    });
+
+    // Walk the nested contents tree returned by pCloud
+    function extractFolders(contents: PCloudItem[], parentPath: string) {
+      for (const item of contents) {
+        if (item.isfolder) {
+          const itemPath = `${parentPath}/${item.name}`;
+          const rel = itemPath.startsWith('/') ? itemPath.slice(1) : itemPath;
+          paths.add(rel);
+          if (item.contents && item.contents.length > 0) {
+            extractFolders(item.contents, itemPath);
+          }
+        }
+      }
+    }
+
+    const contents = (data.metadata?.contents || []) as PCloudItem[];
+    extractFolders(contents, cleanRoot);
+  } catch {
+    // Root folder doesn't exist
+  }
+
   return paths;
 }
