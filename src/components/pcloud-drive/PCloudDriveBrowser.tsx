@@ -151,30 +151,23 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
   }, [currentPCloudPath]);
 
   const handleUpload = useCallback(async () => {
-    if (currentFolderId === null) {
+    if (breadcrumb.length === 0) {
       toast.error("Navigate to a folder first");
       return;
     }
     const input = document.createElement("input");
     input.type = "file";
     input.multiple = true;
-    input.onchange = async () => {
+    input.accept = "image/*,video/*";
+    input.onchange = () => {
       const fileList = input.files;
       if (!fileList?.length) return;
-      try {
-        for (const file of Array.from(fileList)) {
-          await uploadToPCloud(currentFolderId, file);
-        }
-        toast.success(`Uploaded ${fileList.length} file(s)`);
-        const result = await listPCloudFolderByPath(currentPCloudPath);
-        setPcloudItems(result.contents);
-      } catch (err) {
-        toast.error("Upload failed");
-        console.error(err);
-      }
+      const targetPath = currentPCloudPath;
+      addPCloudUploadJobs(Array.from(fileList), targetPath);
+      toast.success(`${fileList.length} file(s) queued for upload to pCloud`);
     };
     input.click();
-  }, [currentFolderId, currentPCloudPath]);
+  }, [currentPCloudPath, breadcrumb.length, addPCloudUploadJobs]);
 
   const handleFileClick = useCallback(async (item: PCloudItem) => {
     if (!item.fileid) return;
