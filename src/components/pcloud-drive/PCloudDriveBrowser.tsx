@@ -65,18 +65,18 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
   }, [groups, yearFilter, monthFilter]);
 
   const currentLevel = breadcrumb.length;
-  const selectedGroupKey = breadcrumb[0]?.level;
+  const selectedGroupLabel = breadcrumb[0]?.label;
   const selectedClient = breadcrumb[1]?.label;
   const selectedCategory = breadcrumb[2]?.label;
   const selectedEvent = breadcrumb[3]?.label;
 
-  const currentGroup = groups.find(g => g.key === selectedGroupKey);
+  const currentGroup = groups.find(g => g.label === selectedGroupLabel);
   const currentClientFolder = currentGroup?.clients.find(c => c.clientName === selectedClient);
 
   // Build pCloud path
   const currentPCloudPath = useMemo(() => {
     const segments = [PCLOUD_ROOT];
-    if (breadcrumb[0]) segments.push(breadcrumb[0].level);
+    if (breadcrumb[0]) segments.push(breadcrumb[0].label.replace(/[/\\]/g, "_"));
     for (let i = 1; i < breadcrumb.length; i++) {
       segments.push(breadcrumb[i].label.replace(/[/\\]/g, "_"));
     }
@@ -229,7 +229,7 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
   const virtualFolderNames = useMemo(() => {
     const names = new Set<string>();
     if (currentLevel === 0) {
-      filteredGroups.forEach(g => names.add(g.key));
+      filteredGroups.forEach(g => names.add(g.label));
     } else if (currentLevel === 1 && currentGroup) {
       currentGroup.clients.forEach(c => names.add(c.clientName));
     } else if (currentLevel === 2) {
@@ -343,7 +343,7 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
       return (
         <div className={gridClass}>
           {filteredGroups.map(g => (
-            <XitoDriveFolderCard key={g.key} name={g.label} itemCount={g.clients.length} type="month-year" onClick={() => navigate(g.label, g.key)} />
+            <XitoDriveFolderCard key={g.key} name={g.label} itemCount={g.clients.length} type="month-year" onClick={() => navigate(g.label, g.label)} />
           ))}
         </div>
       );
