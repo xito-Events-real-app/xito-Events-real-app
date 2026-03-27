@@ -94,11 +94,12 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
   const currentGroup = groups.find(g => g.key === selectedGroupKey);
   const currentClientFolder = currentGroup?.clients.find(c => c.clientName === selectedClient);
 
-  // Build S3 prefix — inject "Photos" between client and event
+  // Build S3 prefix — use label (e.g. "MAGH EVENTS 2082") instead of numeric key
   const currentS3Prefix = useMemo(() => {
     if (breadcrumb.length === 0) return "";
     const segments: string[] = [];
-    if (breadcrumb[0]) segments.push(breadcrumb[0].level);
+    // Level 0 uses the label directly (e.g. "MAGH EVENTS 2082")
+    if (breadcrumb[0]) segments.push(breadcrumb[0].label.replace(/[/\\]/g, "_"));
     if (breadcrumb[1]) segments.push(breadcrumb[1].label.replace(/[/\\]/g, "_"));
     // Insert Photos folder implicitly
     if (breadcrumb.length >= 2) segments.push("Photos");
