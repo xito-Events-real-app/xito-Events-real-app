@@ -240,12 +240,27 @@ export function isPCloudVideo(item: PCloudItem): boolean {
 
 /**
  * Create a folder by full path, creating parent directories as needed.
- * Uses pCloud's createfolderifnotexists which is idempotent.
+ * If a parent doesn't exist, iteratively creates each segment from root.
  */
 export async function createPCloudFolderByPath(path: string): Promise<PCloudItem> {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
-  const data = await callPCloudDirect('/createfolderifnotexists', { path: cleanPath });
-  return data.metadata as PCloudItem;
+  try {
+    const data = await callPCloudDirect('/createfolderifnotexists', { path: cleanPath });
+    return data.metadata as PCloudItem;
+  } catch (err: any) {
+    // If parent doesn't exist, create each segment iteratively
+    if (err?.message?.includes('component of parent directory')) {
+      const segments = cleanPath.split('/').filter(Boolean);
+      let current = '';
+      let lastResult: any = null;
+      for (const seg of segments) {
+        current += '/' + seg;
+        lastResult = await callPCloudDirect('/createfolderifnotexists', { path: current });
+      }
+      return lastResult?.metadata as PCloudItem;
+    }
+    throw err;
+  }
 }
 
 /**
