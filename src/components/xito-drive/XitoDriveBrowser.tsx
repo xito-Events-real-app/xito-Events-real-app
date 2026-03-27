@@ -44,6 +44,10 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
   const [e2Loading, setE2Loading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ name: string; percent: number }[]>([]);
+  const [syncStatus, setSyncStatus] = useState<PendingSyncStatus | null>(null);
+  const [syncChecking, setSyncChecking] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
   const groups = useMemo(() => buildMonthYearGroups(clients), [clients]);
   const uniqueYears = useMemo(() => getUniqueYears(groups), [groups]);
 
