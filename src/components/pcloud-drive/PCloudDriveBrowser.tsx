@@ -70,7 +70,7 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
   const selectedCategory = breadcrumb[2]?.label;
   const selectedEvent = breadcrumb[3]?.label;
 
-  const currentGroup = groups.find(g => g.key === selectedGroupKey);
+  const currentGroup = groups.find(g => g.label === selectedGroupLabel);
   const currentClientFolder = currentGroup?.clients.find(c => c.clientName === selectedClient);
 
   // Build pCloud path
