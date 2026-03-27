@@ -48,6 +48,7 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
   const [pcloudLoading, setPcloudLoading] = useState(false);
   const [currentFolderId, setCurrentFolderId] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const { addJobs: addPCloudUploadJobs } = usePCloudUploadContext();
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
 
   // Pending sync status
