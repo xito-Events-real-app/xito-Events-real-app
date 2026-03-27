@@ -426,6 +426,39 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
         </div>
       )}
 
+      {/* Sync Banner */}
+      {syncStatus && syncStatus.pending > 0 && !syncing && (
+        <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3">
+          <RefreshCw className="h-4 w-4 text-amber-400 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-amber-300">{syncStatus.pending} pending changes</p>
+            <p className="text-xs text-amber-300/60 truncate">
+              {syncStatus.summaries.slice(0, 2).join(" · ")}
+              {syncStatus.summaries.length > 2 && ` +${syncStatus.summaries.length - 2} more`}
+            </p>
+          </div>
+          <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black text-xs shrink-0" onClick={handleSync}>
+            Sync Now
+          </Button>
+        </div>
+      )}
+      {syncing && syncProgress && (
+        <div className="bg-primary/10 border border-primary/30 rounded-lg px-4 py-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            <span className="text-sm text-primary">Syncing {syncProgress.current}/{syncProgress.total}...</span>
+          </div>
+          <Progress value={(syncProgress.current / syncProgress.total) * 100} className="h-1.5" />
+          <p className="text-[11px] text-muted-foreground truncate">{syncProgress.currentPath}</p>
+        </div>
+      )}
+      {syncStatus && syncStatus.pending === 0 && !syncChecking && !syncing && syncStatus.paths !== undefined && (
+        <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-4 py-2">
+          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+          <span className="text-sm text-emerald-300">All folders synced</span>
+        </div>
+      )}
+
       {/* Breadcrumb */}
       <div className="flex items-center gap-1 text-sm flex-wrap bg-muted/50 rounded-lg px-3 py-2 border border-border/50">
         <button onClick={() => navigateTo(-1)} className="flex items-center gap-1 text-primary hover:underline font-medium">

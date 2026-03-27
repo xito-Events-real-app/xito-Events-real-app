@@ -185,16 +185,18 @@ const RESEARCH_ROOT = "WEDDING TALES NEPAL CLIENT DETAILS";
 
 /**
  * Build iDrive E2 folder tree — Photos only (XITO DRIVE).
+ * E2 uses a dedicated bucket, so no root prefix is needed.
+ * Paths: MAGH EVENTS 2082 / ClientName / Photos / Event / Photographer
  */
 export function buildXitoFolderTree(
   clients: BookedClientData[],
   assignments: FreelancerAssignment[]
 ): string[] {
-  const paths: string[] = [PCLOUD_ROOT];
+  const paths: string[] = [];
   const groups = buildMonthYearGroups(clients);
 
   for (const group of groups) {
-    const groupPath = `${PCLOUD_ROOT}/${group.label}`;
+    const groupPath = group.label;
     paths.push(groupPath);
 
     for (const client of group.clients) {

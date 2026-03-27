@@ -95,3 +95,9 @@ export async function getE2FileUrls(keys: string[]): Promise<Record<string, stri
   const data = await callE2("getSignedUrls", { keys });
   return data.urls;
 }
+
+/** Recursively list all folder prefixes under a given prefix (for sync checks) */
+export async function listE2FolderRecursive(prefix: string): Promise<Set<string>> {
+  const data = await callE2("listRecursive", { prefix }, "GET");
+  return new Set<string>(data.folders || []);
+}
