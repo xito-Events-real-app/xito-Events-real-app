@@ -174,6 +174,35 @@ export async function syncResearchFolders(
   return batchCreateFolders(paths, onProgress);
 }
 
+/**
+ * Check what folders are missing in pCloud vs expected research tree.
+ */
+export async function checkResearchSyncStatus(
+  clients: BookedClientData[],
+  assignments: FreelancerAssignment[]
+): Promise<PendingSyncStatus> {
+  const expectedPaths = buildResearchFolderTree(clients, assignments);
+  
+  let existingPaths: Set<string>;
+  try {
+    existingPaths = await listPCloudFolderRecursive("CLIENT DETAILS", 5);
+  } catch {
+    return {
+      pending: expectedPaths.length,
+      paths: expectedPaths,
+      summaries: [`Root folder not found — full sync needed (${expectedPaths.length} folders)`],
+    };
+  }
+
+  const missing = expectedPaths.filter(p => !existingPaths.has(p));
+  
+  return {
+    pending: missing.length,
+    paths: missing,
+    summaries: generateSummaries(missing),
+  };
+}
+
 /** @deprecated Use syncPCloudDriveFolders or syncResearchFolders */
 export async function syncAllFoldersToPCloud(
   clients: BookedClientData[],

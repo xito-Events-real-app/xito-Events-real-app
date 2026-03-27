@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { ChevronRight, BookOpen, FolderPlus, Upload, CloudUpload } from "lucide-react";
+import { ChevronRight, BookOpen, FolderPlus, Upload, CloudUpload, AlertTriangle, RefreshCw, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { XitoDriveFolderCard } from "@/components/xito-drive/XitoDriveFolderCard";
@@ -14,13 +14,13 @@ import {
 import {
   listPCloudFolderByPath,
   createPCloudFolderByPath,
-  uploadToPCloud,
   getPCloudFileLink,
   PCloudItem,
 } from "@/lib/pcloud-api";
-import { syncResearchFolders } from "@/lib/pcloud-sync";
+import { checkResearchSyncStatus, syncPendingFolders, syncResearchFolders, PendingSyncStatus } from "@/lib/pcloud-sync";
 import { BookedClientData } from "@/lib/sheets-api";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
+import { usePCloudUploadContext } from "@/contexts/PCloudUploadContext";
 import { toast } from "sonner";
 
 interface Props {
@@ -30,6 +30,8 @@ interface Props {
 }
 
 type BreadcrumbSegment = { label: string; level: string };
+
+const RESEARCH_ROOT = "CLIENT DETAILS";
 
 /**
  * Barun's Research — browses pCloud under /CLIENT DETAILS.
@@ -43,7 +45,12 @@ export function ResearchBrowser({ clients, assignments, isLoading }: Props) {
   const [pcloudLoading, setPcloudLoading] = useState(false);
   const [currentFolderId, setCurrentFolderId] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const { addJobs: addPCloudUploadJobs } = usePCloudUploadContext();
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
+
+  // Pending sync status
+  const [pendingStatus, setPendingStatus] = useState<PendingSyncStatus | null>(null);
+  const [checkingSync, setCheckingSync] = useState(false);
 
   const groups = useMemo(() => buildMonthYearGroups(clients), [clients]);
   const uniqueYears = useMemo(() => getUniqueYears(groups), [groups]);
@@ -57,23 +64,43 @@ export function ResearchBrowser({ clients, assignments, isLoading }: Props) {
   }, [groups, yearFilter, monthFilter]);
 
   const currentLevel = breadcrumb.length;
-  const selectedGroupKey = breadcrumb[0]?.level;
+  const selectedGroupLabel = breadcrumb[0]?.label;
   const selectedClient = breadcrumb[1]?.label;
   const selectedCategory = breadcrumb[2]?.label;
   const selectedEvent = breadcrumb[3]?.label;
 
-  const currentGroup = groups.find(g => g.key === selectedGroupKey);
+  const currentGroup = groups.find(g => g.label === selectedGroupLabel);
   const currentClientFolder = currentGroup?.clients.find(c => c.clientName === selectedClient);
 
+  // Build pCloud path using labels
   const currentPCloudPath = useMemo(() => {
-    const segments = ["CLIENT DETAILS"];
-    if (breadcrumb[0]) segments.push(breadcrumb[0].level);
+    const segments = [RESEARCH_ROOT];
+    if (breadcrumb[0]) segments.push(breadcrumb[0].label.replace(/[/\\]/g, "_"));
     for (let i = 1; i < breadcrumb.length; i++) {
       segments.push(breadcrumb[i].label.replace(/[/\\]/g, "_"));
     }
     return "/" + segments.join("/");
   }, [breadcrumb]);
 
+  // Check pending sync status on mount when clients are loaded
+  useEffect(() => {
+    if (clients.length === 0 || isLoading) return;
+    let cancelled = false;
+    setCheckingSync(true);
+    checkResearchSyncStatus(clients, assignments)
+      .then(status => {
+        if (!cancelled) setPendingStatus(status);
+      })
+      .catch(err => {
+        console.warn("Research sync status check failed:", err);
+      })
+      .finally(() => {
+        if (!cancelled) setCheckingSync(false);
+      });
+    return () => { cancelled = true; };
+  }, [clients, assignments, isLoading]);
+
+  // Fetch pCloud contents when navigating deeper than root
   useEffect(() => {
     if (breadcrumb.length === 0) {
       setPcloudItems([]);
@@ -121,30 +148,22 @@ export function ResearchBrowser({ clients, assignments, isLoading }: Props) {
   }, [currentPCloudPath]);
 
   const handleUpload = useCallback(async () => {
-    if (currentFolderId === null) {
+    if (breadcrumb.length === 0) {
       toast.error("Navigate to a folder first");
       return;
     }
     const input = document.createElement("input");
     input.type = "file";
     input.multiple = true;
-    input.onchange = async () => {
+    input.onchange = () => {
       const fileList = input.files;
       if (!fileList?.length) return;
-      try {
-        for (const file of Array.from(fileList)) {
-          await uploadToPCloud(currentFolderId, file);
-        }
-        toast.success(`Uploaded ${fileList.length} file(s)`);
-        const result = await listPCloudFolderByPath(currentPCloudPath);
-        setPcloudItems(result.contents);
-      } catch (err) {
-        toast.error("Upload failed");
-        console.error(err);
-      }
+      const targetPath = currentPCloudPath;
+      addPCloudUploadJobs(Array.from(fileList), targetPath);
+      toast.success(`${fileList.length} file(s) queued for upload`);
     };
     input.click();
-  }, [currentFolderId, currentPCloudPath]);
+  }, [currentPCloudPath, breadcrumb.length, addPCloudUploadJobs]);
 
   const handleFileClick = useCallback(async (item: PCloudItem) => {
     if (!item.fileid) return;
@@ -157,17 +176,20 @@ export function ResearchBrowser({ clients, assignments, isLoading }: Props) {
     }
   }, []);
 
-  const handleSync = useCallback(async () => {
-    if (syncing) return;
+  const handleSyncPending = useCallback(async () => {
+    if (syncing || !pendingStatus || pendingStatus.pending === 0) return;
     setSyncing(true);
-    setSyncProgress({ current: 0, total: 0 });
+    setSyncProgress({ current: 0, total: pendingStatus.pending });
     const toastId = toast.loading("Syncing CLIENT DETAILS folders...");
     try {
-      const { created, errors } = await syncResearchFolders(clients, assignments, (p) => {
+      const { created, errors } = await syncPendingFolders(pendingStatus.paths, (p) => {
         setSyncProgress({ current: p.current, total: p.total });
       });
       toast.dismiss(toastId);
-      toast.success(errors.length === 0 ? `Synced ${created} folders` : `Synced ${created}, ${errors.length} failed`);
+      toast.success(errors.length === 0 ? `Synced ${created} new folders` : `Synced ${created}, ${errors.length} failed`);
+      // Re-check status
+      const newStatus = await checkResearchSyncStatus(clients, assignments);
+      setPendingStatus(newStatus);
     } catch (err) {
       toast.dismiss(toastId);
       toast.error("Sync failed");
@@ -176,12 +198,29 @@ export function ResearchBrowser({ clients, assignments, isLoading }: Props) {
       setSyncing(false);
       setSyncProgress(null);
     }
-  }, [syncing, clients, assignments]);
+  }, [syncing, pendingStatus, clients, assignments]);
 
+  const handleRefreshStatus = useCallback(async () => {
+    setCheckingSync(true);
+    try {
+      const status = await checkResearchSyncStatus(clients, assignments);
+      setPendingStatus(status);
+      if (status.pending === 0) {
+        toast.success("Everything is in sync!");
+      }
+    } catch (err) {
+      toast.error("Failed to check sync status");
+      console.error(err);
+    } finally {
+      setCheckingSync(false);
+    }
+  }, [clients, assignments]);
+
+  // Virtual folder names at current level
   const virtualFolderNames = useMemo(() => {
     const names = new Set<string>();
     if (currentLevel === 0) {
-      filteredGroups.forEach(g => names.add(g.key));
+      filteredGroups.forEach(g => names.add(g.label));
     } else if (currentLevel === 1 && currentGroup) {
       currentGroup.clients.forEach(c => names.add(c.clientName));
     } else if (currentLevel === 2) {
@@ -206,6 +245,71 @@ export function ResearchBrowser({ clients, assignments, isLoading }: Props) {
   }, [pcloudItems]);
 
   const gridClass = "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3";
+
+  // Pending sync banner (same style as PCloudDriveBrowser)
+  const renderPendingBanner = () => {
+    if (checkingSync) {
+      return (
+        <div className="flex items-center gap-2 bg-muted/60 border border-border rounded-lg px-4 py-3 text-sm animate-pulse">
+          <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
+          <span className="text-muted-foreground">Checking for pending changes...</span>
+        </div>
+      );
+    }
+
+    if (!pendingStatus) return null;
+
+    if (pendingStatus.pending === 0) {
+      return (
+        <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-lg px-4 py-3 text-sm">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          <span className="text-emerald-700 dark:text-emerald-300 font-medium">All folders in sync</span>
+          <Button variant="ghost" size="sm" className="ml-auto h-7 text-xs" onClick={handleRefreshStatus}>
+            <RefreshCw className="h-3 w-3 mr-1" /> Recheck
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3 space-y-2">
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+              {pendingStatus.pending} new {pendingStatus.pending === 1 ? "folder" : "folders"} pending sync
+            </p>
+            {pendingStatus.summaries.length > 0 && (
+              <ul className="mt-1 space-y-0.5">
+                {pendingStatus.summaries.slice(0, 4).map((s, i) => (
+                  <li key={i} className="text-xs text-amber-700 dark:text-amber-300">• {s}</li>
+                ))}
+                {pendingStatus.summaries.length > 4 && (
+                  <li className="text-xs text-amber-600 dark:text-amber-400 italic">
+                    ...and {pendingStatus.summaries.length - 4} more
+                  </li>
+                )}
+              </ul>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleRefreshStatus} disabled={checkingSync}>
+              <RefreshCw className="h-3 w-3" />
+            </Button>
+            <Button
+              size="sm"
+              className="h-7 text-xs bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={handleSyncPending}
+              disabled={syncing}
+            >
+              <CloudUpload className="h-3 w-3 mr-1" />
+              {syncing ? `Syncing ${syncProgress?.current || 0}/${syncProgress?.total || 0}...` : "Sync Now"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderContent = () => {
     if (isLoading) {
@@ -329,6 +433,9 @@ export function ResearchBrowser({ clients, assignments, isLoading }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Pending sync banner */}
+      {renderPendingBanner()}
+
       <div className="flex flex-wrap items-center gap-2">
         {currentLevel === 0 && (
           <>
@@ -349,14 +456,10 @@ export function ResearchBrowser({ clients, assignments, isLoading }: Props) {
           </>
         )}
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="outline" size="sm" className="text-xs" disabled={syncing} onClick={handleSync}>
-            <CloudUpload className="h-3.5 w-3.5 mr-1" />
-            {syncing ? `Syncing ${syncProgress?.current || 0}/${syncProgress?.total || 0}...` : "Sync Folders"}
-          </Button>
           <Button variant="outline" size="sm" className="text-xs" disabled={currentLevel === 0} onClick={handleCreateFolder}>
             <FolderPlus className="h-3.5 w-3.5 mr-1" /> New Folder
           </Button>
-          <Button variant="outline" size="sm" className="text-xs" disabled={currentLevel === 0 || currentFolderId === null} onClick={handleUpload}>
+          <Button variant="outline" size="sm" className="text-xs" disabled={currentLevel === 0} onClick={handleUpload}>
             <Upload className="h-3.5 w-3.5 mr-1" /> Upload
           </Button>
         </div>
@@ -365,7 +468,7 @@ export function ResearchBrowser({ clients, assignments, isLoading }: Props) {
       <div className="flex items-center gap-1 text-sm flex-wrap bg-muted/50 rounded-lg px-3 py-2 border border-border/50">
         <button onClick={() => navigateTo(-1)} className="flex items-center gap-1 text-primary hover:underline font-medium">
           <BookOpen className="h-4 w-4" />
-          Barun's Research
+          {RESEARCH_ROOT}
         </button>
         {breadcrumb.map((seg, i) => (
           <span key={i} className="flex items-center gap-1">
