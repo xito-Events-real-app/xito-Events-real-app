@@ -64,6 +64,7 @@ const App = () => (
         <BookingCalendarPopupProvider>
            <BenzoKeepPopupProvider>
           <EditedFilesUploadProvider>
+          <PCloudUploadProvider>
           <BrowserRouter>
             <AuthProvider>
               <WtnFilesAnnouncement />
@@ -73,6 +74,7 @@ const App = () => (
               <Toaster />
               <Sonner />
               <UploadProgressTracker />
+              <PCloudUploadTracker />
             <Routes>
               {/* Public routes - no auth required */}
               <Route path="/client-form/:clientName/:clientId" element={<ClientContactForm />} />
