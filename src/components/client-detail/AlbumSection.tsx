@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { loadDeliverables, DeliverableRow } from "@/lib/deliverables-api";
 import { listE2Folder, getE2FileUrls, E2File } from "@/lib/idrive-e2-api";
 import { FreelancerAssignment } from "@/lib/freelancer-assignment-api";
+import { NEPALI_MONTHS } from "@/lib/nepali-months";
 import { cn } from "@/lib/utils";
 import XitoImageViewer from "./XitoImageViewer";
 
