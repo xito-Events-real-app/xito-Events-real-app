@@ -1,59 +1,53 @@
 
 
-## Plan: Rename Root Folder + Add Smart Sync with Pending Changes Banner
+## Plan: Unify XITO DRIVE with Label-Based Folders + Sync System
 
-### What Changes
+### Problem
+XITO DRIVE (iDrive E2) currently uses numeric folder keys (`2082-10`) for S3 paths, while pCloud and Barun's Research use descriptive labels (`MAGH EVENTS 2082`). XITO DRIVE also lacks the "Sync Now" banner that the other two modules have. Additionally, the Album section in Client Detail must stay in sync with whatever path format XITO DRIVE uses.
 
-1. **Rename root folder** from `wedding-tales-nepal` to `WEDDING TALES NEPAL` everywhere
-2. **Track pending changes** — detect when new clients/events/freelancers exist that don't have pCloud folders yet
-3. **Show a banner** at the top of the pCloud module showing "X new changes pending sync" with a sync button
-4. **First sync** creates the entire `WEDDING TALES NEPAL` folder tree from scratch
-5. **Subsequent syncs** only create the missing folders (the API is already idempotent — `createfolderifnotexists` skips existing folders)
+### Changes Overview
 
-### Files to Modify
+**1. Edge Function: Add recursive list action** (`supabase/functions/idrive-e2-api/index.ts`)
+- Add a `listRecursive` action that calls S3 ListObjectsV2 **without** a delimiter, returning all folder prefixes under a given prefix. This is needed for the sync status check (similar to what pCloud does natively with `recursive: 1`).
 
-**1. `src/lib/xito-drive-utils.ts`** — Change `PCLOUD_ROOT`
-- Change `const PCLOUD_ROOT = "wedding-tales-nepal"` to `const PCLOUD_ROOT = "WEDDING TALES NEPAL"`
-- Everything downstream (tree builders, paths) automatically uses the new name
+**2. Client API: Add recursive list helper** (`src/lib/idrive-e2-api.ts`)
+- Add `listE2FolderRecursive(prefix)` that calls the new `listRecursive` action and returns a `Set<string>` of all existing folder paths.
 
-**2. `src/components/pcloud-drive/PCloudDriveBrowser.tsx`** — Add pending changes detection + banner
-- On mount, call `listPCloudFolderByPath("/WEDDING TALES NEPAL")` to get existing folder structure
-- Compare `buildPCloudFolderTree(clients, assignments)` paths against what actually exists in pCloud
-- Count the difference as "pending changes"
-- Show a sticky banner: "5 new folders pending sync — Freelancer X added, Client Y added" with a "Sync Now" button
-- After sync completes, re-check and hide banner if 0 pending
-- Update breadcrumb root label from "wedding-tales-nepal" to "WEDDING TALES NEPAL"
-- Update the path builder from `"wedding-tales-nepal"` to `"WEDDING TALES NEPAL"`
+**3. Sync logic for iDrive E2** (`src/lib/pcloud-sync.ts` or new `src/lib/e2-sync.ts`)
+- Add `checkE2SyncStatus(clients, assignments)` — compares `buildXitoFolderTree()` output against actual E2 folders via `listE2FolderRecursive`.
+- Add `syncE2PendingFolders(paths)` — batch-creates missing folders using `createE2Folder`.
+- Reuses existing `SyncProgress` and `PendingSyncStatus` types.
 
-**3. `src/lib/pcloud-sync.ts`** — Add a function to detect pending changes
-- Add `getPendingSyncPaths(clients, assignments, existingPaths): string[]` that returns only paths not yet in pCloud
-- Add `checkPCloudSyncStatus(clients, assignments): Promise<{ pending: number; paths: string[]; summary: string[] }>` that:
-  1. Recursively lists the `WEDDING TALES NEPAL` folder in pCloud
-  2. Builds the expected tree from client data
-  3. Returns the diff (missing paths) with human-readable summaries like "New client: Karishma Shrestha", "New freelancer: Ram for Wedding"
+**4. Update S3 paths to use labels** (`src/components/xito-drive/XitoDriveBrowser.tsx`)
+- Change the breadcrumb navigation at level 0 from `navigate(g.label, g.key)` to `navigate(g.label, g.label)` so the S3 prefix uses `MAGH EVENTS 2082` instead of `2082-10`.
+- Add the sync banner (pending changes detection + "Sync Now" button) matching pCloud/Research style.
+- Integrate with global upload context or keep existing inline upload (already working).
 
-**4. `src/lib/pcloud-api.ts`** — Add recursive listing helper
-- Add `listPCloudFolderRecursive(path): Promise<Set<string>>` that walks the pCloud tree and returns all existing folder paths as a flat set (used for diff detection)
+**5. Update Album section S3 prefix** (`src/components/client-detail/AlbumSection.tsx`)
+- Change the prefix from `${majorityYearMonth}/...` to use the label format: compute `NEPALI_MONTHS[monthNum] + " EVENTS " + year` from `majorityYearMonth`.
+- This ensures Album photos resolve to the same folders as XITO DRIVE.
 
-### How the Banner Works
+**6. Update tree builder path format** (`src/lib/xito-drive-utils.ts`)
+- The `buildXitoFolderTree` already uses `group.label` — no change needed there. Verify consistency.
 
-```text
-┌─────────────────────────────────────────────────┐
-│ ⚠ 5 new changes pending sync                   │
-│   • New client: Karishma Shrestha (2082-10)     │
-│   • New freelancer: Ram added to Wedding        │
-│                              [Sync Now]         │
-└─────────────────────────────────────────────────┘
-```
+### Technical Details
 
-- Checked on page load (async, non-blocking)
-- Re-checked after each sync completes
-- Shows count + up to 3 change summaries
-- "Sync Now" triggers the existing `syncPCloudDriveFolders` but only with the missing paths
+**Recursive S3 listing** — S3 `ListObjectsV2` without a delimiter returns all keys (including nested). We parse unique folder prefixes from the returned keys. This is done server-side in the edge function to keep it efficient.
 
-### Technical Notes
+**Sync flow** — Same pattern as pCloud:
+1. On mount, call `checkE2SyncStatus()` → get missing folder count
+2. Show sticky banner with count + "Sync Now"
+3. On click, batch-create folders with progress callback
+4. Refresh status after sync
 
-- `createfolderifnotexists` is idempotent — running sync on already-existing folders is harmless but wastes API calls. The diff check avoids this.
-- Recursive listing depth is limited to 3 levels (root → year-month → client) for speed. Deeper checks happen per-client only when needed.
-- The root folder name `WEDDING TALES NEPAL` will be created automatically on first sync if it doesn't exist.
+**Album backward compatibility** — The path change from `2082-10` to `MAGH EVENTS 2082` means any photos already uploaded under the old numeric prefix will not appear until re-uploaded or the folders are renamed in iDrive. This is expected since the user wants the new naming convention.
+
+### Files to Create/Modify
+| File | Action |
+|------|--------|
+| `supabase/functions/idrive-e2-api/index.ts` | Add `listRecursive` action |
+| `src/lib/idrive-e2-api.ts` | Add `listE2FolderRecursive()` |
+| `src/lib/e2-sync.ts` | New — sync check + batch create for E2 |
+| `src/components/xito-drive/XitoDriveBrowser.tsx` | Label-based paths + sync banner |
+| `src/components/client-detail/AlbumSection.tsx` | Update S3 prefix to label format |
 
