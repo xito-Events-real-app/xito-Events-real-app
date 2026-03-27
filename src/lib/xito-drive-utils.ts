@@ -194,7 +194,7 @@ export function buildXitoFolderTree(
   const groups = buildMonthYearGroups(clients);
 
   for (const group of groups) {
-    const groupPath = `${PCLOUD_ROOT}/${group.key}`;
+    const groupPath = `${PCLOUD_ROOT}/${group.label}`;
     paths.push(groupPath);
 
     for (const client of group.clients) {
