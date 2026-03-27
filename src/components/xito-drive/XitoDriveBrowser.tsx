@@ -1,7 +1,8 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { ChevronRight, HardDrive, FolderPlus, Upload } from "lucide-react";
+import { ChevronRight, HardDrive, FolderPlus, Upload, RefreshCw, Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import { XitoDriveFolderCard } from "./XitoDriveFolderCard";
 import { XitoDrivePhotoGallery } from "./XitoDrivePhotoGallery";
 import {
@@ -14,6 +15,8 @@ import {
 import { listE2Folder, createE2Folder, uploadToE2, getE2FileUrl, E2File } from "@/lib/idrive-e2-api";
 import { BookedClientData } from "@/lib/sheets-api";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
+import { checkE2SyncStatus, syncE2PendingFolders } from "@/lib/e2-sync";
+import { PendingSyncStatus, SyncProgress } from "@/lib/pcloud-sync";
 import { toast } from "sonner";
 
 interface Props {
