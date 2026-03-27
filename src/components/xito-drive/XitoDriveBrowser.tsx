@@ -59,6 +59,33 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
     });
   }, [groups, yearFilter, monthFilter]);
 
+  // Check sync status when data loads
+  useEffect(() => {
+    if (clients.length === 0 || assignments.length === 0 || isLoading) return;
+    setSyncChecking(true);
+    checkE2SyncStatus(clients, assignments)
+      .then(status => setSyncStatus(status))
+      .catch(err => console.warn("E2 sync check failed:", err))
+      .finally(() => setSyncChecking(false));
+  }, [clients, assignments, isLoading]);
+
+  const handleSync = useCallback(async () => {
+    if (!syncStatus || syncStatus.pending === 0) return;
+    setSyncing(true);
+    setSyncProgress({ current: 0, total: syncStatus.pending, currentPath: "" });
+    try {
+      const result = await syncE2PendingFolders(syncStatus.paths, (p) => setSyncProgress(p));
+      toast.success(`Synced ${result.created} folders${result.errors.length ? `, ${result.errors.length} errors` : ""}`);
+      setSyncStatus({ pending: 0, paths: [], summaries: [] });
+    } catch (err) {
+      toast.error("Sync failed");
+      console.error(err);
+    } finally {
+      setSyncing(false);
+      setSyncProgress(null);
+    }
+  }, [syncStatus]);
+
   const currentLevel = breadcrumb.length;
   const selectedGroupKey = breadcrumb[0]?.level;
   const selectedClient = breadcrumb[1]?.label;
