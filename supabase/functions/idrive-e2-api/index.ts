@@ -393,7 +393,60 @@ serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ error: "Unknown action. Use: list, createFolder, upload, delete, getSignedUrl, getSignedUrls, getUploadUrl" }), {
+    // ACTION: listRecursive — list ALL keys under a prefix (no delimiter) for sync checks
+    if (action === "listRecursive") {
+      const prefix = url.searchParams.get("prefix") || "";
+      const allFolders = new Set<string>();
+      let continuationToken: string | undefined;
+
+      // Paginate through all results
+      for (let page = 0; page < 50; page++) {
+        const qp: Record<string, string> = { "list-type": "2", prefix };
+        if (continuationToken) qp["continuation-token"] = continuationToken;
+
+        const signed = await signS3Request({
+          method: "GET", endpoint, bucket, objectKey: "",
+          region, accessKey, secretKey,
+          queryParams: qp,
+        });
+
+        const s3Resp = await fetch(signed.url, { headers: signed.headers });
+        const xml = await s3Resp.text();
+        if (!s3Resp.ok) {
+          return new Response(JSON.stringify({ error: "S3 listRecursive failed", details: xml }), {
+            status: s3Resp.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Extract all keys and derive folder prefixes
+        const keyMatches = xml.matchAll(/<Key>([^<]+)<\/Key>/g);
+        const decodeXmlEntities = (s: string) =>
+          s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+           .replace(/&quot;/g, '"').replace(/&apos;/g, "'");
+
+        for (const m of keyMatches) {
+          const key = decodeXmlEntities(m[1]);
+          // Derive all parent folder prefixes from this key
+          const parts = key.split("/");
+          for (let i = 1; i < parts.length; i++) {
+            allFolders.add(parts.slice(0, i).join("/"));
+          }
+        }
+
+        // Check for truncation
+        const isTruncated = xml.includes("<IsTruncated>true</IsTruncated>");
+        if (!isTruncated) break;
+        const tokenMatch = xml.match(/<NextContinuationToken>([^<]+)<\/NextContinuationToken>/);
+        if (!tokenMatch) break;
+        continuationToken = decodeXmlEntities(tokenMatch[1]);
+      }
+
+      return new Response(JSON.stringify({ folders: Array.from(allFolders) }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ error: "Unknown action. Use: list, listRecursive, createFolder, upload, delete, getSignedUrl, getSignedUrls, getUploadUrl" }), {
       status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {

@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { loadDeliverables, DeliverableRow } from "@/lib/deliverables-api";
 import { listE2Folder, getE2FileUrls, E2File } from "@/lib/idrive-e2-api";
 import { FreelancerAssignment } from "@/lib/freelancer-assignment-api";
+import { NEPALI_MONTHS } from "@/lib/nepali-months";
 import { cn } from "@/lib/utils";
 import XitoImageViewer from "./XitoImageViewer";
 
@@ -106,7 +107,12 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
         const tabId = `${a.event}-${p.name}`;
         if (seen.has(tabId)) return;
         seen.add(tabId);
-        const prefix = `${majorityYearMonth}/${clientName}/Photos/${a.event}/${p.name}/`;
+        // Convert numeric year-month to label format: "MAGH EVENTS 2082"
+        const [ymYear, ymMonth] = majorityYearMonth!.split("-");
+        const monthNum = parseInt(ymMonth, 10);
+        const monthLabel = NEPALI_MONTHS[monthNum] || `MONTH ${ymMonth}`;
+        const folderLabel = `${monthLabel} EVENTS ${ymYear}`;
+        const prefix = `${folderLabel}/${clientName}/Photos/${a.event}/${p.name}/`;
         result.push({
           id: tabId,
           label: `${a.event} (${p.name})`,

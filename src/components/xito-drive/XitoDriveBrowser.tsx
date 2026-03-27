@@ -1,7 +1,8 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { ChevronRight, HardDrive, FolderPlus, Upload } from "lucide-react";
+import { ChevronRight, HardDrive, FolderPlus, Upload, RefreshCw, Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import { XitoDriveFolderCard } from "./XitoDriveFolderCard";
 import { XitoDrivePhotoGallery } from "./XitoDrivePhotoGallery";
 import {
@@ -14,6 +15,8 @@ import {
 import { listE2Folder, createE2Folder, uploadToE2, getE2FileUrl, E2File } from "@/lib/idrive-e2-api";
 import { BookedClientData } from "@/lib/sheets-api";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
+import { checkE2SyncStatus, syncE2PendingFolders } from "@/lib/e2-sync";
+import { PendingSyncStatus, SyncProgress } from "@/lib/pcloud-sync";
 import { toast } from "sonner";
 
 interface Props {
@@ -41,6 +44,10 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
   const [e2Loading, setE2Loading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ name: string; percent: number }[]>([]);
+  const [syncStatus, setSyncStatus] = useState<PendingSyncStatus | null>(null);
+  const [syncChecking, setSyncChecking] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
   const groups = useMemo(() => buildMonthYearGroups(clients), [clients]);
   const uniqueYears = useMemo(() => getUniqueYears(groups), [groups]);
 
@@ -52,6 +59,33 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
     });
   }, [groups, yearFilter, monthFilter]);
 
+  // Check sync status when data loads
+  useEffect(() => {
+    if (clients.length === 0 || assignments.length === 0 || isLoading) return;
+    setSyncChecking(true);
+    checkE2SyncStatus(clients, assignments)
+      .then(status => setSyncStatus(status))
+      .catch(err => console.warn("E2 sync check failed:", err))
+      .finally(() => setSyncChecking(false));
+  }, [clients, assignments, isLoading]);
+
+  const handleSync = useCallback(async () => {
+    if (!syncStatus || syncStatus.pending === 0) return;
+    setSyncing(true);
+    setSyncProgress({ current: 0, total: syncStatus.pending, currentPath: "" });
+    try {
+      const result = await syncE2PendingFolders(syncStatus.paths, (p) => setSyncProgress(p));
+      toast.success(`Synced ${result.created} folders${result.errors.length ? `, ${result.errors.length} errors` : ""}`);
+      setSyncStatus({ pending: 0, paths: [], summaries: [] });
+    } catch (err) {
+      toast.error("Sync failed");
+      console.error(err);
+    } finally {
+      setSyncing(false);
+      setSyncProgress(null);
+    }
+  }, [syncStatus]);
+
   const currentLevel = breadcrumb.length;
   const selectedGroupKey = breadcrumb[0]?.level;
   const selectedClient = breadcrumb[1]?.label;
@@ -60,11 +94,12 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
   const currentGroup = groups.find(g => g.key === selectedGroupKey);
   const currentClientFolder = currentGroup?.clients.find(c => c.clientName === selectedClient);
 
-  // Build S3 prefix — inject "Photos" between client and event
+  // Build S3 prefix — use label (e.g. "MAGH EVENTS 2082") instead of numeric key
   const currentS3Prefix = useMemo(() => {
     if (breadcrumb.length === 0) return "";
     const segments: string[] = [];
-    if (breadcrumb[0]) segments.push(breadcrumb[0].level);
+    // Level 0 uses the label directly (e.g. "MAGH EVENTS 2082")
+    if (breadcrumb[0]) segments.push(breadcrumb[0].label.replace(/[/\\]/g, "_"));
     if (breadcrumb[1]) segments.push(breadcrumb[1].label.replace(/[/\\]/g, "_"));
     // Insert Photos folder implicitly
     if (breadcrumb.length >= 2) segments.push("Photos");
@@ -388,6 +423,39 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
               <span className="text-[11px] text-muted-foreground w-9 text-right">{item.percent}%</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Sync Banner */}
+      {syncStatus && syncStatus.pending > 0 && !syncing && (
+        <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3">
+          <RefreshCw className="h-4 w-4 text-amber-400 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-amber-300">{syncStatus.pending} pending changes</p>
+            <p className="text-xs text-amber-300/60 truncate">
+              {syncStatus.summaries.slice(0, 2).join(" · ")}
+              {syncStatus.summaries.length > 2 && ` +${syncStatus.summaries.length - 2} more`}
+            </p>
+          </div>
+          <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black text-xs shrink-0" onClick={handleSync}>
+            Sync Now
+          </Button>
+        </div>
+      )}
+      {syncing && syncProgress && (
+        <div className="bg-primary/10 border border-primary/30 rounded-lg px-4 py-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            <span className="text-sm text-primary">Syncing {syncProgress.current}/{syncProgress.total}...</span>
+          </div>
+          <Progress value={(syncProgress.current / syncProgress.total) * 100} className="h-1.5" />
+          <p className="text-[11px] text-muted-foreground truncate">{syncProgress.currentPath}</p>
+        </div>
+      )}
+      {syncStatus && syncStatus.pending === 0 && !syncChecking && !syncing && syncStatus.paths !== undefined && (
+        <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-4 py-2">
+          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+          <span className="text-sm text-emerald-300">All folders synced</span>
         </div>
       )}
 
