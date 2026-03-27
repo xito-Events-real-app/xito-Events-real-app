@@ -125,6 +125,7 @@ const App = () => (
             </Routes>
           </AuthProvider>
           </BrowserRouter>
+          </PCloudUploadProvider>
           </EditedFilesUploadProvider>
            </BenzoKeepPopupProvider>
         </BookingCalendarPopupProvider>
