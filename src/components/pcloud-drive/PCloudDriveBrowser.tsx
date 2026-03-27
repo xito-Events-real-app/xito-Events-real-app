@@ -23,6 +23,7 @@ import {
 import { checkPCloudSyncStatus, syncPendingFolders, PendingSyncStatus } from "@/lib/pcloud-sync";
 import { BookedClientData } from "@/lib/sheets-api";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
+import { usePCloudUploadContext } from "@/contexts/PCloudUploadContext";
 import { toast } from "sonner";
 
 interface Props {
