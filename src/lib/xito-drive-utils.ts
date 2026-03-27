@@ -273,7 +273,7 @@ export function buildResearchFolderTree(
   const groups = buildMonthYearGroups(clients);
 
   for (const group of groups) {
-    const groupPath = `${RESEARCH_ROOT}/${group.key}`;
+    const groupPath = `${RESEARCH_ROOT}/${group.label}`;
     paths.push(groupPath);
 
     for (const client of group.clients) {
