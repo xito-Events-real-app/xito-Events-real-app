@@ -181,7 +181,7 @@ export function buildStoragePath(segments: string[]): string {
 // ── Folder tree builders per module ──
 
 const PCLOUD_ROOT = "WEDDING TALES NEPAL";
-const RESEARCH_ROOT = "CLIENT DETAILS";
+const RESEARCH_ROOT = "WEDDING TALES NEPAL CLIENT DETAILS";
 
 /**
  * Build iDrive E2 folder tree — Photos only (XITO DRIVE).

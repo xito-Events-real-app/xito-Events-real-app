@@ -185,7 +185,7 @@ export async function checkResearchSyncStatus(
   
   let existingPaths: Set<string>;
   try {
-    existingPaths = await listPCloudFolderRecursive("CLIENT DETAILS", 5);
+    existingPaths = await listPCloudFolderRecursive("WEDDING TALES NEPAL CLIENT DETAILS", 5);
   } catch {
     return {
       pending: expectedPaths.length,
