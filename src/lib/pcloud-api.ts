@@ -167,6 +167,55 @@ export async function uploadToPCloud(folderId: number, file: File): Promise<any>
   return await res.json();
 }
 
+/**
+ * Upload a file to pCloud by folder path (creates folder if needed).
+ * Uses XHR for progress tracking.
+ */
+export async function uploadToPCloudByPath(
+  folderPath: string,
+  file: File,
+  onProgress?: (percent: number) => void
+): Promise<any> {
+  // Ensure folder exists first
+  const cleanPath = folderPath.startsWith('/') ? folderPath : `/${folderPath}`;
+  const folderData = await callPCloudDirect('/createfolderifnotexists', { path: cleanPath });
+  const folderId = folderData.metadata?.folderid;
+  if (!folderId) throw new Error('Could not resolve folder');
+
+  const auth = await getAuthToken();
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          if (data.result !== 0) {
+            reject(new Error(data.error || `pCloud upload error ${data.result}`));
+          } else {
+            resolve(data);
+          }
+        } catch { resolve(xhr.responseText); }
+      } else {
+        reject(new Error(`Upload failed: HTTP ${xhr.status}`));
+      }
+    };
+    xhr.onerror = () => reject(new Error('Upload network error'));
+
+    xhr.open('POST', `${PCLOUD_API}/uploadfile?auth=${auth}&folderid=${folderId}&filename=${encodeURIComponent(file.name)}`);
+    xhr.send(formData);
+  });
+}
+
 export function formatPCloudSize(bytes: number): string {
   if (!bytes || bytes === 0) return '0 B';
   const k = 1024;
