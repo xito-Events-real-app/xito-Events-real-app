@@ -76,7 +76,7 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
   // Build pCloud path
   const currentPCloudPath = useMemo(() => {
     const segments = [PCLOUD_ROOT];
-    if (breadcrumb[0]) segments.push(breadcrumb[0].level);
+    if (breadcrumb[0]) segments.push(breadcrumb[0].label.replace(/[/\\]/g, "_"));
     for (let i = 1; i < breadcrumb.length; i++) {
       segments.push(breadcrumb[i].label.replace(/[/\\]/g, "_"));
     }
