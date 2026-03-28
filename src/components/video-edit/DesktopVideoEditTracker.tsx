@@ -93,6 +93,7 @@ function getTimeAgo(isoDate: string): string | null {
 /* ── Live Edit Timer ── */
 const NO_TIMER_STAGES = ['QUEUE', 'EDIT_LAB'];
 const PROGRESS_STAGES_SET = new Set(['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS', 'COLOR_QUEUE', 'COLOR_LAB', 'EXPORT_QUEUE', 'EXPORTED', 'CLIENT_REVIEW', 'FINALIZED']);
+const COLORIST_STAGES = new Set(['COLOR_QUEUE', 'COLOR_LAB', 'COLOR_ON_PROGRESS', 'EXPORT_QUEUE', 'EXPORTED', 'CLIENT_REVIEW', 'RE_EDIT_ON_PROGRESS', 'FINALIZED']);
 
 function LiveEditTimer({
   editStartedAt,
