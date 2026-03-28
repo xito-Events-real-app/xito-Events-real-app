@@ -1780,10 +1780,10 @@ const ClientDetail = () => {
               clientName={client.clientName || ''}
               contactNo={client.contactNo || ''}
               whatsappNo={client.whatsappNo || ''}
-              brideFullName={contactDetailsData?.bride_full_name || ''}
-              brideWhatsapp={contactDetailsData?.bride_whatsapp_number || ''}
-              groomFullName={contactDetailsData?.groom_full_name || ''}
-              groomWhatsapp={contactDetailsData?.groom_whatsapp_number || ''}
+              brideFullName={contactDetailsData?.brideFullName || ''}
+              brideWhatsapp={contactDetailsData?.brideWhatsappNumber || ''}
+              groomFullName={contactDetailsData?.groomFullName || ''}
+              groomWhatsapp={contactDetailsData?.groomWhatsappNumber || ''}
             />
           )}
 
