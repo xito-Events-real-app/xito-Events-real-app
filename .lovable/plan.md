@@ -1,53 +1,55 @@
 
 
-## Plan: Unify XITO DRIVE with Label-Based Folders + Sync System
+## Plan: pCloud Drive Enhancements — Deep Links, Activity Feed & Storage Quota
 
-### Problem
-XITO DRIVE (iDrive E2) currently uses numeric folder keys (`2082-10`) for S3 paths, while pCloud and Barun's Research use descriptive labels (`MAGH EVENTS 2082`). XITO DRIVE also lacks the "Sync Now" banner that the other two modules have. Additionally, the Album section in Client Detail must stay in sync with whatever path format XITO DRIVE uses.
+### 1. "Open in pCloud" link on every folder card
 
-### Changes Overview
+**File: `src/components/xito-drive/XitoDriveFolderCard.tsx`**
+- Add an optional `pcloudPath` prop to the card component
+- Below the folder name/size, render a small "Open in pCloud" link with a tiny Cloud icon
+- The link opens `https://my.pcloud.com/#page=filemanager&folder=FOLDERID` on desktop
+- On mobile, use the `pcloud://` URI scheme to attempt opening the pCloud app. Fallback: `https://my.pcloud.com/...`
+- The link gets `e.stopPropagation()` so clicking it doesn't trigger the folder navigation
 
-**1. Edge Function: Add recursive list action** (`supabase/functions/idrive-e2-api/index.ts`)
-- Add a `listRecursive` action that calls S3 ListObjectsV2 **without** a delimiter, returning all folder prefixes under a given prefix. This is needed for the sync status check (similar to what pCloud does natively with `recursive: 1`).
+**File: `src/components/pcloud-drive/PCloudDriveBrowser.tsx`**
+- Pass `pcloudFolderId` to each `XitoDriveFolderCard` by matching the folder name against `pcloudItems` that were fetched for the current level
+- For virtual folders that haven't been synced yet (no matching pCloud folder), don't show the link
 
-**2. Client API: Add recursive list helper** (`src/lib/idrive-e2-api.ts`)
-- Add `listE2FolderRecursive(prefix)` that calls the new `listRecursive` action and returns a `Set<string>` of all existing folder paths.
+### 2. Activity feed sidebar — "Recent pCloud Changes"
 
-**3. Sync logic for iDrive E2** (`src/lib/pcloud-sync.ts` or new `src/lib/e2-sync.ts`)
-- Add `checkE2SyncStatus(clients, assignments)` — compares `buildXitoFolderTree()` output against actual E2 folders via `listE2FolderRecursive`.
-- Add `syncE2PendingFolders(paths)` — batch-creates missing folders using `createE2Folder`.
-- Reuses existing `SyncProgress` and `PendingSyncStatus` types.
+**File: `src/lib/pcloud-api.ts`**
+- Add `getPCloudQuota()` function: calls pCloud's `/userinfo` endpoint (already authenticated) which returns `quota` and `usedquota` fields
+- Export a new type `PCloudQuota { used: number; total: number; free: number }`
 
-**4. Update S3 paths to use labels** (`src/components/xito-drive/XitoDriveBrowser.tsx`)
-- Change the breadcrumb navigation at level 0 from `navigate(g.label, g.key)` to `navigate(g.label, g.label)` so the S3 prefix uses `MAGH EVENTS 2082` instead of `2082-10`.
-- Add the sync banner (pending changes detection + "Sync Now" button) matching pCloud/Research style.
-- Integrate with global upload context or keep existing inline upload (already working).
+**File: `src/components/pcloud-drive/PCloudActivitySidebar.tsx`** (new)
+- A right-side panel component showing:
+  - **Storage bar**: used/total/free from `getPCloudQuota()` with a progress bar and formatted sizes (e.g. "234 GB / 2 TB used")
+  - **Recent edited uploads**: fetches from `edited_files` table where `storage_type = 'pcloud'` or `pcloud_file_id IS NOT NULL`, ordered by `created_at DESC`, limit 20
+  - Each entry shows: client name, event, photographer, file size — formatted like "Shakti Neupane : Wedding BS : nikit : 234 GB"
 
-**5. Update Album section S3 prefix** (`src/components/client-detail/AlbumSection.tsx`)
-- Change the prefix from `${majorityYearMonth}/...` to use the label format: compute `NEPALI_MONTHS[monthNum] + " EVENTS " + year` from `majorityYearMonth`.
-- This ensures Album photos resolve to the same folders as XITO DRIVE.
+**File: `src/pages/PCloudDrive.tsx`**
+- On desktop: render the page as a flex row with the browser on the left and `PCloudActivitySidebar` on the right (similar to the Breaking News sidebar in `DesktopSuiteLanding`)
+- On mobile: add a small toggle button to show/hide the sidebar as a sheet/drawer
 
-**6. Update tree builder path format** (`src/lib/xito-drive-utils.ts`)
-- The `buildXitoFolderTree` already uses `group.label` — no change needed there. Verify consistency.
+### 3. Edge function update for quota
+
+**File: `supabase/functions/pcloud-api/index.ts`**
+- Add a `userinfo` action in the switch that calls `/userinfo` with the auth token and returns `quota`, `usedquota`, `email`, and `premium` fields
 
 ### Technical Details
 
-**Recursive S3 listing** — S3 `ListObjectsV2` without a delimiter returns all keys (including nested). We parse unique folder prefixes from the returned keys. This is done server-side in the edge function to keep it efficient.
-
-**Sync flow** — Same pattern as pCloud:
-1. On mount, call `checkE2SyncStatus()` → get missing folder count
-2. Show sticky banner with count + "Sync Now"
-3. On click, batch-create folders with progress callback
-4. Refresh status after sync
-
-**Album backward compatibility** — The path change from `2082-10` to `MAGH EVENTS 2082` means any photos already uploaded under the old numeric prefix will not appear until re-uploaded or the folders are renamed in iDrive. This is expected since the user wants the new naming convention.
+- pCloud web link format: `https://my.pcloud.com/#page=filemanager&folder=FOLDER_ID` (verified from pCloud docs)
+- pCloud app deep link: `pcloud://folder/FOLDER_ID` — on mobile, attempt this first with a timeout fallback to web URL
+- The `/userinfo` pCloud endpoint already returns quota info (it's the same endpoint used for login, but the `quota` and `usedquota` fields are always present)
+- The activity feed queries the existing `edited_files` table — no new tables needed
 
 ### Files to Create/Modify
 | File | Action |
 |------|--------|
-| `supabase/functions/idrive-e2-api/index.ts` | Add `listRecursive` action |
-| `src/lib/idrive-e2-api.ts` | Add `listE2FolderRecursive()` |
-| `src/lib/e2-sync.ts` | New — sync check + batch create for E2 |
-| `src/components/xito-drive/XitoDriveBrowser.tsx` | Label-based paths + sync banner |
-| `src/components/client-detail/AlbumSection.tsx` | Update S3 prefix to label format |
+| `src/components/xito-drive/XitoDriveFolderCard.tsx` | Add "Open in pCloud" link with folder ID prop |
+| `src/components/pcloud-drive/PCloudDriveBrowser.tsx` | Pass pCloud folder IDs to cards |
+| `src/lib/pcloud-api.ts` | Add `getPCloudQuota()` |
+| `supabase/functions/pcloud-api/index.ts` | Add `userinfo` action |
+| `src/components/pcloud-drive/PCloudActivitySidebar.tsx` | New — activity feed + storage stats |
+| `src/pages/PCloudDrive.tsx` | Add sidebar layout |
 
