@@ -81,10 +81,23 @@ export function PCloudActivitySidebar() {
   const fetchRecentUploads = async () => {
     setUploadsLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('pcloud-api', {
-        body: { action: 'getrecentuploads', params: { path: '/WEDDING TALES NEPAL', limit: 50 } },
+      // Use fetch directly with a longer timeout (90s) since recursive listing is slow
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 90000);
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const res = await fetch(`${supabaseUrl}/functions/v1/pcloud-api`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseKey}`,
+          'apikey': supabaseKey,
+        },
+        body: JSON.stringify({ action: 'getrecentuploads', params: { path: '/WEDDING TALES NEPAL', limit: 50 } }),
+        signal: controller.signal,
       });
-      if (error) throw error;
+      clearTimeout(timeoutId);
+      const data = await res.json();
       setUploads(data?.files || []);
     } catch (err) {
       console.warn("Failed to fetch recent uploads:", err);
