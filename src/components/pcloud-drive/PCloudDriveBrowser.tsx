@@ -545,6 +545,10 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
           </>
         )}
         <div className="ml-auto flex items-center gap-2">
+          <Button variant="outline" size="sm" className="text-xs" onClick={handleRecalculateSizes} disabled={calculatingSizes}>
+            <Calculator className={`h-3.5 w-3.5 mr-1 ${calculatingSizes ? 'animate-spin' : ''}`} />
+            {calculatingSizes ? 'Calculating...' : 'Recalculate Sizes'}
+          </Button>
           <Button variant="outline" size="sm" className="text-xs" disabled={currentLevel === 0} onClick={handleCreateFolder}>
             <FolderPlus className="h-3.5 w-3.5 mr-1" /> New Folder
           </Button>
