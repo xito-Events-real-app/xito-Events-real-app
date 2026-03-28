@@ -55,6 +55,7 @@ import NepaliDate from "nepali-date-converter";
 import PaymentDrawer from "@/components/finance/PaymentDrawer";
 import { ClientDetailSidebar, ClientHeroSection, SectionType, EventDetailsSummaryCard, FullScreenEventCard, ClientDetailsCard, BenzoKeepDialog, BenzoKeepViewer, DeleteClientDialog, ClientFilesSection, DeliverablesSection, EditProductionSection, AlbumSection } from "@/components/client-detail";
 import FreelancerAssignmentSection from "@/components/client-detail/FreelancerAssignmentSection";
+import ClientLinkSection from "@/components/client-detail/ClientLinkSection";
 import { updateRequiredCrewCategories } from "@/lib/freelancer-assignment-api";
 import { EventDetailCard } from "@/components/client-detail/EventDetailCard";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -1772,7 +1773,20 @@ const ClientDetail = () => {
             />
           )}
 
-          {/* Freelancers Section */}
+          {/* Client Link Section */}
+          {activeSection === 'clientLink' && client?.registeredDateTimeAD && (
+            <ClientLinkSection
+              registeredDateTimeAD={client.registeredDateTimeAD}
+              clientName={client.clientName || ''}
+              contactNo={client.contactNo || ''}
+              whatsappNo={client.whatsappNo || ''}
+              brideFullName={contactDetailsData?.brideFullName || ''}
+              brideWhatsapp={contactDetailsData?.brideWhatsappNumber || ''}
+              groomFullName={contactDetailsData?.groomFullName || ''}
+              groomWhatsapp={contactDetailsData?.groomWhatsappNumber || ''}
+            />
+          )}
+
           {activeSection === 'freelancers' && client?.registeredDateTimeAD && (
             <FreelancerAssignmentSection registeredDateTimeAD={client.registeredDateTimeAD} />
           )}

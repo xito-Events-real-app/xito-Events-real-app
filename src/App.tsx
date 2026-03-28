@@ -44,6 +44,7 @@ import EditedFiles from "./pages/EditedFiles";
 import XitoDrive from "./pages/XitoDrive";
 import PCloudDrive from "./pages/PCloudDrive";
 import BarunsResearch from "./pages/BarunsResearch";
+import ClientPortal from "./pages/ClientPortal";
 import { EditedFilesUploadProvider } from "./components/edited-files/EditedFilesUploadContext";
 import { UploadProgressTracker } from "./components/edited-files/UploadProgressTracker";
 import { PCloudUploadProvider } from "./contexts/PCloudUploadContext";
@@ -78,6 +79,7 @@ const App = () => (
             <Routes>
               {/* Public routes - no auth required */}
               <Route path="/client-form/:clientName/:clientId" element={<ClientContactForm />} />
+              <Route path="/client-portal/:clientName/:clientId" element={<ClientPortal />} />
               <Route path="/crew-schedule/:freelancerName" element={<CrewSchedule />} />
               <Route path="/login" element={<Login />} />
               
