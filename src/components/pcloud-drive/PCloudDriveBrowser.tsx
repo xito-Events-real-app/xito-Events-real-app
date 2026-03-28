@@ -1,8 +1,9 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { ChevronRight, Cloud, FolderPlus, Upload, CloudUpload, AlertTriangle, RefreshCw, CheckCircle2 } from "lucide-react";
+import { ChevronRight, Cloud, FolderPlus, Upload, CloudUpload, AlertTriangle, RefreshCw, CheckCircle2, Calculator } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { XitoDriveFolderCard } from "@/components/xito-drive/XitoDriveFolderCard";
+import { supabase } from "@/integrations/supabase/client";
 import {
   MonthYearGroup,
   buildMonthYearGroups,
@@ -55,6 +56,31 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
   const [pendingStatus, setPendingStatus] = useState<PendingSyncStatus | null>(null);
   const [checkingSync, setCheckingSync] = useState(false);
 
+  // Folder sizes cache
+  const [folderSizes, setFolderSizes] = useState<Record<string, { sizeGB: string; bytes: number }>>({});
+  const [calculatingSizes, setCalculatingSizes] = useState(false);
+
+  // Load cached folder sizes from DB
+  useEffect(() => {
+    supabase
+      .from('pcloud_folder_sizes')
+      .select('folder_path, folder_name, size_bytes')
+      .then(({ data }) => {
+        if (!data) return;
+        const map: Record<string, { sizeGB: string; bytes: number }> = {};
+        for (const row of data) {
+          const gb = row.size_bytes / (1024 * 1024 * 1024);
+          map[row.folder_path] = {
+            sizeGB: gb >= 1 ? `${gb.toFixed(1)} GB` : `${(row.size_bytes / (1024 * 1024)).toFixed(0)} MB`,
+            bytes: Number(row.size_bytes),
+          };
+        }
+        setFolderSizes(map);
+      });
+  }, []);
+
+
+
   const groups = useMemo(() => buildMonthYearGroups(clients), [clients]);
   const uniqueYears = useMemo(() => getUniqueYears(groups), [groups]);
 
@@ -85,7 +111,53 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
     return "/" + segments.join("/");
   }, [breadcrumb]);
 
-  // Check pending sync status on mount when clients are loaded
+  const handleRecalculateSizes = useCallback(async () => {
+    setCalculatingSizes(true);
+    const toastId = toast.loading("Calculating folder sizes from pCloud...");
+    try {
+      const path = breadcrumb.length === 0 ? `/${PCLOUD_ROOT}` : currentPCloudPath;
+      const { data, error } = await supabase.functions.invoke('pcloud-api', {
+        body: { action: 'calculatesubfoldersizes', params: { path } },
+      });
+      if (error) throw error;
+      
+      const folders = data?.folders || [];
+      const newSizes: Record<string, { sizeGB: string; bytes: number }> = { ...folderSizes };
+      
+      for (const f of folders) {
+        const gb = f.totalBytes / (1024 * 1024 * 1024);
+        const sizeLabel = gb >= 1 ? `${gb.toFixed(1)} GB` : `${(f.totalBytes / (1024 * 1024)).toFixed(0)} MB`;
+        newSizes[f.path] = { sizeGB: sizeLabel, bytes: f.totalBytes };
+        
+        await supabase.from('pcloud_folder_sizes').upsert({
+          folder_path: f.path,
+          folder_name: f.name,
+          size_bytes: f.totalBytes,
+          file_count: f.fileCount,
+          calculated_at: new Date().toISOString(),
+        }, { onConflict: 'folder_path' });
+      }
+      
+      setFolderSizes(newSizes);
+      toast.dismiss(toastId);
+      toast.success(`Calculated sizes for ${folders.length} folders`);
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error("Failed to calculate sizes");
+      console.error(err);
+    } finally {
+      setCalculatingSizes(false);
+    }
+  }, [currentPCloudPath, breadcrumb.length, folderSizes]);
+
+  const getFolderSize = useCallback((folderName: string): string | undefined => {
+    const path = breadcrumb.length === 0 
+      ? `/${PCLOUD_ROOT}/${folderName}` 
+      : `${currentPCloudPath}/${folderName}`;
+    return folderSizes[path]?.sizeGB;
+  }, [folderSizes, currentPCloudPath, breadcrumb.length]);
+
+
   useEffect(() => {
     if (clients.length === 0 || isLoading) return;
     let cancelled = false;
@@ -337,7 +409,7 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
           {filteredGroups.map(g => {
             const match = pcloudItems.find(p => p.isfolder && p.name === g.label);
             return (
-              <XitoDriveFolderCard key={g.key} name={g.label} itemCount={g.clients.length} type="month-year" pcloudFolderId={match?.folderid} onClick={() => navigate(g.label, g.label)} />
+              <XitoDriveFolderCard key={g.key} name={g.label} itemCount={g.clients.length} type="month-year" pcloudFolderId={match?.folderid} folderSizeGB={getFolderSize(g.label)} onClick={() => navigate(g.label, g.label)} />
             );
           })}
         </div>
@@ -351,7 +423,7 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
           {currentGroup.clients.map(c => {
             const match = pcloudItems.find(p => p.isfolder && p.name === c.clientName);
             return (
-              <XitoDriveFolderCard key={c.registeredDateTimeAD} name={c.clientName} itemCount={PCLOUD_CATEGORIES.length} type="client" pcloudFolderId={match?.folderid} onClick={() => navigate(c.clientName, c.registeredDateTimeAD)} />
+              <XitoDriveFolderCard key={c.registeredDateTimeAD} name={c.clientName} itemCount={PCLOUD_CATEGORIES.length} type="client" pcloudFolderId={match?.folderid} folderSizeGB={getFolderSize(c.clientName)} onClick={() => navigate(c.clientName, c.registeredDateTimeAD)} />
             );
           })}
           {extraPCloudFolders.map(f => (
@@ -473,6 +545,10 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
           </>
         )}
         <div className="ml-auto flex items-center gap-2">
+          <Button variant="outline" size="sm" className="text-xs" onClick={handleRecalculateSizes} disabled={calculatingSizes}>
+            <Calculator className={`h-3.5 w-3.5 mr-1 ${calculatingSizes ? 'animate-spin' : ''}`} />
+            {calculatingSizes ? 'Calculating...' : 'Recalculate Sizes'}
+          </Button>
           <Button variant="outline" size="sm" className="text-xs" disabled={currentLevel === 0} onClick={handleCreateFolder}>
             <FolderPlus className="h-3.5 w-3.5 mr-1" /> New Folder
           </Button>

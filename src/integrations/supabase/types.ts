@@ -1021,6 +1021,33 @@ export type Database = {
         }
         Relationships: []
       }
+      pcloud_folder_sizes: {
+        Row: {
+          calculated_at: string
+          file_count: number
+          folder_name: string
+          folder_path: string
+          id: string
+          size_bytes: number
+        }
+        Insert: {
+          calculated_at?: string
+          file_count?: number
+          folder_name?: string
+          folder_path: string
+          id?: string
+          size_bytes?: number
+        }
+        Update: {
+          calculated_at?: string
+          file_count?: number
+          folder_name?: string
+          folder_path?: string
+          id?: string
+          size_bytes?: number
+        }
+        Relationships: []
+      }
       potential_deletes: {
         Row: {
           approved_by: string

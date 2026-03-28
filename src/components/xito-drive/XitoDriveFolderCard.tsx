@@ -8,6 +8,7 @@ interface Props {
   type: "month-year" | "client" | "category" | "event" | "freelancer" | "leaf" | "file";
   categoryName?: string;
   fileSize?: number;
+  folderSizeGB?: string;
   pcloudFolderId?: number;
   onClick: () => void;
 }
@@ -37,7 +38,7 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
 }
 
-export function XitoDriveFolderCard({ name, itemCount, type, categoryName, fileSize, pcloudFolderId, onClick }: Props) {
+export function XitoDriveFolderCard({ name, itemCount, type, categoryName, fileSize, folderSizeGB, pcloudFolderId, onClick }: Props) {
   const isMobile = useIsMobile();
   const gradient = categoryName ? CATEGORY_COLORS[categoryName] : null;
   const isFile = type === "file";
@@ -90,11 +91,20 @@ export function XitoDriveFolderCard({ name, itemCount, type, categoryName, fileS
         <p className="text-xs font-medium leading-tight truncate" title={name}>{name}</p>
         {isFile && fileSize !== undefined ? (
           <p className="text-[10px] text-muted-foreground">{formatFileSize(fileSize)}</p>
-        ) : itemCount !== undefined ? (
-          <p className="text-[10px] text-muted-foreground">
-            {itemCount} {itemCount === 1 ? "item" : "items"}
-          </p>
-        ) : null}
+        ) : (
+          <div className="flex items-center gap-1.5">
+            {itemCount !== undefined && (
+              <span className="text-[10px] text-muted-foreground">
+                {itemCount} {itemCount === 1 ? "item" : "items"}
+              </span>
+            )}
+            {folderSizeGB && (
+              <span className="text-[10px] font-semibold text-sky-600 dark:text-sky-400">
+                {folderSizeGB}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Open in pCloud link */}
         {pcloudFolderId && !isFile && (
