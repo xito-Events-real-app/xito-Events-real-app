@@ -422,7 +422,9 @@ serve(async (req) => {
         const keyMatches = xml.matchAll(/<Key>([^<]+)<\/Key>/g);
         const decodeXmlEntities = (s: string) =>
           s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-           .replace(/&quot;/g, '"').replace(/&apos;/g, "'");
+           .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+           .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n)))
+           .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
 
         for (const m of keyMatches) {
           const key = decodeXmlEntities(m[1]);
