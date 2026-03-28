@@ -56,6 +56,33 @@ function sumFolderSize(contents: any[]): { totalBytes: number; fileCount: number
   return { totalBytes, fileCount };
 }
 
+// Recursively collect sizes for EVERY folder in the tree
+function collectAllFolderSizes(items: any[], parentPath: string): Array<{ name: string; path: string; totalBytes: number; fileCount: number }> {
+  const results: Array<{ name: string; path: string; totalBytes: number; fileCount: number }> = [];
+  for (const item of items) {
+    if (item.isfolder) {
+      const folderPath = `${parentPath}/${item.name}`;
+      const { totalBytes, fileCount } = sumFolderSize(item.contents || []);
+      results.push({ name: item.name, path: folderPath, totalBytes, fileCount });
+      if (item.contents) {
+        results.push(...collectAllFolderSizes(item.contents, folderPath));
+      }
+    }
+  }
+  return results;
+}
+
+// Build folderid → path mapping from recursive listing
+function buildFolderIdMap(items: any[], parentPath: string, map: Map<number, string>) {
+  for (const item of items) {
+    if (item.isfolder) {
+      const p = `${parentPath}/${item.name}`;
+      if (item.folderid) map.set(item.folderid, p);
+      if (item.contents) buildFolderIdMap(item.contents, p, map);
+    }
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
