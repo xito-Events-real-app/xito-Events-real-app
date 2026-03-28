@@ -197,6 +197,7 @@ export async function updateVideoEditField(id: string, field: string, value: str
   const fieldMap: Record<string, string> = {
     urgency: "urgency",
     editor: "editor",
+    colorist: "colorist",
     videoEditStatus: "video_edit_status",
     companyNotes: "company_notes",
     clientDemand: "client_demand",
