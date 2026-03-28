@@ -216,6 +216,19 @@ export async function uploadToPCloudByPath(
   });
 }
 
+export interface PCloudQuota {
+  used: number;
+  total: number;
+  free: number;
+}
+
+export async function getPCloudQuota(): Promise<PCloudQuota> {
+  const data = await callPCloudDirect('/userinfo', {});
+  const total = data.quota || 0;
+  const used = data.usedquota || 0;
+  return { total, used, free: total - used };
+}
+
 export function formatPCloudSize(bytes: number): string {
   if (!bytes || bytes === 0) return '0 B';
   const k = 1024;
