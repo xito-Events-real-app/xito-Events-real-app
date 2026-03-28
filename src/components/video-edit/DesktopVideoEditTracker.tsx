@@ -537,6 +537,24 @@ function VideoEditTable({
                   </SelectContent>
                 </Select>
               </TableCell>
+              {COLORIST_STAGES.has(currentStageKey) && (
+              <TableCell>
+                <Select value={row.colorist || "unassigned"} onValueChange={(v) => onUpdateField(row.id, "colorist", v === "unassigned" ? "" : v, row.mergedIds)}>
+                  <SelectTrigger className="w-44 h-8 text-xs">
+                    <SelectValue placeholder="Assign..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                    {editors.filter(e => e.isVideoEditor && e.name).map(e => (
+                      <SelectItem key={`vc-${e.name}`} value={e.name}>⭐ {e.name}</SelectItem>
+                    ))}
+                    {editors.filter(e => !e.isVideoEditor && e.name).map(e => (
+                      <SelectItem key={`c-${e.name}`} value={e.name}>{e.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </TableCell>
+              )}
               {/* Event Date */}
               <TableCell>
                 {(() => {
