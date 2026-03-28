@@ -86,7 +86,7 @@ const PortalMyVideos = ({ clientName, eventYear, eventMonth }: PortalMyVideosPro
     a.click();
   }, []);
 
-  const activeVideo = videos[activeIndex];
+  // activeVideo and activeVideoUrl already defined above
 
   return (
     <div className="pb-20">
