@@ -11,7 +11,6 @@ const PCLOUD_API = 'https://api.pcloud.com';
 let cachedAuth: { token: string; expiresAt: number } | null = null;
 
 async function getAuthToken(): Promise<string> {
-  // Return cached token if still valid (with 60s buffer)
   if (cachedAuth && Date.now() < cachedAuth.expiresAt - 60000) {
     return cachedAuth.token;
   }
@@ -38,6 +37,23 @@ async function getAuthToken(): Promise<string> {
   };
 
   return cachedAuth.token;
+}
+
+// Recursively sum file sizes from a folder listing
+function sumFolderSize(contents: any[]): { totalBytes: number; fileCount: number } {
+  let totalBytes = 0;
+  let fileCount = 0;
+  for (const item of contents) {
+    if (item.isfolder && item.contents) {
+      const sub = sumFolderSize(item.contents);
+      totalBytes += sub.totalBytes;
+      fileCount += sub.fileCount;
+    } else if (!item.isfolder) {
+      totalBytes += item.size || 0;
+      fileCount++;
+    }
+  }
+  return { totalBytes, fileCount };
 }
 
 serve(async (req) => {
@@ -110,12 +126,10 @@ serve(async (req) => {
         break;
 
       case 'getthumbslinks': {
-        // Batch thumbnail fetching - get multiple thumbs in one edge function call
         const fileids = params.fileids as number[];
         const size = params.size || '200x200';
         const results: Record<number, string> = {};
         
-        // Fetch thumbs in parallel (max 50 at a time)
         const chunks: number[][] = [];
         for (let i = 0; i < fileids.length; i += 50) {
           chunks.push(fileids.slice(i, i + 50));
@@ -135,6 +149,106 @@ serve(async (req) => {
         }
         
         return new Response(JSON.stringify({ result: 0, thumbs: results }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      case 'getdiff': {
+        // Get recent file changes from pCloud using /diff endpoint
+        const diffid = params.diffid || 0;
+        const limit = params.limit || 100;
+        const diffRes = await fetch(`${PCLOUD_API}/diff?auth=${auth}&diffid=${diffid}&limit=${limit}`);
+        const diffData = await diffRes.json();
+        return new Response(JSON.stringify(diffData), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      case 'getevents': {
+        // Use /listfolder with recursive on root + filter recent modifications
+        const rootPath = params.path || '/WEDDING TALES NEPAL';
+        const evRes = await fetch(`${PCLOUD_API}/listfolder?auth=${auth}&path=${encodeURIComponent(rootPath)}&recursive=0&showdeleted=0`);
+        const evData = await evRes.json();
+        return new Response(JSON.stringify(evData), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      case 'calculatefoldersize': {
+        // Calculate total size of a folder recursively
+        const folderPath = params.path;
+        const folderId = params.folderid;
+        
+        let sizeQuery: string;
+        if (folderPath) {
+          sizeQuery = `path=${encodeURIComponent(folderPath)}&recursive=1&showdeleted=0`;
+        } else {
+          sizeQuery = `folderid=${folderId}&recursive=1&showdeleted=0`;
+        }
+        
+        const sizeRes = await fetch(`${PCLOUD_API}/listfolder?auth=${auth}&${sizeQuery}`);
+        const sizeData = await sizeRes.json();
+        
+        if (sizeData.result !== 0) {
+          return new Response(JSON.stringify({ error: sizeData.error || 'Failed to list folder' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const contents = sizeData.metadata?.contents || [];
+        const { totalBytes, fileCount } = sumFolderSize(contents);
+        const folderName = sizeData.metadata?.name || '';
+        
+        return new Response(JSON.stringify({ 
+          result: 0, 
+          totalBytes, 
+          fileCount, 
+          folderName,
+          folderPath: folderPath || `folderid:${folderId}`,
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      case 'calculatesubfoldersizes': {
+        // Calculate sizes for all immediate subfolders of a given folder
+        const parentPath = params.path;
+        
+        // First list the parent to get subfolders
+        const listRes = await fetch(`${PCLOUD_API}/listfolder?auth=${auth}&path=${encodeURIComponent(parentPath)}&recursive=0&showdeleted=0`);
+        const listData = await listRes.json();
+        
+        if (listData.result !== 0) {
+          return new Response(JSON.stringify({ error: listData.error || 'Failed to list folder' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const subfolders = (listData.metadata?.contents || []).filter((i: any) => i.isfolder);
+        const results: Array<{ name: string; path: string; totalBytes: number; fileCount: number }> = [];
+        
+        // Process in parallel batches of 5
+        const batchSize = 5;
+        for (let i = 0; i < subfolders.length; i += batchSize) {
+          const batch = subfolders.slice(i, i + batchSize);
+          const promises = batch.map(async (sf: any) => {
+            try {
+              const sfPath = `${parentPath}/${sf.name}`;
+              const sfRes = await fetch(`${PCLOUD_API}/listfolder?auth=${auth}&path=${encodeURIComponent(sfPath)}&recursive=1&showdeleted=0`);
+              const sfData = await sfRes.json();
+              if (sfData.result === 0) {
+                const contents = sfData.metadata?.contents || [];
+                const { totalBytes, fileCount } = sumFolderSize(contents);
+                results.push({ name: sf.name, path: sfPath, totalBytes, fileCount });
+              }
+            } catch { /* skip */ }
+          });
+          await Promise.all(promises);
+        }
+        
+        return new Response(JSON.stringify({ result: 0, folders: results }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }

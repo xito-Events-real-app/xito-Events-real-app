@@ -8,6 +8,7 @@ interface Props {
   type: "month-year" | "client" | "category" | "event" | "freelancer" | "leaf" | "file";
   categoryName?: string;
   fileSize?: number;
+  folderSizeGB?: string;
   pcloudFolderId?: number;
   onClick: () => void;
 }
