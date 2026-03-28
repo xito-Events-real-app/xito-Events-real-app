@@ -154,7 +154,6 @@ serve(async (req) => {
       }
 
       case 'getdiff': {
-        // Get recent file changes from pCloud using /diff endpoint
         const diffid = params.diffid || 0;
         const limit = params.limit || 100;
         const diffRes = await fetch(`${PCLOUD_API}/diff?auth=${auth}&diffid=${diffid}&limit=${limit}`);
@@ -164,12 +163,69 @@ serve(async (req) => {
         });
       }
 
-      case 'getevents': {
-        // Use /listfolder with recursive on root + filter recent modifications
-        const rootPath = params.path || '/WEDDING TALES NEPAL';
-        const evRes = await fetch(`${PCLOUD_API}/listfolder?auth=${auth}&path=${encodeURIComponent(rootPath)}&recursive=0&showdeleted=0`);
-        const evData = await evRes.json();
-        return new Response(JSON.stringify(evData), {
+      case 'getrecentuploads': {
+        // Recursively list /WEDDING TALES NEPAL, collect all files, sort by modified desc, return top N
+        const wtnPath = params.path || '/WEDDING TALES NEPAL';
+        const topN = params.limit || 30;
+        const recRes = await fetch(`${PCLOUD_API}/listfolder?auth=${auth}&path=${encodeURIComponent(wtnPath)}&recursive=1&showdeleted=0`);
+        const recData = await recRes.json();
+        if (recData.result !== 0) {
+          return new Response(JSON.stringify({ error: recData.error || 'Failed to list WTN' }), {
+            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        // Collect all files recursively with their full path
+        interface FileEntry { name: string; path: string; size: number; modified: string; created: string; contenttype: string; }
+        const allFiles: FileEntry[] = [];
+        
+        function collectFiles(items: any[], parentPath: string) {
+          for (const item of items) {
+            if (item.isfolder && item.contents) {
+              collectFiles(item.contents, `${parentPath}/${item.name}`);
+            } else if (!item.isfolder) {
+              allFiles.push({
+                name: item.name,
+                path: `${parentPath}/${item.name}`,
+                size: item.size || 0,
+                modified: item.modified || '',
+                created: item.created || '',
+                contenttype: item.contenttype || '',
+              });
+            }
+          }
+        }
+        
+        const rootContents = recData.metadata?.contents || [];
+        collectFiles(rootContents, wtnPath);
+        
+        // Sort by modified descending (most recent first)
+        allFiles.sort((a, b) => {
+          const ta = new Date(a.modified).getTime() || 0;
+          const tb = new Date(b.modified).getTime() || 0;
+          return tb - ta;
+        });
+        
+        // Parse path segments for each entry
+        const recent = allFiles.slice(0, topN).map(f => {
+          // Path: /WEDDING TALES NEPAL/monthYear/clientName/category/event/...
+          const segments = f.path.split('/').filter(Boolean);
+          // segments[0] = WEDDING TALES NEPAL, [1] = monthYear, [2] = clientName, [3] = category, [4] = event, ...
+          return {
+            fileName: f.name,
+            fullPath: f.path,
+            size: f.size,
+            modified: f.modified,
+            created: f.created,
+            contenttype: f.contenttype,
+            monthYear: segments[1] || '',
+            clientName: segments[2] || '',
+            category: segments[3] || '',
+            eventName: segments[4] || '',
+          };
+        });
+        
+        return new Response(JSON.stringify({ result: 0, files: recent, totalFiles: allFiles.length }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }

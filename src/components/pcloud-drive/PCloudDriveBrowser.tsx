@@ -60,13 +60,19 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
   const [folderSizes, setFolderSizes] = useState<Record<string, { sizeGB: string; bytes: number }>>({});
   const [calculatingSizes, setCalculatingSizes] = useState(false);
 
-  // Load cached folder sizes from DB
+  // Load cached folder sizes from DB — auto-calculate if none exist
+  const [sizesLoaded, setSizesLoaded] = useState(false);
+  const [autoCalcTriggered, setAutoCalcTriggered] = useState(false);
+
   useEffect(() => {
     supabase
       .from('pcloud_folder_sizes')
       .select('folder_path, folder_name, size_bytes')
       .then(({ data }) => {
-        if (!data) return;
+        if (!data || data.length === 0) {
+          setSizesLoaded(true);
+          return;
+        }
         const map: Record<string, { sizeGB: string; bytes: number }> = {};
         for (const row of data) {
           const gb = row.size_bytes / (1024 * 1024 * 1024);
@@ -76,6 +82,7 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
           };
         }
         setFolderSizes(map);
+        setSizesLoaded(true);
       });
   }, []);
 
@@ -113,16 +120,16 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
 
   const handleRecalculateSizes = useCallback(async () => {
     setCalculatingSizes(true);
-    const toastId = toast.loading("Calculating folder sizes from pCloud...");
+    const toastId = toast.loading("Calculating ALL folder sizes from pCloud...");
     try {
-      const path = breadcrumb.length === 0 ? `/${PCLOUD_ROOT}` : currentPCloudPath;
+      // Always calculate from WTN root regardless of current breadcrumb
       const { data, error } = await supabase.functions.invoke('pcloud-api', {
-        body: { action: 'calculatesubfoldersizes', params: { path } },
+        body: { action: 'calculatesubfoldersizes', params: { path: `/${PCLOUD_ROOT}` } },
       });
       if (error) throw error;
       
       const folders = data?.folders || [];
-      const newSizes: Record<string, { sizeGB: string; bytes: number }> = { ...folderSizes };
+      const newSizes: Record<string, { sizeGB: string; bytes: number }> = {};
       
       for (const f of folders) {
         const gb = f.totalBytes / (1024 * 1024 * 1024);
@@ -148,7 +155,15 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
     } finally {
       setCalculatingSizes(false);
     }
-  }, [currentPCloudPath, breadcrumb.length, folderSizes]);
+  }, [folderSizes]);
+
+  // Auto-calculate sizes on first load if no cached sizes exist
+  useEffect(() => {
+    if (sizesLoaded && !autoCalcTriggered && Object.keys(folderSizes).length === 0) {
+      setAutoCalcTriggered(true);
+      handleRecalculateSizes();
+    }
+  }, [sizesLoaded, autoCalcTriggered, folderSizes, handleRecalculateSizes]);
 
   const getFolderSize = useCallback((folderName: string): string | undefined => {
     const path = breadcrumb.length === 0 
