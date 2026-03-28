@@ -165,6 +165,7 @@ function dbToRow(r: any): VideoEditRow {
     subEventName: r.sub_event_name || "",
     editType: normalizeEditType(r.edit_type),
     editor: r.editor || "",
+    colorist: r.colorist || "",
     companyNotes: r.company_notes || "",
     clientDemand: r.client_demand || "",
     reference: r.reference || "",
