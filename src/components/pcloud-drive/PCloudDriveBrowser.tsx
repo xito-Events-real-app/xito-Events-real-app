@@ -337,9 +337,12 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
       }
       return (
         <div className={gridClass}>
-          {filteredGroups.map(g => (
-            <XitoDriveFolderCard key={g.key} name={g.label} itemCount={g.clients.length} type="month-year" onClick={() => navigate(g.label, g.label)} />
-          ))}
+          {filteredGroups.map(g => {
+            const match = pcloudItems.find(p => p.isfolder && p.name === g.label);
+            return (
+              <XitoDriveFolderCard key={g.key} name={g.label} itemCount={g.clients.length} type="month-year" pcloudFolderId={match?.folderid} onClick={() => navigate(g.label, g.label)} />
+            );
+          })}
         </div>
       );
     }
