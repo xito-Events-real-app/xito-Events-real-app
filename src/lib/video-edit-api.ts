@@ -230,10 +230,10 @@ export async function pushToStatus(id: string, newStatus: string): Promise<void>
     updated_at: new Date().toISOString(),
   };
 
-  // Fetch current row for edit_started_at and stage_history
+  // Fetch current row for edit_started_at, stage_history, editor, colorist
   const { data: existing } = await supabase
     .from("video_edit_tracker")
-    .select("edit_started_at, stage_history")
+    .select("edit_started_at, stage_history, editor, colorist")
     .eq("id", id)
     .single();
 
@@ -247,6 +247,12 @@ export async function pushToStatus(id: string, newStatus: string): Promise<void>
       updateData.is_playing = true;
       updateData.playing_since = new Date().toISOString();
     }
+  }
+
+  // Auto-set colorist = editor when entering a colorist stage if colorist is empty
+  const COLORIST_STAGES = ['COLOR_QUEUE', 'COLOR_LAB', 'COLOR_ON_PROGRESS', 'EXPORT_QUEUE', 'EXPORTED', 'CLIENT_REVIEW', 'RE_EDIT_ON_PROGRESS', 'FINALIZED'];
+  if (COLORIST_STAGES.includes(newStatus) && !existing?.colorist && existing?.editor) {
+    updateData.colorist = existing.editor;
   }
 
   // Append to stage_history
