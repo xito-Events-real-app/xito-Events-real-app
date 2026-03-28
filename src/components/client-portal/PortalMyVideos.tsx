@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Film, Youtube, Cloud, Loader2, Download, Play, Pause, SkipForward, SkipBack } from "lucide-react";
+import { Film, Youtube, Cloud, Loader2, Download, Play, SkipForward, SkipBack } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { listPCloudFolderByPath, getPCloudStreamUrl, getPCloudThumbsBatch, isPCloudVideo, PCloudItem, formatPCloudSize } from "@/lib/pcloud-api";
