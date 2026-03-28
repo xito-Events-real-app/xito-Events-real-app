@@ -483,11 +483,11 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
             {items.map(ev => {
               const freelancers = ev !== "Selected" ? getFreelancersForEvent(assignments, currentClientFolder.registeredDateTimeAD, ev) : { photographers: [] };
               return (
-                <XitoDriveFolderCard key={ev} name={ev} itemCount={ev === "Selected" ? undefined : freelancers.photographers.length || undefined} type="event" categoryName="Photos" onClick={() => navigate(ev, ev)} />
+                <XitoDriveFolderCard key={ev} name={ev} itemCount={ev === "Selected" ? undefined : freelancers.photographers.length || undefined} type="event" categoryName="Photos" folderSizeGB={getFolderSize(ev)} onClick={() => navigate(ev, ev)} />
               );
             })}
             {extraPCloudFolders.map(f => (
-              <XitoDriveFolderCard key={f.name} name={f.name} type="leaf" onClick={() => navigate(f.name, f.name)} />
+              <XitoDriveFolderCard key={f.name} name={f.name} type="leaf" folderSizeGB={getFolderSize(f.name)} onClick={() => navigate(f.name, f.name)} />
             ))}
           </div>
         );
@@ -496,10 +496,10 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
         return (
           <div className={gridClass}>
             {getVideoSubfolders().map(sub => (
-              <XitoDriveFolderCard key={sub} name={sub} type="leaf" categoryName="Videos" onClick={() => navigate(sub, sub)} />
+              <XitoDriveFolderCard key={sub} name={sub} type="leaf" categoryName="Videos" folderSizeGB={getFolderSize(sub)} onClick={() => navigate(sub, sub)} />
             ))}
             {extraPCloudFolders.map(f => (
-              <XitoDriveFolderCard key={f.name} name={f.name} type="leaf" onClick={() => navigate(f.name, f.name)} />
+              <XitoDriveFolderCard key={f.name} name={f.name} type="leaf" folderSizeGB={getFolderSize(f.name)} onClick={() => navigate(f.name, f.name)} />
             ))}
           </div>
         );
