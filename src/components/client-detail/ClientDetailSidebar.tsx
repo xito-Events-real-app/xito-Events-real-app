@@ -37,6 +37,7 @@ const sidebarItems: { id: SectionType; label: string; icon: React.ElementType }[
   { id: 'deliverables', label: 'Deliverables', icon: Package },
   { id: 'edit', label: 'Edit', icon: Film },
   { id: 'album', label: 'Album', icon: BookOpen },
+  { id: 'clientLink', label: 'Client Link', icon: ExternalLink },
 ];
 
 const ClientDetailSidebar = ({

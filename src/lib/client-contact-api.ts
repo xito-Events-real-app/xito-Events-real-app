@@ -162,6 +162,29 @@ export function formatWhatsAppLink(phone: string): string {
   return `https://wa.me/${cleaned.replace('+', '')}`;
 }
 
+// Generate client portal URL
+export function getClientPortalUrl(registeredDateTimeAD: string, clientName?: string): string {
+  const encodedId = encodeURIComponent(registeredDateTimeAD);
+  const nameSlug = clientName ? slugifyName(clientName) : 'client';
+  return `https://wtnclienttracker.lovable.app/client-portal/${nameSlug}/${encodedId}`;
+}
+
+// Generate WhatsApp message with portal link
+export function generatePortalWhatsAppMessage(registeredDateTimeAD: string, clientName?: string): string {
+  const portalUrl = getClientPortalUrl(registeredDateTimeAD, clientName);
+  return `Hello 👋
+Greetings from Wedding Tales Nepal 💍✨
+
+Your personal client portal is ready! You can view your photos, videos and more through the link below:
+
+👉 ${portalUrl}
+
+Thank you for choosing Wedding Tales Nepal ❤️
+
+Warm regards,
+Wedding Tales Nepal`;
+}
+
 // Format Instagram link
 export function formatInstagramLink(handle: string): string {
   if (!handle) return '';

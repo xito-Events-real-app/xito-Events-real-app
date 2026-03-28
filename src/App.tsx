@@ -79,6 +79,7 @@ const App = () => (
             <Routes>
               {/* Public routes - no auth required */}
               <Route path="/client-form/:clientName/:clientId" element={<ClientContactForm />} />
+              <Route path="/client-portal/:clientName/:clientId" element={<ClientPortal />} />
               <Route path="/crew-schedule/:freelancerName" element={<CrewSchedule />} />
               <Route path="/login" element={<Login />} />
               
