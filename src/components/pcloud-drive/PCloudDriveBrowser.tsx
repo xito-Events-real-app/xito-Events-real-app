@@ -122,30 +122,39 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
     setCalculatingSizes(true);
     const toastId = toast.loading("Calculating ALL folder sizes from pCloud...");
     try {
-      // Always calculate from WTN root regardless of current breadcrumb
+      // Use calculateallsizes to get sizes for EVERY folder in the tree
       const { data, error } = await supabase.functions.invoke('pcloud-api', {
-        body: { action: 'calculatesubfoldersizes', params: { path: `/${PCLOUD_ROOT}` } },
+        body: { action: 'calculateallsizes', params: { path: `/${PCLOUD_ROOT}` } },
       });
       if (error) throw error;
       
       const folders = data?.folders || [];
       const newSizes: Record<string, { sizeGB: string; bytes: number }> = {};
       
+      // Batch upsert all folder sizes
+      const upsertRows = folders.map((f: any) => ({
+        folder_path: f.path,
+        folder_name: f.name,
+        size_bytes: f.totalBytes,
+        file_count: f.fileCount,
+        calculated_at: new Date().toISOString(),
+      }));
+      
       for (const f of folders) {
         const gb = f.totalBytes / (1024 * 1024 * 1024);
         const sizeLabel = gb >= 1 ? `${gb.toFixed(1)} GB` : `${(f.totalBytes / (1024 * 1024)).toFixed(0)} MB`;
         newSizes[f.path] = { sizeGB: sizeLabel, bytes: f.totalBytes };
-        
-        await supabase.from('pcloud_folder_sizes').upsert({
-          folder_path: f.path,
-          folder_name: f.name,
-          size_bytes: f.totalBytes,
-          file_count: f.fileCount,
-          calculated_at: new Date().toISOString(),
-        }, { onConflict: 'folder_path' });
+      }
+
+      // Upsert in batches of 50
+      for (let i = 0; i < upsertRows.length; i += 50) {
+        await supabase.from('pcloud_folder_sizes').upsert(
+          upsertRows.slice(i, i + 50),
+          { onConflict: 'folder_path' }
+        );
       }
       
-      setFolderSizes(newSizes);
+      setFolderSizes(prev => ({ ...prev, ...newSizes }));
       toast.dismiss(toastId);
       toast.success(`Calculated sizes for ${folders.length} folders`);
     } catch (err) {
@@ -155,7 +164,7 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
     } finally {
       setCalculatingSizes(false);
     }
-  }, [folderSizes]);
+  }, []);
 
   // Auto-calculate sizes on first load if no cached sizes exist
   useEffect(() => {
@@ -455,11 +464,11 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
           {PCLOUD_CATEGORIES.map(cat => {
             const match = pcloudItems.find(p => p.isfolder && p.name === cat.name);
             return (
-              <XitoDriveFolderCard key={cat.name} name={cat.name} type="category" categoryName={cat.name} pcloudFolderId={match?.folderid} onClick={() => navigate(cat.name, cat.name)} />
+              <XitoDriveFolderCard key={cat.name} name={cat.name} type="category" categoryName={cat.name} pcloudFolderId={match?.folderid} folderSizeGB={getFolderSize(cat.name)} onClick={() => navigate(cat.name, cat.name)} />
             );
           })}
           {extraPCloudFolders.map(f => (
-            <XitoDriveFolderCard key={f.name} name={f.name} type="leaf" pcloudFolderId={f.folderid} onClick={() => navigate(f.name, f.name)} />
+            <XitoDriveFolderCard key={f.name} name={f.name} type="leaf" pcloudFolderId={f.folderid} folderSizeGB={getFolderSize(f.name)} onClick={() => navigate(f.name, f.name)} />
           ))}
         </div>
       );
@@ -474,11 +483,11 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
             {items.map(ev => {
               const freelancers = ev !== "Selected" ? getFreelancersForEvent(assignments, currentClientFolder.registeredDateTimeAD, ev) : { photographers: [] };
               return (
-                <XitoDriveFolderCard key={ev} name={ev} itemCount={ev === "Selected" ? undefined : freelancers.photographers.length || undefined} type="event" categoryName="Photos" onClick={() => navigate(ev, ev)} />
+                <XitoDriveFolderCard key={ev} name={ev} itemCount={ev === "Selected" ? undefined : freelancers.photographers.length || undefined} type="event" categoryName="Photos" folderSizeGB={getFolderSize(ev)} onClick={() => navigate(ev, ev)} />
               );
             })}
             {extraPCloudFolders.map(f => (
-              <XitoDriveFolderCard key={f.name} name={f.name} type="leaf" onClick={() => navigate(f.name, f.name)} />
+              <XitoDriveFolderCard key={f.name} name={f.name} type="leaf" folderSizeGB={getFolderSize(f.name)} onClick={() => navigate(f.name, f.name)} />
             ))}
           </div>
         );
@@ -487,10 +496,10 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
         return (
           <div className={gridClass}>
             {getVideoSubfolders().map(sub => (
-              <XitoDriveFolderCard key={sub} name={sub} type="leaf" categoryName="Videos" onClick={() => navigate(sub, sub)} />
+              <XitoDriveFolderCard key={sub} name={sub} type="leaf" categoryName="Videos" folderSizeGB={getFolderSize(sub)} onClick={() => navigate(sub, sub)} />
             ))}
             {extraPCloudFolders.map(f => (
-              <XitoDriveFolderCard key={f.name} name={f.name} type="leaf" onClick={() => navigate(f.name, f.name)} />
+              <XitoDriveFolderCard key={f.name} name={f.name} type="leaf" folderSizeGB={getFolderSize(f.name)} onClick={() => navigate(f.name, f.name)} />
             ))}
           </div>
         );
@@ -503,10 +512,10 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
       return (
         <div className={gridClass}>
           {photographers.map(name => (
-            <XitoDriveFolderCard key={name} name={name} type="freelancer" onClick={() => navigate(name, name)} />
+            <XitoDriveFolderCard key={name} name={name} type="freelancer" folderSizeGB={getFolderSize(name)} onClick={() => navigate(name, name)} />
           ))}
           {extraPCloudFolders.map(f => (
-            <XitoDriveFolderCard key={f.name} name={f.name} type="leaf" onClick={() => navigate(f.name, f.name)} />
+            <XitoDriveFolderCard key={f.name} name={f.name} type="leaf" folderSizeGB={getFolderSize(f.name)} onClick={() => navigate(f.name, f.name)} />
           ))}
           {pcloudFiles.map(file => (
             <XitoDriveFolderCard key={file.fileid} name={file.name} type="file" fileSize={file.size} onClick={() => handleFileClick(file)} />

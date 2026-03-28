@@ -56,6 +56,33 @@ function sumFolderSize(contents: any[]): { totalBytes: number; fileCount: number
   return { totalBytes, fileCount };
 }
 
+// Recursively collect sizes for EVERY folder in the tree
+function collectAllFolderSizes(items: any[], parentPath: string): Array<{ name: string; path: string; totalBytes: number; fileCount: number }> {
+  const results: Array<{ name: string; path: string; totalBytes: number; fileCount: number }> = [];
+  for (const item of items) {
+    if (item.isfolder) {
+      const folderPath = `${parentPath}/${item.name}`;
+      const { totalBytes, fileCount } = sumFolderSize(item.contents || []);
+      results.push({ name: item.name, path: folderPath, totalBytes, fileCount });
+      if (item.contents) {
+        results.push(...collectAllFolderSizes(item.contents, folderPath));
+      }
+    }
+  }
+  return results;
+}
+
+// Build folderid → path mapping from recursive listing
+function buildFolderIdMap(items: any[], parentPath: string, map: Map<number, string>) {
+  for (const item of items) {
+    if (item.isfolder) {
+      const p = `${parentPath}/${item.name}`;
+      if (item.folderid) map.set(item.folderid, p);
+      if (item.contents) buildFolderIdMap(item.contents, p, map);
+    }
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -164,9 +191,11 @@ serve(async (req) => {
       }
 
       case 'getrecentuploads': {
-        // Recursively list /WEDDING TALES NEPAL, collect all files, sort by modified desc, return top N
+        // Use /diff API to get actual upload events, then resolve paths via recursive listing
         const wtnPath = params.path || '/WEDDING TALES NEPAL';
-        const topN = params.limit || 30;
+        const topN = params.limit || 50;
+        
+        // 1. Get recursive listing to build folderid→path map
         const recRes = await fetch(`${PCLOUD_API}/listfolder?auth=${auth}&path=${encodeURIComponent(wtnPath)}&recursive=1&showdeleted=0`);
         const recData = await recRes.json();
         if (recData.result !== 0) {
@@ -174,64 +203,102 @@ serve(async (req) => {
             status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
-
-        // Collect all files recursively with their full path
-        interface FileEntry { name: string; path: string; size: number; modified: string; created: string; contenttype: string; }
-        const allFiles: FileEntry[] = [];
         
-        function collectFiles(items: any[], parentPath: string) {
-          for (const item of items) {
-            if (item.isfolder && item.contents) {
-              collectFiles(item.contents, `${parentPath}/${item.name}`);
-            } else if (!item.isfolder) {
-              allFiles.push({
-                name: item.name,
-                path: `${parentPath}/${item.name}`,
-                size: item.size || 0,
-                modified: item.modified || '',
-                created: item.created || '',
-                contenttype: item.contenttype || '',
-              });
+        // Build folderid → path map
+        const folderMap = new Map<number, string>();
+        folderMap.set(recData.metadata.folderid, wtnPath);
+        buildFolderIdMap(recData.metadata.contents || [], wtnPath, folderMap);
+        
+        // 2. Get diff entries - fetch in chunks until we have enough WTN entries
+        interface DiffFileEntry {
+          fileName: string; fullPath: string; size: number;
+          modified: string; contenttype: string;
+          monthYear: string; clientName: string; category: string; eventName: string;
+        }
+        const wtnFiles: DiffFileEntry[] = [];
+        let currentDiffId = 0;
+        let iterations = 0;
+        const maxIterations = 10; // Safety limit
+        
+        while (wtnFiles.length < topN && iterations < maxIterations) {
+          iterations++;
+          const diffRes = await fetch(`${PCLOUD_API}/diff?auth=${auth}&diffid=${currentDiffId}&limit=500`);
+          const diffData = await diffRes.json();
+          if (diffData.result !== 0) break;
+          
+          const entries = diffData.entries || [];
+          if (entries.length === 0) break;
+          
+          for (const entry of entries) {
+            if ((entry.event === 'createfile' || entry.event === 'modifyfile') && entry.metadata) {
+              const parentId = entry.metadata.parentfolderid;
+              const parentPath = folderMap.get(parentId);
+              if (parentPath) {
+                const fullPath = `${parentPath}/${entry.metadata.name}`;
+                const segments = fullPath.split('/').filter(Boolean);
+                // Use diff event time (Unix timestamp) as the actual upload time
+                const eventTime = entry.time ? new Date(entry.time * 1000).toUTCString() : '';
+                wtnFiles.push({
+                  fileName: entry.metadata.name,
+                  fullPath,
+                  size: entry.metadata.size || 0,
+                  modified: eventTime,
+                  contenttype: entry.metadata.contenttype || '',
+                  monthYear: segments[1] || '',
+                  clientName: segments[2] || '',
+                  category: segments[3] || '',
+                  eventName: segments[4] || '',
+                });
+              }
             }
+          }
+          
+          currentDiffId = diffData.diffid || 0;
+          // If we got fewer entries than limit, we've reached the end
+          if (entries.length < 500) break;
+        }
+        
+        // Deduplicate by fullPath (keep the latest entry for each file)
+        const deduped = new Map<string, DiffFileEntry>();
+        for (const f of wtnFiles) {
+          const existing = deduped.get(f.fullPath);
+          if (!existing || new Date(f.modified).getTime() > new Date(existing.modified).getTime()) {
+            deduped.set(f.fullPath, f);
           }
         }
         
-        const rootContents = recData.metadata?.contents || [];
-        collectFiles(rootContents, wtnPath);
+        // Sort by time desc (most recent first) and take top N
+        const sorted = Array.from(deduped.values())
+          .sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime())
+          .slice(0, topN);
         
-        // Sort by modified descending (most recent first)
-        allFiles.sort((a, b) => {
-          const ta = new Date(a.modified).getTime() || 0;
-          const tb = new Date(b.modified).getTime() || 0;
-          return tb - ta;
+        return new Response(JSON.stringify({ result: 0, files: sorted, totalFiles: sorted.length }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
+      }
+
+      case 'calculateallsizes': {
+        // Calculate sizes for ALL folders in the tree (not just immediate children)
+        const rootPath = params.path || '/WEDDING TALES NEPAL';
         
-        // Parse path segments for each entry
-        const recent = allFiles.slice(0, topN).map(f => {
-          // Path: /WEDDING TALES NEPAL/monthYear/clientName/category/event/...
-          const segments = f.path.split('/').filter(Boolean);
-          // segments[0] = WEDDING TALES NEPAL, [1] = monthYear, [2] = clientName, [3] = category, [4] = event, ...
-          return {
-            fileName: f.name,
-            fullPath: f.path,
-            size: f.size,
-            modified: f.modified,
-            created: f.created,
-            contenttype: f.contenttype,
-            monthYear: segments[1] || '',
-            clientName: segments[2] || '',
-            category: segments[3] || '',
-            eventName: segments[4] || '',
-          };
-        });
+        const listRes = await fetch(`${PCLOUD_API}/listfolder?auth=${auth}&path=${encodeURIComponent(rootPath)}&recursive=1&showdeleted=0`);
+        const listData = await listRes.json();
         
-        return new Response(JSON.stringify({ result: 0, files: recent, totalFiles: allFiles.length }), {
+        if (listData.result !== 0) {
+          return new Response(JSON.stringify({ error: listData.error || 'Failed to list folder' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const allFolders = collectAllFolderSizes(listData.metadata?.contents || [], rootPath);
+        
+        return new Response(JSON.stringify({ result: 0, folders: allFolders }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
       case 'calculatefoldersize': {
-        // Calculate total size of a folder recursively
         const folderPath = params.path;
         const folderId = params.folderid;
         
@@ -263,48 +330,6 @@ serve(async (req) => {
           folderName,
           folderPath: folderPath || `folderid:${folderId}`,
         }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      case 'calculatesubfoldersizes': {
-        // Calculate sizes for all immediate subfolders of a given folder
-        const parentPath = params.path;
-        
-        // First list the parent to get subfolders
-        const listRes = await fetch(`${PCLOUD_API}/listfolder?auth=${auth}&path=${encodeURIComponent(parentPath)}&recursive=0&showdeleted=0`);
-        const listData = await listRes.json();
-        
-        if (listData.result !== 0) {
-          return new Response(JSON.stringify({ error: listData.error || 'Failed to list folder' }), {
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-
-        const subfolders = (listData.metadata?.contents || []).filter((i: any) => i.isfolder);
-        const results: Array<{ name: string; path: string; totalBytes: number; fileCount: number }> = [];
-        
-        // Process in parallel batches of 5
-        const batchSize = 5;
-        for (let i = 0; i < subfolders.length; i += batchSize) {
-          const batch = subfolders.slice(i, i + batchSize);
-          const promises = batch.map(async (sf: any) => {
-            try {
-              const sfPath = `${parentPath}/${sf.name}`;
-              const sfRes = await fetch(`${PCLOUD_API}/listfolder?auth=${auth}&path=${encodeURIComponent(sfPath)}&recursive=1&showdeleted=0`);
-              const sfData = await sfRes.json();
-              if (sfData.result === 0) {
-                const contents = sfData.metadata?.contents || [];
-                const { totalBytes, fileCount } = sumFolderSize(contents);
-                results.push({ name: sf.name, path: sfPath, totalBytes, fileCount });
-              }
-            } catch { /* skip */ }
-          });
-          await Promise.all(promises);
-        }
-        
-        return new Response(JSON.stringify({ result: 0, folders: results }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
