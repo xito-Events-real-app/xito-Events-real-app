@@ -7,6 +7,7 @@ import PortalDashboard from "@/components/client-portal/PortalDashboard";
 import PortalMyPhotos from "@/components/client-portal/PortalMyPhotos";
 import PortalMyVideos from "@/components/client-portal/PortalMyVideos";
 import PortalMyPayment from "@/components/client-portal/PortalMyPayment";
+import PortalMyDetails from "@/components/client-portal/PortalMyDetails";
 
 interface ClientData {
   clientName: string;
@@ -27,13 +28,39 @@ interface EventDetail {
   eventEndTime: string;
 }
 
-interface Assignment {
+interface FullAssignment {
   event: string;
   eventYear: string;
   eventMonth: string;
   photographerBride: string;
   photographerGroom: string;
   extraPhotographer: string;
+  videographerBride: string;
+  videographerGroom: string;
+  extraVideographer: string;
+  assistant: string;
+  iphoneShooter: string;
+  droneOperator: string;
+  fpvOperator: string;
+}
+
+interface ContactData {
+  brideFullName: string;
+  brideContactNumber: string;
+  brideWhatsappNumber: string;
+  brideBackupNumber: string;
+  brideBackupRelation: string;
+  brideInstagram: string;
+  brideHomeCity: string;
+  brideHomeArea: string;
+  groomFullName: string;
+  groomContactNumber: string;
+  groomWhatsappNumber: string;
+  groomBackupNumber: string;
+  groomBackupRelation: string;
+  groomInstagram: string;
+  groomHomeCity: string;
+  groomHomeArea: string;
 }
 
 const ClientPortal = () => {
@@ -46,9 +73,10 @@ const ClientPortal = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [client, setClient] = useState<ClientData | null>(null);
   const [eventDetails, setEventDetails] = useState<EventDetail[]>([]);
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [assignments, setAssignments] = useState<FullAssignment[]>([]);
+  const [contactData, setContactData] = useState<ContactData | null>(null);
+  const [hasFilledContact, setHasFilledContact] = useState(true);
 
-  // Load all data
   useEffect(() => {
     if (!decodedId) return;
     setIsLoading(true);
@@ -56,8 +84,9 @@ const ClientPortal = () => {
     Promise.all([
       supabase.from('clients_cache').select('client_name, events, event_year, event_month, event_day, event_date_ad').eq('registered_date_time_ad', decodedId).maybeSingle(),
       supabase.from('event_details_cache').select('event_name, event_date_ad, venue_name, venue_city, venue_area, event_start_time, event_end_time').eq('registered_date_time_ad', decodedId).order('event_index'),
-      supabase.from('freelancer_assignments').select('event, event_year, event_month, photographer_bride, photographer_groom, extra_photographer').eq('registered_date_time_ad', decodedId),
-    ]).then(([clientRes, eventsRes, assignRes]) => {
+      supabase.from('freelancer_assignments').select('event, event_year, event_month, photographer_bride, photographer_groom, extra_photographer, videographer_bride, videographer_groom, extra_videographer, assistant, iphone_shooter, drone_operator, fpv_operator').eq('registered_date_time_ad', decodedId),
+      supabase.from('contact_details_cache').select('bride_full_name, bride_contact_number, bride_whatsapp_number, bride_backup_number, bride_backup_relation, bride_instagram, bride_home_city, bride_home_area, groom_full_name, groom_contact_number, groom_whatsapp_number, groom_backup_number, groom_backup_relation, groom_instagram, groom_home_city, groom_home_area').eq('registered_date_time_ad', decodedId).maybeSingle(),
+    ]).then(([clientRes, eventsRes, assignRes, contactRes]) => {
       if (clientRes.data) {
         setClient({
           clientName: clientRes.data.client_name || '',
@@ -87,7 +116,40 @@ const ClientPortal = () => {
           photographerBride: a.photographer_bride || '',
           photographerGroom: a.photographer_groom || '',
           extraPhotographer: a.extra_photographer || '',
+          videographerBride: a.videographer_bride || '',
+          videographerGroom: a.videographer_groom || '',
+          extraVideographer: a.extra_videographer || '',
+          assistant: a.assistant || '',
+          iphoneShooter: a.iphone_shooter || '',
+          droneOperator: a.drone_operator || '',
+          fpvOperator: a.fpv_operator || '',
         })));
+      }
+      if (contactRes.data) {
+        const c = contactRes.data;
+        const cd: ContactData = {
+          brideFullName: c.bride_full_name || '',
+          brideContactNumber: c.bride_contact_number || '',
+          brideWhatsappNumber: c.bride_whatsapp_number || '',
+          brideBackupNumber: c.bride_backup_number || '',
+          brideBackupRelation: c.bride_backup_relation || '',
+          brideInstagram: c.bride_instagram || '',
+          brideHomeCity: c.bride_home_city || '',
+          brideHomeArea: c.bride_home_area || '',
+          groomFullName: c.groom_full_name || '',
+          groomContactNumber: c.groom_contact_number || '',
+          groomWhatsappNumber: c.groom_whatsapp_number || '',
+          groomBackupNumber: c.groom_backup_number || '',
+          groomBackupRelation: c.groom_backup_relation || '',
+          groomInstagram: c.groom_instagram || '',
+          groomHomeCity: c.groom_home_city || '',
+          groomHomeArea: c.groom_home_area || '',
+        };
+        setContactData(cd);
+        const filled = !!(cd.brideFullName && cd.brideContactNumber && cd.brideWhatsappNumber && cd.groomFullName && cd.groomContactNumber && cd.groomWhatsappNumber);
+        setHasFilledContact(filled);
+      } else {
+        setHasFilledContact(false);
       }
     }).finally(() => setIsLoading(false));
   }, [decodedId]);
@@ -106,12 +168,16 @@ const ClientPortal = () => {
     setShowBottomNav(show);
   }, []);
 
+  const handleContactSaved = useCallback(() => {
+    setHasFilledContact(true);
+  }, []);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[hsl(220,25%,6%)] flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-3" />
-          <p className="text-white/50 text-sm">Loading your portal...</p>
+          <Loader2 className="h-8 w-8 animate-spin text-[hsl(350,80%,65%)] mx-auto mb-3" />
+          <p className="text-white/30 text-sm">Loading your portal...</p>
         </div>
       </div>
     );
@@ -121,7 +187,7 @@ const ClientPortal = () => {
     return (
       <div className="min-h-screen bg-[hsl(220,25%,6%)] flex items-center justify-center px-4">
         <div className="text-center">
-          <Heart className="h-10 w-10 text-rose-400/30 mx-auto mb-3" />
+          <Heart className="h-10 w-10 text-[hsl(350,80%,65%/0.3)] mx-auto mb-3" />
           <p className="text-white/60 font-medium">Portal not found</p>
           <p className="text-xs text-white/30 mt-1">This link may be invalid or expired</p>
         </div>
@@ -129,24 +195,34 @@ const ClientPortal = () => {
     );
   }
 
+  // Photos tab still uses the old Assignment interface shape
+  const photoAssignments = assignments.map(a => ({
+    event: a.event,
+    eventYear: a.eventYear,
+    eventMonth: a.eventMonth,
+    photographerBride: a.photographerBride,
+    photographerGroom: a.photographerGroom,
+    extraPhotographer: a.extraPhotographer,
+  }));
+
   const portalContent = (
     <div className="min-h-screen bg-[hsl(220,25%,6%)] text-white">
-      {/* Top header with view toggle */}
-      <div className="sticky top-0 z-40 bg-[hsl(220,25%,6%)]/95 backdrop-blur-sm border-b border-white/10 px-4 py-2 flex items-center justify-between">
+      {/* Top header */}
+      <div className="sticky top-0 z-40 bg-[hsl(220,25%,6%)]/95 backdrop-blur-xl border-b border-white/[0.06] px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Heart className="h-4 w-4 text-rose-400" />
-          <span className="text-xs tracking-widest uppercase text-white/40 font-medium">WTN</span>
+          <Heart className="h-3.5 w-3.5 text-[hsl(350,80%,65%)]" />
+          <span className="text-[10px] tracking-[0.3em] uppercase text-white/25 font-medium">WTN</span>
         </div>
-        <div className="flex items-center gap-1 bg-white/5 rounded-full p-0.5">
+        <div className="flex items-center gap-1 bg-white/[0.04] rounded-full p-0.5">
           <button
             onClick={() => setIsDesktop(false)}
-            className={`p-1.5 rounded-full transition-colors ${!isDesktop ? 'bg-primary text-white' : 'text-white/40'}`}
+            className={`p-1.5 rounded-full transition-colors ${!isDesktop ? 'bg-[hsl(350,80%,65%)] text-white' : 'text-white/30'}`}
           >
             <Smartphone className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={() => setIsDesktop(true)}
-            className={`p-1.5 rounded-full transition-colors ${isDesktop ? 'bg-primary text-white' : 'text-white/40'}`}
+            className={`p-1.5 rounded-full transition-colors ${isDesktop ? 'bg-[hsl(350,80%,65%)] text-white' : 'text-white/30'}`}
           >
             <Monitor className="h-3.5 w-3.5" />
           </button>
@@ -155,12 +231,18 @@ const ClientPortal = () => {
 
       {/* Tab Content */}
       {activeTab === 'dashboard' && (
-        <PortalDashboard clientName={client.clientName} events={eventDetails} />
+        <PortalDashboard
+          clientName={client.clientName}
+          events={eventDetails}
+          assignments={assignments}
+          hasFilledContact={hasFilledContact}
+          onGoToDetails={() => setActiveTab('details')}
+        />
       )}
       {activeTab === 'photos' && (
         <PortalMyPhotos
           clientName={client.clientName}
-          assignments={assignments}
+          assignments={photoAssignments}
           onShowBottomNav={handleShowBottomNav}
         />
       )}
@@ -172,6 +254,13 @@ const ClientPortal = () => {
         />
       )}
       {activeTab === 'payment' && <PortalMyPayment />}
+      {activeTab === 'details' && (
+        <PortalMyDetails
+          registeredDateTimeAD={decodedId}
+          initialData={contactData}
+          onSaved={handleContactSaved}
+        />
+      )}
 
       {/* Bottom Nav */}
       {showBottomNav && (
@@ -180,11 +269,10 @@ const ClientPortal = () => {
     </div>
   );
 
-  // Desktop wrapper
   if (isDesktop) {
     return (
       <div className="min-h-screen bg-[hsl(220,20%,4%)] flex items-start justify-center pt-8 pb-8">
-        <div className="w-[420px] min-h-[calc(100vh-4rem)] rounded-2xl overflow-hidden border border-white/10 shadow-2xl relative">
+        <div className="w-[420px] min-h-[calc(100vh-4rem)] rounded-2xl overflow-hidden border border-white/[0.08] shadow-2xl relative">
           {portalContent}
         </div>
       </div>

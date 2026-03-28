@@ -1,6 +1,8 @@
-import { Calendar, MapPin, Clock, Heart } from "lucide-react";
+import { useState } from "react";
+import { Calendar, MapPin, Clock, Heart, ChevronDown, Camera, Video, Plane, Smartphone, Users, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 interface EventInfo {
   eventName: string;
@@ -12,9 +14,26 @@ interface EventInfo {
   eventEndTime: string;
 }
 
+interface FullAssignment {
+  event: string;
+  photographerBride: string;
+  photographerGroom: string;
+  videographerBride: string;
+  videographerGroom: string;
+  extraPhotographer: string;
+  extraVideographer: string;
+  assistant: string;
+  iphoneShooter: string;
+  droneOperator: string;
+  fpvOperator: string;
+}
+
 interface PortalDashboardProps {
   clientName: string;
   events: EventInfo[];
+  assignments: FullAssignment[];
+  hasFilledContact: boolean;
+  onGoToDetails: () => void;
 }
 
 function getDaysUntil(dateStr: string): number | null {
@@ -33,14 +52,28 @@ function getDaysUntil(dateStr: string): number | null {
 function formatDate(dateStr: string): string {
   if (!dateStr) return '';
   try {
-    return new Date(dateStr).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    return new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' });
   } catch {
     return dateStr;
   }
 }
 
-const PortalDashboard = ({ clientName, events }: PortalDashboardProps) => {
-  // Find soonest event for countdown
+const crewRoles: { key: keyof FullAssignment; label: string; icon: React.ElementType; color: string }[] = [
+  { key: 'photographerBride', label: 'Photo (Bride)', icon: Camera, color: 'text-pink-400' },
+  { key: 'photographerGroom', label: 'Photo (Groom)', icon: Camera, color: 'text-sky-400' },
+  { key: 'videographerBride', label: 'Video (Bride)', icon: Video, color: 'text-pink-400' },
+  { key: 'videographerGroom', label: 'Video (Groom)', icon: Video, color: 'text-sky-400' },
+  { key: 'extraPhotographer', label: 'Extra Photo', icon: Camera, color: 'text-amber-400' },
+  { key: 'extraVideographer', label: 'Extra Video', icon: Video, color: 'text-amber-400' },
+  { key: 'droneOperator', label: 'Drone', icon: Plane, color: 'text-emerald-400' },
+  { key: 'fpvOperator', label: 'FPV', icon: Plane, color: 'text-teal-400' },
+  { key: 'iphoneShooter', label: 'iPhone', icon: Smartphone, color: 'text-violet-400' },
+  { key: 'assistant', label: 'Assistant', icon: Users, color: 'text-white/60' },
+];
+
+const PortalDashboard = ({ clientName, events, assignments, hasFilledContact, onGoToDetails }: PortalDashboardProps) => {
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+
   const soonest = events.reduce<EventInfo | null>((best, e) => {
     const days = getDaysUntil(e.eventDateAD);
     if (days === null || days < 0) return best;
@@ -51,73 +84,155 @@ const PortalDashboard = ({ clientName, events }: PortalDashboardProps) => {
 
   const countdown = soonest ? getDaysUntil(soonest.eventDateAD) : null;
 
+  const getCrewForEvent = (eventName: string) => {
+    return assignments.find(a => a.event === eventName);
+  };
+
   return (
-    <div className="space-y-4 pb-20">
-      {/* Branding Header */}
-      <div className="text-center py-6 px-4">
-        <div className="inline-flex items-center gap-2 mb-2">
-          <Heart className="h-5 w-5 text-rose-400" />
-          <span className="text-xs tracking-[0.3em] uppercase text-white/40 font-medium">Wedding Tales Nepal</span>
-          <Heart className="h-5 w-5 text-rose-400" />
+    <div className="space-y-5 pb-24">
+      {/* Hero / Branding */}
+      <div className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-[hsl(350,60%,25%/0.3)] via-transparent to-transparent" />
+        <div className="relative text-center pt-8 pb-6 px-4">
+          <div className="inline-flex items-center gap-2 mb-3">
+            <Heart className="h-4 w-4 text-[hsl(350,80%,65%)] animate-pulse" />
+            <span className="text-[10px] tracking-[0.35em] uppercase text-white/30 font-medium">Wedding Tales Nepal</span>
+            <Heart className="h-4 w-4 text-[hsl(350,80%,65%)] animate-pulse" />
+          </div>
+          <h1 className="text-3xl font-bold text-white mb-0.5 tracking-tight">{clientName}</h1>
+          <p className="text-xs text-white/30">Your wedding journey</p>
         </div>
-        <h1 className="text-2xl font-bold text-white mb-1">Welcome</h1>
-        <p className="text-lg text-primary font-semibold">{clientName}</p>
       </div>
+
+      {/* Form Reminder Banner */}
+      {!hasFilledContact && (
+        <div className="mx-4">
+          <button
+            onClick={onGoToDetails}
+            className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-gradient-to-r from-[hsl(350,60%,30%/0.3)] to-[hsl(30,60%,30%/0.2)] border border-[hsl(350,80%,65%/0.2)] text-left transition-all active:scale-[0.98]"
+          >
+            <div className="h-9 w-9 rounded-full bg-[hsl(350,80%,65%/0.15)] flex items-center justify-center flex-shrink-0">
+              <AlertCircle className="h-4.5 w-4.5 text-[hsl(350,80%,65%)]" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-white">Complete your details</p>
+              <p className="text-[11px] text-white/40">Tap here to fill your contact information</p>
+            </div>
+            <ChevronDown className="h-4 w-4 text-white/20 -rotate-90" />
+          </button>
+        </div>
+      )}
 
       {/* Countdown */}
       {countdown !== null && countdown >= 0 && soonest && (
-        <Card className="bg-gradient-to-br from-primary/20 to-rose-500/10 border-primary/30 mx-4">
-          <CardContent className="p-5 text-center">
-            <div className="text-5xl font-bold text-primary mb-1">{countdown}</div>
-            <div className="text-sm text-white/60">
-              {countdown === 0 ? "Today is the day! 🎉" : countdown === 1 ? "day until your event!" : "days until your event!"}
+        <div className="mx-4">
+          <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-[hsl(350,50%,18%)] via-[hsl(340,40%,14%)] to-[hsl(220,30%,10%)] border border-white/[0.06] p-6">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-[hsl(350,80%,65%/0.08)] rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
+            <div className="relative text-center">
+              <div className="text-6xl font-black text-white mb-1 tracking-tighter" style={{ textShadow: '0 0 40px hsl(350 80% 65% / 0.3)' }}>
+                {countdown}
+              </div>
+              <p className="text-sm text-white/50 font-medium">
+                {countdown === 0 ? "Today is the big day! 🎉" : countdown === 1 ? "day until your celebration" : "days until your celebration"}
+              </p>
+              <p className="text-[11px] text-[hsl(350,80%,65%/0.7)] mt-1 font-medium">{soonest.eventName}</p>
             </div>
-            <div className="text-xs text-white/40 mt-1">{soonest.eventName}</div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
-      {/* Events List */}
+      {/* Events */}
       <div className="px-4 space-y-3">
-        <h2 className="text-sm font-semibold text-white/50 uppercase tracking-wide">Your Events</h2>
+        <h2 className="text-[11px] font-semibold text-white/25 uppercase tracking-[0.2em] pl-1">Your Events</h2>
+
         {events.length === 0 ? (
-          <Card className="bg-white/5 border-white/10">
-            <CardContent className="p-6 text-center text-white/40">No events found</CardContent>
-          </Card>
+          <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-8 text-center">
+            <Heart className="h-8 w-8 text-white/10 mx-auto mb-2" />
+            <p className="text-sm text-white/30">No events scheduled yet</p>
+          </div>
         ) : (
           events.map((event, i) => {
             const days = getDaysUntil(event.eventDateAD);
+            const isExpanded = expandedIdx === i;
+            const crew = getCrewForEvent(event.eventName);
+            const activeCrew = crew ? crewRoles.filter(r => crew[r.key]) : [];
+
             return (
-              <Card key={i} className="bg-white/5 border-white/10">
-                <CardContent className="p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-white">{event.eventName}</h3>
-                    {days !== null && days >= 0 && (
-                      <Badge variant="outline" className="border-primary/30 text-primary text-xs">
-                        {days === 0 ? 'Today' : `${days}d`}
-                      </Badge>
+              <div
+                key={i}
+                className={cn(
+                  "rounded-xl border transition-all duration-300 overflow-hidden",
+                  isExpanded
+                    ? "bg-white/[0.06] border-[hsl(350,80%,65%/0.15)] shadow-lg shadow-black/20"
+                    : "bg-white/[0.03] border-white/[0.06] active:bg-white/[0.05]"
+                )}
+              >
+                {/* Collapsed header — always visible */}
+                <button
+                  onClick={() => setExpandedIdx(isExpanded ? null : i)}
+                  className="w-full p-4 text-left flex items-center gap-3"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold text-white text-[15px] truncate">{event.eventName}</h3>
+                      {days !== null && days >= 0 && (
+                        <Badge className="bg-[hsl(350,80%,65%/0.15)] text-[hsl(350,80%,70%)] border-0 text-[10px] px-1.5 py-0 font-medium flex-shrink-0">
+                          {days === 0 ? 'Today' : `${days}d`}
+                        </Badge>
+                      )}
+                    </div>
+                    {event.eventDateAD && (
+                      <p className="text-xs text-white/40">{formatDate(event.eventDateAD)}</p>
                     )}
                   </div>
-                  {event.eventDateAD && (
-                    <div className="flex items-center gap-2 text-sm text-white/60">
-                      <Calendar className="h-3.5 w-3.5" />
-                      {formatDate(event.eventDateAD)}
+                  <ChevronDown className={cn("h-4 w-4 text-white/20 transition-transform duration-300 flex-shrink-0", isExpanded && "rotate-180")} />
+                </button>
+
+                {/* Expanded details */}
+                <div className={cn(
+                  "grid transition-all duration-300",
+                  isExpanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+                )}>
+                  <div className="overflow-hidden">
+                    <div className="px-4 pb-4 space-y-3 border-t border-white/[0.06] pt-3">
+                      {/* Venue */}
+                      {(event.venueName || event.venueCity) && (
+                        <div className="flex items-start gap-2.5">
+                          <MapPin className="h-3.5 w-3.5 text-[hsl(350,80%,65%)] mt-0.5 flex-shrink-0" />
+                          <p className="text-sm text-white/60">{[event.venueName, event.venueArea, event.venueCity].filter(Boolean).join(', ')}</p>
+                        </div>
+                      )}
+
+                      {/* Time */}
+                      {(event.eventStartTime || event.eventEndTime) && (
+                        <div className="flex items-start gap-2.5">
+                          <Clock className="h-3.5 w-3.5 text-[hsl(350,80%,65%)] mt-0.5 flex-shrink-0" />
+                          <p className="text-sm text-white/60">{[event.eventStartTime, event.eventEndTime].filter(Boolean).join(' – ')}</p>
+                        </div>
+                      )}
+
+                      {/* Crew */}
+                      {activeCrew.length > 0 && (
+                        <div className="pt-1">
+                          <p className="text-[10px] uppercase tracking-[0.15em] text-white/20 font-semibold mb-2">Your Crew</p>
+                          <div className="space-y-1.5">
+                            {activeCrew.map((role) => {
+                              const Icon = role.icon;
+                              return (
+                                <div key={role.key} className="flex items-center gap-2 bg-white/[0.03] rounded-lg px-3 py-2">
+                                  <Icon className={cn("h-3.5 w-3.5 flex-shrink-0", role.color)} />
+                                  <span className="text-[11px] text-white/30 min-w-[80px]">{role.label}</span>
+                                  <span className="text-sm text-white/80 font-medium">{crew![role.key]}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {(event.venueName || event.venueCity) && (
-                    <div className="flex items-center gap-2 text-sm text-white/60">
-                      <MapPin className="h-3.5 w-3.5" />
-                      {[event.venueName, event.venueArea, event.venueCity].filter(Boolean).join(', ')}
-                    </div>
-                  )}
-                  {(event.eventStartTime || event.eventEndTime) && (
-                    <div className="flex items-center gap-2 text-sm text-white/60">
-                      <Clock className="h-3.5 w-3.5" />
-                      {[event.eventStartTime, event.eventEndTime].filter(Boolean).join(' – ')}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                  </div>
+                </div>
+              </div>
             );
           })
         )}
