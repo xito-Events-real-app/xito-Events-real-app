@@ -1,59 +1,101 @@
 
 
-## Plan: Fix pCloud Drive — Auto-calculate sizes, filter activity to WTN, news-style feed
+## Plan: Client Portal Page ("Client Link" section)
 
-### Issues to fix
+### Overview
+Build a public-facing client portal page (like the existing Crew Schedule page) that clients access via WhatsApp link. It has a mobile-first design with Facebook-style bottom tabs: **Dashboard**, **My Photos**, **My Videos**, **My Payment**.
 
-1. **Folder sizes not auto-calculated on first load** — currently only shows sizes if user clicks "Recalculate". Need to auto-trigger calculation when no cached sizes exist.
-2. **"Recalculate Sizes" should always calculate ALL folders under `/WEDDING TALES NEPAL`** — not just current level.
-3. **Recent Changes shows all pCloud activity** — the `/diff` API returns changes across the entire account. Need to filter server-side to only show entries whose path starts with `/WEDDING TALES NEPAL`.
-4. **Activity feed looks like a log, not news** — needs a "Breaking News" style with descriptive headlines like "New video uploaded to Shakti Wedding folder".
+### Architecture
 
-### Changes
+```text
+URL: /client-portal/:clientName/:clientId
+      (clientId = registeredDateTimeAD, same pattern as /client-form/)
 
-#### 1. Edge function: Filter diff to WTN folder only
-**File: `supabase/functions/pcloud-api/index.ts`**
-- Modify the `getdiff` action to post-process entries
-- For each diff entry, use `/stat` with the `fileid` to get the full path, or better: the diff API returns `metadata` with `parentfolderid` — resolve parent chain
-- Simpler approach: use pCloud's `/listfolder` with `recursive=1` on `/WEDDING TALES NEPAL` sorted by `modified DESC` to get recently modified files. This is more reliable than diff.
-- Add a new action `getrecentuploads` that:
-  - Lists `/WEDDING TALES NEPAL` recursively
-  - Collects all files, sorts by `modified` or `created` timestamp descending
-  - Returns top 30 with their full path segments (client name, event, etc.)
+Public route (no auth required) — client accesses via WhatsApp link
+```
 
-#### 2. Auto-calculate sizes on first visit
-**File: `src/components/pcloud-drive/PCloudDriveBrowser.tsx`**
-- In the `useEffect` that loads cached sizes from DB, check if any sizes exist for WTN root subfolders
-- If none exist (first time), auto-trigger `handleRecalculateSizes` for `/WEDDING TALES NEPAL`
-- The "Recalculate Sizes" button should ALWAYS calculate all subfolders of `/WEDDING TALES NEPAL` regardless of current breadcrumb level
+### New Files
 
-#### 3. News-style activity feed
-**File: `src/components/pcloud-drive/PCloudActivitySidebar.tsx`**
-- Replace the raw diff entries with the new `getrecentuploads` data
-- Each entry rendered as a news card with:
-  - Headline: "New upload in **[Client Name] > [Event]**"
-  - Details: file name, size, time ago
-  - Icon: photo or video badge
-  - Extract client/event from path segments: `/WEDDING TALES NEPAL/2082-Baisakh/ClientName/Photos/Event/file.jpg`
+| File | Purpose |
+|------|---------|
+| `src/pages/ClientPortal.tsx` | Main portal page with bottom tab navigation and view toggle |
+| `src/components/client-portal/PortalDashboard.tsx` | Dashboard tab content |
+| `src/components/client-portal/PortalMyPhotos.tsx` | Photos tab — reuses Album section logic (iDrive E2, XitoImageViewer) |
+| `src/components/client-portal/PortalMyVideos.tsx` | Videos tab — YouTube (coming soon) + pCloud video listing |
+| `src/components/client-portal/PortalMyPayment.tsx` | Payment tab — coming soon |
+| `src/components/client-portal/PortalBottomNav.tsx` | Facebook-style bottom navigation bar |
+| `src/components/client-portal/PortalPhotoEventNav.tsx` | Event navigation bar (replaces bottom nav when viewing photos) |
 
-#### 4. Edge function: `getrecentuploads` action
-**File: `supabase/functions/pcloud-api/index.ts`**
-- New action that does recursive listing of `/WEDDING TALES NEPAL`
-- Collects all non-folder items with their full path
-- Sorts by `modified` descending
-- Returns top 30 entries with parsed path segments (monthYear, clientName, category, event, fileName, size, modified)
+### Modified Files
 
-### Technical details
-
-- pCloud's `/diff` endpoint returns account-wide changes without path info — not suitable for WTN-only filtering
-- pCloud's `/listfolder?recursive=1` returns the full tree with `modified` timestamps on each file — we can extract recent uploads from this
-- The recursive listing of WTN root can be large, so we process server-side in the edge function and only return the 30 most recent files
-- Path parsing: split by `/` → `['', 'WEDDING TALES NEPAL', monthYear, clientName, category, event, ...]`
-
-### Files to modify
 | File | Change |
-|------|--------|
-| `supabase/functions/pcloud-api/index.ts` | Add `getrecentuploads` action |
-| `src/components/pcloud-drive/PCloudActivitySidebar.tsx` | Rewrite to use `getrecentuploads`, news-style cards |
-| `src/components/pcloud-drive/PCloudDriveBrowser.tsx` | Auto-trigger size calculation on first load; always calculate from WTN root |
+|------|---------|
+| `src/App.tsx` | Add public route `/client-portal/:clientName/:clientId` |
+| `src/components/client-detail/ClientDetailSidebar.tsx` | Add "Client Link" section (id: `clientLink`, icon: `ExternalLink`) after "Album" |
+| `src/pages/ClientDetail.tsx` | Add `clientLink` section rendering + link sharing dialog with recipient picker |
+| `src/lib/client-contact-api.ts` | Add `getClientPortalUrl()` and `generatePortalWhatsAppMessage()` helpers |
+
+### Detailed Design
+
+#### 1. Sidebar Entry
+- Add `{ id: 'clientLink', label: 'Client Link', icon: ExternalLink }` to `sidebarItems` after `album`
+- Add `'clientLink'` to `SectionType` union
+
+#### 2. Client Link Section (in ClientDetail.tsx)
+When `activeSection === 'clientLink'`:
+- Show the portal URL with copy button
+- Show mobile/desktop preview toggle
+- **"Send Link" button** opens a dialog asking "Send to whom?":
+  - Options populated from client data + contact_details_cache:
+    - Client Name + Contact No
+    - Client Name + WhatsApp No  
+    - Bride Name + Bride WhatsApp
+    - Groom Name + Groom WhatsApp
+  - Each option is a button that opens WhatsApp with the portal URL pre-filled
+
+#### 3. Client Portal Page (`/client-portal/:clientName/:clientId`)
+- **Public route** (no auth)
+- Loads client data from `clients_cache` by `registeredDateTimeAD`
+- Loads freelancer assignments for photo tabs
+- Mobile/Desktop view toggle in header (like the freelancer crew schedule page)
+
+**Bottom Navigation (Facebook-style):**
+- Dashboard | My Photos | My Videos | My Payment
+- Fixed at bottom, icons + labels
+
+#### 4. Dashboard Tab
+- Wedding Tales Nepal branding header
+- Client name, event dates, days remaining countdown
+- Event list with venue info (from `event_details_cache`)
+
+#### 5. My Photos Tab
+- When entered, bottom nav switches to **event navigation**: `← PRE+RECEPTION (Prasan) →`
+  - Each button = `EventName (Photographer First Name)`
+  - Left/right arrows to cycle through events
+- Reuses exact same logic as `AlbumSection.tsx`:
+  - Same `majorityYearMonth` calculation
+  - Same S3 prefix: `{MONTH} EVENTS {YEAR}/{clientName}/Photos/{event}/{photographer}/`
+  - Same `listE2Folder` → `getE2FileUrls` batched loading
+  - Same `XitoImageViewer` for full-screen viewing
+  - Same list cache ref pattern
+
+#### 6. My Videos Tab
+- Top sub-nav with two tabs: **YouTube** (icon) | **pCloud** (icon)
+- **YouTube**: "Coming Soon" placeholder
+- **pCloud**: 
+  - Fetches videos from pCloud path: `/WEDDING TALES NEPAL/{monthYear}/{clientName}/Videos/`
+  - Lists only video files (`.mp4`, `.mov`, `.mkv`, `.avi`)
+  - Shows video thumbnails via `getPCloudThumbsBatch`
+  - Each video has a download button via `getPCloudFileLink`
+  - **Security**: The edge function call includes the `clientId` parameter and the component only constructs paths for that specific client — no directory traversal possible
+
+#### 7. My Payment Tab
+- "Coming Soon" placeholder with Wedding Tales Nepal branding
+
+### Technical Details
+
+- **Photo loading**: Identical to `AlbumSection.tsx` — uses `listE2Folder`, `getE2FileUrls`, `XitoImageViewer`, batch URL fetching (initial 12), load-more pattern
+- **Video loading**: Uses `listPCloudFolderByPath` to list `/WEDDING TALES NEPAL/{month}/{client}/Videos/` then `getPCloudFileLink` for download URLs
+- **No auth required**: Page reads directly from `clients_cache`, `freelancer_assignments`, `event_details_cache` (all have public RLS)
+- **Portal URL format**: `https://wtnclienttracker.lovable.app/client-portal/{nameSlug}/{encodedClientId}`
 
