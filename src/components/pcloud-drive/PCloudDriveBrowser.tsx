@@ -122,30 +122,39 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
     setCalculatingSizes(true);
     const toastId = toast.loading("Calculating ALL folder sizes from pCloud...");
     try {
-      // Always calculate from WTN root regardless of current breadcrumb
+      // Use calculateallsizes to get sizes for EVERY folder in the tree
       const { data, error } = await supabase.functions.invoke('pcloud-api', {
-        body: { action: 'calculatesubfoldersizes', params: { path: `/${PCLOUD_ROOT}` } },
+        body: { action: 'calculateallsizes', params: { path: `/${PCLOUD_ROOT}` } },
       });
       if (error) throw error;
       
       const folders = data?.folders || [];
       const newSizes: Record<string, { sizeGB: string; bytes: number }> = {};
       
+      // Batch upsert all folder sizes
+      const upsertRows = folders.map((f: any) => ({
+        folder_path: f.path,
+        folder_name: f.name,
+        size_bytes: f.totalBytes,
+        file_count: f.fileCount,
+        calculated_at: new Date().toISOString(),
+      }));
+      
       for (const f of folders) {
         const gb = f.totalBytes / (1024 * 1024 * 1024);
         const sizeLabel = gb >= 1 ? `${gb.toFixed(1)} GB` : `${(f.totalBytes / (1024 * 1024)).toFixed(0)} MB`;
         newSizes[f.path] = { sizeGB: sizeLabel, bytes: f.totalBytes };
-        
-        await supabase.from('pcloud_folder_sizes').upsert({
-          folder_path: f.path,
-          folder_name: f.name,
-          size_bytes: f.totalBytes,
-          file_count: f.fileCount,
-          calculated_at: new Date().toISOString(),
-        }, { onConflict: 'folder_path' });
+      }
+
+      // Upsert in batches of 50
+      for (let i = 0; i < upsertRows.length; i += 50) {
+        await supabase.from('pcloud_folder_sizes').upsert(
+          upsertRows.slice(i, i + 50),
+          { onConflict: 'folder_path' }
+        );
       }
       
-      setFolderSizes(newSizes);
+      setFolderSizes(prev => ({ ...prev, ...newSizes }));
       toast.dismiss(toastId);
       toast.success(`Calculated sizes for ${folders.length} folders`);
     } catch (err) {
@@ -155,7 +164,7 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
     } finally {
       setCalculatingSizes(false);
     }
-  }, [folderSizes]);
+  }, []);
 
   // Auto-calculate sizes on first load if no cached sizes exist
   useEffect(() => {
