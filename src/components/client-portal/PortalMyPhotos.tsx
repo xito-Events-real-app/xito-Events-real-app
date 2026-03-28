@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Loader2, Image as ImageIcon, FolderOpen } from "lucide-react";
+import { Loader2, Image as ImageIcon, FolderOpen, Download } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { listE2Folder, getE2FileUrls, E2File } from "@/lib/idrive-e2-api";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
@@ -186,19 +186,35 @@ const PortalMyPhotos = ({ clientName, assignments, onShowBottomNav }: PortalMyPh
               {photos.map((file, idx) => {
                 const url = photoUrls[file.key];
                 return (
-                  <button
+                  <div
                     key={file.key}
-                    onClick={() => url && setViewerIndex(idx)}
-                    className="aspect-square rounded-sm overflow-hidden bg-white/5 relative"
+                    className="aspect-square rounded-sm overflow-hidden bg-white/5 relative group"
                   >
-                    {url ? (
-                      <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Loader2 className="h-4 w-4 animate-spin text-white/30" />
-                      </div>
+                    <button
+                      onClick={() => url && setViewerIndex(idx)}
+                      className="w-full h-full"
+                    >
+                      {url ? (
+                        <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Loader2 className="h-4 w-4 animate-spin text-white/30" />
+                        </div>
+                      )}
+                    </button>
+                    {url && (
+                      <a
+                        href={url}
+                        download={file.key.split('/').pop() || 'photo.jpg'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="absolute bottom-1 right-1 p-1.5 rounded-full bg-black/60 text-white/80 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Download className="h-3 w-3" />
+                      </a>
                     )}
-                  </button>
+                  </div>
                 );
               })}
             </div>

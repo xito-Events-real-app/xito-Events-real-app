@@ -1,7 +1,6 @@
-import { useState, useEffect } from "react";
-import { Film, Youtube, Cloud, Loader2, Download, Play } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Film, Youtube, Cloud, Loader2, Download, Play, Pause, SkipForward, SkipBack } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { listPCloudFolderByPath, getPCloudFileLink, getPCloudThumbsBatch, isPCloudVideo, PCloudItem, formatPCloudSize } from "@/lib/pcloud-api";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
@@ -20,6 +19,11 @@ const PortalMyVideos = ({ clientName, eventYear, eventMonth }: PortalMyVideosPro
   const [thumbs, setThumbs] = useState<Record<number, string>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Active video state
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [activeVideoUrl, setActiveVideoUrl] = useState('');
+  const [loadingVideoUrl, setLoadingVideoUrl] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
   // Build pCloud path
@@ -30,16 +34,30 @@ const PortalMyVideos = ({ clientName, eventYear, eventMonth }: PortalMyVideosPro
     return `/WEDDING TALES NEPAL/${monthLabel} EVENTS ${year}/${clientName}/Videos`;
   })();
 
+  // Load videos list
   useEffect(() => {
     if (subTab !== 'pcloud' || !clientName || !eventYear || !eventMonth) return;
     setIsLoading(true);
     setError('');
     setVideos([]);
     setThumbs({});
+    setActiveVideoUrl('');
+    setActiveIndex(0);
 
     listPCloudFolderByPath(pcloudPath)
       .then(async (folder) => {
-        const videoFiles = folder.contents.filter(isPCloudVideo);
+        const allItems = folder.contents || [];
+        // Collect videos from root and subfolders
+        const videoFiles: PCloudItem[] = [];
+        for (const item of allItems) {
+          if (!item.isfolder && isPCloudVideo(item)) {
+            videoFiles.push(item);
+          } else if (item.isfolder && item.contents) {
+            for (const sub of item.contents) {
+              if (!sub.isfolder && isPCloudVideo(sub)) videoFiles.push(sub);
+            }
+          }
+        }
         setVideos(videoFiles);
 
         // Fetch thumbnails
@@ -58,7 +76,22 @@ const PortalMyVideos = ({ clientName, eventYear, eventMonth }: PortalMyVideosPro
       .finally(() => setIsLoading(false));
   }, [subTab, pcloudPath, clientName, eventYear, eventMonth]);
 
-  const handleDownload = async (video: PCloudItem) => {
+  // Load active video URL when index changes
+  useEffect(() => {
+    const video = videos[activeIndex];
+    if (!video?.fileid) {
+      setActiveVideoUrl('');
+      return;
+    }
+    setLoadingVideoUrl(true);
+    setActiveVideoUrl('');
+    getPCloudFileLink(video.fileid)
+      .then(url => setActiveVideoUrl(url))
+      .catch(() => setActiveVideoUrl(''))
+      .finally(() => setLoadingVideoUrl(false));
+  }, [activeIndex, videos]);
+
+  const handleDownload = useCallback(async (video: PCloudItem) => {
     if (!video.fileid) return;
     setDownloadingId(video.fileid);
     try {
@@ -73,7 +106,9 @@ const PortalMyVideos = ({ clientName, eventYear, eventMonth }: PortalMyVideosPro
     } finally {
       setDownloadingId(null);
     }
-  };
+  }, []);
+
+  const activeVideo = videos[activeIndex];
 
   return (
     <div className="pb-20">
@@ -110,51 +145,76 @@ const PortalMyVideos = ({ clientName, eventYear, eventMonth }: PortalMyVideosPro
       )}
 
       {subTab === 'pcloud' && (
-        <div className="px-3 space-y-2">
+        <div className="px-3 space-y-3">
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <span className="ml-3 text-white/50">Loading videos...</span>
             </div>
-          ) : error ? (
+          ) : error || videos.length === 0 ? (
             <div className="py-16 text-center">
               <Film className="h-10 w-10 mx-auto mb-3 text-white/20" />
-              <p className="text-white/40">{error}</p>
-            </div>
-          ) : videos.length === 0 ? (
-            <div className="py-16 text-center">
-              <Film className="h-10 w-10 mx-auto mb-3 text-white/20" />
-              <p className="text-white/40">No videos available yet</p>
+              <p className="text-white/40">{error || 'No videos available yet'}</p>
             </div>
           ) : (
-            videos.map((video) => (
-              <Card key={video.fileid} className="bg-white/5 border-white/10 overflow-hidden">
-                <CardContent className="p-0">
-                  <div className="flex gap-3 p-3">
-                    {/* Thumbnail */}
-                    <div className="w-28 h-20 rounded-md overflow-hidden bg-white/5 flex-shrink-0 relative">
-                      {thumbs[video.fileid!] ? (
-                        <img src={thumbs[video.fileid!]} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Play className="h-6 w-6 text-white/20" />
-                        </div>
+            <>
+              {/* === VIDEO PLAYER (Top) === */}
+              <div className="rounded-xl overflow-hidden bg-black border border-white/10">
+                <div className="aspect-video relative">
+                  {loadingVideoUrl ? (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black">
+                      <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                    </div>
+                  ) : activeVideoUrl ? (
+                    <video
+                      key={activeVideoUrl}
+                      src={activeVideoUrl}
+                      controls
+                      autoPlay
+                      className="w-full h-full object-contain bg-black"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black">
+                      <Play className="h-12 w-12 text-white/20" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Player controls bar */}
+                <div className="p-3 bg-white/5">
+                  <p className="text-sm font-medium text-white truncate mb-1">
+                    {activeVideo?.name || 'No video selected'}
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-white/40">
+                        {activeIndex + 1} of {videos.length}
+                      </span>
+                      {activeVideo?.size && (
+                        <span className="text-xs text-white/30">• {formatPCloudSize(activeVideo.size)}</span>
                       )}
                     </div>
-                    {/* Info */}
-                    <div className="flex-1 min-w-0 flex flex-col justify-between">
-                      <p className="text-sm font-medium text-white truncate">{video.name}</p>
-                      <div className="flex items-center gap-2">
-                        {video.size && (
-                          <span className="text-xs text-white/40">{formatPCloudSize(video.size)}</span>
-                        )}
-                      </div>
+                    <div className="flex items-center gap-1">
                       <button
-                        onClick={() => handleDownload(video)}
-                        disabled={downloadingId === video.fileid}
-                        className="self-start flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/20 text-primary text-xs font-medium hover:bg-primary/30 transition-colors disabled:opacity-50"
+                        onClick={() => setActiveIndex(i => Math.max(0, i - 1))}
+                        disabled={activeIndex === 0}
+                        className="p-1.5 rounded-full hover:bg-white/10 text-white/60 disabled:text-white/20 transition-colors"
                       >
-                        {downloadingId === video.fileid ? (
+                        <SkipBack className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => setActiveIndex(i => Math.min(videos.length - 1, i + 1))}
+                        disabled={activeIndex === videos.length - 1}
+                        className="p-1.5 rounded-full hover:bg-white/10 text-white/60 disabled:text-white/20 transition-colors"
+                      >
+                        <SkipForward className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => activeVideo && handleDownload(activeVideo)}
+                        disabled={downloadingId === activeVideo?.fileid}
+                        className="ml-1 flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/20 text-primary text-xs font-medium hover:bg-primary/30 transition-colors disabled:opacity-50"
+                      >
+                        {downloadingId === activeVideo?.fileid ? (
                           <Loader2 className="h-3 w-3 animate-spin" />
                         ) : (
                           <Download className="h-3 w-3" />
@@ -163,9 +223,74 @@ const PortalMyVideos = ({ clientName, eventYear, eventMonth }: PortalMyVideosPro
                       </button>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            ))
+                </div>
+              </div>
+
+              {/* === PLAYLIST (Bottom) === */}
+              <div>
+                <p className="text-xs text-white/40 uppercase tracking-wider mb-2 px-1">
+                  Playlist • {videos.length} videos
+                </p>
+                <div className="space-y-1.5">
+                  {videos.map((video, idx) => (
+                    <button
+                      key={video.fileid || idx}
+                      onClick={() => setActiveIndex(idx)}
+                      className={cn(
+                        "w-full flex gap-3 p-2 rounded-lg transition-all text-left",
+                        idx === activeIndex
+                          ? "bg-primary/15 border border-primary/30"
+                          : "bg-white/5 border border-transparent hover:bg-white/10"
+                      )}
+                    >
+                      {/* Thumbnail */}
+                      <div className="w-24 h-16 rounded-md overflow-hidden bg-white/5 flex-shrink-0 relative">
+                        {thumbs[video.fileid!] ? (
+                          <img src={thumbs[video.fileid!]} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Play className="h-5 w-5 text-white/20" />
+                          </div>
+                        )}
+                        {idx === activeIndex && (
+                          <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                            <Play className="h-5 w-5 text-primary fill-primary" />
+                          </div>
+                        )}
+                      </div>
+                      {/* Info */}
+                      <div className="flex-1 min-w-0 flex flex-col justify-center">
+                        <p className={cn(
+                          "text-sm font-medium truncate",
+                          idx === activeIndex ? "text-primary" : "text-white"
+                        )}>
+                          {video.name}
+                        </p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {video.size && (
+                            <span className="text-xs text-white/40">{formatPCloudSize(video.size)}</span>
+                          )}
+                        </div>
+                      </div>
+                      {/* Download */}
+                      <div className="flex items-center flex-shrink-0">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDownload(video); }}
+                          disabled={downloadingId === video.fileid}
+                          className="p-2 rounded-full hover:bg-white/10 text-white/40 hover:text-white/70 transition-colors disabled:opacity-50"
+                        >
+                          {downloadingId === video.fileid ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Download className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
         </div>
       )}
