@@ -38,7 +38,7 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
 }
 
-export function XitoDriveFolderCard({ name, itemCount, type, categoryName, fileSize, pcloudFolderId, onClick }: Props) {
+export function XitoDriveFolderCard({ name, itemCount, type, categoryName, fileSize, folderSizeGB, pcloudFolderId, onClick }: Props) {
   const isMobile = useIsMobile();
   const gradient = categoryName ? CATEGORY_COLORS[categoryName] : null;
   const isFile = type === "file";
