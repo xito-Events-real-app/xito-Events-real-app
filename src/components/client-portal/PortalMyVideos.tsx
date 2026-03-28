@@ -86,7 +86,7 @@ const PortalMyVideos = ({ clientName, eventYear, eventMonth }: PortalMyVideosPro
     }
     setLoadingVideoUrl(true);
     setActiveVideoUrl('');
-    getPCloudFileLink(video.fileid)
+    getPCloudPublicUrl(video.fileid)
       .then(url => setActiveVideoUrl(url))
       .catch(() => setActiveVideoUrl(''))
       .finally(() => setLoadingVideoUrl(false));
