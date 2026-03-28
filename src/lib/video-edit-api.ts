@@ -249,6 +249,12 @@ export async function pushToStatus(id: string, newStatus: string): Promise<void>
     }
   }
 
+  // Auto-set colorist = editor when entering a colorist stage if colorist is empty
+  const COLORIST_STAGES = ['COLOR_QUEUE', 'COLOR_LAB', 'COLOR_ON_PROGRESS', 'EXPORT_QUEUE', 'EXPORTED', 'CLIENT_REVIEW', 'RE_EDIT_ON_PROGRESS', 'FINALIZED'];
+  if (COLORIST_STAGES.includes(newStatus) && !existing?.colorist && existing?.editor) {
+    updateData.colorist = existing.editor;
+  }
+
   // Append to stage_history
   const historyEntry = `${newStatus} [${new Date().toISOString()}]`;
   const currentHistory = existing?.stage_history || "";
