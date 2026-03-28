@@ -51,25 +51,9 @@ export function XitoDriveFolderCard({ name, itemCount, type, categoryName, fileS
     e.stopPropagation();
     e.preventDefault();
     if (!pcloudFolderId) return;
-
+    // Use web URL — on mobile, pCloud's universal/app links will open the app automatically
     const webUrl = `https://my.pcloud.com/#page=filemanager&folder=${pcloudFolderId}`;
-
-    if (isMobile) {
-      // Try pCloud app deep link first, fallback to web
-      const appUrl = `pcloud://folder/${pcloudFolderId}`;
-      const timeout = setTimeout(() => {
-        window.open(webUrl, "_blank");
-      }, 1500);
-      window.location.href = appUrl;
-      // If app opened, clear fallback
-      const handleBlur = () => {
-        clearTimeout(timeout);
-        window.removeEventListener("blur", handleBlur);
-      };
-      window.addEventListener("blur", handleBlur);
-    } else {
-      window.open(webUrl, "_blank");
-    }
+    window.open(webUrl, "_blank");
   };
 
   return (
