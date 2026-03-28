@@ -17,6 +17,7 @@ export interface VideoEditRow {
   subEventName: string;
   editType: string;
   editor: string;
+  colorist: string;
   companyNotes: string;
   clientDemand: string;
   reference: string;
