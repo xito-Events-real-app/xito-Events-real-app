@@ -56,6 +56,77 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
   const [pendingStatus, setPendingStatus] = useState<PendingSyncStatus | null>(null);
   const [checkingSync, setCheckingSync] = useState(false);
 
+  // Folder sizes cache
+  const [folderSizes, setFolderSizes] = useState<Record<string, { sizeGB: string; bytes: number }>>({});
+  const [calculatingSizes, setCalculatingSizes] = useState(false);
+
+  // Load cached folder sizes from DB
+  useEffect(() => {
+    supabase
+      .from('pcloud_folder_sizes')
+      .select('folder_path, folder_name, size_bytes')
+      .then(({ data }) => {
+        if (!data) return;
+        const map: Record<string, { sizeGB: string; bytes: number }> = {};
+        for (const row of data) {
+          const gb = row.size_bytes / (1024 * 1024 * 1024);
+          map[row.folder_path] = {
+            sizeGB: gb >= 1 ? `${gb.toFixed(1)} GB` : `${(row.size_bytes / (1024 * 1024)).toFixed(0)} MB`,
+            bytes: Number(row.size_bytes),
+          };
+        }
+        setFolderSizes(map);
+      });
+  }, []);
+
+  const handleRecalculateSizes = useCallback(async () => {
+    setCalculatingSizes(true);
+    const toastId = toast.loading("Calculating folder sizes from pCloud...");
+    try {
+      const path = breadcrumb.length === 0 ? `/${PCLOUD_ROOT}` : currentPCloudPath;
+      const { data, error } = await supabase.functions.invoke('pcloud-api', {
+        body: { action: 'calculatesubfoldersizes', params: { path } },
+      });
+      if (error) throw error;
+      
+      const folders = data?.folders || [];
+      const newSizes: Record<string, { sizeGB: string; bytes: number }> = { ...folderSizes };
+      
+      // Upsert into DB and update local state
+      for (const f of folders) {
+        const gb = f.totalBytes / (1024 * 1024 * 1024);
+        const sizeLabel = gb >= 1 ? `${gb.toFixed(1)} GB` : `${(f.totalBytes / (1024 * 1024)).toFixed(0)} MB`;
+        newSizes[f.path] = { sizeGB: sizeLabel, bytes: f.totalBytes };
+        
+        await supabase.from('pcloud_folder_sizes').upsert({
+          folder_path: f.path,
+          folder_name: f.name,
+          size_bytes: f.totalBytes,
+          file_count: f.fileCount,
+          calculated_at: new Date().toISOString(),
+        }, { onConflict: 'folder_path' });
+      }
+      
+      setFolderSizes(newSizes);
+      toast.dismiss(toastId);
+      toast.success(`Calculated sizes for ${folders.length} folders`);
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error("Failed to calculate sizes");
+      console.error(err);
+    } finally {
+      setCalculatingSizes(false);
+    }
+  }, [currentPCloudPath, breadcrumb.length, folderSizes]);
+
+  // Helper to get size label for a folder
+  const getFolderSize = useCallback((folderName: string): string | undefined => {
+    const path = breadcrumb.length === 0 
+      ? `/${PCLOUD_ROOT}/${folderName}` 
+      : `${currentPCloudPath}/${folderName}`;
+    return folderSizes[path]?.sizeGB;
+  }, [folderSizes, currentPCloudPath, breadcrumb.length]);
+
   const groups = useMemo(() => buildMonthYearGroups(clients), [clients]);
   const uniqueYears = useMemo(() => getUniqueYears(groups), [groups]);
 
