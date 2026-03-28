@@ -169,6 +169,7 @@ function dbToVideoRow(r: any): VideoEditRow {
     eventMonth: r.event_month || '', eventDay: r.event_day || '', eventDateAD: r.event_date_ad || '',
     videoEditStatus: r.video_edit_status || 'QUEUE', urgency: r.urgency || '', priority: '',
     subEventName: r.sub_event_name || '', editType: r.edit_type || '', editor: r.editor || '',
+    colorist: r.colorist || '',
     companyNotes: r.company_notes || '', clientDemand: r.client_demand || '', reference: r.reference || '',
     songs: r.songs || '', forceSplit: r.force_split || false, isPlaying: r.is_playing || false,
     playingSince: r.playing_since || '', editStartedAt: r.edit_started_at || '', deadline: r.deadline || '',
