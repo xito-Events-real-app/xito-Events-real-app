@@ -70,7 +70,7 @@ export default function PCloudDrive() {
         </div>
         {/* Desktop: right sidebar */}
         {!isMobile && (
-          <div className="w-[280px] shrink-0 border-l border-border">
+          <div className="w-[340px] shrink-0 border-l border-border overflow-hidden">
             <PCloudActivitySidebar />
           </div>
         )}
