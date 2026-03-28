@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Film, Youtube, Cloud, Loader2, Download, Play, Pause, SkipForward, SkipBack } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { listPCloudFolderByPath, getPCloudFileLink, getPCloudThumbsBatch, isPCloudVideo, PCloudItem, formatPCloudSize } from "@/lib/pcloud-api";
+import { listPCloudFolderByPath, getPCloudPublicUrl, getPCloudThumbsBatch, isPCloudVideo, PCloudItem, formatPCloudSize } from "@/lib/pcloud-api";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
 
 interface PortalMyVideosProps {
@@ -86,7 +86,7 @@ const PortalMyVideos = ({ clientName, eventYear, eventMonth }: PortalMyVideosPro
     }
     setLoadingVideoUrl(true);
     setActiveVideoUrl('');
-    getPCloudFileLink(video.fileid)
+    getPCloudPublicUrl(video.fileid)
       .then(url => setActiveVideoUrl(url))
       .catch(() => setActiveVideoUrl(''))
       .finally(() => setLoadingVideoUrl(false));
@@ -96,7 +96,7 @@ const PortalMyVideos = ({ clientName, eventYear, eventMonth }: PortalMyVideosPro
     if (!video.fileid) return;
     setDownloadingId(video.fileid);
     try {
-      const url = await getPCloudFileLink(video.fileid);
+      const url = await getPCloudPublicUrl(video.fileid);
       const a = document.createElement('a');
       a.href = url;
       a.download = video.name;
