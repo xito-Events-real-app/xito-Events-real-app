@@ -91,11 +91,20 @@ export function XitoDriveFolderCard({ name, itemCount, type, categoryName, fileS
         <p className="text-xs font-medium leading-tight truncate" title={name}>{name}</p>
         {isFile && fileSize !== undefined ? (
           <p className="text-[10px] text-muted-foreground">{formatFileSize(fileSize)}</p>
-        ) : itemCount !== undefined ? (
-          <p className="text-[10px] text-muted-foreground">
-            {itemCount} {itemCount === 1 ? "item" : "items"}
-          </p>
-        ) : null}
+        ) : (
+          <div className="flex items-center gap-1.5">
+            {itemCount !== undefined && (
+              <span className="text-[10px] text-muted-foreground">
+                {itemCount} {itemCount === 1 ? "item" : "items"}
+              </span>
+            )}
+            {folderSizeGB && (
+              <span className="text-[10px] font-semibold text-sky-600 dark:text-sky-400">
+                {folderSizeGB}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Open in pCloud link */}
         {pcloudFolderId && !isFile && (
