@@ -112,6 +112,16 @@ export async function getPCloudPublicUrl(fileid: number): Promise<string> {
   throw new Error('Could not get public file link');
 }
 
+/**
+ * Returns a proxy URL that streams file content through our edge function.
+ * This avoids IP-bound restrictions from pCloud's getfilelink.
+ */
+export function getPCloudStreamUrl(fileid: number): string {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  return `${supabaseUrl}/functions/v1/pcloud-api?streamfileid=${fileid}&apikey=${anonKey}`;
+}
+
 export async function getPCloudThumbUrl(fileid: number, size: string = '200x200'): Promise<string> {
   const data = await invokePCloudAction<{ hosts?: string[]; path?: string }>('getthumblink', {
     fileid,

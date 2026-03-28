@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { Film, Youtube, Cloud, Loader2, Download, Play, Pause, SkipForward, SkipBack } from "lucide-react";
+import { Film, Youtube, Cloud, Loader2, Download, Play, SkipForward, SkipBack } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { listPCloudFolderByPath, getPCloudPublicUrl, getPCloudThumbsBatch, isPCloudVideo, PCloudItem, formatPCloudSize } from "@/lib/pcloud-api";
+import { listPCloudFolderByPath, getPCloudStreamUrl, getPCloudThumbsBatch, isPCloudVideo, PCloudItem, formatPCloudSize } from "@/lib/pcloud-api";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
 
 interface PortalMyVideosProps {
@@ -22,8 +22,6 @@ const PortalMyVideos = ({ clientName, eventYear, eventMonth }: PortalMyVideosPro
 
   // Active video state
   const [activeIndex, setActiveIndex] = useState(0);
-  const [activeVideoUrl, setActiveVideoUrl] = useState('');
-  const [loadingVideoUrl, setLoadingVideoUrl] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
   // Build pCloud path
@@ -41,13 +39,11 @@ const PortalMyVideos = ({ clientName, eventYear, eventMonth }: PortalMyVideosPro
     setError('');
     setVideos([]);
     setThumbs({});
-    setActiveVideoUrl('');
     setActiveIndex(0);
 
     listPCloudFolderByPath(pcloudPath, true)
       .then(async (folder) => {
         const allItems = folder.contents || [];
-        // Recursively collect all video files from any depth
         const videoFiles: PCloudItem[] = [];
         function collectVideos(items: PCloudItem[]) {
           for (const item of items) {
@@ -61,7 +57,6 @@ const PortalMyVideos = ({ clientName, eventYear, eventMonth }: PortalMyVideosPro
         collectVideos(allItems);
         setVideos(videoFiles);
 
-        // Fetch thumbnails
         const fileIds = videoFiles.filter(f => f.fileid).map(f => f.fileid!);
         if (fileIds.length > 0) {
           try {
@@ -77,39 +72,21 @@ const PortalMyVideos = ({ clientName, eventYear, eventMonth }: PortalMyVideosPro
       .finally(() => setIsLoading(false));
   }, [subTab, pcloudPath, clientName, eventYear, eventMonth]);
 
-  // Load active video URL when index changes
-  useEffect(() => {
-    const video = videos[activeIndex];
-    if (!video?.fileid) {
-      setActiveVideoUrl('');
-      return;
-    }
-    setLoadingVideoUrl(true);
-    setActiveVideoUrl('');
-    getPCloudPublicUrl(video.fileid)
-      .then(url => setActiveVideoUrl(url))
-      .catch(() => setActiveVideoUrl(''))
-      .finally(() => setLoadingVideoUrl(false));
-  }, [activeIndex, videos]);
+  // Get stream URL for the active video (synchronous, no async needed)
+  const activeVideo = videos[activeIndex];
+  const activeVideoUrl = activeVideo?.fileid ? getPCloudStreamUrl(activeVideo.fileid) : '';
 
-  const handleDownload = useCallback(async (video: PCloudItem) => {
+  const handleDownload = useCallback((video: PCloudItem) => {
     if (!video.fileid) return;
-    setDownloadingId(video.fileid);
-    try {
-      const url = await getPCloudPublicUrl(video.fileid);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = video.name;
-      a.target = '_blank';
-      a.click();
-    } catch (err) {
-      console.error('Download failed:', err);
-    } finally {
-      setDownloadingId(null);
-    }
+    const url = getPCloudStreamUrl(video.fileid);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = video.name;
+    a.target = '_blank';
+    a.click();
   }, []);
 
-  const activeVideo = videos[activeIndex];
+  // activeVideo and activeVideoUrl already defined above
 
   return (
     <div className="pb-20">
@@ -162,16 +139,13 @@ const PortalMyVideos = ({ clientName, eventYear, eventMonth }: PortalMyVideosPro
               {/* === VIDEO PLAYER (Top) === */}
               <div className="rounded-xl overflow-hidden bg-black border border-white/10">
                 <div className="aspect-video relative">
-                  {loadingVideoUrl ? (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black">
-                      <Loader2 className="h-10 w-10 animate-spin text-primary" />
-                    </div>
-                  ) : activeVideoUrl ? (
+                  {activeVideoUrl ? (
                     <video
                       key={activeVideoUrl}
                       src={activeVideoUrl}
                       controls
                       autoPlay
+                      playsInline
                       className="w-full h-full object-contain bg-black"
                     />
                   ) : (

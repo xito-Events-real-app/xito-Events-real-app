@@ -116,6 +116,42 @@ serve(async (req) => {
       });
     }
 
+    // Stream file proxy — fetches getfilelink server-side and streams raw bytes to client
+    const url = new URL(req.url);
+    const streamFileId = url.searchParams.get('streamfileid');
+    if (streamFileId) {
+      const linkRes = await fetch(`${PCLOUD_API}/getfilelink?auth=${auth}&fileid=${streamFileId}`);
+      const linkData = await linkRes.json();
+      if (linkData.result !== 0 || !linkData.hosts || !linkData.path) {
+        return new Response(JSON.stringify({ error: 'Could not get file link' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const fileUrl = `https://${linkData.hosts[0]}${linkData.path}`;
+      
+      // Support range requests for video seeking
+      const rangeHeader = req.headers.get('range');
+      const fetchHeaders: Record<string, string> = {};
+      if (rangeHeader) fetchHeaders['Range'] = rangeHeader;
+      
+      const fileRes = await fetch(fileUrl, { headers: fetchHeaders });
+      const fileName = linkData.path.split('/').pop() || 'file';
+      
+      const responseHeaders: Record<string, string> = {
+        ...corsHeaders,
+        'Content-Type': fileRes.headers.get('content-type') || 'application/octet-stream',
+        'Accept-Ranges': 'bytes',
+        'Content-Disposition': `inline; filename="${fileName}"`,
+      };
+      if (fileRes.headers.get('content-length')) responseHeaders['Content-Length'] = fileRes.headers.get('content-length')!;
+      if (fileRes.headers.get('content-range')) responseHeaders['Content-Range'] = fileRes.headers.get('content-range')!;
+      
+      return new Response(fileRes.body, {
+        status: fileRes.status,
+        headers: responseHeaders,
+      });
+    }
+
     // JSON body for other actions
     const { action, params } = await req.json();
 
