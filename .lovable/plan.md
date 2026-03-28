@@ -1,55 +1,59 @@
 
 
-## Plan: pCloud Drive Enhancements — Deep Links, Activity Feed & Storage Quota
+## Plan: Fix pCloud Drive — Auto-calculate sizes, filter activity to WTN, news-style feed
 
-### 1. "Open in pCloud" link on every folder card
+### Issues to fix
 
-**File: `src/components/xito-drive/XitoDriveFolderCard.tsx`**
-- Add an optional `pcloudPath` prop to the card component
-- Below the folder name/size, render a small "Open in pCloud" link with a tiny Cloud icon
-- The link opens `https://my.pcloud.com/#page=filemanager&folder=FOLDERID` on desktop
-- On mobile, use the `pcloud://` URI scheme to attempt opening the pCloud app. Fallback: `https://my.pcloud.com/...`
-- The link gets `e.stopPropagation()` so clicking it doesn't trigger the folder navigation
+1. **Folder sizes not auto-calculated on first load** — currently only shows sizes if user clicks "Recalculate". Need to auto-trigger calculation when no cached sizes exist.
+2. **"Recalculate Sizes" should always calculate ALL folders under `/WEDDING TALES NEPAL`** — not just current level.
+3. **Recent Changes shows all pCloud activity** — the `/diff` API returns changes across the entire account. Need to filter server-side to only show entries whose path starts with `/WEDDING TALES NEPAL`.
+4. **Activity feed looks like a log, not news** — needs a "Breaking News" style with descriptive headlines like "New video uploaded to Shakti Wedding folder".
 
-**File: `src/components/pcloud-drive/PCloudDriveBrowser.tsx`**
-- Pass `pcloudFolderId` to each `XitoDriveFolderCard` by matching the folder name against `pcloudItems` that were fetched for the current level
-- For virtual folders that haven't been synced yet (no matching pCloud folder), don't show the link
+### Changes
 
-### 2. Activity feed sidebar — "Recent pCloud Changes"
-
-**File: `src/lib/pcloud-api.ts`**
-- Add `getPCloudQuota()` function: calls pCloud's `/userinfo` endpoint (already authenticated) which returns `quota` and `usedquota` fields
-- Export a new type `PCloudQuota { used: number; total: number; free: number }`
-
-**File: `src/components/pcloud-drive/PCloudActivitySidebar.tsx`** (new)
-- A right-side panel component showing:
-  - **Storage bar**: used/total/free from `getPCloudQuota()` with a progress bar and formatted sizes (e.g. "234 GB / 2 TB used")
-  - **Recent edited uploads**: fetches from `edited_files` table where `storage_type = 'pcloud'` or `pcloud_file_id IS NOT NULL`, ordered by `created_at DESC`, limit 20
-  - Each entry shows: client name, event, photographer, file size — formatted like "Shakti Neupane : Wedding BS : nikit : 234 GB"
-
-**File: `src/pages/PCloudDrive.tsx`**
-- On desktop: render the page as a flex row with the browser on the left and `PCloudActivitySidebar` on the right (similar to the Breaking News sidebar in `DesktopSuiteLanding`)
-- On mobile: add a small toggle button to show/hide the sidebar as a sheet/drawer
-
-### 3. Edge function update for quota
-
+#### 1. Edge function: Filter diff to WTN folder only
 **File: `supabase/functions/pcloud-api/index.ts`**
-- Add a `userinfo` action in the switch that calls `/userinfo` with the auth token and returns `quota`, `usedquota`, `email`, and `premium` fields
+- Modify the `getdiff` action to post-process entries
+- For each diff entry, use `/stat` with the `fileid` to get the full path, or better: the diff API returns `metadata` with `parentfolderid` — resolve parent chain
+- Simpler approach: use pCloud's `/listfolder` with `recursive=1` on `/WEDDING TALES NEPAL` sorted by `modified DESC` to get recently modified files. This is more reliable than diff.
+- Add a new action `getrecentuploads` that:
+  - Lists `/WEDDING TALES NEPAL` recursively
+  - Collects all files, sorts by `modified` or `created` timestamp descending
+  - Returns top 30 with their full path segments (client name, event, etc.)
 
-### Technical Details
+#### 2. Auto-calculate sizes on first visit
+**File: `src/components/pcloud-drive/PCloudDriveBrowser.tsx`**
+- In the `useEffect` that loads cached sizes from DB, check if any sizes exist for WTN root subfolders
+- If none exist (first time), auto-trigger `handleRecalculateSizes` for `/WEDDING TALES NEPAL`
+- The "Recalculate Sizes" button should ALWAYS calculate all subfolders of `/WEDDING TALES NEPAL` regardless of current breadcrumb level
 
-- pCloud web link format: `https://my.pcloud.com/#page=filemanager&folder=FOLDER_ID` (verified from pCloud docs)
-- pCloud app deep link: `pcloud://folder/FOLDER_ID` — on mobile, attempt this first with a timeout fallback to web URL
-- The `/userinfo` pCloud endpoint already returns quota info (it's the same endpoint used for login, but the `quota` and `usedquota` fields are always present)
-- The activity feed queries the existing `edited_files` table — no new tables needed
+#### 3. News-style activity feed
+**File: `src/components/pcloud-drive/PCloudActivitySidebar.tsx`**
+- Replace the raw diff entries with the new `getrecentuploads` data
+- Each entry rendered as a news card with:
+  - Headline: "New upload in **[Client Name] > [Event]**"
+  - Details: file name, size, time ago
+  - Icon: photo or video badge
+  - Extract client/event from path segments: `/WEDDING TALES NEPAL/2082-Baisakh/ClientName/Photos/Event/file.jpg`
 
-### Files to Create/Modify
-| File | Action |
+#### 4. Edge function: `getrecentuploads` action
+**File: `supabase/functions/pcloud-api/index.ts`**
+- New action that does recursive listing of `/WEDDING TALES NEPAL`
+- Collects all non-folder items with their full path
+- Sorts by `modified` descending
+- Returns top 30 entries with parsed path segments (monthYear, clientName, category, event, fileName, size, modified)
+
+### Technical details
+
+- pCloud's `/diff` endpoint returns account-wide changes without path info — not suitable for WTN-only filtering
+- pCloud's `/listfolder?recursive=1` returns the full tree with `modified` timestamps on each file — we can extract recent uploads from this
+- The recursive listing of WTN root can be large, so we process server-side in the edge function and only return the 30 most recent files
+- Path parsing: split by `/` → `['', 'WEDDING TALES NEPAL', monthYear, clientName, category, event, ...]`
+
+### Files to modify
+| File | Change |
 |------|--------|
-| `src/components/xito-drive/XitoDriveFolderCard.tsx` | Add "Open in pCloud" link with folder ID prop |
-| `src/components/pcloud-drive/PCloudDriveBrowser.tsx` | Pass pCloud folder IDs to cards |
-| `src/lib/pcloud-api.ts` | Add `getPCloudQuota()` |
-| `supabase/functions/pcloud-api/index.ts` | Add `userinfo` action |
-| `src/components/pcloud-drive/PCloudActivitySidebar.tsx` | New — activity feed + storage stats |
-| `src/pages/PCloudDrive.tsx` | Add sidebar layout |
+| `supabase/functions/pcloud-api/index.ts` | Add `getrecentuploads` action |
+| `src/components/pcloud-drive/PCloudActivitySidebar.tsx` | Rewrite to use `getrecentuploads`, news-style cards |
+| `src/components/pcloud-drive/PCloudDriveBrowser.tsx` | Auto-trigger size calculation on first load; always calculate from WTN root |
 
