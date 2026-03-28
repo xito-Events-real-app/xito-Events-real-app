@@ -368,11 +368,14 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
     if (currentLevel === 2) {
       return (
         <div className={gridClass}>
-          {PCLOUD_CATEGORIES.map(cat => (
-            <XitoDriveFolderCard key={cat.name} name={cat.name} type="category" categoryName={cat.name} onClick={() => navigate(cat.name, cat.name)} />
-          ))}
+          {PCLOUD_CATEGORIES.map(cat => {
+            const match = pcloudItems.find(p => p.isfolder && p.name === cat.name);
+            return (
+              <XitoDriveFolderCard key={cat.name} name={cat.name} type="category" categoryName={cat.name} pcloudFolderId={match?.folderid} onClick={() => navigate(cat.name, cat.name)} />
+            );
+          })}
           {extraPCloudFolders.map(f => (
-            <XitoDriveFolderCard key={f.name} name={f.name} type="leaf" onClick={() => navigate(f.name, f.name)} />
+            <XitoDriveFolderCard key={f.name} name={f.name} type="leaf" pcloudFolderId={f.folderid} onClick={() => navigate(f.name, f.name)} />
           ))}
         </div>
       );
