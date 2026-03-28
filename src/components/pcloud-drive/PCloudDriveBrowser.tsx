@@ -512,10 +512,10 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
       return (
         <div className={gridClass}>
           {photographers.map(name => (
-            <XitoDriveFolderCard key={name} name={name} type="freelancer" onClick={() => navigate(name, name)} />
+            <XitoDriveFolderCard key={name} name={name} type="freelancer" folderSizeGB={getFolderSize(name)} onClick={() => navigate(name, name)} />
           ))}
           {extraPCloudFolders.map(f => (
-            <XitoDriveFolderCard key={f.name} name={f.name} type="leaf" onClick={() => navigate(f.name, f.name)} />
+            <XitoDriveFolderCard key={f.name} name={f.name} type="leaf" folderSizeGB={getFolderSize(f.name)} onClick={() => navigate(f.name, f.name)} />
           ))}
           {pcloudFiles.map(file => (
             <XitoDriveFolderCard key={file.fileid} name={file.name} type="file" fileSize={file.size} onClick={() => handleFileClick(file)} />

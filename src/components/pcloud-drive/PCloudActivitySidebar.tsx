@@ -12,7 +12,6 @@ interface RecentUpload {
   fullPath: string;
   size: number;
   modified: string;
-  created: string;
   contenttype: string;
   monthYear: string;
   clientName: string;
