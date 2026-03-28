@@ -139,6 +139,10 @@ serve(async (req) => {
         });
       }
 
+      case 'userinfo':
+        endpoint = '/userinfo';
+        break;
+
       case 'stat':
         endpoint = '/stat';
         query.set('fileid', String(params.fileid));

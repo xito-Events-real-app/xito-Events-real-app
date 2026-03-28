@@ -103,16 +103,13 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
     return () => { cancelled = true; };
   }, [clients, assignments, isLoading]);
 
-  // Fetch pCloud contents when navigating deeper than root
+  // Fetch pCloud contents — always fetch (including root level for folder IDs)
   useEffect(() => {
-    if (breadcrumb.length === 0) {
-      setPcloudItems([]);
-      return;
-    }
     let cancelled = false;
     setPcloudLoading(true);
     setPcloudItems([]);
-    listPCloudFolderByPath(currentPCloudPath)
+    const path = breadcrumb.length === 0 ? `/${PCLOUD_ROOT}` : currentPCloudPath;
+    listPCloudFolderByPath(path)
       .then(result => {
         if (!cancelled) {
           setPcloudItems(result.contents);
@@ -337,9 +334,12 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
       }
       return (
         <div className={gridClass}>
-          {filteredGroups.map(g => (
-            <XitoDriveFolderCard key={g.key} name={g.label} itemCount={g.clients.length} type="month-year" onClick={() => navigate(g.label, g.label)} />
-          ))}
+          {filteredGroups.map(g => {
+            const match = pcloudItems.find(p => p.isfolder && p.name === g.label);
+            return (
+              <XitoDriveFolderCard key={g.key} name={g.label} itemCount={g.clients.length} type="month-year" pcloudFolderId={match?.folderid} onClick={() => navigate(g.label, g.label)} />
+            );
+          })}
         </div>
       );
     }
@@ -348,11 +348,14 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
     if (currentLevel === 1 && currentGroup) {
       return (
         <div className={gridClass}>
-          {currentGroup.clients.map(c => (
-            <XitoDriveFolderCard key={c.registeredDateTimeAD} name={c.clientName} itemCount={PCLOUD_CATEGORIES.length} type="client" onClick={() => navigate(c.clientName, c.registeredDateTimeAD)} />
-          ))}
+          {currentGroup.clients.map(c => {
+            const match = pcloudItems.find(p => p.isfolder && p.name === c.clientName);
+            return (
+              <XitoDriveFolderCard key={c.registeredDateTimeAD} name={c.clientName} itemCount={PCLOUD_CATEGORIES.length} type="client" pcloudFolderId={match?.folderid} onClick={() => navigate(c.clientName, c.registeredDateTimeAD)} />
+            );
+          })}
           {extraPCloudFolders.map(f => (
-            <XitoDriveFolderCard key={f.name} name={f.name} type="leaf" onClick={() => navigate(f.name, f.name)} />
+            <XitoDriveFolderCard key={f.name} name={f.name} type="leaf" pcloudFolderId={f.folderid} onClick={() => navigate(f.name, f.name)} />
           ))}
         </div>
       );
@@ -362,11 +365,14 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
     if (currentLevel === 2) {
       return (
         <div className={gridClass}>
-          {PCLOUD_CATEGORIES.map(cat => (
-            <XitoDriveFolderCard key={cat.name} name={cat.name} type="category" categoryName={cat.name} onClick={() => navigate(cat.name, cat.name)} />
-          ))}
+          {PCLOUD_CATEGORIES.map(cat => {
+            const match = pcloudItems.find(p => p.isfolder && p.name === cat.name);
+            return (
+              <XitoDriveFolderCard key={cat.name} name={cat.name} type="category" categoryName={cat.name} pcloudFolderId={match?.folderid} onClick={() => navigate(cat.name, cat.name)} />
+            );
+          })}
           {extraPCloudFolders.map(f => (
-            <XitoDriveFolderCard key={f.name} name={f.name} type="leaf" onClick={() => navigate(f.name, f.name)} />
+            <XitoDriveFolderCard key={f.name} name={f.name} type="leaf" pcloudFolderId={f.folderid} onClick={() => navigate(f.name, f.name)} />
           ))}
         </div>
       );

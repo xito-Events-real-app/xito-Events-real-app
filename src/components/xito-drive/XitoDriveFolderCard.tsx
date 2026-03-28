@@ -1,5 +1,6 @@
-import { Folder, FolderOpen, Image, Video, FileText, CreditCard, Users, Aperture, File, FileImage, FileVideo, FileAudio } from "lucide-react";
+import { Folder, FolderOpen, Image, Video, FileText, CreditCard, Users, Aperture, File, FileImage, FileVideo, FileAudio, Cloud, ExternalLink } from "lucide-react";
 import { CATEGORY_COLORS } from "@/lib/xito-drive-utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface Props {
   name: string;
@@ -7,6 +8,7 @@ interface Props {
   type: "month-year" | "client" | "category" | "event" | "freelancer" | "leaf" | "file";
   categoryName?: string;
   fileSize?: number;
+  pcloudFolderId?: number;
   onClick: () => void;
 }
 
@@ -35,7 +37,8 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
 }
 
-export function XitoDriveFolderCard({ name, itemCount, type, categoryName, fileSize, onClick }: Props) {
+export function XitoDriveFolderCard({ name, itemCount, type, categoryName, fileSize, pcloudFolderId, onClick }: Props) {
+  const isMobile = useIsMobile();
   const gradient = categoryName ? CATEGORY_COLORS[categoryName] : null;
   const isFile = type === "file";
   const Icon = isFile
@@ -43,6 +46,31 @@ export function XitoDriveFolderCard({ name, itemCount, type, categoryName, fileS
     : categoryName
       ? (categoryIcons[categoryName] || Folder)
       : Folder;
+
+  const handleOpenInPCloud = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!pcloudFolderId) return;
+
+    const webUrl = `https://my.pcloud.com/#page=filemanager&folder=${pcloudFolderId}`;
+
+    if (isMobile) {
+      // Try pCloud app deep link first, fallback to web
+      const appUrl = `pcloud://folder/${pcloudFolderId}`;
+      const timeout = setTimeout(() => {
+        window.open(webUrl, "_blank");
+      }, 1500);
+      window.location.href = appUrl;
+      // If app opened, clear fallback
+      const handleBlur = () => {
+        clearTimeout(timeout);
+        window.removeEventListener("blur", handleBlur);
+      };
+      window.addEventListener("blur", handleBlur);
+    } else {
+      window.open(webUrl, "_blank");
+    }
+  };
 
   return (
     <button
@@ -67,6 +95,18 @@ export function XitoDriveFolderCard({ name, itemCount, type, categoryName, fileS
             {itemCount} {itemCount === 1 ? "item" : "items"}
           </p>
         ) : null}
+
+        {/* Open in pCloud link */}
+        {pcloudFolderId && !isFile && (
+          <div
+            onClick={handleOpenInPCloud}
+            className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded text-[9px] font-medium text-sky-600 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-900/30 transition-colors cursor-pointer"
+          >
+            <Cloud className="h-2.5 w-2.5" />
+            <span>Open in pCloud</span>
+            <ExternalLink className="h-2 w-2" />
+          </div>
+        )}
       </div>
     </button>
   );
