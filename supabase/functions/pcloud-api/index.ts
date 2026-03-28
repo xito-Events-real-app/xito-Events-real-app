@@ -191,11 +191,10 @@ serve(async (req) => {
       }
 
       case 'getrecentuploads': {
-        // Use /diff API to get actual upload events, then resolve paths via recursive listing
+        // Use recursive listing and sort files by modified timestamp (most recent first)
         const wtnPath = params.path || '/WEDDING TALES NEPAL';
         const topN = params.limit || 50;
         
-        // 1. Get recursive listing to build folderid→path map
         const recRes = await fetch(`${PCLOUD_API}/listfolder?auth=${auth}&path=${encodeURIComponent(wtnPath)}&recursive=1&showdeleted=0`);
         const recData = await recRes.json();
         if (recData.result !== 0) {
@@ -204,73 +203,43 @@ serve(async (req) => {
           });
         }
         
-        // Build folderid → path map
-        const folderMap = new Map<number, string>();
-        folderMap.set(recData.metadata.folderid, wtnPath);
-        buildFolderIdMap(recData.metadata.contents || [], wtnPath, folderMap);
-        
-        // 2. Get diff entries - fetch in chunks until we have enough WTN entries
-        interface DiffFileEntry {
+        // Collect all files recursively with their full paths
+        interface FileEntry {
           fileName: string; fullPath: string; size: number;
           modified: string; contenttype: string;
           monthYear: string; clientName: string; category: string; eventName: string;
         }
-        const wtnFiles: DiffFileEntry[] = [];
-        let currentDiffId = 0;
-        let iterations = 0;
-        const maxIterations = 10; // Safety limit
         
-        while (wtnFiles.length < topN && iterations < maxIterations) {
-          iterations++;
-          const diffRes = await fetch(`${PCLOUD_API}/diff?auth=${auth}&diffid=${currentDiffId}&limit=500`);
-          const diffData = await diffRes.json();
-          if (diffData.result !== 0) break;
-          
-          const entries = diffData.entries || [];
-          if (entries.length === 0) break;
-          
-          for (const entry of entries) {
-            if ((entry.event === 'createfile' || entry.event === 'modifyfile') && entry.metadata) {
-              const parentId = entry.metadata.parentfolderid;
-              const parentPath = folderMap.get(parentId);
-              if (parentPath) {
-                const fullPath = `${parentPath}/${entry.metadata.name}`;
-                const segments = fullPath.split('/').filter(Boolean);
-                // Use diff event time (Unix timestamp) as the actual upload time
-                const eventTime = entry.time ? new Date(entry.time * 1000).toUTCString() : '';
-                wtnFiles.push({
-                  fileName: entry.metadata.name,
-                  fullPath,
-                  size: entry.metadata.size || 0,
-                  modified: eventTime,
-                  contenttype: entry.metadata.contenttype || '',
-                  monthYear: segments[1] || '',
-                  clientName: segments[2] || '',
-                  category: segments[3] || '',
-                  eventName: segments[4] || '',
-                });
-              }
+        function collectFiles(contents: any[], parentPath: string, result: FileEntry[]) {
+          for (const item of contents) {
+            const itemPath = `${parentPath}/${item.name}`;
+            if (item.isfolder && item.contents) {
+              collectFiles(item.contents, itemPath, result);
+            } else if (!item.isfolder) {
+              const segments = itemPath.split('/').filter(Boolean);
+              // pCloud returns modified as RFC string e.g. "Thu, 28 Mar 2026 10:30:00 +0000"
+              const modifiedStr = item.modified || item.created || '';
+              result.push({
+                fileName: item.name,
+                fullPath: itemPath,
+                size: item.size || 0,
+                modified: modifiedStr,
+                contenttype: item.contenttype || '',
+                monthYear: segments[1] || '',
+                clientName: segments[2] || '',
+                category: segments[3] || '',
+                eventName: segments[4] || '',
+              });
             }
           }
-          
-          currentDiffId = diffData.diffid || 0;
-          // If we got fewer entries than limit, we've reached the end
-          if (entries.length < 500) break;
         }
         
-        // Deduplicate by fullPath (keep the latest entry for each file)
-        const deduped = new Map<string, DiffFileEntry>();
-        for (const f of wtnFiles) {
-          const existing = deduped.get(f.fullPath);
-          if (!existing || new Date(f.modified).getTime() > new Date(existing.modified).getTime()) {
-            deduped.set(f.fullPath, f);
-          }
-        }
+        const allFiles: FileEntry[] = [];
+        collectFiles(recData.metadata?.contents || [], wtnPath, allFiles);
         
-        // Sort by time desc (most recent first) and take top N
-        const sorted = Array.from(deduped.values())
-          .sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime())
-          .slice(0, topN);
+        // Sort by modified desc and take top N
+        allFiles.sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
+        const sorted = allFiles.slice(0, topN);
         
         return new Response(JSON.stringify({ result: 0, files: sorted, totalFiles: sorted.length }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
