@@ -44,20 +44,21 @@ const PortalMyVideos = ({ clientName, eventYear, eventMonth }: PortalMyVideosPro
     setActiveVideoUrl('');
     setActiveIndex(0);
 
-    listPCloudFolderByPath(pcloudPath)
+    listPCloudFolderByPath(pcloudPath, true)
       .then(async (folder) => {
         const allItems = folder.contents || [];
-        // Collect videos from root and subfolders
+        // Recursively collect all video files from any depth
         const videoFiles: PCloudItem[] = [];
-        for (const item of allItems) {
-          if (!item.isfolder && isPCloudVideo(item)) {
-            videoFiles.push(item);
-          } else if (item.isfolder && item.contents) {
-            for (const sub of item.contents) {
-              if (!sub.isfolder && isPCloudVideo(sub)) videoFiles.push(sub);
+        function collectVideos(items: PCloudItem[]) {
+          for (const item of items) {
+            if (!item.isfolder && isPCloudVideo(item)) {
+              videoFiles.push(item);
+            } else if (item.isfolder && item.contents) {
+              collectVideos(item.contents);
             }
           }
         }
+        collectVideos(allItems);
         setVideos(videoFiles);
 
         // Fetch thumbnails

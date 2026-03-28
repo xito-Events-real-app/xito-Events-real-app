@@ -279,11 +279,11 @@ export async function createPCloudFolderByPath(path: string): Promise<PCloudItem
 /**
  * List a folder by path instead of folder ID.
  */
-export async function listPCloudFolderByPath(path: string): Promise<PCloudFolder> {
+export async function listPCloudFolderByPath(path: string, recursive = false): Promise<PCloudFolder> {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   const data = await callPCloudDirect('/listfolder', {
     path: cleanPath,
-    recursive: '0',
+    recursive: recursive ? '1' : '0',
     showdeleted: '0',
   });
   const metadata = data.metadata || {};
