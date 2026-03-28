@@ -17,6 +17,7 @@ export interface VideoEditRow {
   subEventName: string;
   editType: string;
   editor: string;
+  colorist: string;
   companyNotes: string;
   clientDemand: string;
   reference: string;
@@ -164,6 +165,7 @@ function dbToRow(r: any): VideoEditRow {
     subEventName: r.sub_event_name || "",
     editType: normalizeEditType(r.edit_type),
     editor: r.editor || "",
+    colorist: r.colorist || "",
     companyNotes: r.company_notes || "",
     clientDemand: r.client_demand || "",
     reference: r.reference || "",
@@ -195,6 +197,7 @@ export async function updateVideoEditField(id: string, field: string, value: str
   const fieldMap: Record<string, string> = {
     urgency: "urgency",
     editor: "editor",
+    colorist: "colorist",
     videoEditStatus: "video_edit_status",
     companyNotes: "company_notes",
     clientDemand: "client_demand",

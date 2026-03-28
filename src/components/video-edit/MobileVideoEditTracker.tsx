@@ -144,6 +144,17 @@ function VideoCard({
         </Select>
       </div>
 
+      {['COLOR_QUEUE', 'COLOR_LAB', 'COLOR_ON_PROGRESS', 'EXPORT_QUEUE', 'EXPORTED', 'CLIENT_REVIEW', 'RE_EDIT_ON_PROGRESS', 'FINALIZED'].includes(currentStageKey) && (
+        <Select value={row.colorist || "unassigned"} onValueChange={(v) => onUpdateField(row.id, "colorist", v === "unassigned" ? "" : v, row.mergedIds)}>
+          <SelectTrigger className="w-full h-8 text-xs"><SelectValue placeholder="Colorist..." /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="unassigned">Unassigned</SelectItem>
+            {editors.filter(e => e.isVideoEditor && e.name).map(e => <SelectItem key={e.name} value={e.name}>⭐ {e.name}</SelectItem>)}
+            {editors.filter(e => !e.isVideoEditor && e.name).map(e => <SelectItem key={e.name} value={e.name}>{e.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      )}
+
       <Select onValueChange={(v) => onPushToStatus?.(row.id, v, row.mergedIds)}>
         <SelectTrigger className="w-full h-8 text-xs">
           <SelectValue placeholder="Move to..." />

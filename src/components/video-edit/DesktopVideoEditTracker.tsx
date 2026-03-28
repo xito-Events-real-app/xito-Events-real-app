@@ -93,6 +93,7 @@ function getTimeAgo(isoDate: string): string | null {
 /* ── Live Edit Timer ── */
 const NO_TIMER_STAGES = ['QUEUE', 'EDIT_LAB'];
 const PROGRESS_STAGES_SET = new Set(['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS', 'COLOR_QUEUE', 'COLOR_LAB', 'EXPORT_QUEUE', 'EXPORTED', 'CLIENT_REVIEW', 'FINALIZED']);
+const COLORIST_STAGES = new Set(['COLOR_QUEUE', 'COLOR_LAB', 'COLOR_ON_PROGRESS', 'EXPORT_QUEUE', 'EXPORTED', 'CLIENT_REVIEW', 'RE_EDIT_ON_PROGRESS', 'FINALIZED']);
 
 function LiveEditTimer({
   editStartedAt,
@@ -405,6 +406,7 @@ function VideoEditTable({
             <TableHead>Event</TableHead>
             <TableHead>Edit Type</TableHead>
             <TableHead>Editor</TableHead>
+            {COLORIST_STAGES.has(currentStageKey) && <TableHead>Colorist</TableHead>}
             <TableHead className="w-28">Event Date</TableHead>
             <TableHead className="w-24">Edit Started</TableHead>
             <TableHead className="w-28">Deadline</TableHead>
@@ -416,7 +418,7 @@ function VideoEditTable({
         <TableBody>
           {rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={15} className="text-center py-12 text-muted-foreground">
+              <TableCell colSpan={COLORIST_STAGES.has(currentStageKey) ? 16 : 15} className="text-center py-12 text-muted-foreground">
                 No rows found
               </TableCell>
             </TableRow>
@@ -535,6 +537,24 @@ function VideoEditTable({
                   </SelectContent>
                 </Select>
               </TableCell>
+              {COLORIST_STAGES.has(currentStageKey) && (
+              <TableCell>
+                <Select value={row.colorist || "unassigned"} onValueChange={(v) => onUpdateField(row.id, "colorist", v === "unassigned" ? "" : v, row.mergedIds)}>
+                  <SelectTrigger className="w-44 h-8 text-xs">
+                    <SelectValue placeholder="Assign..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                    {editors.filter(e => e.isVideoEditor && e.name).map(e => (
+                      <SelectItem key={`vc-${e.name}`} value={e.name}>⭐ {e.name}</SelectItem>
+                    ))}
+                    {editors.filter(e => !e.isVideoEditor && e.name).map(e => (
+                      <SelectItem key={`c-${e.name}`} value={e.name}>{e.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </TableCell>
+              )}
               {/* Event Date */}
               <TableCell>
                 {(() => {
