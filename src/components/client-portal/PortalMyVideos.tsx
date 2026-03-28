@@ -96,7 +96,7 @@ const PortalMyVideos = ({ clientName, eventYear, eventMonth }: PortalMyVideosPro
     if (!video.fileid) return;
     setDownloadingId(video.fileid);
     try {
-      const url = await getPCloudFileLink(video.fileid);
+      const url = await getPCloudPublicUrl(video.fileid);
       const a = document.createElement('a');
       a.href = url;
       a.download = video.name;
