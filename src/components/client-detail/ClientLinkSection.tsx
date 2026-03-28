@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ExternalLink, Copy, Send, Check, MessageCircle } from "lucide-react";
+import { ExternalLink, Copy, Send, Check, MessageCircle, Smartphone, Monitor } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -29,6 +29,7 @@ const ClientLinkSection = ({
 }: ClientLinkSectionProps) => {
   const [copied, setCopied] = useState(false);
   const [showSendDialog, setShowSendDialog] = useState(false);
+  const [viewMode, setViewMode] = useState<'phone' | 'desktop'>('phone');
 
   const portalUrl = getClientPortalUrl(registeredDateTimeAD, clientName);
   const message = generatePortalWhatsAppMessage(registeredDateTimeAD, clientName);
@@ -56,53 +57,82 @@ const ClientLinkSection = ({
 
   return (
     <div className="space-y-4">
+      {/* Actions Bar */}
       <Card className="bg-[hsl(220,25%,12%)] border-white/10">
-        <CardContent className="p-5 space-y-4">
-          <div className="flex items-center gap-3 mb-2">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-primary/20">
               <ExternalLink className="h-5 w-5 text-primary" />
             </div>
-            <div>
-              <h3 className="text-lg font-semibold text-white">Client Portal Link</h3>
-              <p className="text-xs text-white/40">Send this to clients via WhatsApp</p>
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-white">Client Portal</h3>
+              <p className="text-xs text-white/40">Live preview — exactly what client sees</p>
+            </div>
+            {/* View toggle */}
+            <div className="flex items-center gap-1 bg-white/5 rounded-full p-0.5">
+              <button
+                onClick={() => setViewMode('phone')}
+                className={`p-1.5 rounded-full transition-colors ${viewMode === 'phone' ? 'bg-primary text-white' : 'text-white/40'}`}
+              >
+                <Smartphone className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('desktop')}
+                className={`p-1.5 rounded-full transition-colors ${viewMode === 'desktop' ? 'bg-primary text-white' : 'text-white/40'}`}
+              >
+                <Monitor className="h-4 w-4" />
+              </button>
             </div>
           </div>
 
-          {/* URL Display */}
-          <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-            <p className="text-xs text-white/60 break-all font-mono">{portalUrl}</p>
-          </div>
-
-          {/* Actions */}
+          {/* Quick actions */}
           <div className="flex gap-2">
             <Button
               onClick={handleCopy}
               variant="outline"
+              size="sm"
               className="flex-1 border-white/20 text-white hover:bg-white/10"
             >
-              {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+              {copied ? <Check className="h-3.5 w-3.5 mr-1.5" /> : <Copy className="h-3.5 w-3.5 mr-1.5" />}
               {copied ? 'Copied!' : 'Copy Link'}
             </Button>
             <Button
               onClick={() => setShowSendDialog(true)}
+              size="sm"
               className="flex-1 bg-emerald-600 hover:bg-emerald-700"
             >
-              <Send className="h-4 w-4 mr-2" />
-              Send Link
+              <Send className="h-3.5 w-3.5 mr-1.5" />
+              Send via WhatsApp
             </Button>
           </div>
-
-          {/* Preview Link */}
-          <a
-            href={portalUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block text-center text-xs text-primary hover:underline"
-          >
-            Preview portal in new tab →
-          </a>
         </CardContent>
       </Card>
+
+      {/* Live Preview */}
+      <div className="flex justify-center">
+        <div
+          className={`relative transition-all duration-300 ${
+            viewMode === 'phone'
+              ? 'w-[375px] h-[700px] rounded-[2.5rem] border-[6px] border-white/20 shadow-2xl'
+              : 'w-full h-[700px] rounded-xl border border-white/10 shadow-xl'
+          }`}
+          style={viewMode === 'phone' ? {
+            background: 'linear-gradient(145deg, hsl(220,25%,15%), hsl(220,25%,8%))',
+          } : undefined}
+        >
+          {/* Phone notch */}
+          {viewMode === 'phone' && (
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[120px] h-[24px] bg-black rounded-b-2xl z-10" />
+          )}
+          <iframe
+            src={portalUrl}
+            className={`w-full h-full bg-[hsl(220,25%,6%)] ${
+              viewMode === 'phone' ? 'rounded-[2rem]' : 'rounded-xl'
+            }`}
+            title="Client Portal Preview"
+          />
+        </div>
+      </div>
 
       {/* Send Dialog */}
       <Dialog open={showSendDialog} onOpenChange={setShowSendDialog}>
