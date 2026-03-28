@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Film, Youtube, Cloud, Loader2, Download, Play, Pause, SkipForward, SkipBack } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { listPCloudFolderByPath, getPCloudFileLink, getPCloudThumbsBatch, isPCloudVideo, PCloudItem, formatPCloudSize } from "@/lib/pcloud-api";
+import { listPCloudFolderByPath, getPCloudPublicUrl, getPCloudThumbsBatch, isPCloudVideo, PCloudItem, formatPCloudSize } from "@/lib/pcloud-api";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
 
 interface PortalMyVideosProps {
