@@ -423,7 +423,7 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
           {currentGroup.clients.map(c => {
             const match = pcloudItems.find(p => p.isfolder && p.name === c.clientName);
             return (
-              <XitoDriveFolderCard key={c.registeredDateTimeAD} name={c.clientName} itemCount={PCLOUD_CATEGORIES.length} type="client" pcloudFolderId={match?.folderid} onClick={() => navigate(c.clientName, c.registeredDateTimeAD)} />
+              <XitoDriveFolderCard key={c.registeredDateTimeAD} name={c.clientName} itemCount={PCLOUD_CATEGORIES.length} type="client" pcloudFolderId={match?.folderid} folderSizeGB={getFolderSize(c.clientName)} onClick={() => navigate(c.clientName, c.registeredDateTimeAD)} />
             );
           })}
           {extraPCloudFolders.map(f => (
