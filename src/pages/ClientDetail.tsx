@@ -1772,7 +1772,20 @@ const ClientDetail = () => {
             />
           )}
 
-          {/* Freelancers Section */}
+          {/* Client Link Section */}
+          {activeSection === 'clientLink' && client?.registeredDateTimeAD && (
+            <ClientLinkSection
+              registeredDateTimeAD={client.registeredDateTimeAD}
+              clientName={client.clientName || ''}
+              contactNo={client.contactNo || ''}
+              whatsappNo={client.whatsappNo || ''}
+              brideFullName={contactDetailsData?.bride_full_name || ''}
+              brideWhatsapp={contactDetailsData?.bride_whatsapp_number || ''}
+              groomFullName={contactDetailsData?.groom_full_name || ''}
+              groomWhatsapp={contactDetailsData?.groom_whatsapp_number || ''}
+            />
+          )}
+
           {activeSection === 'freelancers' && client?.registeredDateTimeAD && (
             <FreelancerAssignmentSection registeredDateTimeAD={client.registeredDateTimeAD} />
           )}
