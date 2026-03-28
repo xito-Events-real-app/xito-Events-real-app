@@ -60,13 +60,19 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
   const [folderSizes, setFolderSizes] = useState<Record<string, { sizeGB: string; bytes: number }>>({});
   const [calculatingSizes, setCalculatingSizes] = useState(false);
 
-  // Load cached folder sizes from DB
+  // Load cached folder sizes from DB — auto-calculate if none exist
+  const [sizesLoaded, setSizesLoaded] = useState(false);
+  const [autoCalcTriggered, setAutoCalcTriggered] = useState(false);
+
   useEffect(() => {
     supabase
       .from('pcloud_folder_sizes')
       .select('folder_path, folder_name, size_bytes')
       .then(({ data }) => {
-        if (!data) return;
+        if (!data || data.length === 0) {
+          setSizesLoaded(true);
+          return;
+        }
         const map: Record<string, { sizeGB: string; bytes: number }> = {};
         for (const row of data) {
           const gb = row.size_bytes / (1024 * 1024 * 1024);
@@ -76,6 +82,7 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
           };
         }
         setFolderSizes(map);
+        setSizesLoaded(true);
       });
   }, []);
 
