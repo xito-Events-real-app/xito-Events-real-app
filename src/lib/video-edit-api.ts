@@ -230,10 +230,10 @@ export async function pushToStatus(id: string, newStatus: string): Promise<void>
     updated_at: new Date().toISOString(),
   };
 
-  // Fetch current row for edit_started_at and stage_history
+  // Fetch current row for edit_started_at, stage_history, editor, colorist
   const { data: existing } = await supabase
     .from("video_edit_tracker")
-    .select("edit_started_at, stage_history")
+    .select("edit_started_at, stage_history, editor, colorist")
     .eq("id", id)
     .single();
 
