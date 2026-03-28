@@ -104,6 +104,14 @@ export async function getPCloudFileLink(fileid: number): Promise<string> {
   throw new Error('Could not get file link');
 }
 
+export async function getPCloudPublicUrl(fileid: number): Promise<string> {
+  const data = await callPCloudDirect('/getfilepublink', { fileid: String(fileid) });
+  if (data.link) {
+    return data.link.startsWith('http') ? data.link : `https://u.pcloud.link${data.link}`;
+  }
+  throw new Error('Could not get public file link');
+}
+
 export async function getPCloudThumbUrl(fileid: number, size: string = '200x200'): Promise<string> {
   const data = await invokePCloudAction<{ hosts?: string[]; path?: string }>('getthumblink', {
     fileid,
