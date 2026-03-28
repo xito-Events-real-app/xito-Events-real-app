@@ -103,16 +103,13 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
     return () => { cancelled = true; };
   }, [clients, assignments, isLoading]);
 
-  // Fetch pCloud contents when navigating deeper than root
+  // Fetch pCloud contents — always fetch (including root level for folder IDs)
   useEffect(() => {
-    if (breadcrumb.length === 0) {
-      setPcloudItems([]);
-      return;
-    }
     let cancelled = false;
     setPcloudLoading(true);
     setPcloudItems([]);
-    listPCloudFolderByPath(currentPCloudPath)
+    const path = breadcrumb.length === 0 ? `/${PCLOUD_ROOT}` : currentPCloudPath;
+    listPCloudFolderByPath(path)
       .then(result => {
         if (!cancelled) {
           setPcloudItems(result.contents);
