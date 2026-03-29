@@ -5,7 +5,7 @@ import { listE2Folder, getE2FileUrls, E2File } from "@/lib/idrive-e2-api";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
 import { cn } from "@/lib/utils";
 import XitoImageViewer from "@/components/client-detail/XitoImageViewer";
-import PortalPhotoEventNav from "./PortalPhotoEventNav";
+
 
 const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".tiff", ".bmp", ".heic"];
 const isImage = (key: string) => IMAGE_EXTS.some((e) => key.toLowerCase().endsWith(e));
@@ -95,11 +95,7 @@ const PortalMyPhotos = ({ clientName, assignments, onShowBottomNav }: PortalMyPh
     return result;
   }, [assignments, clientName, majorityYearMonth]);
 
-  // Hide bottom nav when in photos, show event nav instead
-  useEffect(() => {
-    onShowBottomNav(false);
-    return () => onShowBottomNav(true);
-  }, [onShowBottomNav]);
+  // Keep bottom nav visible — no longer hiding it
 
   // Load photos when tab changes
   useEffect(() => {
@@ -166,7 +162,32 @@ const PortalMyPhotos = ({ clientName, assignments, onShowBottomNav }: PortalMyPh
 
   return (
     <>
-      <div className="pb-20 px-3 pt-3">
+      <div className="pb-36 px-3 pt-1">
+        {/* Event selector bar above photos */}
+        {tabs.length > 1 && (
+          <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-1 scrollbar-hide">
+            {tabs.map((tab, idx) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTabIndex(idx)}
+                className={cn(
+                  "shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all duration-200",
+                  idx === activeTabIndex
+                    ? "bg-[hsl(350,80%,65%)] text-white border-[hsl(350,80%,65%)] shadow-[0_0_12px_hsl(350,80%,65%/0.4)]"
+                    : "bg-white/5 text-white/50 border-white/10 hover:bg-white/10 hover:text-white/70"
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {tabs.length === 1 && (
+          <div className="mb-3 px-1">
+            <span className="text-xs font-medium text-[hsl(350,80%,65%)]">{tabs[0].label}</span>
+          </div>
+        )}
+
         {isLoadingPhotos ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -230,14 +251,6 @@ const PortalMyPhotos = ({ clientName, assignments, onShowBottomNav }: PortalMyPh
         )}
       </div>
 
-      {/* Event navigation bar replaces bottom nav */}
-      <PortalPhotoEventNav
-        tabs={tabs.map(t => ({ id: t.id, label: t.label }))}
-        activeIndex={activeTabIndex}
-        onPrev={() => setActiveTabIndex(i => Math.max(0, i - 1))}
-        onNext={() => setActiveTabIndex(i => Math.min(tabs.length - 1, i + 1))}
-        onBack={() => onShowBottomNav(true)}
-      />
 
       {/* XITO IMAGE VIEWER */}
       {viewerIndex !== null && viewerImages.length > 0 && (
