@@ -84,6 +84,11 @@ export async function deleteE2Object(key: string): Promise<{ success: boolean }>
   return callE2("delete", { key });
 }
 
+/** Server-side S3 copy — no data transfer, just metadata copy */
+export async function copyE2Object(sourceKey: string, destinationKey: string): Promise<{ success: boolean; key: string }> {
+  return callE2("copyObject", { sourceKey, destinationKey });
+}
+
 export async function getE2FileUrl(key: string): Promise<string> {
   const data = await callE2("getSignedUrl", { key });
   return data.url;
