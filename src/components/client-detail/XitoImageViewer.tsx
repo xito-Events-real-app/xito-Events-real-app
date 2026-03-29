@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, memo } from "react";
 import { X, ChevronLeft, ChevronRight, Download, ImageIcon, Check, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 

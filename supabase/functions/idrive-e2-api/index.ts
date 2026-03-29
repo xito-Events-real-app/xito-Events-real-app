@@ -448,7 +448,57 @@ serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ error: "Unknown action. Use: list, listRecursive, createFolder, upload, delete, getSignedUrl, getSignedUrls, getUploadUrl" }), {
+    // ACTION: copyObject — server-side S3 copy (no data transfer)
+    if (action === "copyObject") {
+      const body = await req.json();
+      const { sourceKey, destinationKey } = body;
+      if (!sourceKey || !destinationKey) {
+        return new Response(JSON.stringify({ error: "sourceKey and destinationKey required" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Ensure destination folder exists
+      const destFolder = destinationKey.substring(0, destinationKey.lastIndexOf("/") + 1);
+      if (destFolder) {
+        const folderSigned = await signS3Request({
+          method: "PUT", endpoint, bucket, objectKey: destFolder,
+          region, accessKey, secretKey,
+          body: "",
+          headers: { "content-length": "0", "content-type": "application/x-directory" },
+        });
+        await fetch(folderSigned.url, { method: "PUT", headers: folderSigned.headers, body: "" });
+      }
+
+      // S3 CopyObject: PUT with x-amz-copy-source header
+      const copySource = `/${bucket}/${sourceKey}`;
+      const signed = await signS3Request({
+        method: "PUT", endpoint, bucket, objectKey: destinationKey,
+        region, accessKey, secretKey,
+        body: "",
+        headers: {
+          "content-length": "0",
+          "x-amz-copy-source": s3UriEncode(copySource, false),
+        },
+      });
+      const s3Resp = await fetch(signed.url, {
+        method: "PUT",
+        headers: signed.headers,
+        body: "",
+      });
+      const respText = await s3Resp.text();
+      if (!s3Resp.ok) {
+        console.error("S3 copyObject error:", respText);
+        return new Response(JSON.stringify({ error: "Copy failed", details: respText }), {
+          status: s3Resp.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ success: true, key: destinationKey }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ error: "Unknown action. Use: list, listRecursive, createFolder, upload, delete, getSignedUrl, getSignedUrls, getUploadUrl, copyObject" }), {
       status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {

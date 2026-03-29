@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, memo } from "react";
 import { Loader2, Image as ImageIcon, FolderOpen, Download } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { listE2Folder, getE2FileUrls, E2File } from "@/lib/idrive-e2-api";
@@ -49,38 +49,65 @@ const PortalMyPhotos = ({
   const [urlsFetchedCount, setUrlsFetchedCount] = useState(0);
   const listCacheRef = useRef<Record<string, E2File[]>>({});
 
-  // Build selectedAlbums map: photoKey → albumTypes[]
+  // Use refs for album state to avoid recreating callbacks
+  const albumSelectionsRef = useRef(albumSelections);
+  albumSelectionsRef.current = albumSelections;
+  const photoUrlsRef = useRef(photoUrls);
+  photoUrlsRef.current = photoUrls;
+
+  // Local album state for optimistic UI — synced to parent without causing viewer re-render
+  const [localAlbumSelections, setLocalAlbumSelections] = useState(albumSelections);
+  useEffect(() => {
+    setLocalAlbumSelections(albumSelections);
+  }, [albumSelections]);
+
+  // Build selectedAlbums map from LOCAL state
   const selectedAlbumsMap = useMemo(() => {
     const map: Record<string, string[]> = {};
-    albumSelections.forEach(s => {
+    localAlbumSelections.forEach(s => {
       if (!map[s.photo_key]) map[s.photo_key] = [];
       map[s.photo_key].push(s.album_type);
     });
     return map;
-  }, [albumSelections]);
+  }, [localAlbumSelections]);
 
-  // Album counts
+  // Album counts from LOCAL state
   const albumCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     albums.forEach(a => {
-      counts[a.type] = albumSelections.filter(s => s.album_type === a.type).length;
+      counts[a.type] = localAlbumSelections.filter(s => s.album_type === a.type).length;
     });
     return counts;
-  }, [albumSelections, albums]);
+  }, [localAlbumSelections, albums]);
 
-  const handleToggleAlbum = useCallback(async (photoKey: string, albumType: string, albumName: string) => {
-    const isCurrentlySelected = selectedAlbumsMap[photoKey]?.includes(albumType);
+  // Stable toggle handler using refs — no parent state updates during viewer interaction
+  const handleToggleAlbum = useCallback((photoKey: string, albumType: string, albumName: string) => {
+    const currentSelections = albumSelectionsRef.current;
+    const isCurrentlySelected = currentSelections.some(s => s.album_type === albumType && s.photo_key === photoKey);
 
     if (isCurrentlySelected) {
-      // Optimistic remove
-      const updated = albumSelections.filter(s => !(s.album_type === albumType && s.photo_key === photoKey));
-      onAlbumSelectionsChange(updated);
-      const success = await removeFromAlbum(registeredDateTimeAD, albumType, photoKey);
-      if (!success) {
-        onAlbumSelectionsChange(albumSelections);
-        toast.error("Failed to remove from album");
-      }
+      // Optimistic remove — update local state instantly
+      const updated = currentSelections.filter(s => !(s.album_type === albumType && s.photo_key === photoKey));
+      setLocalAlbumSelections(updated);
+      albumSelectionsRef.current = updated;
+      // Fire-and-forget: DB delete + E2 delete in background
+      removeFromAlbum(registeredDateTimeAD, albumType, photoKey, albumName).then(success => {
+        if (success) {
+          onAlbumSelectionsChange(albumSelectionsRef.current);
+        } else {
+          // Revert
+          setLocalAlbumSelections(currentSelections);
+          albumSelectionsRef.current = currentSelections;
+          toast.error("Failed to remove from album");
+        }
+      });
     } else {
+      // Check count client-side
+      const typeCount = currentSelections.filter(s => s.album_type === albumType).length;
+      if (typeCount >= 140) {
+        toast.error("Album is full (140 max)");
+        return;
+      }
       // Optimistic add
       const newSelection: AlbumSelection = {
         id: crypto.randomUUID(),
@@ -88,17 +115,25 @@ const PortalMyPhotos = ({
         album_type: albumType,
         album_name: albumName,
         photo_key: photoKey,
-        photo_url: photoUrls[photoKey] || '',
+        photo_url: photoUrlsRef.current[photoKey] || '',
         selected_at: new Date().toISOString(),
       };
-      onAlbumSelectionsChange([...albumSelections, newSelection]);
-      const success = await addToAlbum(registeredDateTimeAD, albumType, albumName, photoKey, photoUrls[photoKey]);
-      if (!success) {
-        onAlbumSelectionsChange(albumSelections);
-        toast.error("Album is full (140 max) or failed to save");
-      }
+      const updated = [...currentSelections, newSelection];
+      setLocalAlbumSelections(updated);
+      albumSelectionsRef.current = updated;
+      // Fire-and-forget: DB save + E2 copy in background
+      addToAlbum(registeredDateTimeAD, albumType, albumName, photoKey, photoUrlsRef.current[photoKey]).then(success => {
+        if (success) {
+          onAlbumSelectionsChange(albumSelectionsRef.current);
+        } else {
+          // Revert
+          setLocalAlbumSelections(currentSelections);
+          albumSelectionsRef.current = currentSelections;
+          toast.error("Failed to save to album");
+        }
+      });
     }
-  }, [selectedAlbumsMap, albumSelections, onAlbumSelectionsChange, registeredDateTimeAD, photoUrls]);
+  }, [registeredDateTimeAD, onAlbumSelectionsChange]);
 
   // Compute majority year-month
   const majorityYearMonth = useMemo(() => {
@@ -263,7 +298,6 @@ const PortalMyPhotos = ({
             <div className="grid grid-cols-3 gap-1">
               {photos.map((file, idx) => {
                 const url = photoUrls[file.key];
-                // Show album indicator dots
                 const fileAlbums = selectedAlbumsMap[file.key] || [];
                 return (
                   <div
@@ -282,7 +316,6 @@ const PortalMyPhotos = ({
                         </div>
                       )}
                     </button>
-                    {/* Album selection indicator */}
                     {fileAlbums.length > 0 && (
                       <div className="absolute top-1 left-1 flex gap-0.5">
                         {fileAlbums.map(at => (
@@ -334,4 +367,4 @@ const PortalMyPhotos = ({
   );
 };
 
-export default PortalMyPhotos;
+export default memo(PortalMyPhotos);
