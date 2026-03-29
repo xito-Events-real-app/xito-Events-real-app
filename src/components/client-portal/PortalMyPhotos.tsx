@@ -5,7 +5,7 @@ import { listE2Folder, getE2FileUrls, E2File } from "@/lib/idrive-e2-api";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
 import { cn } from "@/lib/utils";
 import XitoImageViewer from "@/components/client-detail/XitoImageViewer";
-import PortalPhotoEventNav from "./PortalPhotoEventNav";
+
 
 const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".tiff", ".bmp", ".heic"];
 const isImage = (key: string) => IMAGE_EXTS.some((e) => key.toLowerCase().endsWith(e));
