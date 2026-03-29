@@ -1,14 +1,28 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { X, ChevronLeft, ChevronRight, Download, ImageIcon } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, Download, ImageIcon, Check, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+export interface AlbumInfo {
+  type: string;
+  name: string;
+}
 
 interface XitoImageViewerProps {
   images: { key: string; url: string }[];
   initialIndex: number;
   onClose: () => void;
+  albums?: AlbumInfo[];
+  albumCounts?: Record<string, number>;
+  selectedAlbums?: Record<string, string[]>; // photoKey → albumTypes[]
+  onToggleAlbum?: (photoKey: string, albumType: string, albumName: string) => void;
 }
 
-const XitoImageViewer = ({ images, initialIndex, onClose }: XitoImageViewerProps) => {
+const MAX_ALBUM_PHOTOS = 140;
+
+const XitoImageViewer = ({
+  images, initialIndex, onClose,
+  albums, albumCounts, selectedAlbums, onToggleAlbum
+}: XitoImageViewerProps) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const touchStartX = useRef(0);
   const total = images.length;
@@ -23,7 +37,6 @@ const XitoImageViewer = ({ images, initialIndex, onClose }: XitoImageViewerProps
     if (currentIndex < total - 1) setCurrentIndex(currentIndex + 1);
   }, [currentIndex, total]);
 
-  // Keyboard navigation
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -34,7 +47,6 @@ const XitoImageViewer = ({ images, initialIndex, onClose }: XitoImageViewerProps
     return () => window.removeEventListener("keydown", handler);
   }, [goPrev, goNext, onClose]);
 
-  // Touch swipe
   const onTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
   const onTouchEnd = (e: React.TouchEvent) => {
     const delta = touchStartX.current - e.changedTouches[0].clientX;
@@ -51,10 +63,13 @@ const XitoImageViewer = ({ images, initialIndex, onClose }: XitoImageViewerProps
     a.click();
   };
 
-  // Determine which indices to render (prev, current, next)
   const renderIndices = [currentIndex - 1, currentIndex, currentIndex + 1].filter(
     (i) => i >= 0 && i < total
   );
+
+  const currentPhotoKey = images[currentIndex]?.key || "";
+  const currentAlbumTypes = selectedAlbums?.[currentPhotoKey] || [];
+  const hasAlbums = albums && albums.length > 0 && onToggleAlbum;
 
   return (
     <div
@@ -80,8 +95,7 @@ const XitoImageViewer = ({ images, initialIndex, onClose }: XitoImageViewerProps
       </div>
 
       {/* Main Image Area */}
-      <div className="flex-1 relative flex items-center justify-center overflow-hidden">
-        {/* Left Arrow */}
+      <div className={cn("flex-1 relative flex items-center justify-center overflow-hidden", hasAlbums && "mb-0")}>
         {!isFirst && (
           <button
             onClick={goPrev}
@@ -91,7 +105,6 @@ const XitoImageViewer = ({ images, initialIndex, onClose }: XitoImageViewerProps
           </button>
         )}
 
-        {/* Preloaded images: prev, current, next rendered in DOM */}
         {renderIndices.map((idx) => (
           <img
             key={images[idx]?.key || idx}
@@ -105,7 +118,6 @@ const XitoImageViewer = ({ images, initialIndex, onClose }: XitoImageViewerProps
           />
         ))}
 
-        {/* Right Arrow */}
         {!isLast && (
           <button
             onClick={goNext}
@@ -116,9 +128,63 @@ const XitoImageViewer = ({ images, initialIndex, onClose }: XitoImageViewerProps
         )}
       </div>
 
+      {/* Album Selection Bar */}
+      {hasAlbums && (
+        <div className="px-3 py-3 bg-black/90 backdrop-blur-md border-t border-white/[0.08] z-10">
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
+            {albums!.map((album) => {
+              const isSelected = currentAlbumTypes.includes(album.type);
+              const count = albumCounts?.[album.type] || 0;
+              const isFull = count >= MAX_ALBUM_PHOTOS && !isSelected;
+              return (
+                <button
+                  key={album.type}
+                  disabled={isFull}
+                  onClick={() => onToggleAlbum!(currentPhotoKey, album.type, album.name)}
+                  className={cn(
+                    "shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-all duration-200",
+                    isSelected
+                      ? "bg-[hsl(350,80%,65%)] text-white border-[hsl(350,80%,65%)] shadow-[0_0_12px_hsl(350,80%,65%/0.4)]"
+                      : isFull
+                        ? "bg-white/[0.03] text-white/20 border-white/[0.06] cursor-not-allowed"
+                        : "bg-white/[0.06] text-white/60 border-white/10 hover:bg-white/10 active:scale-95"
+                  )}
+                >
+                  <span className={cn(
+                    "flex items-center justify-center w-4 h-4 rounded-full transition-all",
+                    isSelected ? "bg-white/25" : "bg-white/10"
+                  )}>
+                    {isSelected
+                      ? <Check className="h-2.5 w-2.5" />
+                      : <Plus className="h-2.5 w-2.5" />
+                    }
+                  </span>
+                  <span>{album.name}</span>
+                  <span className={cn(
+                    "text-[10px] ml-0.5",
+                    isSelected ? "text-white/70" : "text-white/30"
+                  )}>
+                    ({count}/{MAX_ALBUM_PHOTOS})
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* End of folder message */}
-      {isLast && (
+      {isLast && !hasAlbums && (
         <div className="absolute bottom-6 left-0 right-0 text-center">
+          <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/10 backdrop-blur-md text-white/80 text-sm">
+            <ImageIcon className="h-4 w-4" />
+            You've viewed all {total} photos from this folder
+          </div>
+        </div>
+      )}
+
+      {isLast && hasAlbums && (
+        <div className="absolute bottom-20 left-0 right-0 text-center z-[2]">
           <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/10 backdrop-blur-md text-white/80 text-sm">
             <ImageIcon className="h-4 w-4" />
             You've viewed all {total} photos from this folder
