@@ -50,8 +50,7 @@ const PortalMyPhotos = ({
   const listCacheRef = useRef<Record<string, E2File[]>>({});
 
   // Use refs for album state to avoid recreating callbacks
-  const albumSelectionsRef = useRef(albumSelections);
-  albumSelectionsRef.current = albumSelections;
+  const albumSelectionsRef = useRef(localAlbumSelections);
   const photoUrlsRef = useRef(photoUrls);
   photoUrlsRef.current = photoUrls;
 
