@@ -121,14 +121,14 @@ const PortalMyPhotos = ({
       const updated = [...currentSelections, newSelection];
       setLocalAlbumSelections(updated);
       albumSelectionsRef.current = updated;
+      onAlbumSelectionsChange(updated);
       // Fire-and-forget: DB save + E2 copy in background
       addToAlbum(registeredDateTimeAD, albumType, albumName, photoKey, photoUrlsRef.current[photoKey]).then(success => {
-        if (success) {
-          onAlbumSelectionsChange(albumSelectionsRef.current);
-        } else {
-          // Revert
+        if (!success) {
+          // Revert both local and parent
           setLocalAlbumSelections(currentSelections);
           albumSelectionsRef.current = currentSelections;
+          onAlbumSelectionsChange(currentSelections);
           toast.error("Failed to save to album");
         }
       });
