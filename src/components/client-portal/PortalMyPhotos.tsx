@@ -251,14 +251,6 @@ const PortalMyPhotos = ({ clientName, assignments, onShowBottomNav }: PortalMyPh
         )}
       </div>
 
-      {/* Event navigation bar replaces bottom nav */}
-      <PortalPhotoEventNav
-        tabs={tabs.map(t => ({ id: t.id, label: t.label }))}
-        activeIndex={activeTabIndex}
-        onPrev={() => setActiveTabIndex(i => Math.max(0, i - 1))}
-        onNext={() => setActiveTabIndex(i => Math.min(tabs.length - 1, i + 1))}
-        onBack={() => onShowBottomNav(true)}
-      />
 
       {/* XITO IMAGE VIEWER */}
       {viewerIndex !== null && viewerImages.length > 0 && (
