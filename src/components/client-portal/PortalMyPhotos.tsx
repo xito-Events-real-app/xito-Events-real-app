@@ -4,8 +4,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { listE2Folder, getE2FileUrls, E2File } from "@/lib/idrive-e2-api";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
 import { cn } from "@/lib/utils";
-import XitoImageViewer from "@/components/client-detail/XitoImageViewer";
-
+import XitoImageViewer, { AlbumInfo } from "@/components/client-detail/XitoImageViewer";
+import { AlbumSelection, addToAlbum, removeFromAlbum } from "@/lib/album-selection-api";
+import { toast } from "sonner";
 
 const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".tiff", ".bmp", ".heic"];
 const isImage = (key: string) => IMAGE_EXTS.some((e) => key.toLowerCase().endsWith(e));
@@ -30,9 +31,16 @@ interface PortalMyPhotosProps {
   clientName: string;
   assignments: Assignment[];
   onShowBottomNav: (show: boolean) => void;
+  registeredDateTimeAD: string;
+  albums: AlbumInfo[];
+  albumSelections: AlbumSelection[];
+  onAlbumSelectionsChange: (selections: AlbumSelection[]) => void;
 }
 
-const PortalMyPhotos = ({ clientName, assignments, onShowBottomNav }: PortalMyPhotosProps) => {
+const PortalMyPhotos = ({
+  clientName, assignments, onShowBottomNav,
+  registeredDateTimeAD, albums, albumSelections, onAlbumSelectionsChange
+}: PortalMyPhotosProps) => {
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [photos, setPhotos] = useState<E2File[]>([]);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
@@ -40,6 +48,57 @@ const PortalMyPhotos = ({ clientName, assignments, onShowBottomNav }: PortalMyPh
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [urlsFetchedCount, setUrlsFetchedCount] = useState(0);
   const listCacheRef = useRef<Record<string, E2File[]>>({});
+
+  // Build selectedAlbums map: photoKey → albumTypes[]
+  const selectedAlbumsMap = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    albumSelections.forEach(s => {
+      if (!map[s.photo_key]) map[s.photo_key] = [];
+      map[s.photo_key].push(s.album_type);
+    });
+    return map;
+  }, [albumSelections]);
+
+  // Album counts
+  const albumCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    albums.forEach(a => {
+      counts[a.type] = albumSelections.filter(s => s.album_type === a.type).length;
+    });
+    return counts;
+  }, [albumSelections, albums]);
+
+  const handleToggleAlbum = useCallback(async (photoKey: string, albumType: string, albumName: string) => {
+    const isCurrentlySelected = selectedAlbumsMap[photoKey]?.includes(albumType);
+
+    if (isCurrentlySelected) {
+      // Optimistic remove
+      const updated = albumSelections.filter(s => !(s.album_type === albumType && s.photo_key === photoKey));
+      onAlbumSelectionsChange(updated);
+      const success = await removeFromAlbum(registeredDateTimeAD, albumType, photoKey);
+      if (!success) {
+        onAlbumSelectionsChange(albumSelections);
+        toast.error("Failed to remove from album");
+      }
+    } else {
+      // Optimistic add
+      const newSelection: AlbumSelection = {
+        id: crypto.randomUUID(),
+        registered_date_time_ad: registeredDateTimeAD,
+        album_type: albumType,
+        album_name: albumName,
+        photo_key: photoKey,
+        photo_url: photoUrls[photoKey] || '',
+        selected_at: new Date().toISOString(),
+      };
+      onAlbumSelectionsChange([...albumSelections, newSelection]);
+      const success = await addToAlbum(registeredDateTimeAD, albumType, albumName, photoKey, photoUrls[photoKey]);
+      if (!success) {
+        onAlbumSelectionsChange(albumSelections);
+        toast.error("Album is full (140 max) or failed to save");
+      }
+    }
+  }, [selectedAlbumsMap, albumSelections, onAlbumSelectionsChange, registeredDateTimeAD, photoUrls]);
 
   // Compute majority year-month
   const majorityYearMonth = useMemo(() => {
@@ -94,8 +153,6 @@ const PortalMyPhotos = ({ clientName, assignments, onShowBottomNav }: PortalMyPh
     });
     return result;
   }, [assignments, clientName, majorityYearMonth]);
-
-  // Keep bottom nav visible — no longer hiding it
 
   // Load photos when tab changes
   useEffect(() => {
@@ -206,6 +263,8 @@ const PortalMyPhotos = ({ clientName, assignments, onShowBottomNav }: PortalMyPh
             <div className="grid grid-cols-3 gap-1">
               {photos.map((file, idx) => {
                 const url = photoUrls[file.key];
+                // Show album indicator dots
+                const fileAlbums = selectedAlbumsMap[file.key] || [];
                 return (
                   <div
                     key={file.key}
@@ -223,6 +282,14 @@ const PortalMyPhotos = ({ clientName, assignments, onShowBottomNav }: PortalMyPh
                         </div>
                       )}
                     </button>
+                    {/* Album selection indicator */}
+                    {fileAlbums.length > 0 && (
+                      <div className="absolute top-1 left-1 flex gap-0.5">
+                        {fileAlbums.map(at => (
+                          <div key={at} className="w-2 h-2 rounded-full bg-[hsl(350,80%,65%)] shadow-[0_0_4px_hsl(350,80%,65%/0.6)]" />
+                        ))}
+                      </div>
+                    )}
                     {url && (
                       <a
                         href={url}
@@ -251,13 +318,16 @@ const PortalMyPhotos = ({ clientName, assignments, onShowBottomNav }: PortalMyPh
         )}
       </div>
 
-
       {/* XITO IMAGE VIEWER */}
       {viewerIndex !== null && viewerImages.length > 0 && (
         <XitoImageViewer
           images={viewerImages}
           initialIndex={viewerIndex}
           onClose={() => setViewerIndex(null)}
+          albums={albums.length > 0 ? albums : undefined}
+          albumCounts={albums.length > 0 ? albumCounts : undefined}
+          selectedAlbums={albums.length > 0 ? selectedAlbumsMap : undefined}
+          onToggleAlbum={albums.length > 0 ? handleToggleAlbum : undefined}
         />
       )}
     </>
