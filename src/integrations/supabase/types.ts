@@ -32,6 +32,36 @@ export type Database = {
         }
         Relationships: []
       }
+      client_album_selections: {
+        Row: {
+          album_name: string
+          album_type: string
+          id: string
+          photo_key: string
+          photo_url: string | null
+          registered_date_time_ad: string
+          selected_at: string
+        }
+        Insert: {
+          album_name?: string
+          album_type: string
+          id?: string
+          photo_key: string
+          photo_url?: string | null
+          registered_date_time_ad: string
+          selected_at?: string
+        }
+        Update: {
+          album_name?: string
+          album_type?: string
+          id?: string
+          photo_key?: string
+          photo_url?: string | null
+          registered_date_time_ad?: string
+          selected_at?: string
+        }
+        Relationships: []
+      }
       client_deliverables: {
         Row: {
           album_name: string
