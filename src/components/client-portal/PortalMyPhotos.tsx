@@ -55,11 +55,19 @@ const PortalMyPhotos = ({
   const photoUrlsRef = useRef(photoUrls);
   photoUrlsRef.current = photoUrls;
 
-  // Local album state for optimistic UI — synced to parent without causing viewer re-render
+  // Local album state for optimistic UI — only synced to parent on unmount
   const [localAlbumSelections, setLocalAlbumSelections] = useState(albumSelections);
+  const onAlbumSelectionsChangeRef = useRef(onAlbumSelectionsChange);
+  onAlbumSelectionsChangeRef.current = onAlbumSelectionsChange;
+  const localAlbumSelectionsRef = useRef(localAlbumSelections);
+  localAlbumSelectionsRef.current = localAlbumSelections;
+
+  // Sync local state back to parent on unmount so album tab gets latest
   useEffect(() => {
-    setLocalAlbumSelections(albumSelections);
-  }, [albumSelections]);
+    return () => {
+      onAlbumSelectionsChangeRef.current(localAlbumSelectionsRef.current);
+    };
+  }, []);
 
   // Build selectedAlbums map from LOCAL state
   const selectedAlbumsMap = useMemo(() => {
