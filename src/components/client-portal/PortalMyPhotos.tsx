@@ -49,15 +49,16 @@ const PortalMyPhotos = ({
   const [urlsFetchedCount, setUrlsFetchedCount] = useState(0);
   const listCacheRef = useRef<Record<string, E2File[]>>({});
 
-  // Use refs for album state to avoid recreating callbacks
-  const albumSelectionsRef = useRef(localAlbumSelections);
-  const photoUrlsRef = useRef(photoUrls);
-  photoUrlsRef.current = photoUrls;
-
   // Local album state for optimistic UI — only synced to parent on unmount
   const [localAlbumSelections, setLocalAlbumSelections] = useState(albumSelections);
   const onAlbumSelectionsChangeRef = useRef(onAlbumSelectionsChange);
   onAlbumSelectionsChangeRef.current = onAlbumSelectionsChange;
+
+  // Use refs for album state to avoid recreating callbacks
+  const albumSelectionsRef = useRef(localAlbumSelections);
+  albumSelectionsRef.current = localAlbumSelections;
+  const photoUrlsRef = useRef(photoUrls);
+  photoUrlsRef.current = photoUrls;
   const localAlbumSelectionsRef = useRef(localAlbumSelections);
   localAlbumSelectionsRef.current = localAlbumSelections;
 
