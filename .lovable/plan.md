@@ -1,104 +1,82 @@
 
 
-# Client Portal Redesign — Premium UI + Contact Form Integration
+# Album Selection Feature for Client Portal Photos
 
 ## Overview
 
-Transform the Client Portal into a stunning, premium wedding app experience with:
-1. Netflix/Instagram-grade dashboard with freelancer details in events
-2. Integrated contact details form as a dedicated bottom-nav tab
-3. Smart form-fill reminder on first load if contact details are incomplete
-4. Required fields: Name, Contact Number, WhatsApp for both bride and groom
+When viewing photos in the Client Portal, add album selection buttons below each photo (in the viewer). Albums are derived from the client's deliverables (bride_album, groom_album, other_album from `client_deliverables` table). Each album holds max 140 photos. Add a new "My Album" tab to view selected photos per album.
 
-## Current State
+## Data Model
 
-- **PortalDashboard**: Basic cards with events, countdown, venue/time info
-- **ClientPortal page**: Loads client data, event details, and assignments from Supabase
-- **PortalBottomNav**: 4 tabs — Dashboard, Photos, Videos, Payment
-- **ClientContactForm**: Separate standalone page at `/client-form/:slug/:id`
-- **Contact data**: Stored in `contact_details_cache` table, saved via `google-sheets` edge function
+**New table: `client_album_selections`**
+- `id` uuid PK
+- `registered_date_time_ad` text NOT NULL
+- `album_type` text NOT NULL (e.g. 'bride_album', 'groom_album', 'other_album')
+- `album_name` text NOT NULL (display name from deliverables)
+- `photo_key` text NOT NULL (S3 key of selected photo)
+- `photo_url` text (cached signed URL, optional)
+- `selected_at` timestamptz DEFAULT now()
+- UNIQUE(registered_date_time_ad, album_type, photo_key)
 
-## Plan
+## Changes
 
-### 1. Add "My Details" Tab to Bottom Navigation
-**File: `src/components/client-portal/PortalBottomNav.tsx`**
-- Add 5th tab: `details` with `UserCircle` icon and label "My Details"
-- Update `PortalTab` type to include `'details'`
+### 1. Database Migration
+Create `client_album_selections` table with public RLS policy (matching other tables' pattern).
 
-### 2. Redesign PortalDashboard — Premium Wedding UI
-**File: `src/components/client-portal/PortalDashboard.tsx`**
-- Pass `assignments` data (all fields including videographer, drone, etc.) as prop
-- **Hero section**: Large animated countdown with particle/shimmer effects, gradient background, client name in elegant typography
-- **Event cards**: Expandable — collapsed shows event name + date + venue; expanded shows:
-  - Venue with map link
-  - Timing
-  - Freelancer crew list (Photographer Bride, Photographer Groom, Videographer Bride, Videographer Groom, Extra Photographer, Drone, etc.) with role labels and colored badges
-- Use glass-morphism cards, subtle animations, rose/gold accent palette
-- Add WTN branding watermark
+### 2. New API: `src/lib/album-selection-api.ts`
+- `getAlbumSelections(registeredDateTimeAD)` → fetch all selections
+- `addToAlbum(registeredDateTimeAD, albumType, albumName, photoKey)` → insert (check count < 140)
+- `removeFromAlbum(registeredDateTimeAD, albumType, photoKey)` → delete
+- `getAlbumCount(registeredDateTimeAD, albumType)` → count
 
-### 3. Load Full Assignment Data in ClientPortal
-**File: `src/pages/ClientPortal.tsx`**
-- Expand the `freelancer_assignments` query to fetch ALL role columns (videographer_bride, videographer_groom, extra_videographer, assistant, iphone_shooter, drone_operator, fpv_operator)
-- Expand `Assignment` interface to include all roles
-- Pass full assignments to PortalDashboard
-- Load `contact_details_cache` for the client (new query)
-- Track `contactLoaded` and `hasFilledContact` state
-- Pass contact data + save handler to the new "My Details" tab
+### 3. Load Album Deliverables in ClientPortal.tsx
+- Query `client_deliverables` for album entries (section='album', enabled=true): bride_album, groom_album, other_album
+- Pass available albums + `registeredDateTimeAD` to `PortalMyPhotos`
 
-### 4. Create PortalMyDetails Component — Integrated Form
-**File: `src/components/client-portal/PortalMyDetails.tsx`** (new)
-- Dark-themed version of the existing `ClientContactForm` adapted for the portal
-- Two sections: Bride (rose accent) and Groom (sky accent)
-- **Required fields** (validated before save): Full Name, Contact Number, WhatsApp Number — for both bride and groom
-- **Optional fields**: Backup numbers, relations, Instagram, home address
-- **Partial save**: Client can save just the required fields and fill the rest later
-- Save via `supabase.functions.invoke('google-sheets', { action: 'updateClientContactDetails' })`
-- Also upsert into `contact_details_cache` for instant reads
-- Show success toast on save, form stays editable (not a one-time submit)
-- Pre-fill from cached data on load
+### 4. Update XitoImageViewer — Album Selection Bar
+- Accept new props: `albums` (list of {type, name}), `selections` (map of photoKey → albumTypes[]), `onToggleAlbum(photoKey, albumType, albumName)`
+- Render a bottom bar below the image with album buttons:
+  - Each button shows album name + count (e.g. "Bride Album (12/140)")
+  - Small check/plus icon inside each button to toggle selection
+  - Selected state: filled rose button; unselected: outline button
+  - Smooth toggle animation
 
-### 5. Smart Form Reminder
-**File: `src/pages/ClientPortal.tsx`**
-- On load, check `contact_details_cache` for this client
-- If bride/groom name + contact + whatsapp are not all filled → show a gentle banner at the top of Dashboard tab:
-  - "Please fill in your contact details" with a button that switches to "My Details" tab
-  - Not a popup/modal — just a persistent banner within the dashboard content
-  - Dismisses once they navigate to My Details tab
+### 5. Update PortalMyPhotos
+- Load album deliverables and selections on mount
+- Pass albums + selections + toggle handler to XitoImageViewer
+- On toggle: optimistic state update + DB write
 
-### 6. Premium Visual Polish
-**Files: PortalDashboard, PortalBottomNav, ClientPortal, PortalMyDetails**
-- Dark theme with rose-gold gradients throughout
-- Animated countdown: large number with glow effect, ring animation
-- Glass-morphism event cards with hover/tap micro-interactions
-- Smooth tab transitions
-- Bottom nav with active indicator glow
-- Shimmer loading skeletons instead of plain spinner
-- Event expand/collapse with smooth height animation
-- WTN branding: subtle rose hearts, elegant typography
+### 6. Add "My Album" Tab
+- Add `'album'` to `PortalTab` type in PortalBottomNav (6th tab with `BookOpen` icon)
+- Create `src/components/client-portal/PortalMyAlbum.tsx`:
+  - Shows album tabs (Bride Album, Groom Album, Other Album)
+  - Lists selected photos for each album in a grid
+  - Shows count (X/140) per album
+  - Click opens XitoImageViewer for that album's photos
+  - Option to remove photos from album
+
+### 7. Wire in ClientPortal.tsx
+- Load `client_album_selections` data
+- Pass to both PortalMyPhotos and PortalMyAlbum
+- Add album tab rendering
 
 ## Technical Details
 
-### Data Flow
+### Album Selection Flow
 ```text
-ClientPortal.tsx
-  ├── fetches: clients_cache, event_details_cache, freelancer_assignments, contact_details_cache
-  ├── PortalDashboard (events + full assignments + contactFilled flag)
-  ├── PortalMyPhotos (assignments)
-  ├── PortalMyVideos (client info)
-  ├── PortalMyPayment
-  └── PortalMyDetails (contactData + saveHandler + registeredDateTimeAD)
+User views photo in XitoImageViewer
+  → Bottom bar shows available albums from deliverables
+  → Tap album button → toggles photo in/out of that album
+  → Optimistic UI + upsert/delete in client_album_selections
+  → Count updates live (X/140)
 ```
 
-### Required Fields Validation (PortalMyDetails)
-- Bride: fullName, contactNumber, whatsappNumber
-- Groom: fullName, contactNumber, whatsappNumber
-- Phone validation: 10 digits, numeric only
-- Save button disabled until all 6 required fields are filled
-
-### Files Changed
-1. `src/components/client-portal/PortalBottomNav.tsx` — add 5th tab
-2. `src/components/client-portal/PortalDashboard.tsx` — complete redesign with assignments + premium UI
-3. `src/pages/ClientPortal.tsx` — fetch all assignment roles + contact data, wire new tab + reminder
-4. `src/components/client-portal/PortalMyDetails.tsx` — new file, dark-themed contact form
-5. `src/index.css` — add portal-specific animations (shimmer, glow, expand)
+### Files Changed/Created
+1. **Migration**: Create `client_album_selections` table
+2. **New**: `src/lib/album-selection-api.ts`
+3. **New**: `src/components/client-portal/PortalMyAlbum.tsx`
+4. **Modified**: `src/components/client-detail/XitoImageViewer.tsx` — add album bar props
+5. **Modified**: `src/components/client-portal/PortalMyPhotos.tsx` — load albums/selections, pass to viewer
+6. **Modified**: `src/components/client-portal/PortalBottomNav.tsx` — add Album tab
+7. **Modified**: `src/pages/ClientPortal.tsx` — load deliverables + selections, wire album tab
 
