@@ -162,7 +162,32 @@ const PortalMyPhotos = ({ clientName, assignments, onShowBottomNav }: PortalMyPh
 
   return (
     <>
-      <div className="pb-20 px-3 pt-3">
+      <div className="pb-36 px-3 pt-1">
+        {/* Event selector bar above photos */}
+        {tabs.length > 1 && (
+          <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-1 scrollbar-hide">
+            {tabs.map((tab, idx) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTabIndex(idx)}
+                className={cn(
+                  "shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all duration-200",
+                  idx === activeTabIndex
+                    ? "bg-[hsl(350,80%,65%)] text-white border-[hsl(350,80%,65%)] shadow-[0_0_12px_hsl(350,80%,65%/0.4)]"
+                    : "bg-white/5 text-white/50 border-white/10 hover:bg-white/10 hover:text-white/70"
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {tabs.length === 1 && (
+          <div className="mb-3 px-1">
+            <span className="text-xs font-medium text-[hsl(350,80%,65%)]">{tabs[0].label}</span>
+          </div>
+        )}
+
         {isLoadingPhotos ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
