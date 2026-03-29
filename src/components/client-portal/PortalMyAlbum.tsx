@@ -145,8 +145,9 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
                       {url ? (
                         <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center">
+                        <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 animate-pulse bg-white/[0.03]">
                           <Loader2 className="h-4 w-4 animate-spin text-white/20" />
+                          <span className="text-[9px] text-white/15">Loading...</span>
                         </div>
                       )}
                     </button>
