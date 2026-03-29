@@ -95,11 +95,7 @@ const PortalMyPhotos = ({ clientName, assignments, onShowBottomNav }: PortalMyPh
     return result;
   }, [assignments, clientName, majorityYearMonth]);
 
-  // Hide bottom nav when in photos, show event nav instead
-  useEffect(() => {
-    onShowBottomNav(false);
-    return () => onShowBottomNav(true);
-  }, [onShowBottomNav]);
+  // Keep bottom nav visible — no longer hiding it
 
   // Load photos when tab changes
   useEffect(() => {
