@@ -55,11 +55,19 @@ const PortalMyPhotos = ({
   const photoUrlsRef = useRef(photoUrls);
   photoUrlsRef.current = photoUrls;
 
-  // Local album state for optimistic UI — synced to parent without causing viewer re-render
+  // Local album state for optimistic UI — only synced to parent on unmount
   const [localAlbumSelections, setLocalAlbumSelections] = useState(albumSelections);
+  const onAlbumSelectionsChangeRef = useRef(onAlbumSelectionsChange);
+  onAlbumSelectionsChangeRef.current = onAlbumSelectionsChange;
+  const localAlbumSelectionsRef = useRef(localAlbumSelections);
+  localAlbumSelectionsRef.current = localAlbumSelections;
+
+  // Sync local state back to parent on unmount so album tab gets latest
   useEffect(() => {
-    setLocalAlbumSelections(albumSelections);
-  }, [albumSelections]);
+    return () => {
+      onAlbumSelectionsChangeRef.current(localAlbumSelectionsRef.current);
+    };
+  }, []);
 
   // Build selectedAlbums map from LOCAL state
   const selectedAlbumsMap = useMemo(() => {
@@ -86,18 +94,15 @@ const PortalMyPhotos = ({
     const isCurrentlySelected = currentSelections.some(s => s.album_type === albumType && s.photo_key === photoKey);
 
     if (isCurrentlySelected) {
-      // Optimistic remove — update local + parent state instantly
+      // Optimistic remove — local only, no parent re-render
       const updated = currentSelections.filter(s => !(s.album_type === albumType && s.photo_key === photoKey));
       setLocalAlbumSelections(updated);
       albumSelectionsRef.current = updated;
-      onAlbumSelectionsChange(updated);
       // Fire-and-forget: DB delete + E2 delete in background
       removeFromAlbum(registeredDateTimeAD, albumType, photoKey, albumName).then(success => {
         if (!success) {
-          // Revert both local and parent
           setLocalAlbumSelections(currentSelections);
           albumSelectionsRef.current = currentSelections;
-          onAlbumSelectionsChange(currentSelections);
           toast.error("Failed to remove from album");
         }
       });
@@ -121,19 +126,16 @@ const PortalMyPhotos = ({
       const updated = [...currentSelections, newSelection];
       setLocalAlbumSelections(updated);
       albumSelectionsRef.current = updated;
-      onAlbumSelectionsChange(updated);
       // Fire-and-forget: DB save + E2 copy in background
       addToAlbum(registeredDateTimeAD, albumType, albumName, photoKey, photoUrlsRef.current[photoKey]).then(success => {
         if (!success) {
-          // Revert both local and parent
           setLocalAlbumSelections(currentSelections);
           albumSelectionsRef.current = currentSelections;
-          onAlbumSelectionsChange(currentSelections);
           toast.error("Failed to save to album");
         }
       });
     }
-  }, [registeredDateTimeAD, onAlbumSelectionsChange]);
+  }, [registeredDateTimeAD]);
 
   // Compute majority year-month
   const majorityYearMonth = useMemo(() => {
