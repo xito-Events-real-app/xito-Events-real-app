@@ -8,6 +8,8 @@ import PortalMyPhotos from "@/components/client-portal/PortalMyPhotos";
 import PortalMyVideos from "@/components/client-portal/PortalMyVideos";
 import PortalMyPayment from "@/components/client-portal/PortalMyPayment";
 import PortalMyDetails from "@/components/client-portal/PortalMyDetails";
+import PortalMyAlbum from "@/components/client-portal/PortalMyAlbum";
+import { AlbumSelection, getAlbumSelections, getAlbumDefsFromDeliverables, AlbumDef } from "@/lib/album-selection-api";
 
 interface ClientData {
   clientName: string;
@@ -76,6 +78,8 @@ const ClientPortal = () => {
   const [assignments, setAssignments] = useState<FullAssignment[]>([]);
   const [contactData, setContactData] = useState<ContactData | null>(null);
   const [hasFilledContact, setHasFilledContact] = useState(true);
+  const [albumDefs, setAlbumDefs] = useState<AlbumDef[]>([]);
+  const [albumSelections, setAlbumSelections] = useState<AlbumSelection[]>([]);
 
   useEffect(() => {
     if (!decodedId) return;
@@ -86,7 +90,9 @@ const ClientPortal = () => {
       supabase.from('event_details_cache').select('event_name, event_date_ad, venue_name, venue_city, venue_area, event_start_time, event_end_time').eq('registered_date_time_ad', decodedId).order('event_index'),
       supabase.from('freelancer_assignments').select('event, event_year, event_month, photographer_bride, photographer_groom, extra_photographer, videographer_bride, videographer_groom, extra_videographer, assistant, iphone_shooter, drone_operator, fpv_operator').eq('registered_date_time_ad', decodedId),
       supabase.from('contact_details_cache').select('bride_full_name, bride_contact_number, bride_whatsapp_number, bride_backup_number, bride_backup_relation, bride_instagram, bride_home_city, bride_home_area, groom_full_name, groom_contact_number, groom_whatsapp_number, groom_backup_number, groom_backup_relation, groom_instagram, groom_home_city, groom_home_area').eq('registered_date_time_ad', decodedId).maybeSingle(),
-    ]).then(([clientRes, eventsRes, assignRes, contactRes]) => {
+      getAlbumDefsFromDeliverables(decodedId),
+      getAlbumSelections(decodedId),
+    ]).then(([clientRes, eventsRes, assignRes, contactRes, albumDefsResult, albumSelectionsResult]) => {
       if (clientRes.data) {
         setClient({
           clientName: clientRes.data.client_name || '',
@@ -151,6 +157,8 @@ const ClientPortal = () => {
       } else {
         setHasFilledContact(false);
       }
+      setAlbumDefs(albumDefsResult);
+      setAlbumSelections(albumSelectionsResult);
     }).finally(() => setIsLoading(false));
   }, [decodedId]);
 
@@ -171,6 +179,8 @@ const ClientPortal = () => {
   const handleContactSaved = useCallback(() => {
     setHasFilledContact(true);
   }, []);
+
+  const totalAlbumCount = albumSelections.length;
 
   if (isLoading) {
     return (
@@ -195,7 +205,6 @@ const ClientPortal = () => {
     );
   }
 
-  // Photos tab still uses the old Assignment interface shape
   const photoAssignments = assignments.map(a => ({
     event: a.event,
     eventYear: a.eventYear,
@@ -244,6 +253,18 @@ const ClientPortal = () => {
           clientName={client.clientName}
           assignments={photoAssignments}
           onShowBottomNav={handleShowBottomNav}
+          registeredDateTimeAD={decodedId}
+          albums={albumDefs}
+          albumSelections={albumSelections}
+          onAlbumSelectionsChange={setAlbumSelections}
+        />
+      )}
+      {activeTab === 'album' && (
+        <PortalMyAlbum
+          registeredDateTimeAD={decodedId}
+          albums={albumDefs}
+          selections={albumSelections}
+          onSelectionsChange={setAlbumSelections}
         />
       )}
       {activeTab === 'videos' && (
@@ -264,7 +285,7 @@ const ClientPortal = () => {
 
       {/* Bottom Nav */}
       {showBottomNav && (
-        <PortalBottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+        <PortalBottomNav activeTab={activeTab} onTabChange={setActiveTab} albumCount={totalAlbumCount} />
       )}
     </div>
   );
