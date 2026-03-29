@@ -195,4 +195,4 @@ const XitoImageViewer = ({
   );
 };
 
-export default XitoImageViewer;
+export default memo(XitoImageViewer);
