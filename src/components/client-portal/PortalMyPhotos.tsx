@@ -86,18 +86,18 @@ const PortalMyPhotos = ({
     const isCurrentlySelected = currentSelections.some(s => s.album_type === albumType && s.photo_key === photoKey);
 
     if (isCurrentlySelected) {
-      // Optimistic remove — update local state instantly
+      // Optimistic remove — update local + parent state instantly
       const updated = currentSelections.filter(s => !(s.album_type === albumType && s.photo_key === photoKey));
       setLocalAlbumSelections(updated);
       albumSelectionsRef.current = updated;
+      onAlbumSelectionsChange(updated);
       // Fire-and-forget: DB delete + E2 delete in background
       removeFromAlbum(registeredDateTimeAD, albumType, photoKey, albumName).then(success => {
-        if (success) {
-          onAlbumSelectionsChange(albumSelectionsRef.current);
-        } else {
-          // Revert
+        if (!success) {
+          // Revert both local and parent
           setLocalAlbumSelections(currentSelections);
           albumSelectionsRef.current = currentSelections;
+          onAlbumSelectionsChange(currentSelections);
           toast.error("Failed to remove from album");
         }
       });
@@ -121,14 +121,14 @@ const PortalMyPhotos = ({
       const updated = [...currentSelections, newSelection];
       setLocalAlbumSelections(updated);
       albumSelectionsRef.current = updated;
+      onAlbumSelectionsChange(updated);
       // Fire-and-forget: DB save + E2 copy in background
       addToAlbum(registeredDateTimeAD, albumType, albumName, photoKey, photoUrlsRef.current[photoKey]).then(success => {
-        if (success) {
-          onAlbumSelectionsChange(albumSelectionsRef.current);
-        } else {
-          // Revert
+        if (!success) {
+          // Revert both local and parent
           setLocalAlbumSelections(currentSelections);
           albumSelectionsRef.current = currentSelections;
+          onAlbumSelectionsChange(currentSelections);
           toast.error("Failed to save to album");
         }
       });
