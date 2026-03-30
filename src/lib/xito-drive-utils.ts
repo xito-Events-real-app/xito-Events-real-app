@@ -111,28 +111,46 @@ export function buildMonthYearGroups(clients: BookedClientData[]): MonthYearGrou
     const years = (client.eventYear || "").split("\n").filter(Boolean);
     const months = (client.eventMonth || "").split("\n").filter(Boolean);
     const events = (client.events || "").split("\n").filter(Boolean);
+    const clientName = client.clientName || "Unknown Client";
+    const regDate = client.registeredDateTimeAD || "";
 
-    const key = getMajorityYearMonth(years, months);
-    const [yearStr, monthStr] = key.split("-");
-    const monthNum = parseInt(monthStr, 10);
+    // Group events by their individual year-month
+    const eventsByYearMonth = new Map<string, string[]>();
+    const maxLen = Math.max(events.length, years.length, months.length, 1);
 
-    if (!groupMap.has(key)) {
-      const monthName = NEPALI_MONTHS[monthNum] || `MONTH ${monthStr}`;
-      groupMap.set(key, {
-        key,
-        label: `${monthName} EVENTS ${yearStr}`,
-        year: yearStr,
-        month: monthStr,
-        monthNum,
-        clients: [],
-      });
+    for (let i = 0; i < maxLen; i++) {
+      const ev = events[i];
+      if (!ev) continue;
+      const y = String(parseInt(years[i] || years[0] || "0"));
+      const m = String(parseInt(months[i] || months[0] || "0")).padStart(2, "0");
+      const key = `${y}-${m}`;
+      if (!eventsByYearMonth.has(key)) eventsByYearMonth.set(key, []);
+      eventsByYearMonth.get(key)!.push(ev);
     }
 
-    groupMap.get(key)!.clients.push({
-      clientName: client.clientName || "Unknown Client",
-      registeredDateTimeAD: client.registeredDateTimeAD || "",
-      events,
-    });
+    // Place client into each relevant month group
+    for (const [key, monthEvents] of eventsByYearMonth) {
+      const [yearStr, monthStr] = key.split("-");
+      const monthNum = parseInt(monthStr, 10);
+
+      if (!groupMap.has(key)) {
+        const monthName = NEPALI_MONTHS[monthNum] || `MONTH ${monthStr}`;
+        groupMap.set(key, {
+          key,
+          label: `${monthName} EVENTS ${yearStr}`,
+          year: yearStr,
+          month: monthStr,
+          monthNum,
+          clients: [],
+        });
+      }
+
+      groupMap.get(key)!.clients.push({
+        clientName,
+        registeredDateTimeAD: regDate,
+        events: monthEvents,
+      });
+    }
   }
 
   return Array.from(groupMap.values()).sort((a, b) => {
