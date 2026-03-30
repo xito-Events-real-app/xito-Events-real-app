@@ -42,19 +42,17 @@ function getDeadlineInfoPipeline(deadline: string): { text: string; isCrossed: b
   } catch { return null; }
 }
 
-const NO_TIMER_STAGES_PIPELINE = new Set(['QUEUE', 'EDIT_LAB']);
-
-function PipelineLiveTimer({ editStartedAt, stageKey }: { editStartedAt: string; stageKey: string }) {
+function PipelineLiveTimer({ editStartedAt, stageKey, stageHistory }: { editStartedAt: string; stageKey: string; stageHistory?: string }) {
   const [now, setNow] = useState(Date.now());
   const isFinalized = stageKey === 'FINALIZED';
 
   useEffect(() => {
-    if (isFinalized || NO_TIMER_STAGES_PIPELINE.has(stageKey)) return;
+    if (isFinalized) return;
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
-  }, [isFinalized, stageKey]);
+  }, [isFinalized]);
 
-  if (!editStartedAt || NO_TIMER_STAGES_PIPELINE.has(stageKey)) return null;
+  if (!editStartedAt) return null;
   const startTime = new Date(editStartedAt).getTime();
   if (isNaN(startTime)) return null;
 

@@ -2052,6 +2052,51 @@ export function DesktopVideoEditTracker() {
           </div>
         )}
       </div>
+      {/* Search Dialog */}
+      <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Search className="w-5 h-5 text-primary" />
+              Search Client
+            </DialogTitle>
+            <DialogDescription>
+              Type to search or press <kbd className="px-1.5 py-0.5 rounded bg-muted text-xs font-mono">E</kbd> twice to open
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            ref={searchInputRef}
+            placeholder="Search client name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="mb-2"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && searchResults.length > 0) {
+                handleSearchSelect(searchResults[0]);
+              }
+            }}
+          />
+          <div className="max-h-72 overflow-y-auto space-y-0.5">
+            {searchResults.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No clients found</p>
+            ) : (
+              searchResults.map(name => {
+                const total = STAGES.reduce((sum, s) => sum + (rowsByStatus[s.key] || []).filter(r => r.clientName === name).length, 0);
+                return (
+                  <button
+                    key={name}
+                    onClick={() => handleSearchSelect(name)}
+                    className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-muted/60 flex items-center justify-between transition-colors"
+                  >
+                    <span className="font-medium text-sm text-foreground">{name}</span>
+                    <Badge variant="outline" className="text-[10px]">{total} videos</Badge>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
