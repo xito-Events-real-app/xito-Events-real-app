@@ -49,6 +49,7 @@ import { EditedFilesUploadProvider } from "./components/edited-files/EditedFiles
 import { UploadProgressTracker } from "./components/edited-files/UploadProgressTracker";
 import { PCloudUploadProvider } from "./contexts/PCloudUploadContext";
 import { PCloudUploadTracker } from "./components/pcloud-drive/PCloudUploadTracker";
+import { StartupAnnouncementPopup } from "./components/suite/StartupAnnouncementPopup";
 
 const queryClient = new QueryClient();
 
