@@ -59,6 +59,12 @@ function WtnFilesAnnouncement() {
   return <WtnFilesAnnouncementDialog user={user} onNavigate={() => navigate('/files?section=files')} />;
 }
 
+function AuthenticatedStartupPopup() {
+  const { user } = useAuthContext();
+  if (!user) return null;
+  return <StartupAnnouncementPopup />;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
