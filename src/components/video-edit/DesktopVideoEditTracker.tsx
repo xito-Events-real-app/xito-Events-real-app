@@ -1499,10 +1499,17 @@ function VideoEditSidebar({
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center">
             <Video className="w-4 h-4 text-white" />
           </div>
-          <div>
+          <div className="flex-1">
             <div className="font-semibold text-sm">Video Edit</div>
             <div className="text-[10px] text-zinc-400">Tracker</div>
           </div>
+          <button
+            onClick={onSearchClick}
+            className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition-colors"
+            title="Search clients (press E twice)"
+          >
+            <Search className="w-4 h-4 text-zinc-400" />
+          </button>
         </div>
       </div>
 
