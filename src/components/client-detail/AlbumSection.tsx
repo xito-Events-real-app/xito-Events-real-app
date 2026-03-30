@@ -65,35 +65,8 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     return { count: albumRows.length, sides, types };
   }, [deliverables]);
 
-  // Compute majority year-month once for all assignments
-  const majorityYearMonth = useMemo(() => {
-    const years = assignments.map(a => a.eventYear || "").filter(Boolean);
-    const months = assignments.map(a => a.eventMonth || "").filter(Boolean);
-    if (years.length === 0 || months.length === 0) return null;
-
-    const freq = new Map<string, number>();
-    const order: string[] = [];
-    for (let i = 0; i < Math.max(years.length, months.length, 1); i++) {
-      const y = String(parseInt(years[i] || years[0] || "0"));
-      const m = String(parseInt(months[i] || months[0] || "0")).padStart(2, "0");
-      const key = `${y}-${m}`;
-      if (!freq.has(key)) order.push(key);
-      freq.set(key, (freq.get(key) || 0) + 1);
-    }
-    let best = order[0] || "0-00";
-    let bestCount = 0;
-    for (const k of order) {
-      if ((freq.get(k) || 0) > bestCount) {
-        best = k;
-        bestCount = freq.get(k) || 0;
-      }
-    }
-    return best;
-  }, [assignments]);
-
-  // Build tabs from assignments — deduplicated, using majority month for S3 prefix
+  // Build tabs from assignments — use each assignment's own eventMonth/eventYear
   const tabs: TabDef[] = useMemo(() => {
-    if (!majorityYearMonth) return [];
     const result: TabDef[] = [];
     const seen = new Set<string>();
 
@@ -103,15 +76,16 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
       if (a.photographerGroom) photographers.push({ name: a.photographerGroom });
       if (a.extraPhotographer) photographers.push({ name: a.extraPhotographer });
 
+      const y = String(parseInt(a.eventYear || "0"));
+      const m = parseInt(a.eventMonth || "0");
+      if (!y || y === "0" || !m) return;
+      const monthLabel = NEPALI_MONTHS[m] || `MONTH ${m}`;
+      const folderLabel = `${monthLabel} EVENTS ${y}`;
+
       photographers.forEach((p) => {
         const tabId = `${a.event}-${p.name}`;
         if (seen.has(tabId)) return;
         seen.add(tabId);
-        // Convert numeric year-month to label format: "MAGH EVENTS 2082"
-        const [ymYear, ymMonth] = majorityYearMonth!.split("-");
-        const monthNum = parseInt(ymMonth, 10);
-        const monthLabel = NEPALI_MONTHS[monthNum] || `MONTH ${ymMonth}`;
-        const folderLabel = `${monthLabel} EVENTS ${ymYear}`;
         const prefix = `${folderLabel}/${clientName}/Photos/${a.event}/${p.name}/`;
         result.push({
           id: tabId,
@@ -123,7 +97,7 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
       });
     });
     return result;
-  }, [assignments, clientName, majorityYearMonth]);
+  }, [assignments, clientName]);
 
   // Fetch photo counts for all tabs on mount & cache results
   useEffect(() => {
@@ -151,23 +125,19 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     if (tabs.length > 0 && !activeTab) setActiveTab(tabs[0].id);
   }, [tabs, activeTab]);
 
-  // Load photos when tab changes — use cache if available
+  // Load photos when tab changes — fetch ALL URLs at once
   useEffect(() => {
     const tab = tabs.find((t) => t.id === activeTab);
     if (!tab) return;
     setIsLoadingPhotos(true);
     setPhotos([]);
     setPhotoUrls({});
-    setUrlsFetchedCount(0);
 
     const loadPhotos = async (imageFiles: E2File[]) => {
       setPhotos(imageFiles);
-      // Only fetch URLs for first batch
       if (imageFiles.length > 0) {
-        const firstBatch = imageFiles.slice(0, INITIAL_URL_BATCH);
-        const urls = await getE2FileUrls(firstBatch.map((f) => f.key));
+        const urls = await getE2FileUrls(imageFiles.map((f) => f.key));
         setPhotoUrls(urls);
-        setUrlsFetchedCount(firstBatch.length);
       }
       setIsLoadingPhotos(false);
     };
@@ -188,16 +158,6 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
         });
     }
   }, [activeTab, tabs]);
-
-  // Load more URLs
-  const loadMoreUrls = useCallback(async () => {
-    if (urlsFetchedCount >= photos.length) return;
-    const nextBatch = photos.slice(urlsFetchedCount, urlsFetchedCount + INITIAL_URL_BATCH);
-    if (nextBatch.length === 0) return;
-    const urls = await getE2FileUrls(nextBatch.map((f) => f.key));
-    setPhotoUrls((prev) => ({ ...prev, ...urls }));
-    setUrlsFetchedCount((prev) => prev + nextBatch.length);
-  }, [photos, urlsFetchedCount]);
 
   // Viewer data
   const viewerImages = useMemo(
