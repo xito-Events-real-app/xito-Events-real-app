@@ -281,14 +281,6 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
                       );
                     })}
                   </div>
-                  {hasMore && (
-                    <button
-                      onClick={loadMoreUrls}
-                      className="mt-4 w-full py-2.5 rounded-lg bg-white/5 border border-white/10 text-sm text-white/60 hover:bg-white/10 hover:text-white/80 transition-all"
-                    >
-                      Load more photos ({photos.length - urlsFetchedCount} remaining)
-                    </button>
-                  )}
                 </>
               )}
             </TabsContent>
