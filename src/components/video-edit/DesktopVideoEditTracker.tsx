@@ -1426,6 +1426,7 @@ function VideoEditSidebar({
   activeProgressEditors,
   playingEditors,
   editorStageGroups,
+  onSearchClick,
 }: {
   activeView: ActiveView;
   onViewChange: (view: ActiveView) => void;
@@ -1440,6 +1441,7 @@ function VideoEditSidebar({
     editLab: string[];
     available: string[];
   };
+  onSearchClick?: () => void;
 }) {
   const navItems = [
     { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
