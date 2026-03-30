@@ -1,35 +1,41 @@
 
 
-# Fix: Photos Not Showing for Some Clients + Speed Improvement
+# Multi-Month Folder Creation for Clients
 
-## Root Cause — Wrong Month Folder
+## Problem
+Currently, `buildMonthYearGroups()` assigns each client to a SINGLE month folder using a "majority month" rule. A client like KARISHMA SHRESTHA with events in FALGUN (month 11) and CHAITRA (month 12) only gets folders in one of them. This breaks file organization.
 
-Both `PortalMyPhotos` and `AlbumSection` compute a single "majority month" across all assignments, then use it as the S3 folder prefix for EVERY tab. This breaks when:
-- A client's E2 folder was created under a different month than the majority
-- Example: KARISHMA SHRESTHA has events in month 11 (MAGH) and 12 (FALGUN), majority picks MAGH, but all photos are in `FALGUN EVENTS 2082/KARISHMA SHRESTHA/`
+## Solution
+Change `buildMonthYearGroups()` so a client appears in EVERY month where they have events, with only the relevant events listed under each month group. This single change fixes folder creation for all three modules (XITO DRIVE, pCloud, Research) since they all call `buildMonthYearGroups`.
 
-The fix: use each assignment's own `eventMonth`/`eventYear` to build the S3 prefix per tab, instead of a global majority month.
+## Example
+KARISHMA SHRESTHA — events: "Reception" (FALGUN 2082), "Wedding" (CHAITRA 2082)
 
-## Root Cause — Slow Loading
+**Before:** Only appears under `FALGUN EVENTS 2082/KARISHMA SHRESTHA/` with both events
 
-XITO Drive fetches ALL signed URLs in one batch call. Album/Portal fetch only 12 at a time requiring manual "Load more" clicks. Fix: fetch all URLs in a single batch like XITO Drive does.
+**After:**
+- `FALGUN EVENTS 2082/KARISHMA SHRESTHA/` → only Reception event folders
+- `CHAITRA EVENTS 2082/KARISHMA SHRESTHA/` → only Wedding event folders
 
-## Plan
+## Technical Change
 
-### 1. Fix per-tab S3 prefix in `PortalMyPhotos.tsx`
-- Remove the `majorityYearMonth` calculation
-- In the `tabs` builder, use each assignment's own `eventMonth` and `eventYear` to compute the month folder label (e.g., `FALGUN EVENTS 2082`)
-- Each tab gets its own correct prefix based on its assignment's month
+### File: `src/lib/xito-drive-utils.ts`
 
-### 2. Fix per-tab S3 prefix in `AlbumSection.tsx`
-- Same change: remove global `majorityYearMonth`, use per-assignment month/year for each tab's prefix
+**Modify `buildMonthYearGroups()`** (lines 107–143):
+- Instead of computing one majority key per client, iterate over each event's year+month
+- Group events by their individual year-month combination
+- Place the client into each relevant month group with only the events belonging to that month
+- The `ClientFolder.events` array will contain only the events for that specific month
 
-### 3. Speed up URL loading in both components
-- Replace the initial-batch-of-12 + "Load more" pattern with a single batch fetch of ALL URLs (like XITO Drive does)
-- Remove `urlsFetchedCount`, `loadMoreUrls`, and the "Load more" button
-- Fetch all URLs at once after listing the folder
+```text
+Before (simplified):
+  client → getMajorityYearMonth → single group → all events
 
-### Files Changed
-1. `src/components/client-portal/PortalMyPhotos.tsx` — per-tab prefix + batch URL loading
-2. `src/components/client-detail/AlbumSection.tsx` — per-tab prefix + batch URL loading
+After (simplified):
+  client → for each event[i]:
+    key = year[i] + month[i]
+    add client to group[key] with event[i]
+```
+
+No other files need changes — all three tree builders (`buildXitoFolderTree`, `buildPCloudFolderTree`, `buildResearchFolderTree`) and both sync systems (`pcloud-sync.ts`, `e2-sync.ts`) consume `buildMonthYearGroups` output, so they'll automatically create folders in all relevant months.
 
