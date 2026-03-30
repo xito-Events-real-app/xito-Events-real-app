@@ -567,10 +567,7 @@ function VideoEditTable({
               </TableCell>
               {/* Edit Started */}
               <TableCell>
-                {NO_TIMER_STAGES.includes(currentStageKey)
-                  ? <span className="text-muted-foreground text-xs">-</span>
-                  : <LiveEditTimer editStartedAt={row.editStartedAt} stageHistory={row.stageHistory} size="table" stageKey={currentStageKey} />
-                }
+                <LiveEditTimer editStartedAt={row.editStartedAt} stageHistory={row.stageHistory} size="table" stageKey={currentStageKey} />
                 {currentStageKey === 'FINALIZED' && row.stageHistory && (
                   <StageHistoryDialog stageHistory={row.stageHistory} editStartedAt={row.editStartedAt} />
                 )}
