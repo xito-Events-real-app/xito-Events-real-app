@@ -799,7 +799,7 @@ function DashboardView({
           {row.editor && (
           <button onClick={() => onEditorClick?.(row.editor)} className="text-sm px-2.5 py-1 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-200 font-bold hover:bg-teal-200 dark:hover:bg-teal-900 transition-colors cursor-pointer">
             {row.editor}
-          </span>
+          </button>
         )}
       </div>
       {/* Stage tag - bottom left large */}
