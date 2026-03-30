@@ -10,7 +10,7 @@ import { toast } from "sonner";
 
 const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".tiff", ".bmp", ".heic"];
 const isImage = (key: string) => IMAGE_EXTS.some((e) => key.toLowerCase().endsWith(e));
-const INITIAL_URL_BATCH = 12;
+
 
 interface Assignment {
   event: string;
@@ -46,7 +46,6 @@ const PortalMyPhotos = ({
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
-  const [urlsFetchedCount, setUrlsFetchedCount] = useState(0);
   const listCacheRef = useRef<Record<string, E2File[]>>({});
 
   // Local album state for optimistic UI — only synced to parent on unmount
@@ -137,32 +136,8 @@ const PortalMyPhotos = ({
     }
   }, [registeredDateTimeAD]);
 
-  // Compute majority year-month
-  const majorityYearMonth = useMemo(() => {
-    const years = assignments.map(a => a.eventYear || "").filter(Boolean);
-    const months = assignments.map(a => a.eventMonth || "").filter(Boolean);
-    if (years.length === 0 || months.length === 0) return null;
-
-    const freq = new Map<string, number>();
-    const order: string[] = [];
-    for (let i = 0; i < Math.max(years.length, months.length, 1); i++) {
-      const y = String(parseInt(years[i] || years[0] || "0"));
-      const m = String(parseInt(months[i] || months[0] || "0")).padStart(2, "0");
-      const key = `${y}-${m}`;
-      if (!freq.has(key)) order.push(key);
-      freq.set(key, (freq.get(key) || 0) + 1);
-    }
-    let best = order[0] || "0-00";
-    let bestCount = 0;
-    for (const k of order) {
-      if ((freq.get(k) || 0) > bestCount) { best = k; bestCount = freq.get(k) || 0; }
-    }
-    return best;
-  }, [assignments]);
-
-  // Build tabs
+  // Build tabs — use each assignment's own eventMonth/eventYear for S3 prefix
   const tabs: TabDef[] = useMemo(() => {
-    if (!majorityYearMonth) return [];
     const result: TabDef[] = [];
     const seen = new Set<string>();
 
@@ -172,14 +147,16 @@ const PortalMyPhotos = ({
       if (a.photographerGroom) photographers.push(a.photographerGroom);
       if (a.extraPhotographer) photographers.push(a.extraPhotographer);
 
+      const y = String(parseInt(a.eventYear || "0"));
+      const m = parseInt(a.eventMonth || "0");
+      if (!y || y === "0" || !m) return;
+      const monthLabel = NEPALI_MONTHS[m] || `MONTH ${m}`;
+      const folderLabel = `${monthLabel} EVENTS ${y}`;
+
       photographers.forEach((pName) => {
         const tabId = `${a.event}-${pName}`;
         if (seen.has(tabId)) return;
         seen.add(tabId);
-        const [ymYear, ymMonth] = majorityYearMonth!.split("-");
-        const monthNum = parseInt(ymMonth, 10);
-        const monthLabel = NEPALI_MONTHS[monthNum] || `MONTH ${ymMonth}`;
-        const folderLabel = `${monthLabel} EVENTS ${ymYear}`;
         const firstName = pName.split(' ')[0] || pName;
         result.push({
           id: tabId,
@@ -189,7 +166,7 @@ const PortalMyPhotos = ({
       });
     });
     return result;
-  }, [assignments, clientName, majorityYearMonth]);
+  }, [assignments, clientName]);
 
   // Load photos when tab changes
   useEffect(() => {
@@ -198,15 +175,12 @@ const PortalMyPhotos = ({
     setIsLoadingPhotos(true);
     setPhotos([]);
     setPhotoUrls({});
-    setUrlsFetchedCount(0);
 
     const loadPhotos = async (imageFiles: E2File[]) => {
       setPhotos(imageFiles);
       if (imageFiles.length > 0) {
-        const firstBatch = imageFiles.slice(0, INITIAL_URL_BATCH);
-        const urls = await getE2FileUrls(firstBatch.map(f => f.key));
+        const urls = await getE2FileUrls(imageFiles.map(f => f.key));
         setPhotoUrls(urls);
-        setUrlsFetchedCount(firstBatch.length);
       }
       setIsLoadingPhotos(false);
     };
@@ -225,21 +199,10 @@ const PortalMyPhotos = ({
     }
   }, [activeTabIndex, tabs]);
 
-  const loadMoreUrls = useCallback(async () => {
-    if (urlsFetchedCount >= photos.length) return;
-    const nextBatch = photos.slice(urlsFetchedCount, urlsFetchedCount + INITIAL_URL_BATCH);
-    if (nextBatch.length === 0) return;
-    const urls = await getE2FileUrls(nextBatch.map(f => f.key));
-    setPhotoUrls(prev => ({ ...prev, ...urls }));
-    setUrlsFetchedCount(prev => prev + nextBatch.length);
-  }, [photos, urlsFetchedCount]);
-
   const viewerImages = useMemo(
     () => photos.map(p => ({ key: p.key, url: photoUrls[p.key] || "" })).filter(i => i.url),
     [photos, photoUrls]
   );
-
-  const hasMore = urlsFetchedCount < photos.length;
 
   if (tabs.length === 0) {
     return (
@@ -341,14 +304,6 @@ const PortalMyPhotos = ({
                 );
               })}
             </div>
-            {hasMore && (
-              <button
-                onClick={loadMoreUrls}
-                className="mt-4 w-full py-2.5 rounded-lg bg-white/5 border border-white/10 text-sm text-white/60 hover:bg-white/10 transition-all"
-              >
-                Load more ({photos.length - urlsFetchedCount} remaining)
-              </button>
-            )}
           </>
         )}
       </div>
