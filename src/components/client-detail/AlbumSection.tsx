@@ -105,10 +105,14 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
   useEffect(() => {
     if (tabs.length === 0) return;
     tabs.forEach((tab) => {
+      if (albumFolderCache[tab.id]) {
+        setTabPhotoCounts((prev) => ({ ...prev, [tab.id]: albumFolderCache[tab.id].length }));
+        return;
+      }
       listE2Folder(tab.s3Prefix)
         .then((result) => {
           const imageFiles = result.files.filter((f) => isImage(f.key));
-          listCacheRef.current[tab.id] = imageFiles;
+          albumFolderCache[tab.id] = imageFiles;
           setTabPhotoCounts((prev) => ({ ...prev, [tab.id]: imageFiles.length }));
         })
         .catch(() => {
