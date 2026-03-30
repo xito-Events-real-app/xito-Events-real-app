@@ -56,7 +56,18 @@ function PipelineLiveTimer({ editStartedAt, stageKey, stageHistory }: { editStar
   const startTime = new Date(editStartedAt).getTime();
   if (isNaN(startTime)) return null;
 
-  const diffMs = Math.max(0, now - startTime);
+  let endTime = now;
+  if (isFinalized && stageHistory) {
+    const lines = stageHistory.trim().split('\n');
+    const lastLine = lines[lines.length - 1];
+    const match = lastLine?.match(/\[(.+)\]/);
+    if (match) {
+      const parsed = new Date(match[1]).getTime();
+      if (!isNaN(parsed)) endTime = parsed;
+    }
+  }
+
+  const diffMs = Math.max(0, endTime - startTime);
   const totalSecs = Math.floor(diffMs / 1000);
   const days = Math.floor(totalSecs / 86400);
   const hrs = Math.floor((totalSecs % 86400) / 3600);
