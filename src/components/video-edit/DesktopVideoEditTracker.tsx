@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { useVideoEditTracker, STAGES, DisplayRow } from "@/hooks/useVideoEditTracker";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
