@@ -159,13 +159,10 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     }
   }, [activeTab, tabs]);
 
-  // Viewer data
   const viewerImages = useMemo(
     () => photos.map((p) => ({ key: p.key, url: photoUrls[p.key] || "" })).filter((i) => i.url),
     [photos, photoUrls]
   );
-
-  const hasMore = urlsFetchedCount < photos.length;
 
   return (
     <div className="space-y-4">
