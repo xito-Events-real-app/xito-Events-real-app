@@ -49,6 +49,7 @@ import { EditedFilesUploadProvider } from "./components/edited-files/EditedFiles
 import { UploadProgressTracker } from "./components/edited-files/UploadProgressTracker";
 import { PCloudUploadProvider } from "./contexts/PCloudUploadContext";
 import { PCloudUploadTracker } from "./components/pcloud-drive/PCloudUploadTracker";
+import { StartupAnnouncementPopup } from "./components/suite/StartupAnnouncementPopup";
 
 const queryClient = new QueryClient();
 
@@ -56,6 +57,12 @@ function WtnFilesAnnouncement() {
   const navigate = useNavigate();
   const { user } = useAuthContext();
   return <WtnFilesAnnouncementDialog user={user} onNavigate={() => navigate('/files?section=files')} />;
+}
+
+function AuthenticatedStartupPopup() {
+  const { user } = useAuthContext();
+  if (!user) return null;
+  return <StartupAnnouncementPopup />;
 }
 
 const App = () => (
@@ -69,6 +76,7 @@ const App = () => (
           <BrowserRouter>
             <AuthProvider>
               <WtnFilesAnnouncement />
+              <AuthenticatedStartupPopup />
               <SaugatSearch />
               <FloatingBookingCalendar />
               <FloatingBenzoKeep />
