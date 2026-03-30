@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { BookOpen, Image as ImageIcon, Loader2, FolderOpen, Camera } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,10 @@ interface AlbumSectionProps {
 
 const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".tiff", ".bmp", ".heic"];
 const isImage = (key: string) => IMAGE_EXTS.some((e) => key.toLowerCase().endsWith(e));
+
+// Module-level caches — survive unmount/remount within the same browser session
+const albumFolderCache: Record<string, E2File[]> = {};
+const albumUrlCache: Record<string, Record<string, string>> = {};
 
 
 interface TabDef {
@@ -39,8 +43,6 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
   const [tabPhotoCounts, setTabPhotoCounts] = useState<Record<string, number>>({});
   
 
-  // Cache listE2Folder results to avoid double-fetching
-  const listCacheRef = useRef<Record<string, E2File[]>>({});
 
   // Load deliverables
   useEffect(() => {
@@ -103,10 +105,14 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
   useEffect(() => {
     if (tabs.length === 0) return;
     tabs.forEach((tab) => {
+      if (albumFolderCache[tab.id]) {
+        setTabPhotoCounts((prev) => ({ ...prev, [tab.id]: albumFolderCache[tab.id].length }));
+        return;
+      }
       listE2Folder(tab.s3Prefix)
         .then((result) => {
           const imageFiles = result.files.filter((f) => isImage(f.key));
-          listCacheRef.current[tab.id] = imageFiles;
+          albumFolderCache[tab.id] = imageFiles;
           setTabPhotoCounts((prev) => ({ ...prev, [tab.id]: imageFiles.length }));
         })
         .catch(() => {
@@ -125,10 +131,19 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     if (tabs.length > 0 && !activeTab) setActiveTab(tabs[0].id);
   }, [tabs, activeTab]);
 
-  // Load photos when tab changes — fetch ALL URLs at once
+  // Load photos when tab changes — use module-level cache for instant re-loads
   useEffect(() => {
     const tab = tabs.find((t) => t.id === activeTab);
     if (!tab) return;
+
+    // If both folder listing and URLs are cached, load instantly
+    if (albumFolderCache[tab.id] && albumUrlCache[tab.id]) {
+      setPhotos(albumFolderCache[tab.id]);
+      setPhotoUrls(albumUrlCache[tab.id]);
+      setIsLoadingPhotos(false);
+      return;
+    }
+
     setIsLoadingPhotos(true);
     setPhotos([]);
     setPhotoUrls({});
@@ -137,19 +152,20 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
       setPhotos(imageFiles);
       if (imageFiles.length > 0) {
         const urls = await getE2FileUrls(imageFiles.map((f) => f.key));
+        albumUrlCache[tab.id] = urls;
         setPhotoUrls(urls);
       }
       setIsLoadingPhotos(false);
     };
 
-    const cached = listCacheRef.current[tab.id];
+    const cached = albumFolderCache[tab.id];
     if (cached) {
       loadPhotos(cached);
     } else {
       listE2Folder(tab.s3Prefix)
         .then((result) => {
           const imageFiles = result.files.filter((f) => isImage(f.key));
-          listCacheRef.current[tab.id] = imageFiles;
+          albumFolderCache[tab.id] = imageFiles;
           return loadPhotos(imageFiles);
         })
         .catch((err) => {

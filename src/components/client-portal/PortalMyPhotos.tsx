@@ -11,6 +11,10 @@ import { toast } from "sonner";
 const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".tiff", ".bmp", ".heic"];
 const isImage = (key: string) => IMAGE_EXTS.some((e) => key.toLowerCase().endsWith(e));
 
+// Module-level caches — survive unmount/remount within the same browser session
+const folderCache: Record<string, E2File[]> = {};
+const urlCache: Record<string, Record<string, string>> = {};
+
 
 interface Assignment {
   event: string;
@@ -46,7 +50,7 @@ const PortalMyPhotos = ({
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
-  const listCacheRef = useRef<Record<string, E2File[]>>({});
+  
 
   // Local album state for optimistic UI — only synced to parent on unmount
   const [localAlbumSelections, setLocalAlbumSelections] = useState(albumSelections);
@@ -168,10 +172,19 @@ const PortalMyPhotos = ({
     return result;
   }, [assignments, clientName]);
 
-  // Load photos when tab changes
+  // Load photos when tab changes — use module-level cache for instant re-loads
   useEffect(() => {
     const tab = tabs[activeTabIndex];
     if (!tab) return;
+
+    // If both folder listing and URLs are cached, load instantly
+    if (folderCache[tab.id] && urlCache[tab.id]) {
+      setPhotos(folderCache[tab.id]);
+      setPhotoUrls(urlCache[tab.id]);
+      setIsLoadingPhotos(false);
+      return;
+    }
+
     setIsLoadingPhotos(true);
     setPhotos([]);
     setPhotoUrls({});
@@ -180,19 +193,20 @@ const PortalMyPhotos = ({
       setPhotos(imageFiles);
       if (imageFiles.length > 0) {
         const urls = await getE2FileUrls(imageFiles.map(f => f.key));
+        urlCache[tab.id] = urls;
         setPhotoUrls(urls);
       }
       setIsLoadingPhotos(false);
     };
 
-    const cached = listCacheRef.current[tab.id];
+    const cached = folderCache[tab.id];
     if (cached) {
       loadPhotos(cached);
     } else {
       listE2Folder(tab.s3Prefix)
         .then((result) => {
           const imageFiles = result.files.filter(f => isImage(f.key));
-          listCacheRef.current[tab.id] = imageFiles;
+          folderCache[tab.id] = imageFiles;
           return loadPhotos(imageFiles);
         })
         .catch(() => setIsLoadingPhotos(false));
