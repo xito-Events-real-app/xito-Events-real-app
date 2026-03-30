@@ -768,7 +768,7 @@ function DashboardView({
           : <Play className="w-4 h-4 text-muted-foreground" />
         }
       </button>
-      <p className="font-bold text-base text-foreground pr-10">{row.clientName}</p>
+      <button onClick={() => onClientFilter?.(row.clientName)} className="font-bold text-base text-foreground pr-10 hover:text-primary hover:underline text-left transition-colors">{row.clientName}</button>
       <p className="text-sm text-muted-foreground">{row.eventName} · {row.editType}</p>
       {/* Event age stamp */}
       {(() => {
