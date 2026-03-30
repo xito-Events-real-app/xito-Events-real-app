@@ -18,7 +18,7 @@ interface AlbumSectionProps {
 
 const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".tiff", ".bmp", ".heic"];
 const isImage = (key: string) => IMAGE_EXTS.some((e) => key.toLowerCase().endsWith(e));
-const INITIAL_URL_BATCH = 12;
+
 
 interface TabDef {
   id: string;
