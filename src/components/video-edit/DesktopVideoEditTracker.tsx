@@ -1569,6 +1569,61 @@ export function DesktopVideoEditTracker() {
   const [filterEditor, setFilterEditor] = useState<string | null>(null);
   const [activeDesktopTab, setActiveDesktopTab] = useState<string>("QUEUE");
   const [pipelineInitialStage, setPipelineInitialStage] = useState<string | undefined>();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const lastETime = useRef(0);
+  const navigate = useNavigate();
+
+  // Double-E shortcut to open search
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && searchOpen) {
+        setSearchOpen(false);
+        return;
+      }
+      if (e.key.toLowerCase() === 'e') {
+        const el = document.activeElement;
+        if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || (el instanceof HTMLElement && el.isContentEditable)) return;
+        const now = Date.now();
+        if (now - lastETime.current < 400) {
+          e.preventDefault();
+          setSearchOpen(true);
+          setSearchQuery('');
+          lastETime.current = 0;
+        } else {
+          lastETime.current = now;
+        }
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [searchOpen]);
+
+  useEffect(() => {
+    if (searchOpen) setTimeout(() => searchInputRef.current?.focus(), 100);
+  }, [searchOpen]);
+
+  const uniqueClientNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const stage of STAGES) {
+      (rowsByStatus[stage.key] || []).forEach(r => { if (r.clientName) names.add(r.clientName); });
+    }
+    return Array.from(names).sort();
+  }, [rowsByStatus]);
+
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return uniqueClientNames.slice(0, 30);
+    const q = searchQuery.toLowerCase();
+    return uniqueClientNames.filter(n => n.toLowerCase().includes(q));
+  }, [searchQuery, uniqueClientNames]);
+
+  const handleSearchSelect = useCallback((name: string) => {
+    setFilterClient(name);
+    setActiveView('classic');
+    setSearchOpen(false);
+    setSearchQuery('');
+  }, []);
 
   const hasFilters = !!(filterClient || filterEditType || filterYear || filterMonth || filterEditor);
   const hasSortOrFilter = hasFilters || sortMode !== 'default';
