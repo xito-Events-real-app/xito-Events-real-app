@@ -803,15 +803,27 @@ function DashboardView({
         )}
       </div>
       {/* Stage tag - bottom left large */}
+      {/* Move to pipeline */}
+      <Select onValueChange={(v) => onPushToStatus(row.id, v, row.mergedIds)}>
+        <SelectTrigger className="w-full h-8 text-xs mt-1"><SelectValue placeholder="Move to..." /></SelectTrigger>
+        <SelectContent>
+          {STAGES.filter(s => s.key !== row._progressStage).map(s => (
+            <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       <div className="mt-auto pt-3 flex items-end justify-between">
-        <span className={cn(
-          "text-sm px-3 py-1 rounded-lg font-bold",
-          row._progressStage === 'EDIT_ON_PROGRESS' ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" :
-          row._progressStage === 'COLOR_ON_PROGRESS' ? "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300" :
-          "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
-        )}>
+        <button
+          onClick={() => onStageClick(row._progressStage)}
+          className={cn(
+            "text-sm px-3 py-1 rounded-lg font-bold hover:opacity-80 transition-opacity cursor-pointer",
+            row._progressStage === 'EDIT_ON_PROGRESS' ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" :
+            row._progressStage === 'COLOR_ON_PROGRESS' ? "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300" :
+            "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
+          )}
+        >
           {STAGE_SHORT_LABEL[row._progressStage] || row._progressStage}
-        </span>
+        </button>
         {/* Live timer - bottom right */}
         {row.editStartedAt && (
           <LiveEditTimer editStartedAt={row.editStartedAt} stageHistory={row.stageHistory} size="card" stageKey={row._progressStage} />
