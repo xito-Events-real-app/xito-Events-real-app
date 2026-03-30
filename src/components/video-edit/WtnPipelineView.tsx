@@ -81,7 +81,7 @@ function PipelineLiveTimer({ editStartedAt, stageKey, stageHistory }: { editStar
       <TooltipTrigger asChild>
         <div className={cn("flex items-center gap-1 text-xs font-medium cursor-default", colorCls, isOverdue ? "animate-pulse" : "")}>
           <Timer className="w-3 h-3" />
-          {days > 0 ? `${days}d ${hrs}h` : `${hrs}h ${mins}m`}
+          {isFinalized ? `Total: ${days > 0 ? `${days}d ${hrs}h` : `${hrs}h ${mins}m`}` : days > 0 ? `${days}d ${hrs}h` : `${hrs}h ${mins}m`}
         </div>
       </TooltipTrigger>
       <TooltipContent>
