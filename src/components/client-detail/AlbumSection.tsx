@@ -43,8 +43,6 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
   const [tabPhotoCounts, setTabPhotoCounts] = useState<Record<string, number>>({});
   
 
-  // Cache listE2Folder results to avoid double-fetching
-  const listCacheRef = useRef<Record<string, E2File[]>>({});
 
   // Load deliverables
   useEffect(() => {
