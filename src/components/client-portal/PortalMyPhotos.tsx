@@ -175,15 +175,12 @@ const PortalMyPhotos = ({
     setIsLoadingPhotos(true);
     setPhotos([]);
     setPhotoUrls({});
-    setUrlsFetchedCount(0);
 
     const loadPhotos = async (imageFiles: E2File[]) => {
       setPhotos(imageFiles);
       if (imageFiles.length > 0) {
-        const firstBatch = imageFiles.slice(0, INITIAL_URL_BATCH);
-        const urls = await getE2FileUrls(firstBatch.map(f => f.key));
+        const urls = await getE2FileUrls(imageFiles.map(f => f.key));
         setPhotoUrls(urls);
-        setUrlsFetchedCount(firstBatch.length);
       }
       setIsLoadingPhotos(false);
     };
@@ -202,21 +199,10 @@ const PortalMyPhotos = ({
     }
   }, [activeTabIndex, tabs]);
 
-  const loadMoreUrls = useCallback(async () => {
-    if (urlsFetchedCount >= photos.length) return;
-    const nextBatch = photos.slice(urlsFetchedCount, urlsFetchedCount + INITIAL_URL_BATCH);
-    if (nextBatch.length === 0) return;
-    const urls = await getE2FileUrls(nextBatch.map(f => f.key));
-    setPhotoUrls(prev => ({ ...prev, ...urls }));
-    setUrlsFetchedCount(prev => prev + nextBatch.length);
-  }, [photos, urlsFetchedCount]);
-
   const viewerImages = useMemo(
     () => photos.map(p => ({ key: p.key, url: photoUrls[p.key] || "" })).filter(i => i.url),
     [photos, photoUrls]
   );
-
-  const hasMore = urlsFetchedCount < photos.length;
 
   if (tabs.length === 0) {
     return (
