@@ -697,6 +697,8 @@ function DashboardView({
   availableEditors,
   onPushToStatus,
   onTogglePlaying,
+  onClientFilter,
+  onEditorClick,
 }: {
   rowsByStatus: Record<string, DisplayRow[]>;
   allRows: any[];
@@ -705,6 +707,8 @@ function DashboardView({
   availableEditors: { name: string; stage: 'EDIT_LAB' | 'QUEUE' | 'NONE'; rows: DisplayRow[]; whatsapp: string }[];
   onPushToStatus: (id: string, newStatus: string, mergedIds?: string[]) => void;
   onTogglePlaying: (id: string, currentlyPlaying: boolean, mergedIds?: string[]) => void;
+  onClientFilter?: (clientName: string) => void;
+  onEditorClick?: (editorName: string) => void;
 }) {
   const [assignDialogEditor, setAssignDialogEditor] = useState<string | null>(null);
 
