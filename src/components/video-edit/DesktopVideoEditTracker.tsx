@@ -1830,6 +1830,8 @@ export function DesktopVideoEditTracker() {
                 availableEditors={availableEditors}
                 onPushToStatus={pushToStatus}
                 onTogglePlaying={togglePlaying}
+                onClientFilter={(name) => { setFilterClient(name); setActiveView('classic'); }}
+                onEditorClick={(name) => setActiveView(name)}
               />
             </div>
           </div>
