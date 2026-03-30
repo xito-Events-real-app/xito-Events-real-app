@@ -131,10 +131,19 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     if (tabs.length > 0 && !activeTab) setActiveTab(tabs[0].id);
   }, [tabs, activeTab]);
 
-  // Load photos when tab changes — fetch ALL URLs at once
+  // Load photos when tab changes — use module-level cache for instant re-loads
   useEffect(() => {
     const tab = tabs.find((t) => t.id === activeTab);
     if (!tab) return;
+
+    // If both folder listing and URLs are cached, load instantly
+    if (albumFolderCache[tab.id] && albumUrlCache[tab.id]) {
+      setPhotos(albumFolderCache[tab.id]);
+      setPhotoUrls(albumUrlCache[tab.id]);
+      setIsLoadingPhotos(false);
+      return;
+    }
+
     setIsLoadingPhotos(true);
     setPhotos([]);
     setPhotoUrls({});
@@ -143,19 +152,20 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
       setPhotos(imageFiles);
       if (imageFiles.length > 0) {
         const urls = await getE2FileUrls(imageFiles.map((f) => f.key));
+        albumUrlCache[tab.id] = urls;
         setPhotoUrls(urls);
       }
       setIsLoadingPhotos(false);
     };
 
-    const cached = listCacheRef.current[tab.id];
+    const cached = albumFolderCache[tab.id];
     if (cached) {
       loadPhotos(cached);
     } else {
       listE2Folder(tab.s3Prefix)
         .then((result) => {
           const imageFiles = result.files.filter((f) => isImage(f.key));
-          listCacheRef.current[tab.id] = imageFiles;
+          albumFolderCache[tab.id] = imageFiles;
           return loadPhotos(imageFiles);
         })
         .catch((err) => {
