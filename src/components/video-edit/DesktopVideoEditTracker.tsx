@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { useVideoEditTracker, STAGES, DisplayRow } from "@/hooks/useVideoEditTracker";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -12,13 +12,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Video, MessageSquare, Music, ExternalLink, ChevronDown, ChevronRight, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, FolderOpen, LayoutDashboard, List, GitBranch, Users, RefreshCcw, CheckCircle, Play, Pause, Clock, Phone, ArrowRight, CalendarIcon, AlertTriangle, Timer } from "lucide-react";
+import { Video, MessageSquare, Music, ExternalLink, ChevronDown, ChevronRight, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, FolderOpen, LayoutDashboard, List, GitBranch, Users, RefreshCcw, CheckCircle, Play, Pause, Clock, Phone, ArrowRight, CalendarIcon, AlertTriangle, Timer, Search } from "lucide-react";
 import { WtnPipelineView } from "./WtnPipelineView";
 import { FileDetailsExpander } from "./FileDetailsExpander";
 import { supabase } from "@/integrations/supabase/client";
 import { adToBS, nepaliMonthsEnglish, getBSYearsRange, formatBSDate } from "@/lib/nepali-date";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { useNavigate } from "react-router-dom";
+import { Input } from "@/components/ui/input";
 
 const URGENCY_COLORS: Record<string, string> = {
   "1": "bg-muted text-muted-foreground",
@@ -91,7 +93,7 @@ function getTimeAgo(isoDate: string): string | null {
 }
 
 /* ── Live Edit Timer ── */
-const NO_TIMER_STAGES = ['QUEUE', 'EDIT_LAB'];
+const NO_TIMER_STAGES: string[] = [];
 const PROGRESS_STAGES_SET = new Set(['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS', 'COLOR_QUEUE', 'COLOR_LAB', 'EXPORT_QUEUE', 'EXPORTED', 'CLIENT_REVIEW', 'FINALIZED']);
 const COLORIST_STAGES = new Set(['COLOR_QUEUE', 'COLOR_LAB', 'COLOR_ON_PROGRESS', 'EXPORT_QUEUE', 'EXPORTED', 'CLIENT_REVIEW', 'RE_EDIT_ON_PROGRESS', 'FINALIZED']);
 
@@ -565,10 +567,7 @@ function VideoEditTable({
               </TableCell>
               {/* Edit Started */}
               <TableCell>
-                {NO_TIMER_STAGES.includes(currentStageKey)
-                  ? <span className="text-muted-foreground text-xs">-</span>
-                  : <LiveEditTimer editStartedAt={row.editStartedAt} stageHistory={row.stageHistory} size="table" stageKey={currentStageKey} />
-                }
+                <LiveEditTimer editStartedAt={row.editStartedAt} stageHistory={row.stageHistory} size="table" stageKey={currentStageKey} />
                 {currentStageKey === 'FINALIZED' && row.stageHistory && (
                   <StageHistoryDialog stageHistory={row.stageHistory} editStartedAt={row.editStartedAt} />
                 )}
@@ -698,6 +697,8 @@ function DashboardView({
   availableEditors,
   onPushToStatus,
   onTogglePlaying,
+  onClientFilter,
+  onEditorClick,
 }: {
   rowsByStatus: Record<string, DisplayRow[]>;
   allRows: any[];
@@ -706,6 +707,8 @@ function DashboardView({
   availableEditors: { name: string; stage: 'EDIT_LAB' | 'QUEUE' | 'NONE'; rows: DisplayRow[]; whatsapp: string }[];
   onPushToStatus: (id: string, newStatus: string, mergedIds?: string[]) => void;
   onTogglePlaying: (id: string, currentlyPlaying: boolean, mergedIds?: string[]) => void;
+  onClientFilter?: (clientName: string) => void;
+  onEditorClick?: (editorName: string) => void;
 }) {
   const [assignDialogEditor, setAssignDialogEditor] = useState<string | null>(null);
 
@@ -765,7 +768,7 @@ function DashboardView({
           : <Play className="w-4 h-4 text-muted-foreground" />
         }
       </button>
-      <p className="font-bold text-base text-foreground pr-10">{row.clientName}</p>
+      <button onClick={() => onClientFilter?.(row.clientName)} className="font-bold text-base text-foreground pr-10 hover:text-primary hover:underline text-left transition-colors">{row.clientName}</button>
       <p className="text-sm text-muted-foreground">{row.eventName} · {row.editType}</p>
       {/* Event age stamp */}
       {(() => {
@@ -793,22 +796,34 @@ function DashboardView({
       })()}
       <div className="flex items-center gap-2 mt-2">
         <UrgencyBadge value={row.urgency || "0"} />
-        {row.editor && (
-          <span className="text-sm px-2.5 py-1 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-200 font-bold">
+          {row.editor && (
+          <button onClick={() => onEditorClick?.(row.editor)} className="text-sm px-2.5 py-1 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-200 font-bold hover:bg-teal-200 dark:hover:bg-teal-900 transition-colors cursor-pointer">
             {row.editor}
-          </span>
+          </button>
         )}
       </div>
       {/* Stage tag - bottom left large */}
+      {/* Move to pipeline */}
+      <Select onValueChange={(v) => onPushToStatus(row.id, v, row.mergedIds)}>
+        <SelectTrigger className="w-full h-8 text-xs mt-1"><SelectValue placeholder="Move to..." /></SelectTrigger>
+        <SelectContent>
+          {STAGES.filter(s => s.key !== row._progressStage).map(s => (
+            <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       <div className="mt-auto pt-3 flex items-end justify-between">
-        <span className={cn(
-          "text-sm px-3 py-1 rounded-lg font-bold",
-          row._progressStage === 'EDIT_ON_PROGRESS' ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" :
-          row._progressStage === 'COLOR_ON_PROGRESS' ? "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300" :
-          "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
-        )}>
+        <button
+          onClick={() => onStageClick(row._progressStage)}
+          className={cn(
+            "text-sm px-3 py-1 rounded-lg font-bold hover:opacity-80 transition-opacity cursor-pointer",
+            row._progressStage === 'EDIT_ON_PROGRESS' ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" :
+            row._progressStage === 'COLOR_ON_PROGRESS' ? "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300" :
+            "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
+          )}
+        >
           {STAGE_SHORT_LABEL[row._progressStage] || row._progressStage}
-        </span>
+        </button>
         {/* Live timer - bottom right */}
         {row.editStartedAt && (
           <LiveEditTimer editStartedAt={row.editStartedAt} stageHistory={row.stageHistory} size="card" stageKey={row._progressStage} />
@@ -1411,6 +1426,7 @@ function VideoEditSidebar({
   activeProgressEditors,
   playingEditors,
   editorStageGroups,
+  onSearchClick,
 }: {
   activeView: ActiveView;
   onViewChange: (view: ActiveView) => void;
@@ -1425,6 +1441,7 @@ function VideoEditSidebar({
     editLab: string[];
     available: string[];
   };
+  onSearchClick?: () => void;
 }) {
   const navItems = [
     { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
@@ -1482,10 +1499,17 @@ function VideoEditSidebar({
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center">
             <Video className="w-4 h-4 text-white" />
           </div>
-          <div>
+          <div className="flex-1">
             <div className="font-semibold text-sm">Video Edit</div>
             <div className="text-[10px] text-zinc-400">Tracker</div>
           </div>
+          <button
+            onClick={onSearchClick}
+            className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition-colors"
+            title="Search clients (press E twice)"
+          >
+            <Search className="w-4 h-4 text-zinc-400" />
+          </button>
         </div>
       </div>
 
@@ -1545,6 +1569,61 @@ export function DesktopVideoEditTracker() {
   const [filterEditor, setFilterEditor] = useState<string | null>(null);
   const [activeDesktopTab, setActiveDesktopTab] = useState<string>("QUEUE");
   const [pipelineInitialStage, setPipelineInitialStage] = useState<string | undefined>();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const lastETime = useRef(0);
+  const navigate = useNavigate();
+
+  // Double-E shortcut to open search
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && searchOpen) {
+        setSearchOpen(false);
+        return;
+      }
+      if (e.key.toLowerCase() === 'e') {
+        const el = document.activeElement;
+        if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || (el instanceof HTMLElement && el.isContentEditable)) return;
+        const now = Date.now();
+        if (now - lastETime.current < 400) {
+          e.preventDefault();
+          setSearchOpen(true);
+          setSearchQuery('');
+          lastETime.current = 0;
+        } else {
+          lastETime.current = now;
+        }
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [searchOpen]);
+
+  useEffect(() => {
+    if (searchOpen) setTimeout(() => searchInputRef.current?.focus(), 100);
+  }, [searchOpen]);
+
+  const uniqueClientNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const stage of STAGES) {
+      (rowsByStatus[stage.key] || []).forEach(r => { if (r.clientName) names.add(r.clientName); });
+    }
+    return Array.from(names).sort();
+  }, [rowsByStatus]);
+
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return uniqueClientNames.slice(0, 30);
+    const q = searchQuery.toLowerCase();
+    return uniqueClientNames.filter(n => n.toLowerCase().includes(q));
+  }, [searchQuery, uniqueClientNames]);
+
+  const handleSearchSelect = useCallback((name: string) => {
+    setFilterClient(name);
+    setActiveView('classic');
+    setSearchOpen(false);
+    setSearchQuery('');
+  }, []);
 
   const hasFilters = !!(filterClient || filterEditType || filterYear || filterMonth || filterEditor);
   const hasSortOrFilter = hasFilters || sortMode !== 'default';
@@ -1728,6 +1807,7 @@ export function DesktopVideoEditTracker() {
         activeProgressEditors={activeProgressEditors}
         playingEditors={playingEditors}
         editorStageGroups={editorStageGroups}
+        onSearchClick={() => { setSearchOpen(true); setSearchQuery(''); }}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -1750,6 +1830,8 @@ export function DesktopVideoEditTracker() {
                 availableEditors={availableEditors}
                 onPushToStatus={pushToStatus}
                 onTogglePlaying={togglePlaying}
+                onClientFilter={(name) => { setFilterClient(name); setActiveView('classic'); }}
+                onEditorClick={(name) => setActiveView(name)}
               />
             </div>
           </div>
@@ -1970,6 +2052,51 @@ export function DesktopVideoEditTracker() {
           </div>
         )}
       </div>
+      {/* Search Dialog */}
+      <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Search className="w-5 h-5 text-primary" />
+              Search Client
+            </DialogTitle>
+            <DialogDescription>
+              Type to search or press <kbd className="px-1.5 py-0.5 rounded bg-muted text-xs font-mono">E</kbd> twice to open
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            ref={searchInputRef}
+            placeholder="Search client name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="mb-2"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && searchResults.length > 0) {
+                handleSearchSelect(searchResults[0]);
+              }
+            }}
+          />
+          <div className="max-h-72 overflow-y-auto space-y-0.5">
+            {searchResults.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No clients found</p>
+            ) : (
+              searchResults.map(name => {
+                const total = STAGES.reduce((sum, s) => sum + (rowsByStatus[s.key] || []).filter(r => r.clientName === name).length, 0);
+                return (
+                  <button
+                    key={name}
+                    onClick={() => handleSearchSelect(name)}
+                    className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-muted/60 flex items-center justify-between transition-colors"
+                  >
+                    <span className="font-medium text-sm text-foreground">{name}</span>
+                    <Badge variant="outline" className="text-[10px]">{total} videos</Badge>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

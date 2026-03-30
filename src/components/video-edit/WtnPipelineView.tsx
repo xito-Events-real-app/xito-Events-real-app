@@ -42,23 +42,32 @@ function getDeadlineInfoPipeline(deadline: string): { text: string; isCrossed: b
   } catch { return null; }
 }
 
-const NO_TIMER_STAGES_PIPELINE = new Set(['QUEUE', 'EDIT_LAB']);
-
-function PipelineLiveTimer({ editStartedAt, stageKey }: { editStartedAt: string; stageKey: string }) {
+function PipelineLiveTimer({ editStartedAt, stageKey, stageHistory }: { editStartedAt: string; stageKey: string; stageHistory?: string }) {
   const [now, setNow] = useState(Date.now());
   const isFinalized = stageKey === 'FINALIZED';
 
   useEffect(() => {
-    if (isFinalized || NO_TIMER_STAGES_PIPELINE.has(stageKey)) return;
+    if (isFinalized) return;
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
-  }, [isFinalized, stageKey]);
+  }, [isFinalized]);
 
-  if (!editStartedAt || NO_TIMER_STAGES_PIPELINE.has(stageKey)) return null;
+  if (!editStartedAt) return null;
   const startTime = new Date(editStartedAt).getTime();
   if (isNaN(startTime)) return null;
 
-  const diffMs = Math.max(0, now - startTime);
+  let endTime = now;
+  if (isFinalized && stageHistory) {
+    const lines = stageHistory.trim().split('\n');
+    const lastLine = lines[lines.length - 1];
+    const match = lastLine?.match(/\[(.+)\]/);
+    if (match) {
+      const parsed = new Date(match[1]).getTime();
+      if (!isNaN(parsed)) endTime = parsed;
+    }
+  }
+
+  const diffMs = Math.max(0, endTime - startTime);
   const totalSecs = Math.floor(diffMs / 1000);
   const days = Math.floor(totalSecs / 86400);
   const hrs = Math.floor((totalSecs % 86400) / 3600);
@@ -72,7 +81,7 @@ function PipelineLiveTimer({ editStartedAt, stageKey }: { editStartedAt: string;
       <TooltipTrigger asChild>
         <div className={cn("flex items-center gap-1 text-xs font-medium cursor-default", colorCls, isOverdue ? "animate-pulse" : "")}>
           <Timer className="w-3 h-3" />
-          {days > 0 ? `${days}d ${hrs}h` : `${hrs}h ${mins}m`}
+          {isFinalized ? `Total: ${days > 0 ? `${days}d ${hrs}h` : `${hrs}h ${mins}m`}` : days > 0 ? `${days}d ${hrs}h` : `${hrs}h ${mins}m`}
         </div>
       </TooltipTrigger>
       <TooltipContent>
@@ -297,7 +306,7 @@ function PipelineCard({
           })()}
 
           {/* Live timer */}
-          <PipelineLiveTimer editStartedAt={row.editStartedAt} stageKey={stageKey} />
+          <PipelineLiveTimer editStartedAt={row.editStartedAt} stageKey={stageKey} stageHistory={row.stageHistory} />
 
           {/* Urgency selector */}
           <Select value={row.urgency || "0"} onValueChange={(v) => onUpdateField(row.id, "urgency", v, row.mergedIds)}>
