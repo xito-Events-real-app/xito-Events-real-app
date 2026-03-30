@@ -796,8 +796,8 @@ function DashboardView({
       })()}
       <div className="flex items-center gap-2 mt-2">
         <UrgencyBadge value={row.urgency || "0"} />
-        {row.editor && (
-          <span className="text-sm px-2.5 py-1 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-200 font-bold">
+          {row.editor && (
+          <button onClick={() => onEditorClick?.(row.editor)} className="text-sm px-2.5 py-1 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-200 font-bold hover:bg-teal-200 dark:hover:bg-teal-900 transition-colors cursor-pointer">
             {row.editor}
           </span>
         )}
