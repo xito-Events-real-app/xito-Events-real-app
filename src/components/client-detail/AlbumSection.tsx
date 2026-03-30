@@ -37,7 +37,7 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [tabPhotoCounts, setTabPhotoCounts] = useState<Record<string, number>>({});
-  const [urlsFetchedCount, setUrlsFetchedCount] = useState(0);
+  
 
   // Cache listE2Folder results to avoid double-fetching
   const listCacheRef = useRef<Record<string, E2File[]>>({});
