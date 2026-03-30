@@ -1807,6 +1807,7 @@ export function DesktopVideoEditTracker() {
         activeProgressEditors={activeProgressEditors}
         playingEditors={playingEditors}
         editorStageGroups={editorStageGroups}
+        onSearchClick={() => { setSearchOpen(true); setSearchQuery(''); }}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">
