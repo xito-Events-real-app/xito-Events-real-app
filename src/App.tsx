@@ -76,7 +76,7 @@ const App = () => (
           <BrowserRouter>
             <AuthProvider>
               <WtnFilesAnnouncement />
-              <SaugatSearch />
+              <AuthenticatedStartupPopup />
               <FloatingBookingCalendar />
               <FloatingBenzoKeep />
               <Toaster />
