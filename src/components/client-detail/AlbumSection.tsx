@@ -19,6 +19,10 @@ interface AlbumSectionProps {
 const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".tiff", ".bmp", ".heic"];
 const isImage = (key: string) => IMAGE_EXTS.some((e) => key.toLowerCase().endsWith(e));
 
+// Module-level caches — survive unmount/remount within the same browser session
+const albumFolderCache: Record<string, E2File[]> = {};
+const albumUrlCache: Record<string, Record<string, string>> = {};
+
 
 interface TabDef {
   id: string;
