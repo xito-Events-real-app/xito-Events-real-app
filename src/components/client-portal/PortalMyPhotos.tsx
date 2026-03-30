@@ -46,7 +46,6 @@ const PortalMyPhotos = ({
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
-  const [urlsFetchedCount, setUrlsFetchedCount] = useState(0);
   const listCacheRef = useRef<Record<string, E2File[]>>({});
 
   // Local album state for optimistic UI — only synced to parent on unmount
