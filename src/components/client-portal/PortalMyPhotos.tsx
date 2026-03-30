@@ -11,6 +11,10 @@ import { toast } from "sonner";
 const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".tiff", ".bmp", ".heic"];
 const isImage = (key: string) => IMAGE_EXTS.some((e) => key.toLowerCase().endsWith(e));
 
+// Module-level caches — survive unmount/remount within the same browser session
+const folderCache: Record<string, E2File[]> = {};
+const urlCache: Record<string, Record<string, string>> = {};
+
 
 interface Assignment {
   event: string;
