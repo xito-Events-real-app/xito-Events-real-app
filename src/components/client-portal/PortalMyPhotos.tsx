@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import XitoImageViewer, { AlbumInfo } from "@/components/client-detail/XitoImageViewer";
 import { AlbumSelection, addToAlbum, removeFromAlbum } from "@/lib/album-selection-api";
 import { toast } from "sonner";
+import { getPCloudFileLinkByPath } from "@/lib/pcloud-api";
 
 const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".tiff", ".bmp", ".heic"];
 const isImage = (key: string) => IMAGE_EXTS.some((e) => key.toLowerCase().endsWith(e));
