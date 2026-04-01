@@ -192,7 +192,8 @@ export async function uploadToPCloud(folderId: number, file: File): Promise<any>
 export async function uploadToPCloudByPath(
   folderPath: string,
   file: File,
-  onProgress?: (percent: number) => void
+  onProgress?: (percent: number) => void,
+  abortSignal?: AbortSignal
 ): Promise<any> {
   // Ensure folder exists first
   const cleanPath = folderPath.startsWith('/') ? folderPath : `/${folderPath}`;
@@ -206,6 +207,17 @@ export async function uploadToPCloudByPath(
     const xhr = new XMLHttpRequest();
     const formData = new FormData();
     formData.append('file', file, file.name);
+
+    if (abortSignal) {
+      if (abortSignal.aborted) {
+        reject(new Error('Upload cancelled'));
+        return;
+      }
+      abortSignal.addEventListener('abort', () => {
+        xhr.abort();
+        reject(new Error('Upload cancelled'));
+      });
+    }
 
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onProgress) {
