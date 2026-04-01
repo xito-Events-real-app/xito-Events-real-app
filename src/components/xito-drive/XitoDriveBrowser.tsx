@@ -457,8 +457,11 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
         onConfirm={handleUploadConfirm}
         fileCount={pendingFiles.length}
         folderPath={currentS3Prefix}
-        defaultPhotographer={breadcrumb.length >= 4 ? breadcrumb[breadcrumb.length - 1]?.label : ""}
-        defaultEventName={breadcrumb.length >= 3 ? breadcrumb[2]?.label : ""}
+        shotBy={uploadShotBy}
+        eventName={uploadEventName}
+        clientName={uploadClientName}
+        eventDate={uploadEventDate}
+        daysAgo={uploadDaysAgo}
       />
 
       {/* Sync Banner */}
