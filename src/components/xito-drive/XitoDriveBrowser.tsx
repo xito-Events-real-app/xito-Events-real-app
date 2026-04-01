@@ -184,8 +184,8 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
   const uploadEventDate = useMemo(() => {
     if (!currentClientFolder) return "";
     // Get event date from clients data
-    const client = clients.find(c => c.registered_date_time_ad === currentClientFolder.registeredDateTimeAD);
-    return client?.event_date_ad || "";
+    const client = clients.find(c => c.registeredDateTimeAD === currentClientFolder.registeredDateTimeAD);
+    return client?.eventDateAD || "";
   }, [currentClientFolder, clients]);
   const uploadDaysAgo = useMemo(() => {
     if (!uploadEventDate) return null;
