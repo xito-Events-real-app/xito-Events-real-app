@@ -422,7 +422,7 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
       return (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
           {currentGroup.clients.map(c => (
-            <XitoDriveFolderCard key={c.registeredDateTimeAD} name={c.clientName} itemCount={c.events.length + 1} type="client" onClick={() => navigate(c.clientName, c.registeredDateTimeAD)} />
+            <XitoDriveFolderCard key={c.registeredDateTimeAD} name={c.clientName} itemCount={c.events.length + 1} type="client" folderSizeGB={getFolderSize(c.clientName)} onClick={() => navigate(c.clientName, c.registeredDateTimeAD)} />
           ))}
           {renderE2Files()}
         </div>
