@@ -55,6 +55,93 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
   const groups = useMemo(() => buildMonthYearGroups(clients), [clients]);
   const uniqueYears = useMemo(() => getUniqueYears(groups), [groups]);
 
+  // Folder sizes from R2
+  const [folderSizes, setFolderSizes] = useState<Record<string, { sizeGB: string; bytes: number }>>({});
+  const [r2Usage, setR2Usage] = useState<R2BucketUsage | null>(null);
+  const [calculatingSizes, setCalculatingSizes] = useState(false);
+  const [sizesLoaded, setSizesLoaded] = useState(false);
+
+  // Load cached sizes from localStorage
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem("xito-folder-sizes");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        setFolderSizes(parsed.sizes || {});
+        setR2Usage(parsed.usage || null);
+      }
+    } catch {}
+    setSizesLoaded(true);
+  }, []);
+
+  const handleRecalculateSizes = useCallback(async () => {
+    setCalculatingSizes(true);
+    const toastId = toast.loading("Calculating XITO Drive sizes from Cloudflare R2...");
+    try {
+      const usage = await getR2BucketUsage();
+      setR2Usage(usage);
+      const newSizes: Record<string, { sizeGB: string; bytes: number }> = {};
+      for (const f of usage.folders) {
+        const gb = f.totalBytes / (1024 * 1024 * 1024);
+        newSizes[f.path] = {
+          sizeGB: gb >= 1 ? `${gb.toFixed(1)} GB` : `${(f.totalBytes / (1024 * 1024)).toFixed(0)} MB`,
+          bytes: f.totalBytes,
+        };
+      }
+      setFolderSizes(newSizes);
+      localStorage.setItem("xito-folder-sizes", JSON.stringify({ sizes: newSizes, usage }));
+      toast.dismiss(toastId);
+      toast.success(`Calculated sizes for ${usage.folders.length} folders`);
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error("Failed to calculate sizes");
+      console.error(err);
+    } finally {
+      setCalculatingSizes(false);
+    }
+  }, []);
+
+  // Auto-calc on first load if no cache
+  useEffect(() => {
+    if (sizesLoaded && Object.keys(folderSizes).length === 0 && !calculatingSizes) {
+      handleRecalculateSizes();
+    }
+  }, [sizesLoaded]);
+
+  const getFolderSize = useCallback((folderName: string): string | undefined => {
+    const path = breadcrumb.length === 0
+      ? folderName
+      : `${breadcrumb.map(b => b.label.replace(/[/\\]/g, "_")).join("/")}${breadcrumb.length >= 2 ? "/Photos" : ""}/${folderName}`.replace(/\/\//g, "/");
+    // Try exact match first, then with Photos inserted
+    return folderSizes[path]?.sizeGB;
+  }, [folderSizes, breadcrumb]);
+
+  // Build searchable items for search panel
+  const searchableItems = useMemo(() => {
+    const items: { label: string; path: string[]; type: string }[] = [];
+    for (const g of groups) {
+      items.push({ label: g.label, path: [g.label], type: "month-year" });
+      for (const c of g.clients) {
+        items.push({ label: c.clientName, path: [g.label, c.clientName], type: "client" });
+        for (const ev of c.events) {
+          items.push({ label: `${c.clientName} › ${ev}`, path: [g.label, c.clientName, ev], type: "event" });
+        }
+      }
+    }
+    return items;
+  }, [groups]);
+
+  const handleSearchNavigate = useCallback((path: string[]) => {
+    const newBreadcrumb: BreadcrumbSegment[] = [];
+    if (path[0]) {
+      const group = groups.find(g => g.label === path[0]);
+      if (group) newBreadcrumb.push({ label: group.label, level: group.key });
+    }
+    if (path[1]) newBreadcrumb.push({ label: path[1], level: path[1] });
+    if (path[2]) newBreadcrumb.push({ label: path[2], level: path[2] });
+    setBreadcrumb(newBreadcrumb);
+  }, [groups]);
+
   const filteredGroups = useMemo(() => {
     return groups.filter(g => {
       if (yearFilter !== "all" && g.year !== yearFilter) return false;
