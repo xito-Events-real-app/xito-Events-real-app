@@ -357,6 +357,7 @@ const PortalMyPhotos = ({
           albumCounts={albums.length > 0 ? albumCounts : undefined}
           selectedAlbums={albums.length > 0 ? selectedAlbumsMap : undefined}
           onToggleAlbum={albums.length > 0 ? handleToggleAlbum : undefined}
+          onDownloadHQ={handleDownloadHQ}
         />
       )}
     </>

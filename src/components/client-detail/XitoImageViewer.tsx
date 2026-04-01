@@ -103,8 +103,11 @@ const XitoImageViewer = ({
           </div>
           <div className="text-xs text-white/50 mt-0.5">{currentIndex + 1} of {total}</div>
         </div>
-        <button onClick={handleDownload} className="p-2 rounded-full hover:bg-white/10 text-white/80 hover:text-white transition-colors">
-          <Download className="h-5 w-5" />
+        <button onClick={handleDownload} disabled={isDownloading} className="p-2 rounded-full hover:bg-white/10 text-white/80 hover:text-white transition-colors relative">
+          {isDownloading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
+          {onDownloadHQ && !isDownloading && (
+            <span className="absolute -top-0.5 -right-0.5 text-[8px] font-bold bg-[hsl(350,80%,65%)] text-white rounded px-0.5 leading-tight">HQ</span>
+          )}
         </button>
       </div>
 
