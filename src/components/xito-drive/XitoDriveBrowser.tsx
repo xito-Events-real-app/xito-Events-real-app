@@ -368,6 +368,44 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
     }
   }, [deleteTarget, currentS3Prefix, breadcrumb]);
 
+  // Clear cross-sync result when navigating
+  useEffect(() => {
+    setCrossSyncResult(null);
+  }, [currentS3Prefix]);
+
+  const handleCheckCrossSync = useCallback(async () => {
+    if (!currentS3Prefix) return;
+    setCrossSyncChecking(true);
+    setCrossSyncResult(null);
+    try {
+      const pcloudPath = `/WEDDING TALES NEPAL/${currentS3Prefix.replace(/\/$/, '')}`;
+      const pcloudFolder = await listPCloudFolderByPath(pcloudPath);
+      const pcloudFiles = pcloudFolder.contents.filter(item => !item.isfolder);
+      const pcloudNames = new Set(pcloudFiles.map(f => f.name.toLowerCase()));
+
+      const xitoNames = e2Files.map(f => (f.key.split("/").pop() || f.key).toLowerCase());
+      const xitoNamesSet = new Set(xitoNames);
+
+      const onlyInXito = xitoNames.filter(n => !pcloudNames.has(n));
+      const onlyInPCloud = Array.from(pcloudNames).filter(n => !xitoNamesSet.has(n));
+      const matchCount = xitoNames.filter(n => pcloudNames.has(n)).length;
+
+      setCrossSyncResult({
+        inSync: onlyInXito.length === 0 && onlyInPCloud.length === 0,
+        xitoCount: e2Files.length,
+        pcloudCount: pcloudFiles.length,
+        onlyInXito,
+        onlyInPCloud,
+        matchCount,
+      });
+    } catch (err) {
+      console.error("Cross-sync check failed:", err);
+      toast.error("Failed to check sync with pCloud");
+    } finally {
+      setCrossSyncChecking(false);
+    }
+  }, [currentS3Prefix, e2Files]);
+
   const virtualFolderNames = useMemo(() => {
     const names = new Set<string>();
     if (currentLevel === 0) {
