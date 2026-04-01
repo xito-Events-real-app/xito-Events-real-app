@@ -573,6 +573,14 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
       {/* Pending sync banner */}
       {renderPendingBanner()}
 
+      {/* Search */}
+      <DriveSearchPanel
+        storageKey="pcloud-recent-searches"
+        items={searchableItems}
+        onNavigate={handleSearchNavigate}
+        placeholder="Search clients, events..."
+      />
+
       <div className="flex flex-wrap items-center gap-2">
         {currentLevel === 0 && (
           <>
