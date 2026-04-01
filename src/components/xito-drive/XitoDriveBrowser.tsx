@@ -1,10 +1,12 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { ChevronRight, HardDrive, FolderPlus, Upload, RefreshCw, Loader2, CheckCircle2 } from "lucide-react";
+import { ChevronRight, HardDrive, FolderPlus, Upload, RefreshCw, Loader2, CheckCircle2, ImageIcon, HardDriveIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { XitoDriveFolderCard } from "./XitoDriveFolderCard";
 import { XitoDrivePhotoGallery } from "./XitoDrivePhotoGallery";
+import { XitoUploadPreDialog } from "./XitoUploadPreDialog";
+import { useXitoDriveUploadContext } from "@/contexts/XitoDriveUploadContext";
 import {
   MonthYearGroup,
   buildMonthYearGroups,
