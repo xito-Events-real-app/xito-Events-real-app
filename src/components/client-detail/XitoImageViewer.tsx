@@ -55,25 +55,26 @@ const XitoImageViewer = ({
     if (Math.abs(delta) > 50) delta > 0 ? goNext() : goPrev();
   };
 
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
   const handleDownload = async () => {
     if (isDownloading) return;
     const current = images[currentIndex];
     if (!current?.key) return;
 
-    if (onDownloadHQ) {
-      setIsDownloading(true);
-      try {
+    setIsDownloading(true);
+    try {
+      if (onDownloadHQ) {
         await onDownloadHQ(current.key);
-      } finally {
-        setIsDownloading(false);
+      } else if (current.url) {
+        const a = document.createElement("a");
+        a.href = current.url;
+        a.download = current.key.split("/").pop() || "photo.jpg";
+        a.target = "_blank";
+        a.click();
       }
-    } else {
-      if (!current.url) return;
-      const a = document.createElement("a");
-      a.href = current.url;
-      a.download = current.key.split("/").pop() || "photo.jpg";
-      a.target = "_blank";
-      a.click();
+    } finally {
+      setIsDownloading(false);
     }
   };
 
