@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   X, CheckCircle, AlertCircle, CloudUpload, Trash2,
   Maximize2, Minimize2, SkipForward, Camera, Calendar,
-  Sparkles, ImageIcon
+  ImageIcon, Pause, Play, Ban
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -17,18 +17,21 @@ function formatBytes(bytes: number): string {
 }
 
 function SessionCard({ session }: { session: XitoUploadSession }) {
+  const { pauseSession, resumeSession, cancelSession } = useXitoDriveUploadContext();
   const completed = session.jobs.filter(j => j.status === 'completed').length;
   const failed = session.jobs.filter(j => j.status === 'failed').length;
   const skipped = session.jobs.filter(j => j.status === 'skipped').length;
+  const cancelled = session.jobs.filter(j => j.status === 'cancelled').length;
   const pending = session.jobs.filter(j => j.status === 'pending' || j.status === 'uploading').length;
   const total = session.jobs.length;
-  const progressPercent = total > 0 ? Math.round(((completed + skipped) / total) * 100) : 0;
+  const progressPercent = total > 0 ? Math.round(((completed + skipped + cancelled) / total) * 100) : 0;
   const uploadedSize = session.jobs.filter(j => j.status === 'completed').reduce((s, j) => s + j.file.size, 0);
   const totalSize = session.jobs.filter(j => j.status !== 'skipped').reduce((s, j) => s + j.file.size, 0);
+  const hasActive = pending > 0;
 
   return (
     <div className="rounded-xl border border-border/50 bg-muted/30 p-3 space-y-2.5">
-      {/* Session meta */}
+      {/* Session meta + controls */}
       <div className="flex items-start gap-2">
         <div className="p-1.5 rounded-lg bg-primary/15 shrink-0">
           <Camera className="h-3.5 w-3.5 text-primary" />
@@ -46,8 +49,33 @@ function SessionCard({ session }: { session: XitoUploadSession }) {
                 <Calendar className="h-2.5 w-2.5" /> {session.meta.eventDate}
               </span>
             )}
+            {session.paused && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-medium">Paused</span>
+            )}
           </div>
         </div>
+        {hasActive && (
+          <div className="flex items-center gap-0.5 shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={() => session.paused ? resumeSession(session.id) : pauseSession(session.id)}
+              title={session.paused ? "Resume" : "Pause"}
+            >
+              {session.paused ? <Play className="h-3 w-3 text-amber-400" /> : <Pause className="h-3 w-3" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={() => cancelSession(session.id)}
+              title="Cancel all"
+            >
+              <Ban className="h-3 w-3 text-destructive" />
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Progress bar */}
@@ -74,6 +102,11 @@ function SessionCard({ session }: { session: XitoUploadSession }) {
         {skipped > 0 && (
           <span className="flex items-center gap-1 text-amber-400">
             <SkipForward className="h-3 w-3" /> {skipped} skipped
+          </span>
+        )}
+        {cancelled > 0 && (
+          <span className="flex items-center gap-1 text-muted-foreground">
+            <Ban className="h-3 w-3" /> {cancelled} cancelled
           </span>
         )}
         {failed > 0 && (
@@ -108,7 +141,6 @@ export function XitoUploadTracker() {
 
   const hasActive = activeCount > 0;
 
-  // Collapsed pill
   if (collapsed) {
     return (
       <div
@@ -126,7 +158,6 @@ export function XitoUploadTracker() {
     );
   }
 
-  // Full-screen expanded
   if (expanded) {
     return (
       <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col">
@@ -162,13 +193,11 @@ export function XitoUploadTracker() {
     );
   }
 
-  // Default floating panel
   return (
     <div className={cn(
       "fixed bottom-4 right-4 z-50 w-[380px] bg-card border border-border/50 rounded-2xl shadow-2xl overflow-hidden",
       hasActive && "border-primary/20"
     )}>
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-muted/80 to-muted/40 border-b border-border/50">
         <div className="flex items-center gap-2">
           <div className="relative">
@@ -193,8 +222,6 @@ export function XitoUploadTracker() {
           </button>
         </div>
       </div>
-
-      {/* Sessions */}
       <div className="max-h-72 overflow-y-auto p-3 space-y-3">
         {sessions.slice(0, 5).map(session => (
           <SessionCard key={session.id} session={session} />

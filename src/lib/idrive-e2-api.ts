@@ -50,7 +50,8 @@ export async function createE2Folder(path: string): Promise<{ success: boolean; 
 export async function uploadToE2(
   path: string,
   file: File,
-  onProgress?: (percent: number) => void
+  onProgress?: (percent: number) => void,
+  abortSignal?: AbortSignal
 ): Promise<{ success: boolean; key: string }> {
   // Get a presigned PUT URL from the edge function (no file data sent to edge fn)
   const data = await callE2("getUploadUrl", {
@@ -62,6 +63,18 @@ export async function uploadToE2(
   // Upload directly to iDrive E2 using XMLHttpRequest for progress tracking
   await new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
+
+    if (abortSignal) {
+      if (abortSignal.aborted) {
+        reject(new Error("Upload cancelled"));
+        return;
+      }
+      abortSignal.addEventListener("abort", () => {
+        xhr.abort();
+        reject(new Error("Upload cancelled"));
+      });
+    }
+
     xhr.open("PUT", data.url);
     xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
     xhr.upload.onprogress = (e) => {

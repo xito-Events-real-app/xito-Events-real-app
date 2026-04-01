@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { ChevronRight, HardDrive, FolderPlus, Upload, RefreshCw, Loader2, CheckCircle2, ImageIcon, HardDriveIcon, Calculator } from "lucide-react";
+import { ChevronRight, HardDrive, FolderPlus, Upload, RefreshCw, Loader2, CheckCircle2, ImageIcon, HardDriveIcon, Calculator, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
@@ -15,7 +15,18 @@ import {
   getFreelancersForEvent,
   FreelancerAssignment,
 } from "@/lib/xito-drive-utils";
-import { listE2Folder, createE2Folder, getE2FileUrl, E2File, getR2BucketUsage, R2BucketUsage } from "@/lib/idrive-e2-api";
+import { listE2Folder, createE2Folder, getE2FileUrl, deleteE2Object, E2File, getR2BucketUsage, R2BucketUsage } from "@/lib/idrive-e2-api";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { BookedClientData } from "@/lib/sheets-api";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
 import { checkE2SyncStatus, syncE2PendingFolders } from "@/lib/e2-sync";
@@ -51,6 +62,8 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<E2File | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const { startUpload, activeCount: uploadActiveCount } = useXitoDriveUploadContext();
   const groups = useMemo(() => buildMonthYearGroups(clients), [clients]);
   const uniqueYears = useMemo(() => getUniqueYears(groups), [groups]);
@@ -311,7 +324,40 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
     }
   }, []);
 
-  // Virtual folder names at current level
+  const handleDeleteFile = useCallback(async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteE2Object(deleteTarget.key);
+      // Log deletion
+      const pathSegments = currentS3Prefix.split('/').filter(Boolean);
+      const derivedClientName = pathSegments.length >= 2 ? pathSegments[1] : pathSegments[0] || '';
+      const fileName = deleteTarget.key.split("/").pop() || deleteTarget.key;
+      await supabase.from("xito_activity_log").insert({
+        action_type: 'delete',
+        folder_path: currentS3Prefix,
+        client_name: derivedClientName,
+        event_name: breadcrumb[2]?.label || '',
+        photographer: breadcrumb[3]?.label || '',
+        file_count: 1,
+        total_size_bytes: deleteTarget.size,
+        file_name: fileName,
+        is_video: false,
+      });
+      toast.success(`Deleted "${fileName}"`);
+      // Refresh
+      const result = await listE2Folder(currentS3Prefix);
+      setE2Files(result.files);
+      setE2Folders(result.folders);
+    } catch (err) {
+      toast.error("Failed to delete file");
+      console.error(err);
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
+  }, [deleteTarget, currentS3Prefix, breadcrumb]);
+
   const virtualFolderNames = useMemo(() => {
     const names = new Set<string>();
     if (currentLevel === 0) {
@@ -361,7 +407,17 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
         {e2Files.map(file => {
           const fileName = file.key.split("/").pop() || file.key;
           return (
-            <XitoDriveFolderCard key={`e2-file-${file.key}`} name={fileName} type="file" fileSize={file.size} onClick={() => handleFileClick(file)} />
+            <div key={`e2-file-${file.key}`} className="relative group">
+              <XitoDriveFolderCard name={fileName} type="file" fileSize={file.size} onClick={() => handleFileClick(file)} />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-destructive hover:text-destructive-foreground"
+                onClick={(e) => { e.stopPropagation(); setDeleteTarget(file); }}
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
           );
         })}
       </>
@@ -635,6 +691,24 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
       </div>
 
       {renderContent()}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete File</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deleteTarget?.key.split("/").pop()}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteFile} disabled={deleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {deleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

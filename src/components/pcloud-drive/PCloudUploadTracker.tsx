@@ -1,11 +1,11 @@
 import { usePCloudUploadContext } from "@/contexts/PCloudUploadContext";
 import { Progress } from "@/components/ui/progress";
-import { X, CheckCircle, AlertCircle, CloudUpload, Trash2 } from "lucide-react";
+import { X, CheckCircle, AlertCircle, CloudUpload, Trash2, Pause, Play, Ban } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
 export function PCloudUploadTracker() {
-  const { jobs, activeCount, clearCompleted } = usePCloudUploadContext();
+  const { jobs, activeCount, clearCompleted, paused, pauseUpload, resumeUpload, cancelAll } = usePCloudUploadContext();
   const [collapsed, setCollapsed] = useState(false);
 
   if (jobs.length === 0) return null;
@@ -13,6 +13,7 @@ export function PCloudUploadTracker() {
   const recentJobs = jobs.slice(0, 20);
   const completedCount = jobs.filter(j => j.status === 'completed').length;
   const failedCount = jobs.filter(j => j.status === 'failed').length;
+  const cancelledCount = jobs.filter(j => j.status === 'cancelled').length;
 
   if (collapsed) {
     return (
@@ -39,9 +40,28 @@ export function PCloudUploadTracker() {
           <span className="text-sm font-semibold">
             {activeCount > 0 ? `Uploading ${activeCount} file(s) to pCloud` : 'pCloud Upload Complete'}
           </span>
+          {paused && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-medium">Paused</span>
+          )}
         </div>
         <div className="flex items-center gap-1">
-          {completedCount > 0 && activeCount === 0 && (
+          {activeCount > 0 && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={paused ? resumeUpload : pauseUpload}
+                title={paused ? "Resume" : "Pause"}
+              >
+                {paused ? <Play className="h-3 w-3 text-amber-400" /> : <Pause className="h-3 w-3" />}
+              </Button>
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={cancelAll} title="Cancel all">
+                <Ban className="h-3 w-3 text-destructive" />
+              </Button>
+            </>
+          )}
+          {(completedCount > 0 || cancelledCount > 0) && activeCount === 0 && (
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={clearCompleted} title="Clear completed">
               <Trash2 className="h-3 w-3" />
             </Button>
@@ -56,6 +76,7 @@ export function PCloudUploadTracker() {
           <div key={job.id} className="flex items-center gap-2 text-xs">
             {job.status === 'completed' && <CheckCircle className="h-3.5 w-3.5 text-green-500 shrink-0" />}
             {job.status === 'failed' && <AlertCircle className="h-3.5 w-3.5 text-destructive shrink-0" />}
+            {job.status === 'cancelled' && <Ban className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
             {(job.status === 'uploading' || job.status === 'pending') && (
               <CloudUpload className="h-3.5 w-3.5 text-primary shrink-0 animate-pulse" />
             )}
@@ -65,6 +86,9 @@ export function PCloudUploadTracker() {
               {job.status === 'uploading' && <Progress value={job.progress} className="h-1 mt-0.5" />}
               {job.status === 'failed' && job.error && (
                 <p className="text-destructive text-[10px] truncate">{job.error}</p>
+              )}
+              {job.status === 'cancelled' && (
+                <p className="text-muted-foreground text-[10px]">Cancelled</p>
               )}
             </div>
           </div>
