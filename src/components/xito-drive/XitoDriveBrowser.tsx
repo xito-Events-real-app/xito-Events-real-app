@@ -164,38 +164,35 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
     }
   }, [currentS3Prefix]);
 
-  const handleUpload = useCallback(async () => {
+  const handleUpload = useCallback(() => {
     const input = document.createElement("input");
     input.type = "file";
     input.multiple = true;
-    input.onchange = async () => {
+    input.onchange = () => {
       const fileList = input.files;
       if (!fileList?.length) return;
-      const filesToUpload = Array.from(fileList);
-      setUploading(true);
-      setUploadProgress(filesToUpload.map(f => ({ name: f.name, percent: 0 })));
+      setPendingFiles(Array.from(fileList));
+      setUploadDialogOpen(true);
+    };
+    input.click();
+  }, []);
+
+  const handleUploadConfirm = useCallback(async (meta: { shotBy: string; eventName: string; eventDate: string; expectedCount: number }) => {
+    setUploadDialogOpen(false);
+    await startUpload(pendingFiles, {
+      ...meta,
+      folderPrefix: currentS3Prefix,
+    });
+    setPendingFiles([]);
+    // Refresh folder listing after a delay
+    setTimeout(async () => {
       try {
-        for (let i = 0; i < filesToUpload.length; i++) {
-          const file = filesToUpload[i];
-          await uploadToE2(currentS3Prefix, file, (percent) => {
-            setUploadProgress(prev => prev.map((p, idx) => idx === i ? { ...p, percent } : p));
-          });
-          setUploadProgress(prev => prev.map((p, idx) => idx === i ? { ...p, percent: 100 } : p));
-        }
-        toast.success(`Uploaded ${filesToUpload.length} file(s)`);
         const result = await listE2Folder(currentS3Prefix);
         setE2Files(result.files);
         setE2Folders(result.folders);
-      } catch (err) {
-        toast.error("Upload failed");
-        console.error(err);
-      } finally {
-        setUploading(false);
-        setTimeout(() => setUploadProgress([]), 2000);
-      }
-    };
-    input.click();
-  }, [currentS3Prefix]);
+      } catch {}
+    }, 2000);
+  }, [pendingFiles, currentS3Prefix, startUpload]);
 
   const handleFileClick = useCallback(async (file: E2File) => {
     try {
