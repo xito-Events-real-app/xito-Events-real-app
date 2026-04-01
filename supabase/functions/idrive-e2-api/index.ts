@@ -511,7 +511,80 @@ serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ error: "Unknown action. Use: list, listRecursive, createFolder, upload, delete, getSignedUrl, getSignedUrls, getUploadUrl, copyObject" }), {
+    // ACTION: getBucketUsage — get total size of all objects in bucket
+    if (action === "getBucketUsage") {
+      let totalSize = 0;
+      let totalFiles = 0;
+      let continuationToken: string | undefined;
+      const folderSizes = new Map<string, { size: number; count: number }>();
+
+      for (let page = 0; page < 200; page++) {
+        const qp: Record<string, string> = { "list-type": "2", "max-keys": "1000" };
+        if (continuationToken) qp["continuation-token"] = continuationToken;
+
+        const signed = await signS3Request({
+          method: "GET", endpoint, bucket, objectKey: "",
+          region, accessKey, secretKey,
+          queryParams: qp,
+        });
+
+        const s3Resp = await fetch(signed.url, { headers: signed.headers });
+        const xml = await s3Resp.text();
+        if (!s3Resp.ok) {
+          return new Response(JSON.stringify({ error: "Failed to get bucket usage" }), {
+            status: s3Resp.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const decodeXmlEntities = (s: string) =>
+          s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+           .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+           .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n)))
+           .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+
+        const contentBlocks = xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g);
+        for (const block of contentBlocks) {
+          const keyMatch = block[1].match(/<Key>([^<]+)<\/Key>/);
+          const sizeMatch = block[1].match(/<Size>([^<]+)<\/Size>/);
+          if (keyMatch && sizeMatch) {
+            const key = decodeXmlEntities(keyMatch[1]);
+            const size = parseInt(sizeMatch[1] || "0");
+            totalSize += size;
+            totalFiles++;
+
+            // Accumulate sizes for each parent folder
+            const parts = key.split("/");
+            for (let i = 1; i < parts.length; i++) {
+              const folderPath = parts.slice(0, i).join("/");
+              const existing = folderSizes.get(folderPath) || { size: 0, count: 0 };
+              existing.size += size;
+              existing.count++;
+              folderSizes.set(folderPath, existing);
+            }
+          }
+        }
+
+        const isTruncated = xml.includes("<IsTruncated>true</IsTruncated>");
+        if (!isTruncated) break;
+        const tokenMatch = xml.match(/<NextContinuationToken>([^<]+)<\/NextContinuationToken>/);
+        if (!tokenMatch) break;
+        continuationToken = decodeXmlEntities(tokenMatch[1]);
+      }
+
+      // Convert folder sizes map to array
+      const folders = Array.from(folderSizes.entries()).map(([path, data]) => ({
+        path,
+        name: path.split("/").pop() || path,
+        totalBytes: data.size,
+        fileCount: data.count,
+      }));
+
+      return new Response(JSON.stringify({ totalSize, totalFiles, folders }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ error: "Unknown action" }), {
       status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
