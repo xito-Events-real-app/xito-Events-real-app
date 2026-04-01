@@ -474,6 +474,31 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Storage Info Bar */}
+      {r2Usage && (
+        <div className="flex items-center gap-4 bg-muted/30 rounded-xl px-4 py-2.5 border border-border/30">
+          <div className="flex items-center gap-1.5">
+            <HardDrive className="h-4 w-4 text-primary" />
+            <span className="text-xs font-bold text-foreground">
+              {(r2Usage.totalSize / (1024 * 1024 * 1024)).toFixed(2)} GB
+            </span>
+            <span className="text-[10px] text-muted-foreground">total used</span>
+          </div>
+          <span className="text-border">•</span>
+          <span className="text-[10px] text-muted-foreground">
+            {r2Usage.totalFiles.toLocaleString()} files
+          </span>
+        </div>
+      )}
+
+      {/* Search */}
+      <DriveSearchPanel
+        storageKey="xito-drive-recent-searches"
+        items={searchableItems}
+        onNavigate={handleSearchNavigate}
+        placeholder="Search clients, events..."
+      />
+
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
         {currentLevel === 0 && (
@@ -504,6 +529,10 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
         )}
 
         <div className="ml-auto flex items-center gap-2">
+          <Button variant="outline" size="sm" className="text-xs" onClick={handleRecalculateSizes} disabled={calculatingSizes}>
+            <Calculator className={`h-3.5 w-3.5 mr-1 ${calculatingSizes ? 'animate-spin' : ''}`} />
+            {calculatingSizes ? 'Calculating...' : 'Recalculate'}
+          </Button>
           <Button variant="outline" size="sm" className="text-xs" disabled={currentLevel === 0} onClick={handleCreateFolder}>
             <FolderPlus className="h-3.5 w-3.5 mr-1" /> New Folder
           </Button>
