@@ -439,7 +439,7 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
               ? getFreelancersForEvent(assignments, currentClientFolder.registeredDateTimeAD, ev)
               : { photographers: [], videographers: [] };
             return (
-              <XitoDriveFolderCard key={ev} name={ev} itemCount={ev === "Selected" ? undefined : freelancers.photographers.length || undefined} type="event" categoryName="Photos" onClick={() => navigate(ev, ev)} />
+              <XitoDriveFolderCard key={ev} name={ev} itemCount={ev === "Selected" ? undefined : freelancers.photographers.length || undefined} type="event" categoryName="Photos" folderSizeGB={getFolderSize(ev)} onClick={() => navigate(ev, ev)} />
             );
           })}
           {renderE2Files()}
