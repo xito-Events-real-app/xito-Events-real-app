@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { BookOpen, Loader2, Trash2, ImageIcon } from "lucide-react";
+import { BookOpen, Loader2, Trash2, ImageIcon, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AlbumDef, AlbumSelection, removeFromAlbum, getAlbumSelections } from "@/lib/album-selection-api";
 import { getE2FileUrls } from "@/lib/idrive-e2-api";
+import { getPCloudFileLinkByPath } from "@/lib/pcloud-api";
 import XitoImageViewer from "@/components/client-detail/XitoImageViewer";
 import { toast } from "sonner";
 
@@ -14,6 +15,35 @@ interface PortalMyAlbumProps {
 }
 
 const MAX_PHOTOS = 140;
+
+const isMobileDevice = () => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+async function downloadFromPCloud(photoKey: string) {
+  const pcloudPath = `/WEDDING TALES NEPAL/${photoKey}`;
+  const streamUrl = await getPCloudFileLinkByPath(pcloudPath);
+  const fileName = photoKey.split("/").pop() || "photo.jpg";
+
+  if (isMobileDevice() && navigator.share) {
+    // Mobile: fetch blob and use Web Share API for "Save to Gallery" option
+    try {
+      const resp = await fetch(streamUrl);
+      const blob = await resp.blob();
+      const file = new File([blob], fileName, { type: blob.type || "image/jpeg" });
+      await navigator.share({ files: [file] });
+      return;
+    } catch (shareErr: any) {
+      // If share was cancelled or unsupported, fall through to link download
+      if (shareErr?.name === "AbortError") return;
+    }
+  }
+
+  // Desktop / fallback: direct download
+  const a = document.createElement("a");
+  a.href = streamUrl;
+  a.download = fileName;
+  a.target = "_blank";
+  a.click();
+}
 
 const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsChange }: PortalMyAlbumProps) => {
   const [activeAlbumIndex, setActiveAlbumIndex] = useState(0);
