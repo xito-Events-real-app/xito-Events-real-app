@@ -1,5 +1,4 @@
 import { supabase } from "@/integrations/supabase/client";
-import { copyE2Object, deleteE2Object } from "@/lib/idrive-e2-api";
 
 export interface AlbumSelection {
   id: string;
@@ -32,18 +31,6 @@ export async function getAlbumSelections(registeredDateTimeAD: string): Promise<
   return (data || []) as AlbumSelection[];
 }
 
-/** Build the E2 destination path for an album photo */
-function buildAlbumE2Path(photoKey: string, albumName: string): string {
-  // photoKey format: "MAGH EVENTS 2082/ClientName/Photos/EventName/Photographer/filename.jpg"
-  // Target: "MAGH EVENTS 2082/ClientName/Albums/AlbumName/filename.jpg"
-  const parts = photoKey.split('/');
-  const filename = parts[parts.length - 1];
-  // First two parts are month-folder and client name
-  const monthFolder = parts[0] || '';
-  const clientFolder = parts[1] || '';
-  return `${monthFolder}/${clientFolder}/Albums/${albumName}/${filename}`;
-}
-
 export async function addToAlbum(
   registeredDateTimeAD: string,
   albumType: string,
@@ -51,7 +38,6 @@ export async function addToAlbum(
   photoKey: string,
   photoUrl?: string
 ): Promise<boolean> {
-  // DB save — fire and forget style, caller handles optimistic UI
   const { error } = await supabase
     .from('client_album_selections')
     .upsert(
@@ -70,12 +56,6 @@ export async function addToAlbum(
     console.error('Error adding to album:', error);
     return false;
   }
-
-  // Background E2 copy — fire and forget
-  const destPath = buildAlbumE2Path(photoKey, albumName);
-  copyE2Object(photoKey, destPath).catch(err => {
-    console.error('Background E2 copy failed:', err);
-  });
 
   return true;
 }
