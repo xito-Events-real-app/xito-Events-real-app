@@ -139,6 +139,7 @@ const App = () => (
             </Routes>
           </AuthProvider>
           </BrowserRouter>
+          </XitoDriveUploadProvider>
           </PCloudUploadProvider>
           </EditedFilesUploadProvider>
            </BenzoKeepPopupProvider>
