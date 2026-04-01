@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { ChevronRight, HardDrive, FolderPlus, Upload, RefreshCw, Loader2, CheckCircle2, ImageIcon, HardDriveIcon, Calculator, Trash2 } from "lucide-react";
+import { ChevronRight, HardDrive, FolderPlus, Upload, RefreshCw, Loader2, CheckCircle2, ImageIcon, HardDriveIcon, Calculator, Trash2, GitCompareArrows, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
@@ -16,6 +16,7 @@ import {
   FreelancerAssignment,
 } from "@/lib/xito-drive-utils";
 import { listE2Folder, createE2Folder, getE2FileUrl, deleteE2Object, E2File, getR2BucketUsage, R2BucketUsage } from "@/lib/idrive-e2-api";
+import { listPCloudFolderByPath } from "@/lib/pcloud-api";
 import { supabase } from "@/integrations/supabase/client";
 import {
   AlertDialog,
@@ -64,6 +65,15 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<E2File | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [crossSyncResult, setCrossSyncResult] = useState<{
+    inSync: boolean;
+    xitoCount: number;
+    pcloudCount: number;
+    onlyInXito: string[];
+    onlyInPCloud: string[];
+    matchCount: number;
+  } | null>(null);
+  const [crossSyncChecking, setCrossSyncChecking] = useState(false);
   const { startUpload, activeCount: uploadActiveCount } = useXitoDriveUploadContext();
   const groups = useMemo(() => buildMonthYearGroups(clients), [clients]);
   const uniqueYears = useMemo(() => getUniqueYears(groups), [groups]);
@@ -358,6 +368,44 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
     }
   }, [deleteTarget, currentS3Prefix, breadcrumb]);
 
+  // Clear cross-sync result when navigating
+  useEffect(() => {
+    setCrossSyncResult(null);
+  }, [currentS3Prefix]);
+
+  const handleCheckCrossSync = useCallback(async () => {
+    if (!currentS3Prefix) return;
+    setCrossSyncChecking(true);
+    setCrossSyncResult(null);
+    try {
+      const pcloudPath = `/WEDDING TALES NEPAL/${currentS3Prefix.replace(/\/$/, '')}`;
+      const pcloudFolder = await listPCloudFolderByPath(pcloudPath);
+      const pcloudFiles = pcloudFolder.contents.filter(item => !item.isfolder);
+      const pcloudNames = new Set(pcloudFiles.map(f => f.name.toLowerCase()));
+
+      const xitoNames = e2Files.map(f => (f.key.split("/").pop() || f.key).toLowerCase());
+      const xitoNamesSet = new Set(xitoNames);
+
+      const onlyInXito = xitoNames.filter(n => !pcloudNames.has(n));
+      const onlyInPCloud = Array.from(pcloudNames).filter(n => !xitoNamesSet.has(n));
+      const matchCount = xitoNames.filter(n => pcloudNames.has(n)).length;
+
+      setCrossSyncResult({
+        inSync: onlyInXito.length === 0 && onlyInPCloud.length === 0,
+        xitoCount: e2Files.length,
+        pcloudCount: pcloudFiles.length,
+        onlyInXito,
+        onlyInPCloud,
+        matchCount,
+      });
+    } catch (err) {
+      console.error("Cross-sync check failed:", err);
+      toast.error("Failed to check sync with pCloud");
+    } finally {
+      setCrossSyncChecking(false);
+    }
+  }, [currentS3Prefix, e2Files]);
+
   const virtualFolderNames = useMemo(() => {
     const names = new Set<string>();
     if (currentLevel === 0) {
@@ -585,6 +633,12 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
         )}
 
         <div className="ml-auto flex items-center gap-2">
+          {currentLevel >= 2 && (
+            <Button variant="outline" size="sm" className="text-xs" onClick={handleCheckCrossSync} disabled={crossSyncChecking || e2Loading}>
+              <GitCompareArrows className={`h-3.5 w-3.5 mr-1 ${crossSyncChecking ? 'animate-spin' : ''}`} />
+              {crossSyncChecking ? 'Checking...' : 'Check Sync'}
+            </Button>
+          )}
           <Button variant="outline" size="sm" className="text-xs" onClick={handleRecalculateSizes} disabled={calculatingSizes}>
             <Calculator className={`h-3.5 w-3.5 mr-1 ${calculatingSizes ? 'animate-spin' : ''}`} />
             {calculatingSizes ? 'Calculating...' : 'Recalculate'}
@@ -597,6 +651,39 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
           </Button>
         </div>
       </div>
+
+      {/* Cross-Sync Result Banner */}
+      {crossSyncResult && (
+        <div className={`flex items-center gap-3 flex-wrap rounded-xl px-4 py-2.5 border ${
+          crossSyncResult.inSync
+            ? 'bg-emerald-500/10 border-emerald-500/30'
+            : 'bg-amber-500/10 border-amber-500/30'
+        }`}>
+          <div className="flex-1 min-w-0">
+            {crossSyncResult.inSync ? (
+              <p className="text-sm font-medium text-emerald-400 flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4" />
+                Both drives in sync — {crossSyncResult.matchCount} files match
+              </p>
+            ) : (
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium text-amber-400">⚠ Out of sync</p>
+                <p className="text-xs text-amber-300/70">
+                  XITO: {crossSyncResult.xitoCount} files · pCloud: {crossSyncResult.pcloudCount} files
+                </p>
+                <p className="text-xs text-amber-300/60">
+                  {crossSyncResult.onlyInXito.length > 0 && `${crossSyncResult.onlyInXito.length} files only in XITO`}
+                  {crossSyncResult.onlyInXito.length > 0 && crossSyncResult.onlyInPCloud.length > 0 && ' · '}
+                  {crossSyncResult.onlyInPCloud.length > 0 && `${crossSyncResult.onlyInPCloud.length} files only in pCloud`}
+                </p>
+              </div>
+            )}
+          </div>
+          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setCrossSyncResult(null)}>
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
 
       {/* Folder info bar */}
       {currentLevel > 0 && !e2Loading && (e2Files.length > 0 || e2Folders.length > 0) && (
