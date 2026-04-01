@@ -49,6 +49,8 @@ import { EditedFilesUploadProvider } from "./components/edited-files/EditedFiles
 import { UploadProgressTracker } from "./components/edited-files/UploadProgressTracker";
 import { PCloudUploadProvider } from "./contexts/PCloudUploadContext";
 import { PCloudUploadTracker } from "./components/pcloud-drive/PCloudUploadTracker";
+import { XitoDriveUploadProvider } from "./contexts/XitoDriveUploadContext";
+import { XitoUploadTracker } from "./components/xito-drive/XitoUploadTracker";
 import { StartupAnnouncementPopup } from "./components/suite/StartupAnnouncementPopup";
 
 const queryClient = new QueryClient();
