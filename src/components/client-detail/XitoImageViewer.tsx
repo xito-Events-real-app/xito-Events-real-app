@@ -145,7 +145,7 @@ const XitoImageViewer = ({
         )}
       </div>
 
-      {/* Album Selection Bar */}
+      {/* Album Selection Bar + Download */}
       {hasAlbums && (
         <div className="px-3 py-3 bg-black/90 backdrop-blur-md border-t border-white/[0.08] z-10">
           <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
@@ -186,6 +186,21 @@ const XitoImageViewer = ({
                 </button>
               );
             })}
+
+            {/* Download button — always visible at the end */}
+            {onDownloadHQ && (
+              <button
+                onClick={handleDownload}
+                disabled={isDownloading}
+                className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-all duration-200 bg-white/[0.08] text-white/70 border-white/15 hover:bg-white/15 hover:text-white active:scale-95"
+              >
+                {isDownloading
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Download className="h-3.5 w-3.5" />
+                }
+                <span>Download</span>
+              </button>
+            )}
           </div>
         </div>
       )}
