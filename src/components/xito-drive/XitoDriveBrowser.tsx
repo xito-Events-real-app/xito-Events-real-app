@@ -633,6 +633,12 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
         )}
 
         <div className="ml-auto flex items-center gap-2">
+          {currentLevel >= 2 && (
+            <Button variant="outline" size="sm" className="text-xs" onClick={handleCheckCrossSync} disabled={crossSyncChecking || e2Loading}>
+              <GitCompareArrows className={`h-3.5 w-3.5 mr-1 ${crossSyncChecking ? 'animate-spin' : ''}`} />
+              {crossSyncChecking ? 'Checking...' : 'Check Sync'}
+            </Button>
+          )}
           <Button variant="outline" size="sm" className="text-xs" onClick={handleRecalculateSizes} disabled={calculatingSizes}>
             <Calculator className={`h-3.5 w-3.5 mr-1 ${calculatingSizes ? 'animate-spin' : ''}`} />
             {calculatingSizes ? 'Calculating...' : 'Recalculate'}
@@ -645,6 +651,39 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
           </Button>
         </div>
       </div>
+
+      {/* Cross-Sync Result Banner */}
+      {crossSyncResult && (
+        <div className={`flex items-center gap-3 flex-wrap rounded-xl px-4 py-2.5 border ${
+          crossSyncResult.inSync
+            ? 'bg-emerald-500/10 border-emerald-500/30'
+            : 'bg-amber-500/10 border-amber-500/30'
+        }`}>
+          <div className="flex-1 min-w-0">
+            {crossSyncResult.inSync ? (
+              <p className="text-sm font-medium text-emerald-400 flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4" />
+                Both drives in sync — {crossSyncResult.matchCount} files match
+              </p>
+            ) : (
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium text-amber-400">⚠ Out of sync</p>
+                <p className="text-xs text-amber-300/70">
+                  XITO: {crossSyncResult.xitoCount} files · pCloud: {crossSyncResult.pcloudCount} files
+                </p>
+                <p className="text-xs text-amber-300/60">
+                  {crossSyncResult.onlyInXito.length > 0 && `${crossSyncResult.onlyInXito.length} files only in XITO`}
+                  {crossSyncResult.onlyInXito.length > 0 && crossSyncResult.onlyInPCloud.length > 0 && ' · '}
+                  {crossSyncResult.onlyInPCloud.length > 0 && `${crossSyncResult.onlyInPCloud.length} files only in pCloud`}
+                </p>
+              </div>
+            )}
+          </div>
+          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setCrossSyncResult(null)}>
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
 
       {/* Folder info bar */}
       {currentLevel > 0 && !e2Loading && (e2Files.length > 0 || e2Folders.length > 0) && (
