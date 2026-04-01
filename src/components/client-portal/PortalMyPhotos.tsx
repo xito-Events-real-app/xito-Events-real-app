@@ -329,16 +329,15 @@ const PortalMyPhotos = ({
                       </div>
                     )}
                     {url && (
-                      <a
-                        href={url}
-                        download={file.key.split('/').pop() || 'photo.jpg'}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
                         className="absolute bottom-1 right-1 p-1.5 rounded-full bg-black/60 text-white/80 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDownloadHQ(file.key);
+                        }}
                       >
                         <Download className="h-3 w-3" />
-                      </a>
+                      </button>
                     )}
                   </div>
                 );
