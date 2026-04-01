@@ -407,7 +407,17 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
         {e2Files.map(file => {
           const fileName = file.key.split("/").pop() || file.key;
           return (
-            <XitoDriveFolderCard key={`e2-file-${file.key}`} name={fileName} type="file" fileSize={file.size} onClick={() => handleFileClick(file)} />
+            <div key={`e2-file-${file.key}`} className="relative group">
+              <XitoDriveFolderCard name={fileName} type="file" fileSize={file.size} onClick={() => handleFileClick(file)} />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-destructive hover:text-destructive-foreground"
+                onClick={(e) => { e.stopPropagation(); setDeleteTarget(file); }}
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
           );
         })}
       </>
