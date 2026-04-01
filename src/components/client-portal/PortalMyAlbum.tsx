@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { BookOpen, Loader2, Trash2, ImageIcon } from "lucide-react";
+import { BookOpen, Loader2, Trash2, ImageIcon, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AlbumDef, AlbumSelection, removeFromAlbum, getAlbumSelections } from "@/lib/album-selection-api";
 import { getE2FileUrls } from "@/lib/idrive-e2-api";
+import { getPCloudFileLinkByPath } from "@/lib/pcloud-api";
 import XitoImageViewer from "@/components/client-detail/XitoImageViewer";
 import { toast } from "sonner";
 
@@ -14,6 +15,35 @@ interface PortalMyAlbumProps {
 }
 
 const MAX_PHOTOS = 140;
+
+const isMobileDevice = () => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+async function downloadFromPCloud(photoKey: string) {
+  const pcloudPath = `/WEDDING TALES NEPAL/${photoKey}`;
+  const streamUrl = await getPCloudFileLinkByPath(pcloudPath);
+  const fileName = photoKey.split("/").pop() || "photo.jpg";
+
+  if (isMobileDevice() && navigator.share) {
+    // Mobile: fetch blob and use Web Share API for "Save to Gallery" option
+    try {
+      const resp = await fetch(streamUrl);
+      const blob = await resp.blob();
+      const file = new File([blob], fileName, { type: blob.type || "image/jpeg" });
+      await navigator.share({ files: [file] });
+      return;
+    } catch (shareErr: any) {
+      // If share was cancelled or unsupported, fall through to link download
+      if (shareErr?.name === "AbortError") return;
+    }
+  }
+
+  // Desktop / fallback: direct download
+  const a = document.createElement("a");
+  a.href = streamUrl;
+  a.download = fileName;
+  a.target = "_blank";
+  a.click();
+}
 
 const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsChange }: PortalMyAlbumProps) => {
   const [activeAlbumIndex, setActiveAlbumIndex] = useState(0);
@@ -62,6 +92,35 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
     setRemovingKey(null);
   }, [activeAlbum, registeredDateTimeAD, selections, onSelectionsChange, removingKey]);
 
+  const [downloadingAlbum, setDownloadingAlbum] = useState<string | null>(null);
+
+  const handleDownloadAlbum = useCallback(async (albumType: string) => {
+    const photosForAlbum = selections.filter(s => s.album_type === albumType);
+    if (photosForAlbum.length === 0) {
+      toast.error("No photos to download");
+      return;
+    }
+    setDownloadingAlbum(albumType);
+    toast.info(`Downloading ${photosForAlbum.length} photos...`);
+    let successCount = 0;
+    for (const photo of photosForAlbum) {
+      try {
+        await downloadFromPCloud(photo.photo_key);
+        successCount++;
+        // Small delay between downloads to avoid overwhelming the browser
+        await new Promise(r => setTimeout(r, 400));
+      } catch (err) {
+        console.error("Download failed for:", photo.photo_key, err);
+      }
+    }
+    setDownloadingAlbum(null);
+    if (successCount === photosForAlbum.length) {
+      toast.success(`All ${successCount} photos downloaded`);
+    } else {
+      toast.warning(`${successCount} of ${photosForAlbum.length} photos downloaded`);
+    }
+  }, [selections]);
+
   const viewerImages = useMemo(() =>
     albumPhotos.map(p => ({ key: p.photo_key, url: photoUrls[p.photo_key] || "" })).filter(i => i.url),
     [albumPhotos, photoUrls]
@@ -92,25 +151,46 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
         <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 scrollbar-hide">
           {albums.map((album, idx) => {
             const count = albumCounts[album.type] || 0;
+            const isActive = idx === activeAlbumIndex;
+            const isDownloading = downloadingAlbum === album.type;
             return (
-              <button
-                key={album.type}
-                onClick={() => setActiveAlbumIndex(idx)}
-                className={cn(
-                  "shrink-0 px-4 py-2 rounded-xl text-xs font-medium border transition-all duration-200",
-                  idx === activeAlbumIndex
-                    ? "bg-[hsl(350,80%,65%)] text-white border-[hsl(350,80%,65%)] shadow-[0_0_16px_hsl(350,80%,65%/0.3)]"
-                    : "bg-white/[0.04] text-white/50 border-white/10 hover:bg-white/[0.08]"
+              <div key={album.type} className="shrink-0 flex items-center gap-1">
+                <button
+                  onClick={() => setActiveAlbumIndex(idx)}
+                  className={cn(
+                    "px-4 py-2 rounded-xl text-xs font-medium border transition-all duration-200",
+                    isActive
+                      ? "bg-[hsl(350,80%,65%)] text-white border-[hsl(350,80%,65%)] shadow-[0_0_16px_hsl(350,80%,65%/0.3)]"
+                      : "bg-white/[0.04] text-white/50 border-white/10 hover:bg-white/[0.08]"
+                  )}
+                >
+                  {album.name}
+                  <span className={cn(
+                    "ml-1.5 text-[10px]",
+                    isActive ? "text-white/80" : "text-white/30"
+                  )}>
+                    {count}/{MAX_PHOTOS}
+                  </span>
+                </button>
+                {count > 0 && (
+                  <button
+                    onClick={() => handleDownloadAlbum(album.type)}
+                    disabled={!!downloadingAlbum}
+                    className={cn(
+                      "p-1.5 rounded-lg border transition-all text-[10px] font-medium flex items-center gap-1",
+                      isActive
+                        ? "border-[hsl(350,80%,65%)]/40 text-[hsl(350,80%,65%)] hover:bg-[hsl(350,80%,65%)]/10"
+                        : "border-white/10 text-white/40 hover:bg-white/[0.06]"
+                    )}
+                  >
+                    {isDownloading ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Download className="h-3 w-3" />
+                    )}
+                  </button>
                 )}
-              >
-                {album.name}
-                <span className={cn(
-                  "ml-1.5 text-[10px]",
-                  idx === activeAlbumIndex ? "text-white/80" : "text-white/30"
-                )}>
-                  {count}/{MAX_PHOTOS}
-                </span>
-              </button>
+              </div>
             );
           })}
         </div>
