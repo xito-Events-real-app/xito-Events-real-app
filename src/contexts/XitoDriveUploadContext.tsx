@@ -1,5 +1,11 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
 import { uploadToE2, listE2Folder } from "@/lib/idrive-e2-api";
+import { supabase } from "@/integrations/supabase/client";
+
+const VIDEO_EXTS = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'mxf', 'wmv', 'flv'];
+function isVideo(name: string) {
+  return VIDEO_EXTS.includes(name.split('.').pop()?.toLowerCase() || '');
+}
 
 export interface XitoUploadSessionMeta {
   shotBy: string;
