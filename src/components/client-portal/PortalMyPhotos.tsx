@@ -141,6 +141,31 @@ const PortalMyPhotos = ({
     }
   }, [registeredDateTimeAD]);
 
+  // pCloud HQ download handler
+  const handleDownloadHQ = useCallback(async (photoKey: string) => {
+    try {
+      const pcloudPath = `/WEDDING TALES NEPAL/${photoKey}`;
+      const streamUrl = await getPCloudFileLinkByPath(pcloudPath);
+      const a = document.createElement("a");
+      a.href = streamUrl;
+      a.download = photoKey.split("/").pop() || "photo.jpg";
+      a.target = "_blank";
+      a.click();
+    } catch (err) {
+      console.error("HQ download failed:", err);
+      toast.error("HQ download failed — downloading preview instead");
+      // Fallback to XITO version
+      const url = photoUrlsRef.current[photoKey];
+      if (url) {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = photoKey.split("/").pop() || "photo.jpg";
+        a.target = "_blank";
+        a.click();
+      }
+    }
+  }, []);
+
   // Build tabs — use each assignment's own eventMonth/eventYear for S3 prefix
   const tabs: TabDef[] = useMemo(() => {
     const result: TabDef[] = [];
