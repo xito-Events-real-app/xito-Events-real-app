@@ -141,25 +141,37 @@ const PortalMyPhotos = ({
     }
   }, [registeredDateTimeAD]);
 
-  // pCloud HQ download handler
+  // pCloud HQ download handler — platform-aware (save to gallery on mobile)
   const handleDownloadHQ = useCallback(async (photoKey: string) => {
+    const fileName = photoKey.split("/").pop() || "photo.jpg";
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
     try {
       const pcloudPath = `/WEDDING TALES NEPAL/${photoKey}`;
       const streamUrl = await getPCloudFileLinkByPath(pcloudPath);
-      const a = document.createElement("a");
-      a.href = streamUrl;
-      a.download = photoKey.split("/").pop() || "photo.jpg";
-      a.target = "_blank";
-      a.click();
+
+      if (isMobile && navigator.share) {
+        // Fetch as blob and use Web Share API for "Save to Gallery"
+        const resp = await fetch(streamUrl);
+        const blob = await resp.blob();
+        const file = new File([blob], fileName, { type: blob.type || "image/jpeg" });
+        await navigator.share({ files: [file] });
+      } else {
+        // Desktop — auto download
+        const a = document.createElement("a");
+        a.href = streamUrl;
+        a.download = fileName;
+        a.target = "_blank";
+        a.click();
+      }
     } catch (err) {
       console.error("HQ download failed:", err);
       toast.error("HQ download failed — downloading preview instead");
-      // Fallback to XITO version
       const url = photoUrlsRef.current[photoKey];
       if (url) {
         const a = document.createElement("a");
         a.href = url;
-        a.download = photoKey.split("/").pop() || "photo.jpg";
+        a.download = fileName;
         a.target = "_blank";
         a.click();
       }
