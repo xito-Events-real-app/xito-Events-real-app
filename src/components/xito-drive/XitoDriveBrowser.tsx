@@ -15,7 +15,18 @@ import {
   getFreelancersForEvent,
   FreelancerAssignment,
 } from "@/lib/xito-drive-utils";
-import { listE2Folder, createE2Folder, getE2FileUrl, E2File, getR2BucketUsage, R2BucketUsage } from "@/lib/idrive-e2-api";
+import { listE2Folder, createE2Folder, getE2FileUrl, deleteE2Object, E2File, getR2BucketUsage, R2BucketUsage } from "@/lib/idrive-e2-api";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { BookedClientData } from "@/lib/sheets-api";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
 import { checkE2SyncStatus, syncE2PendingFolders } from "@/lib/e2-sync";
