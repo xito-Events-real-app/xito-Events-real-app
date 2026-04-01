@@ -1366,6 +1366,48 @@ export type Database = {
         }
         Relationships: []
       }
+      xito_activity_log: {
+        Row: {
+          action_type: string
+          client_name: string
+          created_at: string
+          event_name: string
+          file_count: number
+          file_name: string
+          folder_path: string
+          id: string
+          is_video: boolean
+          photographer: string
+          total_size_bytes: number
+        }
+        Insert: {
+          action_type?: string
+          client_name?: string
+          created_at?: string
+          event_name?: string
+          file_count?: number
+          file_name?: string
+          folder_path?: string
+          id?: string
+          is_video?: boolean
+          photographer?: string
+          total_size_bytes?: number
+        }
+        Update: {
+          action_type?: string
+          client_name?: string
+          created_at?: string
+          event_name?: string
+          file_count?: number
+          file_name?: string
+          folder_path?: string
+          id?: string
+          is_video?: boolean
+          photographer?: string
+          total_size_bytes?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
