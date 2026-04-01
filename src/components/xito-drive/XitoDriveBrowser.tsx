@@ -324,7 +324,40 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
     }
   }, []);
 
-  // Virtual folder names at current level
+  const handleDeleteFile = useCallback(async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteE2Object(deleteTarget.key);
+      // Log deletion
+      const pathSegments = currentS3Prefix.split('/').filter(Boolean);
+      const derivedClientName = pathSegments.length >= 2 ? pathSegments[1] : pathSegments[0] || '';
+      const fileName = deleteTarget.key.split("/").pop() || deleteTarget.key;
+      await supabase.from("xito_activity_log").insert({
+        action_type: 'delete',
+        folder_path: currentS3Prefix,
+        client_name: derivedClientName,
+        event_name: breadcrumb[2]?.label || '',
+        photographer: breadcrumb[3]?.label || '',
+        file_count: 1,
+        total_size_bytes: deleteTarget.size,
+        file_name: fileName,
+        is_video: false,
+      });
+      toast.success(`Deleted "${fileName}"`);
+      // Refresh
+      const result = await listE2Folder(currentS3Prefix);
+      setE2Files(result.files);
+      setE2Folders(result.folders);
+    } catch (err) {
+      toast.error("Failed to delete file");
+      console.error(err);
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
+  }, [deleteTarget, currentS3Prefix, breadcrumb]);
+
   const virtualFolderNames = useMemo(() => {
     const names = new Set<string>();
     if (currentLevel === 0) {
