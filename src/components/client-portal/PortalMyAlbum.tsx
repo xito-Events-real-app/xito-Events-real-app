@@ -92,6 +92,35 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
     setRemovingKey(null);
   }, [activeAlbum, registeredDateTimeAD, selections, onSelectionsChange, removingKey]);
 
+  const [downloadingAlbum, setDownloadingAlbum] = useState<string | null>(null);
+
+  const handleDownloadAlbum = useCallback(async (albumType: string) => {
+    const photosForAlbum = selections.filter(s => s.album_type === albumType);
+    if (photosForAlbum.length === 0) {
+      toast.error("No photos to download");
+      return;
+    }
+    setDownloadingAlbum(albumType);
+    toast.info(`Downloading ${photosForAlbum.length} photos...`);
+    let successCount = 0;
+    for (const photo of photosForAlbum) {
+      try {
+        await downloadFromPCloud(photo.photo_key);
+        successCount++;
+        // Small delay between downloads to avoid overwhelming the browser
+        await new Promise(r => setTimeout(r, 400));
+      } catch (err) {
+        console.error("Download failed for:", photo.photo_key, err);
+      }
+    }
+    setDownloadingAlbum(null);
+    if (successCount === photosForAlbum.length) {
+      toast.success(`All ${successCount} photos downloaded`);
+    } else {
+      toast.warning(`${successCount} of ${photosForAlbum.length} photos downloaded`);
+    }
+  }, [selections]);
+
   const viewerImages = useMemo(() =>
     albumPhotos.map(p => ({ key: p.photo_key, url: photoUrls[p.photo_key] || "" })).filter(i => i.url),
     [albumPhotos, photoUrls]
