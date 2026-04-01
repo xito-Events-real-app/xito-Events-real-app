@@ -97,6 +97,10 @@ export function XitoDriveUploadProvider({ children }: { children: React.ReactNod
 
     // Process non-skipped jobs sequentially
     const pendingJobs = jobs.filter(j => j.status === 'pending');
+    let completedCount = 0;
+    let completedSize = 0;
+    const videoFiles: { name: string; size: number }[] = [];
+
     for (const job of pendingJobs) {
       updateJob(sessionId, job.id, { status: 'uploading', progress: 5 });
       try {
@@ -104,9 +108,52 @@ export function XitoDriveUploadProvider({ children }: { children: React.ReactNod
           updateJob(sessionId, job.id, { progress: percent });
         });
         updateJob(sessionId, job.id, { status: 'completed', progress: 100 });
+        completedCount++;
+        completedSize += job.file.size;
+        if (isVideo(job.file.name)) {
+          videoFiles.push({ name: job.file.name, size: job.file.size });
+        }
       } catch (err: any) {
         updateJob(sessionId, job.id, { status: 'failed', progress: 0, error: err.message });
       }
+    }
+
+    // Log activity to database
+    try {
+      const photoCount = completedCount - videoFiles.length;
+      const photoSize = completedSize - videoFiles.reduce((s, v) => s + v.size, 0);
+
+      // Log bulk photo entry
+      if (photoCount > 0) {
+        await supabase.from("xito_activity_log").insert({
+          action_type: 'upload',
+          folder_path: meta.folderPrefix,
+          client_name: meta.eventName ? meta.eventName : '',
+          event_name: meta.eventName,
+          photographer: meta.shotBy,
+          file_count: photoCount,
+          total_size_bytes: photoSize,
+          file_name: '',
+          is_video: false,
+        });
+      }
+
+      // Log each video individually
+      for (const vid of videoFiles) {
+        await supabase.from("xito_activity_log").insert({
+          action_type: 'upload',
+          folder_path: meta.folderPrefix,
+          client_name: meta.eventName ? meta.eventName : '',
+          event_name: meta.eventName,
+          photographer: meta.shotBy,
+          file_count: 1,
+          total_size_bytes: vid.size,
+          file_name: vid.name,
+          is_video: true,
+        });
+      }
+    } catch (err) {
+      console.warn("Failed to log xito activity:", err);
     }
   }, [updateJob]);
 
