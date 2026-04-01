@@ -400,31 +400,47 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
           <Button variant="outline" size="sm" className="text-xs" disabled={currentLevel === 0} onClick={handleCreateFolder}>
             <FolderPlus className="h-3.5 w-3.5 mr-1" /> New Folder
           </Button>
-          <Button variant="outline" size="sm" className="text-xs" disabled={currentLevel === 0 || uploading} onClick={handleUpload}>
-            <Upload className="h-3.5 w-3.5 mr-1" /> {uploading ? "Uploading..." : "Upload"}
+          <Button variant="outline" size="sm" className="text-xs" disabled={currentLevel === 0 || uploadActiveCount > 0} onClick={handleUpload}>
+            <Upload className="h-3.5 w-3.5 mr-1" /> {uploadActiveCount > 0 ? "Uploading..." : "Upload"}
           </Button>
         </div>
       </div>
 
-      {/* Upload progress */}
-      {uploadProgress.length > 0 && (
-        <div className="space-y-1.5 bg-muted/50 rounded-lg px-3 py-2 border border-border/50">
-          <p className="text-xs font-medium text-foreground">
-            Uploading {uploadProgress.filter(p => p.percent < 100).length > 0
-              ? `${uploadProgress.filter(p => p.percent >= 100).length}/${uploadProgress.length} files...`
-              : "Complete!"}
-          </p>
-          {uploadProgress.map((item, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <p className="text-[11px] text-muted-foreground truncate min-w-0 flex-1 max-w-[200px]">{item.name}</p>
-              <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${item.percent}%` }} />
-              </div>
-              <span className="text-[11px] text-muted-foreground w-9 text-right">{item.percent}%</span>
-            </div>
-          ))}
+      {/* Folder info bar */}
+      {currentLevel > 0 && !e2Loading && (e2Files.length > 0 || e2Folders.length > 0) && (
+        <div className="flex items-center gap-3 flex-wrap bg-muted/30 rounded-xl px-4 py-2.5 border border-border/30">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <HardDriveIcon className="h-3.5 w-3.5" />
+            <span className="font-medium text-foreground">
+              {(e2Files.reduce((s, f) => s + f.size, 0) / (1024 * 1024)).toFixed(1)} MB
+            </span>
+          </div>
+          <span className="text-border">•</span>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <ImageIcon className="h-3.5 w-3.5" />
+            <span className="font-medium text-foreground">{e2Files.length} photos</span>
+          </div>
+          {uploadActiveCount > 0 && (
+            <>
+              <span className="text-border">•</span>
+              <span className="text-xs text-primary font-medium animate-pulse">
+                {uploadActiveCount} remaining to upload
+              </span>
+            </>
+          )}
         </div>
       )}
+
+      {/* Upload Pre-Dialog */}
+      <XitoUploadPreDialog
+        open={uploadDialogOpen}
+        onClose={() => { setUploadDialogOpen(false); setPendingFiles([]); }}
+        onConfirm={handleUploadConfirm}
+        fileCount={pendingFiles.length}
+        folderPath={currentS3Prefix}
+        defaultPhotographer={breadcrumb.length >= 4 ? breadcrumb[breadcrumb.length - 1]?.label : ""}
+        defaultEventName={breadcrumb.length >= 3 ? breadcrumb[2]?.label : ""}
+      />
 
       {/* Sync Banner */}
       {syncStatus && syncStatus.pending > 0 && !syncing && (
