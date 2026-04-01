@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { ChevronRight, Cloud, FolderPlus, Upload, CloudUpload, AlertTriangle, RefreshCw, CheckCircle2, Calculator } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DriveSearchPanel } from "@/components/shared/DriveSearchPanel";
 import { XitoDriveFolderCard } from "@/components/xito-drive/XitoDriveFolderCard";
 import { supabase } from "@/integrations/supabase/client";
 import {
