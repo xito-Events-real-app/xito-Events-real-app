@@ -1,52 +1,57 @@
 
 
-# Cross-Drive Synchronicity Check (XITO ↔ pCloud)
+# Download from pCloud While Viewing from XITO Drive
 
 ## What It Does
 
-Adds a "Check Sync" button in the XITO Drive toolbar that appears only at **level 3+** (event/freelancer level, e.g. `FALGUN EVENTS 2082 > KARISHMA SHRESTHA > WEDDING(BOTH SIDES) > SAFAL KC`). When clicked, it compares the file count and names between the current XITO Drive (R2) folder and the equivalent pCloud folder, then displays an info bar showing match/mismatch details.
+In the XITO Image Viewer (used in the client portal photo browsing), the existing Download button currently downloads the compressed XITO Drive (R2) version. This change makes it download the **high-quality pCloud version** instead, while viewing remains from XITO Drive for speed.
 
-## Path Mapping
+## How It Works
 
-XITO Drive path: `FALGUN EVENTS 2082/KARISHMA SHRESTHA/Photos/WEDDING(BOTH SIDES)/SAFAL KC/`
-pCloud equivalent: `/WEDDING TALES NEPAL/FALGUN EVENTS 2082/KARISHMA SHRESTHA/Photos/WEDDING(BOTH SIDES)/SAFAL KC`
+The XITO Drive S3 key maps directly to a pCloud path:
+- XITO key: `FALGUN EVENTS 2082/KARISHMA SHRESTHA/Photos/WEDDING(BOTH SIDES)/SAFAL KC/photo.jpg`  
+- pCloud path: `/WEDDING TALES NEPAL/FALGUN EVENTS 2082/KARISHMA SHRESTHA/Photos/WEDDING(BOTH SIDES)/SAFAL KC/photo.jpg`
 
-The pCloud path is simply `/WEDDING TALES NEPAL/` + the XITO S3 prefix (minus trailing slash).
-
-## UI Design
-
-- A **"Check Sync"** button placed in the toolbar row, before the Recalculate button
-- Only visible at breadcrumb level ≥ 2 (event level and deeper)
-- Default state: just the button, no banner
-- After clicking: shows an info bar above the folder info bar with results:
-  - **In sync**: Green bar — "✓ Both drives in sync — X files match"
-  - **Mismatch**: Amber bar — "⚠ Out of sync" with details:
-    - "XITO: X files · pCloud: Y files"
-    - "Z files only in XITO · W files only in pCloud" (based on filename comparison)
+pCloud's API supports `stat` by path (returns fileid), then we use the existing stream proxy (`getPCloudStreamUrl`) for a reliable download URL that works across IPs.
 
 ## Implementation
 
-### File: `src/components/xito-drive/XitoDriveBrowser.tsx`
+### 1. Add `getPCloudFileLinkByPath` to `src/lib/pcloud-api.ts`
 
-1. Add new state variables:
-   - `crossSyncResult` — stores comparison result (null by default)
-   - `crossSyncChecking` — loading state
+New function that:
+- Calls pCloud's `/stat` endpoint with `path` parameter to get the `fileid`
+- Returns a stream proxy URL via `getPCloudStreamUrl(fileid)` for reliable cross-device downloads
 
-2. Add `handleCheckCrossSync` function:
-   - Get current E2 files (already loaded in `e2Files`)
-   - Call `listPCloudFolderByPath("/WEDDING TALES NEPAL/" + currentS3Prefix)` to get pCloud contents
-   - Compare file names (strip path, compare by name only)
-   - Compute: files only in XITO, files only in pCloud, matching count
+### 2. Update Edge Function `supabase/functions/pcloud-api/index.ts`
 
-3. Add button in toolbar (next to Recalculate), visible when `currentLevel >= 2`:
-   ```
-   Check Sync (default) → Checking... (loading) → button resets after result shows
-   ```
+Add path support to the `stat` action — accept either `fileid` or `path` parameter and pass it to pCloud's `/stat` API.
 
-4. Add result info bar between the toolbar and the folder info bar:
-   - Green banner if `onlyInXito.length === 0 && onlyInPCloud.length === 0`
-   - Amber banner with mismatch details otherwise
-   - Dismissible (X button to clear result)
+### 3. Update `XitoImageViewer.tsx`
 
-### No new files needed — single file edit to `XitoDriveBrowser.tsx`
+- Add optional prop: `onDownloadHQ?: (photoKey: string) => void`
+- When provided, the Download button calls `onDownloadHQ(currentPhotoKey)` instead of the default XITO download
+- Show a loading spinner on the download button while fetching the pCloud link
+- The download button label changes subtly (e.g., small "HQ" badge) to indicate it's downloading the high-quality version
+
+### 4. Update `PortalMyPhotos.tsx`
+
+- Import `getPCloudFileLinkByPath` from pcloud-api
+- Create `handleDownloadHQ` callback that:
+  1. Maps the XITO key to pCloud path: `/WEDDING TALES NEPAL/${key}`
+  2. Calls `getPCloudFileLinkByPath(pcloudPath)` to get stream URL
+  3. Triggers download via `window.open(url)` or `<a>` element
+- Pass `onDownloadHQ={handleDownloadHQ}` to `XitoImageViewer`
+
+### 5. Update grid download button in `PortalMyPhotos.tsx`
+
+The small download icon on hover in the photo grid should also download from pCloud (same logic).
+
+## Files to Modify
+
+| File | Change |
+|------|--------|
+| `src/lib/pcloud-api.ts` | Add `getPCloudFileLinkByPath(path)` |
+| `supabase/functions/pcloud-api/index.ts` | Support `path` param in `stat` action |
+| `src/components/client-detail/XitoImageViewer.tsx` | Add `onDownloadHQ` prop with loading state |
+| `src/components/client-portal/PortalMyPhotos.tsx` | Wire up pCloud HQ download for viewer and grid |
 
