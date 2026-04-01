@@ -189,59 +189,72 @@ serve(async (req) => {
     const url = new URL(req.url);
     const action = url.searchParams.get("action");
 
-    // ACTION: list
+    // ACTION: list (with pagination to support >1000 files)
     if (action === "list") {
       const prefix = url.searchParams.get("prefix") || "";
-      const signed = await signS3Request({
-        method: "GET", endpoint, bucket, objectKey: "",
-        region, accessKey, secretKey,
-        queryParams: { "list-type": "2", prefix, delimiter: "/" },
-      });
-
-      const s3Resp = await fetch(signed.url, { headers: signed.headers });
-      const xml = await s3Resp.text();
-
-      if (!s3Resp.ok) {
-        console.error("S3 list error:", xml);
-        return new Response(JSON.stringify({ error: "S3 list failed", details: xml }), {
-          status: s3Resp.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      // Decode XML entities
+      
+      // Decode XML entities helper
       const decodeXmlEntities = (s: string) =>
         s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
          .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n)))
          .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
 
-      // Parse XML simply
       const folders: string[] = [];
       const files: { key: string; size: number; lastModified: string }[] = [];
+      let continuationToken: string | null = null;
 
-      // CommonPrefixes -> folders
-      const prefixMatches = xml.matchAll(/<Prefix>([^<]+)<\/Prefix>/g);
-      for (const m of prefixMatches) {
-        const p = decodeXmlEntities(m[1]);
-        if (p && p !== prefix) folders.push(p);
-      }
+      // Loop through all pages
+      do {
+        const qp: Record<string, string> = { "list-type": "2", prefix, delimiter: "/", "max-keys": "1000" };
+        if (continuationToken) {
+          qp["continuation-token"] = continuationToken;
+        }
 
-      // Contents -> files
-      const contentBlocks = xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g);
-      for (const block of contentBlocks) {
-        const keyMatch = block[1].match(/<Key>([^<]+)<\/Key>/);
-        const sizeMatch = block[1].match(/<Size>([^<]+)<\/Size>/);
-        const modMatch = block[1].match(/<LastModified>([^<]+)<\/LastModified>/);
-        if (keyMatch) {
-          const key = decodeXmlEntities(keyMatch[1]);
-          // Skip folder markers
-          if (key.endsWith("/")) continue;
-          files.push({
-            key,
-            size: parseInt(sizeMatch?.[1] || "0"),
-            lastModified: modMatch?.[1] || "",
+        const signed = await signS3Request({
+          method: "GET", endpoint, bucket, objectKey: "",
+          region, accessKey, secretKey,
+          queryParams: qp,
+        });
+
+        const s3Resp = await fetch(signed.url, { headers: signed.headers });
+        const xml = await s3Resp.text();
+
+        if (!s3Resp.ok) {
+          console.error("S3 list error:", xml);
+          return new Response(JSON.stringify({ error: "S3 list failed", details: xml }), {
+            status: s3Resp.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-      }
+
+        // CommonPrefixes -> folders
+        const prefixMatches = xml.matchAll(/<Prefix>([^<]+)<\/Prefix>/g);
+        for (const m of prefixMatches) {
+          const p = decodeXmlEntities(m[1]);
+          if (p && p !== prefix && !folders.includes(p)) folders.push(p);
+        }
+
+        // Contents -> files
+        const contentBlocks = xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g);
+        for (const block of contentBlocks) {
+          const keyMatch = block[1].match(/<Key>([^<]+)<\/Key>/);
+          const sizeMatch = block[1].match(/<Size>([^<]+)<\/Size>/);
+          const modMatch = block[1].match(/<LastModified>([^<]+)<\/LastModified>/);
+          if (keyMatch) {
+            const key = decodeXmlEntities(keyMatch[1]);
+            if (key.endsWith("/")) continue;
+            files.push({
+              key,
+              size: parseInt(sizeMatch?.[1] || "0"),
+              lastModified: modMatch?.[1] || "",
+            });
+          }
+        }
+
+        // Check for next page
+        const isTruncated = /<IsTruncated>true<\/IsTruncated>/i.test(xml);
+        const nextTokenMatch = xml.match(/<NextContinuationToken>([^<]+)<\/NextContinuationToken>/);
+        continuationToken = isTruncated && nextTokenMatch ? decodeXmlEntities(nextTokenMatch[1]) : null;
+      } while (continuationToken);
 
       return new Response(JSON.stringify({ folders, files }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
