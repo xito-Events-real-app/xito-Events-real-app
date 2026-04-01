@@ -147,7 +147,7 @@ export function XitoDriveUploadProvider({ children }: { children: React.ReactNod
         await supabase.from("xito_activity_log").insert({
           action_type: 'upload',
           folder_path: meta.folderPrefix,
-          client_name: meta.eventName ? meta.eventName : '',
+          client_name: derivedClientName,
           event_name: meta.eventName,
           photographer: meta.shotBy,
           file_count: 1,
