@@ -75,6 +75,7 @@ const App = () => (
            <BenzoKeepPopupProvider>
           <EditedFilesUploadProvider>
           <PCloudUploadProvider>
+          <XitoDriveUploadProvider>
           <BrowserRouter>
             <AuthProvider>
               <WtnFilesAnnouncement />
