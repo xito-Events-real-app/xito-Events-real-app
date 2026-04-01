@@ -1,57 +1,27 @@
 
 
-# Download from pCloud While Viewing from XITO Drive
+# Simplify Album System — Data-Only, No R2 Copy
 
-## What It Does
+## What Changes
 
-In the XITO Image Viewer (used in the client portal photo browsing), the existing Download button currently downloads the compressed XITO Drive (R2) version. This change makes it download the **high-quality pCloud version** instead, while viewing remains from XITO Drive for speed.
+Currently, when a photo is selected for an album, it gets **copied to a new R2 folder** (`/Albums/AlbumName/`). The "My Album" tab then loads photos from that copied folder. This is wasteful — duplicating storage for the same files.
 
-## How It Works
+**New approach**: Only save the selection record in the database. The "My Album" tab will load photos using the **original `photo_key`** (which already points to the main Photos folder on R2), fetching signed URLs from the same source as the Photos tab.
 
-The XITO Drive S3 key maps directly to a pCloud path:
-- XITO key: `FALGUN EVENTS 2082/KARISHMA SHRESTHA/Photos/WEDDING(BOTH SIDES)/SAFAL KC/photo.jpg`  
-- pCloud path: `/WEDDING TALES NEPAL/FALGUN EVENTS 2082/KARISHMA SHRESTHA/Photos/WEDDING(BOTH SIDES)/SAFAL KC/photo.jpg`
+## Changes
 
-pCloud's API supports `stat` by path (returns fileid), then we use the existing stream proxy (`getPCloudStreamUrl`) for a reliable download URL that works across IPs.
+### 1. `src/lib/album-selection-api.ts` — Remove R2 copy/delete operations
 
-## Implementation
+- **`addToAlbum`**: Remove the `copyE2Object` call (lines 74-78). Keep only the database upsert.
+- **`removeFromAlbum`**: Remove the `deleteE2Object` call (lines 114-120) and the album name resolution logic (lines 89-100). Keep only the database delete.
+- Remove the `buildAlbumE2Path` helper function (lines 36-45).
+- Remove the `import { copyE2Object, deleteE2Object }` import (line 2).
 
-### 1. Add `getPCloudFileLinkByPath` to `src/lib/pcloud-api.ts`
+### 2. `src/components/client-portal/PortalMyAlbum.tsx` — No changes needed
 
-New function that:
-- Calls pCloud's `/stat` endpoint with `path` parameter to get the `fileid`
-- Returns a stream proxy URL via `getPCloudStreamUrl(fileid)` for reliable cross-device downloads
+The "My Album" tab already uses `photo_key` (the original path) to fetch signed URLs via `getE2FileUrls`. Since `photo_key` stores the original Photos folder path, everything will continue to work — it was never actually loading from the Albums subfolder. The viewer, download, and remove features all work off `photo_key`.
 
-### 2. Update Edge Function `supabase/functions/pcloud-api/index.ts`
+## Summary
 
-Add path support to the `stat` action — accept either `fileid` or `path` parameter and pass it to pCloud's `/stat` API.
-
-### 3. Update `XitoImageViewer.tsx`
-
-- Add optional prop: `onDownloadHQ?: (photoKey: string) => void`
-- When provided, the Download button calls `onDownloadHQ(currentPhotoKey)` instead of the default XITO download
-- Show a loading spinner on the download button while fetching the pCloud link
-- The download button label changes subtly (e.g., small "HQ" badge) to indicate it's downloading the high-quality version
-
-### 4. Update `PortalMyPhotos.tsx`
-
-- Import `getPCloudFileLinkByPath` from pcloud-api
-- Create `handleDownloadHQ` callback that:
-  1. Maps the XITO key to pCloud path: `/WEDDING TALES NEPAL/${key}`
-  2. Calls `getPCloudFileLinkByPath(pcloudPath)` to get stream URL
-  3. Triggers download via `window.open(url)` or `<a>` element
-- Pass `onDownloadHQ={handleDownloadHQ}` to `XitoImageViewer`
-
-### 5. Update grid download button in `PortalMyPhotos.tsx`
-
-The small download icon on hover in the photo grid should also download from pCloud (same logic).
-
-## Files to Modify
-
-| File | Change |
-|------|--------|
-| `src/lib/pcloud-api.ts` | Add `getPCloudFileLinkByPath(path)` |
-| `supabase/functions/pcloud-api/index.ts` | Support `path` param in `stat` action |
-| `src/components/client-detail/XitoImageViewer.tsx` | Add `onDownloadHQ` prop with loading state |
-| `src/components/client-portal/PortalMyPhotos.tsx` | Wire up pCloud HQ download for viewer and grid |
+This is a small, clean change — just strip out the background R2 copy/delete calls from `album-selection-api.ts`. Everything else already works with the original photo keys.
 
