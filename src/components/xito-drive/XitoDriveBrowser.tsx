@@ -411,7 +411,7 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
       return (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
           {filteredGroups.map(g => (
-            <XitoDriveFolderCard key={g.key} name={g.label} itemCount={g.clients.length} type="month-year" onClick={() => navigate(g.label, g.key)} />
+            <XitoDriveFolderCard key={g.key} name={g.label} itemCount={g.clients.length} type="month-year" folderSizeGB={getFolderSize(g.label)} onClick={() => navigate(g.label, g.key)} />
           ))}
         </div>
       );
