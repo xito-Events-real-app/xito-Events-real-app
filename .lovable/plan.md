@@ -1,68 +1,52 @@
 
 
-# Pause, Cancel & Delete for XITO Drive and pCloud Uploads
+# Cross-Drive Synchronicity Check (XITO ↔ pCloud)
 
-## Overview
+## What It Does
 
-Add pause/cancel controls to ongoing uploads in both XITO Drive and pCloud, plus a delete-from-folder option in XITO Drive's file browser.
+Adds a "Check Sync" button in the XITO Drive toolbar that appears only at **level 3+** (event/freelancer level, e.g. `FALGUN EVENTS 2082 > KARISHMA SHRESTHA > WEDDING(BOTH SIDES) > SAFAL KC`). When clicked, it compares the file count and names between the current XITO Drive (R2) folder and the equivalent pCloud folder, then displays an info bar showing match/mismatch details.
 
-## Current Architecture
+## Path Mapping
 
-Both upload systems use sequential processing loops inside their contexts. Uploads use `XMLHttpRequest` (XHR) for progress tracking. There's no mechanism to abort or pause mid-upload. XITO Drive already has `deleteE2Object` in `idrive-e2-api.ts` but it's not exposed in the drive browser UI.
+XITO Drive path: `FALGUN EVENTS 2082/KARISHMA SHRESTHA/Photos/WEDDING(BOTH SIDES)/SAFAL KC/`
+pCloud equivalent: `/WEDDING TALES NEPAL/FALGUN EVENTS 2082/KARISHMA SHRESTHA/Photos/WEDDING(BOTH SIDES)/SAFAL KC`
 
-## Plan
+The pCloud path is simply `/WEDDING TALES NEPAL/` + the XITO S3 prefix (minus trailing slash).
 
-### 1. Add Pause/Cancel to XITO Drive Uploads
+## UI Design
 
-**`src/contexts/XitoDriveUploadContext.tsx`**:
-- Add a `paused` ref and `cancelledJobs` set to track state
-- Store the active XHR instance in a ref so it can be aborted
-- Modify `uploadToE2` to accept an `AbortSignal` or return an abort handle — instead, store XHR ref in context
-- Add `pauseSession`, `resumeSession`, `cancelJob`, `cancelSession` methods to the context
-- When paused: after current file completes, stop processing next files
-- When cancelled: abort current XHR, mark remaining pending jobs as `'cancelled'` status
-- Add `'cancelled'` and `'paused'` to the job status type
+- A **"Check Sync"** button placed in the toolbar row, before the Recalculate button
+- Only visible at breadcrumb level ≥ 2 (event level and deeper)
+- Default state: just the button, no banner
+- After clicking: shows an info bar above the folder info bar with results:
+  - **In sync**: Green bar — "✓ Both drives in sync — X files match"
+  - **Mismatch**: Amber bar — "⚠ Out of sync" with details:
+    - "XITO: X files · pCloud: Y files"
+    - "Z files only in XITO · W files only in pCloud" (based on filename comparison)
 
-**`src/lib/idrive-e2-api.ts`**:
-- Modify `uploadToE2` to accept an optional `AbortController` signal, call `xhr.abort()` when signaled
+## Implementation
 
-**`src/components/xito-drive/XitoUploadTracker.tsx`**:
-- Add Pause/Play and Cancel (X) buttons in the session header
-- Show paused state with a yellow indicator
-- Cancelled jobs show a grey "cancelled" badge
+### File: `src/components/xito-drive/XitoDriveBrowser.tsx`
 
-### 2. Add Pause/Cancel to pCloud Uploads
+1. Add new state variables:
+   - `crossSyncResult` — stores comparison result (null by default)
+   - `crossSyncChecking` — loading state
 
-**`src/contexts/PCloudUploadContext.tsx`**:
-- Same pattern: add `paused` ref, `cancelledJobs` set, store active XHR ref
-- Add `pauseUpload`, `resumeUpload`, `cancelAll`, `cancelJob` methods
-- Add `'cancelled'` status type
+2. Add `handleCheckCrossSync` function:
+   - Get current E2 files (already loaded in `e2Files`)
+   - Call `listPCloudFolderByPath("/WEDDING TALES NEPAL/" + currentS3Prefix)` to get pCloud contents
+   - Compare file names (strip path, compare by name only)
+   - Compute: files only in XITO, files only in pCloud, matching count
 
-**`src/lib/pcloud-api.ts`**:
-- Modify `uploadToPCloudByPath` to accept an optional `AbortController` signal
+3. Add button in toolbar (next to Recalculate), visible when `currentLevel >= 2`:
+   ```
+   Check Sync (default) → Checking... (loading) → button resets after result shows
+   ```
 
-**`src/components/pcloud-drive/PCloudUploadTracker.tsx`**:
-- Add Pause/Play and Cancel buttons in the tracker header
-- Per-job cancel button (X icon) for pending/uploading jobs
+4. Add result info bar between the toolbar and the folder info bar:
+   - Green banner if `onlyInXito.length === 0 && onlyInPCloud.length === 0`
+   - Amber banner with mismatch details otherwise
+   - Dismissible (X button to clear result)
 
-### 3. Add Delete Files from XITO Drive Folders
-
-**`src/components/xito-drive/XitoDriveBrowser.tsx`**:
-- At the leaf/file level where E2 files are listed, add a delete button (Trash icon) per file
-- Show a confirmation dialog before deleting
-- Call `deleteE2Object(file.key)` on confirm
-- Refresh the file list after deletion
-- Log the deletion to `xito_activity_log` with `action_type: 'delete'`
-
-### Files to Modify
-
-| File | Change |
-|------|--------|
-| `src/lib/idrive-e2-api.ts` | Add `AbortController` support to `uploadToE2` |
-| `src/lib/pcloud-api.ts` | Add `AbortController` support to `uploadToPCloudByPath` |
-| `src/contexts/XitoDriveUploadContext.tsx` | Add pause/cancel state and methods |
-| `src/contexts/PCloudUploadContext.tsx` | Add pause/cancel state and methods |
-| `src/components/xito-drive/XitoUploadTracker.tsx` | Add pause/cancel UI buttons |
-| `src/components/pcloud-drive/PCloudUploadTracker.tsx` | Add pause/cancel UI buttons |
-| `src/components/xito-drive/XitoDriveBrowser.tsx` | Add delete button per file with confirmation |
+### No new files needed — single file edit to `XitoDriveBrowser.tsx`
 
