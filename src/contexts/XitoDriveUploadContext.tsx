@@ -123,12 +123,16 @@ export function XitoDriveUploadProvider({ children }: { children: React.ReactNod
       const photoCount = completedCount - videoFiles.length;
       const photoSize = completedSize - videoFiles.reduce((s, v) => s + v.size, 0);
 
+      // Derive client name from folder path segments (2nd segment typically)
+      const pathSegments = meta.folderPrefix.split('/').filter(Boolean);
+      const derivedClientName = pathSegments.length >= 2 ? pathSegments[1] : pathSegments[0] || '';
+
       // Log bulk photo entry
       if (photoCount > 0) {
         await supabase.from("xito_activity_log").insert({
           action_type: 'upload',
           folder_path: meta.folderPrefix,
-          client_name: meta.eventName ? meta.eventName : '',
+          client_name: derivedClientName,
           event_name: meta.eventName,
           photographer: meta.shotBy,
           file_count: photoCount,
