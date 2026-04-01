@@ -22,9 +22,10 @@ const MAX_ALBUM_PHOTOS = 140;
 
 const XitoImageViewer = ({
   images, initialIndex, onClose,
-  albums, albumCounts, selectedAlbums, onToggleAlbum
+  albums, albumCounts, selectedAlbums, onToggleAlbum, onDownloadHQ
 }: XitoImageViewerProps) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const [isDownloading, setIsDownloading] = useState(false);
   const touchStartX = useRef(0);
   const total = images.length;
   const isLast = currentIndex === total - 1;
