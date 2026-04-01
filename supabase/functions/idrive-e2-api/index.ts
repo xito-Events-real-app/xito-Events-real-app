@@ -502,7 +502,7 @@ serve(async (req) => {
       status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("idrive-e2-api error:", err);
+    console.error("cloudflare-r2-api error:", err);
     return new Response(JSON.stringify({ error: err.message || "Internal error" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
