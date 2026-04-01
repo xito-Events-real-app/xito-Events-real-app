@@ -64,21 +64,8 @@ export async function removeFromAlbum(
   registeredDateTimeAD: string,
   albumType: string,
   photoKey: string,
-  albumName?: string
+  _albumName?: string
 ): Promise<boolean> {
-  // Get album name if not provided (needed for E2 path)
-  let resolvedAlbumName = albumName;
-  if (!resolvedAlbumName) {
-    const { data } = await supabase
-      .from('client_album_selections')
-      .select('album_name')
-      .eq('registered_date_time_ad', registeredDateTimeAD)
-      .eq('album_type', albumType)
-      .eq('photo_key', photoKey)
-      .maybeSingle();
-    resolvedAlbumName = data?.album_name || '';
-  }
-
   const { error } = await supabase
     .from('client_album_selections')
     .delete()
@@ -89,14 +76,6 @@ export async function removeFromAlbum(
   if (error) {
     console.error('Error removing from album:', error);
     return false;
-  }
-
-  // Background E2 delete — fire and forget
-  if (resolvedAlbumName) {
-    const destPath = buildAlbumE2Path(photoKey, resolvedAlbumName);
-    deleteE2Object(destPath).catch(err => {
-      console.error('Background E2 delete failed:', err);
-    });
   }
 
   return true;
