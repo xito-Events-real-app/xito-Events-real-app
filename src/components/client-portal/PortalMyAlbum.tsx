@@ -151,25 +151,46 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
         <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 scrollbar-hide">
           {albums.map((album, idx) => {
             const count = albumCounts[album.type] || 0;
+            const isActive = idx === activeAlbumIndex;
+            const isDownloading = downloadingAlbum === album.type;
             return (
-              <button
-                key={album.type}
-                onClick={() => setActiveAlbumIndex(idx)}
-                className={cn(
-                  "shrink-0 px-4 py-2 rounded-xl text-xs font-medium border transition-all duration-200",
-                  idx === activeAlbumIndex
-                    ? "bg-[hsl(350,80%,65%)] text-white border-[hsl(350,80%,65%)] shadow-[0_0_16px_hsl(350,80%,65%/0.3)]"
-                    : "bg-white/[0.04] text-white/50 border-white/10 hover:bg-white/[0.08]"
+              <div key={album.type} className="shrink-0 flex items-center gap-1">
+                <button
+                  onClick={() => setActiveAlbumIndex(idx)}
+                  className={cn(
+                    "px-4 py-2 rounded-xl text-xs font-medium border transition-all duration-200",
+                    isActive
+                      ? "bg-[hsl(350,80%,65%)] text-white border-[hsl(350,80%,65%)] shadow-[0_0_16px_hsl(350,80%,65%/0.3)]"
+                      : "bg-white/[0.04] text-white/50 border-white/10 hover:bg-white/[0.08]"
+                  )}
+                >
+                  {album.name}
+                  <span className={cn(
+                    "ml-1.5 text-[10px]",
+                    isActive ? "text-white/80" : "text-white/30"
+                  )}>
+                    {count}/{MAX_PHOTOS}
+                  </span>
+                </button>
+                {count > 0 && (
+                  <button
+                    onClick={() => handleDownloadAlbum(album.type)}
+                    disabled={!!downloadingAlbum}
+                    className={cn(
+                      "p-1.5 rounded-lg border transition-all text-[10px] font-medium flex items-center gap-1",
+                      isActive
+                        ? "border-[hsl(350,80%,65%)]/40 text-[hsl(350,80%,65%)] hover:bg-[hsl(350,80%,65%)]/10"
+                        : "border-white/10 text-white/40 hover:bg-white/[0.06]"
+                    )}
+                  >
+                    {isDownloading ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Download className="h-3 w-3" />
+                    )}
+                  </button>
                 )}
-              >
-                {album.name}
-                <span className={cn(
-                  "ml-1.5 text-[10px]",
-                  idx === activeAlbumIndex ? "text-white/80" : "text-white/30"
-                )}>
-                  {count}/{MAX_PHOTOS}
-                </span>
-              </button>
+              </div>
             );
           })}
         </div>
