@@ -106,3 +106,25 @@ export async function listE2FolderRecursive(prefix: string): Promise<Set<string>
   const data = await callE2("listRecursive", { prefix }, "GET");
   return new Set<string>(data.folders || []);
 }
+
+export interface R2BucketUsage {
+  totalSize: number;
+  totalFiles: number;
+  folders: { path: string; name: string; totalBytes: number; fileCount: number }[];
+}
+
+/** Get total bucket usage and per-folder sizes from Cloudflare R2 */
+export async function getR2BucketUsage(): Promise<R2BucketUsage> {
+  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+  const headers: Record<string, string> = {
+    apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+    'Content-Type': 'application/json',
+  };
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120000);
+  const url = `https://${projectId}.supabase.co/functions/v1/idrive-e2-api?action=getBucketUsage`;
+  const resp = await fetch(url, { headers, signal: controller.signal });
+  clearTimeout(timeoutId);
+  if (!resp.ok) throw new Error(await resp.text());
+  return resp.json();
+}

@@ -1,11 +1,12 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { ChevronRight, HardDrive, FolderPlus, Upload, RefreshCw, Loader2, CheckCircle2, ImageIcon, HardDriveIcon } from "lucide-react";
+import { ChevronRight, HardDrive, FolderPlus, Upload, RefreshCw, Loader2, CheckCircle2, ImageIcon, HardDriveIcon, Calculator } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { XitoDriveFolderCard } from "./XitoDriveFolderCard";
 import { XitoDrivePhotoGallery } from "./XitoDrivePhotoGallery";
 import { XitoUploadPreDialog } from "./XitoUploadPreDialog";
+import { DriveSearchPanel } from "@/components/shared/DriveSearchPanel";
 import { useXitoDriveUploadContext } from "@/contexts/XitoDriveUploadContext";
 import {
   MonthYearGroup,
@@ -14,7 +15,7 @@ import {
   getFreelancersForEvent,
   FreelancerAssignment,
 } from "@/lib/xito-drive-utils";
-import { listE2Folder, createE2Folder, getE2FileUrl, E2File } from "@/lib/idrive-e2-api";
+import { listE2Folder, createE2Folder, getE2FileUrl, E2File, getR2BucketUsage, R2BucketUsage } from "@/lib/idrive-e2-api";
 import { BookedClientData } from "@/lib/sheets-api";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
 import { checkE2SyncStatus, syncE2PendingFolders } from "@/lib/e2-sync";
@@ -53,6 +54,93 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
   const { startUpload, activeCount: uploadActiveCount } = useXitoDriveUploadContext();
   const groups = useMemo(() => buildMonthYearGroups(clients), [clients]);
   const uniqueYears = useMemo(() => getUniqueYears(groups), [groups]);
+
+  // Folder sizes from R2
+  const [folderSizes, setFolderSizes] = useState<Record<string, { sizeGB: string; bytes: number }>>({});
+  const [r2Usage, setR2Usage] = useState<R2BucketUsage | null>(null);
+  const [calculatingSizes, setCalculatingSizes] = useState(false);
+  const [sizesLoaded, setSizesLoaded] = useState(false);
+
+  // Load cached sizes from localStorage
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem("xito-folder-sizes");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        setFolderSizes(parsed.sizes || {});
+        setR2Usage(parsed.usage || null);
+      }
+    } catch {}
+    setSizesLoaded(true);
+  }, []);
+
+  const handleRecalculateSizes = useCallback(async () => {
+    setCalculatingSizes(true);
+    const toastId = toast.loading("Calculating XITO Drive sizes from Cloudflare R2...");
+    try {
+      const usage = await getR2BucketUsage();
+      setR2Usage(usage);
+      const newSizes: Record<string, { sizeGB: string; bytes: number }> = {};
+      for (const f of usage.folders) {
+        const gb = f.totalBytes / (1024 * 1024 * 1024);
+        newSizes[f.path] = {
+          sizeGB: gb >= 1 ? `${gb.toFixed(1)} GB` : `${(f.totalBytes / (1024 * 1024)).toFixed(0)} MB`,
+          bytes: f.totalBytes,
+        };
+      }
+      setFolderSizes(newSizes);
+      localStorage.setItem("xito-folder-sizes", JSON.stringify({ sizes: newSizes, usage }));
+      toast.dismiss(toastId);
+      toast.success(`Calculated sizes for ${usage.folders.length} folders`);
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error("Failed to calculate sizes");
+      console.error(err);
+    } finally {
+      setCalculatingSizes(false);
+    }
+  }, []);
+
+  // Auto-calc on first load if no cache
+  useEffect(() => {
+    if (sizesLoaded && Object.keys(folderSizes).length === 0 && !calculatingSizes) {
+      handleRecalculateSizes();
+    }
+  }, [sizesLoaded]);
+
+  const getFolderSize = useCallback((folderName: string): string | undefined => {
+    const path = breadcrumb.length === 0
+      ? folderName
+      : `${breadcrumb.map(b => b.label.replace(/[/\\]/g, "_")).join("/")}${breadcrumb.length >= 2 ? "/Photos" : ""}/${folderName}`.replace(/\/\//g, "/");
+    // Try exact match first, then with Photos inserted
+    return folderSizes[path]?.sizeGB;
+  }, [folderSizes, breadcrumb]);
+
+  // Build searchable items for search panel
+  const searchableItems = useMemo(() => {
+    const items: { label: string; path: string[]; type: string }[] = [];
+    for (const g of groups) {
+      items.push({ label: g.label, path: [g.label], type: "month-year" });
+      for (const c of g.clients) {
+        items.push({ label: c.clientName, path: [g.label, c.clientName], type: "client" });
+        for (const ev of c.events) {
+          items.push({ label: `${c.clientName} › ${ev}`, path: [g.label, c.clientName, ev], type: "event" });
+        }
+      }
+    }
+    return items;
+  }, [groups]);
+
+  const handleSearchNavigate = useCallback((path: string[]) => {
+    const newBreadcrumb: BreadcrumbSegment[] = [];
+    if (path[0]) {
+      const group = groups.find(g => g.label === path[0]);
+      if (group) newBreadcrumb.push({ label: group.label, level: group.key });
+    }
+    if (path[1]) newBreadcrumb.push({ label: path[1], level: path[1] });
+    if (path[2]) newBreadcrumb.push({ label: path[2], level: path[2] });
+    setBreadcrumb(newBreadcrumb);
+  }, [groups]);
 
   const filteredGroups = useMemo(() => {
     return groups.filter(g => {
@@ -323,7 +411,7 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
       return (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
           {filteredGroups.map(g => (
-            <XitoDriveFolderCard key={g.key} name={g.label} itemCount={g.clients.length} type="month-year" onClick={() => navigate(g.label, g.key)} />
+            <XitoDriveFolderCard key={g.key} name={g.label} itemCount={g.clients.length} type="month-year" folderSizeGB={getFolderSize(g.label)} onClick={() => navigate(g.label, g.key)} />
           ))}
         </div>
       );
@@ -334,7 +422,7 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
       return (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
           {currentGroup.clients.map(c => (
-            <XitoDriveFolderCard key={c.registeredDateTimeAD} name={c.clientName} itemCount={c.events.length + 1} type="client" onClick={() => navigate(c.clientName, c.registeredDateTimeAD)} />
+            <XitoDriveFolderCard key={c.registeredDateTimeAD} name={c.clientName} itemCount={c.events.length + 1} type="client" folderSizeGB={getFolderSize(c.clientName)} onClick={() => navigate(c.clientName, c.registeredDateTimeAD)} />
           ))}
           {renderE2Files()}
         </div>
@@ -351,7 +439,7 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
               ? getFreelancersForEvent(assignments, currentClientFolder.registeredDateTimeAD, ev)
               : { photographers: [], videographers: [] };
             return (
-              <XitoDriveFolderCard key={ev} name={ev} itemCount={ev === "Selected" ? undefined : freelancers.photographers.length || undefined} type="event" categoryName="Photos" onClick={() => navigate(ev, ev)} />
+              <XitoDriveFolderCard key={ev} name={ev} itemCount={ev === "Selected" ? undefined : freelancers.photographers.length || undefined} type="event" categoryName="Photos" folderSizeGB={getFolderSize(ev)} onClick={() => navigate(ev, ev)} />
             );
           })}
           {renderE2Files()}
@@ -366,7 +454,7 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
         <div className="space-y-3">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
             {photographers.map(name => (
-              <XitoDriveFolderCard key={name} name={name} type="freelancer" onClick={() => navigate(name, name)} />
+              <XitoDriveFolderCard key={name} name={name} type="freelancer" folderSizeGB={getFolderSize(name)} onClick={() => navigate(name, name)} />
             ))}
             {renderE2Files()}
           </div>
@@ -386,6 +474,31 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Storage Info Bar */}
+      {r2Usage && (
+        <div className="flex items-center gap-4 bg-muted/30 rounded-xl px-4 py-2.5 border border-border/30">
+          <div className="flex items-center gap-1.5">
+            <HardDrive className="h-4 w-4 text-primary" />
+            <span className="text-xs font-bold text-foreground">
+              {(r2Usage.totalSize / (1024 * 1024 * 1024)).toFixed(2)} GB
+            </span>
+            <span className="text-[10px] text-muted-foreground">total used</span>
+          </div>
+          <span className="text-border">•</span>
+          <span className="text-[10px] text-muted-foreground">
+            {r2Usage.totalFiles.toLocaleString()} files
+          </span>
+        </div>
+      )}
+
+      {/* Search */}
+      <DriveSearchPanel
+        storageKey="xito-drive-recent-searches"
+        items={searchableItems}
+        onNavigate={handleSearchNavigate}
+        placeholder="Search clients, events..."
+      />
+
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
         {currentLevel === 0 && (
@@ -416,6 +529,10 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
         )}
 
         <div className="ml-auto flex items-center gap-2">
+          <Button variant="outline" size="sm" className="text-xs" onClick={handleRecalculateSizes} disabled={calculatingSizes}>
+            <Calculator className={`h-3.5 w-3.5 mr-1 ${calculatingSizes ? 'animate-spin' : ''}`} />
+            {calculatingSizes ? 'Calculating...' : 'Recalculate'}
+          </Button>
           <Button variant="outline" size="sm" className="text-xs" disabled={currentLevel === 0} onClick={handleCreateFolder}>
             <FolderPlus className="h-3.5 w-3.5 mr-1" /> New Folder
           </Button>
