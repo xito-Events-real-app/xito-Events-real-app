@@ -177,14 +177,31 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
     input.click();
   }, []);
 
-  const handleUploadConfirm = useCallback(async (meta: { shotBy: string; eventName: string; eventDate: string; expectedCount: number }) => {
+  // Derive metadata from breadcrumb
+  const uploadShotBy = breadcrumb[3]?.label || breadcrumb[2]?.label || "";
+  const uploadEventName = breadcrumb[2]?.label || "";
+  const uploadClientName = breadcrumb[1]?.label || "";
+  const uploadEventDate = useMemo(() => {
+    if (!currentClientFolder) return "";
+    return currentClientFolder.eventDateAD || "";
+  }, [currentClientFolder]);
+  const uploadDaysAgo = useMemo(() => {
+    if (!uploadEventDate) return null;
+    const d = new Date(uploadEventDate);
+    if (isNaN(d.getTime())) return null;
+    return Math.floor((Date.now() - d.getTime()) / 86400000);
+  }, [uploadEventDate]);
+
+  const handleUploadConfirm = useCallback(async () => {
     setUploadDialogOpen(false);
     await startUpload(pendingFiles, {
-      ...meta,
+      shotBy: uploadShotBy,
+      eventName: uploadEventName,
+      eventDate: uploadEventDate,
+      expectedCount: pendingFiles.length,
       folderPrefix: currentS3Prefix,
     });
     setPendingFiles([]);
-    // Refresh folder listing after a delay
     setTimeout(async () => {
       try {
         const result = await listE2Folder(currentS3Prefix);
@@ -192,7 +209,7 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
         setE2Folders(result.folders);
       } catch {}
     }, 2000);
-  }, [pendingFiles, currentS3Prefix, startUpload]);
+  }, [pendingFiles, currentS3Prefix, startUpload, uploadShotBy, uploadEventName, uploadEventDate]);
 
   const handleFileClick = useCallback(async (file: E2File) => {
     try {
