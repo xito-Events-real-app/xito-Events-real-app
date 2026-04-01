@@ -49,6 +49,8 @@ import { EditedFilesUploadProvider } from "./components/edited-files/EditedFiles
 import { UploadProgressTracker } from "./components/edited-files/UploadProgressTracker";
 import { PCloudUploadProvider } from "./contexts/PCloudUploadContext";
 import { PCloudUploadTracker } from "./components/pcloud-drive/PCloudUploadTracker";
+import { XitoDriveUploadProvider } from "./contexts/XitoDriveUploadContext";
+import { XitoUploadTracker } from "./components/xito-drive/XitoUploadTracker";
 import { StartupAnnouncementPopup } from "./components/suite/StartupAnnouncementPopup";
 
 const queryClient = new QueryClient();
@@ -73,6 +75,7 @@ const App = () => (
            <BenzoKeepPopupProvider>
           <EditedFilesUploadProvider>
           <PCloudUploadProvider>
+          <XitoDriveUploadProvider>
           <BrowserRouter>
             <AuthProvider>
               <WtnFilesAnnouncement />
@@ -84,6 +87,7 @@ const App = () => (
               <Sonner />
               <UploadProgressTracker />
               <PCloudUploadTracker />
+              <XitoUploadTracker />
             <Routes>
               {/* Public routes - no auth required */}
               <Route path="/client-form/:clientName/:clientId" element={<ClientContactForm />} />
@@ -135,6 +139,7 @@ const App = () => (
             </Routes>
           </AuthProvider>
           </BrowserRouter>
+          </XitoDriveUploadProvider>
           </PCloudUploadProvider>
           </EditedFilesUploadProvider>
            </BenzoKeepPopupProvider>
