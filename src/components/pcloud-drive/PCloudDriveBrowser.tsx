@@ -348,6 +348,29 @@ export function PCloudDriveBrowser({ clients, assignments, isLoading }: Props) {
     return pcloudItems.filter(item => !item.isfolder);
   }, [pcloudItems]);
 
+  // Build searchable items for search panel
+  const searchableItems = useMemo(() => {
+    const items: { label: string; path: string[]; type: string }[] = [];
+    for (const g of groups) {
+      items.push({ label: g.label, path: [g.label], type: "month-year" });
+      for (const c of g.clients) {
+        items.push({ label: c.clientName, path: [g.label, c.clientName], type: "client" });
+        for (const ev of c.events) {
+          items.push({ label: `${c.clientName} › ${ev}`, path: [g.label, c.clientName, "Photos", ev], type: "event" });
+        }
+      }
+    }
+    return items;
+  }, [groups]);
+
+  const handleSearchNavigate = useCallback((path: string[]) => {
+    const newBreadcrumb: BreadcrumbSegment[] = [];
+    for (const seg of path) {
+      newBreadcrumb.push({ label: seg, level: seg });
+    }
+    setBreadcrumb(newBreadcrumb);
+  }, []);
+
   // Pending sync banner
   const renderPendingBanner = () => {
     if (checkingSync) {
