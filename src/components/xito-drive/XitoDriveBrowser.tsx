@@ -16,6 +16,7 @@ import {
   FreelancerAssignment,
 } from "@/lib/xito-drive-utils";
 import { listE2Folder, createE2Folder, getE2FileUrl, deleteE2Object, E2File, getR2BucketUsage, R2BucketUsage } from "@/lib/idrive-e2-api";
+import { listPCloudFolderByPath } from "@/lib/pcloud-api";
 import { supabase } from "@/integrations/supabase/client";
 import {
   AlertDialog,
