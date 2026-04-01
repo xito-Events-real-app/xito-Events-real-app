@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import XitoImageViewer, { AlbumInfo } from "@/components/client-detail/XitoImageViewer";
 import { AlbumSelection, addToAlbum, removeFromAlbum } from "@/lib/album-selection-api";
 import { toast } from "sonner";
+import { getPCloudFileLinkByPath } from "@/lib/pcloud-api";
 
 const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".tiff", ".bmp", ".heic"];
 const isImage = (key: string) => IMAGE_EXTS.some((e) => key.toLowerCase().endsWith(e));
@@ -139,6 +140,31 @@ const PortalMyPhotos = ({
       });
     }
   }, [registeredDateTimeAD]);
+
+  // pCloud HQ download handler
+  const handleDownloadHQ = useCallback(async (photoKey: string) => {
+    try {
+      const pcloudPath = `/WEDDING TALES NEPAL/${photoKey}`;
+      const streamUrl = await getPCloudFileLinkByPath(pcloudPath);
+      const a = document.createElement("a");
+      a.href = streamUrl;
+      a.download = photoKey.split("/").pop() || "photo.jpg";
+      a.target = "_blank";
+      a.click();
+    } catch (err) {
+      console.error("HQ download failed:", err);
+      toast.error("HQ download failed — downloading preview instead");
+      // Fallback to XITO version
+      const url = photoUrlsRef.current[photoKey];
+      if (url) {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = photoKey.split("/").pop() || "photo.jpg";
+        a.target = "_blank";
+        a.click();
+      }
+    }
+  }, []);
 
   // Build tabs — use each assignment's own eventMonth/eventYear for S3 prefix
   const tabs: TabDef[] = useMemo(() => {
@@ -303,16 +329,15 @@ const PortalMyPhotos = ({
                       </div>
                     )}
                     {url && (
-                      <a
-                        href={url}
-                        download={file.key.split('/').pop() || 'photo.jpg'}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
                         className="absolute bottom-1 right-1 p-1.5 rounded-full bg-black/60 text-white/80 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDownloadHQ(file.key);
+                        }}
                       >
                         <Download className="h-3 w-3" />
-                      </a>
+                      </button>
                     )}
                   </div>
                 );
@@ -332,6 +357,7 @@ const PortalMyPhotos = ({
           albumCounts={albums.length > 0 ? albumCounts : undefined}
           selectedAlbums={albums.length > 0 ? selectedAlbumsMap : undefined}
           onToggleAlbum={albums.length > 0 ? handleToggleAlbum : undefined}
+          onDownloadHQ={handleDownloadHQ}
         />
       )}
     </>

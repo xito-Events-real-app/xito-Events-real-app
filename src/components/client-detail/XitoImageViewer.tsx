@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, memo } from "react";
-import { X, ChevronLeft, ChevronRight, Download, ImageIcon, Check, Plus } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, Download, ImageIcon, Check, Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface AlbumInfo {
@@ -15,15 +15,17 @@ interface XitoImageViewerProps {
   albumCounts?: Record<string, number>;
   selectedAlbums?: Record<string, string[]>; // photoKey → albumTypes[]
   onToggleAlbum?: (photoKey: string, albumType: string, albumName: string) => void;
+  onDownloadHQ?: (photoKey: string) => Promise<void>;
 }
 
 const MAX_ALBUM_PHOTOS = 140;
 
 const XitoImageViewer = ({
   images, initialIndex, onClose,
-  albums, albumCounts, selectedAlbums, onToggleAlbum
+  albums, albumCounts, selectedAlbums, onToggleAlbum, onDownloadHQ
 }: XitoImageViewerProps) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const [isDownloading, setIsDownloading] = useState(false);
   const touchStartX = useRef(0);
   const total = images.length;
   const isLast = currentIndex === total - 1;
@@ -53,14 +55,26 @@ const XitoImageViewer = ({
     if (Math.abs(delta) > 50) delta > 0 ? goNext() : goPrev();
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
+    if (isDownloading) return;
     const current = images[currentIndex];
-    if (!current?.url) return;
-    const a = document.createElement("a");
-    a.href = current.url;
-    a.download = current.key.split("/").pop() || "photo.jpg";
-    a.target = "_blank";
-    a.click();
+    if (!current?.key) return;
+
+    if (onDownloadHQ) {
+      setIsDownloading(true);
+      try {
+        await onDownloadHQ(current.key);
+      } finally {
+        setIsDownloading(false);
+      }
+    } else {
+      if (!current.url) return;
+      const a = document.createElement("a");
+      a.href = current.url;
+      a.download = current.key.split("/").pop() || "photo.jpg";
+      a.target = "_blank";
+      a.click();
+    }
   };
 
   const renderIndices = [currentIndex - 1, currentIndex, currentIndex + 1].filter(
@@ -89,8 +103,11 @@ const XitoImageViewer = ({
           </div>
           <div className="text-xs text-white/50 mt-0.5">{currentIndex + 1} of {total}</div>
         </div>
-        <button onClick={handleDownload} className="p-2 rounded-full hover:bg-white/10 text-white/80 hover:text-white transition-colors">
-          <Download className="h-5 w-5" />
+        <button onClick={handleDownload} disabled={isDownloading} className="p-2 rounded-full hover:bg-white/10 text-white/80 hover:text-white transition-colors relative">
+          {isDownloading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
+          {onDownloadHQ && !isDownloading && (
+            <span className="absolute -top-0.5 -right-0.5 text-[8px] font-bold bg-[hsl(350,80%,65%)] text-white rounded px-0.5 leading-tight">HQ</span>
+          )}
         </button>
       </div>
 

@@ -92,6 +92,17 @@ async function invokePCloudAction<T>(action: string, params: Record<string, unkn
   return data as T;
 }
 
+/**
+ * Get a download URL for a pCloud file by its full path.
+ * Uses /stat to resolve fileid, then returns a stream proxy URL.
+ */
+export async function getPCloudFileLinkByPath(path: string): Promise<string> {
+  const data = await invokePCloudAction<{ metadata?: { fileid?: number } }>('stat', { path });
+  const fileid = data.metadata?.fileid;
+  if (!fileid) throw new Error('Could not resolve pCloud file from path');
+  return getPCloudStreamUrl(fileid);
+}
+
 export async function getPCloudFileLink(fileid: number): Promise<string> {
   const data = await invokePCloudAction<{ hosts?: string[]; path?: string }>('getfilelink', {
     fileid,

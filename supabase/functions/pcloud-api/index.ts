@@ -345,7 +345,11 @@ serve(async (req) => {
 
       case 'stat':
         endpoint = '/stat';
-        query.set('fileid', String(params.fileid));
+        if (params.path) {
+          query.set('path', params.path);
+        } else {
+          query.set('fileid', String(params.fileid));
+        }
         break;
 
       case 'deletefile':
