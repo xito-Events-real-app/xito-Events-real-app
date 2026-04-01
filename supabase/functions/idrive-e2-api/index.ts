@@ -174,14 +174,14 @@ serve(async (req) => {
   }
 
   try {
-    const endpoint = Deno.env.get("IDRIVE_E2_ENDPOINT")!;
-    const accessKey = Deno.env.get("IDRIVE_E2_ACCESS_KEY")!;
-    const secretKey = Deno.env.get("IDRIVE_E2_SECRET_KEY")!;
-    const bucket = Deno.env.get("IDRIVE_E2_BUCKET")!;
-    const region = Deno.env.get("IDRIVE_E2_REGION")!;
+    const endpoint = Deno.env.get("CF_R2_ENDPOINT")!;
+    const accessKey = Deno.env.get("CF_R2_ACCESS_KEY")!;
+    const secretKey = Deno.env.get("CF_R2_SECRET_KEY")!;
+    const bucket = Deno.env.get("CF_R2_BUCKET")!;
+    const region = Deno.env.get("CF_R2_REGION") || "auto";
 
-    if (!endpoint || !accessKey || !secretKey || !bucket || !region) {
-      return new Response(JSON.stringify({ error: "iDrive E2 credentials not configured" }), {
+    if (!endpoint || !accessKey || !secretKey || !bucket) {
+      return new Response(JSON.stringify({ error: "Cloudflare R2 credentials not configured" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
