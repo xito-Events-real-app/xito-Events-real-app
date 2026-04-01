@@ -206,9 +206,37 @@ const XitoImageViewer = ({
         </div>
       )}
 
+      {/* Download-only bar when no albums but onDownloadHQ is provided */}
+      {!hasAlbums && onDownloadHQ && (
+        <div className="px-3 py-3 bg-black/90 backdrop-blur-md border-t border-white/[0.08] z-10">
+          <div className="flex items-center justify-center">
+            <button
+              onClick={handleDownload}
+              disabled={isDownloading}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium border transition-all duration-200 bg-white/[0.08] text-white/70 border-white/15 hover:bg-white/15 hover:text-white active:scale-95"
+            >
+              {isDownloading
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : <Download className="h-3.5 w-3.5" />
+              }
+              <span>Download</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* End of folder message */}
-      {isLast && !hasAlbums && (
+      {isLast && !hasAlbums && !onDownloadHQ && (
         <div className="absolute bottom-6 left-0 right-0 text-center">
+          <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/10 backdrop-blur-md text-white/80 text-sm">
+            <ImageIcon className="h-4 w-4" />
+            You've viewed all {total} photos from this folder
+          </div>
+        </div>
+      )}
+
+      {isLast && !hasAlbums && onDownloadHQ && (
+        <div className="absolute bottom-16 left-0 right-0 text-center z-[2]">
           <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/10 backdrop-blur-md text-white/80 text-sm">
             <ImageIcon className="h-4 w-4" />
             You've viewed all {total} photos from this folder
