@@ -14,7 +14,7 @@ import {
   getFreelancersForEvent,
   FreelancerAssignment,
 } from "@/lib/xito-drive-utils";
-import { listE2Folder, createE2Folder, uploadToE2, getE2FileUrl, E2File } from "@/lib/idrive-e2-api";
+import { listE2Folder, createE2Folder, getE2FileUrl, E2File } from "@/lib/idrive-e2-api";
 import { BookedClientData } from "@/lib/sheets-api";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
 import { checkE2SyncStatus, syncE2PendingFolders } from "@/lib/e2-sync";
