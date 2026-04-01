@@ -65,6 +65,15 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<E2File | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [crossSyncResult, setCrossSyncResult] = useState<{
+    inSync: boolean;
+    xitoCount: number;
+    pcloudCount: number;
+    onlyInXito: string[];
+    onlyInPCloud: string[];
+    matchCount: number;
+  } | null>(null);
+  const [crossSyncChecking, setCrossSyncChecking] = useState(false);
   const { startUpload, activeCount: uploadActiveCount } = useXitoDriveUploadContext();
   const groups = useMemo(() => buildMonthYearGroups(clients), [clients]);
   const uniqueYears = useMemo(() => getUniqueYears(groups), [groups]);
