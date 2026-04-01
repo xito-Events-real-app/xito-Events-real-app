@@ -15,6 +15,7 @@ interface XitoImageViewerProps {
   albumCounts?: Record<string, number>;
   selectedAlbums?: Record<string, string[]>; // photoKey → albumTypes[]
   onToggleAlbum?: (photoKey: string, albumType: string, albumName: string) => void;
+  onDownloadHQ?: (photoKey: string) => Promise<void>;
 }
 
 const MAX_ALBUM_PHOTOS = 140;
