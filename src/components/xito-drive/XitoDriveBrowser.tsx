@@ -454,7 +454,7 @@ export function XitoDriveBrowser({ clients, assignments, isLoading }: Props) {
         <div className="space-y-3">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
             {photographers.map(name => (
-              <XitoDriveFolderCard key={name} name={name} type="freelancer" onClick={() => navigate(name, name)} />
+              <XitoDriveFolderCard key={name} name={name} type="freelancer" folderSizeGB={getFolderSize(name)} onClick={() => navigate(name, name)} />
             ))}
             {renderE2Files()}
           </div>
