@@ -136,6 +136,7 @@ export async function syncYouTubeLinks(rows: TrackerRow[]): Promise<number> {
     // Match each tracker row to a video by event name + edit type in title
     for (const row of clientRows) {
       const eventNorm = normalizeForMatch(row.subEventName || row.eventName);
+      const eventKeyword = extractEventKeyword(row.subEventName || row.eventName);
       const editTypeNorm = normalizeForMatch(row.editType);
 
       // Map edit types to what appears in titles
@@ -145,12 +146,17 @@ export async function syncYouTubeLinks(rows: TrackerRow[]): Promise<number> {
       if (editTypeNorm === "REEL" || editTypeNorm === "REELS") {
         editTypeVariants.push("REEL", "REELS");
       }
+      if (editTypeNorm === "TEASER") editTypeVariants.push("TEASER");
 
       const matchedVideo = videos.find((v) => {
         const titleNorm = normalizeForMatch(v.title);
-        const hasEvent = titleNorm.includes(eventNorm);
         const hasType = editTypeVariants.some((et) => titleNorm.includes(et));
-        return hasEvent && hasType;
+        if (!hasType) return false;
+        // Strategy 1: exact event name match
+        if (titleNorm.includes(eventNorm)) return true;
+        // Strategy 2: keyword fallback (e.g. "MEHNDI" instead of "BRIDES MEHNDI")
+        if (eventKeyword && eventKeyword !== eventNorm && titleNorm.includes(eventKeyword)) return true;
+        return false;
       });
 
       if (matchedVideo) {

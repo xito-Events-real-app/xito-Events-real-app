@@ -219,8 +219,13 @@ export function useVideoEditTracker() {
           processed.add(pair.fv.id);
           processed.add(pair.hl.id);
           const subLabel = pair.fv.subEventName ? `${pair.fv.subEventName}: ` : '';
+          // Combine youtube links from both rows
+          const fvLink = pair.fv.youtubeLink || '';
+          const hlLink = pair.hl.youtubeLink || '';
+          const combinedLinks = [fvLink, hlLink].filter(Boolean).join(',');
           displayRows.push({
             ...pair.fv,
+            youtubeLink: combinedLinks,
             editType: `${subLabel}Full Video + Highlights`,
             isMerged: true,
             mergedIds: [pair.fv.id, pair.hl.id],
