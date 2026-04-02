@@ -268,6 +268,7 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
     }
   };
 
+  const loadStats = async () => {
     const today = new Date().toISOString().split('T')[0];
     const { count: todayCount } = await supabase
       .from('youtube_upload_sessions')
@@ -278,11 +279,12 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
 
     const { data: trackerData } = await supabase
       .from('video_edit_tracker')
-      .select('id, youtube_link, deleted')
+      .select('id, client_name, event_name, edit_type, editor, colorist, video_edit_status, edit_started_at, event_date_ad, stage_history, updated_at, youtube_link, deleted')
       .eq('deleted', false);
     if (trackerData) {
       setTotalTrackerRows(trackerData.length);
       setUploadedRows(trackerData.filter(r => r.youtube_link && r.youtube_link.trim() !== '').length);
+      setAllTrackerRows(trackerData as TrackerRow[]);
     }
   };
 
@@ -292,20 +294,65 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
     loadComments(activeVideo.videoId);
   }, [activeVideo?.videoId]);
 
-  // Load tracker info for active video
+  // Load tracker info for active video — match by youtube_link OR by title parsing
   useEffect(() => {
     if (!activeVideo) { setTrackerInfo(null); return; }
-    loadTrackerInfo(activeVideo.videoId);
-  }, [activeVideo?.videoId]);
+    findTrackerForVideo(activeVideo.videoId, activeVideo.title);
+  }, [activeVideo?.videoId, allTrackerRows]);
 
-  const loadTrackerInfo = async (videoId: string) => {
-    const { data } = await supabase
-      .from('video_edit_tracker')
-      .select('id, client_name, event_name, edit_type, editor, colorist, video_edit_status, edit_started_at, event_date_ad, stage_history, updated_at')
-      .like('youtube_link', `%${videoId}%`)
-      .eq('deleted', false)
-      .limit(1);
-    setTrackerInfo(data?.[0] as TrackerRow | null ?? null);
+  const findTrackerForVideo = async (videoId: string, videoTitle: string) => {
+    // 1. Try direct youtube_link match
+    const directMatch = allTrackerRows.find(r => 
+      r.youtube_link && r.youtube_link.includes(videoId)
+    );
+    if (directMatch) {
+      setTrackerInfo(directMatch);
+      return;
+    }
+
+    // 2. Parse video title: pattern "BRIDE & GROOM EVENT TYPE || WEDDING TALES NEPAL"
+    const titlePart = videoTitle.split('||')[0]?.trim() || videoTitle;
+    const ampersandMatch = titlePart.match(/^(.+?)\s*&\s*(.+?)(?:\s+(WEDDING|MEHNDI|RECEPTION|ENGAGEMENT|HALDI|SANGEET|SWAYAMBAR|BARATYATRA|VIDAI|JANTI|TIKA|MEHENDI|PRE[-\s]?WEDDING).*)$/i);
+    
+    if (ampersandMatch) {
+      const name1 = ampersandMatch[1].trim().toUpperCase();
+      const name2 = ampersandMatch[2].trim().split(/\s+/)[0].toUpperCase(); // First word after &
+      
+      // Match against client_name in tracker (client_name usually contains both names)
+      const nameMatch = allTrackerRows.find(r => {
+        if (!r.client_name) return false;
+        const cn = r.client_name.toUpperCase();
+        return cn.includes(name1) && cn.includes(name2);
+      });
+      if (nameMatch) {
+        // Further narrow by edit_type if title contains HIGHLIGHTS/FULL VIDEO/TEASER/REEL
+        const titleUpper = titlePart.toUpperCase();
+        let typeFilter: string | null = null;
+        if (titleUpper.includes('HIGHLIGHT')) typeFilter = 'Highlights';
+        else if (titleUpper.includes('FULL VIDEO') || titleUpper.includes('FULL FILM')) typeFilter = 'Full Video';
+        else if (titleUpper.includes('TEASER')) typeFilter = 'Teaser';
+        else if (titleUpper.includes('REEL')) typeFilter = 'Reel';
+        
+        // Try to match with both name + event + type
+        const eventWords = titlePart.toUpperCase().match(/(WEDDING|MEHNDI|RECEPTION|ENGAGEMENT|HALDI|SANGEET|SWAYAMBAR|BARATYATRA|VIDAI|JANTI|TIKA|MEHENDI|PRE[-\s]?WEDDING)/gi) || [];
+        
+        const bestMatch = allTrackerRows.find(r => {
+          if (!r.client_name) return false;
+          const cn = r.client_name.toUpperCase();
+          if (!cn.includes(name1) || !cn.includes(name2)) return false;
+          if (typeFilter && r.edit_type && !r.edit_type.toLowerCase().includes(typeFilter.toLowerCase())) return false;
+          if (eventWords.length > 0 && r.event_name) {
+            return eventWords.some(ew => r.event_name!.toUpperCase().includes(ew.toUpperCase()));
+          }
+          return true;
+        });
+        
+        setTrackerInfo(bestMatch || nameMatch);
+        return;
+      }
+    }
+
+    setTrackerInfo(null);
   };
 
   const loadComments = async (videoId: string) => {
