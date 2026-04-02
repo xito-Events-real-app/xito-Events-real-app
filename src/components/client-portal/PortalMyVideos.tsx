@@ -249,18 +249,17 @@ const PortalMyVideos = ({ clientName, brideFullName, groomFullName }: PortalMyVi
       <div
         className="w-full bg-black overflow-hidden relative"
         style={{
-          /* Make the outer container the visible 16:9 area */
           aspectRatio: "16 / 9",
         }}
       >
-        {/* Inner wrapper: taller than visible area, shifted up to clip top title bar & bottom logo */}
+        {/* Inner wrapper: clip top title bar only, keep bottom controls visible */}
         <div
           className="absolute"
           style={{
             top: "-60px",
             left: 0,
             right: 0,
-            bottom: "-40px",
+            bottom: 0,
           }}
         >
           <div
