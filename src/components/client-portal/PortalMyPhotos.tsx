@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback, memo } from "react";
 import { Loader2, Image as ImageIcon, FolderOpen, Download } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { listE2Folder, getE2FileUrls, E2File } from "@/lib/idrive-e2-api";
+import { cacheUrls } from "@/lib/shared-url-cache";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
 import { cn } from "@/lib/utils";
 import XitoImageViewer, { AlbumInfo } from "@/components/client-detail/XitoImageViewer";
@@ -232,6 +233,7 @@ const PortalMyPhotos = ({
       if (imageFiles.length > 0) {
         const urls = await getE2FileUrls(imageFiles.map(f => f.key));
         urlCache[tab.id] = urls;
+        cacheUrls(urls);
         setPhotoUrls(urls);
       }
       setIsLoadingPhotos(false);

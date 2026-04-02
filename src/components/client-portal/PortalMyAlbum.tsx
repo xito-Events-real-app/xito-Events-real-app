@@ -3,6 +3,7 @@ import { BookOpen, Loader2, Trash2, ImageIcon, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AlbumDef, AlbumSelection, removeFromAlbum, getAlbumSelections } from "@/lib/album-selection-api";
 import { getE2FileUrls } from "@/lib/idrive-e2-api";
+import { lookupUrls, cacheUrls } from "@/lib/shared-url-cache";
 import { getPCloudFileLinkByPath } from "@/lib/pcloud-api";
 import XitoImageViewer from "@/components/client-detail/XitoImageViewer";
 import { toast } from "sonner";
@@ -73,10 +74,24 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
       setPhotoUrls({});
       return;
     }
-    setLoadingUrls(true);
     const keys = albumPhotos.map(p => p.photo_key);
-    getE2FileUrls(keys)
-      .then(urls => setPhotoUrls(urls))
+    const { hits, missingKeys } = lookupUrls(keys);
+
+    // If everything is already cached, show instantly
+    if (missingKeys.length === 0) {
+      setPhotoUrls(hits);
+      setLoadingUrls(false);
+      return;
+    }
+
+    // Show cached hits immediately, fetch only missing
+    setPhotoUrls(hits);
+    setLoadingUrls(true);
+    getE2FileUrls(missingKeys)
+      .then(urls => {
+        cacheUrls(urls);
+        setPhotoUrls(prev => ({ ...prev, ...urls }));
+      })
       .catch(() => {})
       .finally(() => setLoadingUrls(false));
   }, [albumPhotos]);
