@@ -28,6 +28,7 @@ export interface VideoEditRow {
   editStartedAt: string;
   deadline: string;
   stageHistory: string;
+  youtubeLink: string;
 }
 
 const VIDEO_DELIVERABLE_SECTIONS = ["video", "videos"] as const;
