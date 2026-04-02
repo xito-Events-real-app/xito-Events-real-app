@@ -402,16 +402,6 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
     setActiveVideo({ videoId, title, playlistTitle });
   };
 
-  // All videos flattened for Recent tab
-  const allVideosFlat = useMemo(() => {
-    const all: (PlaylistVideo & { playlistTitle: string })[] = [];
-    playlists.forEach(pl => {
-      pl.videos.forEach(v => all.push({ ...v, playlistTitle: pl.title }));
-    });
-    // Sort by position descending (most recently added first)
-    return all.sort((a, b) => b.position - a.position);
-  }, [playlists]);
-
   // Filter
   const filteredPlaylists = useMemo(() => {
     if (!searchQuery.trim()) return playlists;
@@ -423,10 +413,10 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
   }, [playlists, searchQuery]);
 
   const filteredRecentVideos = useMemo(() => {
-    if (!searchQuery.trim()) return allVideosFlat;
+    if (!searchQuery.trim()) return recentVideos;
     const q = searchQuery.toLowerCase();
-    return allVideosFlat.filter(v => v.title.toLowerCase().includes(q) || v.playlistTitle.toLowerCase().includes(q));
-  }, [allVideosFlat, searchQuery]);
+    return recentVideos.filter(v => v.title.toLowerCase().includes(q));
+  }, [recentVideos, searchQuery]);
 
   const remainingRows = totalTrackerRows - uploadedRows;
   const activeJobs = jobs.filter(j => j.status === 'uploading');
