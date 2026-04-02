@@ -355,6 +355,17 @@ export function useVideoEditTracker() {
     }
   }, [toast, loadRows]);
 
+  const manualYtSync = useCallback(async () => {
+    toast({ title: "Syncing YouTube links..." });
+    const count = await syncYouTubeLinks(rows);
+    if (count > 0) {
+      toast({ title: `Synced ${count} YouTube link${count > 1 ? 's' : ''}` });
+      await loadRows();
+    } else {
+      toast({ title: "No new YouTube links found" });
+    }
+  }, [rows, loadRows, toast]);
+
   return {
     rowsByStatus: displayRowsByStatus,
     allRows: rows,
@@ -366,6 +377,7 @@ export function useVideoEditTracker() {
     mergeRow,
     togglePlaying,
     updateDeadline,
+    syncYouTubeLinks: manualYtSync,
     STAGES,
   };
 }
