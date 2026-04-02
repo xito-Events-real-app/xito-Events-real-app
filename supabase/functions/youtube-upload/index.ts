@@ -236,31 +236,21 @@ Deno.serve(async (req) => {
 
       case "listRecentUploads": {
         const maxResults = body.maxResults || 50;
-        let allVideos: any[] = [];
-        let nextPageToken = "";
+        const pageToken = body.pageToken || "";
         
-        // Use search.list to get recent uploads from the channel
-        do {
-          const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&forMine=true&type=video&order=date&maxResults=${Math.min(maxResults, 50)}${nextPageToken ? `&pageToken=${nextPageToken}` : ""}`;
-          const res = await fetch(url, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          });
-          const data = await res.json();
-          if (data.items) {
-            allVideos = allVideos.concat(
-              data.items.map((item: any) => ({
-                videoId: item.id?.videoId || "",
-                title: item.snippet?.title || "",
-                thumbnailUrl: item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || "",
-                publishedAt: item.snippet?.publishedAt || "",
-              }))
-            );
-          }
-          nextPageToken = data.nextPageToken || "";
-          if (allVideos.length >= maxResults) break;
-        } while (nextPageToken);
+        const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&forMine=true&type=video&order=date&maxResults=${Math.min(maxResults, 50)}${pageToken ? `&pageToken=${pageToken}` : ""}`;
+        const res = await fetch(url, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        const data = await res.json();
+        const videos = (data.items || []).map((item: any) => ({
+          videoId: item.id?.videoId || "",
+          title: item.snippet?.title || "",
+          thumbnailUrl: item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || "",
+          publishedAt: item.snippet?.publishedAt || "",
+        }));
 
-        return new Response(JSON.stringify({ videos: allVideos.slice(0, maxResults) }), {
+        return new Response(JSON.stringify({ videos, nextPageToken: data.nextPageToken || null }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }

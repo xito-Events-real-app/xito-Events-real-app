@@ -99,6 +99,39 @@ function computeTotalTime(editStartedAt: string | null, status: string | null, u
   return formatDuration(end.getTime() - start.getTime());
 }
 
+function timeAgo(dateStr: string): string {
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return "";
+  const now = Date.now();
+  const diffMs = now - date.getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  return `${Math.floor(months / 12)}y ago`;
+}
+
+// localStorage cache helpers
+const YT_CACHE_RECENT = "yt_cache_recent";
+const YT_CACHE_PLAYLISTS = "yt_cache_playlists";
+
+function getCachedData<T>(key: string): T | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    return JSON.parse(raw) as T;
+  } catch { return null; }
+}
+
+function setCachedData(key: string, data: any) {
+  try { localStorage.setItem(key, JSON.stringify(data)); } catch {}
+}
+
 const STAGE_COLORS: Record<string, string> = {
   QUEUE: "bg-gray-200 text-gray-700",
   EDIT_LAB: "bg-blue-100 text-blue-700",
@@ -124,6 +157,11 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<string>("recent");
   const [allTrackerRows, setAllTrackerRows] = useState<TrackerRow[]>([]);
+
+  // Infinite scroll
+  const [recentNextPageToken, setRecentNextPageToken] = useState<string | null>(null);
+  const [loadingMoreRecent, setLoadingMoreRecent] = useState(false);
+  const recentScrollRef = useRef<HTMLDivElement>(null);
 
   // Stats
   const [todayUploaded, setTodayUploaded] = useState(0);
@@ -207,16 +245,32 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
     }
   }, [open]);
 
-  // Load playlists
+  // Load data on open — show cache first, then refresh in background
   useEffect(() => {
     if (!open) return;
-    loadPlaylists();
-    loadRecentUploads();
+
+    // Instantly show cached data
+    const cachedRecent = getCachedData<RecentVideo[]>(YT_CACHE_RECENT);
+    if (cachedRecent && cachedRecent.length > 0) {
+      setRecentVideos(cachedRecent);
+      setLoadingRecent(false);
+    }
+
+    const cachedPlaylists = getCachedData<PlaylistWithVideos[]>(YT_CACHE_PLAYLISTS);
+    if (cachedPlaylists && cachedPlaylists.length > 0) {
+      setPlaylists(cachedPlaylists);
+      setLoadingPlaylists(false);
+      if (cachedPlaylists.length > 0) setExpandedPlaylists(new Set([cachedPlaylists[0].id]));
+    }
+
+    // Background refresh
+    loadRecentUploads(true);
+    loadPlaylists(true);
     loadStats();
   }, [open]);
 
-  const loadPlaylists = async () => {
-    setLoadingPlaylists(true);
+  const loadPlaylists = async (isBackground = false) => {
+    if (!isBackground) setLoadingPlaylists(true);
     try {
       const { data, error } = await supabase.functions.invoke("youtube-upload", {
         body: { action: "listPlaylists" },
@@ -242,32 +296,71 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
             }
           })
         );
-        setPlaylists(prev => prev.map(p => {
-          const result = results.find(r => r.id === p.id);
-          return result ? { ...p, videos: result.videos, loading: false } : p;
-        }));
+        setPlaylists(prev => {
+          const updated = prev.map(p => {
+            const result = results.find(r => r.id === p.id);
+            return result ? { ...p, videos: result.videos, loading: false } : p;
+          });
+          setCachedData(YT_CACHE_PLAYLISTS, updated);
+          return updated;
+        });
       }
     } catch (err) {
       console.error("Failed to load playlists:", err);
     } finally {
-      setLoadingPlaylists(false);
+      if (!isBackground) setLoadingPlaylists(false);
     }
   };
 
-  const loadRecentUploads = async () => {
-    setLoadingRecent(true);
+  const loadRecentUploads = async (isBackground = false) => {
+    if (!isBackground) setLoadingRecent(true);
     try {
       const { data, error } = await supabase.functions.invoke("youtube-upload", {
-        body: { action: "listRecentUploads", maxResults: 100 },
+        body: { action: "listRecentUploads", maxResults: 50 },
       });
       if (error) throw error;
-      setRecentVideos((data?.videos || []) as RecentVideo[]);
+      const videos = (data?.videos || []) as RecentVideo[];
+      setRecentVideos(videos);
+      setRecentNextPageToken(data?.nextPageToken || null);
+      setCachedData(YT_CACHE_RECENT, videos);
     } catch (err) {
       console.error("Failed to load recent uploads:", err);
     } finally {
       setLoadingRecent(false);
     }
   };
+
+  // Load more recent videos (infinite scroll)
+  const loadMoreRecent = async () => {
+    if (!recentNextPageToken || loadingMoreRecent) return;
+    setLoadingMoreRecent(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("youtube-upload", {
+        body: { action: "listRecentUploads", maxResults: 50, pageToken: recentNextPageToken },
+      });
+      if (error) throw error;
+      const newVideos = (data?.videos || []) as RecentVideo[];
+      setRecentVideos(prev => {
+        const combined = [...prev, ...newVideos];
+        setCachedData(YT_CACHE_RECENT, combined);
+        return combined;
+      });
+      setRecentNextPageToken(data?.nextPageToken || null);
+    } catch (err) {
+      console.error("Failed to load more recent:", err);
+    } finally {
+      setLoadingMoreRecent(false);
+    }
+  };
+
+  // Infinite scroll handler
+  const handleRecentScroll = useCallback(() => {
+    const el = recentScrollRef.current;
+    if (!el || !recentNextPageToken || loadingMoreRecent) return;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 200) {
+      loadMoreRecent();
+    }
+  }, [recentNextPageToken, loadingMoreRecent]);
 
   const loadStats = async () => {
     const today = new Date().toISOString().split('T')[0];
@@ -463,7 +556,7 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
           {/* Left: Video Player + Details + Comments */}
           <div className="flex-1 flex flex-col min-w-0 p-4 overflow-y-auto">
             {/* Player - smaller */}
-            <div className="w-full max-w-[720px] aspect-video bg-black rounded-xl overflow-hidden mb-3">
+            <div className="w-full max-w-[900px] aspect-video bg-black rounded-xl overflow-hidden mb-3">
               {activeVideo ? (
                 <div ref={playerContainerRef} className="w-full h-full" />
               ) : (
@@ -478,7 +571,7 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
 
             {/* Video Details */}
             {activeVideo && (
-              <div className="max-w-[720px] mb-4">
+              <div className="max-w-[900px] mb-4">
                 <h2 className="text-base font-bold text-gray-900 leading-tight">{activeVideo.title}</h2>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <span className="text-xs text-gray-500">{activeVideo.playlistTitle}</span>
@@ -540,7 +633,7 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
 
             {/* Comments Section */}
             {activeVideo && (
-              <div className="max-w-[720px] flex-1 min-h-0 flex flex-col bg-gray-50 border border-gray-200 rounded-xl p-4">
+              <div className="max-w-[900px] flex-1 min-h-0 flex flex-col bg-gray-50 border border-gray-200 rounded-xl p-4">
                 <h3 className="text-sm font-bold mb-3 text-gray-600">
                   Company Review ({comments.length})
                 </h3>
@@ -603,7 +696,7 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
           </div>
 
           {/* Right: Tabbed Sidebar */}
-          <div className="w-[380px] bg-gray-50 border-l border-gray-200 flex flex-col shrink-0">
+          <div className="w-[480px] bg-gray-50 border-l border-gray-200 flex flex-col shrink-0">
             <Tabs value={sidebarTab} onValueChange={setSidebarTab} className="flex flex-col flex-1 min-h-0">
               <div className="p-3 border-b border-gray-200">
                 <TabsList className="w-full bg-gray-200">
@@ -613,47 +706,57 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
               </div>
 
               {/* Recent Tab */}
-              <TabsContent value="recent" className="flex-1 overflow-y-auto m-0">
-                {loadingRecent ? (
+              <TabsContent value="recent" className="flex-1 overflow-y-auto m-0" ref={recentScrollRef} onScroll={handleRecentScroll}>
+                {loadingRecent && recentVideos.length === 0 ? (
                   <div className="flex items-center justify-center py-12">
                     <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
                   </div>
                 ) : filteredRecentVideos.length === 0 ? (
                   <p className="text-center text-gray-400 py-12 text-sm">No videos found</p>
                 ) : (
-                  filteredRecentVideos.map(v => (
-                    <button
-                      key={v.videoId}
-                      onClick={() => selectVideo(v.videoId, v.title, 'Recent Upload')}
-                      className={cn(
-                        "w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-100 text-left border-b border-gray-100",
-                        activeVideo?.videoId === v.videoId && "bg-blue-50"
-                      )}
-                    >
-                      <div className="w-24 h-14 bg-gray-200 rounded overflow-hidden shrink-0 relative">
-                        {v.thumbnailUrl ? (
-                          <img src={v.thumbnailUrl} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Play className="w-4 h-4 text-gray-400" />
-                          </div>
+                  <>
+                    {filteredRecentVideos.map(v => (
+                      <button
+                        key={v.videoId}
+                        onClick={() => selectVideo(v.videoId, v.title, 'Recent Upload')}
+                        className={cn(
+                          "w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-100 text-left border-b border-gray-100",
+                          activeVideo?.videoId === v.videoId && "bg-blue-50"
                         )}
-                        {activeVideo?.videoId === v.videoId && (
-                          <div className="absolute inset-0 bg-blue-600/30 flex items-center justify-center">
-                            <Play className="w-5 h-5 text-white" />
-                          </div>
-                        )}
+                      >
+                        <div className="w-28 h-16 bg-gray-200 rounded overflow-hidden shrink-0 relative">
+                          {v.thumbnailUrl ? (
+                            <img src={v.thumbnailUrl} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Play className="w-4 h-4 text-gray-400" />
+                            </div>
+                          )}
+                          {activeVideo?.videoId === v.videoId && (
+                            <div className="absolute inset-0 bg-blue-600/30 flex items-center justify-center">
+                              <Play className="w-5 h-5 text-white" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-gray-900 line-clamp-2">{v.title}</p>
+                          {v.publishedAt && (
+                            <p className="text-[10px] text-gray-400 mt-0.5">
+                              {timeAgo(v.publishedAt)}
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                    {loadingMoreRecent && (
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-gray-900 line-clamp-2">{v.title}</p>
-                        {v.publishedAt && (
-                          <p className="text-[10px] text-gray-400 mt-0.5">
-                            {new Date(v.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </p>
-                        )}
-                      </div>
-                    </button>
-                  ))
+                    )}
+                    {!recentNextPageToken && recentVideos.length > 0 && (
+                      <p className="text-center text-[10px] text-gray-300 py-3">End of results</p>
+                    )}
+                  </>
                 )}
               </TabsContent>
 
