@@ -556,7 +556,7 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
           {/* Left: Video Player + Details + Comments */}
           <div className="flex-1 flex flex-col min-w-0 p-4 overflow-y-auto">
             {/* Player - smaller */}
-            <div className="w-full max-w-[720px] aspect-video bg-black rounded-xl overflow-hidden mb-3">
+            <div className="w-full max-w-[900px] aspect-video bg-black rounded-xl overflow-hidden mb-3">
               {activeVideo ? (
                 <div ref={playerContainerRef} className="w-full h-full" />
               ) : (
