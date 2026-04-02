@@ -619,15 +619,21 @@ function VideoEditTable({
               <TableCell className="text-center">
                 <SongsCell songs={row.songs} />
               </TableCell>
+              {YT_STAGES.has(currentStageKey) && (
               <TableCell className="text-center">
                 {row.youtubeLink ? (
-                  <a href={row.youtubeLink} target="_blank" rel="noopener noreferrer" className="text-red-600 hover:text-red-500">
-                    <Youtube className="w-4 h-4" />
-                  </a>
+                  <div className="flex items-center justify-center gap-1">
+                    {row.youtubeLink.split(',').map((link, i) => (
+                      <a key={i} href={link.trim()} target="_blank" rel="noopener noreferrer" className="text-red-600 hover:text-red-500">
+                        <Youtube className="w-4 h-4" />
+                      </a>
+                    ))}
+                  </div>
                 ) : (
                   <span className="text-muted-foreground">-</span>
                 )}
               </TableCell>
+              )}
               <TableCell className="text-center">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
