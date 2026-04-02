@@ -108,12 +108,82 @@ function timeAgo(dateStr: string): string {
   if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
+  if (hrs < 24) return `${hrs}hr${hrs > 1 ? 's' : ''} ago`;
   const days = Math.floor(hrs / 24);
-  if (days < 30) return `${days}d ago`;
+  const remHrs = hrs % 24;
+  if (days < 30) {
+    if (remHrs > 0) return `${days}d ${remHrs}hr${remHrs > 1 ? 's' : ''} ago`;
+    return `${days}d ago`;
+  }
   const months = Math.floor(days / 30);
   if (months < 12) return `${months}mo ago`;
   return `${Math.floor(months / 12)}y ago`;
+}
+
+function timeAgoLarge(dateStr: string): string {
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return "";
+  const now = Date.now();
+  const diffMs = now - date.getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins} minute${mins > 1 ? 's' : ''} ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hour${hrs > 1 ? 's' : ''} ago`;
+  const days = Math.floor(hrs / 24);
+  const remHrs = hrs % 24;
+  if (days < 30) {
+    if (remHrs > 0) return `${days} day${days > 1 ? 's' : ''} ${remHrs} hour${remHrs > 1 ? 's' : ''} ago`;
+    return `${days} day${days > 1 ? 's' : ''} ago`;
+  }
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months} month${months > 1 ? 's' : ''} ago`;
+  return `${Math.floor(months / 12)} year${Math.floor(months / 12) > 1 ? 's' : ''} ago`;
+}
+
+function getDayLabel(dateStr: string): string {
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return "";
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dateStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.floor((todayStart.getTime() - dateStart.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  return `${diffDays} days ago`;
+}
+
+function formatDateHeader(dateStr: string): string {
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return "";
+  const adStr = date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+  // Convert to BS
+  try {
+    const NepaliDate = (window as any).__nepaliDateConverter;
+    if (NepaliDate) {
+      const nd = new NepaliDate(date);
+      const nepaliMonthsEn = ["Baisakh", "Jestha", "Ashar", "Shrawan", "Bhadra", "Ashwin", "Kartik", "Mangsir", "Poush", "Magh", "Falgun", "Chaitra"];
+      return `${adStr} / ${nepaliMonthsEn[nd.getMonth()]} ${nd.getDate()}`;
+    }
+  } catch {}
+  return adStr;
+}
+
+// Group videos by date for section headers
+function groupVideosByDate(videos: RecentVideo[]): { dateKey: string; dateHeader: string; dayLabel: string; videos: RecentVideo[] }[] {
+  const groups: Map<string, RecentVideo[]> = new Map();
+  for (const v of videos) {
+    const d = new Date(v.publishedAt);
+    const key = isNaN(d.getTime()) ? "unknown" : `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(v);
+  }
+  return Array.from(groups.entries()).map(([key, vids]) => ({
+    dateKey: key,
+    dateHeader: vids[0]?.publishedAt ? formatDateHeader(vids[0].publishedAt) : "",
+    dayLabel: vids[0]?.publishedAt ? getDayLabel(vids[0].publishedAt) : "",
+    videos: vids,
+  }));
 }
 
 // localStorage cache helpers
