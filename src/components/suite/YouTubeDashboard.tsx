@@ -614,7 +614,7 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
 
               {/* Recent Tab */}
               <TabsContent value="recent" className="flex-1 overflow-y-auto m-0">
-                {loadingPlaylists ? (
+                {loadingRecent ? (
                   <div className="flex items-center justify-center py-12">
                     <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
                   </div>
@@ -623,8 +623,8 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
                 ) : (
                   filteredRecentVideos.map(v => (
                     <button
-                      key={`${v.videoId}-${v.playlistTitle}`}
-                      onClick={() => selectVideo(v.videoId, v.title, v.playlistTitle)}
+                      key={v.videoId}
+                      onClick={() => selectVideo(v.videoId, v.title, 'Recent Upload')}
                       className={cn(
                         "w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-100 text-left border-b border-gray-100",
                         activeVideo?.videoId === v.videoId && "bg-blue-50"
@@ -646,7 +646,11 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-gray-900 line-clamp-2">{v.title}</p>
-                        <p className="text-[10px] text-gray-400 mt-0.5">{v.playlistTitle}</p>
+                        {v.publishedAt && (
+                          <p className="text-[10px] text-gray-400 mt-0.5">
+                            {new Date(v.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </p>
+                        )}
                       </div>
                     </button>
                   ))
