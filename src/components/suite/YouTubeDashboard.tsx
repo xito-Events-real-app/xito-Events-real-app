@@ -210,6 +210,7 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
   useEffect(() => {
     if (!open) return;
     loadPlaylists();
+    loadRecentUploads();
     loadStats();
   }, [open]);
 
