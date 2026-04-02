@@ -242,6 +242,8 @@ const ClientPortal = () => {
       {activeTab === 'dashboard' && (
         <PortalDashboard
           clientName={client.clientName}
+          brideFullName={contactData?.brideFullName}
+          groomFullName={contactData?.groomFullName}
           events={eventDetails}
           assignments={assignments}
           hasFilledContact={hasFilledContact}

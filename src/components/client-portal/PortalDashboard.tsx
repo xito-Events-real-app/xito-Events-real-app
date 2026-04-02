@@ -29,6 +29,8 @@ interface FullAssignment {
 
 interface PortalDashboardProps {
   clientName: string;
+  brideFullName?: string;
+  groomFullName?: string;
   events: EventInfo[];
   assignments: FullAssignment[];
   hasFilledContact: boolean;
@@ -70,7 +72,7 @@ const crewRoles: { key: keyof FullAssignment; label: string; icon: React.Element
   { key: 'assistant', label: 'Assistant', icon: Users, color: 'text-gray-400' },
 ];
 
-const PortalDashboard = ({ clientName, events, assignments, hasFilledContact, onGoToDetails }: PortalDashboardProps) => {
+const PortalDashboard = ({ clientName, brideFullName, groomFullName, events, assignments, hasFilledContact, onGoToDetails }: PortalDashboardProps) => {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
 
   const soonest = events.reduce<EventInfo | null>((best, e) => {
@@ -98,7 +100,11 @@ const PortalDashboard = ({ clientName, events, assignments, hasFilledContact, on
             <span className="text-[10px] tracking-[0.35em] uppercase text-gray-400 font-medium">Wedding Tales Nepal</span>
             <Heart className="h-4 w-4 text-[hsl(350,80%,65%)] animate-pulse" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-0.5 tracking-tight">{clientName}</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-0.5 tracking-tight">
+            {brideFullName && groomFullName
+              ? `${brideFullName} & ${groomFullName}`
+              : clientName}
+          </h1>
           <p className="text-xs text-gray-400">Your wedding journey</p>
         </div>
       </div>
