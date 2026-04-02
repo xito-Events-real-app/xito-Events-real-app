@@ -184,10 +184,10 @@ const ClientPortal = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[hsl(220,25%,6%)] flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-[hsl(350,80%,65%)] mx-auto mb-3" />
-          <p className="text-white/30 text-sm">Loading your portal...</p>
+          <p className="text-gray-400 text-sm">Loading your portal...</p>
         </div>
       </div>
     );
@@ -195,11 +195,11 @@ const ClientPortal = () => {
 
   if (!client) {
     return (
-      <div className="min-h-screen bg-[hsl(220,25%,6%)] flex items-center justify-center px-4">
+      <div className="min-h-screen bg-white flex items-center justify-center px-4">
         <div className="text-center">
           <Heart className="h-10 w-10 text-[hsl(350,80%,65%/0.3)] mx-auto mb-3" />
-          <p className="text-white/60 font-medium">Portal not found</p>
-          <p className="text-xs text-white/30 mt-1">This link may be invalid or expired</p>
+          <p className="text-gray-600 font-medium">Portal not found</p>
+          <p className="text-xs text-gray-400 mt-1">This link may be invalid or expired</p>
         </div>
       </div>
     );
@@ -215,23 +215,23 @@ const ClientPortal = () => {
   }));
 
   const portalContent = (
-    <div className="min-h-screen bg-[hsl(220,25%,6%)] text-white">
+    <div className="min-h-screen bg-white text-gray-900">
       {/* Top header */}
-      <div className="sticky top-0 z-40 bg-[hsl(220,25%,6%)]/95 backdrop-blur-xl border-b border-white/[0.06] px-4 py-2 flex items-center justify-between">
+      <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-xl border-b border-gray-200 px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Heart className="h-3.5 w-3.5 text-[hsl(350,80%,65%)]" />
-          <span className="text-[10px] tracking-[0.3em] uppercase text-white/25 font-medium">WTN</span>
+          <span className="text-[10px] tracking-[0.3em] uppercase text-gray-400 font-medium">WTN</span>
         </div>
-        <div className="flex items-center gap-1 bg-white/[0.04] rounded-full p-0.5">
+        <div className="flex items-center gap-1 bg-gray-100 rounded-full p-0.5">
           <button
             onClick={() => setIsDesktop(false)}
-            className={`p-1.5 rounded-full transition-colors ${!isDesktop ? 'bg-[hsl(350,80%,65%)] text-white' : 'text-white/30'}`}
+            className={`p-1.5 rounded-full transition-colors ${!isDesktop ? 'bg-[hsl(350,80%,65%)] text-white' : 'text-gray-400'}`}
           >
             <Smartphone className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={() => setIsDesktop(true)}
-            className={`p-1.5 rounded-full transition-colors ${isDesktop ? 'bg-[hsl(350,80%,65%)] text-white' : 'text-white/30'}`}
+            className={`p-1.5 rounded-full transition-colors ${isDesktop ? 'bg-[hsl(350,80%,65%)] text-white' : 'text-gray-400'}`}
           >
             <Monitor className="h-3.5 w-3.5" />
           </button>
@@ -272,6 +272,8 @@ const ClientPortal = () => {
           clientName={client.clientName}
           eventYear={majorityYear}
           eventMonth={majorityMonth}
+          brideFullName={contactData?.brideFullName}
+          groomFullName={contactData?.groomFullName}
         />
       )}
       {activeTab === 'payment' && <PortalMyPayment />}
@@ -292,8 +294,8 @@ const ClientPortal = () => {
 
   if (isDesktop) {
     return (
-      <div className="min-h-screen bg-[hsl(220,20%,4%)] flex items-start justify-center pt-8 pb-8">
-        <div className="w-[420px] min-h-[calc(100vh-4rem)] rounded-2xl overflow-hidden border border-white/[0.08] shadow-2xl relative">
+      <div className="min-h-screen bg-gray-100 flex items-start justify-center pt-8 pb-8">
+        <div className="w-[420px] min-h-[calc(100vh-4rem)] rounded-2xl overflow-hidden border border-gray-200 shadow-2xl relative">
           {portalContent}
         </div>
       </div>
