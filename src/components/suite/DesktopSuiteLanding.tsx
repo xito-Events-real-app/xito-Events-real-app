@@ -55,6 +55,7 @@ export function DesktopSuiteLanding() {
   return (
     <div className="min-h-screen bg-gray-50 flex w-full">
       <AllClientsAnnouncementDialog onNavigate={() => setShowAllClients(true)} />
+      <YouTubeUploadDialog open={showYouTube} onOpenChange={setShowYouTube} />
       {/* Left Sidebar - Module Navigation */}
       <SuiteLeftSidebar 
         onSelectStarHandler={(h) => { setSelectedStarHandler(h || null); setShowAllClients(false); }}
