@@ -643,6 +643,15 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
             {activeVideo && (
               <div className="max-w-[900px] mb-4">
                 <h2 className="text-base font-bold text-gray-900 leading-tight">{activeVideo.title}</h2>
+                {activeVideo.publishedAt && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <Globe className="w-3.5 h-3.5 text-gray-400" />
+                    <span className="text-sm font-semibold text-gray-600">{timeAgoLarge(activeVideo.publishedAt)}</span>
+                    <span className="text-xs text-gray-400">
+                      ({new Date(activeVideo.publishedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })})
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <span className="text-xs text-gray-500">{activeVideo.playlistTitle}</span>
                   {trackerInfo?.video_edit_status && (
