@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Film, Loader2, Play } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Film, Loader2, Play, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -23,13 +23,106 @@ interface PlaylistInfo {
   title: string;
 }
 
+declare global {
+  interface Window {
+    YT: any;
+    onYouTubeIframeAPIReady: (() => void) | undefined;
+  }
+}
+
 const PortalMyVideos = ({ clientName, brideFullName, groomFullName }: PortalMyVideosProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [playlist, setPlaylist] = useState<PlaylistInfo | null>(null);
   const [videos, setVideos] = useState<PlaylistVideo[]>([]);
   const [activeVideoId, setActiveVideoId] = useState<string>("");
   const [error, setError] = useState("");
+  const playerRef = useRef<any>(null);
+  const playerContainerRef = useRef<HTMLDivElement>(null);
+  const apiReadyRef = useRef(false);
 
+  // Load YouTube IFrame API
+  useEffect(() => {
+    if (window.YT && window.YT.Player) {
+      apiReadyRef.current = true;
+      return;
+    }
+    const existing = document.getElementById("yt-iframe-api");
+    if (!existing) {
+      const tag = document.createElement("script");
+      tag.id = "yt-iframe-api";
+      tag.src = "https://www.youtube.com/iframe_api";
+      document.head.appendChild(tag);
+    }
+    const prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      apiReadyRef.current = true;
+      prev?.();
+    };
+  }, []);
+
+  // Create or update player
+  const initPlayer = useCallback((videoId: string) => {
+    if (!apiReadyRef.current || !playerContainerRef.current) return;
+
+    if (playerRef.current) {
+      try {
+        playerRef.current.loadVideoById(videoId);
+        playerRef.current.unMute();
+        playerRef.current.setVolume(100);
+      } catch {
+        // player may have been destroyed
+      }
+      return;
+    }
+
+    playerRef.current = new window.YT.Player(playerContainerRef.current, {
+      videoId,
+      playerVars: {
+        autoplay: 1,
+        playsinline: 1,
+        rel: 0,
+        modestbranding: 1,
+      },
+      events: {
+        onReady: (e: any) => {
+          e.target.unMute();
+          e.target.setVolume(100);
+          e.target.playVideo();
+        },
+      },
+    });
+  }, []);
+
+  // Wait for API + first video, then create player
+  useEffect(() => {
+    if (!activeVideoId) return;
+
+    const tryInit = () => {
+      if (apiReadyRef.current) {
+        initPlayer(activeVideoId);
+        return true;
+      }
+      return false;
+    };
+
+    if (tryInit()) return;
+
+    // Poll until API is ready
+    const interval = setInterval(() => {
+      if (tryInit()) clearInterval(interval);
+    }, 200);
+    return () => clearInterval(interval);
+  }, [activeVideoId, initPlayer]);
+
+  // Cleanup player on unmount
+  useEffect(() => {
+    return () => {
+      try { playerRef.current?.destroy(); } catch {}
+      playerRef.current = null;
+    };
+  }, []);
+
+  // Fetch playlist data
   useEffect(() => {
     if (!brideFullName && !groomFullName) {
       setIsLoading(false);
@@ -42,7 +135,6 @@ const PortalMyVideos = ({ clientName, brideFullName, groomFullName }: PortalMyVi
       setError("");
 
       try {
-        // Fetch all playlists
         const { data: plData, error: plErr } = await supabase.functions.invoke("youtube-upload", {
           body: { action: "listPlaylists" },
         });
@@ -52,16 +144,13 @@ const PortalMyVideos = ({ clientName, brideFullName, groomFullName }: PortalMyVi
         const brideFirst = (brideFullName || "").split(" ")[0]?.toLowerCase();
         const groomFirst = (groomFullName || "").split(" ")[0]?.toLowerCase();
 
-        // Fuzzy match: use first 4 chars to handle minor spelling variations
         const fuzzyMatch = (haystack: string, needle: string) => {
           if (!needle || needle.length < 3) return false;
           if (haystack.includes(needle)) return true;
-          // Try prefix match (first 4 chars)
           const prefix = needle.slice(0, Math.min(4, needle.length));
           return haystack.includes(prefix);
         };
 
-        // Match playlist containing both bride and groom first names
         const matched = playlists.find((p) => {
           const t = p.title.toLowerCase();
           return fuzzyMatch(t, brideFirst) && fuzzyMatch(t, groomFirst);
@@ -75,7 +164,6 @@ const PortalMyVideos = ({ clientName, brideFullName, groomFullName }: PortalMyVi
 
         setPlaylist(matched);
 
-        // Fetch videos in the matched playlist
         const { data: vidData, error: vidErr } = await supabase.functions.invoke("youtube-upload", {
           body: { action: "getPlaylistVideos", playlistId: matched.id },
         });
@@ -96,6 +184,23 @@ const PortalMyVideos = ({ clientName, brideFullName, groomFullName }: PortalMyVi
 
     findPlaylistAndLoadVideos();
   }, [brideFullName, groomFullName]);
+
+  const handleVideoClick = (videoId: string) => {
+    setActiveVideoId(videoId);
+    if (playerRef.current) {
+      try {
+        playerRef.current.loadVideoById(videoId);
+        playerRef.current.unMute();
+        playerRef.current.setVolume(100);
+      } catch {}
+    }
+  };
+
+  const openPlaylistInYouTube = () => {
+    if (playlist) {
+      window.location.href = `https://www.youtube.com/playlist?list=${playlist.id}`;
+    }
+  };
 
   const activeVideo = videos.find((v) => v.videoId === activeVideoId);
 
@@ -119,23 +224,26 @@ const PortalMyVideos = ({ clientName, brideFullName, groomFullName }: PortalMyVi
 
   return (
     <div className="pb-24 bg-white">
-      {/* Playlist title */}
+      {/* Playlist title with YouTube link */}
       {playlist && (
-        <div className="px-4 pt-4 pb-2">
-          <h2 className="text-base font-bold text-gray-900 leading-snug">{playlist.title}</h2>
-          <p className="text-xs text-gray-400 mt-0.5">{videos.length} videos</p>
+        <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold text-gray-900 leading-snug">{playlist.title}</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{videos.length} videos</p>
+          </div>
+          <button
+            onClick={openPlaylistInYouTube}
+            className="flex items-center gap-1 text-[11px] text-red-500 font-medium px-2 py-1 rounded-full bg-red-50 active:bg-red-100 transition-colors"
+          >
+            <ExternalLink className="h-3 w-3" />
+            Playlist
+          </button>
         </div>
       )}
 
-      {/* YouTube Player */}
+      {/* YouTube Player (API-controlled) */}
       <div className="w-full aspect-video bg-black">
-        <iframe
-          key={activeVideoId}
-          src={`https://www.youtube.com/embed/${activeVideoId}?autoplay=1&mute=1&rel=0&playsinline=1`}
-          className="w-full h-full"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-        />
+        <div ref={playerContainerRef} className="w-full h-full" />
       </div>
 
       {/* Video info bar */}
@@ -148,20 +256,17 @@ const PortalMyVideos = ({ clientName, brideFullName, groomFullName }: PortalMyVi
       {/* Playlist items */}
       <div className="px-3 py-2">
         <div className="space-y-1">
-          {videos.map((video, idx) => {
+          {videos.map((video) => {
             const isActive = video.videoId === activeVideoId;
             return (
               <button
                 key={video.videoId}
-                onClick={() => setActiveVideoId(video.videoId)}
+                onClick={() => handleVideoClick(video.videoId)}
                 className={cn(
                   "w-full flex gap-3 p-2 rounded-lg transition-all text-left",
-                  isActive
-                    ? "bg-gray-100"
-                    : "hover:bg-gray-50"
+                  isActive ? "bg-gray-100" : "hover:bg-gray-50"
                 )}
               >
-                {/* Thumbnail */}
                 <div className="w-28 h-[72px] rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 relative">
                   {video.thumbnailUrl ? (
                     <img src={video.thumbnailUrl} alt="" className="w-full h-full object-cover" />
@@ -176,7 +281,6 @@ const PortalMyVideos = ({ clientName, brideFullName, groomFullName }: PortalMyVi
                     </div>
                   )}
                 </div>
-                {/* Info */}
                 <div className="flex-1 min-w-0 flex flex-col justify-center">
                   <p className={cn(
                     "text-[13px] font-medium leading-snug line-clamp-2",
