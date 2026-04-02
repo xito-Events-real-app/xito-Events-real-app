@@ -1746,9 +1746,9 @@ const ClientDetail = () => {
             />
           )}
 
-          {/* Files Section */}
+          {/* Files Status Section */}
           {activeSection === 'files' && client?.registeredDateTimeAD && (
-            <ClientFilesSection
+            <ClientFileStatusSection
               registeredDateTimeAD={client.registeredDateTimeAD}
               clientName={client.clientName}
             />
