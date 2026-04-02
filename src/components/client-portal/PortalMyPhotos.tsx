@@ -285,7 +285,7 @@ const PortalMyPhotos = ({
                   "shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all duration-200",
                   idx === activeTabIndex
                     ? "bg-[hsl(350,80%,65%)] text-white border-[hsl(350,80%,65%)] shadow-[0_0_12px_hsl(350,80%,65%/0.4)]"
-                    : "bg-white/5 text-white/50 border-white/10 hover:bg-white/10 hover:text-white/70"
+                    : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100 hover:text-gray-700"
                 )}
               >
                 {tab.label}
