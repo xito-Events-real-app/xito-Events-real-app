@@ -37,8 +37,15 @@ function fuzzyMatch(haystack: string, needle: string): boolean {
 function normalizeForMatch(s: string): string {
   return (s || "")
     .toUpperCase()
-    .replace(/['']/g, "")
+    .replace(/['''`]/g, "")
     .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractEventKeyword(eventName: string): string {
+  const norm = normalizeForMatch(eventName);
+  return norm
+    .replace(/^(BRIDES?|GROOMS?)\s+/i, "")
     .trim();
 }
 
