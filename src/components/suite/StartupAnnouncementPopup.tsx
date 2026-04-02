@@ -9,28 +9,28 @@ const INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
 const APP_UPDATES = [
   {
-    title: "Multi-Month Folder Creation",
-    description: "Clients with events in multiple months now get folders in EVERY month (e.g., FALGUN + CHAITRA) instead of just one.",
-    tag: "XITO DRIVE / pCloud / Research",
+    title: "YouTube Upload System",
+    description: "Upload videos directly to YouTube with resumable uploads, playlist management, thumbnail support, and real-time progress tracking across all users.",
+    tag: "Video Edit / Suite",
+    color: "from-red-500 to-rose-500",
+  },
+  {
+    title: "Global Upload Tracker",
+    description: "YouTube uploads now show real-time progress in the bottom-right corner — visible to ALL users simultaneously, just like XITO Drive.",
+    tag: "Suite",
     color: "from-violet-500 to-purple-500",
   },
   {
-    title: "Instant Photo Re-Loads",
-    description: "Photos are now cached in the browser — clients don't have to wait when switching tabs or revisiting the Photos section.",
-    tag: "Client Portal / Albums",
+    title: "Smart Video Titles & Playlists",
+    description: "Auto-generated ALL CAPS titles using bride & groom names, auto-suggested playlists, and one-click new playlist creation.",
+    tag: "YouTube / Video Edit",
     color: "from-emerald-500 to-teal-500",
   },
   {
-    title: "Browser-Level Photo Caching",
-    description: "Both admin Album section and Client Portal photos use module-level caching for 0ms re-loads on tab switches.",
-    tag: "Performance",
+    title: "Client Portal Link Section",
+    description: "Send client portal links via WhatsApp with live phone/desktop preview, copy link, and quick recipient selection.",
+    tag: "Client Detail",
     color: "from-blue-500 to-cyan-500",
-  },
-  {
-    title: "Startup Announcement Popup",
-    description: "This popup! Shows latest app feature updates and pCloud migration reminders with music on every app open.",
-    tag: "Suite",
-    color: "from-fuchsia-500 to-pink-500",
   },
 ];
 

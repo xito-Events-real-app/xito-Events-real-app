@@ -65,7 +65,9 @@ function WtnFilesAnnouncement() {
 
 function AuthenticatedStartupPopup() {
   const { user } = useAuthContext();
-  if (!user) return null;
+  const pathname = window.location.pathname;
+  const isPublicRoute = pathname.startsWith('/client-portal') || pathname.startsWith('/crew-schedule') || pathname.startsWith('/client-form');
+  if (!user || isPublicRoute) return null;
   return <StartupAnnouncementPopup />;
 }
 
