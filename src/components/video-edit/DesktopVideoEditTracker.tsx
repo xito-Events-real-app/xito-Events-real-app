@@ -388,6 +388,7 @@ function VideoEditTable({
   onUpdateDeadline?: (id: string, deadline: string | null, mergedIds?: string[]) => void;
 }) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [reviewComments, setReviewComments] = useState<Record<string, { author: string; comment: string; created_at: string }[]>>({});
   const toggleExpand = (id: string) => {
     setExpandedRows(prev => {
       const next = new Set(prev);
@@ -395,6 +396,28 @@ function VideoEditTable({
       return next;
     });
   };
+
+  // Load company review comments for CLIENT_REVIEW stage
+  useEffect(() => {
+    if (!REVIEW_STAGES.has(currentStageKey) || rows.length === 0) return;
+    const trackerIds = rows.flatMap(r => r.mergedIds?.length ? r.mergedIds : [r.id]);
+    if (trackerIds.length === 0) return;
+    supabase
+      .from('youtube_video_comments')
+      .select('tracker_row_id, author, comment, created_at')
+      .in('tracker_row_id', trackerIds)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (!data) return;
+        const grouped: Record<string, typeof data> = {};
+        for (const c of data) {
+          const key = c.tracker_row_id || '';
+          if (!grouped[key]) grouped[key] = [];
+          grouped[key].push(c as any);
+        }
+        setReviewComments(grouped);
+      });
+  }, [currentStageKey, rows]);
 
   return (
     <div className="rounded-xl border bg-card overflow-auto">
