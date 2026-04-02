@@ -78,6 +78,7 @@ const App = () => (
           <EditedFilesUploadProvider>
           <PCloudUploadProvider>
           <XitoDriveUploadProvider>
+          <YouTubeUploadProvider>
           <BrowserRouter>
             <AuthProvider>
               <WtnFilesAnnouncement />
