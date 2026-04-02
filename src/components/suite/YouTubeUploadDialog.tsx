@@ -344,12 +344,12 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
 
           {/* Video Title */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-gray-300">Video Title</Label>
+            <Label className="text-xs font-medium text-gray-600">Video Title</Label>
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="VIDEO TITLE"
-              className="bg-[#1a1a1a] border-gray-700 text-white uppercase font-semibold"
+              className="bg-gray-50 border-gray-200 text-gray-900 uppercase font-semibold"
             />
           </div>
 
