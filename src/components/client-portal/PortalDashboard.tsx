@@ -29,6 +29,8 @@ interface FullAssignment {
 
 interface PortalDashboardProps {
   clientName: string;
+  brideFullName?: string;
+  groomFullName?: string;
   events: EventInfo[];
   assignments: FullAssignment[];
   hasFilledContact: boolean;
