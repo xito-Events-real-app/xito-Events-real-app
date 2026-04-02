@@ -86,6 +86,22 @@ export function DesktopSuiteLanding() {
 
             {/* Right side actions */}
             <div className="flex items-center gap-2">
+              {/* YouTube Upload Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowYouTube(true)}
+                className="gap-2"
+                style={{
+                  background: '#CC0000',
+                  color: '#fff',
+                  borderColor: '#CC0000',
+                }}
+              >
+                <Youtube className="w-4 h-4" />
+                YouTube
+              </Button>
+
               {/* Saugat Search Button */}
               <Button
                 variant="outline"
