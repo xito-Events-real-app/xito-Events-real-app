@@ -1,123 +1,88 @@
 
 
-## YouTube Upload System Overhaul
+## Client Portal: YouTube Playlist Videos + White Theme
 
-This is a large feature set spanning 7 areas. Here's the plan:
+### What needs to happen
 
----
+The Client Portal's "Videos" tab will be completely redesigned to fetch and display YouTube playlist videos directly, with a white background theme applied across the entire portal.
 
-### 1. YouTube-Themed Upload Dialog Redesign
-**File:** `src/components/suite/YouTubeUploadDialog.tsx`
-- Restyle dialog with YouTube's dark theme (dark background, red accents, YouTube logo)
-- Larger dialog size (`sm:max-w-2xl`)
-- YouTube-branded upload button, progress bar in red
+### 1. New Edge Function Action: `getPlaylistVideos`
+**File:** `supabase/functions/youtube-upload/index.ts`
 
-### 2. Smart Default Selection on Open
-**File:** `src/components/suite/YouTubeUploadDialog.tsx`
-- On dialog open, auto-select the top client (first EXPORTED client from sorted list)
-- Auto-select the event associated with the most recently exported row for that client
-- Default edit type to "Highlights"
-- Title auto-generated in ALL CAPS format: `ANJALI & SHAKTI WEDDING HIGHLIGHTS || WEDDING TALES NEPAL`
-- Use bride/groom names from `contact_details_cache` (not client_name)
+Add a new action `getPlaylistVideos` that:
+- Takes `playlistId` as input
+- Calls YouTube Data API `playlistItems.list` with `part=snippet,contentDetails`
+- Paginates to get all videos
+- Returns `{ videos: [{ videoId, title, thumbnailUrl, position }] }`
 
-### 3. Playlist Support
-**New edge function action in:** `supabase/functions/youtube-upload/index.ts`
-- Add actions: `listPlaylists`, `createPlaylist`, `addToPlaylist`
-- `listPlaylists`: calls YouTube Data API v3 `playlists.list` to fetch all playlists from the channel
-- `createPlaylist`: creates a new playlist via YouTube API
-- `addToPlaylist`: adds uploaded video to selected playlist via `playlistItems.insert`
+Also add `searchPlaylists` action (or reuse `listPlaylists`) so the portal can search for a playlist matching the client name.
 
-**File:** `src/components/suite/YouTubeUploadDialog.tsx`
-- Add playlist dropdown populated from edge function
-- Auto-suggest playlist matching bride & groom names (e.g., "ANJALI & SHAKTI WEDDING STORY")
-- Option to create new playlist inline if no match found
-- Playlist name editable before creation
+### 2. Rewrite `PortalMyVideos.tsx`
+**File:** `src/components/client-portal/PortalMyVideos.tsx`
 
-### 4. Thumbnail Support
-**File:** `src/components/suite/YouTubeUploadDialog.tsx`
-- Add thumbnail file input (image/jpeg, image/png)
-- After video upload completes, call YouTube API `thumbnails.set` via edge function
+Complete rewrite:
+- Remove pCloud tab/logic entirely, remove YouTube/pCloud sub-tabs
+- On mount, call `listPlaylists` via edge function to find playlist matching client's bride+groom names (passed as new props from `ClientPortal.tsx`)
+- Once playlist found, call `getPlaylistVideos` to get all videos in it
+- Display playlist title at top (e.g., "Abhinash & Subekhsya Wedding Stories") — no "YouTube" label
+- Embed YouTube player using `<iframe src="https://www.youtube.com/embed/{videoId}?autoplay=1">` for the active video
+- Below the player: video title, "Open in YouTube" button linking to `https://youtube.com/watch?v={videoId}`
+- Below that: scrollable playlist of other videos with thumbnails (from YouTube API), titles
+- Clicking a playlist item changes the embedded video
+- All styled with white background, dark text — YouTube-like appearance
 
-**Edge function:** Add `setThumbnail` action that uploads thumbnail binary to `https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=...`
+### 3. Pass Contact Data to Videos Tab
+**File:** `src/pages/ClientPortal.tsx`
 
-### 5. Global YouTube Upload Tracker (like XITO Drive)
-**New context:** `src/contexts/YouTubeUploadContext.tsx`
-- Modeled after `XitoDriveUploadContext` with: sessions, jobs, pause/resume/cancel, progress tracking
-- Resumable upload support: use YouTube's resumable upload protocol to resume from last byte on interruption (query upload URI for status, resume from `bytes_received`)
-- Store upload state in Supabase table for cross-user visibility
+- Pass `brideFullName` and `groomFullName` from `contactData` as props to `PortalMyVideos` so it can match playlist names
+- Also pass `registeredDateTimeAD` for potential future use
 
-**New DB table:** `youtube_upload_sessions`
-- Columns: `id`, `client_name`, `event_name`, `edit_type`, `title`, `playlist_id`, `video_file_name`, `file_size_bytes`, `bytes_uploaded`, `upload_uri`, `status` (pending/uploading/completed/failed/paused), `youtube_video_id`, `youtube_link`, `started_by`, `created_at`, `updated_at`
-- Enable realtime: `ALTER PUBLICATION supabase_realtime ADD TABLE public.youtube_upload_sessions`
+### 4. White Theme for Entire Client Portal
+**File:** `src/pages/ClientPortal.tsx`
 
-**New tracker widget:** `src/components/suite/YouTubeUploadTracker.tsx`
-- Same pattern as `XitoUploadTracker` — fixed bottom-right, collapsible, expandable
-- Shows YouTube icon, red theme, progress bar, pause/resume/cancel controls
-- Reads from `youtube_upload_sessions` table via realtime subscription so ALL users see the same status
+Change the portal's background and text theme:
+- `bg-[hsl(220,25%,6%)]` → `bg-white`
+- `text-white` → `text-gray-900`
+- Header: white/light background with subtle border
+- Bottom nav: white background, adjusted icon/text colors
 
-**File:** `src/App.tsx`
-- Add `YouTubeUploadProvider` wrapper and `YouTubeUploadTracker` component
+**File:** `src/components/client-portal/PortalBottomNav.tsx`
+- Update background from dark to white
+- Update active/inactive colors for light theme
 
-### 6. Resumable Upload (Don't Restart from Beginning)
-**In `YouTubeUploadContext`:**
-- Before starting upload, check if an `upload_uri` exists in DB for this session
-- Query YouTube API for bytes already received: `PUT upload_uri` with `Content-Range: bytes */*`
-- Resume from the returned byte offset using `file.slice(offset)` and `Content-Range: bytes offset-total/total`
-- On network failure, retry from last known position
-
-### 7. YT Column Visibility & Multi-Link Support
-**File:** `src/components/video-edit/DesktopVideoEditTracker.tsx`
-- Show YT column only for stages EXPORTED through FINALIZED (use a `YT_STAGES` set)
-- Support multiple YouTube links per row (stored as comma-separated or JSON in `youtube_link` column)
-- Render multiple clickable YouTube icons if multiple links exist
-
-**File:** `src/components/suite/YouTubeUploadDialog.tsx` (already handles this)
-- When saving youtube_link, append to existing value if one already exists (comma-separated)
-
-**File:** `src/hooks/useVideoEditTracker.ts`
-- On successful upload via context, update the matching `video_edit_tracker` row's `youtube_link`
-
----
+**File:** Other portal components (`PortalDashboard`, `PortalMyPhotos`, `PortalMyPayment`, `PortalMyDetails`, `PortalMyAlbum`)
+- Update text colors from `text-white/X` patterns to dark equivalents
+- Update card backgrounds from dark to light
 
 ### Technical Details
 
-**Database migration:**
-```sql
-CREATE TABLE public.youtube_upload_sessions (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  client_name text NOT NULL DEFAULT '',
-  event_name text NOT NULL DEFAULT '',
-  edit_type text NOT NULL DEFAULT '',
-  title text NOT NULL DEFAULT '',
-  playlist_id text DEFAULT '',
-  video_file_name text NOT NULL DEFAULT '',
-  file_size_bytes bigint NOT NULL DEFAULT 0,
-  bytes_uploaded bigint NOT NULL DEFAULT 0,
-  upload_uri text DEFAULT '',
-  status text NOT NULL DEFAULT 'pending',
-  youtube_video_id text DEFAULT '',
-  youtube_link text DEFAULT '',
-  started_by text DEFAULT '',
-  tracker_row_id uuid,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
-);
-
-ALTER TABLE public.youtube_upload_sessions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow all access" ON public.youtube_upload_sessions FOR ALL USING (true) WITH CHECK (true);
-ALTER PUBLICATION supabase_realtime ADD TABLE public.youtube_upload_sessions;
+**Edge function new action:**
+```
+case "getPlaylistVideos": {
+  // paginate playlistItems.list?part=snippet,contentDetails&playlistId=X
+  // return { videos: [{ videoId, title, thumbnailUrl }] }
+}
 ```
 
-**Edge function updates (`youtube-upload/index.ts`):**
-- Add action-based routing: `initUpload` (existing), `listPlaylists`, `createPlaylist`, `addToPlaylist`, `setThumbnail`
+**YouTube embed URL format:**
+```
+https://www.youtube.com/embed/{videoId}?autoplay=1&rel=0
+```
 
-**Files to create:**
-- `src/contexts/YouTubeUploadContext.tsx`
-- `src/components/suite/YouTubeUploadTracker.tsx`
+**Playlist matching logic:**
+- Fetch all playlists via `listPlaylists`
+- Find first playlist whose title contains both bride and groom first names (case-insensitive)
+- If no match, show "No videos available" state
 
 **Files to modify:**
-- `src/components/suite/YouTubeUploadDialog.tsx` (major rewrite)
-- `supabase/functions/youtube-upload/index.ts` (add playlist + thumbnail actions)
-- `src/components/video-edit/DesktopVideoEditTracker.tsx` (YT column visibility + multi-link)
-- `src/App.tsx` (add provider + tracker)
+- `supabase/functions/youtube-upload/index.ts` — add `getPlaylistVideos` action
+- `src/components/client-portal/PortalMyVideos.tsx` — complete rewrite
+- `src/pages/ClientPortal.tsx` — pass contact props, white theme
+- `src/components/client-portal/PortalBottomNav.tsx` — white theme
+- `src/components/client-portal/PortalDashboard.tsx` — white theme
+- `src/components/client-portal/PortalMyPhotos.tsx` — white theme
+- `src/components/client-portal/PortalMyPayment.tsx` — white theme
+- `src/components/client-portal/PortalMyDetails.tsx` — white theme
+- `src/components/client-portal/PortalMyAlbum.tsx` — white theme
+- `src/components/client-portal/PortalPhotoEventNav.tsx` — white theme
 
