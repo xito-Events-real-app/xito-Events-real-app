@@ -200,6 +200,40 @@ Deno.serve(async (req) => {
         });
       }
 
+      case "getPlaylistVideos": {
+        const { playlistId } = body;
+        if (!playlistId) {
+          return new Response(JSON.stringify({ error: "playlistId required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        let allVideos: any[] = [];
+        let nextPageToken = "";
+        do {
+          const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${playlistId}&maxResults=50${nextPageToken ? `&pageToken=${nextPageToken}` : ""}`;
+          const res = await fetch(url, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          const data = await res.json();
+          if (data.items) {
+            allVideos = allVideos.concat(
+              data.items.map((item: any) => ({
+                videoId: item.contentDetails?.videoId || "",
+                title: item.snippet?.title || "",
+                thumbnailUrl: item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || "",
+                position: item.snippet?.position ?? 0,
+              }))
+            );
+          }
+          nextPageToken = data.nextPageToken || "";
+        } while (nextPageToken);
+
+        return new Response(JSON.stringify({ videos: allVideos }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       default:
         return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
           status: 400,

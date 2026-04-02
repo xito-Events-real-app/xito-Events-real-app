@@ -261,8 +261,8 @@ const PortalMyPhotos = ({
   if (tabs.length === 0) {
     return (
       <div className="pb-20 px-4 pt-4">
-        <Card className="bg-white/5 border-white/10">
-          <CardContent className="p-8 text-center text-white/40">
+        <Card className="bg-gray-50 border-gray-200">
+          <CardContent className="p-8 text-center text-gray-400">
             <FolderOpen className="h-10 w-10 mx-auto mb-3 opacity-50" />
             <p>No photos available yet.</p>
           </CardContent>
@@ -285,7 +285,7 @@ const PortalMyPhotos = ({
                   "shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all duration-200",
                   idx === activeTabIndex
                     ? "bg-[hsl(350,80%,65%)] text-white border-[hsl(350,80%,65%)] shadow-[0_0_12px_hsl(350,80%,65%/0.4)]"
-                    : "bg-white/5 text-white/50 border-white/10 hover:bg-white/10 hover:text-white/70"
+                    : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100 hover:text-gray-700"
                 )}
               >
                 {tab.label}
@@ -301,19 +301,19 @@ const PortalMyPhotos = ({
 
         {isLoadingPhotos ? (
           <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <span className="ml-3 text-white/50">Loading photos...</span>
+            <Loader2 className="h-8 w-8 animate-spin text-[hsl(350,80%,65%)]" />
+            <span className="ml-3 text-gray-400">Loading photos...</span>
           </div>
         ) : photos.length === 0 ? (
-          <Card className="bg-white/5 border-white/10">
-            <CardContent className="p-8 text-center text-white/40">
+          <Card className="bg-gray-50 border-gray-200">
+            <CardContent className="p-8 text-center text-gray-400">
               <ImageIcon className="h-10 w-10 mx-auto mb-3 opacity-50" />
               <p>No photos in this folder yet.</p>
             </CardContent>
           </Card>
         ) : (
           <>
-            <div className="text-sm text-white/50 mb-2">{photos.length} photos</div>
+            <div className="text-sm text-gray-500 mb-2">{photos.length} photos</div>
             <div className="grid grid-cols-3 gap-1">
               {photos.map((file, idx) => {
                 const url = photoUrls[file.key];
@@ -321,7 +321,7 @@ const PortalMyPhotos = ({
                 return (
                   <div
                     key={file.key}
-                    className="aspect-square rounded-sm overflow-hidden bg-white/5 relative group"
+                    className="aspect-square rounded-sm overflow-hidden bg-gray-100 relative group"
                   >
                     <button
                       onClick={() => url && setViewerIndex(idx)}
@@ -331,7 +331,7 @@ const PortalMyPhotos = ({
                         <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
-                          <Loader2 className="h-4 w-4 animate-spin text-white/30" />
+                          <Loader2 className="h-4 w-4 animate-spin text-gray-300" />
                         </div>
                       )}
                     </button>

@@ -20,24 +20,24 @@ const PortalPhotoEventNav = ({ tabs, activeIndex, onPrev, onNext, onBack }: Port
   const isLast = activeIndex === tabs.length - 1;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-[hsl(220,25%,6%)] border-t border-white/10 safe-area-bottom">
+    <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 safe-area-bottom">
       <div className="flex items-center justify-between max-w-lg mx-auto px-2 py-2">
         <button
           onClick={isFirst ? onBack : onPrev}
-          className="p-2 rounded-full text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+          className="p-2 rounded-full text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
         >
           <ChevronLeft className="h-6 w-6" />
         </button>
         <div className="flex-1 text-center">
-          <span className="text-sm font-semibold text-white">{current?.label || ''}</span>
-          <div className="text-[10px] text-white/40">{activeIndex + 1} of {tabs.length}</div>
+          <span className="text-sm font-semibold text-gray-900">{current?.label || ''}</span>
+          <div className="text-[10px] text-gray-400">{activeIndex + 1} of {tabs.length}</div>
         </div>
         <button
           onClick={onNext}
           disabled={isLast}
           className={cn(
             "p-2 rounded-full transition-colors",
-            isLast ? "text-white/20" : "text-white/60 hover:text-white hover:bg-white/10"
+            isLast ? "text-gray-200" : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"
           )}
         >
           <ChevronRight className="h-6 w-6" />

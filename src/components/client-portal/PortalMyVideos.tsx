@@ -1,274 +1,198 @@
-import { useState, useEffect, useCallback } from "react";
-import { Film, Youtube, Cloud, Loader2, Download, Play, SkipForward, SkipBack } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { Film, Loader2, Play, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { listPCloudFolderByPath, getPCloudStreamUrl, getPCloudThumbsBatch, isPCloudVideo, PCloudItem, formatPCloudSize } from "@/lib/pcloud-api";
-import { NEPALI_MONTHS } from "@/lib/nepali-months";
+import { supabase } from "@/integrations/supabase/client";
 
 interface PortalMyVideosProps {
   clientName: string;
   eventYear: string;
   eventMonth: string;
+  brideFullName?: string;
+  groomFullName?: string;
 }
 
-type VideoSubTab = 'youtube' | 'pcloud';
+interface PlaylistVideo {
+  videoId: string;
+  title: string;
+  thumbnailUrl: string;
+  position: number;
+}
 
-const PortalMyVideos = ({ clientName, eventYear, eventMonth }: PortalMyVideosProps) => {
-  const [subTab, setSubTab] = useState<VideoSubTab>('pcloud');
-  const [videos, setVideos] = useState<PCloudItem[]>([]);
-  const [thumbs, setThumbs] = useState<Record<number, string>>({});
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+interface PlaylistInfo {
+  id: string;
+  title: string;
+}
 
-  // Active video state
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+const PortalMyVideos = ({ clientName, brideFullName, groomFullName }: PortalMyVideosProps) => {
+  const [isLoading, setIsLoading] = useState(true);
+  const [playlist, setPlaylist] = useState<PlaylistInfo | null>(null);
+  const [videos, setVideos] = useState<PlaylistVideo[]>([]);
+  const [activeVideoId, setActiveVideoId] = useState<string>("");
+  const [error, setError] = useState("");
 
-  // Build pCloud path
-  const pcloudPath = (() => {
-    const monthNum = parseInt(eventMonth, 10);
-    const monthLabel = NEPALI_MONTHS[monthNum] || `MONTH ${eventMonth}`;
-    const year = String(parseInt(eventYear || "0"));
-    return `/WEDDING TALES NEPAL/${monthLabel} EVENTS ${year}/${clientName}/Videos`;
-  })();
-
-  // Load videos list
   useEffect(() => {
-    if (subTab !== 'pcloud' || !clientName || !eventYear || !eventMonth) return;
-    setIsLoading(true);
-    setError('');
-    setVideos([]);
-    setThumbs({});
-    setActiveIndex(0);
+    if (!brideFullName && !groomFullName) {
+      setIsLoading(false);
+      setError("Contact details not available");
+      return;
+    }
 
-    listPCloudFolderByPath(pcloudPath, true)
-      .then(async (folder) => {
-        const allItems = folder.contents || [];
-        const videoFiles: PCloudItem[] = [];
-        function collectVideos(items: PCloudItem[]) {
-          for (const item of items) {
-            if (!item.isfolder && isPCloudVideo(item)) {
-              videoFiles.push(item);
-            } else if (item.isfolder && item.contents) {
-              collectVideos(item.contents);
-            }
-          }
+    const findPlaylistAndLoadVideos = async () => {
+      setIsLoading(true);
+      setError("");
+
+      try {
+        // Fetch all playlists
+        const { data: plData, error: plErr } = await supabase.functions.invoke("youtube-upload", {
+          body: { action: "listPlaylists" },
+        });
+        if (plErr) throw plErr;
+
+        const playlists: PlaylistInfo[] = plData?.playlists || [];
+        const brideFirst = (brideFullName || "").split(" ")[0]?.toLowerCase();
+        const groomFirst = (groomFullName || "").split(" ")[0]?.toLowerCase();
+
+        // Match playlist containing both bride and groom first names
+        const matched = playlists.find((p) => {
+          const t = p.title.toLowerCase();
+          const hasBride = brideFirst ? t.includes(brideFirst) : false;
+          const hasGroom = groomFirst ? t.includes(groomFirst) : false;
+          return hasBride && hasGroom;
+        });
+
+        if (!matched) {
+          setError("No playlist found");
+          setIsLoading(false);
+          return;
         }
-        collectVideos(allItems);
-        setVideos(videoFiles);
 
-        const fileIds = videoFiles.filter(f => f.fileid).map(f => f.fileid!);
-        if (fileIds.length > 0) {
-          try {
-            const thumbMap = await getPCloudThumbsBatch(fileIds, '320x240');
-            setThumbs(thumbMap);
-          } catch {}
-        }
-      })
-      .catch((err) => {
-        console.error('Failed to load videos:', err);
-        setError('No videos found yet');
-      })
-      .finally(() => setIsLoading(false));
-  }, [subTab, pcloudPath, clientName, eventYear, eventMonth]);
+        setPlaylist(matched);
 
-  // Get stream URL for the active video (synchronous, no async needed)
-  const activeVideo = videos[activeIndex];
-  const activeVideoUrl = activeVideo?.fileid ? getPCloudStreamUrl(activeVideo.fileid) : '';
+        // Fetch videos in the matched playlist
+        const { data: vidData, error: vidErr } = await supabase.functions.invoke("youtube-upload", {
+          body: { action: "getPlaylistVideos", playlistId: matched.id },
+        });
+        if (vidErr) throw vidErr;
 
-  const handleDownload = useCallback((video: PCloudItem) => {
-    if (!video.fileid) return;
-    const url = getPCloudStreamUrl(video.fileid);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = video.name;
-    a.target = '_blank';
-    a.click();
-  }, []);
+        const vids: PlaylistVideo[] = (vidData?.videos || []).sort(
+          (a: PlaylistVideo, b: PlaylistVideo) => a.position - b.position
+        );
+        setVideos(vids);
+        if (vids.length > 0) setActiveVideoId(vids[0].videoId);
+      } catch (err: any) {
+        console.error("Failed to load YouTube videos:", err);
+        setError("Failed to load videos");
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  // activeVideo and activeVideoUrl already defined above
+    findPlaylistAndLoadVideos();
+  }, [brideFullName, groomFullName]);
+
+  const activeVideo = videos.find((v) => v.videoId === activeVideoId);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-red-500" />
+        <span className="ml-3 text-gray-500">Loading videos...</span>
+      </div>
+    );
+  }
+
+  if (error || videos.length === 0) {
+    return (
+      <div className="pb-20 px-4 py-20 text-center">
+        <Film className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+        <p className="text-gray-500 font-medium">{error || "No videos available yet"}</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="pb-20">
-      {/* Sub-tab navigation */}
-      <div className="flex border-b border-white/10 mb-3">
-        <button
-          onClick={() => setSubTab('youtube')}
-          className={cn(
-            "flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors border-b-2",
-            subTab === 'youtube' ? "border-red-500 text-red-400" : "border-transparent text-white/40"
-          )}
-        >
-          <Youtube className="h-4 w-4" />
-          YouTube
-        </button>
-        <button
-          onClick={() => setSubTab('pcloud')}
-          className={cn(
-            "flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors border-b-2",
-            subTab === 'pcloud' ? "border-emerald-500 text-emerald-400" : "border-transparent text-white/40"
-          )}
-        >
-          <Cloud className="h-4 w-4" />
-          pCloud
-        </button>
-      </div>
-
-      {subTab === 'youtube' && (
-        <div className="px-4 py-16 text-center">
-          <Youtube className="h-12 w-12 mx-auto mb-3 text-red-500/30" />
-          <p className="text-white/50 font-medium">Coming Soon</p>
-          <p className="text-xs text-white/30 mt-1">YouTube videos will be available here</p>
+    <div className="pb-24 bg-white">
+      {/* Playlist title */}
+      {playlist && (
+        <div className="px-4 pt-4 pb-2">
+          <h2 className="text-base font-bold text-gray-900 leading-snug">{playlist.title}</h2>
+          <p className="text-xs text-gray-400 mt-0.5">{videos.length} videos</p>
         </div>
       )}
 
-      {subTab === 'pcloud' && (
-        <div className="px-3 space-y-3">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <span className="ml-3 text-white/50">Loading videos...</span>
-            </div>
-          ) : error || videos.length === 0 ? (
-            <div className="py-16 text-center">
-              <Film className="h-10 w-10 mx-auto mb-3 text-white/20" />
-              <p className="text-white/40">{error || 'No videos available yet'}</p>
-            </div>
-          ) : (
-            <>
-              {/* === VIDEO PLAYER (Top) === */}
-              <div className="rounded-xl overflow-hidden bg-black border border-white/10">
-                <div className="aspect-video relative">
-                  {activeVideoUrl ? (
-                    <video
-                      key={activeVideoUrl}
-                      src={activeVideoUrl}
-                      controls
-                      autoPlay
-                      playsInline
-                      className="w-full h-full object-contain bg-black"
-                    />
+      {/* YouTube Player */}
+      <div className="w-full aspect-video bg-black">
+        <iframe
+          key={activeVideoId}
+          src={`https://www.youtube.com/embed/${activeVideoId}?autoplay=1&rel=0`}
+          className="w-full h-full"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      </div>
+
+      {/* Video info bar */}
+      {activeVideo && (
+        <div className="px-4 py-3 border-b border-gray-100">
+          <h3 className="text-sm font-semibold text-gray-900 leading-snug">{activeVideo.title}</h3>
+          <a
+            href={`https://www.youtube.com/watch?v=${activeVideoId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-full bg-red-500 text-white text-xs font-medium hover:bg-red-600 transition-colors"
+          >
+            <ExternalLink className="h-3 w-3" />
+            Open in YouTube
+          </a>
+        </div>
+      )}
+
+      {/* Playlist items */}
+      <div className="px-3 py-2">
+        <div className="space-y-1">
+          {videos.map((video, idx) => {
+            const isActive = video.videoId === activeVideoId;
+            return (
+              <button
+                key={video.videoId}
+                onClick={() => setActiveVideoId(video.videoId)}
+                className={cn(
+                  "w-full flex gap-3 p-2 rounded-lg transition-all text-left",
+                  isActive
+                    ? "bg-gray-100"
+                    : "hover:bg-gray-50"
+                )}
+              >
+                {/* Thumbnail */}
+                <div className="w-28 h-[72px] rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 relative">
+                  {video.thumbnailUrl ? (
+                    <img src={video.thumbnailUrl} alt="" className="w-full h-full object-cover" />
                   ) : (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black">
-                      <Play className="h-12 w-12 text-white/20" />
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Play className="h-5 w-5 text-gray-300" />
+                    </div>
+                  )}
+                  {isActive && (
+                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                      <Play className="h-5 w-5 text-white fill-white" />
                     </div>
                   )}
                 </div>
-
-                {/* Player controls bar */}
-                <div className="p-3 bg-white/5">
-                  <p className="text-sm font-medium text-white truncate mb-1">
-                    {activeVideo?.name || 'No video selected'}
+                {/* Info */}
+                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                  <p className={cn(
+                    "text-[13px] font-medium leading-snug line-clamp-2",
+                    isActive ? "text-gray-900" : "text-gray-700"
+                  )}>
+                    {video.title}
                   </p>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-white/40">
-                        {activeIndex + 1} of {videos.length}
-                      </span>
-                      {activeVideo?.size && (
-                        <span className="text-xs text-white/30">• {formatPCloudSize(activeVideo.size)}</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => setActiveIndex(i => Math.max(0, i - 1))}
-                        disabled={activeIndex === 0}
-                        className="p-1.5 rounded-full hover:bg-white/10 text-white/60 disabled:text-white/20 transition-colors"
-                      >
-                        <SkipBack className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => setActiveIndex(i => Math.min(videos.length - 1, i + 1))}
-                        disabled={activeIndex === videos.length - 1}
-                        className="p-1.5 rounded-full hover:bg-white/10 text-white/60 disabled:text-white/20 transition-colors"
-                      >
-                        <SkipForward className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => activeVideo && handleDownload(activeVideo)}
-                        disabled={downloadingId === activeVideo?.fileid}
-                        className="ml-1 flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/20 text-primary text-xs font-medium hover:bg-primary/30 transition-colors disabled:opacity-50"
-                      >
-                        {downloadingId === activeVideo?.fileid ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <Download className="h-3 w-3" />
-                        )}
-                        Download
-                      </button>
-                    </div>
-                  </div>
+                  <p className="text-[11px] text-gray-400 mt-1">Wedding Tales Nepal</p>
                 </div>
-              </div>
-
-              {/* === PLAYLIST (Bottom) === */}
-              <div>
-                <p className="text-xs text-white/40 uppercase tracking-wider mb-2 px-1">
-                  Playlist • {videos.length} videos
-                </p>
-                <div className="space-y-1.5">
-                  {videos.map((video, idx) => (
-                    <button
-                      key={video.fileid || idx}
-                      onClick={() => setActiveIndex(idx)}
-                      className={cn(
-                        "w-full flex gap-3 p-2 rounded-lg transition-all text-left",
-                        idx === activeIndex
-                          ? "bg-primary/15 border border-primary/30"
-                          : "bg-white/5 border border-transparent hover:bg-white/10"
-                      )}
-                    >
-                      {/* Thumbnail */}
-                      <div className="w-24 h-16 rounded-md overflow-hidden bg-white/5 flex-shrink-0 relative">
-                        {thumbs[video.fileid!] ? (
-                          <img src={thumbs[video.fileid!]} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Play className="h-5 w-5 text-white/20" />
-                          </div>
-                        )}
-                        {idx === activeIndex && (
-                          <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
-                            <Play className="h-5 w-5 text-primary fill-primary" />
-                          </div>
-                        )}
-                      </div>
-                      {/* Info */}
-                      <div className="flex-1 min-w-0 flex flex-col justify-center">
-                        <p className={cn(
-                          "text-sm font-medium truncate",
-                          idx === activeIndex ? "text-primary" : "text-white"
-                        )}>
-                          {video.name}
-                        </p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          {video.size && (
-                            <span className="text-xs text-white/40">{formatPCloudSize(video.size)}</span>
-                          )}
-                        </div>
-                      </div>
-                      {/* Download */}
-                      <div className="flex items-center flex-shrink-0">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleDownload(video); }}
-                          disabled={downloadingId === video.fileid}
-                          className="p-2 rounded-full hover:bg-white/10 text-white/40 hover:text-white/70 transition-colors disabled:opacity-50"
-                        >
-                          {downloadingId === video.fileid ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Download className="h-4 w-4" />
-                          )}
-                        </button>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
+              </button>
+            );
+          })}
         </div>
-      )}
+      </div>
     </div>
   );
 };

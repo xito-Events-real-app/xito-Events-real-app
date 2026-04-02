@@ -20,7 +20,7 @@ const tabs: { id: PortalTab; label: string; icon: React.ElementType }[] = [
 
 const PortalBottomNav = ({ activeTab, onTabChange, albumCount }: PortalBottomNavProps) => {
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-[hsl(220,25%,5%)]/95 backdrop-blur-xl border-t border-white/[0.06] safe-area-bottom">
+    <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-xl border-t border-gray-200 safe-area-bottom">
       <div className="flex items-center justify-around max-w-lg mx-auto">
         {tabs.map((tab) => {
           const Icon = tab.icon;
@@ -31,7 +31,7 @@ const PortalBottomNav = ({ activeTab, onTabChange, albumCount }: PortalBottomNav
               onClick={() => onTabChange(tab.id)}
               className={cn(
                 "flex flex-col items-center gap-0.5 py-2 px-1.5 min-w-[44px] transition-all duration-300 relative",
-                isActive ? "text-[hsl(350,80%,65%)]" : "text-white/30 active:text-white/50"
+                isActive ? "text-[hsl(350,80%,65%)]" : "text-gray-400 active:text-gray-600"
               )}
             >
               {isActive && (

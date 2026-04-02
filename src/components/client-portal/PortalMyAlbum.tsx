@@ -25,7 +25,6 @@ async function downloadFromPCloud(photoKey: string) {
   const fileName = photoKey.split("/").pop() || "photo.jpg";
 
   if (isMobileDevice() && navigator.share) {
-    // Mobile: fetch blob and use Web Share API for "Save to Gallery" option
     try {
       const resp = await fetch(streamUrl);
       const blob = await resp.blob();
@@ -33,12 +32,10 @@ async function downloadFromPCloud(photoKey: string) {
       await navigator.share({ files: [file] });
       return;
     } catch (shareErr: any) {
-      // If share was cancelled or unsupported, fall through to link download
       if (shareErr?.name === "AbortError") return;
     }
   }
 
-  // Desktop / fallback: direct download
   const a = document.createElement("a");
   a.href = streamUrl;
   a.download = fileName;
@@ -68,7 +65,6 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
     return counts;
   }, [selections, albums]);
 
-  // Load signed URLs for current album photos
   useEffect(() => {
     if (albumPhotos.length === 0) {
       setPhotoUrls({});
@@ -77,14 +73,12 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
     const keys = albumPhotos.map(p => p.photo_key);
     const { hits, missingKeys } = lookupUrls(keys);
 
-    // If everything is already cached, show instantly
     if (missingKeys.length === 0) {
       setPhotoUrls(hits);
       setLoadingUrls(false);
       return;
     }
 
-    // Show cached hits immediately, fetch only missing
     setPhotoUrls(hits);
     setLoadingUrls(true);
     getE2FileUrls(missingKeys)
@@ -122,7 +116,6 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
       try {
         await downloadFromPCloud(photo.photo_key);
         successCount++;
-        // Small delay between downloads to avoid overwhelming the browser
         await new Promise(r => setTimeout(r, 400));
       } catch (err) {
         console.error("Download failed for:", photo.photo_key, err);
@@ -145,9 +138,9 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
     return (
       <div className="pb-24 px-4 pt-6">
         <div className="text-center py-16">
-          <BookOpen className="h-12 w-12 mx-auto mb-3 text-white/20" />
-          <p className="text-white/40 text-sm">No albums configured for this client</p>
-          <p className="text-white/20 text-xs mt-1">Albums appear when deliverables are set up</p>
+          <BookOpen className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+          <p className="text-gray-500 text-sm">No albums configured for this client</p>
+          <p className="text-gray-400 text-xs mt-1">Albums appear when deliverables are set up</p>
         </div>
       </div>
     );
@@ -156,13 +149,11 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
   return (
     <>
       <div className="pb-28 px-3 pt-3">
-        {/* Album header */}
         <div className="flex items-center gap-2 mb-4 px-1">
           <BookOpen className="h-4 w-4 text-[hsl(350,80%,65%)]" />
-          <span className="text-sm font-semibold text-white/80">My Albums</span>
+          <span className="text-sm font-semibold text-gray-700">My Albums</span>
         </div>
 
-        {/* Album tabs */}
         <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 scrollbar-hide">
           {albums.map((album, idx) => {
             const count = albumCounts[album.type] || 0;
@@ -176,13 +167,13 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
                     "px-4 py-2 rounded-xl text-xs font-medium border transition-all duration-200",
                     isActive
                       ? "bg-[hsl(350,80%,65%)] text-white border-[hsl(350,80%,65%)] shadow-[0_0_16px_hsl(350,80%,65%/0.3)]"
-                      : "bg-white/[0.04] text-white/50 border-white/10 hover:bg-white/[0.08]"
+                      : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
                   )}
                 >
                   {album.name}
                   <span className={cn(
                     "ml-1.5 text-[10px]",
-                    isActive ? "text-white/80" : "text-white/30"
+                    isActive ? "text-white/80" : "text-gray-400"
                   )}>
                     {count}/{MAX_PHOTOS}
                   </span>
@@ -195,7 +186,7 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
                       "p-1.5 rounded-lg border transition-all text-[10px] font-medium flex items-center gap-1",
                       isActive
                         ? "border-[hsl(350,80%,65%)]/40 text-[hsl(350,80%,65%)] hover:bg-[hsl(350,80%,65%)]/10"
-                        : "border-white/10 text-white/40 hover:bg-white/[0.06]"
+                        : "border-gray-200 text-gray-400 hover:bg-gray-50"
                     )}
                   >
                     {isDownloading ? (
@@ -210,21 +201,20 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
           })}
         </div>
 
-        {/* Album photo grid */}
         {loadingUrls ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-6 w-6 animate-spin text-[hsl(350,80%,65%)]" />
-            <span className="ml-3 text-white/40 text-sm">Loading album photos...</span>
+            <span className="ml-3 text-gray-400 text-sm">Loading album photos...</span>
           </div>
         ) : albumPhotos.length === 0 ? (
           <div className="text-center py-16">
-            <ImageIcon className="h-10 w-10 mx-auto mb-3 text-white/15" />
-            <p className="text-white/35 text-sm">No photos selected yet</p>
-            <p className="text-white/20 text-xs mt-1">Go to Photos tab and select photos for this album</p>
+            <ImageIcon className="h-10 w-10 mx-auto mb-3 text-gray-200" />
+            <p className="text-gray-400 text-sm">No photos selected yet</p>
+            <p className="text-gray-300 text-xs mt-1">Go to Photos tab and select photos for this album</p>
           </div>
         ) : (
           <>
-            <div className="text-xs text-white/40 mb-2 px-1">
+            <div className="text-xs text-gray-400 mb-2 px-1">
               {albumPhotos.length} of {MAX_PHOTOS} photos selected
             </div>
             <div className="grid grid-cols-3 gap-1.5">
@@ -232,7 +222,7 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
                 const url = photoUrls[photo.photo_key];
                 const isRemoving = removingKey === photo.photo_key;
                 return (
-                  <div key={photo.photo_key} className="aspect-square rounded-lg overflow-hidden bg-white/5 relative group">
+                  <div key={photo.photo_key} className="aspect-square rounded-lg overflow-hidden bg-gray-100 relative group">
                     <button
                       onClick={() => url && setViewerIndex(idx)}
                       className="w-full h-full"
@@ -240,17 +230,16 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
                       {url ? (
                         <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
                       ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 animate-pulse bg-white/[0.03]">
-                          <Loader2 className="h-4 w-4 animate-spin text-white/20" />
-                          <span className="text-[9px] text-white/15">Loading...</span>
+                        <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 animate-pulse bg-gray-50">
+                          <Loader2 className="h-4 w-4 animate-spin text-gray-300" />
+                          <span className="text-[9px] text-gray-300">Loading...</span>
                         </div>
                       )}
                     </button>
-                    {/* Remove button */}
                     <button
                       onClick={(e) => { e.stopPropagation(); handleRemove(photo.photo_key); }}
                       disabled={isRemoving}
-                      className="absolute top-1 right-1 p-1.5 rounded-full bg-black/70 text-white/70 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/80 hover:text-white"
+                      className="absolute top-1 right-1 p-1.5 rounded-full bg-black/60 text-white/70 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/80 hover:text-white"
                     >
                       {isRemoving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
                     </button>
