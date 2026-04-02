@@ -287,7 +287,7 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl bg-[#0f0f0f] border-red-500/20 text-white [&>button]:text-white">
+      <DialogContent className="sm:max-w-2xl bg-white border-gray-200 text-gray-900 [&>button]:text-gray-500">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-white">
             <Youtube className="w-6 h-6 text-red-500" />
