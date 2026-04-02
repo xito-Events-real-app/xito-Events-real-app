@@ -3,6 +3,7 @@ import { BookOpen, Loader2, Trash2, ImageIcon, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AlbumDef, AlbumSelection, removeFromAlbum, getAlbumSelections } from "@/lib/album-selection-api";
 import { getE2FileUrls } from "@/lib/idrive-e2-api";
+import { lookupUrls, cacheUrls } from "@/lib/shared-url-cache";
 import { getPCloudFileLinkByPath } from "@/lib/pcloud-api";
 import XitoImageViewer from "@/components/client-detail/XitoImageViewer";
 import { toast } from "sonner";
