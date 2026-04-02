@@ -287,13 +287,13 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl bg-[#0f0f0f] border-red-500/20 text-white [&>button]:text-white">
+      <DialogContent className="sm:max-w-2xl bg-white border-gray-200 text-gray-900 [&>button]:text-gray-500">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-white">
-            <Youtube className="w-6 h-6 text-red-500" />
+          <DialogTitle className="flex items-center gap-2 text-gray-900">
+            <Youtube className="w-6 h-6 text-red-600" />
             Upload to YouTube
           </DialogTitle>
-          <DialogDescription className="text-gray-400">
+          <DialogDescription className="text-gray-500">
             Select client, event, and video — uploads go directly to your channel
           </DialogDescription>
         </DialogHeader>
@@ -301,14 +301,14 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
           {/* Client selector */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-gray-300">Client</Label>
+            <Label className="text-xs font-medium text-gray-600">Client</Label>
             <Select value={selectedClient} onValueChange={(v) => { setSelectedClient(v); setSelectedEvent(""); setSelectedEditType(""); }}>
-              <SelectTrigger className="h-9 bg-[#1a1a1a] border-gray-700 text-white"><SelectValue placeholder="Select client..." /></SelectTrigger>
-              <SelectContent className="max-h-60 bg-[#1a1a1a] border-gray-700">
+              <SelectTrigger className="h-9 bg-gray-50 border-gray-200 text-gray-900"><SelectValue placeholder="Select client..." /></SelectTrigger>
+              <SelectContent className="max-h-60 bg-white border-gray-200">
                 {sortedClients.map(c => (
-                  <SelectItem key={c.name} value={c.name} className="text-white hover:bg-red-500/10">
-                    <span className={c.bestOrder === 1 ? "font-bold text-red-400" : ""}>{c.name}</span>
-                    {c.bestOrder === 1 && <span className="ml-2 text-[10px] text-red-400">EXPORTED</span>}
+                  <SelectItem key={c.name} value={c.name} className="text-gray-900 hover:bg-red-50">
+                    <span className={c.bestOrder === 1 ? "font-bold text-red-600" : ""}>{c.name}</span>
+                    {c.bestOrder === 1 && <span className="ml-2 text-[10px] text-red-600">EXPORTED</span>}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -319,11 +319,11 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
           <div className="grid grid-cols-2 gap-3">
             {selectedClient && (
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-gray-300">Event</Label>
+                <Label className="text-xs font-medium text-gray-600">Event</Label>
                 <Select value={selectedEvent} onValueChange={(v) => { setSelectedEvent(v); setSelectedEditType(""); }}>
-                  <SelectTrigger className="h-9 bg-[#1a1a1a] border-gray-700 text-white"><SelectValue placeholder="Event..." /></SelectTrigger>
-                  <SelectContent className="bg-[#1a1a1a] border-gray-700">
-                    {clientEvents.map(e => <SelectItem key={e} value={e} className="text-white hover:bg-red-500/10">{e}</SelectItem>)}
+                  <SelectTrigger className="h-9 bg-gray-50 border-gray-200 text-gray-900"><SelectValue placeholder="Event..." /></SelectTrigger>
+                  <SelectContent className="bg-white border-gray-200">
+                    {clientEvents.map(e => <SelectItem key={e} value={e} className="text-gray-900 hover:bg-red-50">{e}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -331,11 +331,11 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
 
             {selectedEvent && (
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-gray-300">Edit Type</Label>
+                <Label className="text-xs font-medium text-gray-600">Edit Type</Label>
                 <Select value={selectedEditType} onValueChange={setSelectedEditType}>
-                  <SelectTrigger className="h-9 bg-[#1a1a1a] border-gray-700 text-white"><SelectValue placeholder="Type..." /></SelectTrigger>
-                  <SelectContent className="bg-[#1a1a1a] border-gray-700">
-                    {editTypes.map(t => <SelectItem key={t} value={t} className="text-white hover:bg-red-500/10">{t}</SelectItem>)}
+                  <SelectTrigger className="h-9 bg-gray-50 border-gray-200 text-gray-900"><SelectValue placeholder="Type..." /></SelectTrigger>
+                  <SelectContent className="bg-white border-gray-200">
+                    {editTypes.map(t => <SelectItem key={t} value={t} className="text-gray-900 hover:bg-red-50">{t}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -344,34 +344,34 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
 
           {/* Video Title */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-gray-300">Video Title</Label>
+            <Label className="text-xs font-medium text-gray-600">Video Title</Label>
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="VIDEO TITLE"
-              className="bg-[#1a1a1a] border-gray-700 text-white uppercase font-semibold"
+              className="bg-gray-50 border-gray-200 text-gray-900 uppercase font-semibold"
             />
           </div>
 
           {/* Playlist section */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-gray-300 flex items-center gap-1.5">
+            <Label className="text-xs font-medium text-gray-600 flex items-center gap-1.5">
               <ListVideo className="h-3.5 w-3.5" /> Playlist
             </Label>
             <Select value={selectedPlaylistId} onValueChange={(v) => {
               setSelectedPlaylistId(v);
               setShowNewPlaylist(v === "__new__");
             }}>
-              <SelectTrigger className="h-9 bg-[#1a1a1a] border-gray-700 text-white">
+              <SelectTrigger className="h-9 bg-gray-50 border-gray-200 text-gray-900">
                 <SelectValue placeholder={loadingPlaylists ? "Loading..." : "Select playlist..."} />
               </SelectTrigger>
-              <SelectContent className="max-h-60 bg-[#1a1a1a] border-gray-700">
-                <SelectItem value="__none__" className="text-gray-400 hover:bg-red-500/10">No playlist</SelectItem>
-                <SelectItem value="__new__" className="text-red-400 hover:bg-red-500/10">
+              <SelectContent className="max-h-60 bg-white border-gray-200">
+                <SelectItem value="__none__" className="text-gray-400 hover:bg-red-50">No playlist</SelectItem>
+                <SelectItem value="__new__" className="text-red-600 hover:bg-red-50">
                   <span className="flex items-center gap-1"><Plus className="h-3 w-3" /> Create new playlist</span>
                 </SelectItem>
                 {sortedPlaylists.map(p => (
-                  <SelectItem key={p.id} value={p.id} className="text-white hover:bg-red-500/10">{p.title}</SelectItem>
+                  <SelectItem key={p.id} value={p.id} className="text-gray-900 hover:bg-red-50">{p.title}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -382,7 +382,7 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
                   value={newPlaylistName}
                   onChange={(e) => setNewPlaylistName(e.target.value)}
                   placeholder="PLAYLIST NAME"
-                  className="bg-[#1a1a1a] border-gray-700 text-white uppercase font-semibold flex-1"
+                  className="bg-gray-50 border-gray-200 text-gray-900 uppercase font-semibold flex-1"
                 />
                 <Button
                   size="sm"
@@ -398,15 +398,15 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
 
           {/* Video File */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-gray-300">Video File</Label>
+            <Label className="text-xs font-medium text-gray-600">Video File</Label>
             <Input
               type="file"
               accept="video/mp4,video/quicktime,video/x-msvideo,.mp4,.mov,.avi"
               onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
-              className="h-auto py-2 bg-[#1a1a1a] border-gray-700 text-white file:text-white file:bg-red-600 file:border-0 file:rounded file:px-3 file:py-1 file:mr-3 file:cursor-pointer"
+              className="h-auto py-2 bg-gray-50 border-gray-200 text-gray-900 file:text-white file:bg-red-600 file:border-0 file:rounded file:px-3 file:py-1 file:mr-3 file:cursor-pointer"
             />
             {videoFile && (
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-500">
                 {videoFile.name} — {(videoFile.size / (1024 * 1024 * 1024)).toFixed(2)} GB
               </p>
             )}
@@ -414,18 +414,18 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
 
           {/* Thumbnail */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-gray-300 flex items-center gap-1.5">
+            <Label className="text-xs font-medium text-gray-600 flex items-center gap-1.5">
               <ImageIcon className="h-3.5 w-3.5" /> Thumbnail (optional)
             </Label>
             <Input
               type="file"
               accept="image/jpeg,image/png,image/webp"
               onChange={(e) => setThumbnailFile(e.target.files?.[0] || null)}
-              className="h-auto py-2 bg-[#1a1a1a] border-gray-700 text-white file:text-white file:bg-gray-700 file:border-0 file:rounded file:px-3 file:py-1 file:mr-3 file:cursor-pointer"
+              className="h-auto py-2 bg-gray-50 border-gray-200 text-gray-900 file:text-white file:bg-gray-600 file:border-0 file:rounded file:px-3 file:py-1 file:mr-3 file:cursor-pointer"
             />
             {thumbnailPreview && (
               <div className="mt-1.5">
-                <img src={thumbnailPreview} alt="Thumbnail preview" className="h-20 rounded-lg border border-gray-700 object-cover" />
+                <img src={thumbnailPreview} alt="Thumbnail preview" className="h-20 rounded-lg border border-gray-200 object-cover" />
               </div>
             )}
           </div>
