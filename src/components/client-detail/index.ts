@@ -15,6 +15,7 @@ export { parseBenzoKeepNotes } from './BenzoKeepDialog';
 export { default as FreelancerAssignmentSection } from './FreelancerAssignmentSection';
 export { default as DeleteClientDialog } from './DeleteClientDialog';
 export { default as ClientFilesSection } from './ClientFilesSection';
+export { default as ClientFileStatusSection } from './ClientFileStatusSection';
 export { default as DeliverablesSection } from './DeliverablesSection';
 export { default as EditProductionSection } from './EditProductionSection';
 export { default as AlbumSection } from './AlbumSection';
