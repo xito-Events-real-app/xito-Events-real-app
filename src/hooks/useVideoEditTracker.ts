@@ -8,6 +8,7 @@ import {
   syncWithDeliverables,
 } from "@/lib/video-edit-api";
 import { scheduleVideoEditPush } from "@/lib/video-edit-push-scheduler";
+import { syncYouTubeLinks } from "@/lib/youtube-link-sync";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -68,13 +69,28 @@ export function useVideoEditTracker() {
     }
   }, [toast]);
 
+  const runYouTubeSync = useCallback(async (currentRows: VideoEditRow[]) => {
+    try {
+      const count = await syncYouTubeLinks(currentRows);
+      if (count > 0) {
+        console.log(`[YT-SYNC] Updated ${count} rows with YouTube links`);
+        await loadRows();
+      }
+    } catch (err) {
+      console.error("[YT-SYNC] Error:", err);
+    }
+  }, [loadRows]);
+
   useEffect(() => {
     (async () => {
       setIsLoading(true);
       try {
         await ensureVideoEditRows();
         await syncWithDeliverables();
-        await loadRows();
+        const data = await getVideoEditRows();
+        setRows(data || []);
+        // Run YouTube link sync in background after load
+        runYouTubeSync(data || []);
       } catch (err: any) {
         console.error("[VIDEO-EDIT] Init error:", err);
       } finally {
@@ -339,6 +355,17 @@ export function useVideoEditTracker() {
     }
   }, [toast, loadRows]);
 
+  const manualYtSync = useCallback(async () => {
+    toast({ title: "Syncing YouTube links..." });
+    const count = await syncYouTubeLinks(rows);
+    if (count > 0) {
+      toast({ title: `Synced ${count} YouTube link${count > 1 ? 's' : ''}` });
+      await loadRows();
+    } else {
+      toast({ title: "No new YouTube links found" });
+    }
+  }, [rows, loadRows, toast]);
+
   return {
     rowsByStatus: displayRowsByStatus,
     allRows: rows,
@@ -350,6 +377,7 @@ export function useVideoEditTracker() {
     mergeRow,
     togglePlaying,
     updateDeadline,
+    syncYouTubeLinks: manualYtSync,
     STAGES,
   };
 }
