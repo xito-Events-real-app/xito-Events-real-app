@@ -1,88 +1,49 @@
 
+I’ll adjust the Videos tab to behave correctly, with one important constraint: browsers and YouTube embeds do not allow truly forced autoplay with sound in every case. The current mute setting exists because autoplay is usually blocked unless muted. I can improve this so tab entry and video clicks trigger play + unmute as aggressively as possible, but I cannot guarantee sound-autoplay on every browser/device.
 
-## Client Portal: YouTube Playlist Videos + White Theme
+Plan
 
-### What needs to happen
+1. Replace the simple iframe swap in `src/components/client-portal/PortalMyVideos.tsx` with a controllable YouTube player setup.
+- Use the YouTube player API instead of only changing the iframe `src`.
+- On first load of the Videos tab, load the first video and immediately call play + unmute.
+- When another playlist item is clicked, load that video and immediately play it without needing a second tap.
+- Remove the current forced `mute=1`.
 
-The Client Portal's "Videos" tab will be completely redesigned to fetch and display YouTube playlist videos directly, with a white background theme applied across the entire portal.
+2. Fix the playlist-opening behavior.
+- Right now there is no custom playlist link in the code, so the behavior you are seeing is coming from YouTube’s built-in iframe UI.
+- That built-in iframe action cannot be forced to open the YouTube app, cannot be forced to use the playlist URL, and cannot be made fully blank-tab-safe by the app.
+- To solve this properly, I’ll stop relying on the iframe’s native “Watch on YouTube” behavior and use a controlled app-side action instead.
 
-### 1. New Edge Function Action: `getPlaylistVideos`
-**File:** `supabase/functions/youtube-upload/index.ts`
+3. Open the real playlist URL in the same tab.
+- Use `https://www.youtube.com/playlist?list={playlistId}`.
+- Open it in the same tab/window, not a new tab, so the browser does not leave an empty extra tab behind.
+- On supported phones, this gives the device a chance to hand off to the YouTube app; otherwise it opens the playlist page directly.
 
-Add a new action `getPlaylistVideos` that:
-- Takes `playlistId` as input
-- Calls YouTube Data API `playlistItems.list` with `part=snippet,contentDetails`
-- Paginates to get all videos
-- Returns `{ videos: [{ videoId, title, thumbnailUrl, position }] }`
+4. Keep the UI clean.
+- Do not bring back the old “Open in YouTube” button in the previous location.
+- If a direct playlist-open action is still needed, attach it subtly to the playlist title/header area instead of the removed button.
+- Keep the first video selected automatically and the playlist list below the player.
 
-Also add `searchPlaylists` action (or reuse `listPlaylists`) so the portal can search for a playlist matching the client name.
-
-### 2. Rewrite `PortalMyVideos.tsx`
-**File:** `src/components/client-portal/PortalMyVideos.tsx`
-
-Complete rewrite:
-- Remove pCloud tab/logic entirely, remove YouTube/pCloud sub-tabs
-- On mount, call `listPlaylists` via edge function to find playlist matching client's bride+groom names (passed as new props from `ClientPortal.tsx`)
-- Once playlist found, call `getPlaylistVideos` to get all videos in it
-- Display playlist title at top (e.g., "Abhinash & Subekhsya Wedding Stories") — no "YouTube" label
-- Embed YouTube player using `<iframe src="https://www.youtube.com/embed/{videoId}?autoplay=1">` for the active video
-- Below the player: video title, "Open in YouTube" button linking to `https://youtube.com/watch?v={videoId}`
-- Below that: scrollable playlist of other videos with thumbnails (from YouTube API), titles
-- Clicking a playlist item changes the embedded video
-- All styled with white background, dark text — YouTube-like appearance
-
-### 3. Pass Contact Data to Videos Tab
-**File:** `src/pages/ClientPortal.tsx`
-
-- Pass `brideFullName` and `groomFullName` from `contactData` as props to `PortalMyVideos` so it can match playlist names
-- Also pass `registeredDateTimeAD` for potential future use
-
-### 4. White Theme for Entire Client Portal
-**File:** `src/pages/ClientPortal.tsx`
-
-Change the portal's background and text theme:
-- `bg-[hsl(220,25%,6%)]` → `bg-white`
-- `text-white` → `text-gray-900`
-- Header: white/light background with subtle border
-- Bottom nav: white background, adjusted icon/text colors
-
-**File:** `src/components/client-portal/PortalBottomNav.tsx`
-- Update background from dark to white
-- Update active/inactive colors for light theme
-
-**File:** Other portal components (`PortalDashboard`, `PortalMyPhotos`, `PortalMyPayment`, `PortalMyDetails`, `PortalMyAlbum`)
-- Update text colors from `text-white/X` patterns to dark equivalents
-- Update card backgrounds from dark to light
-
-### Technical Details
-
-**Edge function new action:**
-```
-case "getPlaylistVideos": {
-  // paginate playlistItems.list?part=snippet,contentDetails&playlistId=X
-  // return { videos: [{ videoId, title, thumbnailUrl }] }
-}
+Technical notes
+```text
+Current causes:
+- `mute=1` is still present in the embed URL.
+- No custom playlist URL exists in the current source.
+- The blank page is caused by external/new-tab style navigation, not by playlist data loading.
 ```
 
-**YouTube embed URL format:**
-```
-https://www.youtube.com/embed/{videoId}?autoplay=1&rel=0
-```
+Files to update
+- `src/components/client-portal/PortalMyVideos.tsx`
+  - switch to controlled YouTube player logic
+  - remove forced mute
+  - use same-tab playlist navigation
+  - avoid depending on YouTube iframe native external-link behavior
+- `src/pages/ClientPortal.tsx`
+  - only if needed, pass a small signal when the Videos tab becomes active so first-play can trigger more reliably
 
-**Playlist matching logic:**
-- Fetch all playlists via `listPlaylists`
-- Find first playlist whose title contains both bride and groom first names (case-insensitive)
-- If no match, show "No videos available" state
-
-**Files to modify:**
-- `supabase/functions/youtube-upload/index.ts` — add `getPlaylistVideos` action
-- `src/components/client-portal/PortalMyVideos.tsx` — complete rewrite
-- `src/pages/ClientPortal.tsx` — pass contact props, white theme
-- `src/components/client-portal/PortalBottomNav.tsx` — white theme
-- `src/components/client-portal/PortalDashboard.tsx` — white theme
-- `src/components/client-portal/PortalMyPhotos.tsx` — white theme
-- `src/components/client-portal/PortalMyPayment.tsx` — white theme
-- `src/components/client-portal/PortalMyDetails.tsx` — white theme
-- `src/components/client-portal/PortalMyAlbum.tsx` — white theme
-- `src/components/client-portal/PortalPhotoEventNav.tsx` — white theme
-
+Expected result
+- First video starts as soon as the user opens the Videos tab, with immediate unmute attempted.
+- Clicking another video starts it directly without another play press.
+- Playlist opening uses the real playlist link.
+- No extra blank browser tab is created.
+- Remaining limitation: some browsers may still block first-load sound until they treat the tab change as a valid user gesture, but video clicks will still start directly with sound.
