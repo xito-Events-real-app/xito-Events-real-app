@@ -1,90 +1,123 @@
 
 
-# YouTube Upload Feature
+## YouTube Upload System Overhaul
 
-## Overview
+This is a large feature set spanning 7 areas. Here's the plan:
 
-Add a YouTube upload capability with: a button in the suite header, a dialog to select video/client/event, auto-generated titles from bride/groom names, and a YouTube link column in the video edit tracker's EXPORTED stage onwards.
+---
 
-## Important: Credentials
+### 1. YouTube-Themed Upload Dialog Redesign
+**File:** `src/components/suite/YouTubeUploadDialog.tsx`
+- Restyle dialog with YouTube's dark theme (dark background, red accents, YouTube logo)
+- Larger dialog size (`sm:max-w-2xl`)
+- YouTube-branded upload button, progress bar in red
 
-Your Google OAuth Client ID and Client Secret will be stored as backend secrets (`YOUTUBE_CLIENT_ID` and `YOUTUBE_CLIENT_SECRET`). These are private keys and must never be in the codebase.
+### 2. Smart Default Selection on Open
+**File:** `src/components/suite/YouTubeUploadDialog.tsx`
+- On dialog open, auto-select the top client (first EXPORTED client from sorted list)
+- Auto-select the event associated with the most recently exported row for that client
+- Default edit type to "Highlights"
+- Title auto-generated in ALL CAPS format: `ANJALI & SHAKTI WEDDING HIGHLIGHTS || WEDDING TALES NEPAL`
+- Use bride/groom names from `contact_details_cache` (not client_name)
 
-## Plan
+### 3. Playlist Support
+**New edge function action in:** `supabase/functions/youtube-upload/index.ts`
+- Add actions: `listPlaylists`, `createPlaylist`, `addToPlaylist`
+- `listPlaylists`: calls YouTube Data API v3 `playlists.list` to fetch all playlists from the channel
+- `createPlaylist`: creates a new playlist via YouTube API
+- `addToPlaylist`: adds uploaded video to selected playlist via `playlistItems.insert`
 
-### 1. Database Migration — Add `youtube_link` column to `video_edit_tracker`
+**File:** `src/components/suite/YouTubeUploadDialog.tsx`
+- Add playlist dropdown populated from edge function
+- Auto-suggest playlist matching bride & groom names (e.g., "ANJALI & SHAKTI WEDDING STORY")
+- Option to create new playlist inline if no match found
+- Playlist name editable before creation
 
+### 4. Thumbnail Support
+**File:** `src/components/suite/YouTubeUploadDialog.tsx`
+- Add thumbnail file input (image/jpeg, image/png)
+- After video upload completes, call YouTube API `thumbnails.set` via edge function
+
+**Edge function:** Add `setThumbnail` action that uploads thumbnail binary to `https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=...`
+
+### 5. Global YouTube Upload Tracker (like XITO Drive)
+**New context:** `src/contexts/YouTubeUploadContext.tsx`
+- Modeled after `XitoDriveUploadContext` with: sessions, jobs, pause/resume/cancel, progress tracking
+- Resumable upload support: use YouTube's resumable upload protocol to resume from last byte on interruption (query upload URI for status, resume from `bytes_received`)
+- Store upload state in Supabase table for cross-user visibility
+
+**New DB table:** `youtube_upload_sessions`
+- Columns: `id`, `client_name`, `event_name`, `edit_type`, `title`, `playlist_id`, `video_file_name`, `file_size_bytes`, `bytes_uploaded`, `upload_uri`, `status` (pending/uploading/completed/failed/paused), `youtube_video_id`, `youtube_link`, `started_by`, `created_at`, `updated_at`
+- Enable realtime: `ALTER PUBLICATION supabase_realtime ADD TABLE public.youtube_upload_sessions`
+
+**New tracker widget:** `src/components/suite/YouTubeUploadTracker.tsx`
+- Same pattern as `XitoUploadTracker` — fixed bottom-right, collapsible, expandable
+- Shows YouTube icon, red theme, progress bar, pause/resume/cancel controls
+- Reads from `youtube_upload_sessions` table via realtime subscription so ALL users see the same status
+
+**File:** `src/App.tsx`
+- Add `YouTubeUploadProvider` wrapper and `YouTubeUploadTracker` component
+
+### 6. Resumable Upload (Don't Restart from Beginning)
+**In `YouTubeUploadContext`:**
+- Before starting upload, check if an `upload_uri` exists in DB for this session
+- Query YouTube API for bytes already received: `PUT upload_uri` with `Content-Range: bytes */*`
+- Resume from the returned byte offset using `file.slice(offset)` and `Content-Range: bytes offset-total/total`
+- On network failure, retry from last known position
+
+### 7. YT Column Visibility & Multi-Link Support
+**File:** `src/components/video-edit/DesktopVideoEditTracker.tsx`
+- Show YT column only for stages EXPORTED through FINALIZED (use a `YT_STAGES` set)
+- Support multiple YouTube links per row (stored as comma-separated or JSON in `youtube_link` column)
+- Render multiple clickable YouTube icons if multiple links exist
+
+**File:** `src/components/suite/YouTubeUploadDialog.tsx` (already handles this)
+- When saving youtube_link, append to existing value if one already exists (comma-separated)
+
+**File:** `src/hooks/useVideoEditTracker.ts`
+- On successful upload via context, update the matching `video_edit_tracker` row's `youtube_link`
+
+---
+
+### Technical Details
+
+**Database migration:**
 ```sql
-ALTER TABLE public.video_edit_tracker ADD COLUMN youtube_link text NOT NULL DEFAULT '';
+CREATE TABLE public.youtube_upload_sessions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_name text NOT NULL DEFAULT '',
+  event_name text NOT NULL DEFAULT '',
+  edit_type text NOT NULL DEFAULT '',
+  title text NOT NULL DEFAULT '',
+  playlist_id text DEFAULT '',
+  video_file_name text NOT NULL DEFAULT '',
+  file_size_bytes bigint NOT NULL DEFAULT 0,
+  bytes_uploaded bigint NOT NULL DEFAULT 0,
+  upload_uri text DEFAULT '',
+  status text NOT NULL DEFAULT 'pending',
+  youtube_video_id text DEFAULT '',
+  youtube_link text DEFAULT '',
+  started_by text DEFAULT '',
+  tracker_row_id uuid,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE public.youtube_upload_sessions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all access" ON public.youtube_upload_sessions FOR ALL USING (true) WITH CHECK (true);
+ALTER PUBLICATION supabase_realtime ADD TABLE public.youtube_upload_sessions;
 ```
 
-This column will store the YouTube URL after upload, visible from EXPORTED through FINALIZED.
+**Edge function updates (`youtube-upload/index.ts`):**
+- Add action-based routing: `initUpload` (existing), `listPlaylists`, `createPlaylist`, `addToPlaylist`, `setThumbnail`
 
-### 2. Store Secrets
+**Files to create:**
+- `src/contexts/YouTubeUploadContext.tsx`
+- `src/components/suite/YouTubeUploadTracker.tsx`
 
-Use the `add_secret` tool to save:
-- `YOUTUBE_CLIENT_ID` = `808838065-cfnjufbaeq6oreg6o82iat4eo6oqevad.apps.googleusercontent.com`
-- `YOUTUBE_CLIENT_SECRET` = `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`
-
-### 3. Edge Function — `youtube-upload`
-
-Create `supabase/functions/youtube-upload/index.ts`:
-- Accepts a resumable upload request with video metadata (title, description, tags, privacy)
-- Uses Google OAuth refresh token flow to authenticate
-- Initiates a resumable upload session and returns the upload URI
-- The actual file upload happens client-side directly to Google's resumable URI (avoids edge function size limits)
-
-**Note**: This requires a one-time OAuth consent flow to get a refresh token. The edge function will handle token refresh using the client ID/secret.
-
-### 4. New Component — `YouTubeUploadDialog.tsx`
-
-Create `src/components/suite/YouTubeUploadDialog.tsx`:
-- Triggered by a YouTube icon button in the suite header (next to Search)
-- Dialog content:
-  - **Client selector**: Dropdown listing clients from the video edit tracker, ordered by:
-    1. EXPORTED (most recently entered first)
-    2. Other active stages
-    3. QUEUE
-    4. FINALIZED (last)
-  - **Event selector**: Shows events for the selected client
-  - **Edit type selector**: Shows deliverable types (Full Video, Highlights, Reel, Teaser)
-  - **Title field**: Auto-generated from `contact_details_cache` bride/groom names in pattern: `{Bride} & {Groom} {Event} {EditType}` (e.g., "Anjali & Shakti Wedding Full Video"). Editable.
-  - **Video file picker**: Standard file input for MP4/MOV
-  - **Upload button**: Initiates the upload flow
-
-### 5. Auto-Title Logic
-
-When client + event + edit type are selected:
-1. Query `contact_details_cache` for `bride_full_name` and `groom_full_name` (using first names)
-2. Build title: `{BrideFirstName} & {GroomFirstName} {EventName} {EditType}`
-3. Pre-fill the title field (user can edit)
-
-### 6. Update Suite Header
-
-In `DesktopSuiteLanding.tsx` — add a YouTube icon button next to the Search button that opens `YouTubeUploadDialog`.
-
-### 7. Update Video Edit Table — YouTube Column
-
-In `DesktopVideoEditTracker.tsx` `VideoEditTable`:
-- Add a "YouTube" column header after "Songs"
-- Show a YouTube icon link if `youtube_link` is set (clickable, opens in new tab)
-- Show an empty placeholder if not set
-- This column appears for ALL stages (not just EXPORTED) as requested ("till the last")
-
-### 8. Update `VideoEditRow` interface and `dbToRow` mapping
-
-In `video-edit-api.ts`:
-- Add `youtubeLink: string` to `VideoEditRow`
-- Map `youtube_link` in `dbToRow()`
-
-### Files Changed
-- **Migration**: Add `youtube_link` column to `video_edit_tracker`
-- **New**: `supabase/functions/youtube-upload/index.ts`
-- **New**: `src/components/suite/YouTubeUploadDialog.tsx`
-- **Edit**: `src/components/suite/DesktopSuiteLanding.tsx` — add YouTube button
-- **Edit**: `src/components/suite/MobileSuiteLanding.tsx` — add YouTube button
-- **Edit**: `src/lib/video-edit-api.ts` — add `youtubeLink` to interface + mapping
-- **Edit**: `src/hooks/useVideoEditTracker.ts` — pass through youtubeLink
-- **Edit**: `src/components/video-edit/DesktopVideoEditTracker.tsx` — YouTube column in table
-- **Edit**: `src/components/suite/index.ts` — export new component
+**Files to modify:**
+- `src/components/suite/YouTubeUploadDialog.tsx` (major rewrite)
+- `supabase/functions/youtube-upload/index.ts` (add playlist + thumbnail actions)
+- `src/components/video-edit/DesktopVideoEditTracker.tsx` (YT column visibility + multi-link)
+- `src/App.tsx` (add provider + tracker)
 
