@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { ArrowLeft, Youtube, Search, Upload, ChevronDown, ChevronRight, Send, Loader2, Play, Clock, User, Palette, Calendar, Activity } from "lucide-react";
+import { ArrowLeft, Youtube, Search, Upload, ChevronDown, ChevronRight, Send, Loader2, Play, Clock, User, Palette, Calendar, Activity, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -108,12 +108,82 @@ function timeAgo(dateStr: string): string {
   if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
+  if (hrs < 24) return `${hrs}hr${hrs > 1 ? 's' : ''} ago`;
   const days = Math.floor(hrs / 24);
-  if (days < 30) return `${days}d ago`;
+  const remHrs = hrs % 24;
+  if (days < 30) {
+    if (remHrs > 0) return `${days}d ${remHrs}hr${remHrs > 1 ? 's' : ''} ago`;
+    return `${days}d ago`;
+  }
   const months = Math.floor(days / 30);
   if (months < 12) return `${months}mo ago`;
   return `${Math.floor(months / 12)}y ago`;
+}
+
+function timeAgoLarge(dateStr: string): string {
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return "";
+  const now = Date.now();
+  const diffMs = now - date.getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins} minute${mins > 1 ? 's' : ''} ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hour${hrs > 1 ? 's' : ''} ago`;
+  const days = Math.floor(hrs / 24);
+  const remHrs = hrs % 24;
+  if (days < 30) {
+    if (remHrs > 0) return `${days} day${days > 1 ? 's' : ''} ${remHrs} hour${remHrs > 1 ? 's' : ''} ago`;
+    return `${days} day${days > 1 ? 's' : ''} ago`;
+  }
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months} month${months > 1 ? 's' : ''} ago`;
+  return `${Math.floor(months / 12)} year${Math.floor(months / 12) > 1 ? 's' : ''} ago`;
+}
+
+function getDayLabel(dateStr: string): string {
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return "";
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dateStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.floor((todayStart.getTime() - dateStart.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  return `${diffDays} days ago`;
+}
+
+function formatDateHeader(dateStr: string): string {
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return "";
+  const adStr = date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+  // Convert to BS
+  try {
+    const NepaliDate = (window as any).__nepaliDateConverter;
+    if (NepaliDate) {
+      const nd = new NepaliDate(date);
+      const nepaliMonthsEn = ["Baisakh", "Jestha", "Ashar", "Shrawan", "Bhadra", "Ashwin", "Kartik", "Mangsir", "Poush", "Magh", "Falgun", "Chaitra"];
+      return `${adStr} / ${nepaliMonthsEn[nd.getMonth()]} ${nd.getDate()}`;
+    }
+  } catch {}
+  return adStr;
+}
+
+// Group videos by date for section headers
+function groupVideosByDate(videos: RecentVideo[]): { dateKey: string; dateHeader: string; dayLabel: string; videos: RecentVideo[] }[] {
+  const groups: Map<string, RecentVideo[]> = new Map();
+  for (const v of videos) {
+    const d = new Date(v.publishedAt);
+    const key = isNaN(d.getTime()) ? "unknown" : `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(v);
+  }
+  return Array.from(groups.entries()).map(([key, vids]) => ({
+    dateKey: key,
+    dateHeader: vids[0]?.publishedAt ? formatDateHeader(vids[0].publishedAt) : "",
+    dayLabel: vids[0]?.publishedAt ? getDayLabel(vids[0].publishedAt) : "",
+    videos: vids,
+  }));
 }
 
 // localStorage cache helpers
@@ -152,7 +222,7 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
   const [loadingPlaylists, setLoadingPlaylists] = useState(true);
   const [loadingRecent, setLoadingRecent] = useState(true);
   const [expandedPlaylists, setExpandedPlaylists] = useState<Set<string>>(new Set());
-  const [activeVideo, setActiveVideo] = useState<{ videoId: string; title: string; playlistTitle: string } | null>(null);
+  const [activeVideo, setActiveVideo] = useState<{ videoId: string; title: string; playlistTitle: string; publishedAt?: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<string>("recent");
@@ -491,8 +561,8 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
     });
   };
 
-  const selectVideo = (videoId: string, title: string, playlistTitle: string) => {
-    setActiveVideo({ videoId, title, playlistTitle });
+  const selectVideo = (videoId: string, title: string, playlistTitle: string, publishedAt?: string) => {
+    setActiveVideo({ videoId, title, playlistTitle, publishedAt });
   };
 
   // Filter
@@ -573,6 +643,15 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
             {activeVideo && (
               <div className="max-w-[900px] mb-4">
                 <h2 className="text-base font-bold text-gray-900 leading-tight">{activeVideo.title}</h2>
+                {activeVideo.publishedAt && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <Globe className="w-3.5 h-3.5 text-gray-400" />
+                    <span className="text-sm font-semibold text-gray-600">{timeAgoLarge(activeVideo.publishedAt)}</span>
+                    <span className="text-xs text-gray-400">
+                      ({new Date(activeVideo.publishedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })})
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <span className="text-xs text-gray-500">{activeVideo.playlistTitle}</span>
                   {trackerInfo?.video_edit_status && (
@@ -715,38 +794,47 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
                   <p className="text-center text-gray-400 py-12 text-sm">No videos found</p>
                 ) : (
                   <>
-                    {filteredRecentVideos.map(v => (
-                      <button
-                        key={v.videoId}
-                        onClick={() => selectVideo(v.videoId, v.title, 'Recent Upload')}
-                        className={cn(
-                          "w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-100 text-left border-b border-gray-100",
-                          activeVideo?.videoId === v.videoId && "bg-blue-50"
-                        )}
-                      >
-                        <div className="w-28 h-16 bg-gray-200 rounded overflow-hidden shrink-0 relative">
-                          {v.thumbnailUrl ? (
-                            <img src={v.thumbnailUrl} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <Play className="w-4 h-4 text-gray-400" />
-                            </div>
-                          )}
-                          {activeVideo?.videoId === v.videoId && (
-                            <div className="absolute inset-0 bg-blue-600/30 flex items-center justify-center">
-                              <Play className="w-5 h-5 text-white" />
-                            </div>
-                          )}
+                    {groupVideosByDate(filteredRecentVideos).map(group => (
+                      <div key={group.dateKey}>
+                        {/* Date section header */}
+                        <div className="sticky top-0 z-10 bg-gray-100 border-b border-gray-200 px-4 py-2">
+                          <p className="text-sm font-bold text-gray-800">{group.dateHeader}</p>
+                          <p className="text-[11px] text-gray-500 font-medium">{group.dayLabel}</p>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-gray-900 line-clamp-2">{v.title}</p>
-                          {v.publishedAt && (
-                            <p className="text-[10px] text-gray-400 mt-0.5">
-                              {timeAgo(v.publishedAt)}
-                            </p>
-                          )}
-                        </div>
-                      </button>
+                        {group.videos.map(v => (
+                          <button
+                            key={v.videoId}
+                            onClick={() => selectVideo(v.videoId, v.title, 'Recent Upload', v.publishedAt)}
+                            className={cn(
+                              "w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-100 text-left border-b border-gray-100",
+                              activeVideo?.videoId === v.videoId && "bg-blue-50"
+                            )}
+                          >
+                            <div className="w-28 h-16 bg-gray-200 rounded overflow-hidden shrink-0 relative">
+                              {v.thumbnailUrl ? (
+                                <img src={v.thumbnailUrl} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <Play className="w-4 h-4 text-gray-400" />
+                                </div>
+                              )}
+                              {activeVideo?.videoId === v.videoId && (
+                                <div className="absolute inset-0 bg-blue-600/30 flex items-center justify-center">
+                                  <Play className="w-5 h-5 text-white" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-gray-900 line-clamp-2">{v.title}</p>
+                              {v.publishedAt && (
+                                <p className="text-[11px] text-gray-500 mt-0.5 font-medium">
+                                  {timeAgo(v.publishedAt)}
+                                </p>
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
                     ))}
                     {loadingMoreRecent && (
                       <div className="flex items-center justify-center py-4">
