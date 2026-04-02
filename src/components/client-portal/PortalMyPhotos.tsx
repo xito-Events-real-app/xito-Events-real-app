@@ -301,19 +301,19 @@ const PortalMyPhotos = ({
 
         {isLoadingPhotos ? (
           <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <span className="ml-3 text-white/50">Loading photos...</span>
+            <Loader2 className="h-8 w-8 animate-spin text-[hsl(350,80%,65%)]" />
+            <span className="ml-3 text-gray-400">Loading photos...</span>
           </div>
         ) : photos.length === 0 ? (
-          <Card className="bg-white/5 border-white/10">
-            <CardContent className="p-8 text-center text-white/40">
+          <Card className="bg-gray-50 border-gray-200">
+            <CardContent className="p-8 text-center text-gray-400">
               <ImageIcon className="h-10 w-10 mx-auto mb-3 opacity-50" />
               <p>No photos in this folder yet.</p>
             </CardContent>
           </Card>
         ) : (
           <>
-            <div className="text-sm text-white/50 mb-2">{photos.length} photos</div>
+            <div className="text-sm text-gray-500 mb-2">{photos.length} photos</div>
             <div className="grid grid-cols-3 gap-1">
               {photos.map((file, idx) => {
                 const url = photoUrls[file.key];
