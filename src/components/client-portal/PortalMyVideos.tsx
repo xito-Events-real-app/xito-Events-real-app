@@ -52,12 +52,19 @@ const PortalMyVideos = ({ clientName, brideFullName, groomFullName }: PortalMyVi
         const brideFirst = (brideFullName || "").split(" ")[0]?.toLowerCase();
         const groomFirst = (groomFullName || "").split(" ")[0]?.toLowerCase();
 
+        // Fuzzy match: use first 4 chars to handle minor spelling variations
+        const fuzzyMatch = (haystack: string, needle: string) => {
+          if (!needle || needle.length < 3) return false;
+          if (haystack.includes(needle)) return true;
+          // Try prefix match (first 4 chars)
+          const prefix = needle.slice(0, Math.min(4, needle.length));
+          return haystack.includes(prefix);
+        };
+
         // Match playlist containing both bride and groom first names
         const matched = playlists.find((p) => {
           const t = p.title.toLowerCase();
-          const hasBride = brideFirst ? t.includes(brideFirst) : false;
-          const hasGroom = groomFirst ? t.includes(groomFirst) : false;
-          return hasBride && hasGroom;
+          return fuzzyMatch(t, brideFirst) && fuzzyMatch(t, groomFirst);
         });
 
         if (!matched) {
