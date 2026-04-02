@@ -1,0 +1,1 @@
+ALTER TABLE public.video_edit_tracker ADD COLUMN youtube_link text NOT NULL DEFAULT '';

@@ -1301,6 +1301,7 @@ export type Database = {
           updated_at: string | null
           urgency: string | null
           video_edit_status: string | null
+          youtube_link: string
         }
         Insert: {
           client_demand?: string | null
@@ -1332,6 +1333,7 @@ export type Database = {
           updated_at?: string | null
           urgency?: string | null
           video_edit_status?: string | null
+          youtube_link?: string
         }
         Update: {
           client_demand?: string | null
@@ -1363,6 +1365,7 @@ export type Database = {
           updated_at?: string | null
           urgency?: string | null
           video_edit_status?: string | null
+          youtube_link?: string
         }
         Relationships: []
       }
