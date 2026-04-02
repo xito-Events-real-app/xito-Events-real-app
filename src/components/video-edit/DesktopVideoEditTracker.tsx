@@ -414,6 +414,7 @@ function VideoEditTable({
             <TableHead className="w-28">Deadline</TableHead>
             <TableHead className="w-12 text-center">Notes</TableHead>
             <TableHead className="w-12 text-center">Songs</TableHead>
+            <TableHead className="w-12 text-center">YT</TableHead>
             <TableHead className="w-32 text-center">Action</TableHead>
           </TableRow>
         </TableHeader>
