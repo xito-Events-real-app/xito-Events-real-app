@@ -26,6 +26,7 @@ export function DesktopSuiteLanding() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedStarHandler, setSelectedStarHandler] = useState<string | null>(null);
   const [showAllClients, setShowAllClients] = useState(false);
+  const [showYouTube, setShowYouTube] = useState(false);
 
   const handleRefreshNews = async () => {
     setIsRefreshing(true);
