@@ -788,7 +788,7 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
                     {filteredRecentVideos.map(v => (
                       <button
                         key={v.videoId}
-                        onClick={() => selectVideo(v.videoId, v.title, 'Recent Upload')}
+                        onClick={() => selectVideo(v.videoId, v.title, 'Recent Upload', v.publishedAt)}
                         className={cn(
                           "w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-100 text-left border-b border-gray-100",
                           activeVideo?.videoId === v.videoId && "bg-blue-50"
