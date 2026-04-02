@@ -633,7 +633,7 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
 
             {/* Comments Section */}
             {activeVideo && (
-              <div className="max-w-[720px] flex-1 min-h-0 flex flex-col bg-gray-50 border border-gray-200 rounded-xl p-4">
+              <div className="max-w-[900px] flex-1 min-h-0 flex flex-col bg-gray-50 border border-gray-200 rounded-xl p-4">
                 <h3 className="text-sm font-bold mb-3 text-gray-600">
                   Company Review ({comments.length})
                 </h3>
