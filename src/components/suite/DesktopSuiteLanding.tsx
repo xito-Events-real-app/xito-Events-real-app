@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Smartphone, LogOut, Newspaper, RefreshCw, Search } from "lucide-react";
+import { Smartphone, LogOut, Newspaper, RefreshCw, Search, Youtube } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useDesktopMode } from "@/hooks/useDesktopMode";
@@ -14,6 +14,7 @@ import { SuiteQuickActionsBar } from "./SuiteQuickActionsBar";
 import { SuiteDashboardContent } from "./SuiteDashboardContent";
 import { AllClientsAnnouncementDialog } from "./AllClientsAnnouncementDialog";
 import { useSaugatSearch } from "@/contexts/SaugatSearchContext";
+import { YouTubeUploadDialog } from "./YouTubeUploadDialog";
 
 export function DesktopSuiteLanding() {
   const navigate = useNavigate();
