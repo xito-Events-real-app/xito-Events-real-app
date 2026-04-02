@@ -321,7 +321,7 @@ const PortalMyPhotos = ({
                 return (
                   <div
                     key={file.key}
-                    className="aspect-square rounded-sm overflow-hidden bg-white/5 relative group"
+                    className="aspect-square rounded-sm overflow-hidden bg-gray-100 relative group"
                   >
                     <button
                       onClick={() => url && setViewerIndex(idx)}
@@ -331,7 +331,7 @@ const PortalMyPhotos = ({
                         <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
-                          <Loader2 className="h-4 w-4 animate-spin text-white/30" />
+                          <Loader2 className="h-4 w-4 animate-spin text-gray-300" />
                         </div>
                       )}
                     </button>
