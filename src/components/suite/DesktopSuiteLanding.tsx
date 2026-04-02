@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Smartphone, LogOut, Newspaper, RefreshCw, Search } from "lucide-react";
+import { Smartphone, LogOut, Newspaper, RefreshCw, Search, Youtube } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useDesktopMode } from "@/hooks/useDesktopMode";
@@ -14,6 +14,7 @@ import { SuiteQuickActionsBar } from "./SuiteQuickActionsBar";
 import { SuiteDashboardContent } from "./SuiteDashboardContent";
 import { AllClientsAnnouncementDialog } from "./AllClientsAnnouncementDialog";
 import { useSaugatSearch } from "@/contexts/SaugatSearchContext";
+import { YouTubeUploadDialog } from "./YouTubeUploadDialog";
 
 export function DesktopSuiteLanding() {
   const navigate = useNavigate();
@@ -25,6 +26,7 @@ export function DesktopSuiteLanding() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedStarHandler, setSelectedStarHandler] = useState<string | null>(null);
   const [showAllClients, setShowAllClients] = useState(false);
+  const [showYouTube, setShowYouTube] = useState(false);
 
   const handleRefreshNews = async () => {
     setIsRefreshing(true);
@@ -53,6 +55,7 @@ export function DesktopSuiteLanding() {
   return (
     <div className="min-h-screen bg-gray-50 flex w-full">
       <AllClientsAnnouncementDialog onNavigate={() => setShowAllClients(true)} />
+      <YouTubeUploadDialog open={showYouTube} onOpenChange={setShowYouTube} />
       {/* Left Sidebar - Module Navigation */}
       <SuiteLeftSidebar 
         onSelectStarHandler={(h) => { setSelectedStarHandler(h || null); setShowAllClients(false); }}
@@ -84,6 +87,22 @@ export function DesktopSuiteLanding() {
 
             {/* Right side actions */}
             <div className="flex items-center gap-2">
+              {/* YouTube Upload Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowYouTube(true)}
+                className="gap-2"
+                style={{
+                  background: '#CC0000',
+                  color: '#fff',
+                  borderColor: '#CC0000',
+                }}
+              >
+                <Youtube className="w-4 h-4" />
+                YouTube
+              </Button>
+
               {/* Saugat Search Button */}
               <Button
                 variant="outline"

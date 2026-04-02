@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Video, MessageSquare, Music, ExternalLink, ChevronDown, ChevronRight, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, FolderOpen, LayoutDashboard, List, GitBranch, Users, RefreshCcw, CheckCircle, Play, Pause, Clock, Phone, ArrowRight, CalendarIcon, AlertTriangle, Timer, Search } from "lucide-react";
+import { Video, MessageSquare, Music, ExternalLink, ChevronDown, ChevronRight, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, FolderOpen, LayoutDashboard, List, GitBranch, Users, RefreshCcw, CheckCircle, Play, Pause, Clock, Phone, ArrowRight, CalendarIcon, AlertTriangle, Timer, Search, Youtube } from "lucide-react";
 import { WtnPipelineView } from "./WtnPipelineView";
 import { FileDetailsExpander } from "./FileDetailsExpander";
 import { supabase } from "@/integrations/supabase/client";
@@ -414,13 +414,14 @@ function VideoEditTable({
             <TableHead className="w-28">Deadline</TableHead>
             <TableHead className="w-12 text-center">Notes</TableHead>
             <TableHead className="w-12 text-center">Songs</TableHead>
+            <TableHead className="w-12 text-center">YT</TableHead>
             <TableHead className="w-32 text-center">Action</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={COLORIST_STAGES.has(currentStageKey) ? 16 : 15} className="text-center py-12 text-muted-foreground">
+              <TableCell colSpan={COLORIST_STAGES.has(currentStageKey) ? 17 : 16} className="text-center py-12 text-muted-foreground">
                 No rows found
               </TableCell>
             </TableRow>
@@ -618,6 +619,15 @@ function VideoEditTable({
                 <SongsCell songs={row.songs} />
               </TableCell>
               <TableCell className="text-center">
+                {row.youtubeLink ? (
+                  <a href={row.youtubeLink} target="_blank" rel="noopener noreferrer" className="text-red-600 hover:text-red-500">
+                    <Youtube className="w-4 h-4" />
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground">-</span>
+                )}
+              </TableCell>
+              <TableCell className="text-center">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
@@ -636,7 +646,7 @@ function VideoEditTable({
             </TableRow>
             {isExpanded && (
               <TableRow>
-                <TableCell colSpan={15} className="p-0 bg-muted/20 border-b-2 border-primary/20">
+                <TableCell colSpan={17} className="p-0 bg-muted/20 border-b-2 border-primary/20">
                   <FileDetailsExpander
                     registeredDateTimeAD={row.registeredDateTimeAD}
                     eventName={row.eventName}

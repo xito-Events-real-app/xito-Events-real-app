@@ -18,3 +18,4 @@ export { SuiteBenzoKeepSection } from './SuiteBenzoKeepSection';
 export { UnassignedBenzoKeepDialog } from './UnassignedBenzoKeepDialog';
 export { AssignNoteDialog } from './AssignNoteDialog';
 export { BenzoKeepNotepadDialog } from './BenzoKeepNotepadDialog';
+export { YouTubeUploadDialog } from './YouTubeUploadDialog';

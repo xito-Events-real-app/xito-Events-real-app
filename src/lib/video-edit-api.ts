@@ -28,6 +28,7 @@ export interface VideoEditRow {
   editStartedAt: string;
   deadline: string;
   stageHistory: string;
+  youtubeLink: string;
 }
 
 const VIDEO_DELIVERABLE_SECTIONS = ["video", "videos"] as const;
@@ -176,6 +177,7 @@ function dbToRow(r: any): VideoEditRow {
     editStartedAt: r.edit_started_at || "",
     deadline: r.deadline || "",
     stageHistory: r.stage_history || "",
+    youtubeLink: r.youtube_link || "",
   };
 }
 
