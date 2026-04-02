@@ -114,12 +114,15 @@ const STAGE_COLORS: Record<string, string> = {
 export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { jobs, activeCount } = useYouTubeUploadContext();
   const [playlists, setPlaylists] = useState<PlaylistWithVideos[]>([]);
+  const [recentVideos, setRecentVideos] = useState<RecentVideo[]>([]);
   const [loadingPlaylists, setLoadingPlaylists] = useState(true);
+  const [loadingRecent, setLoadingRecent] = useState(true);
   const [expandedPlaylists, setExpandedPlaylists] = useState<Set<string>>(new Set());
   const [activeVideo, setActiveVideo] = useState<{ videoId: string; title: string; playlistTitle: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<string>("recent");
+  const [allTrackerRows, setAllTrackerRows] = useState<TrackerRow[]>([]);
 
   // Stats
   const [todayUploaded, setTodayUploaded] = useState(0);
