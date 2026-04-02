@@ -233,6 +233,7 @@ const PortalMyPhotos = ({
       if (imageFiles.length > 0) {
         const urls = await getE2FileUrls(imageFiles.map(f => f.key));
         urlCache[tab.id] = urls;
+        cacheUrls(urls);
         setPhotoUrls(urls);
       }
       setIsLoadingPhotos(false);

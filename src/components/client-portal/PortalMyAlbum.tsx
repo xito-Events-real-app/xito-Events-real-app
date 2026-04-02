@@ -74,10 +74,24 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
       setPhotoUrls({});
       return;
     }
-    setLoadingUrls(true);
     const keys = albumPhotos.map(p => p.photo_key);
-    getE2FileUrls(keys)
-      .then(urls => setPhotoUrls(urls))
+    const { hits, missingKeys } = lookupUrls(keys);
+
+    // If everything is already cached, show instantly
+    if (missingKeys.length === 0) {
+      setPhotoUrls(hits);
+      setLoadingUrls(false);
+      return;
+    }
+
+    // Show cached hits immediately, fetch only missing
+    setPhotoUrls(hits);
+    setLoadingUrls(true);
+    getE2FileUrls(missingKeys)
+      .then(urls => {
+        cacheUrls(urls);
+        setPhotoUrls(prev => ({ ...prev, ...urls }));
+      })
       .catch(() => {})
       .finally(() => setLoadingUrls(false));
   }, [albumPhotos]);
