@@ -1471,6 +1471,47 @@ export type Database = {
         }
         Relationships: []
       }
+      youtube_video_comments: {
+        Row: {
+          author: string
+          comment: string
+          created_at: string | null
+          id: string
+          playlist_id: string | null
+          tracker_row_id: string | null
+          updated_at: string | null
+          video_id: string
+        }
+        Insert: {
+          author: string
+          comment: string
+          created_at?: string | null
+          id?: string
+          playlist_id?: string | null
+          tracker_row_id?: string | null
+          updated_at?: string | null
+          video_id: string
+        }
+        Update: {
+          author?: string
+          comment?: string
+          created_at?: string | null
+          id?: string
+          playlist_id?: string | null
+          tracker_row_id?: string | null
+          updated_at?: string | null
+          video_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "youtube_video_comments_tracker_row_id_fkey"
+            columns: ["tracker_row_id"]
+            isOneToOne: false
+            referencedRelation: "video_edit_tracker"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
