@@ -4,10 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
-import { Youtube, Upload, CheckCircle } from "lucide-react";
+import { Youtube, Upload, Plus, ImageIcon, ListVideo } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useYouTubeUploadContext } from "@/contexts/YouTubeUploadContext";
 
 const STAGE_ORDER: Record<string, number> = {
   EXPORTED: 1,
@@ -34,20 +34,35 @@ interface TrackerRow {
   updated_at: string;
 }
 
+interface Playlist {
+  id: string;
+  title: string;
+}
+
 export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const { startUpload } = useYouTubeUploadContext();
   const [trackerRows, setTrackerRows] = useState<TrackerRow[]>([]);
   const [selectedClient, setSelectedClient] = useState("");
   const [selectedEvent, setSelectedEvent] = useState("");
   const [selectedEditType, setSelectedEditType] = useState("");
   const [title, setTitle] = useState("");
   const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [done, setDone] = useState(false);
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState("");
+  const [newPlaylistName, setNewPlaylistName] = useState("");
+  const [showNewPlaylist, setShowNewPlaylist] = useState(false);
+  const [creatingPlaylist, setCreatingPlaylist] = useState(false);
+  const [loadingPlaylists, setLoadingPlaylists] = useState(false);
+  const [defaultsApplied, setDefaultsApplied] = useState(false);
 
-  // Load tracker rows
+  // Load tracker rows & playlists on open
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setDefaultsApplied(false);
+      return;
+    }
     (async () => {
       const { data } = await supabase
         .from("video_edit_tracker")
@@ -55,7 +70,22 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
         .eq("deleted", false);
       setTrackerRows(data || []);
     })();
+    loadPlaylists();
   }, [open]);
+
+  const loadPlaylists = async () => {
+    setLoadingPlaylists(true);
+    try {
+      const { data } = await supabase.functions.invoke("youtube-upload", {
+        body: { action: "listPlaylists" },
+      });
+      if (data?.playlists) setPlaylists(data.playlists);
+    } catch {
+      console.warn("Failed to load playlists");
+    } finally {
+      setLoadingPlaylists(false);
+    }
+  };
 
   // Sorted unique clients
   const sortedClients = useMemo(() => {
@@ -71,6 +101,29 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
       .filter(c => c.name)
       .sort((a, b) => a.bestOrder - b.bestOrder || b.latestUpdate.localeCompare(a.latestUpdate));
   }, [trackerRows]);
+
+  // Apply smart defaults on first load
+  useEffect(() => {
+    if (defaultsApplied || sortedClients.length === 0 || !open) return;
+    setDefaultsApplied(true);
+
+    const topClient = sortedClients[0];
+    setSelectedClient(topClient.name);
+
+    // Find the most recently exported event for this client
+    const clientRows = trackerRows.filter(r => r.client_name === topClient.name);
+    const exportedRows = clientRows.filter(r => r.video_edit_status?.toUpperCase() === 'EXPORTED');
+    const bestRow = exportedRows.length > 0
+      ? exportedRows.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''))[0]
+      : clientRows[0];
+
+    if (bestRow?.event_name) setSelectedEvent(bestRow.event_name);
+
+    // Default to Highlights
+    const eventRows = clientRows.filter(r => r.event_name === bestRow?.event_name);
+    const hasHighlights = eventRows.some(r => r.edit_type === "Highlights");
+    setSelectedEditType(hasHighlights ? "Highlights" : (eventRows[0]?.edit_type || "Highlights"));
+  }, [sortedClients, trackerRows, defaultsApplied, open]);
 
   const clientEvents = useMemo(() => {
     if (!selectedClient) return [];
@@ -92,7 +145,7 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
     return Array.from(types);
   }, [trackerRows, selectedClient, selectedEvent]);
 
-  // Auto-generate title
+  // Auto-generate title in ALL CAPS
   useEffect(() => {
     if (!selectedClient || !selectedEvent || !selectedEditType) return;
     (async () => {
@@ -106,15 +159,74 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
 
       const bride = (contact?.bride_full_name || "").split(" ")[0] || "";
       const groom = (contact?.groom_full_name || "").split(" ")[0] || selectedClient.split(" ")[0] || "";
-      const eventLabel = selectedEvent === "OVERALL" ? "Overall" : selectedEvent;
+      const eventLabel = selectedEvent === "OVERALL" ? "WEDDING" : selectedEvent;
 
+      let generatedTitle = "";
       if (bride && groom) {
-        setTitle(`${bride} & ${groom} ${eventLabel} ${selectedEditType}`);
+        generatedTitle = `${bride} & ${groom} ${eventLabel} ${selectedEditType} || WEDDING TALES NEPAL`;
       } else if (groom) {
-        setTitle(`${groom} ${eventLabel} ${selectedEditType}`);
+        generatedTitle = `${groom} ${eventLabel} ${selectedEditType} || WEDDING TALES NEPAL`;
+      }
+      setTitle(generatedTitle.toUpperCase());
+
+      // Auto-suggest playlist
+      const playlistSuggestion = bride && groom
+        ? `${bride} & ${groom} WEDDING STORY`
+        : `${groom} WEDDING STORY`;
+      setNewPlaylistName(playlistSuggestion.toUpperCase());
+
+      // Find matching playlist
+      const matchingPlaylist = playlists.find(p =>
+        p.title.toUpperCase().includes(bride.toUpperCase()) &&
+        p.title.toUpperCase().includes(groom.toUpperCase())
+      );
+      if (matchingPlaylist) {
+        setSelectedPlaylistId(matchingPlaylist.id);
+        setShowNewPlaylist(false);
+      } else {
+        setSelectedPlaylistId("__new__");
+        setShowNewPlaylist(true);
       }
     })();
-  }, [selectedClient, selectedEvent, selectedEditType, trackerRows]);
+  }, [selectedClient, selectedEvent, selectedEditType, trackerRows, playlists]);
+
+  // Handle thumbnail preview
+  useEffect(() => {
+    if (!thumbnailFile) {
+      setThumbnailPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(thumbnailFile);
+    setThumbnailPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [thumbnailFile]);
+
+  const matchingTrackerRow = useMemo(() => {
+    return trackerRows.find(
+      r => r.client_name === selectedClient && r.event_name === selectedEvent && r.edit_type === selectedEditType
+    );
+  }, [trackerRows, selectedClient, selectedEvent, selectedEditType]);
+
+  const handleCreatePlaylist = async () => {
+    if (!newPlaylistName.trim()) return;
+    setCreatingPlaylist(true);
+    try {
+      const { data } = await supabase.functions.invoke("youtube-upload", {
+        body: { action: "createPlaylist", playlistTitle: newPlaylistName.trim() },
+      });
+      if (data?.playlistId) {
+        const newPl = { id: data.playlistId, title: newPlaylistName.trim() };
+        setPlaylists(prev => [newPl, ...prev]);
+        setSelectedPlaylistId(data.playlistId);
+        setShowNewPlaylist(false);
+        toast.success("Playlist created!");
+      }
+    } catch (err: any) {
+      toast.error("Failed to create playlist: " + err.message);
+    } finally {
+      setCreatingPlaylist(false);
+    }
+  };
 
   const handleUpload = async () => {
     if (!videoFile || !title) {
@@ -122,163 +234,210 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
       return;
     }
 
-    setUploading(true);
-    setProgress(0);
-    setDone(false);
+    let playlistId = selectedPlaylistId;
+
+    // Auto-create playlist if __new__
+    if (playlistId === "__new__" && newPlaylistName.trim()) {
+      try {
+        const { data } = await supabase.functions.invoke("youtube-upload", {
+          body: { action: "createPlaylist", playlistTitle: newPlaylistName.trim() },
+        });
+        if (data?.playlistId) {
+          playlistId = data.playlistId;
+          setPlaylists(prev => [{ id: data.playlistId, title: newPlaylistName.trim() }, ...prev]);
+          setSelectedPlaylistId(data.playlistId);
+          setShowNewPlaylist(false);
+        }
+      } catch {
+        toast.error("Failed to create playlist, uploading without playlist");
+        playlistId = "";
+      }
+    }
 
     try {
-      const { data: initData, error: initError } = await supabase.functions.invoke("youtube-upload", {
-        body: {
-          title,
-          description: `${title} | Xito Production`,
-          tags: ["wedding", "nepal", "xito"],
-          privacy: "private",
-        },
+      await startUpload({
+        file: videoFile,
+        title,
+        clientName: selectedClient,
+        eventName: selectedEvent,
+        editType: selectedEditType,
+        playlistId: playlistId === "__new__" ? "" : playlistId,
+        playlistTitle: newPlaylistName,
+        thumbnailFile,
+        trackerRowId: matchingTrackerRow?.id || "",
+        privacy: "private",
       });
-
-      if (initError || !initData?.upload_uri) {
-        throw new Error(initData?.error || initError?.message || "Failed to init upload");
-      }
-
-      const uploadUri = initData.upload_uri;
-
-      const xhr = new XMLHttpRequest();
-      xhr.open("PUT", uploadUri);
-      xhr.setRequestHeader("Content-Type", videoFile.type || "video/mp4");
-
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          setProgress(Math.round((e.loaded / e.total) * 100));
-        }
-      };
-
-      const uploadResult = await new Promise<any>((resolve, reject) => {
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve(JSON.parse(xhr.responseText));
-          } else {
-            reject(new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`));
-          }
-        };
-        xhr.onerror = () => reject(new Error("Network error during upload"));
-        xhr.send(videoFile);
-      });
-
-      const videoId = uploadResult.id;
-      const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
-
-      const matchRow = trackerRows.find(
-        r => r.client_name === selectedClient && r.event_name === selectedEvent && r.edit_type === selectedEditType
-      );
-      if (matchRow) {
-        await supabase
-          .from("video_edit_tracker")
-          .update({ youtube_link: youtubeUrl, updated_at: new Date().toISOString() })
-          .eq("id", matchRow.id);
-      }
-
-      setDone(true);
-      toast.success("Video uploaded to YouTube!");
+      toast.success("Upload started! Track progress in the bottom-right panel.");
+      onOpenChange(false);
     } catch (err: any) {
       toast.error("Upload failed: " + err.message);
-    } finally {
-      setUploading(false);
     }
   };
 
+  // Sorted playlists with matching ones first
+  const sortedPlaylists = useMemo(() => {
+    if (!selectedClient) return playlists;
+    const clientFirst = selectedClient.split(" ")[0]?.toUpperCase() || "";
+    return [...playlists].sort((a, b) => {
+      const aMatch = a.title.toUpperCase().includes(clientFirst) ? 0 : 1;
+      const bMatch = b.title.toUpperCase().includes(clientFirst) ? 0 : 1;
+      return aMatch - bMatch;
+    });
+  }, [playlists, selectedClient]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-2xl bg-[#0f0f0f] border-red-500/20 text-white [&>button]:text-white">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Youtube className="w-5 h-5 text-red-600" />
+          <DialogTitle className="flex items-center gap-2 text-white">
+            <Youtube className="w-6 h-6 text-red-500" />
             Upload to YouTube
           </DialogTitle>
-          <DialogDescription>Select a client, event, and video file — uploads go directly to your channel</DialogDescription>
+          <DialogDescription className="text-gray-400">
+            Select client, event, and video — uploads go directly to your channel
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
           {/* Client selector */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium">Client</Label>
+            <Label className="text-xs font-medium text-gray-300">Client</Label>
             <Select value={selectedClient} onValueChange={(v) => { setSelectedClient(v); setSelectedEvent(""); setSelectedEditType(""); }}>
-              <SelectTrigger className="h-9"><SelectValue placeholder="Select client..." /></SelectTrigger>
-              <SelectContent className="max-h-60">
+              <SelectTrigger className="h-9 bg-[#1a1a1a] border-gray-700 text-white"><SelectValue placeholder="Select client..." /></SelectTrigger>
+              <SelectContent className="max-h-60 bg-[#1a1a1a] border-gray-700">
                 {sortedClients.map(c => (
-                  <SelectItem key={c.name} value={c.name}>
-                    <span className={c.bestOrder === 1 ? "font-bold text-amber-600" : ""}>{c.name}</span>
-                    {c.bestOrder === 1 && <span className="ml-2 text-[10px] text-amber-500">EXPORTED</span>}
+                  <SelectItem key={c.name} value={c.name} className="text-white hover:bg-red-500/10">
+                    <span className={c.bestOrder === 1 ? "font-bold text-red-400" : ""}>{c.name}</span>
+                    {c.bestOrder === 1 && <span className="ml-2 text-[10px] text-red-400">EXPORTED</span>}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          {selectedClient && (
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Event</Label>
-              <Select value={selectedEvent} onValueChange={(v) => { setSelectedEvent(v); setSelectedEditType(""); }}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="Select event..." /></SelectTrigger>
-                <SelectContent>
-                  {clientEvents.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          {/* Event + Edit Type row */}
+          <div className="grid grid-cols-2 gap-3">
+            {selectedClient && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-gray-300">Event</Label>
+                <Select value={selectedEvent} onValueChange={(v) => { setSelectedEvent(v); setSelectedEditType(""); }}>
+                  <SelectTrigger className="h-9 bg-[#1a1a1a] border-gray-700 text-white"><SelectValue placeholder="Event..." /></SelectTrigger>
+                  <SelectContent className="bg-[#1a1a1a] border-gray-700">
+                    {clientEvents.map(e => <SelectItem key={e} value={e} className="text-white hover:bg-red-500/10">{e}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
-          {selectedEvent && (
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Edit Type</Label>
-              <Select value={selectedEditType} onValueChange={setSelectedEditType}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="Select edit type..." /></SelectTrigger>
-                <SelectContent>
-                  {editTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">Video Title</Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Anjali & Shakti Wedding Full Video" />
+            {selectedEvent && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-gray-300">Edit Type</Label>
+                <Select value={selectedEditType} onValueChange={setSelectedEditType}>
+                  <SelectTrigger className="h-9 bg-[#1a1a1a] border-gray-700 text-white"><SelectValue placeholder="Type..." /></SelectTrigger>
+                  <SelectContent className="bg-[#1a1a1a] border-gray-700">
+                    {editTypes.map(t => <SelectItem key={t} value={t} className="text-white hover:bg-red-500/10">{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
+          {/* Video Title */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium">Video File</Label>
+            <Label className="text-xs font-medium text-gray-300">Video Title</Label>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="VIDEO TITLE"
+              className="bg-[#1a1a1a] border-gray-700 text-white uppercase font-semibold"
+            />
+          </div>
+
+          {/* Playlist section */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-gray-300 flex items-center gap-1.5">
+              <ListVideo className="h-3.5 w-3.5" /> Playlist
+            </Label>
+            <Select value={selectedPlaylistId} onValueChange={(v) => {
+              setSelectedPlaylistId(v);
+              setShowNewPlaylist(v === "__new__");
+            }}>
+              <SelectTrigger className="h-9 bg-[#1a1a1a] border-gray-700 text-white">
+                <SelectValue placeholder={loadingPlaylists ? "Loading..." : "Select playlist..."} />
+              </SelectTrigger>
+              <SelectContent className="max-h-60 bg-[#1a1a1a] border-gray-700">
+                <SelectItem value="__none__" className="text-gray-400 hover:bg-red-500/10">No playlist</SelectItem>
+                <SelectItem value="__new__" className="text-red-400 hover:bg-red-500/10">
+                  <span className="flex items-center gap-1"><Plus className="h-3 w-3" /> Create new playlist</span>
+                </SelectItem>
+                {sortedPlaylists.map(p => (
+                  <SelectItem key={p.id} value={p.id} className="text-white hover:bg-red-500/10">{p.title}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {showNewPlaylist && (
+              <div className="flex gap-2 mt-1.5">
+                <Input
+                  value={newPlaylistName}
+                  onChange={(e) => setNewPlaylistName(e.target.value)}
+                  placeholder="PLAYLIST NAME"
+                  className="bg-[#1a1a1a] border-gray-700 text-white uppercase font-semibold flex-1"
+                />
+                <Button
+                  size="sm"
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                  onClick={handleCreatePlaylist}
+                  disabled={creatingPlaylist || !newPlaylistName.trim()}
+                >
+                  {creatingPlaylist ? "Creating..." : "Create"}
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Video File */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-gray-300">Video File</Label>
             <Input
               type="file"
               accept="video/mp4,video/quicktime,video/x-msvideo,.mp4,.mov,.avi"
               onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
-              className="h-auto py-2"
+              className="h-auto py-2 bg-[#1a1a1a] border-gray-700 text-white file:text-white file:bg-red-600 file:border-0 file:rounded file:px-3 file:py-1 file:mr-3 file:cursor-pointer"
             />
             {videoFile && (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-gray-400">
                 {videoFile.name} — {(videoFile.size / (1024 * 1024 * 1024)).toFixed(2)} GB
               </p>
             )}
           </div>
 
-          {uploading && (
-            <div className="space-y-2">
-              <Progress value={progress} />
-              <p className="text-xs text-muted-foreground text-center">{progress}% uploaded</p>
-            </div>
-          )}
+          {/* Thumbnail */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-gray-300 flex items-center gap-1.5">
+              <ImageIcon className="h-3.5 w-3.5" /> Thumbnail (optional)
+            </Label>
+            <Input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(e) => setThumbnailFile(e.target.files?.[0] || null)}
+              className="h-auto py-2 bg-[#1a1a1a] border-gray-700 text-white file:text-white file:bg-gray-700 file:border-0 file:rounded file:px-3 file:py-1 file:mr-3 file:cursor-pointer"
+            />
+            {thumbnailPreview && (
+              <div className="mt-1.5">
+                <img src={thumbnailPreview} alt="Thumbnail preview" className="h-20 rounded-lg border border-gray-700 object-cover" />
+              </div>
+            )}
+          </div>
 
-          {done && (
-            <div className="flex items-center gap-2 text-green-600 text-sm font-medium">
-              <CheckCircle className="w-4 h-4" />
-              Upload complete!
-            </div>
-          )}
-
+          {/* Upload Button */}
           <Button
-            className="w-full gap-2"
+            className="w-full gap-2 bg-red-600 hover:bg-red-700 text-white font-bold text-base py-5"
             onClick={handleUpload}
-            disabled={uploading || !videoFile || !title}
+            disabled={!videoFile || !title}
           >
-            <Upload className="w-4 h-4" />
-            {uploading ? "Uploading..." : "Upload to YouTube"}
+            <Upload className="w-5 h-5" />
+            Upload to YouTube
           </Button>
         </div>
       </DialogContent>
