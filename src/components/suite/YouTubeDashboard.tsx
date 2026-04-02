@@ -571,7 +571,7 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
 
             {/* Video Details */}
             {activeVideo && (
-              <div className="max-w-[720px] mb-4">
+              <div className="max-w-[900px] mb-4">
                 <h2 className="text-base font-bold text-gray-900 leading-tight">{activeVideo.title}</h2>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <span className="text-xs text-gray-500">{activeVideo.playlistTitle}</span>
