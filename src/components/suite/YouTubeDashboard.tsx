@@ -28,6 +28,13 @@ interface PlaylistVideo {
   position: number;
 }
 
+interface RecentVideo {
+  videoId: string;
+  title: string;
+  thumbnailUrl: string;
+  publishedAt: string;
+}
+
 interface PlaylistWithVideos extends PlaylistInfo {
   videos: PlaylistVideo[];
   loading: boolean;
