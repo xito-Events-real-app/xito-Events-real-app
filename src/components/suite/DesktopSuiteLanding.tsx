@@ -14,7 +14,7 @@ import { SuiteQuickActionsBar } from "./SuiteQuickActionsBar";
 import { SuiteDashboardContent } from "./SuiteDashboardContent";
 import { AllClientsAnnouncementDialog } from "./AllClientsAnnouncementDialog";
 import { useSaugatSearch } from "@/contexts/SaugatSearchContext";
-import { YouTubeUploadDialog } from "./YouTubeUploadDialog";
+import { YouTubeDashboard } from "./YouTubeDashboard";
 
 export function DesktopSuiteLanding() {
   const navigate = useNavigate();
