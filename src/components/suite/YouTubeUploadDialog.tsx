@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { Youtube, Upload, CheckCircle, AlertTriangle, LogIn } from "lucide-react";
+import { Youtube, Upload, CheckCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -22,8 +22,6 @@ const STAGE_ORDER: Record<string, number> = {
   QUEUE: 10,
   FINALIZED: 11,
 };
-
-const REFRESH_TOKEN_KEY = "yt_refresh_token";
 
 interface TrackerRow {
   id: string;
@@ -46,8 +44,6 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [done, setDone] = useState(false);
-  const [refreshToken, setRefreshToken] = useState(localStorage.getItem(REFRESH_TOKEN_KEY) || "");
-  const [authUrl, setAuthUrl] = useState("");
 
   // Load tracker rows
   useEffect(() => {
@@ -61,7 +57,7 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
     })();
   }, [open]);
 
-  // Sorted unique clients — EXPORTED first, FINALIZED last
+  // Sorted unique clients
   const sortedClients = useMemo(() => {
     const clientMap = new Map<string, { name: string; bestOrder: number; latestUpdate: string }>();
     for (const r of trackerRows) {
@@ -76,7 +72,6 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
       .sort((a, b) => a.bestOrder - b.bestOrder || b.latestUpdate.localeCompare(a.latestUpdate));
   }, [trackerRows]);
 
-  // Events for selected client
   const clientEvents = useMemo(() => {
     if (!selectedClient) return [];
     const events = new Set<string>();
@@ -86,7 +81,6 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
     return Array.from(events);
   }, [trackerRows, selectedClient]);
 
-  // Edit types for selected client + event
   const editTypes = useMemo(() => {
     if (!selectedClient || !selectedEvent) return [];
     const types = new Set<string>();
@@ -98,7 +92,7 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
     return Array.from(types);
   }, [trackerRows, selectedClient, selectedEvent]);
 
-  // Auto-generate title when selection changes
+  // Auto-generate title
   useEffect(() => {
     if (!selectedClient || !selectedEvent || !selectedEditType) return;
     (async () => {
@@ -112,8 +106,8 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
 
       const bride = (contact?.bride_full_name || "").split(" ")[0] || "";
       const groom = (contact?.groom_full_name || "").split(" ")[0] || selectedClient.split(" ")[0] || "";
-
       const eventLabel = selectedEvent === "OVERALL" ? "Overall" : selectedEvent;
+
       if (bride && groom) {
         setTitle(`${bride} & ${groom} ${eventLabel} ${selectedEditType}`);
       } else if (groom) {
@@ -122,24 +116,9 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
     })();
   }, [selectedClient, selectedEvent, selectedEditType, trackerRows]);
 
-  // Get auth URL
-  const handleGetAuthUrl = useCallback(async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke("youtube-upload", {
-        body: { action: "get_auth_url" },
-      });
-      if (error) throw error;
-      setAuthUrl(data.auth_url);
-      window.open(data.auth_url, "_blank");
-    } catch (err: any) {
-      toast.error("Failed to get auth URL: " + err.message);
-    }
-  }, []);
-
-  // Handle upload
   const handleUpload = async () => {
-    if (!videoFile || !title || !refreshToken) {
-      toast.error("Please fill all fields and authenticate first");
+    if (!videoFile || !title) {
+      toast.error("Please fill all fields and select a video file");
       return;
     }
 
@@ -148,11 +127,8 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
     setDone(false);
 
     try {
-      // Step 1: Get resumable upload URI from edge function
       const { data: initData, error: initError } = await supabase.functions.invoke("youtube-upload", {
         body: {
-          action: "init_upload",
-          refresh_token: refreshToken,
           title,
           description: `${title} | Xito Production`,
           tags: ["wedding", "nepal", "xito"],
@@ -164,9 +140,7 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
         throw new Error(initData?.error || initError?.message || "Failed to init upload");
       }
 
-      // Step 2: Upload file directly to Google's resumable URI
       const uploadUri = initData.upload_uri;
-      const fileSize = videoFile.size;
 
       const xhr = new XMLHttpRequest();
       xhr.open("PUT", uploadUri);
@@ -193,7 +167,6 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
       const videoId = uploadResult.id;
       const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-      // Step 3: Save YouTube link to tracker
       const matchRow = trackerRows.find(
         r => r.client_name === selectedClient && r.event_name === selectedEvent && r.edit_type === selectedEditType
       );
@@ -213,8 +186,6 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
     }
   };
 
-  const isAuthenticated = !!refreshToken;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
@@ -223,35 +194,10 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
             <Youtube className="w-5 h-5 text-red-600" />
             Upload to YouTube
           </DialogTitle>
-          <DialogDescription>Select a client, event, and video file to upload</DialogDescription>
+          <DialogDescription>Select a client, event, and video file — uploads go directly to your channel</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Auth Section */}
-          {!isAuthenticated && (
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
-              <p className="text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4" />
-                YouTube authentication required
-              </p>
-              <Button size="sm" variant="outline" onClick={handleGetAuthUrl} className="gap-2">
-                <LogIn className="w-4 h-4" /> Authenticate with Google
-              </Button>
-              <div className="mt-2">
-                <Label className="text-xs">Paste refresh token after auth:</Label>
-                <Input
-                  placeholder="Refresh token..."
-                  value={refreshToken}
-                  onChange={(e) => {
-                    setRefreshToken(e.target.value);
-                    localStorage.setItem(REFRESH_TOKEN_KEY, e.target.value);
-                  }}
-                  className="h-8 text-xs mt-1"
-                />
-              </div>
-            </div>
-          )}
-
           {/* Client selector */}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium">Client</Label>
@@ -268,7 +214,6 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
             </Select>
           </div>
 
-          {/* Event selector */}
           {selectedClient && (
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">Event</Label>
@@ -281,7 +226,6 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
             </div>
           )}
 
-          {/* Edit type selector */}
           {selectedEvent && (
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">Edit Type</Label>
@@ -294,13 +238,11 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
             </div>
           )}
 
-          {/* Title */}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium">Video Title</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Anjali & Shakti Wedding Full Video" />
           </div>
 
-          {/* File picker */}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium">Video File</Label>
             <Input
@@ -316,7 +258,6 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
             )}
           </div>
 
-          {/* Progress */}
           {uploading && (
             <div className="space-y-2">
               <Progress value={progress} />
@@ -331,11 +272,10 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
             </div>
           )}
 
-          {/* Upload button */}
           <Button
             className="w-full gap-2"
             onClick={handleUpload}
-            disabled={uploading || !videoFile || !title || !isAuthenticated}
+            disabled={uploading || !videoFile || !title}
           >
             <Upload className="w-4 h-4" />
             {uploading ? "Uploading..." : "Upload to YouTube"}
