@@ -706,47 +706,57 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
               </div>
 
               {/* Recent Tab */}
-              <TabsContent value="recent" className="flex-1 overflow-y-auto m-0">
-                {loadingRecent ? (
+              <TabsContent value="recent" className="flex-1 overflow-y-auto m-0" ref={recentScrollRef} onScroll={handleRecentScroll}>
+                {loadingRecent && recentVideos.length === 0 ? (
                   <div className="flex items-center justify-center py-12">
                     <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
                   </div>
                 ) : filteredRecentVideos.length === 0 ? (
                   <p className="text-center text-gray-400 py-12 text-sm">No videos found</p>
                 ) : (
-                  filteredRecentVideos.map(v => (
-                    <button
-                      key={v.videoId}
-                      onClick={() => selectVideo(v.videoId, v.title, 'Recent Upload')}
-                      className={cn(
-                        "w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-100 text-left border-b border-gray-100",
-                        activeVideo?.videoId === v.videoId && "bg-blue-50"
-                      )}
-                    >
-                      <div className="w-24 h-14 bg-gray-200 rounded overflow-hidden shrink-0 relative">
-                        {v.thumbnailUrl ? (
-                          <img src={v.thumbnailUrl} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Play className="w-4 h-4 text-gray-400" />
-                          </div>
+                  <>
+                    {filteredRecentVideos.map(v => (
+                      <button
+                        key={v.videoId}
+                        onClick={() => selectVideo(v.videoId, v.title, 'Recent Upload')}
+                        className={cn(
+                          "w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-100 text-left border-b border-gray-100",
+                          activeVideo?.videoId === v.videoId && "bg-blue-50"
                         )}
-                        {activeVideo?.videoId === v.videoId && (
-                          <div className="absolute inset-0 bg-blue-600/30 flex items-center justify-center">
-                            <Play className="w-5 h-5 text-white" />
-                          </div>
-                        )}
+                      >
+                        <div className="w-28 h-16 bg-gray-200 rounded overflow-hidden shrink-0 relative">
+                          {v.thumbnailUrl ? (
+                            <img src={v.thumbnailUrl} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Play className="w-4 h-4 text-gray-400" />
+                            </div>
+                          )}
+                          {activeVideo?.videoId === v.videoId && (
+                            <div className="absolute inset-0 bg-blue-600/30 flex items-center justify-center">
+                              <Play className="w-5 h-5 text-white" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-gray-900 line-clamp-2">{v.title}</p>
+                          {v.publishedAt && (
+                            <p className="text-[10px] text-gray-400 mt-0.5">
+                              {timeAgo(v.publishedAt)}
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                    {loadingMoreRecent && (
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-gray-900 line-clamp-2">{v.title}</p>
-                        {v.publishedAt && (
-                          <p className="text-[10px] text-gray-400 mt-0.5">
-                            {new Date(v.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </p>
-                        )}
-                      </div>
-                    </button>
-                  ))
+                    )}
+                    {!recentNextPageToken && recentVideos.length > 0 && (
+                      <p className="text-center text-[10px] text-gray-300 py-3">End of results</p>
+                    )}
+                  </>
                 )}
               </TabsContent>
 
