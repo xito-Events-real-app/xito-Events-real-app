@@ -440,6 +440,7 @@ function VideoEditTable({
             <TableHead className="w-12 text-center">Notes</TableHead>
             <TableHead className="w-12 text-center">Songs</TableHead>
             {YT_STAGES.has(currentStageKey) && <TableHead className="w-12 text-center">YT</TableHead>}
+            {REVIEW_STAGES.has(currentStageKey) && <TableHead className="w-40">Company Review</TableHead>}
             <TableHead className="w-32 text-center">Action</TableHead>
           </TableRow>
         </TableHeader>
