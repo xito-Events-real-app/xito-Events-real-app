@@ -102,7 +102,7 @@ const PortalDashboard = ({ clientName, brideFullName, groomFullName, events, ass
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-0.5 tracking-tight">
             {brideFullName && groomFullName
-              ? `${brideFullName} & ${groomFullName}`
+              ? `${brideFullName.split(' ')[0]} & ${groomFullName.split(' ')[0]}`
               : clientName}
           </h1>
           <p className="text-xs text-gray-400">Your wedding journey</p>
