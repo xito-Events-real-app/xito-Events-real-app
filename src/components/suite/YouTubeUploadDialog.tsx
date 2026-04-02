@@ -319,11 +319,11 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
           <div className="grid grid-cols-2 gap-3">
             {selectedClient && (
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-gray-300">Event</Label>
+                <Label className="text-xs font-medium text-gray-600">Event</Label>
                 <Select value={selectedEvent} onValueChange={(v) => { setSelectedEvent(v); setSelectedEditType(""); }}>
-                  <SelectTrigger className="h-9 bg-[#1a1a1a] border-gray-700 text-white"><SelectValue placeholder="Event..." /></SelectTrigger>
-                  <SelectContent className="bg-[#1a1a1a] border-gray-700">
-                    {clientEvents.map(e => <SelectItem key={e} value={e} className="text-white hover:bg-red-500/10">{e}</SelectItem>)}
+                  <SelectTrigger className="h-9 bg-gray-50 border-gray-200 text-gray-900"><SelectValue placeholder="Event..." /></SelectTrigger>
+                  <SelectContent className="bg-white border-gray-200">
+                    {clientEvents.map(e => <SelectItem key={e} value={e} className="text-gray-900 hover:bg-red-50">{e}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -331,11 +331,11 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
 
             {selectedEvent && (
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-gray-300">Edit Type</Label>
+                <Label className="text-xs font-medium text-gray-600">Edit Type</Label>
                 <Select value={selectedEditType} onValueChange={setSelectedEditType}>
-                  <SelectTrigger className="h-9 bg-[#1a1a1a] border-gray-700 text-white"><SelectValue placeholder="Type..." /></SelectTrigger>
-                  <SelectContent className="bg-[#1a1a1a] border-gray-700">
-                    {editTypes.map(t => <SelectItem key={t} value={t} className="text-white hover:bg-red-500/10">{t}</SelectItem>)}
+                  <SelectTrigger className="h-9 bg-gray-50 border-gray-200 text-gray-900"><SelectValue placeholder="Type..." /></SelectTrigger>
+                  <SelectContent className="bg-white border-gray-200">
+                    {editTypes.map(t => <SelectItem key={t} value={t} className="text-gray-900 hover:bg-red-50">{t}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
