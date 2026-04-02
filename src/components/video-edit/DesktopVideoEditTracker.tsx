@@ -97,6 +97,7 @@ const NO_TIMER_STAGES: string[] = [];
 const PROGRESS_STAGES_SET = new Set(['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS', 'COLOR_QUEUE', 'COLOR_LAB', 'EXPORT_QUEUE', 'EXPORTED', 'CLIENT_REVIEW', 'FINALIZED']);
 const COLORIST_STAGES = new Set(['COLOR_QUEUE', 'COLOR_LAB', 'COLOR_ON_PROGRESS', 'EXPORT_QUEUE', 'EXPORTED', 'CLIENT_REVIEW', 'RE_EDIT_ON_PROGRESS', 'FINALIZED']);
 const YT_STAGES = new Set(['EXPORTED', 'CLIENT_REVIEW', 'RE_EDIT_ON_PROGRESS', 'FINALIZED']);
+const REVIEW_STAGES = new Set(['CLIENT_REVIEW']);
 
 function LiveEditTimer({
   editStartedAt,
@@ -387,6 +388,7 @@ function VideoEditTable({
   onUpdateDeadline?: (id: string, deadline: string | null, mergedIds?: string[]) => void;
 }) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [reviewComments, setReviewComments] = useState<Record<string, { author: string; comment: string; created_at: string }[]>>({});
   const toggleExpand = (id: string) => {
     setExpandedRows(prev => {
       const next = new Set(prev);
@@ -394,6 +396,28 @@ function VideoEditTable({
       return next;
     });
   };
+
+  // Load company review comments for CLIENT_REVIEW stage
+  useEffect(() => {
+    if (!REVIEW_STAGES.has(currentStageKey) || rows.length === 0) return;
+    const trackerIds = rows.flatMap(r => r.mergedIds?.length ? r.mergedIds : [r.id]);
+    if (trackerIds.length === 0) return;
+    supabase
+      .from('youtube_video_comments')
+      .select('tracker_row_id, author, comment, created_at')
+      .in('tracker_row_id', trackerIds)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (!data) return;
+        const grouped: Record<string, typeof data> = {};
+        for (const c of data) {
+          const key = c.tracker_row_id || '';
+          if (!grouped[key]) grouped[key] = [];
+          grouped[key].push(c as any);
+        }
+        setReviewComments(grouped);
+      });
+  }, [currentStageKey, rows]);
 
   return (
     <div className="rounded-xl border bg-card overflow-auto">
@@ -416,6 +440,7 @@ function VideoEditTable({
             <TableHead className="w-12 text-center">Notes</TableHead>
             <TableHead className="w-12 text-center">Songs</TableHead>
             {YT_STAGES.has(currentStageKey) && <TableHead className="w-12 text-center">YT</TableHead>}
+            {REVIEW_STAGES.has(currentStageKey) && <TableHead className="w-40">Company Review</TableHead>}
             <TableHead className="w-32 text-center">Action</TableHead>
           </TableRow>
         </TableHeader>
@@ -632,6 +657,42 @@ function VideoEditTable({
                 ) : (
                   <span className="text-muted-foreground">-</span>
                 )}
+              </TableCell>
+              )}
+              {REVIEW_STAGES.has(currentStageKey) && (
+              <TableCell>
+                {(() => {
+                  const ids = row.mergedIds?.length ? row.mergedIds : [row.id];
+                  const allComments = ids.flatMap(id => reviewComments[id] || []);
+                  if (allComments.length === 0) return <span className="text-muted-foreground text-xs">-</span>;
+                  return (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="space-y-0.5 cursor-pointer max-w-[160px]">
+                          {allComments.slice(0, 2).map((c, i) => (
+                            <p key={i} className="text-[10px] truncate">
+                              <span className="font-bold text-primary">{c.author}:</span>{' '}
+                              <span className="text-muted-foreground">{c.comment}</span>
+                            </p>
+                          ))}
+                          {allComments.length > 2 && (
+                            <p className="text-[10px] text-muted-foreground">+{allComments.length - 2} more</p>
+                          )}
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-sm p-3">
+                        <p className="text-xs font-bold mb-2">Company Review</p>
+                        {allComments.map((c, i) => (
+                          <div key={i} className="mb-2">
+                            <span className="text-xs font-bold">{c.author}</span>
+                            <span className="text-[10px] text-muted-foreground ml-2">{new Date(c.created_at).toLocaleString()}</span>
+                            <p className="text-xs">{c.comment}</p>
+                          </div>
+                        ))}
+                      </TooltipContent>
+                    </Tooltip>
+                  );
+                })()}
               </TableCell>
               )}
               <TableCell className="text-center">
