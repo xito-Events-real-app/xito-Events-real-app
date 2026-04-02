@@ -355,23 +355,23 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
 
           {/* Playlist section */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-gray-300 flex items-center gap-1.5">
+            <Label className="text-xs font-medium text-gray-600 flex items-center gap-1.5">
               <ListVideo className="h-3.5 w-3.5" /> Playlist
             </Label>
             <Select value={selectedPlaylistId} onValueChange={(v) => {
               setSelectedPlaylistId(v);
               setShowNewPlaylist(v === "__new__");
             }}>
-              <SelectTrigger className="h-9 bg-[#1a1a1a] border-gray-700 text-white">
+              <SelectTrigger className="h-9 bg-gray-50 border-gray-200 text-gray-900">
                 <SelectValue placeholder={loadingPlaylists ? "Loading..." : "Select playlist..."} />
               </SelectTrigger>
-              <SelectContent className="max-h-60 bg-[#1a1a1a] border-gray-700">
-                <SelectItem value="__none__" className="text-gray-400 hover:bg-red-500/10">No playlist</SelectItem>
-                <SelectItem value="__new__" className="text-red-400 hover:bg-red-500/10">
+              <SelectContent className="max-h-60 bg-white border-gray-200">
+                <SelectItem value="__none__" className="text-gray-400 hover:bg-red-50">No playlist</SelectItem>
+                <SelectItem value="__new__" className="text-red-600 hover:bg-red-50">
                   <span className="flex items-center gap-1"><Plus className="h-3 w-3" /> Create new playlist</span>
                 </SelectItem>
                 {sortedPlaylists.map(p => (
-                  <SelectItem key={p.id} value={p.id} className="text-white hover:bg-red-500/10">{p.title}</SelectItem>
+                  <SelectItem key={p.id} value={p.id} className="text-gray-900 hover:bg-red-50">{p.title}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -382,7 +382,7 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
                   value={newPlaylistName}
                   onChange={(e) => setNewPlaylistName(e.target.value)}
                   placeholder="PLAYLIST NAME"
-                  className="bg-[#1a1a1a] border-gray-700 text-white uppercase font-semibold flex-1"
+                  className="bg-gray-50 border-gray-200 text-gray-900 uppercase font-semibold flex-1"
                 />
                 <Button
                   size="sm"
