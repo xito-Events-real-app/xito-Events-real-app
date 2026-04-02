@@ -398,15 +398,15 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
 
           {/* Video File */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-gray-300">Video File</Label>
+            <Label className="text-xs font-medium text-gray-600">Video File</Label>
             <Input
               type="file"
               accept="video/mp4,video/quicktime,video/x-msvideo,.mp4,.mov,.avi"
               onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
-              className="h-auto py-2 bg-[#1a1a1a] border-gray-700 text-white file:text-white file:bg-red-600 file:border-0 file:rounded file:px-3 file:py-1 file:mr-3 file:cursor-pointer"
+              className="h-auto py-2 bg-gray-50 border-gray-200 text-gray-900 file:text-white file:bg-red-600 file:border-0 file:rounded file:px-3 file:py-1 file:mr-3 file:cursor-pointer"
             />
             {videoFile && (
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-500">
                 {videoFile.name} — {(videoFile.size / (1024 * 1024 * 1024)).toFixed(2)} GB
               </p>
             )}
