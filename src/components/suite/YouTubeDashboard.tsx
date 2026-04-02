@@ -696,7 +696,7 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
           </div>
 
           {/* Right: Tabbed Sidebar */}
-          <div className="w-[380px] bg-gray-50 border-l border-gray-200 flex flex-col shrink-0">
+          <div className="w-[480px] bg-gray-50 border-l border-gray-200 flex flex-col shrink-0">
             <Tabs value={sidebarTab} onValueChange={setSidebarTab} className="flex flex-col flex-1 min-h-0">
               <div className="p-3 border-b border-gray-200">
                 <TabsList className="w-full bg-gray-200">
