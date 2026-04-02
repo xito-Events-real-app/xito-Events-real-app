@@ -134,6 +134,23 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
     return Array.from(events);
   }, [trackerRows, selectedClient]);
 
+  // Auto-select best event & edit type when client changes
+  useEffect(() => {
+    if (!selectedClient || defaultsApplied === false) return;
+    const clientRows = trackerRows.filter(r => r.client_name === selectedClient);
+    const exportedRows = clientRows.filter(r => r.video_edit_status?.toUpperCase() === 'EXPORTED');
+    const bestRow = exportedRows.length > 0
+      ? exportedRows.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''))[0]
+      : clientRows[0];
+
+    const bestEvent = bestRow?.event_name || "";
+    setSelectedEvent(bestEvent);
+
+    const eventRows = clientRows.filter(r => r.event_name === bestEvent);
+    const hasHighlights = eventRows.some(r => r.edit_type === "Highlights");
+    setSelectedEditType(hasHighlights ? "Highlights" : (eventRows[0]?.edit_type || "Highlights"));
+  }, [selectedClient, trackerRows]);
+
   const editTypes = useMemo(() => {
     if (!selectedClient || !selectedEvent) return [];
     const types = new Set<string>();
@@ -302,7 +319,7 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
           {/* Client selector */}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-gray-600">Client</Label>
-            <Select value={selectedClient} onValueChange={(v) => { setSelectedClient(v); setSelectedEvent(""); setSelectedEditType(""); }}>
+            <Select value={selectedClient} onValueChange={setSelectedClient}>
               <SelectTrigger className="h-9 bg-gray-50 border-gray-200 text-gray-900"><SelectValue placeholder="Select client..." /></SelectTrigger>
               <SelectContent className="max-h-60 bg-white border-gray-200">
                 {sortedClients.map(c => (
