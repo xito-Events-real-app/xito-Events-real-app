@@ -51,6 +51,8 @@ import { PCloudUploadProvider } from "./contexts/PCloudUploadContext";
 import { PCloudUploadTracker } from "./components/pcloud-drive/PCloudUploadTracker";
 import { XitoDriveUploadProvider } from "./contexts/XitoDriveUploadContext";
 import { XitoUploadTracker } from "./components/xito-drive/XitoUploadTracker";
+import { YouTubeUploadProvider } from "./contexts/YouTubeUploadContext";
+import { YouTubeUploadTracker } from "./components/suite/YouTubeUploadTracker";
 import { StartupAnnouncementPopup } from "./components/suite/StartupAnnouncementPopup";
 
 const queryClient = new QueryClient();
