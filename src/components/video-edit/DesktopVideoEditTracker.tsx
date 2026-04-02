@@ -619,6 +619,15 @@ function VideoEditTable({
                 <SongsCell songs={row.songs} />
               </TableCell>
               <TableCell className="text-center">
+                {row.youtubeLink ? (
+                  <a href={row.youtubeLink} target="_blank" rel="noopener noreferrer" className="text-red-600 hover:text-red-500">
+                    <Youtube className="w-4 h-4" />
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground">-</span>
+                )}
+              </TableCell>
+              <TableCell className="text-center">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
