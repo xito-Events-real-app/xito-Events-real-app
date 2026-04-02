@@ -414,18 +414,18 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
 
           {/* Thumbnail */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-gray-300 flex items-center gap-1.5">
+            <Label className="text-xs font-medium text-gray-600 flex items-center gap-1.5">
               <ImageIcon className="h-3.5 w-3.5" /> Thumbnail (optional)
             </Label>
             <Input
               type="file"
               accept="image/jpeg,image/png,image/webp"
               onChange={(e) => setThumbnailFile(e.target.files?.[0] || null)}
-              className="h-auto py-2 bg-[#1a1a1a] border-gray-700 text-white file:text-white file:bg-gray-700 file:border-0 file:rounded file:px-3 file:py-1 file:mr-3 file:cursor-pointer"
+              className="h-auto py-2 bg-gray-50 border-gray-200 text-gray-900 file:text-white file:bg-gray-600 file:border-0 file:rounded file:px-3 file:py-1 file:mr-3 file:cursor-pointer"
             />
             {thumbnailPreview && (
               <div className="mt-1.5">
-                <img src={thumbnailPreview} alt="Thumbnail preview" className="h-20 rounded-lg border border-gray-700 object-cover" />
+                <img src={thumbnailPreview} alt="Thumbnail preview" className="h-20 rounded-lg border border-gray-200 object-cover" />
               </div>
             )}
           </div>
