@@ -301,14 +301,14 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
           {/* Client selector */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-gray-300">Client</Label>
+            <Label className="text-xs font-medium text-gray-600">Client</Label>
             <Select value={selectedClient} onValueChange={(v) => { setSelectedClient(v); setSelectedEvent(""); setSelectedEditType(""); }}>
-              <SelectTrigger className="h-9 bg-[#1a1a1a] border-gray-700 text-white"><SelectValue placeholder="Select client..." /></SelectTrigger>
-              <SelectContent className="max-h-60 bg-[#1a1a1a] border-gray-700">
+              <SelectTrigger className="h-9 bg-gray-50 border-gray-200 text-gray-900"><SelectValue placeholder="Select client..." /></SelectTrigger>
+              <SelectContent className="max-h-60 bg-white border-gray-200">
                 {sortedClients.map(c => (
-                  <SelectItem key={c.name} value={c.name} className="text-white hover:bg-red-500/10">
-                    <span className={c.bestOrder === 1 ? "font-bold text-red-400" : ""}>{c.name}</span>
-                    {c.bestOrder === 1 && <span className="ml-2 text-[10px] text-red-400">EXPORTED</span>}
+                  <SelectItem key={c.name} value={c.name} className="text-gray-900 hover:bg-red-50">
+                    <span className={c.bestOrder === 1 ? "font-bold text-red-600" : ""}>{c.name}</span>
+                    {c.bestOrder === 1 && <span className="ml-2 text-[10px] text-red-600">EXPORTED</span>}
                   </SelectItem>
                 ))}
               </SelectContent>
