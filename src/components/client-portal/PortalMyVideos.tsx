@@ -131,7 +131,7 @@ const PortalMyVideos = ({ clientName, brideFullName, groomFullName }: PortalMyVi
       <div className="w-full aspect-video bg-black">
         <iframe
           key={activeVideoId}
-          src={`https://www.youtube.com/embed/${activeVideoId}?autoplay=1&rel=0`}
+          src={`https://www.youtube.com/embed/${activeVideoId}?autoplay=1&mute=1&rel=0&playsinline=1`}
           className="w-full h-full"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
@@ -142,15 +142,6 @@ const PortalMyVideos = ({ clientName, brideFullName, groomFullName }: PortalMyVi
       {activeVideo && (
         <div className="px-4 py-3 border-b border-gray-100">
           <h3 className="text-sm font-semibold text-gray-900 leading-snug">{activeVideo.title}</h3>
-          <a
-            href={playlist ? `https://www.youtube.com/playlist?list=${playlist.id}` : `https://www.youtube.com/watch?v=${activeVideoId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-full bg-red-500 text-white text-xs font-medium hover:bg-red-600 transition-colors"
-          >
-            <ExternalLink className="h-3 w-3" />
-            Open in YouTube
-          </a>
         </div>
       )}
 
