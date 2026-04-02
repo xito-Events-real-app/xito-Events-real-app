@@ -659,6 +659,42 @@ function VideoEditTable({
                 )}
               </TableCell>
               )}
+              {REVIEW_STAGES.has(currentStageKey) && (
+              <TableCell>
+                {(() => {
+                  const ids = row.mergedIds?.length ? row.mergedIds : [row.id];
+                  const allComments = ids.flatMap(id => reviewComments[id] || []);
+                  if (allComments.length === 0) return <span className="text-muted-foreground text-xs">-</span>;
+                  return (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="space-y-0.5 cursor-pointer max-w-[160px]">
+                          {allComments.slice(0, 2).map((c, i) => (
+                            <p key={i} className="text-[10px] truncate">
+                              <span className="font-bold text-primary">{c.author}:</span>{' '}
+                              <span className="text-muted-foreground">{c.comment}</span>
+                            </p>
+                          ))}
+                          {allComments.length > 2 && (
+                            <p className="text-[10px] text-muted-foreground">+{allComments.length - 2} more</p>
+                          )}
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-sm p-3">
+                        <p className="text-xs font-bold mb-2">Company Review</p>
+                        {allComments.map((c, i) => (
+                          <div key={i} className="mb-2">
+                            <span className="text-xs font-bold">{c.author}</span>
+                            <span className="text-[10px] text-muted-foreground ml-2">{new Date(c.created_at).toLocaleString()}</span>
+                            <p className="text-xs">{c.comment}</p>
+                          </div>
+                        ))}
+                      </TooltipContent>
+                    </Tooltip>
+                  );
+                })()}
+              </TableCell>
+              )}
               <TableCell className="text-center">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
