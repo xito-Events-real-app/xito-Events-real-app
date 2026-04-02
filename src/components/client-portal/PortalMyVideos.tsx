@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Film, Loader2, Play, ExternalLink } from "lucide-react";
+import { Film, Loader2, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 
