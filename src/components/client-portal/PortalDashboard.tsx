@@ -72,7 +72,7 @@ const crewRoles: { key: keyof FullAssignment; label: string; icon: React.Element
   { key: 'assistant', label: 'Assistant', icon: Users, color: 'text-gray-400' },
 ];
 
-const PortalDashboard = ({ clientName, events, assignments, hasFilledContact, onGoToDetails }: PortalDashboardProps) => {
+const PortalDashboard = ({ clientName, brideFullName, groomFullName, events, assignments, hasFilledContact, onGoToDetails }: PortalDashboardProps) => {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
 
   const soonest = events.reduce<EventInfo | null>((best, e) => {
