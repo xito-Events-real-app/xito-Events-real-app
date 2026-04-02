@@ -253,7 +253,21 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
     }
   };
 
-  const loadStats = async () => {
+  const loadRecentUploads = async () => {
+    setLoadingRecent(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("youtube-upload", {
+        body: { action: "listRecentUploads", maxResults: 100 },
+      });
+      if (error) throw error;
+      setRecentVideos((data?.videos || []) as RecentVideo[]);
+    } catch (err) {
+      console.error("Failed to load recent uploads:", err);
+    } finally {
+      setLoadingRecent(false);
+    }
+  };
+
     const today = new Date().toISOString().split('T')[0];
     const { count: todayCount } = await supabase
       .from('youtube_upload_sessions')
