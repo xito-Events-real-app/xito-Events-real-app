@@ -561,8 +561,8 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
     });
   };
 
-  const selectVideo = (videoId: string, title: string, playlistTitle: string) => {
-    setActiveVideo({ videoId, title, playlistTitle });
+  const selectVideo = (videoId: string, title: string, playlistTitle: string, publishedAt?: string) => {
+    setActiveVideo({ videoId, title, playlistTitle, publishedAt });
   };
 
   // Filter
