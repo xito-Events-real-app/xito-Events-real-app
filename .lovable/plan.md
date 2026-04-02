@@ -1,49 +1,56 @@
 
-I’ll adjust the Videos tab to behave correctly, with one important constraint: browsers and YouTube embeds do not allow truly forced autoplay with sound in every case. The current mute setting exists because autoplay is usually blocked unless muted. I can improve this so tab entry and video clicks trigger play + unmute as aggressively as possible, but I cannot guarantee sound-autoplay on every browser/device.
 
-Plan
+## Auto-populate YT column from YouTube playlist videos
 
-1. Replace the simple iframe swap in `src/components/client-portal/PortalMyVideos.tsx` with a controllable YouTube player setup.
-- Use the YouTube player API instead of only changing the iframe `src`.
-- On first load of the Videos tab, load the first video and immediately call play + unmute.
-- When another playlist item is clicked, load that video and immediately play it without needing a second tap.
-- Remove the current forced `mute=1`.
+### Problem
+The YT column in the Video Edit Tracker only gets populated when a video is uploaded through the app's upload dialog. If videos were uploaded directly to YouTube (or from another device), the YT column stays empty even though the video exists in the client's playlist.
 
-2. Fix the playlist-opening behavior.
-- Right now there is no custom playlist link in the code, so the behavior you are seeing is coming from YouTube’s built-in iframe UI.
-- That built-in iframe action cannot be forced to open the YouTube app, cannot be forced to use the playlist URL, and cannot be made fully blank-tab-safe by the app.
-- To solve this properly, I’ll stop relying on the iframe’s native “Watch on YouTube” behavior and use a controlled app-side action instead.
+### Solution
+Add a background sync that fetches videos from the client's YouTube playlist and matches them to tracker rows based on the video title pattern: `{BRIDE} & {GROOM} {EVENT_NAME} {EDIT_TYPE} || WEDDING TALES NEPAL`.
 
-3. Open the real playlist URL in the same tab.
-- Use `https://www.youtube.com/playlist?list={playlistId}`.
-- Open it in the same tab/window, not a new tab, so the browser does not leave an empty extra tab behind.
-- On supported phones, this gives the device a chance to hand off to the YouTube app; otherwise it opens the playlist page directly.
+### How it works
 
-4. Keep the UI clean.
-- Do not bring back the old “Open in YouTube” button in the previous location.
-- If a direct playlist-open action is still needed, attach it subtly to the playlist title/header area instead of the removed button.
-- Keep the first video selected automatically and the playlist list below the player.
+1. **Trigger**: When the Video Edit Tracker loads (or on a manual refresh), for rows in EXPORTED/CLIENT_REVIEW/RE_EDIT/FINALIZED stages that have an empty `youtube_link`, attempt to find the matching YouTube video.
 
-Technical notes
+2. **Matching logic**:
+   - Look up the client's contact details to get bride/groom names
+   - Find the matching YouTube playlist using the same fuzzy-match logic already used in the Client Portal
+   - Fetch all videos from that playlist using the existing `getPlaylistVideos` edge function action
+   - Match video titles to tracker rows by checking if the title contains the event name (e.g., "BRIDES MEHNDI") and edit type (e.g., "HIGHLIGHTS", "FULL VIDEO")
+   - For merged rows (Full Video + Highlights), collect both matching links
+
+3. **Storage**: Write matched YouTube links to the `youtube_link` column on `video_edit_tracker`, comma-separated for merged rows (same format already used by the upload system).
+
+### Files to modify
+
+**`src/hooks/useVideoEditTracker.ts`**
+- Add a `syncYouTubeLinks()` function that runs after initial load
+- Groups rows by `registeredDateTimeAD` (client) to batch playlist lookups
+- Only processes rows in EXPORTED+ stages with empty `youtubeLink`
+- Fetches contact details and playlists, matches videos to rows, updates DB
+
+**`src/components/video-edit/DesktopVideoEditTracker.tsx`**
+- No structural changes needed; the YT column already renders `youtubeLink` data
+- Optionally add a "Sync YT Links" button in the toolbar for manual trigger
+
+### Matching algorithm (pseudocode)
 ```text
-Current causes:
-- `mute=1` is still present in the embed URL.
-- No custom playlist URL exists in the current source.
-- The blank page is caused by external/new-tab style navigation, not by playlist data loading.
+For each client with empty-YT rows:
+  1. Get bride/groom names from contact_details_cache
+  2. Fetch all playlists via listPlaylists
+  3. Find playlist matching "{BRIDE} & {GROOM}" (fuzzy)
+  4. Fetch playlist videos via getPlaylistVideos
+  5. For each tracker row:
+     - Normalize event name: "Brides Mehndi" → "BRIDES MEHNDI"
+     - Normalize edit type: "Highlights" → "HIGHLIGHTS"
+     - Find video whose title contains both event + edit type
+     - If found: update youtube_link = "https://youtu.be/{videoId}"
 ```
 
-Files to update
-- `src/components/client-portal/PortalMyVideos.tsx`
-  - switch to controlled YouTube player logic
-  - remove forced mute
-  - use same-tab playlist navigation
-  - avoid depending on YouTube iframe native external-link behavior
-- `src/pages/ClientPortal.tsx`
-  - only if needed, pass a small signal when the Videos tab becomes active so first-play can trigger more reliably
+### Edge cases
+- Merged rows (FV + HL): find two videos, store comma-separated links
+- Multiple events same client: each row matched independently by event name
+- No playlist found: skip silently
+- Already has youtube_link: skip (don't overwrite manual uploads)
+- Rate limiting: batch by client so each client = 1 playlist lookup + 1 video fetch
 
-Expected result
-- First video starts as soon as the user opens the Videos tab, with immediate unmute attempted.
-- Clicking another video starts it directly without another play press.
-- Playlist opening uses the real playlist link.
-- No extra blank browser tab is created.
-- Remaining limitation: some browsers may still block first-load sound until they treat the tab change as a valid user gesture, but video clicks will still start directly with sound.
