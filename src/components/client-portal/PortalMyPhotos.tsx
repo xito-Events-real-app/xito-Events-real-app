@@ -261,8 +261,8 @@ const PortalMyPhotos = ({
   if (tabs.length === 0) {
     return (
       <div className="pb-20 px-4 pt-4">
-        <Card className="bg-white/5 border-white/10">
-          <CardContent className="p-8 text-center text-white/40">
+        <Card className="bg-gray-50 border-gray-200">
+          <CardContent className="p-8 text-center text-gray-400">
             <FolderOpen className="h-10 w-10 mx-auto mb-3 opacity-50" />
             <p>No photos available yet.</p>
           </CardContent>

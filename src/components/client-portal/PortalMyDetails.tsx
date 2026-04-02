@@ -66,7 +66,6 @@ const PortalMyDetails = ({ registeredDateTimeAD, initialData, onSaved }: PortalM
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Upsert to cache
       await supabase.from('contact_details_cache').upsert({
         registered_date_time_ad: registeredDateTimeAD,
         bride_full_name: form.brideFullName,
@@ -89,29 +88,20 @@ const PortalMyDetails = ({ registeredDateTimeAD, initialData, onSaved }: PortalM
         updated_at: new Date().toISOString(),
       } as any, { onConflict: 'registered_date_time_ad' });
 
-      // Sync to sheets in background
       supabase.functions.invoke('google-sheets', {
         body: {
           action: 'updateClientContactDetails',
           data: {
             registeredDateTimeAD,
             updates: {
-              brideFullName: form.brideFullName,
-              brideContactNumber: form.brideContactNumber,
-              brideWhatsappNumber: form.brideWhatsappNumber,
-              brideBackupNumber: form.brideBackupNumber,
-              brideBackupRelation: form.brideBackupRelation,
-              brideInstagram: form.brideInstagram,
-              brideHomeCity: form.brideHomeCity,
-              brideHomeArea: form.brideHomeArea,
-              groomFullName: form.groomFullName,
-              groomContactNumber: form.groomContactNumber,
-              groomWhatsappNumber: form.groomWhatsappNumber,
-              groomBackupNumber: form.groomBackupNumber,
-              groomBackupRelation: form.groomBackupRelation,
-              groomInstagram: form.groomInstagram,
-              groomHomeCity: form.groomHomeCity,
-              groomHomeArea: form.groomHomeArea,
+              brideFullName: form.brideFullName, brideContactNumber: form.brideContactNumber,
+              brideWhatsappNumber: form.brideWhatsappNumber, brideBackupNumber: form.brideBackupNumber,
+              brideBackupRelation: form.brideBackupRelation, brideInstagram: form.brideInstagram,
+              brideHomeCity: form.brideHomeCity, brideHomeArea: form.brideHomeArea,
+              groomFullName: form.groomFullName, groomContactNumber: form.groomContactNumber,
+              groomWhatsappNumber: form.groomWhatsappNumber, groomBackupNumber: form.groomBackupNumber,
+              groomBackupRelation: form.groomBackupRelation, groomInstagram: form.groomInstagram,
+              groomHomeCity: form.groomHomeCity, groomHomeArea: form.groomHomeArea,
             }
           }
         }
@@ -131,7 +121,7 @@ const PortalMyDetails = ({ registeredDateTimeAD, initialData, onSaved }: PortalM
     label: string; value: string; onChange: (v: string) => void; required?: boolean; placeholder?: string; type?: string;
   }) => (
     <div className="space-y-1">
-      <label className="text-[11px] font-medium text-white/40 uppercase tracking-wide flex items-center gap-1">
+      <label className="text-[11px] font-medium text-gray-500 uppercase tracking-wide flex items-center gap-1">
         {label}
         {required && <span className="text-[hsl(350,80%,65%)]">*</span>}
       </label>
@@ -140,27 +130,25 @@ const PortalMyDetails = ({ registeredDateTimeAD, initialData, onSaved }: PortalM
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="bg-white/[0.04] border-white/[0.08] text-white placeholder:text-white/20 focus:border-[hsl(350,80%,65%/0.4)] focus:ring-[hsl(350,80%,65%/0.1)] h-10 text-sm rounded-lg"
+        className="bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-300 focus:border-[hsl(350,80%,65%/0.4)] focus:ring-[hsl(350,80%,65%/0.1)] h-10 text-sm rounded-lg"
       />
     </div>
   );
 
   return (
     <div className="pb-28 px-4 space-y-6">
-      {/* Header */}
       <div className="text-center pt-6 pb-2">
         <Heart className="h-5 w-5 text-[hsl(350,80%,65%)] mx-auto mb-2" />
-        <h2 className="text-xl font-bold text-white">Your Details</h2>
-        <p className="text-xs text-white/30 mt-1">Fields marked * are required</p>
+        <h2 className="text-xl font-bold text-gray-900">Your Details</h2>
+        <p className="text-xs text-gray-400 mt-1">Fields marked * are required</p>
       </div>
 
-      {/* Bride Section */}
       <div className="space-y-3">
         <div className="flex items-center gap-2 pl-1">
           <div className="w-1.5 h-1.5 rounded-full bg-pink-400" />
-          <h3 className="text-sm font-semibold text-pink-400/80 uppercase tracking-wide">Bride</h3>
+          <h3 className="text-sm font-semibold text-pink-500 uppercase tracking-wide">Bride</h3>
         </div>
-        <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-4 space-y-3">
+        <div className="rounded-xl bg-gray-50 border border-gray-200 p-4 space-y-3">
           <Field label="Full Name" value={form.brideFullName} onChange={v => set('brideFullName', v)} required placeholder="Enter bride's full name" />
           <Field label="Contact Number" value={form.brideContactNumber} onChange={v => set('brideContactNumber', v)} required placeholder="10 digit number" type="tel" />
           <Field label="WhatsApp Number" value={form.brideWhatsappNumber} onChange={v => set('brideWhatsappNumber', v)} required placeholder="10 digit WhatsApp" type="tel" />
@@ -172,13 +160,12 @@ const PortalMyDetails = ({ registeredDateTimeAD, initialData, onSaved }: PortalM
         </div>
       </div>
 
-      {/* Groom Section */}
       <div className="space-y-3">
         <div className="flex items-center gap-2 pl-1">
           <div className="w-1.5 h-1.5 rounded-full bg-sky-400" />
-          <h3 className="text-sm font-semibold text-sky-400/80 uppercase tracking-wide">Groom</h3>
+          <h3 className="text-sm font-semibold text-sky-500 uppercase tracking-wide">Groom</h3>
         </div>
-        <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-4 space-y-3">
+        <div className="rounded-xl bg-gray-50 border border-gray-200 p-4 space-y-3">
           <Field label="Full Name" value={form.groomFullName} onChange={v => set('groomFullName', v)} required placeholder="Enter groom's full name" />
           <Field label="Contact Number" value={form.groomContactNumber} onChange={v => set('groomContactNumber', v)} required placeholder="10 digit number" type="tel" />
           <Field label="WhatsApp Number" value={form.groomWhatsappNumber} onChange={v => set('groomWhatsappNumber', v)} required placeholder="10 digit WhatsApp" type="tel" />
@@ -190,7 +177,6 @@ const PortalMyDetails = ({ registeredDateTimeAD, initialData, onSaved }: PortalM
         </div>
       </div>
 
-      {/* Save Button */}
       <Button
         onClick={handleSave}
         disabled={!requiredFilled || saving}
@@ -198,7 +184,7 @@ const PortalMyDetails = ({ registeredDateTimeAD, initialData, onSaved }: PortalM
           "w-full h-12 rounded-xl text-sm font-semibold transition-all",
           requiredFilled
             ? "bg-gradient-to-r from-[hsl(350,70%,50%)] to-[hsl(20,80%,55%)] hover:from-[hsl(350,70%,45%)] hover:to-[hsl(20,80%,50%)] text-white shadow-lg shadow-[hsl(350,70%,50%/0.25)]"
-            : "bg-white/[0.06] text-white/25"
+            : "bg-gray-100 text-gray-300"
         )}
       >
         {saving ? (
@@ -211,7 +197,7 @@ const PortalMyDetails = ({ registeredDateTimeAD, initialData, onSaved }: PortalM
       </Button>
 
       {!requiredFilled && (
-        <p className="text-center text-[11px] text-white/25">
+        <p className="text-center text-[11px] text-gray-400">
           Please fill all required (*) fields — Name, Contact & WhatsApp for both bride and groom
         </p>
       )}
