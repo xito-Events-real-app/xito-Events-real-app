@@ -289,11 +289,11 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl bg-white border-gray-200 text-gray-900 [&>button]:text-gray-500">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-white">
-            <Youtube className="w-6 h-6 text-red-500" />
+          <DialogTitle className="flex items-center gap-2 text-gray-900">
+            <Youtube className="w-6 h-6 text-red-600" />
             Upload to YouTube
           </DialogTitle>
-          <DialogDescription className="text-gray-400">
+          <DialogDescription className="text-gray-500">
             Select client, event, and video — uploads go directly to your channel
           </DialogDescription>
         </DialogHeader>
