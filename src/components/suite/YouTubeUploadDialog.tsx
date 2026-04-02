@@ -319,7 +319,7 @@ export function YouTubeUploadDialog({ open, onOpenChange }: { open: boolean; onO
           {/* Client selector */}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-gray-600">Client</Label>
-            <Select value={selectedClient} onValueChange={(v) => { setSelectedClient(v); setSelectedEvent(""); setSelectedEditType(""); }}>
+            <Select value={selectedClient} onValueChange={setSelectedClient}>
               <SelectTrigger className="h-9 bg-gray-50 border-gray-200 text-gray-900"><SelectValue placeholder="Select client..." /></SelectTrigger>
               <SelectContent className="max-h-60 bg-white border-gray-200">
                 {sortedClients.map(c => (
