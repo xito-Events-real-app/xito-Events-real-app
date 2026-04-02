@@ -28,6 +28,13 @@ interface PlaylistVideo {
   position: number;
 }
 
+interface RecentVideo {
+  videoId: string;
+  title: string;
+  thumbnailUrl: string;
+  publishedAt: string;
+}
+
 interface PlaylistWithVideos extends PlaylistInfo {
   videos: PlaylistVideo[];
   loading: boolean;
@@ -53,6 +60,7 @@ interface TrackerRow {
   event_date_ad: string | null;
   stage_history: string;
   updated_at: string | null;
+  youtube_link: string;
 }
 
 const AUTHORS = ["BENZO", "BARUN", "SAUGAT", "NIKIT"];
@@ -107,12 +115,15 @@ const STAGE_COLORS: Record<string, string> = {
 export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { jobs, activeCount } = useYouTubeUploadContext();
   const [playlists, setPlaylists] = useState<PlaylistWithVideos[]>([]);
+  const [recentVideos, setRecentVideos] = useState<RecentVideo[]>([]);
   const [loadingPlaylists, setLoadingPlaylists] = useState(true);
+  const [loadingRecent, setLoadingRecent] = useState(true);
   const [expandedPlaylists, setExpandedPlaylists] = useState<Set<string>>(new Set());
   const [activeVideo, setActiveVideo] = useState<{ videoId: string; title: string; playlistTitle: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<string>("recent");
+  const [allTrackerRows, setAllTrackerRows] = useState<TrackerRow[]>([]);
 
   // Stats
   const [todayUploaded, setTodayUploaded] = useState(0);
@@ -200,6 +211,7 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
   useEffect(() => {
     if (!open) return;
     loadPlaylists();
+    loadRecentUploads();
     loadStats();
   }, [open]);
 
@@ -242,6 +254,21 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
     }
   };
 
+  const loadRecentUploads = async () => {
+    setLoadingRecent(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("youtube-upload", {
+        body: { action: "listRecentUploads", maxResults: 100 },
+      });
+      if (error) throw error;
+      setRecentVideos((data?.videos || []) as RecentVideo[]);
+    } catch (err) {
+      console.error("Failed to load recent uploads:", err);
+    } finally {
+      setLoadingRecent(false);
+    }
+  };
+
   const loadStats = async () => {
     const today = new Date().toISOString().split('T')[0];
     const { count: todayCount } = await supabase
@@ -253,11 +280,12 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
 
     const { data: trackerData } = await supabase
       .from('video_edit_tracker')
-      .select('id, youtube_link, deleted')
+      .select('id, client_name, event_name, edit_type, editor, colorist, video_edit_status, edit_started_at, event_date_ad, stage_history, updated_at, youtube_link, deleted')
       .eq('deleted', false);
     if (trackerData) {
       setTotalTrackerRows(trackerData.length);
       setUploadedRows(trackerData.filter(r => r.youtube_link && r.youtube_link.trim() !== '').length);
+      setAllTrackerRows(trackerData as TrackerRow[]);
     }
   };
 
@@ -267,20 +295,65 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
     loadComments(activeVideo.videoId);
   }, [activeVideo?.videoId]);
 
-  // Load tracker info for active video
+  // Load tracker info for active video — match by youtube_link OR by title parsing
   useEffect(() => {
     if (!activeVideo) { setTrackerInfo(null); return; }
-    loadTrackerInfo(activeVideo.videoId);
-  }, [activeVideo?.videoId]);
+    findTrackerForVideo(activeVideo.videoId, activeVideo.title);
+  }, [activeVideo?.videoId, allTrackerRows]);
 
-  const loadTrackerInfo = async (videoId: string) => {
-    const { data } = await supabase
-      .from('video_edit_tracker')
-      .select('id, client_name, event_name, edit_type, editor, colorist, video_edit_status, edit_started_at, event_date_ad, stage_history, updated_at')
-      .like('youtube_link', `%${videoId}%`)
-      .eq('deleted', false)
-      .limit(1);
-    setTrackerInfo(data?.[0] as TrackerRow | null ?? null);
+  const findTrackerForVideo = async (videoId: string, videoTitle: string) => {
+    // 1. Try direct youtube_link match
+    const directMatch = allTrackerRows.find(r => 
+      r.youtube_link && r.youtube_link.includes(videoId)
+    );
+    if (directMatch) {
+      setTrackerInfo(directMatch);
+      return;
+    }
+
+    // 2. Parse video title: pattern "BRIDE & GROOM EVENT TYPE || WEDDING TALES NEPAL"
+    const titlePart = videoTitle.split('||')[0]?.trim() || videoTitle;
+    const ampersandMatch = titlePart.match(/^(.+?)\s*&\s*(.+?)(?:\s+(WEDDING|MEHNDI|RECEPTION|ENGAGEMENT|HALDI|SANGEET|SWAYAMBAR|BARATYATRA|VIDAI|JANTI|TIKA|MEHENDI|PRE[-\s]?WEDDING).*)$/i);
+    
+    if (ampersandMatch) {
+      const name1 = ampersandMatch[1].trim().toUpperCase();
+      const name2 = ampersandMatch[2].trim().split(/\s+/)[0].toUpperCase(); // First word after &
+      
+      // Match against client_name in tracker (client_name usually contains both names)
+      const nameMatch = allTrackerRows.find(r => {
+        if (!r.client_name) return false;
+        const cn = r.client_name.toUpperCase();
+        return cn.includes(name1) && cn.includes(name2);
+      });
+      if (nameMatch) {
+        // Further narrow by edit_type if title contains HIGHLIGHTS/FULL VIDEO/TEASER/REEL
+        const titleUpper = titlePart.toUpperCase();
+        let typeFilter: string | null = null;
+        if (titleUpper.includes('HIGHLIGHT')) typeFilter = 'Highlights';
+        else if (titleUpper.includes('FULL VIDEO') || titleUpper.includes('FULL FILM')) typeFilter = 'Full Video';
+        else if (titleUpper.includes('TEASER')) typeFilter = 'Teaser';
+        else if (titleUpper.includes('REEL')) typeFilter = 'Reel';
+        
+        // Try to match with both name + event + type
+        const eventWords = titlePart.toUpperCase().match(/(WEDDING|MEHNDI|RECEPTION|ENGAGEMENT|HALDI|SANGEET|SWAYAMBAR|BARATYATRA|VIDAI|JANTI|TIKA|MEHENDI|PRE[-\s]?WEDDING)/gi) || [];
+        
+        const bestMatch = allTrackerRows.find(r => {
+          if (!r.client_name) return false;
+          const cn = r.client_name.toUpperCase();
+          if (!cn.includes(name1) || !cn.includes(name2)) return false;
+          if (typeFilter && r.edit_type && !r.edit_type.toLowerCase().includes(typeFilter.toLowerCase())) return false;
+          if (eventWords.length > 0 && r.event_name) {
+            return eventWords.some(ew => r.event_name!.toUpperCase().includes(ew.toUpperCase()));
+          }
+          return true;
+        });
+        
+        setTrackerInfo(bestMatch || nameMatch);
+        return;
+      }
+    }
+
+    setTrackerInfo(null);
   };
 
   const loadComments = async (videoId: string) => {
@@ -329,16 +402,6 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
     setActiveVideo({ videoId, title, playlistTitle });
   };
 
-  // All videos flattened for Recent tab
-  const allVideosFlat = useMemo(() => {
-    const all: (PlaylistVideo & { playlistTitle: string })[] = [];
-    playlists.forEach(pl => {
-      pl.videos.forEach(v => all.push({ ...v, playlistTitle: pl.title }));
-    });
-    // Sort by position descending (most recently added first)
-    return all.sort((a, b) => b.position - a.position);
-  }, [playlists]);
-
   // Filter
   const filteredPlaylists = useMemo(() => {
     if (!searchQuery.trim()) return playlists;
@@ -350,10 +413,10 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
   }, [playlists, searchQuery]);
 
   const filteredRecentVideos = useMemo(() => {
-    if (!searchQuery.trim()) return allVideosFlat;
+    if (!searchQuery.trim()) return recentVideos;
     const q = searchQuery.toLowerCase();
-    return allVideosFlat.filter(v => v.title.toLowerCase().includes(q) || v.playlistTitle.toLowerCase().includes(q));
-  }, [allVideosFlat, searchQuery]);
+    return recentVideos.filter(v => v.title.toLowerCase().includes(q));
+  }, [recentVideos, searchQuery]);
 
   const remainingRows = totalTrackerRows - uploadedRows;
   const activeJobs = jobs.filter(j => j.status === 'uploading');
@@ -551,7 +614,7 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
 
               {/* Recent Tab */}
               <TabsContent value="recent" className="flex-1 overflow-y-auto m-0">
-                {loadingPlaylists ? (
+                {loadingRecent ? (
                   <div className="flex items-center justify-center py-12">
                     <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
                   </div>
@@ -560,8 +623,8 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
                 ) : (
                   filteredRecentVideos.map(v => (
                     <button
-                      key={`${v.videoId}-${v.playlistTitle}`}
-                      onClick={() => selectVideo(v.videoId, v.title, v.playlistTitle)}
+                      key={v.videoId}
+                      onClick={() => selectVideo(v.videoId, v.title, 'Recent Upload')}
                       className={cn(
                         "w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-100 text-left border-b border-gray-100",
                         activeVideo?.videoId === v.videoId && "bg-blue-50"
@@ -583,7 +646,11 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-gray-900 line-clamp-2">{v.title}</p>
-                        <p className="text-[10px] text-gray-400 mt-0.5">{v.playlistTitle}</p>
+                        {v.publishedAt && (
+                          <p className="text-[10px] text-gray-400 mt-0.5">
+                            {new Date(v.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </p>
+                        )}
                       </div>
                     </button>
                   ))
