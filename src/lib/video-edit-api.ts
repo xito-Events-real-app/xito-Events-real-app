@@ -177,6 +177,7 @@ function dbToRow(r: any): VideoEditRow {
     editStartedAt: r.edit_started_at || "",
     deadline: r.deadline || "",
     stageHistory: r.stage_history || "",
+    youtubeLink: r.youtube_link || "",
   };
 }
 
