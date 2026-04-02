@@ -69,13 +69,28 @@ export function useVideoEditTracker() {
     }
   }, [toast]);
 
+  const runYouTubeSync = useCallback(async (currentRows: VideoEditRow[]) => {
+    try {
+      const count = await syncYouTubeLinks(currentRows);
+      if (count > 0) {
+        console.log(`[YT-SYNC] Updated ${count} rows with YouTube links`);
+        await loadRows();
+      }
+    } catch (err) {
+      console.error("[YT-SYNC] Error:", err);
+    }
+  }, [loadRows]);
+
   useEffect(() => {
     (async () => {
       setIsLoading(true);
       try {
         await ensureVideoEditRows();
         await syncWithDeliverables();
-        await loadRows();
+        const data = await getVideoEditRows();
+        setRows(data || []);
+        // Run YouTube link sync in background after load
+        runYouTubeSync(data || []);
       } catch (err: any) {
         console.error("[VIDEO-EDIT] Init error:", err);
       } finally {
