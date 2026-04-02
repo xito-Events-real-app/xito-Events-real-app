@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.idrive-e2-api]
 verify_jwt = false
+
+[functions.youtube-upload]
+verify_jwt = false
