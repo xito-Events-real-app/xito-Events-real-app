@@ -60,6 +60,7 @@ interface TrackerRow {
   event_date_ad: string | null;
   stage_history: string;
   updated_at: string | null;
+  youtube_link: string;
 }
 
 const AUTHORS = ["BENZO", "BARUN", "SAUGAT", "NIKIT"];
