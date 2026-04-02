@@ -82,6 +82,11 @@ const PortalMyVideos = ({ clientName, brideFullName, groomFullName }: PortalMyVi
         playsinline: 1,
         rel: 0,
         modestbranding: 1,
+        showinfo: 0,
+        iv_load_policy: 3,
+        disablekb: 0,
+        fs: 1,
+        cc_load_policy: 0,
       },
       events: {
         onReady: (e: any) => {
@@ -107,7 +112,6 @@ const PortalMyVideos = ({ clientName, brideFullName, groomFullName }: PortalMyVi
 
     if (tryInit()) return;
 
-    // Poll until API is ready
     const interval = setInterval(() => {
       if (tryInit()) clearInterval(interval);
     }, 200);
@@ -241,9 +245,30 @@ const PortalMyVideos = ({ clientName, brideFullName, groomFullName }: PortalMyVi
         </div>
       )}
 
-      {/* YouTube Player (API-controlled) */}
-      <div className="w-full aspect-video bg-black">
-        <div ref={playerContainerRef} className="w-full h-full" />
+      {/* YouTube Player - clipped to hide title bar & bottom logo */}
+      <div
+        className="w-full bg-black overflow-hidden relative"
+        style={{
+          /* Make the outer container the visible 16:9 area */
+          aspectRatio: "16 / 9",
+        }}
+      >
+        {/* Inner wrapper: taller than visible area, shifted up to clip top title bar & bottom logo */}
+        <div
+          className="absolute"
+          style={{
+            top: "-60px",
+            left: 0,
+            right: 0,
+            bottom: "-40px",
+          }}
+        >
+          <div
+            ref={playerContainerRef}
+            className="w-full"
+            style={{ height: "calc(100%)" }}
+          />
+        </div>
       </div>
 
       {/* Video info bar */}
