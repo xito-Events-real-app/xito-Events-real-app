@@ -1411,6 +1411,66 @@ export type Database = {
         }
         Relationships: []
       }
+      youtube_upload_sessions: {
+        Row: {
+          bytes_uploaded: number
+          client_name: string
+          created_at: string | null
+          edit_type: string
+          event_name: string
+          file_size_bytes: number
+          id: string
+          playlist_id: string | null
+          started_by: string | null
+          status: string
+          title: string
+          tracker_row_id: string | null
+          updated_at: string | null
+          upload_uri: string | null
+          video_file_name: string
+          youtube_link: string | null
+          youtube_video_id: string | null
+        }
+        Insert: {
+          bytes_uploaded?: number
+          client_name?: string
+          created_at?: string | null
+          edit_type?: string
+          event_name?: string
+          file_size_bytes?: number
+          id?: string
+          playlist_id?: string | null
+          started_by?: string | null
+          status?: string
+          title?: string
+          tracker_row_id?: string | null
+          updated_at?: string | null
+          upload_uri?: string | null
+          video_file_name?: string
+          youtube_link?: string | null
+          youtube_video_id?: string | null
+        }
+        Update: {
+          bytes_uploaded?: number
+          client_name?: string
+          created_at?: string | null
+          edit_type?: string
+          event_name?: string
+          file_size_bytes?: number
+          id?: string
+          playlist_id?: string | null
+          started_by?: string | null
+          status?: string
+          title?: string
+          tracker_row_id?: string | null
+          updated_at?: string | null
+          upload_uri?: string | null
+          video_file_name?: string
+          youtube_link?: string | null
+          youtube_video_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

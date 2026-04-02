@@ -96,6 +96,7 @@ function getTimeAgo(isoDate: string): string | null {
 const NO_TIMER_STAGES: string[] = [];
 const PROGRESS_STAGES_SET = new Set(['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS', 'COLOR_QUEUE', 'COLOR_LAB', 'EXPORT_QUEUE', 'EXPORTED', 'CLIENT_REVIEW', 'FINALIZED']);
 const COLORIST_STAGES = new Set(['COLOR_QUEUE', 'COLOR_LAB', 'COLOR_ON_PROGRESS', 'EXPORT_QUEUE', 'EXPORTED', 'CLIENT_REVIEW', 'RE_EDIT_ON_PROGRESS', 'FINALIZED']);
+const YT_STAGES = new Set(['EXPORTED', 'CLIENT_REVIEW', 'RE_EDIT_ON_PROGRESS', 'FINALIZED']);
 
 function LiveEditTimer({
   editStartedAt,
@@ -414,7 +415,7 @@ function VideoEditTable({
             <TableHead className="w-28">Deadline</TableHead>
             <TableHead className="w-12 text-center">Notes</TableHead>
             <TableHead className="w-12 text-center">Songs</TableHead>
-            <TableHead className="w-12 text-center">YT</TableHead>
+            {YT_STAGES.has(currentStageKey) && <TableHead className="w-12 text-center">YT</TableHead>}
             <TableHead className="w-32 text-center">Action</TableHead>
           </TableRow>
         </TableHeader>
@@ -618,15 +619,21 @@ function VideoEditTable({
               <TableCell className="text-center">
                 <SongsCell songs={row.songs} />
               </TableCell>
+              {YT_STAGES.has(currentStageKey) && (
               <TableCell className="text-center">
                 {row.youtubeLink ? (
-                  <a href={row.youtubeLink} target="_blank" rel="noopener noreferrer" className="text-red-600 hover:text-red-500">
-                    <Youtube className="w-4 h-4" />
-                  </a>
+                  <div className="flex items-center justify-center gap-1">
+                    {row.youtubeLink.split(',').map((link, i) => (
+                      <a key={i} href={link.trim()} target="_blank" rel="noopener noreferrer" className="text-red-600 hover:text-red-500">
+                        <Youtube className="w-4 h-4" />
+                      </a>
+                    ))}
+                  </div>
                 ) : (
                   <span className="text-muted-foreground">-</span>
                 )}
               </TableCell>
+              )}
               <TableCell className="text-center">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

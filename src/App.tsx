@@ -51,6 +51,8 @@ import { PCloudUploadProvider } from "./contexts/PCloudUploadContext";
 import { PCloudUploadTracker } from "./components/pcloud-drive/PCloudUploadTracker";
 import { XitoDriveUploadProvider } from "./contexts/XitoDriveUploadContext";
 import { XitoUploadTracker } from "./components/xito-drive/XitoUploadTracker";
+import { YouTubeUploadProvider } from "./contexts/YouTubeUploadContext";
+import { YouTubeUploadTracker } from "./components/suite/YouTubeUploadTracker";
 import { StartupAnnouncementPopup } from "./components/suite/StartupAnnouncementPopup";
 
 const queryClient = new QueryClient();
@@ -76,6 +78,7 @@ const App = () => (
           <EditedFilesUploadProvider>
           <PCloudUploadProvider>
           <XitoDriveUploadProvider>
+          <YouTubeUploadProvider>
           <BrowserRouter>
             <AuthProvider>
               <WtnFilesAnnouncement />
@@ -86,8 +89,9 @@ const App = () => (
               <Toaster />
               <Sonner />
               <UploadProgressTracker />
-              <PCloudUploadTracker />
+               <PCloudUploadTracker />
               <XitoUploadTracker />
+              <YouTubeUploadTracker />
             <Routes>
               {/* Public routes - no auth required */}
               <Route path="/client-form/:clientName/:clientId" element={<ClientContactForm />} />
@@ -139,6 +143,7 @@ const App = () => (
             </Routes>
           </AuthProvider>
           </BrowserRouter>
+          </YouTubeUploadProvider>
           </XitoDriveUploadProvider>
           </PCloudUploadProvider>
           </EditedFilesUploadProvider>
