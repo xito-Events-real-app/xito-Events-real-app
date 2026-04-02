@@ -143,6 +143,7 @@ const App = () => (
             </Routes>
           </AuthProvider>
           </BrowserRouter>
+          </YouTubeUploadProvider>
           </XitoDriveUploadProvider>
           </PCloudUploadProvider>
           </EditedFilesUploadProvider>
