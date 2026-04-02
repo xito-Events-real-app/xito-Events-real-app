@@ -222,7 +222,7 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
   const [loadingPlaylists, setLoadingPlaylists] = useState(true);
   const [loadingRecent, setLoadingRecent] = useState(true);
   const [expandedPlaylists, setExpandedPlaylists] = useState<Set<string>>(new Set());
-  const [activeVideo, setActiveVideo] = useState<{ videoId: string; title: string; playlistTitle: string } | null>(null);
+  const [activeVideo, setActiveVideo] = useState<{ videoId: string; title: string; playlistTitle: string; publishedAt?: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<string>("recent");
