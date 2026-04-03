@@ -15,26 +15,6 @@ declare global {
 const MIN_W = 400, MIN_H = 300, MAX_W = 960, MAX_H = 700;
 const DEFAULT_W = 560, DEFAULT_H = 420;
 
-function formatDuration(ms: number): string {
-  if (ms < 0) return "—";
-  const hours = Math.floor(ms / 3600000);
-  const mins = Math.floor((ms % 3600000) / 60000);
-  if (hours >= 24) {
-    const days = Math.floor(hours / 24);
-    const remHrs = hours % 24;
-    return remHrs > 0 ? `${days}d ${remHrs}h` : `${days}d`;
-  }
-  return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
-}
-
-function computeTotalTime(editStartedAt: string | null, status: string | null, updatedAt: string | null): string | null {
-  if (!editStartedAt) return null;
-  const start = new Date(editStartedAt);
-  if (isNaN(start.getTime())) return null;
-  const end = status === "FINALIZED" && updatedAt ? new Date(updatedAt) : new Date();
-  return formatDuration(end.getTime() - start.getTime());
-}
-
 function computeEventAge(eventDateAd: string | null): string | null {
   if (!eventDateAd) return null;
   const eventDate = new Date(eventDateAd);
