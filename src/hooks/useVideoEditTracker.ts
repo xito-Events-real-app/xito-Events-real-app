@@ -11,6 +11,7 @@ import { scheduleVideoEditPush } from "@/lib/video-edit-push-scheduler";
 import { syncYouTubeLinks } from "@/lib/youtube-link-sync";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { pushEditorNotification } from "@/components/video-edit/EditorNotifications";
 
 function getTodayStr() {
   return new Date().toISOString().split("T")[0];
