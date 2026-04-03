@@ -148,6 +148,7 @@ const App = () => (
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AuthProvider>
+           </FloatingYouTubePlayerProvider>
           </BrowserRouter>
           </YouTubeUploadProvider>
           </XitoDriveUploadProvider>
