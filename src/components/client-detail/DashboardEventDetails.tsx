@@ -382,18 +382,6 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, free
         })}
       </div>
 
-      {/* Floating YouTube Player */}
-      {floatingVideo && (
-        <FloatingYouTubePlayer
-          videoId={floatingVideo.videoId}
-          title={floatingVideo.title}
-          onClose={() => setFloatingVideo(null)}
-          onNavigateToYouTube={() => {
-            setFloatingVideo(null);
-            navigate('/?section=youtube');
-          }}
-        />
-      )}
     </div>
   );
 };
