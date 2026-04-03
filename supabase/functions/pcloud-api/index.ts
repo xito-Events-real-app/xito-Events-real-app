@@ -7,10 +7,10 @@ const corsHeaders = {
 
 const PCLOUD_API = 'https://api.pcloud.com';
 
-// Use a long-lived OAuth access token (pCloud deprecated email/password login)
+// Use permanent session auth token (pCloud deprecated email/password login)
 function getAuthToken(): string {
-  const token = Deno.env.get('PCLOUD_ACCESS_TOKEN');
-  if (!token) throw new Error('PCLOUD_ACCESS_TOKEN not configured. Generate one at https://docs.pcloud.com/methods/oauth_2.0/authorize.html');
+  const token = Deno.env.get('PCLOUD_AUTH_TOKEN');
+  if (!token) throw new Error('PCLOUD_AUTH_TOKEN not configured');
   return token;
 }
 
