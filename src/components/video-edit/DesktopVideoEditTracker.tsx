@@ -15,7 +15,6 @@ import { Calendar } from "@/components/ui/calendar";
 import { Video, MessageSquare, Music, ExternalLink, ChevronDown, ChevronRight, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, FolderOpen, LayoutDashboard, List, GitBranch, Users, RefreshCcw, CheckCircle, Play, Pause, Clock, Phone, ArrowRight, CalendarIcon, AlertTriangle, Timer, Search, Youtube, Share2 } from "lucide-react";
 import { WtnPipelineView } from "./WtnPipelineView";
 import { FileDetailsExpander } from "./FileDetailsExpander";
-import { EditorChat } from "./EditorChat";
 import { FloatingEditorChat } from "./FloatingEditorChat";
 import { supabase } from "@/integrations/supabase/client";
 import { adToBS, nepaliMonthsEnglish, getBSYearsRange, formatBSDate } from "@/lib/nepali-date";
