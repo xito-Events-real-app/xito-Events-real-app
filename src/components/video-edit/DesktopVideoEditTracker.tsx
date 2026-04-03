@@ -1190,13 +1190,16 @@ const NEXT_UP_STAGE_COLORS: Record<string, string> = {
   'QUEUE': 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
 };
 
-function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, onTogglePlaying }: {
+function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, onTogglePlaying, editors, allClientNames }: {
   editorName: string;
   rowsByStatus: Record<string, DisplayRow[]>;
   onPushToStatus: (id: string, newStatus: string, mergedIds?: string[]) => void;
   onUpdateField: (id: string, field: string, value: string, mergedIds?: string[]) => void;
   onTogglePlaying: (id: string, currentlyPlaying: boolean, mergedIds?: string[]) => void;
+  editors: { name: string; isVideoEditor: boolean; whatsapp?: string }[];
+  allClientNames: string[];
 }) {
+  const { toast } = useToast();
   const [nextUpOpen, setNextUpOpen] = useState(false);
   const groupedByStage = useMemo(() => {
     const result: { key: string; label: string; rows: DisplayRow[] }[] = [];
