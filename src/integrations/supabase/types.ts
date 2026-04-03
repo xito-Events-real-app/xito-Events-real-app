@@ -1270,6 +1270,75 @@ export type Database = {
         }
         Relationships: []
       }
+      video_edit_chat: {
+        Row: {
+          created_at: string | null
+          editor_name: string
+          id: string
+          is_read: boolean | null
+          mentions: string
+          message: string
+          sender_name: string
+          sender_type: string
+          tracker_row_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          editor_name?: string
+          id?: string
+          is_read?: boolean | null
+          mentions?: string
+          message?: string
+          sender_name?: string
+          sender_type?: string
+          tracker_row_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          editor_name?: string
+          id?: string
+          is_read?: boolean | null
+          mentions?: string
+          message?: string
+          sender_name?: string
+          sender_type?: string
+          tracker_row_id?: string | null
+        }
+        Relationships: []
+      }
+      video_edit_notifications: {
+        Row: {
+          created_at: string | null
+          description: string
+          editor_name: string
+          id: string
+          is_read: boolean | null
+          notification_type: string
+          title: string
+          tracker_row_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string
+          editor_name?: string
+          id?: string
+          is_read?: boolean | null
+          notification_type?: string
+          title?: string
+          tracker_row_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string
+          editor_name?: string
+          id?: string
+          is_read?: boolean | null
+          notification_type?: string
+          title?: string
+          tracker_row_id?: string | null
+        }
+        Relationships: []
+      }
       video_edit_tracker: {
         Row: {
           client_demand: string | null
