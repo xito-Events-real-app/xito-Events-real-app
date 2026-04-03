@@ -499,7 +499,14 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
       setPlaylists(withVideos);
       setCachedData(YT_CACHE_PLAYLISTS, withVideos);
       setCacheTimestamp(YT_CACHE_PLAYLISTS_TS);
-      if (pls.length > 0) setExpandedPlaylists(new Set([pls[0].id]));
+      if (pls.length > 0) {
+        setExpandedPlaylists(new Set([pls[0].id]));
+        // Lazy-load videos for the first playlist if not cached
+        const firstCached = getCachedData<PlaylistVideo[]>(`${YT_CACHE_PLAYLIST_VIDEOS_PREFIX}${pls[0].id}`);
+        if (!firstCached || firstCached.length === 0) {
+          loadPlaylistVideos(pls[0].id);
+        }
+      }
     } catch (err) {
       console.error("Failed to load playlists:", err);
       // Fallback to tracker if no playlists loaded yet
