@@ -8,7 +8,7 @@ import { FreelancerData } from "@/lib/freelancer-api";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from "@/components/ui/command";
 import { supabase } from "@/integrations/supabase/client";
-import { useFloatingYouTubePlayer } from "@/contexts/FloatingYouTubePlayerContext";
+import { useFloatingYouTubePlayer, type FloatingYouTubeVideo } from "@/contexts/FloatingYouTubePlayerContext";
 
 interface ClientEventsData {
   events: string;
