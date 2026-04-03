@@ -12,6 +12,8 @@ import { BenzoKeepPopupProvider } from "./contexts/BenzoKeepPopupContext";
 import { SaugatSearch } from "./components/suite/SaugatSearch";
 import { FloatingBookingCalendar } from "./components/shared/FloatingBookingCalendar";
 import { FloatingBenzoKeep } from "./components/shared/FloatingBenzoKeep";
+import { FloatingYouTubePlayerProvider } from "./contexts/FloatingYouTubePlayerContext";
+import { FloatingYouTubePlayer } from "./components/shared/FloatingYouTubePlayer";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import Login from "./pages/Login";
 import SuiteLanding from "./pages/SuiteLanding";
