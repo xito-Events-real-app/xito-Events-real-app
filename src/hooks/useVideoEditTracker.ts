@@ -11,6 +11,7 @@ import { scheduleVideoEditPush } from "@/lib/video-edit-push-scheduler";
 import { syncYouTubeLinks } from "@/lib/youtube-link-sync";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { pushEditorNotification } from "@/components/video-edit/EditorNotifications";
 
 function getTodayStr() {
   return new Date().toISOString().split("T")[0];
@@ -298,8 +299,18 @@ export function useVideoEditTracker() {
   const updateField = useCallback(async (id: string, field: string, value: string, mergedIds?: string[]) => {
     const ids = mergedIds || [id];
     try {
+      // Get the row to find editor for notifications
+      const targetRow = rows.find(r => r.id === id || mergedIds?.includes(r.id));
       await Promise.all(ids.map(i => apiUpdateField(i, field, value)));
       scheduleVideoEditPush();
+
+      // Push notification for editor assignment or urgency changes
+      if (field === 'editor' && value) {
+        pushEditorNotification(value, 'assignment', 'New assignment', `${targetRow?.clientName || 'A video'} - ${targetRow?.editType || ''} has been assigned to you`, id);
+      } else if (field === 'urgency' && targetRow?.editor) {
+        pushEditorNotification(targetRow.editor, 'urgency', 'Urgency updated', `${targetRow.clientName} - ${targetRow.editType} urgency set to ${value}`, id);
+      }
+
       setTimeout(() => {
         loadRows();
       }, 0);
@@ -307,14 +318,22 @@ export function useVideoEditTracker() {
       toast({ title: "Update failed", description: err.message, variant: "destructive" });
       loadRows();
     }
-  }, [toast, loadRows]);
+  }, [toast, loadRows, rows]);
 
   const pushToStatus = useCallback(async (id: string, newStatus: string, mergedIds?: string[]) => {
     const ids = mergedIds || [id];
+    const targetRow = rows.find(r => r.id === id || mergedIds?.includes(r.id));
+    const stageLabel = STAGES.find(s => s.key === newStatus)?.label || newStatus;
     try {
       await Promise.all(ids.map(i => apiPushToStatus(i, newStatus)));
       scheduleVideoEditPush();
-      toast({ title: `Moved to ${STAGES.find(s => s.key === newStatus)?.label || newStatus}` });
+      toast({ title: `Moved to ${stageLabel}` });
+
+      // Push notification to editor
+      if (targetRow?.editor) {
+        pushEditorNotification(targetRow.editor, 'status_change', `Moved to ${stageLabel}`, `${targetRow.clientName} - ${targetRow.editType} has been moved to ${stageLabel}`, id);
+      }
+
       setTimeout(() => {
         loadRows();
       }, 0);
@@ -322,7 +341,7 @@ export function useVideoEditTracker() {
       toast({ title: "Move failed", description: err.message, variant: "destructive" });
       loadRows();
     }
-  }, [toast, loadRows]);
+  }, [toast, loadRows, rows]);
 
   const togglePlaying = useCallback(async (id: string, currentlyPlaying: boolean, mergedIds?: string[]) => {
     const ids = mergedIds || [id];

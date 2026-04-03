@@ -12,15 +12,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Video, MessageSquare, Music, ExternalLink, ChevronDown, ChevronRight, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, FolderOpen, LayoutDashboard, List, GitBranch, Users, RefreshCcw, CheckCircle, Play, Pause, Clock, Phone, ArrowRight, CalendarIcon, AlertTriangle, Timer, Search, Youtube } from "lucide-react";
+import { Video, MessageSquare, Music, ExternalLink, ChevronDown, ChevronRight, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, FolderOpen, LayoutDashboard, List, GitBranch, Users, RefreshCcw, CheckCircle, Play, Pause, Clock, Phone, ArrowRight, CalendarIcon, AlertTriangle, Timer, Search, Youtube, Share2 } from "lucide-react";
 import { WtnPipelineView } from "./WtnPipelineView";
 import { FileDetailsExpander } from "./FileDetailsExpander";
+import { EditorChat, EditorChatSection } from "./EditorChat";
 import { supabase } from "@/integrations/supabase/client";
 import { adToBS, nepaliMonthsEnglish, getBSYearsRange, formatBSDate } from "@/lib/nepali-date";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 
 const URGENCY_COLORS: Record<string, string> = {
   "1": "bg-muted text-muted-foreground",
@@ -1188,13 +1190,16 @@ const NEXT_UP_STAGE_COLORS: Record<string, string> = {
   'QUEUE': 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
 };
 
-function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, onTogglePlaying }: {
+function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, onTogglePlaying, editors, allClientNames }: {
   editorName: string;
   rowsByStatus: Record<string, DisplayRow[]>;
   onPushToStatus: (id: string, newStatus: string, mergedIds?: string[]) => void;
   onUpdateField: (id: string, field: string, value: string, mergedIds?: string[]) => void;
   onTogglePlaying: (id: string, currentlyPlaying: boolean, mergedIds?: string[]) => void;
+  editors: { name: string; isVideoEditor: boolean; whatsapp?: string }[];
+  allClientNames: string[];
 }) {
+  const { toast } = useToast();
   const [nextUpOpen, setNextUpOpen] = useState(false);
   const groupedByStage = useMemo(() => {
     const result: { key: string; label: string; rows: DisplayRow[] }[] = [];
@@ -1335,16 +1340,42 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, o
     },
   ];
 
+  const editorInfo = editors.find(e => e.name === editorName);
+  const portalUrl = `https://wtnclienttracker.lovable.app/editor-portal/${encodeURIComponent(editorName)}`;
+  const mentionOptions = useMemo(() => {
+    const names = new Set<string>();
+    editors.forEach(e => e.name && names.add(e.name));
+    allClientNames.forEach(n => names.add(n));
+    return Array.from(names).sort();
+  }, [editors, allClientNames]);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-full bg-teal-600 flex items-center justify-center">
           <span className="text-white font-bold text-sm">{editorName.charAt(0).toUpperCase()}</span>
         </div>
-        <div>
+        <div className="flex-1">
           <h2 className="text-lg font-bold text-foreground">{editorName}</h2>
           <p className="text-xs text-muted-foreground">{totalAssigned} assigned videos</p>
         </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8 text-xs gap-1.5"
+          onClick={() => {
+            const msg = `Hi ${editorName.split(' ')[0]}, here's your editor portal:\n${portalUrl}`;
+            if (editorInfo?.whatsapp) {
+              openWhatsApp(editorInfo.whatsapp, msg);
+            } else {
+              navigator.clipboard.writeText(portalUrl);
+              toast({ title: "Portal link copied!" });
+            }
+          }}
+        >
+          <Share2 className="w-3.5 h-3.5" />
+          {editorInfo?.whatsapp ? "Send Portal Link" : "Copy Portal Link"}
+        </Button>
       </div>
 
       {/* Stat Cards */}
@@ -1489,6 +1520,20 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, o
           );
         })
       )}
+
+      {/* Chat Section */}
+      <div className="mt-6">
+        <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+          <MessageSquare className="w-4 h-4 text-primary" />
+          Chat
+        </h3>
+        <EditorChat
+          editorName={editorName}
+          senderName="Admin"
+          senderType="admin"
+          mentionOptions={mentionOptions}
+        />
+      </div>
     </div>
   );
 }
@@ -1525,6 +1570,7 @@ function VideoEditSidebar({
     { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'classic' as const, label: 'Classic View', icon: List },
     { id: 'pipeline' as const, label: 'Pipeline View', icon: GitBranch },
+    { id: 'chat' as const, label: 'Chat', icon: MessageSquare },
   ];
 
   const renderEditorBtn = (name: string, dotClass: string, nameClass: string) => {
@@ -1841,7 +1887,7 @@ export function DesktopVideoEditTracker() {
     setActiveView('pipeline');
   };
 
-  const isEditorView = activeView !== 'dashboard' && activeView !== 'classic' && activeView !== 'pipeline';
+  const isEditorView = activeView !== 'dashboard' && activeView !== 'classic' && activeView !== 'pipeline' && activeView !== 'chat';
 
   // Compute editor stage groups for sidebar
   const editorStageGroups = useMemo(() => {
@@ -1915,10 +1961,22 @@ export function DesktopVideoEditTracker() {
           </div>
         ) : activeView === 'pipeline' ? (
           <WtnPipelineView onClose={() => setActiveView('dashboard')} inline initialStage={pipelineInitialStage} />
+        ) : activeView === 'chat' ? (
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="max-w-[1200px] mx-auto">
+              <h1 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-primary" /> Editor Chat
+              </h1>
+              <EditorChatSection
+                editors={editors.filter(e => e.isVideoEditor && e.name).map(e => e.name)}
+                mentionOptions={uniqueClientNames.concat(editors.filter(e => e.name).map(e => e.name))}
+              />
+            </div>
+          </div>
         ) : isEditorView ? (
           <div className="flex-1 overflow-y-auto p-6">
             <div className="max-w-[1200px] mx-auto">
-              <EditorView editorName={activeView} rowsByStatus={rowsByStatus} onPushToStatus={pushToStatus} onUpdateField={updateField} onTogglePlaying={togglePlaying} />
+              <EditorView editorName={activeView} rowsByStatus={rowsByStatus} onPushToStatus={pushToStatus} onUpdateField={updateField} onTogglePlaying={togglePlaying} editors={editors} allClientNames={uniqueClientNames} />
             </div>
           </div>
         ) : (
