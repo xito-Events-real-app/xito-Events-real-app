@@ -1,18 +1,15 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { X, GripHorizontal, ExternalLink, Maximize2, Minimize2 } from "lucide-react";
+import { X, GripHorizontal, Maximize2, Minimize2 } from "lucide-react";
+import { useFloatingYouTubePlayer } from "@/contexts/FloatingYouTubePlayerContext";
+import { useNavigate } from "react-router-dom";
 
 const MIN_W = 400, MIN_H = 280, MAX_W = 960, MAX_H = 600;
 const DEFAULT_W = 560, DEFAULT_H = 360;
 
-interface FloatingYouTubePlayerProps {
-  videoId: string;
-  title?: string;
-  onClose: () => void;
-  onNavigateToYouTube?: () => void;
-}
-
-export function FloatingYouTubePlayer({ videoId, title, onClose, onNavigateToYouTube }: FloatingYouTubePlayerProps) {
+export function FloatingYouTubePlayer() {
+  const { video, close } = useFloatingYouTubePlayer();
+  const navigate = useNavigate();
   const [pos, setPos] = useState({ x: window.innerWidth / 2 - DEFAULT_W / 2, y: window.innerHeight / 2 - DEFAULT_H / 2 });
   const [size, setSize] = useState({ w: DEFAULT_W, h: DEFAULT_H });
   const [isMaximized, setIsMaximized] = useState(false);
@@ -73,17 +70,19 @@ export function FloatingYouTubePlayer({ videoId, title, onClose, onNavigateToYou
     };
   }, []);
 
+  if (!video) return null;
+
   return createPortal(
     <div
       style={{
         position: "fixed",
-        left: isMaximized ? pos.x : pos.x,
-        top: isMaximized ? pos.y : pos.y,
-        width: isMaximized ? size.w : size.w,
-        height: isMaximized ? size.h : size.h,
+        left: pos.x,
+        top: pos.y,
+        width: size.w,
+        height: size.h,
         zIndex: 300,
       }}
-      className="rounded-xl border border-border bg-black shadow-2xl flex flex-col overflow-hidden select-none"
+      className="rounded-xl border border-zinc-700 bg-black shadow-2xl flex flex-col overflow-hidden select-none"
     >
       {/* Header - draggable */}
       <div
@@ -92,18 +91,17 @@ export function FloatingYouTubePlayer({ videoId, title, onClose, onNavigateToYou
       >
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-3 h-3 rounded-full bg-red-500 flex-shrink-0" />
-          <span className="text-xs font-medium text-white/80 truncate">{title || 'YouTube Player'}</span>
+          <span className="text-xs font-medium text-white/80 truncate">{video.title || 'YouTube Player'}</span>
         </div>
-        <div className="flex items-center gap-1">
-          {onNavigateToYouTube && (
-            <button
-              onClick={onNavigateToYouTube}
-              className="p-1 rounded-md hover:bg-white/10 text-white/50 hover:text-white transition-colors"
-              title="Open in YouTube Dashboard"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-            </button>
-          )}
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => {
+              navigate('/?section=youtube');
+            }}
+            className="px-2 py-0.5 rounded text-[10px] font-semibold bg-red-500/20 text-red-400 hover:bg-red-500/30 hover:text-red-300 transition-colors"
+          >
+            Open in YouTube
+          </button>
           <button
             onClick={toggleMaximize}
             className="p-1 rounded-md hover:bg-white/10 text-white/50 hover:text-white transition-colors"
@@ -112,7 +110,7 @@ export function FloatingYouTubePlayer({ videoId, title, onClose, onNavigateToYou
             {isMaximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </button>
           <button
-            onClick={onClose}
+            onClick={close}
             className="p-1 rounded-md hover:bg-red-500/20 text-white/50 hover:text-red-400 transition-colors"
           >
             <X className="w-3.5 h-3.5" />
@@ -123,7 +121,7 @@ export function FloatingYouTubePlayer({ videoId, title, onClose, onNavigateToYou
       {/* Player */}
       <div className="flex-1 bg-black">
         <iframe
-          src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`}
+          src={`https://www.youtube.com/embed/${video.videoId}?autoplay=1&rel=0`}
           className="w-full h-full"
           allow="autoplay; encrypted-media; picture-in-picture"
           allowFullScreen
