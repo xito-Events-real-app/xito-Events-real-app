@@ -30,6 +30,37 @@ async function getAccessToken(): Promise<string> {
   return tokenData.access_token;
 }
 
+async function youtubeFetch(accessToken: string, url: string) {
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(`YouTube API error (${res.status}): ${JSON.stringify(data)}`);
+  }
+
+  return data;
+}
+
+async function getOwnedChannel(accessToken: string): Promise<{ channelId: string; uploadsPlaylistId: string | null }> {
+  const data = await youtubeFetch(
+    accessToken,
+    "https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails&mine=true"
+  );
+
+  const channel = data.items?.[0];
+  if (!channel?.id) {
+    throw new Error("No YouTube channel found for the connected account");
+  }
+
+  return {
+    channelId: channel.id,
+    uploadsPlaylistId: channel.contentDetails?.relatedPlaylists?.uploads || null,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -85,15 +116,13 @@ Deno.serve(async (req) => {
       }
 
       case "listPlaylists": {
+        const { channelId } = await getOwnedChannel(accessToken);
         let allPlaylists: any[] = [];
         let nextPageToken = "";
 
         do {
-          const url = `https://www.googleapis.com/youtube/v3/playlists?part=snippet&mine=true&maxResults=50${nextPageToken ? `&pageToken=${nextPageToken}` : ""}`;
-          const res = await fetch(url, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          });
-          const data = await res.json();
+          const url = `https://www.googleapis.com/youtube/v3/playlists?part=snippet&channelId=${encodeURIComponent(channelId)}&maxResults=50${nextPageToken ? `&pageToken=${nextPageToken}` : ""}`;
+          const data = await youtubeFetch(accessToken, url);
           if (data.items) {
             allPlaylists = allPlaylists.concat(
               data.items.map((item: any) => ({
@@ -212,10 +241,7 @@ Deno.serve(async (req) => {
         let nextPageToken = "";
         do {
           const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${playlistId}&maxResults=50${nextPageToken ? `&pageToken=${nextPageToken}` : ""}`;
-          const res = await fetch(url, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          });
-          const data = await res.json();
+          const data = await youtubeFetch(accessToken, url);
           if (data.items) {
             allVideos = allVideos.concat(
               data.items.map((item: any) => ({
@@ -237,14 +263,18 @@ Deno.serve(async (req) => {
       case "listRecentUploads": {
         const maxResults = body.maxResults || 50;
         const pageToken = body.pageToken || "";
-        
-        const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&forMine=true&type=video&order=date&maxResults=${Math.min(maxResults, 50)}${pageToken ? `&pageToken=${pageToken}` : ""}`;
-        const res = await fetch(url, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        const data = await res.json();
+
+        const { uploadsPlaylistId } = await getOwnedChannel(accessToken);
+        if (!uploadsPlaylistId) {
+          return new Response(JSON.stringify({ videos: [], nextPageToken: null }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${encodeURIComponent(uploadsPlaylistId)}&maxResults=${Math.min(maxResults, 50)}${pageToken ? `&pageToken=${pageToken}` : ""}`;
+        const data = await youtubeFetch(accessToken, url);
         const videos = (data.items || []).map((item: any) => ({
-          videoId: item.id?.videoId || "",
+          videoId: item.contentDetails?.videoId || item.snippet?.resourceId?.videoId || "",
           title: item.snippet?.title || "",
           thumbnailUrl: item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || "",
           publishedAt: item.snippet?.publishedAt || "",
