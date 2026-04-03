@@ -322,10 +322,18 @@ export function useVideoEditTracker() {
 
   const pushToStatus = useCallback(async (id: string, newStatus: string, mergedIds?: string[]) => {
     const ids = mergedIds || [id];
+    const targetRow = rows.find(r => r.id === id || mergedIds?.includes(r.id));
+    const stageLabel = STAGES.find(s => s.key === newStatus)?.label || newStatus;
     try {
       await Promise.all(ids.map(i => apiPushToStatus(i, newStatus)));
       scheduleVideoEditPush();
-      toast({ title: `Moved to ${STAGES.find(s => s.key === newStatus)?.label || newStatus}` });
+      toast({ title: `Moved to ${stageLabel}` });
+
+      // Push notification to editor
+      if (targetRow?.editor) {
+        pushEditorNotification(targetRow.editor, 'status_change', `Moved to ${stageLabel}`, `${targetRow.clientName} - ${targetRow.editType} has been moved to ${stageLabel}`, id);
+      }
+
       setTimeout(() => {
         loadRows();
       }, 0);
@@ -333,7 +341,7 @@ export function useVideoEditTracker() {
       toast({ title: "Move failed", description: err.message, variant: "destructive" });
       loadRows();
     }
-  }, [toast, loadRows]);
+  }, [toast, loadRows, rows]);
 
   const togglePlaying = useCallback(async (id: string, currentlyPlaying: boolean, mergedIds?: string[]) => {
     const ids = mergedIds || [id];
