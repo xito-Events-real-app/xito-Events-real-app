@@ -7,36 +7,11 @@ const corsHeaders = {
 
 const PCLOUD_API = 'https://api.pcloud.com';
 
-// Cache auth token in memory to avoid re-login on every request
-let cachedAuth: { token: string; expiresAt: number } | null = null;
-
-async function getAuthToken(): Promise<string> {
-  if (cachedAuth && Date.now() < cachedAuth.expiresAt - 60000) {
-    return cachedAuth.token;
-  }
-
-  const email = Deno.env.get('PCLOUD_EMAIL');
-  const password = Deno.env.get('PCLOUD_PASSWORD');
-  if (!email || !password) throw new Error('pCloud credentials not configured');
-
-  const params = new URLSearchParams({
-    getauth: '1',
-    logout: '0',
-    username: email,
-    password: password,
-    authexpire: '3600',
-  });
-
-  const res = await fetch(`${PCLOUD_API}/userinfo?${params}`);
-  const data = await res.json();
-  if (data.result !== 0) throw new Error(`pCloud login failed: ${data.error || 'Unknown error'}`);
-
-  cachedAuth = {
-    token: data.auth as string,
-    expiresAt: Date.now() + 3600 * 1000,
-  };
-
-  return cachedAuth.token;
+// Use a long-lived OAuth access token (pCloud deprecated email/password login)
+function getAuthToken(): string {
+  const token = Deno.env.get('PCLOUD_ACCESS_TOKEN');
+  if (!token) throw new Error('PCLOUD_ACCESS_TOKEN not configured. Generate one at https://docs.pcloud.com/methods/oauth_2.0/authorize.html');
+  return token;
 }
 
 // Recursively sum file sizes from a folder listing
