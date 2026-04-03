@@ -10,6 +10,7 @@ interface FloatingYouTubeVideo {
   updatedAt?: string;
   eventDateAD?: string;
   editType?: string;
+  stageHistory?: string;
 }
 
 interface FloatingYouTubePlayerContextType {

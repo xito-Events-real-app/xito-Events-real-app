@@ -327,15 +327,31 @@ export function useVideoEditTracker() {
   const togglePlaying = useCallback(async (id: string, currentlyPlaying: boolean, mergedIds?: string[]) => {
     const ids = mergedIds || [id];
     const newIsPlaying = !currentlyPlaying;
+    const now = new Date().toISOString();
+    const historyEntry = `${newIsPlaying ? "RESUMED" : "PAUSED"} [${now}]`;
+
     try {
-      await supabase
+      // Fetch current stage_history for each row to append pause/resume events
+      const { data: currentRows } = await supabase
         .from("video_edit_tracker")
-        .update({
-          is_playing: newIsPlaying,
-          playing_since: newIsPlaying ? new Date().toISOString() : null,
-          updated_at: new Date().toISOString(),
-        })
+        .select("id, stage_history")
         .in("id", ids);
+
+      const updates = (currentRows || []).map((row) => {
+        const existing = row.stage_history || "";
+        const updated = existing ? `${existing}\n${historyEntry}` : historyEntry;
+        return supabase
+          .from("video_edit_tracker")
+          .update({
+            is_playing: newIsPlaying,
+            playing_since: newIsPlaying ? now : null,
+            stage_history: updated,
+            updated_at: now,
+          })
+          .eq("id", row.id);
+      });
+
+      await Promise.all(updates);
       setTimeout(() => { loadRows(); }, 0);
     } catch (err: any) {
       toast({ title: "Toggle failed", description: err.message, variant: "destructive" });
