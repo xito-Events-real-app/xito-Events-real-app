@@ -2210,6 +2210,12 @@ export function DesktopVideoEditTracker() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Floating Facebook-style chat widget */}
+      <FloatingEditorChat
+        editors={editors.filter(e => e.isVideoEditor && e.name).map(e => e.name)}
+        mentionOptions={uniqueClientNames.concat(editors.filter(e => e.name).map(e => e.name))}
+      />
     </div>
   );
 }
