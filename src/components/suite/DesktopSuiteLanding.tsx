@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Smartphone, LogOut, Newspaper, RefreshCw, Search, Youtube } from "lucide-react";
 import { cn } from "@/lib/utils";
