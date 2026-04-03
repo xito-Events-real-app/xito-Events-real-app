@@ -1886,7 +1886,7 @@ export function DesktopVideoEditTracker() {
     setActiveView('pipeline');
   };
 
-  const isEditorView = activeView !== 'dashboard' && activeView !== 'classic' && activeView !== 'pipeline';
+  const isEditorView = activeView !== 'dashboard' && activeView !== 'classic' && activeView !== 'pipeline' && activeView !== 'chat';
 
   // Compute editor stage groups for sidebar
   const editorStageGroups = useMemo(() => {
