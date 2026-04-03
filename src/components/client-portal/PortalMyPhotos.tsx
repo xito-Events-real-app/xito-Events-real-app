@@ -211,10 +211,11 @@ const PortalMyPhotos = ({
     return result;
   }, [assignments, clientName]);
 
-  // Load photos when tab changes — use module-level cache for instant re-loads
+  // Load photos when tab changes — use module-level cache, abort stale requests
   useEffect(() => {
     const tab = tabs[activeTabIndex];
     if (!tab) return;
+    let stale = false;
 
     // If both folder listing and URLs are cached, load instantly
     if (folderCache[tab.id] && urlCache[tab.id]) {
@@ -229,9 +230,11 @@ const PortalMyPhotos = ({
     setPhotoUrls({});
 
     const loadPhotos = async (imageFiles: E2File[]) => {
+      if (stale) return;
       setPhotos(imageFiles);
       if (imageFiles.length > 0) {
         const urls = await getE2FileUrls(imageFiles.map(f => f.key));
+        if (stale) return;
         urlCache[tab.id] = urls;
         cacheUrls(urls);
         setPhotoUrls(urls);
@@ -245,12 +248,15 @@ const PortalMyPhotos = ({
     } else {
       listE2Folder(tab.s3Prefix)
         .then((result) => {
+          if (stale) return;
           const imageFiles = result.files.filter(f => isImage(f.key));
           folderCache[tab.id] = imageFiles;
           return loadPhotos(imageFiles);
         })
-        .catch(() => setIsLoadingPhotos(false));
+        .catch(() => { if (!stale) setIsLoadingPhotos(false); });
     }
+
+    return () => { stale = true; };
   }, [activeTabIndex, tabs]);
 
   const viewerImages = useMemo(

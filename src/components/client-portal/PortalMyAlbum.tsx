@@ -70,6 +70,7 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
       setPhotoUrls({});
       return;
     }
+    let stale = false;
     const keys = albumPhotos.map(p => p.photo_key);
     const { hits, missingKeys } = lookupUrls(keys);
 
@@ -83,11 +84,14 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
     setLoadingUrls(true);
     getE2FileUrls(missingKeys)
       .then(urls => {
+        if (stale) return;
         cacheUrls(urls);
         setPhotoUrls(prev => ({ ...prev, ...urls }));
       })
       .catch(() => {})
-      .finally(() => setLoadingUrls(false));
+      .finally(() => { if (!stale) setLoadingUrls(false); });
+
+    return () => { stale = true; };
   }, [albumPhotos]);
 
   const handleRemove = useCallback(async (photoKey: string) => {
