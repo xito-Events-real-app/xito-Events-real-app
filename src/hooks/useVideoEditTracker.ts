@@ -299,8 +299,18 @@ export function useVideoEditTracker() {
   const updateField = useCallback(async (id: string, field: string, value: string, mergedIds?: string[]) => {
     const ids = mergedIds || [id];
     try {
+      // Get the row to find editor for notifications
+      const targetRow = rows.find(r => r.id === id || mergedIds?.includes(r.id));
       await Promise.all(ids.map(i => apiUpdateField(i, field, value)));
       scheduleVideoEditPush();
+
+      // Push notification for editor assignment or urgency changes
+      if (field === 'editor' && value) {
+        pushEditorNotification(value, 'assignment', 'New assignment', `${targetRow?.clientName || 'A video'} - ${targetRow?.editType || ''} has been assigned to you`, id);
+      } else if (field === 'urgency' && targetRow?.editor) {
+        pushEditorNotification(targetRow.editor, 'urgency', 'Urgency updated', `${targetRow.clientName} - ${targetRow.editType} urgency set to ${value}`, id);
+      }
+
       setTimeout(() => {
         loadRows();
       }, 0);
@@ -308,7 +318,7 @@ export function useVideoEditTracker() {
       toast({ title: "Update failed", description: err.message, variant: "destructive" });
       loadRows();
     }
-  }, [toast, loadRows]);
+  }, [toast, loadRows, rows]);
 
   const pushToStatus = useCallback(async (id: string, newStatus: string, mergedIds?: string[]) => {
     const ids = mergedIds || [id];
