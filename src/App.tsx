@@ -84,12 +84,14 @@ const App = () => (
           <XitoDriveUploadProvider>
           <YouTubeUploadProvider>
           <BrowserRouter>
+           <FloatingYouTubePlayerProvider>
             <AuthProvider>
               <WtnFilesAnnouncement />
               <AuthenticatedStartupPopup />
               <SaugatSearch />
               <FloatingBookingCalendar />
               <FloatingBenzoKeep />
+              <FloatingYouTubePlayer />
               <Toaster />
               <Sonner />
               <UploadProgressTracker />
