@@ -255,7 +255,7 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, free
                     return (
                       <button
                         onClick={(e) => {
-                          setFloatingVideo(null);
+                          e.stopPropagation();
                           openFloatingPlayer(yt);
                         }}
                         className="flex-shrink-0 w-5 h-5 rounded flex items-center justify-center bg-red-500/20 hover:bg-red-500/40 transition-colors group"
