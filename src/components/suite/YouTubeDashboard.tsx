@@ -470,6 +470,8 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
       setCachedData(YT_CACHE_RECENT, videos);
     } catch (err) {
       console.error("Failed to load recent uploads:", err);
+      // Fallback to tracker data on API failure
+      if (recentVideos.length === 0) await loadFromTracker();
     } finally {
       setLoadingRecent(false);
     }
@@ -488,9 +490,7 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
     }
 
     retriedRedirectLoadRef.current = true;
-    loadRecentUploads(false);
-    loadPlaylists(false);
-    loadStats();
+    loadFromTracker();
   }, [open, initialVideoId, loadingRecent, loadingPlaylists, recentVideos.length, playlists.length]);
 
   useEffect(() => {
