@@ -4,6 +4,13 @@ import { X, GripHorizontal, Maximize2, Minimize2, User, Palette, Clock, Calendar
 import { useFloatingYouTubePlayer } from "@/contexts/FloatingYouTubePlayerContext";
 import { useNavigate } from "react-router-dom";
 
+declare global {
+  interface Window {
+    YT: any;
+    onYouTubeIframeAPIReady: (() => void) | undefined;
+  }
+}
+
 const MIN_W = 400, MIN_H = 300, MAX_W = 960, MAX_H = 700;
 const DEFAULT_W = 560, DEFAULT_H = 420;
 
@@ -47,6 +54,9 @@ export function FloatingYouTubePlayer() {
   const prevState = useRef({ pos: { x: 0, y: 0 }, size: { w: DEFAULT_W, h: DEFAULT_H } });
   const dragging = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
   const resizing = useRef<{ startX: number; startY: number; origW: number; origH: number } | null>(null);
+  const playerRef = useRef<any>(null);
+  const playerContainerRef = useRef<HTMLDivElement | null>(null);
+  const apiReadyRef = useRef(false);
 
   const onDragStart = useCallback((e: React.MouseEvent) => {
     if (isMaximized) return;
@@ -101,11 +111,101 @@ export function FloatingYouTubePlayer() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!video) {
+      try {
+        playerRef.current?.destroy?.();
+      } catch {}
+      playerRef.current = null;
+      return;
+    }
+
+    if (window.YT?.Player) {
+      apiReadyRef.current = true;
+      return;
+    }
+
+    const existing = document.getElementById("yt-floating-iframe-api");
+    if (!existing) {
+      const tag = document.createElement("script");
+      tag.id = "yt-floating-iframe-api";
+      tag.src = "https://www.youtube.com/iframe_api";
+      document.head.appendChild(tag);
+    }
+
+    const previousReady = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      apiReadyRef.current = true;
+      previousReady?.();
+    };
+  }, [video]);
+
+  const initPlayer = useCallback((videoId: string) => {
+    if (!apiReadyRef.current || !playerContainerRef.current) return;
+
+    if (playerRef.current) {
+      try {
+        playerRef.current.loadVideoById({ videoId, startSeconds: 0 });
+        playerRef.current.unMute();
+        playerRef.current.setVolume(100);
+      } catch {}
+      return;
+    }
+
+    playerRef.current = new window.YT.Player(playerContainerRef.current, {
+      videoId,
+      playerVars: {
+        autoplay: 1,
+        playsinline: 1,
+        rel: 0,
+        modestbranding: 1,
+      },
+      events: {
+        onReady: (e: any) => {
+          e.target.unMute();
+          e.target.setVolume(100);
+          e.target.playVideo();
+        },
+      },
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!video) return;
+
+    const tryInit = () => {
+      if (!apiReadyRef.current) return false;
+      initPlayer(video.videoId);
+      return true;
+    };
+
+    if (tryInit()) return;
+
+    const interval = window.setInterval(() => {
+      if (tryInit()) window.clearInterval(interval);
+    }, 200);
+
+    return () => window.clearInterval(interval);
+  }, [video, initPlayer]);
+
   if (!video) return null;
 
   const totalTime = computeTotalTime(video.editStartedAt || null, video.videoEditStatus || null, video.updatedAt || null);
   const eventAge = computeEventAge(video.eventDateAD || null);
   const hasTrackerInfo = video.editor || video.colorist || totalTime || eventAge;
+
+  const handleOpenInYouTube = () => {
+    let currentSeconds = 0;
+
+    try {
+      currentSeconds = Math.max(0, Math.floor(playerRef.current?.getCurrentTime?.() ?? 0));
+    } catch {
+      currentSeconds = 0;
+    }
+
+    close();
+    navigate(`/?section=youtube&videoId=${video.videoId}${currentSeconds > 0 ? `&t=${currentSeconds}` : ""}`);
+  };
 
   return createPortal(
     <div
@@ -130,10 +230,7 @@ export function FloatingYouTubePlayer() {
         </div>
         <div className="flex items-center gap-1.5">
           <button
-            onClick={() => {
-              close();
-              navigate(`/?section=youtube&videoId=${video.videoId}`);
-            }}
+            onClick={handleOpenInYouTube}
             className="px-2 py-0.5 rounded text-[10px] font-semibold bg-red-500/20 text-red-400 hover:bg-red-500/30 hover:text-red-300 transition-colors"
           >
             Open in YouTube
@@ -156,13 +253,7 @@ export function FloatingYouTubePlayer() {
 
       {/* Player */}
       <div className="flex-1 bg-black min-h-0">
-        <iframe
-          src={`https://www.youtube.com/embed/${video.videoId}?autoplay=1&rel=0`}
-          className="w-full h-full"
-          allow="autoplay; encrypted-media; picture-in-picture"
-          allowFullScreen
-          frameBorder="0"
-        />
+        <div ref={playerContainerRef} className="w-full h-full" />
       </div>
 
       {/* Tracker Info Bar */}
