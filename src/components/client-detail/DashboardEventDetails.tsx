@@ -139,7 +139,7 @@ function FreelancerAssignPopover({
 const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, freelancerAssignments, registeredDateTimeAD, allFreelancers, onAssignmentUpdate }: DashboardEventDetailsProps) => {
   const navigate = useNavigate();
   const [ytLinks, setYtLinks] = useState<Record<string, { videoId: string; title: string }>>({});
-  const [floatingVideo, setFloatingVideo] = useState<{ videoId: string; title: string } | null>(null);
+  const { open: openFloatingPlayer } = useFloatingYouTubePlayer();
 
   // Fetch YouTube links for this client's events from video_edit_tracker
   useEffect(() => {
