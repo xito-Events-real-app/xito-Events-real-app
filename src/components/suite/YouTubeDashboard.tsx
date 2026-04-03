@@ -839,13 +839,25 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
             </div>
           </div>
 
-          <Button
-            onClick={() => setShowUploadDialog(true)}
-            className="bg-red-600 hover:bg-red-700 text-white gap-2 font-bold px-6"
-          >
-            <Upload className="w-4 h-4" />
-            UPLOAD
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleManualRefresh}
+              disabled={loadingRecent && loadingPlaylists}
+              className="text-gray-500 hover:text-gray-700 hover:bg-gray-200"
+              title="Refresh from YouTube (uses API quota)"
+            >
+              <RefreshCw className={cn("w-4 h-4", (loadingRecent || loadingPlaylists) && "animate-spin")} />
+            </Button>
+            <Button
+              onClick={() => setShowUploadDialog(true)}
+              className="bg-red-600 hover:bg-red-700 text-white gap-2 font-bold px-6"
+            >
+              <Upload className="w-4 h-4" />
+              UPLOAD
+            </Button>
+          </div>
         </div>
 
         {/* Main content */}
