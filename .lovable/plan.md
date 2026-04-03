@@ -1,73 +1,65 @@
 
 
-# Fix YouTube Dashboard: Restore Direct YouTube API + Minimize Quota Usage
+# Detailed Video Edit Time Tracking
 
 ## Problem
-The recent changes replaced YouTube API calls with tracker-based fallback data. The user wants actual YouTube videos (with correct dates, thumbnails, real titles) from the YouTube API. The quota exceeded error is temporary — quota resets daily at midnight Pacific Time.
+Currently, only a single "Total Time" (from `edit_started_at` to now/finalized) is shown. The user needs granular breakdowns: Edit Time, Color Time, Total Time, Actual Time (excluding pauses), Finalized Time, and Client Review Time.
 
-## Root Cause of Quota Exhaustion
-Every time the dashboard opens, it calls:
-- `listRecentUploads` (1 API call = ~1 quota unit)
-- `listPlaylists` (1 call) + `getPlaylistVideos` per playlist (N calls in batches of 5)
-- Infinite scroll calls `listRecentUploads` again with pagination
-
-If there are 20 playlists, that's ~22 API calls per dashboard open. YouTube's daily quota is 10,000 units. Opening the dashboard frequently burns through it fast.
+## Current Data Limitations
+- **`stage_history`** records stage transitions as `STATUS [ISO_DATE]` lines — good for computing stage-to-stage durations.
+- **Pause/resume is NOT logged** — `togglePlaying` only sets `is_playing` and `playing_since` without appending to history. This means we **cannot retroactively compute paused time** for existing data.
 
 ## Plan
 
-### 1. Restore YouTube API as Primary Data Source
-- Revert `loadRecentUploads` and `loadPlaylists` to be called on dashboard open (as they were before)
-- Keep `loadFromTracker` only as a fallback when API calls fail (quota/network errors)
-- On open: show cached data instantly, then call YouTube API in background to refresh
-- Cache fresh API data to localStorage
+### 1. Record pause/resume events in `stage_history`
+**File: `src/hooks/useVideoEditTracker.ts`** — Update `togglePlaying` to:
+- Fetch current `stage_history` before updating
+- Append `PAUSED [ISO_DATE]` or `RESUMED [ISO_DATE]` to `stage_history`
+- Continue setting `is_playing` and `playing_since` as before
 
-### 2. Aggressive Caching to Minimize Quota
-- Add a **cache timestamp** alongside cached data (`yt_cache_recent_ts`, `yt_cache_playlists_ts`)
-- Only call the YouTube API if cache is **older than 30 minutes** (configurable)
-- If cache is fresh (< 30 min old), skip API calls entirely — zero quota usage
-- Add a manual **"Refresh"** button so user can force-refresh when needed (costs quota but is intentional)
+### 2. Create a shared time-computation utility
+**New file: `src/lib/video-edit-time-utils.ts`**
 
-### 3. Reduce Playlist Video Fetches
-- Don't fetch `getPlaylistVideos` for every playlist on load — only fetch when a playlist is **expanded/clicked**
-- Cache individual playlist videos separately with timestamps
-- This alone could cut 15-20 API calls per session
+Parse `stage_history` (newline-separated `STATUS [ISO_DATE]` entries) and compute:
 
-### 4. Files to Modify
+| Metric | Calculation |
+|--------|-------------|
+| **Edit Time** | Time from `EDIT_ON_PROGRESS` entry to `COLOR_QUEUE` entry |
+| **Color Time** | Time from `COLOR_ON_PROGRESS` entry to `EXPORT_QUEUE` entry |
+| **Total Time** | Time from `EDIT_ON_PROGRESS` to `EXPORT_QUEUE` (or now if not yet reached) |
+| **Actual Time (excl. pause)** | Total Time minus sum of all `PAUSED→RESUMED` intervals. Show paused duration in brackets. |
+| **Finalized Time** | Time from `EDIT_ON_PROGRESS` to `FINALIZED` (only if finalized) |
+| **Client Review Time** | Time from `CLIENT_REVIEW` entry to next stage (`RE_EDIT_ON_PROGRESS` or `FINALIZED`) |
 
-**`src/components/suite/YouTubeDashboard.tsx`**:
-- Add `YT_CACHE_RECENT_TS` and `YT_CACHE_PLAYLISTS_TS` localStorage keys
-- Add `CACHE_TTL_MS = 30 * 60 * 1000` (30 minutes)
-- Modify `useEffect` on open: check cache age before calling API
-- Restore `loadRecentUploads` + `loadPlaylists` as background refresh (only when cache is stale)
-- Move playlist video loading to on-expand (lazy load)
-- Add a small refresh icon button in the header
-- Keep tracker fallback only for API error scenarios
+### 3. Update YouTube Dashboard metadata panel
+**File: `src/components/suite/YouTubeDashboard.tsx`** (lines ~910-954)
 
-**No edge function changes needed** — the API calls themselves are fine, we just need to call them less often.
+Replace the single "Total Time" row with an expandable details section:
+- Show **Edit Time** and **Color Time** as the primary two items in the grid (replacing "Total Time")
+- Add a small "More timing details" toggle that reveals: Total Time, Actual Time (excl. pause), Finalized Time, Client Review Time
+- Use distinct icons/colors for each metric
+- Only show metrics that have data (e.g., Color Time only after `COLOR_ON_PROGRESS`)
 
-### Technical Details
+### 4. Update Floating YouTube Player metadata bar
+**File: `src/components/shared/FloatingYouTubePlayer.tsx`** (lines ~230-270)
 
-```text
-Dashboard Open Flow (new):
-┌─────────────────────────────────┐
-│ 1. Show cached data instantly   │
-│ 2. Check cache timestamp        │
-│    ├─ < 30 min → done (0 API)   │
-│    └─ > 30 min → background     │
-│       refresh via YouTube API   │
-│       ├─ success → update cache │
-│       └─ fail → keep cache,     │
-│          fallback to tracker    │
-└─────────────────────────────────┘
+- Replace the single "Edit Time" with the same computed breakdowns
+- Show Edit Time + Color Time inline; Total/Actual/Finalized in a tooltip or second row on hover
+- Keep the compact layout intact
 
-Playlist Expand Flow:
-┌─────────────────────────────────┐
-│ Click playlist → check cache    │
-│ ├─ cached videos → show them    │
-│ └─ no cache → fetch from API    │
-│    → cache result               │
-└─────────────────────────────────┘
-```
+### 5. Update FloatingYouTubePlayerContext type
+**File: `src/contexts/FloatingYouTubePlayerContext.tsx`**
 
-This approach means repeated dashboard opens within 30 minutes use **zero quota**, and playlist browsing only fetches videos for playlists the user actually clicks on.
+Add `stageHistory?: string` to `FloatingYouTubeVideo` so the floating player can compute times.
+
+### 6. Fix runtime errors (silent fix)
+**Files: `src/contexts/BenzoKeepPopupContext.tsx`, `src/contexts/BookingCalendarPopupContext.tsx`**
+
+Add null guard: `if (!e.key) return;` before the `.toLowerCase()` call.
+
+## Technical Notes
+- Stage history format: `STATUS [2025-01-15T10:30:00.000Z]\nSTATUS2 [...]`
+- Pause events will be: `PAUSED [ISO]\nRESUMED [ISO]`
+- All time parsing is client-side from the `stage_history` string — no new DB columns needed
+- Existing data will show Edit/Color/Total times accurately (from stage transitions) but Actual Time will only be accurate for future edits (since pause events weren't previously recorded)
 
