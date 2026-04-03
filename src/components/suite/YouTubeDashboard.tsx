@@ -398,11 +398,11 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
     }
   }, [open]);
 
-  // Load data on open — show cache first, then refresh in background
+  // Load data on open — show cache first, then call YouTube API only if cache is stale (>30 min)
   useEffect(() => {
     if (!open) return;
 
-    // Instantly show cached data
+    // 1. Instantly show cached data
     const cachedRecent = getCachedData<RecentVideo[]>(YT_CACHE_RECENT);
     if (cachedRecent && cachedRecent.length > 0) {
       setRecentVideos(cachedRecent);
@@ -416,10 +416,26 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
       if (cachedPlaylists.length > 0) setExpandedPlaylists(new Set([cachedPlaylists[0].id]));
     }
 
-    // If no cache, load from tracker DB (no YouTube API calls)
-    if (!cachedRecent || cachedRecent.length === 0 || !cachedPlaylists || cachedPlaylists.length === 0) {
+    // 2. Check cache freshness — only call YouTube API if stale
+    const recentFresh = isCacheFresh(YT_CACHE_RECENT_TS);
+    const playlistsFresh = isCacheFresh(YT_CACHE_PLAYLISTS_TS);
+
+    if (!recentFresh) {
+      // If we have cached data, do background refresh; otherwise foreground
+      const hasCachedRecent = cachedRecent && cachedRecent.length > 0;
+      loadRecentUploads(hasCachedRecent);
+    }
+
+    if (!playlistsFresh) {
+      const hasCachedPlaylists = cachedPlaylists && cachedPlaylists.length > 0;
+      loadPlaylists(hasCachedPlaylists);
+    }
+
+    // 3. If no cache at all and both are fresh (shouldn't happen), load from tracker as fallback
+    if ((!cachedRecent || cachedRecent.length === 0) && recentFresh) {
       loadFromTracker();
     }
+
     loadStats();
   }, [open]);
 
@@ -430,6 +446,13 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
       setActiveVideo({ videoId: initialVideoId, title: '', playlistTitle: '' });
     }
   }, [open, initialVideoId, initialStartSeconds]);
+
+  // Manual refresh — force API call regardless of cache TTL
+  const handleManualRefresh = async () => {
+    setLoadingRecent(true);
+    setLoadingPlaylists(true);
+    await Promise.all([loadRecentUploads(false), loadPlaylists(false)]);
+  };
 
   const loadFromTracker = async () => {
     setLoadingRecent(true);
@@ -447,9 +470,7 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
         const recent = buildRecentVideosFromTracker(trackerRows as TrackerRow[]);
         const pls = buildPlaylistsFromTracker(trackerRows as TrackerRow[]);
         setRecentVideos(recent);
-        setCachedData(YT_CACHE_RECENT, recent);
         setPlaylists(pls);
-        setCachedData(YT_CACHE_PLAYLISTS, pls);
         if (pls.length > 0) setExpandedPlaylists(new Set([pls[0].id]));
       }
     } catch (err) {
@@ -460,6 +481,7 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
     }
   };
 
+  // Load playlists from YouTube API (metadata only — no video fetches)
   const loadPlaylists = async (isBackground = false) => {
     if (!isBackground) setLoadingPlaylists(true);
     try {
@@ -468,38 +490,54 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
       });
       if (error) throw error;
       const pls: PlaylistInfo[] = data?.playlists || [];
-      const withVideos: PlaylistWithVideos[] = pls.map(p => ({ ...p, videos: [], loading: true }));
+      // Don't fetch videos for each playlist here — lazy load on expand
+      const withVideos: PlaylistWithVideos[] = pls.map(p => {
+        // Restore cached videos if available
+        const cachedVids = getCachedData<PlaylistVideo[]>(`${YT_CACHE_PLAYLIST_VIDEOS_PREFIX}${p.id}`);
+        return { ...p, videos: cachedVids || [], loading: false };
+      });
       setPlaylists(withVideos);
+      setCachedData(YT_CACHE_PLAYLISTS, withVideos);
+      setCacheTimestamp(YT_CACHE_PLAYLISTS_TS);
       if (pls.length > 0) setExpandedPlaylists(new Set([pls[0].id]));
-
-      const batchSize = 5;
-      for (let i = 0; i < pls.length; i += batchSize) {
-        const batch = pls.slice(i, i + batchSize);
-        const results = await Promise.all(
-          batch.map(async (pl) => {
-            try {
-              const { data: vData } = await supabase.functions.invoke("youtube-upload", {
-                body: { action: "getPlaylistVideos", playlistId: pl.id },
-              });
-              return { id: pl.id, videos: (vData?.videos || []) as PlaylistVideo[] };
-            } catch {
-              return { id: pl.id, videos: [] };
-            }
-          })
-        );
-        setPlaylists(prev => {
-          const updated = prev.map(p => {
-            const result = results.find(r => r.id === p.id);
-            return result ? { ...p, videos: result.videos, loading: false } : p;
-          });
-          setCachedData(YT_CACHE_PLAYLISTS, updated);
-          return updated;
-        });
-      }
     } catch (err) {
       console.error("Failed to load playlists:", err);
+      // Fallback to tracker if no playlists loaded yet
+      if (playlists.length === 0) await loadFromTracker();
     } finally {
       if (!isBackground) setLoadingPlaylists(false);
+    }
+  };
+
+  // Lazy-load videos for a specific playlist when expanded
+  const loadPlaylistVideos = async (playlistId: string) => {
+    // Check per-playlist cache
+    if (isCacheFresh(`${YT_CACHE_PLAYLIST_VIDEOS_TS_PREFIX}${playlistId}`)) {
+      const cached = getCachedData<PlaylistVideo[]>(`${YT_CACHE_PLAYLIST_VIDEOS_PREFIX}${playlistId}`);
+      if (cached && cached.length > 0) {
+        setPlaylists(prev => prev.map(p => p.id === playlistId ? { ...p, videos: cached, loading: false } : p));
+        return;
+      }
+    }
+
+    // Mark as loading
+    setPlaylists(prev => prev.map(p => p.id === playlistId ? { ...p, loading: true } : p));
+
+    try {
+      const { data: vData } = await supabase.functions.invoke("youtube-upload", {
+        body: { action: "getPlaylistVideos", playlistId },
+      });
+      const videos = (vData?.videos || []) as PlaylistVideo[];
+      setCachedData(`${YT_CACHE_PLAYLIST_VIDEOS_PREFIX}${playlistId}`, videos);
+      setCacheTimestamp(`${YT_CACHE_PLAYLIST_VIDEOS_TS_PREFIX}${playlistId}`);
+      setPlaylists(prev => {
+        const updated = prev.map(p => p.id === playlistId ? { ...p, videos, loading: false } : p);
+        setCachedData(YT_CACHE_PLAYLISTS, updated);
+        return updated;
+      });
+    } catch (err) {
+      console.error(`Failed to load playlist videos for ${playlistId}:`, err);
+      setPlaylists(prev => prev.map(p => p.id === playlistId ? { ...p, loading: false } : p));
     }
   };
 
@@ -514,6 +552,7 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
       setRecentVideos(videos);
       setRecentNextPageToken(data?.nextPageToken || null);
       setCachedData(YT_CACHE_RECENT, videos);
+      setCacheTimestamp(YT_CACHE_RECENT_TS);
     } catch (err) {
       console.error("Failed to load recent uploads:", err);
       // Fallback to tracker data on API failure
