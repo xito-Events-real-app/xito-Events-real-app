@@ -339,6 +339,13 @@ export function YouTubeDashboard({ open, onClose, initialVideoId }: { open: bool
     loadStats();
   }, [open]);
 
+  // Auto-play initial video from URL param
+  useEffect(() => {
+    if (open && initialVideoId) {
+      setActiveVideo({ videoId: initialVideoId, title: '', playlistTitle: '' });
+    }
+  }, [open, initialVideoId]);
+
   const loadPlaylists = async (isBackground = false) => {
     if (!isBackground) setLoadingPlaylists(true);
     try {
