@@ -414,6 +414,35 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
     }
   }, [open, initialVideoId, initialStartSeconds]);
 
+  const loadFromTracker = async () => {
+    setLoadingRecent(true);
+    setLoadingPlaylists(true);
+    try {
+      const { data: trackerRows } = await supabase
+        .from("video_edit_tracker")
+        .select("id, client_name, event_name, edit_type, editor, colorist, video_edit_status, edit_started_at, event_date_ad, stage_history, updated_at, youtube_link, created_at")
+        .neq("youtube_link", "")
+        .eq("deleted", false)
+        .order("updated_at", { ascending: false })
+        .limit(200);
+
+      if (trackerRows && trackerRows.length > 0) {
+        const recent = buildRecentVideosFromTracker(trackerRows as TrackerRow[]);
+        const pls = buildPlaylistsFromTracker(trackerRows as TrackerRow[]);
+        setRecentVideos(recent);
+        setCachedData(YT_CACHE_RECENT, recent);
+        setPlaylists(pls);
+        setCachedData(YT_CACHE_PLAYLISTS, pls);
+        if (pls.length > 0) setExpandedPlaylists(new Set([pls[0].id]));
+      }
+    } catch (err) {
+      console.error("Failed to load from tracker:", err);
+    } finally {
+      setLoadingRecent(false);
+      setLoadingPlaylists(false);
+    }
+  };
+
   const loadPlaylists = async (isBackground = false) => {
     if (!isBackground) setLoadingPlaylists(true);
     try {
