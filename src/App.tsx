@@ -104,6 +104,7 @@ const App = () => (
               <Route path="/client-form/:clientName/:clientId" element={<ClientContactForm />} />
               <Route path="/client-portal/:clientName/:clientId" element={<ClientPortal />} />
               <Route path="/crew-schedule/:freelancerName" element={<CrewSchedule />} />
+              <Route path="/editor-portal/:editorName" element={<EditorPortal />} />
               <Route path="/login" element={<Login />} />
               
               {/* Protected routes */}
