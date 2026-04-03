@@ -774,7 +774,16 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
   const togglePlaylist = (id: string) => {
     setExpandedPlaylists(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+        // Lazy-load videos for this playlist if not yet loaded
+        const pl = playlists.find(p => p.id === id);
+        if (pl && pl.videos.length === 0 && !pl.id.startsWith('tracker-')) {
+          loadPlaylistVideos(id);
+        }
+      }
       return next;
     });
   };
