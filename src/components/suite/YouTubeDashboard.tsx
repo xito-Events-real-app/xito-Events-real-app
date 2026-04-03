@@ -333,9 +333,11 @@ export function YouTubeDashboard({ open, onClose, initialVideoId }: { open: bool
       if (cachedPlaylists.length > 0) setExpandedPlaylists(new Set([cachedPlaylists[0].id]));
     }
 
-    // Background refresh
-    loadRecentUploads(true);
-    loadPlaylists(true);
+    // Background refresh only if we have cache, otherwise foreground
+    const hasRecentCache = !!(cachedRecent && cachedRecent.length > 0);
+    const hasPlaylistCache = !!(cachedPlaylists && cachedPlaylists.length > 0);
+    loadRecentUploads(hasRecentCache);
+    loadPlaylists(hasPlaylistCache);
     loadStats();
   }, [open]);
 
