@@ -147,12 +147,12 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, free
     (async () => {
       const { data } = await supabase
         .from("video_edit_tracker")
-        .select("event_name, sub_event_name, edit_type, youtube_link, editor, colorist, edit_started_at, video_edit_status, updated_at, event_date_ad")
+        .select("event_name, sub_event_name, edit_type, youtube_link, editor, colorist, edit_started_at, video_edit_status, updated_at, event_date_ad, stage_history")
         .eq("registered_date_time_ad", registeredDateTimeAD)
         .neq("youtube_link", "")
         .eq("deleted", false);
       if (!data) return;
-      const map: Record<string, { videoId: string; title: string; editor?: string; colorist?: string; editStartedAt?: string; videoEditStatus?: string; updatedAt?: string; eventDateAD?: string; editType?: string }> = {};
+      const map: Record<string, FloatingYouTubeVideo> = {};
       for (const row of data) {
         const eventKey = (row.event_name || "").trim().toUpperCase();
         const isFullVideo = (row.edit_type || "").toUpperCase().includes("FULL");
@@ -170,6 +170,7 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, free
             updatedAt: row.updated_at || undefined,
             eventDateAD: row.event_date_ad || undefined,
             editType: row.edit_type || undefined,
+            stageHistory: row.stage_history || undefined,
           };
         }
       }

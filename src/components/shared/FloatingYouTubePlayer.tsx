@@ -1,8 +1,9 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { X, GripHorizontal, Maximize2, Minimize2, User, Palette, Clock, Calendar } from "lucide-react";
+import { X, GripHorizontal, Maximize2, Minimize2, User, Palette, Clock, Calendar, Activity, CheckCircle2, Eye } from "lucide-react";
 import { useFloatingYouTubePlayer } from "@/contexts/FloatingYouTubePlayerContext";
 import { useNavigate } from "react-router-dom";
+import { computeVideoEditTimings } from "@/lib/video-edit-time-utils";
 
 declare global {
   interface Window {
@@ -13,26 +14,6 @@ declare global {
 
 const MIN_W = 400, MIN_H = 300, MAX_W = 960, MAX_H = 700;
 const DEFAULT_W = 560, DEFAULT_H = 420;
-
-function formatDuration(ms: number): string {
-  if (ms < 0) return "—";
-  const hours = Math.floor(ms / 3600000);
-  const mins = Math.floor((ms % 3600000) / 60000);
-  if (hours >= 24) {
-    const days = Math.floor(hours / 24);
-    const remHrs = hours % 24;
-    return remHrs > 0 ? `${days}d ${remHrs}h` : `${days}d`;
-  }
-  return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
-}
-
-function computeTotalTime(editStartedAt: string | null, status: string | null, updatedAt: string | null): string | null {
-  if (!editStartedAt) return null;
-  const start = new Date(editStartedAt);
-  if (isNaN(start.getTime())) return null;
-  const end = status === "FINALIZED" && updatedAt ? new Date(updatedAt) : new Date();
-  return formatDuration(end.getTime() - start.getTime());
-}
 
 function computeEventAge(eventDateAd: string | null): string | null {
   if (!eventDateAd) return null;
@@ -188,11 +169,14 @@ export function FloatingYouTubePlayer() {
     return () => window.clearInterval(interval);
   }, [video, initPlayer]);
 
+  const [showMoreTimings, setShowMoreTimings] = useState(false);
+
   if (!video) return null;
 
-  const totalTime = computeTotalTime(video.editStartedAt || null, video.videoEditStatus || null, video.updatedAt || null);
+  const timings = computeVideoEditTimings(video.stageHistory, video.videoEditStatus);
   const eventAge = computeEventAge(video.eventDateAD || null);
-  const hasTrackerInfo = video.editor || video.colorist || totalTime || eventAge;
+  const hasTrackerInfo = video.editor || video.colorist || timings.editTime || timings.colorTime || eventAge;
+  const hasExpandedTimings = timings.totalTime || timings.actualTime || timings.finalizedTime || timings.clientReviewTime;
 
   const handleOpenInYouTube = () => {
     let currentSeconds = 0;
@@ -274,11 +258,18 @@ export function FloatingYouTubePlayer() {
                 <span className="text-[11px] font-semibold text-white/90">{video.colorist}</span>
               </div>
             )}
-            {totalTime && (
+            {timings.editTime && (
               <div className="flex items-center gap-1.5">
                 <Clock className="w-3 h-3 text-orange-400" />
-                <span className="text-[10px] text-white/40">Edit Time</span>
-                <span className="text-[11px] font-semibold text-white/90">{totalTime}</span>
+                <span className="text-[10px] text-white/40">Edit</span>
+                <span className="text-[11px] font-semibold text-white/90">{timings.editTime}</span>
+              </div>
+            )}
+            {timings.colorTime && (
+              <div className="flex items-center gap-1.5">
+                <Palette className="w-3 h-3 text-indigo-400" />
+                <span className="text-[10px] text-white/40">Color</span>
+                <span className="text-[11px] font-semibold text-white/90">{timings.colorTime}</span>
               </div>
             )}
             {eventAge && (
@@ -290,11 +281,55 @@ export function FloatingYouTubePlayer() {
             )}
             {video.editType && (
               <div className="flex items-center gap-1.5">
+                <Activity className="w-3 h-3 text-rose-400" />
                 <span className="text-[10px] text-white/40">Type</span>
                 <span className="text-[11px] font-semibold text-white/90">{video.editType}</span>
               </div>
             )}
+            {hasExpandedTimings && (
+              <button
+                onClick={() => setShowMoreTimings(!showMoreTimings)}
+                className="text-[10px] text-white/30 hover:text-white/60 transition-colors ml-auto"
+              >
+                {showMoreTimings ? "Less" : "More"}
+              </button>
+            )}
           </div>
+          {showMoreTimings && hasExpandedTimings && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 pt-1.5 border-t border-zinc-800">
+              {timings.totalTime && (
+                <div className="flex items-center gap-1.5">
+                  <Clock className="w-3 h-3 text-amber-400" />
+                  <span className="text-[10px] text-white/40">Total</span>
+                  <span className="text-[11px] font-semibold text-white/90">{timings.totalTime}</span>
+                </div>
+              )}
+              {timings.actualTime && (
+                <div className="flex items-center gap-1.5">
+                  <Activity className="w-3 h-3 text-green-400" />
+                  <span className="text-[10px] text-white/40">Actual</span>
+                  <span className="text-[11px] font-semibold text-white/90">
+                    {timings.actualTime}
+                    {timings.pausedTime && <span className="text-white/30"> ({timings.pausedTime} paused)</span>}
+                  </span>
+                </div>
+              )}
+              {timings.finalizedTime && (
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                  <span className="text-[10px] text-white/40">Finalized</span>
+                  <span className="text-[11px] font-semibold text-white/90">{timings.finalizedTime}</span>
+                </div>
+              )}
+              {timings.clientReviewTime && (
+                <div className="flex items-center gap-1.5">
+                  <Eye className="w-3 h-3 text-sky-400" />
+                  <span className="text-[10px] text-white/40">Review</span>
+                  <span className="text-[11px] font-semibold text-white/90">{timings.clientReviewTime}</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

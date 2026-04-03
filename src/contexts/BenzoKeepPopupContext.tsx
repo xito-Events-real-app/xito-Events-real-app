@@ -24,6 +24,7 @@ export function BenzoKeepPopupProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      if (!e.key) return;
       if (e.key.toLowerCase() === "k") {
         const el = document.activeElement;
         if (

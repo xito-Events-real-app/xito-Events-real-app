@@ -24,6 +24,7 @@ export function BookingCalendarPopupProvider({ children }: { children: ReactNode
         return;
       }
 
+      if (!e.key) return;
       if (e.key.toLowerCase() === "b") {
         const el = document.activeElement;
         if (

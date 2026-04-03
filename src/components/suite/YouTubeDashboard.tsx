@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { ArrowLeft, Youtube, Search, Upload, ChevronDown, ChevronRight, Send, Loader2, Play, Clock, User, Palette, Calendar, Activity, Globe, RefreshCw } from "lucide-react";
+import { ArrowLeft, Youtube, Search, Upload, ChevronDown, ChevronRight, Send, Loader2, Play, Clock, User, Palette, Calendar, Activity, Globe, RefreshCw, CheckCircle2, Eye } from "lucide-react";
+import { computeVideoEditTimings } from "@/lib/video-edit-time-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -907,52 +908,98 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                   )}
                 </div>
 
-                {trackerInfo && (
-                  <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
-                    {trackerInfo.editor && (
-                      <div className="flex items-center gap-1.5">
-                        <User className="w-3.5 h-3.5 text-blue-500" />
-                        <span className="text-gray-500">Editor:</span>
-                        <span className="font-semibold text-gray-800">{trackerInfo.editor}</span>
-                        {trackerInfo.edit_started_at && (
-                          <span className="text-gray-400">
-                            ({computeTotalTime(trackerInfo.edit_started_at, trackerInfo.video_edit_status, trackerInfo.updated_at)})
-                          </span>
+                {trackerInfo && (() => {
+                  const timings = computeVideoEditTimings(trackerInfo.stage_history, trackerInfo.video_edit_status);
+                  const hasExpandedTimings = timings.totalTime || timings.actualTime || timings.finalizedTime || timings.clientReviewTime;
+                  return (
+                    <>
+                      <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
+                        {trackerInfo.editor && (
+                          <div className="flex items-center gap-1.5">
+                            <User className="w-3.5 h-3.5 text-blue-500" />
+                            <span className="text-gray-500">Editor:</span>
+                            <span className="font-semibold text-gray-800">{trackerInfo.editor}</span>
+                          </div>
+                        )}
+                        {trackerInfo.colorist && (
+                          <div className="flex items-center gap-1.5">
+                            <Palette className="w-3.5 h-3.5 text-purple-500" />
+                            <span className="text-gray-500">Colorist:</span>
+                            <span className="font-semibold text-gray-800">{trackerInfo.colorist}</span>
+                          </div>
+                        )}
+                        {timings.editTime && (
+                          <div className="flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-orange-500" />
+                            <span className="text-gray-500">Edit Time:</span>
+                            <span className="font-semibold text-gray-800">{timings.editTime}</span>
+                          </div>
+                        )}
+                        {timings.colorTime && (
+                          <div className="flex items-center gap-1.5">
+                            <Palette className="w-3.5 h-3.5 text-indigo-500" />
+                            <span className="text-gray-500">Color Time:</span>
+                            <span className="font-semibold text-gray-800">{timings.colorTime}</span>
+                          </div>
+                        )}
+                        {trackerInfo.event_date_ad && (
+                          <div className="flex items-center gap-1.5">
+                            <Calendar className="w-3.5 h-3.5 text-teal-500" />
+                            <span className="text-gray-500">Event:</span>
+                            <span className="font-semibold text-gray-800">{computeEventAge(trackerInfo.event_date_ad)}</span>
+                          </div>
+                        )}
+                        {trackerInfo.edit_type && (
+                          <div className="flex items-center gap-1.5">
+                            <Activity className="w-3.5 h-3.5 text-rose-500" />
+                            <span className="text-gray-500">Type:</span>
+                            <span className="font-semibold text-gray-800">{trackerInfo.edit_type}</span>
+                          </div>
                         )}
                       </div>
-                    )}
-                    {trackerInfo.colorist && (
-                      <div className="flex items-center gap-1.5">
-                        <Palette className="w-3.5 h-3.5 text-purple-500" />
-                        <span className="text-gray-500">Colorist:</span>
-                        <span className="font-semibold text-gray-800">{trackerInfo.colorist}</span>
-                      </div>
-                    )}
-                    {trackerInfo.edit_started_at && (
-                      <div className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-orange-500" />
-                        <span className="text-gray-500">Total Time:</span>
-                        <span className="font-semibold text-gray-800">
-                          {computeTotalTime(trackerInfo.edit_started_at, trackerInfo.video_edit_status, trackerInfo.updated_at)}
-                        </span>
-                      </div>
-                    )}
-                    {trackerInfo.event_date_ad && (
-                      <div className="flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-teal-500" />
-                        <span className="text-gray-500">Event:</span>
-                        <span className="font-semibold text-gray-800">{computeEventAge(trackerInfo.event_date_ad)}</span>
-                      </div>
-                    )}
-                    {trackerInfo.edit_type && (
-                      <div className="flex items-center gap-1.5">
-                        <Activity className="w-3.5 h-3.5 text-rose-500" />
-                        <span className="text-gray-500">Type:</span>
-                        <span className="font-semibold text-gray-800">{trackerInfo.edit_type}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
+                      {hasExpandedTimings && (
+                        <details className="mt-2 text-xs">
+                          <summary className="cursor-pointer text-gray-400 hover:text-gray-600 select-none font-medium">
+                            More timing details
+                          </summary>
+                          <div className="mt-1.5 grid grid-cols-2 gap-x-6 gap-y-1.5 pl-1">
+                            {timings.totalTime && (
+                              <div className="flex items-center gap-1.5">
+                                <Clock className="w-3 h-3 text-amber-500" />
+                                <span className="text-gray-500">Total Time:</span>
+                                <span className="font-semibold text-gray-800">{timings.totalTime}</span>
+                              </div>
+                            )}
+                            {timings.actualTime && (
+                              <div className="flex items-center gap-1.5">
+                                <Activity className="w-3 h-3 text-green-500" />
+                                <span className="text-gray-500">Actual Time:</span>
+                                <span className="font-semibold text-gray-800">
+                                  {timings.actualTime}
+                                  {timings.pausedTime && <span className="text-gray-400 font-normal"> ({timings.pausedTime} paused)</span>}
+                                </span>
+                              </div>
+                            )}
+                            {timings.finalizedTime && (
+                              <div className="flex items-center gap-1.5">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                                <span className="text-gray-500">Finalized:</span>
+                                <span className="font-semibold text-gray-800">{timings.finalizedTime}</span>
+                              </div>
+                            )}
+                            {timings.clientReviewTime && (
+                              <div className="flex items-center gap-1.5">
+                                <Eye className="w-3 h-3 text-sky-500" />
+                                <span className="text-gray-500">Client Review:</span>
+                                <span className="font-semibold text-gray-800">{timings.clientReviewTime}</span>
+                              </div>
+                            )}
+                          </div>
+                        </details>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
 
