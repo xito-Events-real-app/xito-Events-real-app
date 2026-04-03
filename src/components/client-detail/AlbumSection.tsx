@@ -101,27 +101,21 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     return result;
   }, [assignments, clientName]);
 
-  // Fetch photo counts for all tabs on mount & cache results
+  // Fetch photo count only for the active tab (lazy) — not all tabs on mount
   useEffect(() => {
-    if (tabs.length === 0) return;
-    tabs.forEach((tab) => {
-      if (albumFolderCache[tab.id]) {
-        setTabPhotoCounts((prev) => ({ ...prev, [tab.id]: albumFolderCache[tab.id].length }));
-        return;
-      }
-      listE2Folder(tab.s3Prefix)
-        .then((result) => {
-          const imageFiles = result.files.filter((f) => isImage(f.key));
-          albumFolderCache[tab.id] = imageFiles;
-          setTabPhotoCounts((prev) => ({ ...prev, [tab.id]: imageFiles.length }));
-        })
-        .catch(() => {
-          setTabPhotoCounts((prev) => ({ ...prev, [tab.id]: 0 }));
-        });
-    });
-  }, [tabs]);
+    if (!activeTab) return;
+    const tab = tabs.find(t => t.id === activeTab);
+    if (!tab) return;
+    // Already have count? skip
+    if (tabPhotoCounts[tab.id] !== undefined && albumFolderCache[tab.id]) return;
+    if (albumFolderCache[tab.id]) {
+      setTabPhotoCounts(prev => ({ ...prev, [tab.id]: albumFolderCache[tab.id].length }));
+      return;
+    }
+    // Will be fetched by the photo loading effect below
+  }, [activeTab, tabs]);
 
-  // Total photos across all tabs
+  // Total photos across loaded tabs
   const totalPhotos = useMemo(() => {
     return Object.values(tabPhotoCounts).reduce((sum, c) => sum + c, 0);
   }, [tabPhotoCounts]);
@@ -131,10 +125,11 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     if (tabs.length > 0 && !activeTab) setActiveTab(tabs[0].id);
   }, [tabs, activeTab]);
 
-  // Load photos when tab changes — use module-level cache for instant re-loads
+  // Load photos when tab changes — use module-level cache, abort stale requests
   useEffect(() => {
     const tab = tabs.find((t) => t.id === activeTab);
     if (!tab) return;
+    let stale = false;
 
     // If both folder listing and URLs are cached, load instantly
     if (albumFolderCache[tab.id] && albumUrlCache[tab.id]) {
@@ -149,9 +144,12 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     setPhotoUrls({});
 
     const loadPhotos = async (imageFiles: E2File[]) => {
+      if (stale) return;
       setPhotos(imageFiles);
+      setTabPhotoCounts(prev => ({ ...prev, [tab.id]: imageFiles.length }));
       if (imageFiles.length > 0) {
         const urls = await getE2FileUrls(imageFiles.map((f) => f.key));
+        if (stale) return;
         albumUrlCache[tab.id] = urls;
         setPhotoUrls(urls);
       }
@@ -164,15 +162,20 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     } else {
       listE2Folder(tab.s3Prefix)
         .then((result) => {
+          if (stale) return;
           const imageFiles = result.files.filter((f) => isImage(f.key));
           albumFolderCache[tab.id] = imageFiles;
           return loadPhotos(imageFiles);
         })
         .catch((err) => {
+          if (stale) return;
           console.error("Failed to load album photos:", err);
+          setTabPhotoCounts(prev => ({ ...prev, [tab.id]: 0 }));
           setIsLoadingPhotos(false);
         });
     }
+
+    return () => { stale = true; };
   }, [activeTab, tabs]);
 
   const viewerImages = useMemo(
