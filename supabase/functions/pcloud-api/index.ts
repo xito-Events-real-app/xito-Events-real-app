@@ -64,7 +64,7 @@ serve(async (req) => {
   }
 
   try {
-    const auth = await getAuthToken();
+    const auth = getAuthToken();
     const contentType = req.headers.get('content-type') || '';
 
     // For file uploads, handle multipart forwarding
