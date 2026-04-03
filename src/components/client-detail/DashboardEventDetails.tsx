@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MapPin, ExternalLink, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { EventDetailsData, EventDetail } from "@/hooks/useEventDetails";
@@ -7,6 +7,8 @@ import { FreelancerAssignment, FreelancerField, CATEGORY_CODE_TO_FIELD, getFilte
 import { FreelancerData } from "@/lib/freelancer-api";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from "@/components/ui/command";
+import { supabase } from "@/integrations/supabase/client";
+import { FloatingYouTubePlayer } from "@/components/shared/FloatingYouTubePlayer";
 
 interface ClientEventsData {
   events: string;
