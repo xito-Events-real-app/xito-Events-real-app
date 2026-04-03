@@ -272,6 +272,37 @@ export function FloatingYouTubePlayer() {
                 <span className="text-[11px] font-semibold text-white/90">{timings.colorTime}</span>
               </div>
             )}
+            {timings.totalTime && (
+              <div className="flex items-center gap-1.5">
+                <Clock className="w-3 h-3 text-amber-400" />
+                <span className="text-[10px] text-white/40">Total</span>
+                <span className="text-[11px] font-semibold text-white/90">{timings.totalTime}</span>
+              </div>
+            )}
+            {timings.actualTime && (
+              <div className="flex items-center gap-1.5">
+                <Activity className="w-3 h-3 text-green-400" />
+                <span className="text-[10px] text-white/40">Actual</span>
+                <span className="text-[11px] font-semibold text-white/90">
+                  {timings.actualTime}
+                  {timings.pausedTime && <span className="text-white/30"> ({timings.pausedTime} paused)</span>}
+                </span>
+              </div>
+            )}
+            {timings.finalizedTime && (
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                <span className="text-[10px] text-white/40">Finalized</span>
+                <span className="text-[11px] font-semibold text-white/90">{timings.finalizedTime}</span>
+              </div>
+            )}
+            {timings.clientReviewTime && (
+              <div className="flex items-center gap-1.5">
+                <Eye className="w-3 h-3 text-sky-400" />
+                <span className="text-[10px] text-white/40">Review</span>
+                <span className="text-[11px] font-semibold text-white/90">{timings.clientReviewTime}</span>
+              </div>
+            )}
             {eventAge && (
               <div className="flex items-center gap-1.5">
                 <Calendar className="w-3 h-3 text-teal-400" />
@@ -286,50 +317,7 @@ export function FloatingYouTubePlayer() {
                 <span className="text-[11px] font-semibold text-white/90">{video.editType}</span>
               </div>
             )}
-            {hasExpandedTimings && (
-              <button
-                onClick={() => setShowMoreTimings(!showMoreTimings)}
-                className="text-[10px] text-white/30 hover:text-white/60 transition-colors ml-auto"
-              >
-                {showMoreTimings ? "Less" : "More"}
-              </button>
-            )}
           </div>
-          {showMoreTimings && hasExpandedTimings && (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 pt-1.5 border-t border-zinc-800">
-              {timings.totalTime && (
-                <div className="flex items-center gap-1.5">
-                  <Clock className="w-3 h-3 text-amber-400" />
-                  <span className="text-[10px] text-white/40">Total</span>
-                  <span className="text-[11px] font-semibold text-white/90">{timings.totalTime}</span>
-                </div>
-              )}
-              {timings.actualTime && (
-                <div className="flex items-center gap-1.5">
-                  <Activity className="w-3 h-3 text-green-400" />
-                  <span className="text-[10px] text-white/40">Actual</span>
-                  <span className="text-[11px] font-semibold text-white/90">
-                    {timings.actualTime}
-                    {timings.pausedTime && <span className="text-white/30"> ({timings.pausedTime} paused)</span>}
-                  </span>
-                </div>
-              )}
-              {timings.finalizedTime && (
-                <div className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                  <span className="text-[10px] text-white/40">Finalized</span>
-                  <span className="text-[11px] font-semibold text-white/90">{timings.finalizedTime}</span>
-                </div>
-              )}
-              {timings.clientReviewTime && (
-                <div className="flex items-center gap-1.5">
-                  <Eye className="w-3 h-3 text-sky-400" />
-                  <span className="text-[10px] text-white/40">Review</span>
-                  <span className="text-[11px] font-semibold text-white/90">{timings.clientReviewTime}</span>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       )}
 
