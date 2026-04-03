@@ -247,6 +247,11 @@ function groupVideosByDate(videos: RecentVideo[]): { dateKey: string; dateHeader
 // localStorage cache helpers
 const YT_CACHE_RECENT = "yt_cache_recent";
 const YT_CACHE_PLAYLISTS = "yt_cache_playlists";
+const YT_CACHE_RECENT_TS = "yt_cache_recent_ts";
+const YT_CACHE_PLAYLISTS_TS = "yt_cache_playlists_ts";
+const YT_CACHE_PLAYLIST_VIDEOS_PREFIX = "yt_cache_plvids_";
+const YT_CACHE_PLAYLIST_VIDEOS_TS_PREFIX = "yt_cache_plvids_ts_";
+const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 function getCachedData<T>(key: string): T | null {
   try {
@@ -258,6 +263,18 @@ function getCachedData<T>(key: string): T | null {
 
 function setCachedData(key: string, data: any) {
   try { localStorage.setItem(key, JSON.stringify(data)); } catch {}
+}
+
+function isCacheFresh(tsKey: string): boolean {
+  try {
+    const ts = localStorage.getItem(tsKey);
+    if (!ts) return false;
+    return Date.now() - parseInt(ts, 10) < CACHE_TTL_MS;
+  } catch { return false; }
+}
+
+function setCacheTimestamp(tsKey: string) {
+  try { localStorage.setItem(tsKey, String(Date.now())); } catch {}
 }
 
 const STAGE_COLORS: Record<string, string> = {
