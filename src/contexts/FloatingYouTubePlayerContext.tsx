@@ -3,6 +3,13 @@ import { createContext, useContext, useState, ReactNode, useCallback } from "rea
 interface FloatingYouTubeVideo {
   videoId: string;
   title: string;
+  editor?: string;
+  colorist?: string;
+  editStartedAt?: string;
+  videoEditStatus?: string;
+  updatedAt?: string;
+  eventDateAD?: string;
+  editType?: string;
 }
 
 interface FloatingYouTubePlayerContextType {
@@ -32,3 +39,5 @@ export function FloatingYouTubePlayerProvider({ children }: { children: ReactNod
 export function useFloatingYouTubePlayer() {
   return useContext(FloatingYouTubePlayerContext);
 }
+
+export type { FloatingYouTubeVideo };

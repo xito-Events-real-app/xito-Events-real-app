@@ -8,7 +8,7 @@ import { FreelancerData } from "@/lib/freelancer-api";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from "@/components/ui/command";
 import { supabase } from "@/integrations/supabase/client";
-import { useFloatingYouTubePlayer } from "@/contexts/FloatingYouTubePlayerContext";
+import { useFloatingYouTubePlayer, type FloatingYouTubeVideo } from "@/contexts/FloatingYouTubePlayerContext";
 
 interface ClientEventsData {
   events: string;
@@ -138,24 +138,23 @@ function FreelancerAssignPopover({
 
 const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, freelancerAssignments, registeredDateTimeAD, allFreelancers, onAssignmentUpdate }: DashboardEventDetailsProps) => {
   const navigate = useNavigate();
-  const [ytLinks, setYtLinks] = useState<Record<string, { videoId: string; title: string }>>({});
+  const [ytLinks, setYtLinks] = useState<Record<string, FloatingYouTubeVideo>>({});
   const { open: openFloatingPlayer } = useFloatingYouTubePlayer();
 
-  // Fetch YouTube links for this client's events from video_edit_tracker
+  // Fetch YouTube links + tracker info for this client's events
   useEffect(() => {
     if (!registeredDateTimeAD) return;
     (async () => {
       const { data } = await supabase
         .from("video_edit_tracker")
-        .select("event_name, sub_event_name, edit_type, youtube_link")
+        .select("event_name, sub_event_name, edit_type, youtube_link, editor, colorist, edit_started_at, video_edit_status, updated_at, event_date_ad")
         .eq("registered_date_time_ad", registeredDateTimeAD)
         .neq("youtube_link", "")
         .eq("deleted", false);
       if (!data) return;
-      const map: Record<string, { videoId: string; title: string }> = {};
+      const map: Record<string, { videoId: string; title: string; editor?: string; colorist?: string; editStartedAt?: string; videoEditStatus?: string; updatedAt?: string; eventDateAD?: string; editType?: string }> = {};
       for (const row of data) {
         const eventKey = (row.event_name || "").trim().toUpperCase();
-        // Prefer Full Video, but fallback to Highlights
         const isFullVideo = (row.edit_type || "").toUpperCase().includes("FULL");
         const link = row.youtube_link || "";
         const vidMatch = link.match(/(?:youtu\.be\/|v=|\/embed\/)([a-zA-Z0-9_-]{11})/);
@@ -164,6 +163,13 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, free
           map[eventKey] = {
             videoId: vidMatch[1],
             title: `${row.event_name || ""} ${row.edit_type || ""}`.trim(),
+            editor: row.editor || undefined,
+            colorist: row.colorist || undefined,
+            editStartedAt: row.edit_started_at || undefined,
+            videoEditStatus: row.video_edit_status || undefined,
+            updatedAt: row.updated_at || undefined,
+            eventDateAD: row.event_date_ad || undefined,
+            editType: row.edit_type || undefined,
           };
         }
       }
