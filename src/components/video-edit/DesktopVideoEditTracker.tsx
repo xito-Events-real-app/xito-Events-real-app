@@ -1571,7 +1571,6 @@ function VideoEditSidebar({
     { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'classic' as const, label: 'Classic View', icon: List },
     { id: 'pipeline' as const, label: 'Pipeline View', icon: GitBranch },
-    { id: 'chat' as const, label: 'Chat', icon: MessageSquare },
   ];
 
   const renderEditorBtn = (name: string, dotClass: string, nameClass: string) => {
