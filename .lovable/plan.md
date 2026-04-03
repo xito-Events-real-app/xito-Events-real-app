@@ -1,41 +1,73 @@
 
 
-# YouTube Dashboard Performance & UX Improvements
+# Fix YouTube Dashboard: Restore Direct YouTube API + Minimize Quota Usage
 
-## Changes
+## Problem
+The recent changes replaced YouTube API calls with tracker-based fallback data. The user wants actual YouTube videos (with correct dates, thumbnails, real titles) from the YouTube API. The quota exceeded error is temporary — quota resets daily at midnight Pacific Time.
 
-### 1. Cache YouTube data in IndexedDB
-Store playlists, playlist videos, and recent uploads in IndexedDB so subsequent opens load instantly from cache, then refresh in the background.
+## Root Cause of Quota Exhaustion
+Every time the dashboard opens, it calls:
+- `listRecentUploads` (1 API call = ~1 quota unit)
+- `listPlaylists` (1 call) + `getPlaylistVideos` per playlist (N calls in batches of 5)
+- Infinite scroll calls `listRecentUploads` again with pagination
 
-- On open: load from IndexedDB cache immediately, show cached data, then fetch fresh data from YouTube API in background
-- On upload completion: trigger background refresh
-- Cache keys: `yt_playlists`, `yt_recent_videos`, with timestamps
-- Use the existing `getDatabase()` helper from `src/lib/indexeddb-config.ts` with a new store, or use a simple `localStorage` approach (JSON stringify) since the data is relatively small (video metadata only, no binary)
-- Use `localStorage` with keys `yt_cache_recent`, `yt_cache_playlists`, `yt_cache_timestamp`
+If there are 20 playlists, that's ~22 API calls per dashboard open. YouTube's daily quota is 10,000 units. Opening the dashboard frequently burns through it fast.
 
-### 2. Infinite scroll for Recent tab
-Currently loads max 100 videos. Change to:
-- Initial load: 50 videos (via `listRecentUploads` with `maxResults: 50`)
-- When user scrolls near bottom of Recent tab, fetch next page using `nextPageToken`
-- Edge function `listRecentUploads` needs to return `nextPageToken` so the client can request more
-- Add `nextPageToken` param support to `listRecentUploads` action in the edge function
-- Client keeps appending videos as user scrolls
+## Plan
 
-### 3. Relative time tags on Recent videos
-Replace the date format (`Mar 15, 2026`) with relative time: `2 hrs ago`, `1 day ago`, `3 months ago`.
-- Simple helper function: compute diff from `publishedAt` to now, return human-readable string
+### 1. Restore YouTube API as Primary Data Source
+- Revert `loadRecentUploads` and `loadPlaylists` to be called on dashboard open (as they were before)
+- Keep `loadFromTracker` only as a fallback when API calls fail (quota/network errors)
+- On open: show cached data instantly, then call YouTube API in background to refresh
+- Cache fresh API data to localStorage
 
-### 4. Increase player size and sidebar width
-- Player: remove `max-w-[720px]`, make it larger — use `max-w-[900px]` or let it fill available space
-- Sidebar: increase from `w-[380px]` to `w-[480px]`
-- These are simple Tailwind class changes
+### 2. Aggressive Caching to Minimize Quota
+- Add a **cache timestamp** alongside cached data (`yt_cache_recent_ts`, `yt_cache_playlists_ts`)
+- Only call the YouTube API if cache is **older than 30 minutes** (configurable)
+- If cache is fresh (< 30 min old), skip API calls entirely — zero quota usage
+- Add a manual **"Refresh"** button so user can force-refresh when needed (costs quota but is intentional)
 
-## Files to modify
+### 3. Reduce Playlist Video Fetches
+- Don't fetch `getPlaylistVideos` for every playlist on load — only fetch when a playlist is **expanded/clicked**
+- Cache individual playlist videos separately with timestamps
+- This alone could cut 15-20 API calls per session
 
-| File | Change |
-|------|--------|
-| `src/components/suite/YouTubeDashboard.tsx` | Add localStorage caching, infinite scroll, relative time, increase sizes |
-| `supabase/functions/youtube-upload/index.ts` | Add `pageToken` support to `listRecentUploads` + redeploy |
+### 4. Files to Modify
 
-## No database changes needed
+**`src/components/suite/YouTubeDashboard.tsx`**:
+- Add `YT_CACHE_RECENT_TS` and `YT_CACHE_PLAYLISTS_TS` localStorage keys
+- Add `CACHE_TTL_MS = 30 * 60 * 1000` (30 minutes)
+- Modify `useEffect` on open: check cache age before calling API
+- Restore `loadRecentUploads` + `loadPlaylists` as background refresh (only when cache is stale)
+- Move playlist video loading to on-expand (lazy load)
+- Add a small refresh icon button in the header
+- Keep tracker fallback only for API error scenarios
+
+**No edge function changes needed** — the API calls themselves are fine, we just need to call them less often.
+
+### Technical Details
+
+```text
+Dashboard Open Flow (new):
+┌─────────────────────────────────┐
+│ 1. Show cached data instantly   │
+│ 2. Check cache timestamp        │
+│    ├─ < 30 min → done (0 API)   │
+│    └─ > 30 min → background     │
+│       refresh via YouTube API   │
+│       ├─ success → update cache │
+│       └─ fail → keep cache,     │
+│          fallback to tracker    │
+└─────────────────────────────────┘
+
+Playlist Expand Flow:
+┌─────────────────────────────────┐
+│ Click playlist → check cache    │
+│ ├─ cached videos → show them    │
+│ └─ no cache → fetch from API    │
+│    → cache result               │
+└─────────────────────────────────┘
+```
+
+This approach means repeated dashboard opens within 30 minutes use **zero quota**, and playlist browsing only fetches videos for playlists the user actually clicks on.
 
