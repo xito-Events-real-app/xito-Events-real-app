@@ -19,6 +19,7 @@ declare global {
 interface PlaylistInfo {
   id: string;
   title: string;
+  thumbnailUrl?: string;
 }
 
 interface PlaylistVideo {
@@ -61,6 +62,63 @@ interface TrackerRow {
   stage_history: string;
   updated_at: string | null;
   youtube_link: string;
+  created_at?: string | null;
+}
+
+function extractYouTubeVideoId(link: string | null | undefined): string | null {
+  if (!link) return null;
+  const match = link.match(/(?:youtu\.be\/|v=|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/);
+  return match?.[1] || null;
+}
+
+function getTrackerDisplayTitle(row: TrackerRow): string {
+  return [row.client_name, row.event_name, row.edit_type].filter(Boolean).join(" ").trim() || "YouTube Video";
+}
+
+function buildRecentVideosFromTracker(rows: TrackerRow[]): RecentVideo[] {
+  return rows
+    .map((row) => {
+      const videoId = extractYouTubeVideoId(row.youtube_link);
+      if (!videoId) return null;
+
+      return {
+        videoId,
+        title: getTrackerDisplayTitle(row),
+        thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+        publishedAt: row.updated_at || row.created_at || new Date(0).toISOString(),
+      } satisfies RecentVideo;
+    })
+    .filter((video): video is RecentVideo => Boolean(video))
+    .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+}
+
+function buildPlaylistsFromTracker(rows: TrackerRow[]): PlaylistWithVideos[] {
+  const groups = new Map<string, PlaylistWithVideos>();
+
+  for (const row of rows) {
+    const videoId = extractYouTubeVideoId(row.youtube_link);
+    if (!videoId) continue;
+
+    const title = row.client_name?.trim() || row.event_name?.trim() || "Uncategorized";
+    const existing = groups.get(title) || {
+      id: `tracker-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+      title,
+      thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+      videos: [],
+      loading: false,
+    };
+
+    existing.videos.push({
+      videoId,
+      title: getTrackerDisplayTitle(row),
+      thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+      position: existing.videos.length,
+    });
+
+    groups.set(title, existing);
+  }
+
+  return Array.from(groups.values()).sort((a, b) => a.title.localeCompare(b.title));
 }
 
 const AUTHORS = ["BENZO", "BARUN", "SAUGAT", "NIKIT"];
@@ -501,7 +559,7 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
 
     const { data: trackerData } = await supabase
       .from('video_edit_tracker')
-      .select('id, client_name, event_name, edit_type, editor, colorist, video_edit_status, edit_started_at, event_date_ad, stage_history, updated_at, youtube_link, deleted')
+      .select('id, client_name, event_name, edit_type, editor, colorist, video_edit_status, edit_started_at, event_date_ad, stage_history, updated_at, created_at, youtube_link, deleted')
       .eq('deleted', false);
     if (trackerData) {
       setTotalTrackerRows(trackerData.length);
@@ -509,6 +567,27 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
       setAllTrackerRows(trackerData as TrackerRow[]);
     }
   };
+
+  useEffect(() => {
+    if (loadingRecent || loadingPlaylists || !allTrackerRows.length) return;
+
+    if (recentVideos.length === 0) {
+      const fallbackRecent = buildRecentVideosFromTracker(allTrackerRows);
+      if (fallbackRecent.length > 0) {
+        setRecentVideos(fallbackRecent);
+        setCachedData(YT_CACHE_RECENT, fallbackRecent);
+      }
+    }
+
+    if (playlists.length === 0) {
+      const fallbackPlaylists = buildPlaylistsFromTracker(allTrackerRows);
+      if (fallbackPlaylists.length > 0) {
+        setPlaylists(fallbackPlaylists);
+        setCachedData(YT_CACHE_PLAYLISTS, fallbackPlaylists);
+        setExpandedPlaylists(new Set([fallbackPlaylists[0].id]));
+      }
+    }
+  }, [loadingRecent, loadingPlaylists, allTrackerRows, recentVideos.length, playlists.length]);
 
   // Load comments for active video
   useEffect(() => {
