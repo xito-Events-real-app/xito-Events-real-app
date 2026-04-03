@@ -4,8 +4,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Video, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow } from "lucide-react";
+import { Video, Loader2, Ungroup, Group, X, Filter, ArrowUpDown, ArrowUp, ArrowDown, Flame, Workflow, MessageSquare, ArrowLeft } from "lucide-react";
 import { WtnPipelineView } from "./WtnPipelineView";
+import { EditorChatSection } from "./EditorChat";
 import { supabase } from "@/integrations/supabase/client";
 import { adToBS, nepaliMonthsEnglish, getBSYearsRange } from "@/lib/nepali-date";
 
@@ -173,6 +174,7 @@ export function MobileVideoEditTracker() {
   const { rowsByStatus, isLoading, updateField, pushToStatus, splitRow, mergeRow } = useVideoEditTracker();
   const [editors, setEditors] = useState<{ name: string; isVideoEditor: boolean }[]>([]);
   const [showPipeline, setShowPipeline] = useState(false);
+  const [showChat, setShowChat] = useState(false);
   const [filterClient, setFilterClient] = useState<string | null>(null);
   const [filterEditType, setFilterEditType] = useState<string | null>(null);
   const [filterYear, setFilterYear] = useState<number | null>(null);
@@ -232,6 +234,43 @@ export function MobileVideoEditTracker() {
 
   const clearAll = () => { setFilterClient(null); setFilterEditType(null); setFilterYear(null); setFilterMonth(null); setSortMode('default'); };
 
+  const uniqueClientNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const stage of STAGES) {
+      for (const r of rowsByStatus[stage.key] || []) {
+        if (r.clientName) names.add(r.clientName);
+      }
+    }
+    return Array.from(names).sort();
+  }, [rowsByStatus]);
+
+  const videoEditorNames = useMemo(() =>
+    editors.filter(e => e.isVideoEditor && e.name).map(e => e.name),
+  [editors]);
+
+  // Chat view
+  if (showChat) {
+    return (
+      <div className="min-h-screen bg-background pb-20 flex flex-col">
+        <div className="sticky top-0 z-10 bg-card border-b px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" className="w-8 h-8" onClick={() => setShowChat(false)}>
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
+            <MessageSquare className="w-5 h-5 text-primary" />
+            <h1 className="text-base font-bold text-foreground flex-1">Editor Chat</h1>
+          </div>
+        </div>
+        <div className="flex-1 px-4 py-4">
+          <EditorChatSection
+            editors={videoEditorNames}
+            mentionOptions={uniqueClientNames.concat(editors.filter(e => e.name).map(e => e.name))}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background pb-20">
       <div className="sticky top-0 z-10 bg-card border-b px-4 py-3">
@@ -240,6 +279,14 @@ export function MobileVideoEditTracker() {
             <Video className="w-4 h-4 text-white" />
           </div>
           <h1 className="text-base font-bold text-foreground flex-1">Video Edit</h1>
+          <Button
+            onClick={() => setShowChat(true)}
+            variant="outline"
+            size="icon"
+            className="rounded-full w-8 h-8 p-0"
+          >
+            <MessageSquare className="w-4 h-4" />
+          </Button>
           <Button
             onClick={() => setShowPipeline(true)}
             className="rounded-full w-8 h-8 bg-green-600 hover:bg-green-500 text-white shadow-lg p-0"

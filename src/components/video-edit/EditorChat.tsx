@@ -230,7 +230,7 @@ export function EditorChat({
   };
 
   return (
-    <div className={cn("flex flex-col border rounded-xl bg-card", compact ? "h-64" : "h-80")}>
+    <div className={cn("flex flex-col bg-card", compact ? "h-full" : "border rounded-xl h-80")}>
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-3 space-y-0.5">
         {messages.length === 0 && (
