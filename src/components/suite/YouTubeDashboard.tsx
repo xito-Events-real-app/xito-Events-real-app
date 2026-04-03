@@ -399,11 +399,10 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
       if (cachedPlaylists.length > 0) setExpandedPlaylists(new Set([cachedPlaylists[0].id]));
     }
 
-    // Background refresh only if we have cache, otherwise foreground
-    const hasRecentCache = !!(cachedRecent && cachedRecent.length > 0);
-    const hasPlaylistCache = !!(cachedPlaylists && cachedPlaylists.length > 0);
-    loadRecentUploads(hasRecentCache);
-    loadPlaylists(hasPlaylistCache);
+    // If no cache, load from tracker DB (no YouTube API calls)
+    if (!cachedRecent || cachedRecent.length === 0 || !cachedPlaylists || cachedPlaylists.length === 0) {
+      loadFromTracker();
+    }
     loadStats();
   }, [open]);
 
