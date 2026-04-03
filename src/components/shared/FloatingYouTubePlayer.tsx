@@ -96,7 +96,8 @@ export function FloatingYouTubePlayer() {
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => {
-              navigate('/?section=youtube');
+              close();
+              navigate(`/?section=youtube&videoId=${video.videoId}`);
             }}
             className="px-2 py-0.5 rounded text-[10px] font-semibold bg-red-500/20 text-red-400 hover:bg-red-500/30 hover:text-red-300 transition-colors"
           >

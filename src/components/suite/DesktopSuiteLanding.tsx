@@ -29,13 +29,18 @@ export function DesktopSuiteLanding() {
   const [showAllClients, setShowAllClients] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [showYouTube, setShowYouTube] = useState(false);
+  const [youtubeInitVideoId, setYoutubeInitVideoId] = useState<string | null>(null);
 
   // Open YouTube dashboard via URL param
   useEffect(() => {
     if (searchParams.get('section') === 'youtube') {
+      const vid = searchParams.get('videoId') || null;
+      setYoutubeInitVideoId(vid);
       setShowYouTube(true);
-      searchParams.delete('section');
-      setSearchParams(searchParams, { replace: true });
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('section');
+      newParams.delete('videoId');
+      setSearchParams(newParams, { replace: true });
     }
   }, [searchParams, setSearchParams]);
 
@@ -66,7 +71,7 @@ export function DesktopSuiteLanding() {
   return (
     <div className="min-h-screen bg-gray-50 flex w-full">
       <AllClientsAnnouncementDialog onNavigate={() => setShowAllClients(true)} />
-      <YouTubeDashboard open={showYouTube} onClose={() => setShowYouTube(false)} />
+      <YouTubeDashboard open={showYouTube} onClose={() => { setShowYouTube(false); setYoutubeInitVideoId(null); }} initialVideoId={youtubeInitVideoId} />
       {/* Left Sidebar - Module Navigation */}
       <SuiteLeftSidebar 
         onSelectStarHandler={(h) => { setSelectedStarHandler(h || null); setShowAllClients(false); }}

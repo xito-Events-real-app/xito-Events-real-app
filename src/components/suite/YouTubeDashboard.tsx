@@ -215,7 +215,7 @@ const STAGE_COLORS: Record<string, string> = {
   FINALIZED: "bg-green-100 text-green-700",
 };
 
-export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function YouTubeDashboard({ open, onClose, initialVideoId }: { open: boolean; onClose: () => void; initialVideoId?: string | null }) {
   const { jobs, activeCount } = useYouTubeUploadContext();
   const [playlists, setPlaylists] = useState<PlaylistWithVideos[]>([]);
   const [recentVideos, setRecentVideos] = useState<RecentVideo[]>([]);
@@ -333,11 +333,20 @@ export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: ()
       if (cachedPlaylists.length > 0) setExpandedPlaylists(new Set([cachedPlaylists[0].id]));
     }
 
-    // Background refresh
-    loadRecentUploads(true);
-    loadPlaylists(true);
+    // Background refresh only if we have cache, otherwise foreground
+    const hasRecentCache = !!(cachedRecent && cachedRecent.length > 0);
+    const hasPlaylistCache = !!(cachedPlaylists && cachedPlaylists.length > 0);
+    loadRecentUploads(hasRecentCache);
+    loadPlaylists(hasPlaylistCache);
     loadStats();
   }, [open]);
+
+  // Auto-play initial video from URL param
+  useEffect(() => {
+    if (open && initialVideoId) {
+      setActiveVideo({ videoId: initialVideoId, title: '', playlistTitle: '' });
+    }
+  }, [open, initialVideoId]);
 
   const loadPlaylists = async (isBackground = false) => {
     if (!isBackground) setLoadingPlaylists(true);
