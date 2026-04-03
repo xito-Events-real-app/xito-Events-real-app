@@ -1,11 +1,42 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { X, GripHorizontal, Maximize2, Minimize2 } from "lucide-react";
+import { X, GripHorizontal, Maximize2, Minimize2, User, Palette, Clock, Calendar } from "lucide-react";
 import { useFloatingYouTubePlayer } from "@/contexts/FloatingYouTubePlayerContext";
 import { useNavigate } from "react-router-dom";
 
-const MIN_W = 400, MIN_H = 280, MAX_W = 960, MAX_H = 600;
-const DEFAULT_W = 560, DEFAULT_H = 360;
+const MIN_W = 400, MIN_H = 300, MAX_W = 960, MAX_H = 700;
+const DEFAULT_W = 560, DEFAULT_H = 420;
+
+function formatDuration(ms: number): string {
+  if (ms < 0) return "—";
+  const hours = Math.floor(ms / 3600000);
+  const mins = Math.floor((ms % 3600000) / 60000);
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24);
+    const remHrs = hours % 24;
+    return remHrs > 0 ? `${days}d ${remHrs}h` : `${days}d`;
+  }
+  return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+}
+
+function computeTotalTime(editStartedAt: string | null, status: string | null, updatedAt: string | null): string | null {
+  if (!editStartedAt) return null;
+  const start = new Date(editStartedAt);
+  if (isNaN(start.getTime())) return null;
+  const end = status === "FINALIZED" && updatedAt ? new Date(updatedAt) : new Date();
+  return formatDuration(end.getTime() - start.getTime());
+}
+
+function computeEventAge(eventDateAd: string | null): string | null {
+  if (!eventDateAd) return null;
+  const eventDate = new Date(eventDateAd);
+  if (isNaN(eventDate.getTime())) return null;
+  const now = new Date();
+  const diffMs = now.getTime() - eventDate.getTime();
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (days < 0) return `in ${Math.abs(days)} days`;
+  return `${days} days old`;
+}
 
 export function FloatingYouTubePlayer() {
   const { video, close } = useFloatingYouTubePlayer();
@@ -72,6 +103,10 @@ export function FloatingYouTubePlayer() {
 
   if (!video) return null;
 
+  const totalTime = computeTotalTime(video.editStartedAt || null, video.videoEditStatus || null, video.updatedAt || null);
+  const eventAge = computeEventAge(video.eventDateAD || null);
+  const hasTrackerInfo = video.editor || video.colorist || totalTime || eventAge;
+
   return createPortal(
     <div
       style={{
@@ -120,7 +155,7 @@ export function FloatingYouTubePlayer() {
       </div>
 
       {/* Player */}
-      <div className="flex-1 bg-black">
+      <div className="flex-1 bg-black min-h-0">
         <iframe
           src={`https://www.youtube.com/embed/${video.videoId}?autoplay=1&rel=0`}
           className="w-full h-full"
@@ -129,6 +164,48 @@ export function FloatingYouTubePlayer() {
           frameBorder="0"
         />
       </div>
+
+      {/* Tracker Info Bar */}
+      {hasTrackerInfo && (
+        <div className="px-3 py-2 bg-zinc-900 border-t border-zinc-700 shrink-0">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            {video.editor && (
+              <div className="flex items-center gap-1.5">
+                <User className="w-3 h-3 text-blue-400" />
+                <span className="text-[10px] text-white/40">Editor</span>
+                <span className="text-[11px] font-semibold text-white/90">{video.editor}</span>
+              </div>
+            )}
+            {video.colorist && (
+              <div className="flex items-center gap-1.5">
+                <Palette className="w-3 h-3 text-purple-400" />
+                <span className="text-[10px] text-white/40">Colorist</span>
+                <span className="text-[11px] font-semibold text-white/90">{video.colorist}</span>
+              </div>
+            )}
+            {totalTime && (
+              <div className="flex items-center gap-1.5">
+                <Clock className="w-3 h-3 text-orange-400" />
+                <span className="text-[10px] text-white/40">Edit Time</span>
+                <span className="text-[11px] font-semibold text-white/90">{totalTime}</span>
+              </div>
+            )}
+            {eventAge && (
+              <div className="flex items-center gap-1.5">
+                <Calendar className="w-3 h-3 text-teal-400" />
+                <span className="text-[10px] text-white/40">Event</span>
+                <span className="text-[11px] font-semibold text-white/90">{eventAge}</span>
+              </div>
+            )}
+            {video.editType && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-white/40">Type</span>
+                <span className="text-[11px] font-semibold text-white/90">{video.editType}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Resize handle */}
       {!isMaximized && (
