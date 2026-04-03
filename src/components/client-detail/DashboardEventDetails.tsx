@@ -138,6 +138,39 @@ function FreelancerAssignPopover({
 
 const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, freelancerAssignments, registeredDateTimeAD, allFreelancers, onAssignmentUpdate }: DashboardEventDetailsProps) => {
   const navigate = useNavigate();
+  const [ytLinks, setYtLinks] = useState<Record<string, { videoId: string; title: string }>>({});
+  const [floatingVideo, setFloatingVideo] = useState<{ videoId: string; title: string } | null>(null);
+
+  // Fetch YouTube links for this client's events from video_edit_tracker
+  useEffect(() => {
+    if (!registeredDateTimeAD) return;
+    (async () => {
+      const { data } = await supabase
+        .from("video_edit_tracker")
+        .select("event_name, sub_event_name, edit_type, youtube_link")
+        .eq("registered_date_time_ad", registeredDateTimeAD)
+        .neq("youtube_link", "")
+        .eq("deleted", false);
+      if (!data) return;
+      const map: Record<string, { videoId: string; title: string }> = {};
+      for (const row of data) {
+        const eventKey = (row.event_name || "").trim().toUpperCase();
+        // Prefer Full Video, but fallback to Highlights
+        const isFullVideo = (row.edit_type || "").toUpperCase().includes("FULL");
+        const link = row.youtube_link || "";
+        const vidMatch = link.match(/(?:youtu\.be\/|v=|\/embed\/)([a-zA-Z0-9_-]{11})/);
+        if (!vidMatch) continue;
+        if (!map[eventKey] || isFullVideo) {
+          map[eventKey] = {
+            videoId: vidMatch[1],
+            title: `${row.event_name || ""} ${row.edit_type || ""}`.trim(),
+          };
+        }
+      }
+      setYtLinks(map);
+    })();
+  }, [registeredDateTimeAD]);
+
   if (isLoading) {
     return (
       <div className="bg-slate-800/50 rounded-xl p-4 mt-4 animate-pulse">
