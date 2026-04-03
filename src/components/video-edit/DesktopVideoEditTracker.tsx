@@ -1520,6 +1520,20 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, o
           );
         })
       )}
+
+      {/* Chat Section */}
+      <div className="mt-6">
+        <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+          <MessageSquare className="w-4 h-4 text-primary" />
+          Chat
+        </h3>
+        <EditorChat
+          editorName={editorName}
+          senderName="Admin"
+          senderType="admin"
+          mentionOptions={mentionOptions}
+        />
+      </div>
     </div>
   );
 }
