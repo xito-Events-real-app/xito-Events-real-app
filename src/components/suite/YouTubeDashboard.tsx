@@ -215,7 +215,7 @@ const STAGE_COLORS: Record<string, string> = {
   FINALIZED: "bg-green-100 text-green-700",
 };
 
-export function YouTubeDashboard({ open, onClose, initialVideoId }: { open: boolean; onClose: () => void; initialVideoId?: string | null }) {
+export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSeconds = 0 }: { open: boolean; onClose: () => void; initialVideoId?: string | null; initialStartSeconds?: number }) {
   const { jobs, activeCount } = useYouTubeUploadContext();
   const [playlists, setPlaylists] = useState<PlaylistWithVideos[]>([]);
   const [recentVideos, setRecentVideos] = useState<RecentVideo[]>([]);
@@ -251,6 +251,8 @@ export function YouTubeDashboard({ open, onClose, initialVideoId }: { open: bool
   const playerRef = useRef<any>(null);
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const apiReadyRef = useRef(false);
+  const pendingStartSecondsRef = useRef(0);
+  const retriedRedirectLoadRef = useRef(false);
 
   // Load YouTube IFrame API
   useEffect(() => {
@@ -273,11 +275,11 @@ export function YouTubeDashboard({ open, onClose, initialVideoId }: { open: bool
     };
   }, [open]);
 
-  const initPlayer = useCallback((videoId: string) => {
+  const initPlayer = useCallback((videoId: string, startSeconds = 0) => {
     if (!apiReadyRef.current || !playerContainerRef.current) return;
     if (playerRef.current) {
       try {
-        playerRef.current.loadVideoById(videoId);
+        playerRef.current.loadVideoById({ videoId, startSeconds });
         playerRef.current.unMute();
         playerRef.current.setVolume(100);
       } catch {}
@@ -285,7 +287,7 @@ export function YouTubeDashboard({ open, onClose, initialVideoId }: { open: bool
     }
     playerRef.current = new window.YT.Player(playerContainerRef.current, {
       videoId,
-      playerVars: { autoplay: 1, playsinline: 1, rel: 0, modestbranding: 1 },
+      playerVars: { autoplay: 1, playsinline: 1, rel: 0, modestbranding: 1, start: startSeconds },
       events: {
         onReady: (e: any) => {
           e.target.unMute();
@@ -299,7 +301,11 @@ export function YouTubeDashboard({ open, onClose, initialVideoId }: { open: bool
   useEffect(() => {
     if (!activeVideo) return;
     const tryInit = () => {
-      if (apiReadyRef.current) { initPlayer(activeVideo.videoId); return true; }
+      if (apiReadyRef.current) {
+        initPlayer(activeVideo.videoId, pendingStartSecondsRef.current);
+        pendingStartSecondsRef.current = 0;
+        return true;
+      }
       return false;
     };
     if (tryInit()) return;
@@ -312,6 +318,8 @@ export function YouTubeDashboard({ open, onClose, initialVideoId }: { open: bool
     if (!open) {
       try { playerRef.current?.destroy(); } catch {}
       playerRef.current = null;
+      pendingStartSecondsRef.current = 0;
+      retriedRedirectLoadRef.current = false;
     }
   }, [open]);
 
@@ -344,9 +352,10 @@ export function YouTubeDashboard({ open, onClose, initialVideoId }: { open: bool
   // Auto-play initial video from URL param
   useEffect(() => {
     if (open && initialVideoId) {
+      pendingStartSecondsRef.current = initialStartSeconds;
       setActiveVideo({ videoId: initialVideoId, title: '', playlistTitle: '' });
     }
-  }, [open, initialVideoId]);
+  }, [open, initialVideoId, initialStartSeconds]);
 
   const loadPlaylists = async (isBackground = false) => {
     if (!isBackground) setLoadingPlaylists(true);
@@ -408,6 +417,46 @@ export function YouTubeDashboard({ open, onClose, initialVideoId }: { open: bool
       setLoadingRecent(false);
     }
   };
+
+  useEffect(() => {
+    if (!open || !initialVideoId || retriedRedirectLoadRef.current) return;
+    if (loadingRecent || loadingPlaylists) return;
+
+    const hasRecentData = recentVideos.length > 0;
+    const hasPlaylistData = playlists.length > 0;
+
+    if (hasRecentData && hasPlaylistData) {
+      retriedRedirectLoadRef.current = true;
+      return;
+    }
+
+    retriedRedirectLoadRef.current = true;
+    loadRecentUploads(false);
+    loadPlaylists(false);
+    loadStats();
+  }, [open, initialVideoId, loadingRecent, loadingPlaylists, recentVideos.length, playlists.length]);
+
+  useEffect(() => {
+    if (!activeVideo?.videoId || activeVideo.title) return;
+
+    const recentMatch = recentVideos.find((video) => video.videoId === activeVideo.videoId);
+    if (recentMatch) {
+      setActiveVideo((prev) => prev && prev.videoId === recentMatch.videoId
+        ? { ...prev, title: recentMatch.title, playlistTitle: 'Recent Upload', publishedAt: recentMatch.publishedAt }
+        : prev);
+      return;
+    }
+
+    for (const playlist of playlists) {
+      const playlistMatch = playlist.videos.find((video) => video.videoId === activeVideo.videoId);
+      if (playlistMatch) {
+        setActiveVideo((prev) => prev && prev.videoId === playlistMatch.videoId
+          ? { ...prev, title: playlistMatch.title, playlistTitle: playlist.title }
+          : prev);
+        return;
+      }
+    }
+  }, [activeVideo?.videoId, activeVideo?.title, recentVideos, playlists]);
 
   // Load more recent videos (infinite scroll)
   const loadMoreRecent = async () => {
