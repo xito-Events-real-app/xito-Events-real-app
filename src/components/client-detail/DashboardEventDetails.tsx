@@ -8,7 +8,7 @@ import { FreelancerData } from "@/lib/freelancer-api";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from "@/components/ui/command";
 import { supabase } from "@/integrations/supabase/client";
-import { FloatingYouTubePlayer } from "@/components/shared/FloatingYouTubePlayer";
+import { useFloatingYouTubePlayer } from "@/contexts/FloatingYouTubePlayerContext";
 
 interface ClientEventsData {
   events: string;
@@ -139,7 +139,7 @@ function FreelancerAssignPopover({
 const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, freelancerAssignments, registeredDateTimeAD, allFreelancers, onAssignmentUpdate }: DashboardEventDetailsProps) => {
   const navigate = useNavigate();
   const [ytLinks, setYtLinks] = useState<Record<string, { videoId: string; title: string }>>({});
-  const [floatingVideo, setFloatingVideo] = useState<{ videoId: string; title: string } | null>(null);
+  const { open: openFloatingPlayer } = useFloatingYouTubePlayer();
 
   // Fetch YouTube links for this client's events from video_edit_tracker
   useEffect(() => {
@@ -256,7 +256,7 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, free
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setFloatingVideo(yt);
+                          openFloatingPlayer(yt);
                         }}
                         className="flex-shrink-0 w-5 h-5 rounded flex items-center justify-center bg-red-500/20 hover:bg-red-500/40 transition-colors group"
                         title="Watch Full Video"
@@ -382,18 +382,6 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, free
         })}
       </div>
 
-      {/* Floating YouTube Player */}
-      {floatingVideo && (
-        <FloatingYouTubePlayer
-          videoId={floatingVideo.videoId}
-          title={floatingVideo.title}
-          onClose={() => setFloatingVideo(null)}
-          onNavigateToYouTube={() => {
-            setFloatingVideo(null);
-            navigate('/?section=youtube');
-          }}
-        />
-      )}
     </div>
   );
 };
