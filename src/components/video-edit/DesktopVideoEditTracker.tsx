@@ -1950,18 +1950,6 @@ export function DesktopVideoEditTracker() {
           </div>
         ) : activeView === 'pipeline' ? (
           <WtnPipelineView onClose={() => setActiveView('dashboard')} inline initialStage={pipelineInitialStage} />
-        ) : activeView === 'chat' ? (
-          <div className="flex-1 overflow-y-auto p-6">
-            <div className="max-w-[1200px] mx-auto">
-              <h1 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
-                <MessageSquare className="w-5 h-5 text-primary" /> Editor Chat
-              </h1>
-              <EditorChatSection
-                editors={editors.filter(e => e.isVideoEditor && e.name).map(e => e.name)}
-                mentionOptions={uniqueClientNames.concat(editors.filter(e => e.name).map(e => e.name))}
-              />
-            </div>
-          </div>
         ) : isEditorView ? (
           <div className="flex-1 overflow-y-auto p-6">
             <div className="max-w-[1200px] mx-auto">
