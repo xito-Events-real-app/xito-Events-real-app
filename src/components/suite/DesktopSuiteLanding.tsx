@@ -27,7 +27,17 @@ export function DesktopSuiteLanding() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedStarHandler, setSelectedStarHandler] = useState<string | null>(null);
   const [showAllClients, setShowAllClients] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [showYouTube, setShowYouTube] = useState(false);
+
+  // Open YouTube dashboard via URL param
+  useEffect(() => {
+    if (searchParams.get('section') === 'youtube') {
+      setShowYouTube(true);
+      searchParams.delete('section');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const handleRefreshNews = async () => {
     setIsRefreshing(true);
