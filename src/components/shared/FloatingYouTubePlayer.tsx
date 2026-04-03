@@ -169,13 +169,14 @@ export function FloatingYouTubePlayer() {
     return () => window.clearInterval(interval);
   }, [video, initPlayer]);
 
+  const [showMoreTimings, setShowMoreTimings] = useState(false);
+
   if (!video) return null;
 
   const timings = computeVideoEditTimings(video.stageHistory, video.videoEditStatus);
   const eventAge = computeEventAge(video.eventDateAD || null);
   const hasTrackerInfo = video.editor || video.colorist || timings.editTime || timings.colorTime || eventAge;
   const hasExpandedTimings = timings.totalTime || timings.actualTime || timings.finalizedTime || timings.clientReviewTime;
-  const [showMoreTimings, setShowMoreTimings] = useState(false);
 
   const handleOpenInYouTube = () => {
     let currentSeconds = 0;
