@@ -215,7 +215,7 @@ const STAGE_COLORS: Record<string, string> = {
   FINALIZED: "bg-green-100 text-green-700",
 };
 
-export function YouTubeDashboard({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function YouTubeDashboard({ open, onClose, initialVideoId }: { open: boolean; onClose: () => void; initialVideoId?: string | null }) {
   const { jobs, activeCount } = useYouTubeUploadContext();
   const [playlists, setPlaylists] = useState<PlaylistWithVideos[]>([]);
   const [recentVideos, setRecentVideos] = useState<RecentVideo[]>([]);
