@@ -1340,16 +1340,42 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, o
     },
   ];
 
+  const editorInfo = editors.find(e => e.name === editorName);
+  const portalUrl = `https://wtnclienttracker.lovable.app/editor-portal/${encodeURIComponent(editorName)}`;
+  const mentionOptions = useMemo(() => {
+    const names = new Set<string>();
+    editors.forEach(e => e.name && names.add(e.name));
+    allClientNames.forEach(n => names.add(n));
+    return Array.from(names).sort();
+  }, [editors, allClientNames]);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-full bg-teal-600 flex items-center justify-center">
           <span className="text-white font-bold text-sm">{editorName.charAt(0).toUpperCase()}</span>
         </div>
-        <div>
+        <div className="flex-1">
           <h2 className="text-lg font-bold text-foreground">{editorName}</h2>
           <p className="text-xs text-muted-foreground">{totalAssigned} assigned videos</p>
         </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8 text-xs gap-1.5"
+          onClick={() => {
+            const msg = `Hi ${editorName.split(' ')[0]}, here's your editor portal:\n${portalUrl}`;
+            if (editorInfo?.whatsapp) {
+              openWhatsApp(editorInfo.whatsapp, msg);
+            } else {
+              navigator.clipboard.writeText(portalUrl);
+              toast({ title: "Portal link copied!" });
+            }
+          }}
+        >
+          <Share2 className="w-3.5 h-3.5" />
+          {editorInfo?.whatsapp ? "Send Portal Link" : "Copy Portal Link"}
+        </Button>
       </div>
 
       {/* Stat Cards */}
