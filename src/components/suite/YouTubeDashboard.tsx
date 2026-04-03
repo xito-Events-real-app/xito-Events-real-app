@@ -652,22 +652,19 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
     }
   };
 
+  // Fallback: if API failed and we still have no data, use tracker rows (don't cache these as "real" data)
   useEffect(() => {
     if (loadingRecent || loadingPlaylists || !allTrackerRows.length) return;
 
     if (recentVideos.length === 0) {
       const fallbackRecent = buildRecentVideosFromTracker(allTrackerRows);
-      if (fallbackRecent.length > 0) {
-        setRecentVideos(fallbackRecent);
-        setCachedData(YT_CACHE_RECENT, fallbackRecent);
-      }
+      if (fallbackRecent.length > 0) setRecentVideos(fallbackRecent);
     }
 
     if (playlists.length === 0) {
       const fallbackPlaylists = buildPlaylistsFromTracker(allTrackerRows);
       if (fallbackPlaylists.length > 0) {
         setPlaylists(fallbackPlaylists);
-        setCachedData(YT_CACHE_PLAYLISTS, fallbackPlaylists);
         setExpandedPlaylists(new Set([fallbackPlaylists[0].id]));
       }
     }
