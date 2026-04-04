@@ -158,7 +158,8 @@ const App = () => (
           </AuthProvider>
            </FloatingYouTubePlayerProvider>
           </BrowserRouter>
-          </YouTubeUploadProvider>
+           </XitoTransferPopupProvider>
+           </YouTubeUploadProvider>
           </XitoDriveUploadProvider>
           </PCloudUploadProvider>
           </EditedFilesUploadProvider>
