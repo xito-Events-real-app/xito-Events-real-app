@@ -113,8 +113,8 @@ export function FloatingEditorChat({ editors, mentionOptions, senderName = "Admi
           <EditorChat
             key={activeEditor}
             editorName={activeEditor}
-            senderName="Admin"
-            senderType="admin"
+            senderName={senderName}
+            senderType={senderType}
             mentionOptions={mentionOptions}
             compact
           />
