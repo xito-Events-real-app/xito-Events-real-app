@@ -7,9 +7,11 @@ import { cn } from "@/lib/utils";
 interface FloatingEditorChatProps {
   editors: string[];
   mentionOptions: string[];
+  senderName?: string;
+  senderType?: "admin" | "editor";
 }
 
-export function FloatingEditorChat({ editors, mentionOptions }: FloatingEditorChatProps) {
+export function FloatingEditorChat({ editors, mentionOptions, senderName = "Admin", senderType = "admin" }: FloatingEditorChatProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeEditor, setActiveEditor] = useState(editors[0] || "");
@@ -111,8 +113,8 @@ export function FloatingEditorChat({ editors, mentionOptions }: FloatingEditorCh
           <EditorChat
             key={activeEditor}
             editorName={activeEditor}
-            senderName="Admin"
-            senderType="admin"
+            senderName={senderName}
+            senderType={senderType}
             mentionOptions={mentionOptions}
             compact
           />
