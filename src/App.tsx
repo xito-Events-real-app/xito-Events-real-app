@@ -57,6 +57,9 @@ import { XitoUploadTracker } from "./components/xito-drive/XitoUploadTracker";
 import { YouTubeUploadProvider } from "./contexts/YouTubeUploadContext";
 import { YouTubeUploadTracker } from "./components/suite/YouTubeUploadTracker";
 import { StartupAnnouncementPopup } from "./components/suite/StartupAnnouncementPopup";
+import { XitoTransferPopupProvider } from "./contexts/XitoTransferPopupContext";
+import { FloatingXitoTransfer } from "./components/shared/FloatingXitoTransfer";
+import XitoTransfer from "./pages/XitoTransfer";
 
 const queryClient = new QueryClient();
 
