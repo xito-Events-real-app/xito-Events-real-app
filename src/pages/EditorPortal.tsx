@@ -341,16 +341,6 @@ export default function EditorPortal() {
               </div>
             )}
 
-            {/* Chat */}
-            <div>
-              <h3 className="text-sm font-semibold text-foreground mb-3">Chat</h3>
-              <EditorChat
-                editorName={editorName}
-                senderName={editorName}
-                senderType="editor"
-                mentionOptions={mentionOptions}
-              />
-            </div>
           </>
         )}
       </div>
