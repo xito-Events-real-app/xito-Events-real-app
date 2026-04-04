@@ -57,6 +57,9 @@ import { XitoUploadTracker } from "./components/xito-drive/XitoUploadTracker";
 import { YouTubeUploadProvider } from "./contexts/YouTubeUploadContext";
 import { YouTubeUploadTracker } from "./components/suite/YouTubeUploadTracker";
 import { StartupAnnouncementPopup } from "./components/suite/StartupAnnouncementPopup";
+import { XitoTransferPopupProvider } from "./contexts/XitoTransferPopupContext";
+import { FloatingXitoTransfer } from "./components/shared/FloatingXitoTransfer";
+import XitoTransfer from "./pages/XitoTransfer";
 
 const queryClient = new QueryClient();
 
@@ -84,6 +87,7 @@ const App = () => (
           <PCloudUploadProvider>
           <XitoDriveUploadProvider>
           <YouTubeUploadProvider>
+          <XitoTransferPopupProvider>
           <BrowserRouter>
            <FloatingYouTubePlayerProvider>
             <AuthProvider>
@@ -92,7 +96,8 @@ const App = () => (
               <SaugatSearch />
               <FloatingBookingCalendar />
               <FloatingBenzoKeep />
-              <FloatingYouTubePlayer />
+               <FloatingYouTubePlayer />
+               <FloatingXitoTransfer />
               <Toaster />
               <Sonner />
               <UploadProgressTracker />
@@ -131,7 +136,8 @@ const App = () => (
               {/* Other Modules */}
               <Route path="/finance" element={<ProtectedRoute><FinanceManager /></ProtectedRoute>} />
               <Route path="/tasks" element={<ProtectedRoute><DailyTasks /></ProtectedRoute>} />
-              <Route path="/video-edit" element={<ProtectedRoute><VideoEditTracker /></ProtectedRoute>} />
+               <Route path="/video-edit" element={<ProtectedRoute><VideoEditTracker /></ProtectedRoute>} />
+               <Route path="/xito-transfer" element={<ProtectedRoute><XitoTransfer /></ProtectedRoute>} />
               <Route path="/photo-edit" element={<ProtectedRoute><ComingSoon moduleId="photo-edit-tracker" /></ProtectedRoute>} />
               <Route path="/files" element={<ProtectedRoute><FileManagement /></ProtectedRoute>} />
               <Route path="/files/client/:clientId" element={<ProtectedRoute><FileClientDetail /></ProtectedRoute>} />
@@ -152,7 +158,8 @@ const App = () => (
           </AuthProvider>
            </FloatingYouTubePlayerProvider>
           </BrowserRouter>
-          </YouTubeUploadProvider>
+           </XitoTransferPopupProvider>
+           </YouTubeUploadProvider>
           </XitoDriveUploadProvider>
           </PCloudUploadProvider>
           </EditedFilesUploadProvider>

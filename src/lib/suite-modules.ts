@@ -14,6 +14,7 @@ import {
   HardDrive,
   Cloud,
   BookOpen,
+  ArrowUpDown,
   LucideIcon,
 } from "lucide-react";
 
@@ -29,6 +30,15 @@ export interface SuiteModule {
 }
 
 export const suiteModules: SuiteModule[] = [
+  {
+    id: 'xito-transfer',
+    name: 'XITO TRANSFER',
+    description: 'Quick file, note & URL transfer (7-day)',
+    icon: ArrowUpDown,
+    path: '/xito-transfer',
+    status: 'active',
+    gradient: 'from-orange-500 to-red-600',
+  },
   {
     id: 'client-tracker',
     name: 'Client Tracker',

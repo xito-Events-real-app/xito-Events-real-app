@@ -1480,6 +1480,51 @@ export type Database = {
         }
         Relationships: []
       }
+      xito_transfers: {
+        Row: {
+          content: string
+          created_at: string
+          expires_at: string
+          file_name: string
+          file_size_bytes: number
+          file_url: string
+          id: string
+          mime_type: string
+          title: string
+          transfer_type: string
+          url: string
+          url_description: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          expires_at?: string
+          file_name?: string
+          file_size_bytes?: number
+          file_url?: string
+          id?: string
+          mime_type?: string
+          title?: string
+          transfer_type?: string
+          url?: string
+          url_description?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          expires_at?: string
+          file_name?: string
+          file_size_bytes?: number
+          file_url?: string
+          id?: string
+          mime_type?: string
+          title?: string
+          transfer_type?: string
+          url?: string
+          url_description?: string
+        }
+        Relationships: []
+      }
       youtube_upload_sessions: {
         Row: {
           bytes_uploaded: number
