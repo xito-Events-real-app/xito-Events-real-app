@@ -87,6 +87,7 @@ const App = () => (
           <PCloudUploadProvider>
           <XitoDriveUploadProvider>
           <YouTubeUploadProvider>
+          <XitoTransferPopupProvider>
           <BrowserRouter>
            <FloatingYouTubePlayerProvider>
             <AuthProvider>
