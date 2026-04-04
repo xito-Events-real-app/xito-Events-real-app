@@ -11,7 +11,7 @@ interface FloatingEditorChatProps {
   senderType?: "admin" | "editor";
 }
 
-export function FloatingEditorChat({ editors, mentionOptions }: FloatingEditorChatProps) {
+export function FloatingEditorChat({ editors, mentionOptions, senderName = "Admin", senderType = "admin" }: FloatingEditorChatProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeEditor, setActiveEditor] = useState(editors[0] || "");
