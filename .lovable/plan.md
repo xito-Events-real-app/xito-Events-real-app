@@ -1,116 +1,70 @@
 
 
-# Video Editor Portal + Chat System
+# XITO TRANSFER Module
 
-## Overview
-Build a public-facing "Editor Portal" page (like the existing Crew Schedule page) that editors access via a WhatsApp-shareable link, plus a real-time chat system with @mention support that works both inside the Video Edit Tracker and on the editor portal.
+## What It Does
+A temporary transfer space for files (< 20MB), text notes, and URLs. Everything auto-deletes after 7 days. Items grouped by date (Today, Tomorrow, then "4 April 2026 / 22 Chaitra 2082" format). Accessible globally by pressing X twice.
 
-## Architecture
+## Database
 
-### 1. New Database Table: `video_edit_chat`
-Store chat messages with @mention metadata:
-
+### New table: `xito_transfers`
 ```sql
-CREATE TABLE public.video_edit_chat (
+CREATE TABLE public.xito_transfers (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   created_at timestamptz DEFAULT now(),
-  editor_name text NOT NULL DEFAULT '',
-  sender_name text NOT NULL DEFAULT '',
-  sender_type text NOT NULL DEFAULT 'admin',  -- 'admin' | 'editor'
-  message text NOT NULL DEFAULT '',
-  mentions text NOT NULL DEFAULT '',  -- JSON array of mentioned names
-  tracker_row_id uuid,  -- optional: link to specific video edit row
-  is_read boolean DEFAULT false
-);
-ALTER TABLE public.video_edit_chat ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow all access" ON public.video_edit_chat FOR ALL TO public USING (true) WITH CHECK (true);
-ALTER PUBLICATION supabase_realtime ADD TABLE public.video_edit_chat;
-```
-
-### 2. New Database Table: `video_edit_notifications`
-Track changes pushed to editors in real-time:
-
-```sql
-CREATE TABLE public.video_edit_notifications (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  created_at timestamptz DEFAULT now(),
-  editor_name text NOT NULL DEFAULT '',
-  notification_type text NOT NULL DEFAULT '',  -- 'status_change' | 'assignment' | 'urgency' | 'deadline' | 'chat'
+  transfer_type text NOT NULL DEFAULT 'note',  -- 'note' | 'file' | 'url'
   title text NOT NULL DEFAULT '',
-  description text NOT NULL DEFAULT '',
-  tracker_row_id uuid,
-  is_read boolean DEFAULT false
+  content text NOT NULL DEFAULT '',
+  file_url text NOT NULL DEFAULT '',
+  file_name text NOT NULL DEFAULT '',
+  file_size_bytes bigint NOT NULL DEFAULT 0,
+  mime_type text NOT NULL DEFAULT '',
+  url text NOT NULL DEFAULT '',              -- for URL type transfers
+  url_description text NOT NULL DEFAULT '',  -- optional label for the URL
+  expires_at timestamptz NOT NULL DEFAULT (now() + interval '7 days')
 );
-ALTER TABLE public.video_edit_notifications ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow all access" ON public.video_edit_notifications FOR ALL TO public USING (true) WITH CHECK (true);
-ALTER PUBLICATION supabase_realtime ADD TABLE public.video_edit_notifications;
+-- Public RLS + Realtime enabled
 ```
 
-### 3. Public Editor Portal Page
-**New file: `src/pages/EditorPortal.tsx`**
-- Public route: `/editor-portal/:editorName` (no auth required)
-- Shows the same data as the internal `EditorView` component but **read-only** except for play/pause
-- Includes real-time notifications bell with unread count
-- Includes the chat box at the bottom
-- Uses Supabase realtime to auto-refresh when data changes from the main system
+### New storage bucket: `xito-transfers` (public, 20MB limit enforced client-side)
 
-**New route in `App.tsx`:**
-```tsx
-<Route path="/editor-portal/:editorName" element={<EditorPortal />} />
-```
+### Cleanup Edge Function: `cleanup-xito-transfers`
+Same pattern as `cleanup-potential-deletes` — deletes expired rows + associated storage files.
 
-### 4. WhatsApp Link Generator
-**Update: `src/components/video-edit/DesktopVideoEditTracker.tsx`**
-- Add a WhatsApp icon button at the top of each `EditorView` page (next to the editor name)
-- On click: copies/sends a WhatsApp message with the portal link:
-  `https://wtnclienttracker.lovable.app/editor-portal/{encodedEditorName}`
-- Similar to the existing client portal link pattern
+## Three Transfer Types
 
-### 5. Chat Component with @Mentions
-**New file: `src/components/video-edit/EditorChat.tsx`**
-- Real-time chat box using `video_edit_chat` table
-- @mention popup triggered by typing `@` — shows list of editors, client names
-- Messages with mentions render highlighted @names
-- Works in two contexts:
-  1. Inside each editor's page in the Video Edit Tracker (admin side)
-  2. On the public Editor Portal page (editor side, sender_type='editor')
+1. **Note** — title + text content
+2. **File** — upload file (< 20MB), stored in `xito-transfers` bucket
+3. **URL** — save a URL with optional description/label; rendered as clickable link with favicon preview
 
-### 6. Chat Section in Sidebar
-**Update: `VideoEditSidebar`**
-- Add a "Chat" nav item below Pipeline View in the sidebar
-- When selected, shows a unified chat view with tabs per editor
-- Unread message count badge on the Chat nav item
+## Module Registration
+`src/lib/suite-modules.ts` — add `xito-transfer` entry ABOVE `client-tracker` with `ArrowUpDown` icon, path `/xito-transfer`.
 
-### 7. Notification System
-**Update: `src/hooks/useVideoEditTracker.ts`**
-- When `updateField`, `pushToStatus`, or `togglePlaying` is called, insert a notification row for the affected editor
-- Example: moving a row to COLOR_QUEUE creates a notification: "Your edit for {clientName} has been moved to Color Queue"
+## New Page: `src/pages/XitoTransfer.tsx`
+- Top bar: icon + "XITO TRANSFER" + back
+- Three add buttons: Note, File, URL
+- Items grouped by date: **Today** / **Tomorrow** / formatted date headers
+- Each item shows: type icon, title, preview, time ago, days-remaining badge, delete
+- Files downloadable on click; URLs open in new tab
+- Desktop: sidebar with date list; Mobile: scrollable list
 
-### 8. Editor Portal Page Layout
-The portal page will show:
-- Editor name + greeting header
-- Notification bell (top right) with dropdown of recent notifications
-- "Currently Working On" card with play/pause button (only interactive element)
-- "Next Up" card (read-only)
-- Stage-grouped task list (read-only, same as EditorView)
-- Chat box at the bottom (interactive)
+## Double-X Global Shortcut
+**New context: `src/contexts/XitoTransferPopupContext.tsx`** — same pattern as `SaugatSearchContext` double-space, but listens for "x" key twice within 400ms.
 
-## Files to Create/Modify
+**New component: `src/components/shared/FloatingXitoTransfer.tsx`** — floating overlay with the full XITO TRANSFER UI.
+
+## Routing
+`src/App.tsx` — protected route `/xito-transfer`, provider + floating component added globally.
+
+## Files Summary
 
 | File | Action |
 |------|--------|
-| `src/pages/EditorPortal.tsx` | Create - public editor portal page |
-| `src/components/video-edit/EditorChat.tsx` | Create - chat component with @mentions |
-| `src/components/video-edit/EditorNotifications.tsx` | Create - notification bell + dropdown |
-| `src/components/video-edit/DesktopVideoEditTracker.tsx` | Modify - add WhatsApp link to EditorView, add Chat to sidebar |
-| `src/hooks/useVideoEditTracker.ts` | Modify - push notifications on changes |
-| `src/App.tsx` | Modify - add public `/editor-portal/:editorName` route |
-| Database migration | Create `video_edit_chat` and `video_edit_notifications` tables with realtime |
-
-## Key Behaviors
-- Chat is realtime (Supabase channels) — messages appear instantly on both sides
-- @mention popup filters as you type after `@`
-- Notifications are generated automatically when admin makes changes
-- Editor portal only allows play/pause + chat; everything else is view-only
-- Each editor sees only their own assignments (filtered by editor name)
+| DB migration | Create `xito_transfers` table + `xito-transfers` bucket |
+| `src/lib/suite-modules.ts` | Add module above Client Tracker |
+| `src/pages/XitoTransfer.tsx` | Create — main page |
+| `src/contexts/XitoTransferPopupContext.tsx` | Create — double-X listener |
+| `src/components/shared/FloatingXitoTransfer.tsx` | Create — floating overlay |
+| `supabase/functions/cleanup-xito-transfers/index.ts` | Create — auto-delete expired |
+| `src/App.tsx` | Add route + provider + floating component |
 
