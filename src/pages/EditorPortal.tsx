@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { EditorChat } from "@/components/video-edit/EditorChat";
 import { EditorNotificationBell } from "@/components/video-edit/EditorNotifications";
+import { FloatingEditorChat } from "@/components/video-edit/FloatingEditorChat";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, Play, Pause, Video, Timer } from "lucide-react";
