@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 interface FloatingEditorChatProps {
   editors: string[];
   mentionOptions: string[];
+  senderName?: string;
+  senderType?: "admin" | "editor";
 }
 
 export function FloatingEditorChat({ editors, mentionOptions }: FloatingEditorChatProps) {
