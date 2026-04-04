@@ -344,6 +344,14 @@ export default function EditorPortal() {
           </>
         )}
       </div>
+
+      {/* Floating Facebook-style chat - same as Video Edit Tracker */}
+      <FloatingEditorChat
+        editors={[editorName]}
+        mentionOptions={mentionOptions}
+        senderName={editorName}
+        senderType="editor"
+      />
     </div>
   );
 }
