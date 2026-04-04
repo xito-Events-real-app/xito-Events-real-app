@@ -96,7 +96,8 @@ const App = () => (
               <SaugatSearch />
               <FloatingBookingCalendar />
               <FloatingBenzoKeep />
-              <FloatingYouTubePlayer />
+               <FloatingYouTubePlayer />
+               <FloatingXitoTransfer />
               <Toaster />
               <Sonner />
               <UploadProgressTracker />
