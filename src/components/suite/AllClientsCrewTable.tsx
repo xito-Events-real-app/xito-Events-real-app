@@ -1832,7 +1832,7 @@ function FreelancerHoverInfo({ name, allAssignments, selectedYear, selectedMonth
   const phone = match?.whatsappNo || match?.contactNo;
 
   const scheduleMessage = useMemo(() => {
-    const scheduleUrl = `https://busines.xitoevents.com/crew-schedule/${encodeURIComponent(name.trim())}`;
+    const scheduleUrl = `https://business.xitoevents.com/crew-schedule/${encodeURIComponent(name.trim())}`;
     return `Hi! Check your upcoming event schedule here:\n${scheduleUrl}`;
   }, [name]);
 

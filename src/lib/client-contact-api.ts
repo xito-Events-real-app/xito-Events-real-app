@@ -166,7 +166,7 @@ export function formatWhatsAppLink(phone: string): string {
 export function getClientPortalUrl(registeredDateTimeAD: string, clientName?: string): string {
   const encodedId = encodeURIComponent(registeredDateTimeAD);
   const nameSlug = clientName ? slugifyName(clientName) : 'client';
-  return `https://busines.xitoevents.com/client-portal/${nameSlug}/${encodedId}`;
+  return `https://business.xitoevents.com/client-portal/${nameSlug}/${encodedId}`;
 }
 
 // Generate WhatsApp message with portal link
