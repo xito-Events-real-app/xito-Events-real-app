@@ -26,7 +26,7 @@ export function UploadProgressTracker() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-80 bg-card border rounded-lg shadow-xl overflow-hidden">
+    <div className="w-80 bg-card border rounded-lg shadow-xl overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 bg-muted/50 border-b">
         <span className="text-sm font-semibold">
           {activeCount > 0 ? `Uploading ${activeCount} file(s)` : 'Upload Complete'}

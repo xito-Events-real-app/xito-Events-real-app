@@ -195,7 +195,7 @@ export function XitoUploadTracker() {
 
   return (
     <div className={cn(
-      "fixed bottom-4 right-4 z-50 w-[380px] bg-card border border-border/50 rounded-2xl shadow-2xl overflow-hidden",
+      "w-[380px] bg-card border border-border/50 rounded-2xl shadow-2xl overflow-hidden",
       hasActive && "border-primary/20"
     )}>
       <div className="flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-muted/80 to-muted/40 border-b border-border/50">

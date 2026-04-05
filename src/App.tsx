@@ -87,10 +87,13 @@ function AdminOnlyFeatures() {
       <FloatingBenzoKeep />
       <FloatingYouTubePlayer />
       <FloatingXitoTransfer />
-      <UploadProgressTracker />
-      <PCloudUploadTracker />
-      <XitoUploadTracker />
-      <YouTubeUploadTracker />
+      {/* Upload trackers in a horizontal row from bottom-right */}
+      <div className="fixed bottom-4 right-4 z-50 flex flex-row-reverse items-end gap-3">
+        <UploadProgressTracker />
+        <PCloudUploadTracker />
+        <XitoUploadTracker />
+        <YouTubeUploadTracker />
+      </div>
     </>
   );
 }
