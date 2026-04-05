@@ -180,6 +180,10 @@ export function computeVideoEditTimings(
     ["RE_EDIT_ON_PROGRESS", "RE_EDIT_QUEUE", "FINALIZED"]
   );
 
+  // Fallback start: first entry in history for total/actual calculations
+  const firstEntry = entries.length > 0 ? entries[0].date : null;
+  const effectiveStart = editStart || firstEntry;
+
   // Helper for ongoing suffix
   const fmt = (start: Date | null, end: Date | null, ongoingStatus: string): string | null => {
     if (!start) return null;
@@ -248,10 +252,19 @@ export function computeVideoEditTimings(
   const reEdit = !!reEditStart;
   let reEditTime: string | null = null;
   if (reEditStart) {
-    const reEditEnd = finalized || (currentStatus === "RE_EDIT_ON_PROGRESS" ? now : null);
+    // RE_EDIT ends at EXPORT_QUEUE after the re-edit, or FINALIZED, or ongoing
+    const reEditEnd = (() => {
+      // Find the EXPORT_QUEUE or FINALIZED that comes AFTER re-edit start
+      for (const e of entries) {
+        if (e.date > reEditStart && (e.status === "EXPORT_QUEUE" || e.status === "FINALIZED")) {
+          return e.date;
+        }
+      }
+      return currentStatus === "RE_EDIT_ON_PROGRESS" ? now : null;
+    })();
     if (reEditEnd) {
       reEditTime = formatDuration(reEditEnd.getTime() - reEditStart.getTime());
-      if (!finalized && currentStatus === "RE_EDIT_ON_PROGRESS") reEditTime += " (ongoing)";
+      if (currentStatus === "RE_EDIT_ON_PROGRESS") reEditTime += " (ongoing)";
     }
   }
 
@@ -261,21 +274,21 @@ export function computeVideoEditTimings(
     finalizedTime = formatDuration(now.getTime() - finalized.getTime()) + " ago";
   }
 
-  // Total Time (edit start → export queue)
+  // Total Time (effective start → export queue or now)
   let totalTime: string | null = null;
-  if (editStart) {
+  if (effectiveStart) {
     const end = exportQueue || now;
-    totalTime = formatDuration(end.getTime() - editStart.getTime());
+    totalTime = formatDuration(end.getTime() - effectiveStart.getTime());
     if (!exportQueue) totalTime += " (ongoing)";
   }
 
   // Actual Time (excluding pauses)
   let actualTime: string | null = null;
   let pausedTime: string | null = null;
-  if (editStart) {
+  if (effectiveStart) {
     const end = exportQueue || now;
-    const paused = computePausedMs(entries, editStart, end);
-    const wall = end.getTime() - editStart.getTime();
+    const paused = computePausedMs(entries, effectiveStart, end);
+    const wall = end.getTime() - effectiveStart.getTime();
     const actual = Math.max(0, wall - paused);
     actualTime = formatDuration(actual);
     if (!exportQueue) actualTime += " (ongoing)";
