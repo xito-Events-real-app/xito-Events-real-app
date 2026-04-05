@@ -124,8 +124,12 @@ export function YouTubeUploadTracker() {
   if (!hasActive && jobs.length === 0 && remoteVisible.length === 0) return null;
 
   const handleDismiss = () => {
+    // Persist dismissed remote session IDs so they don't reappear on reload
+    const currentDismissed: string[] = JSON.parse(localStorage.getItem('yt_dismissed_sessions') || '[]');
+    const allRemoteIds = remoteVisible.map(r => r.id);
+    const merged = [...new Set([...currentDismissed, ...allRemoteIds])];
+    localStorage.setItem('yt_dismissed_sessions', JSON.stringify(merged));
     clearCompleted();
-    setDismissed(true);
   };
 
   if (collapsed) {
