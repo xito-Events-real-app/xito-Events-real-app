@@ -671,21 +671,32 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
 
   const loadStats = async () => {
     const today = new Date().toISOString().split('T')[0];
-    const { count: todayCount } = await supabase
-      .from('youtube_upload_sessions')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'completed')
-      .gte('created_at', `${today}T00:00:00`);
+    const [{ count: todayCount }, { data: trackerData }, { data: sessionData }] = await Promise.all([
+      supabase
+        .from('youtube_upload_sessions')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'completed')
+        .gte('created_at', `${today}T00:00:00`),
+      supabase
+        .from('video_edit_tracker')
+        .select('id, client_name, event_name, edit_type, editor, colorist, video_edit_status, edit_started_at, event_date_ad, stage_history, updated_at, created_at, youtube_link, deleted')
+        .eq('deleted', false),
+      supabase
+        .from('youtube_upload_sessions')
+        .select('youtube_video_id, tracker_row_id, client_name, event_name, edit_type')
+        .eq('status', 'completed')
+        .neq('youtube_video_id', '')
+        .order('created_at', { ascending: false })
+        .limit(200),
+    ]);
     setTodayUploaded(todayCount || 0);
-
-    const { data: trackerData } = await supabase
-      .from('video_edit_tracker')
-      .select('id, client_name, event_name, edit_type, editor, colorist, video_edit_status, edit_started_at, event_date_ad, stage_history, updated_at, created_at, youtube_link, deleted')
-      .eq('deleted', false);
     if (trackerData) {
       setTotalTrackerRows(trackerData.length);
       setUploadedRows(trackerData.filter(r => r.youtube_link && r.youtube_link.trim() !== '').length);
       setAllTrackerRows(trackerData as TrackerRow[]);
+    }
+    if (sessionData) {
+      setUploadSessionMappings(sessionData as UploadSessionMapping[]);
     }
   };
 
