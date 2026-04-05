@@ -106,20 +106,29 @@ function RemoteJobCard({ session }: { session: RemoteYTSession }) {
 export function YouTubeUploadTracker() {
   const { jobs, remoteJobs, activeCount, clearCompleted, expanded, setExpanded } = useYouTubeUploadContext();
   const [collapsed, setCollapsed] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
 
   // Show remote sessions that aren't already tracked locally
   const localDbIds = new Set(jobs.map(j => j.sessionDbId));
   const remoteOnly = remoteJobs.filter(r => !localDbIds.has(r.id));
 
   const totalItems = jobs.length + remoteOnly.length;
-  if (totalItems === 0) return null;
+  if (totalItems === 0 || dismissed) return null;
 
   const hasActive = activeCount > 0 || remoteOnly.some(r => r.status === 'uploading' || r.status === 'pending');
+
+  // Reset dismissed when new uploads start
+  if (hasActive && dismissed) setDismissed(false);
+
+  const handleDismiss = () => {
+    clearCompleted();
+    setDismissed(true);
+  };
 
   if (collapsed) {
     return (
       <div
-        className="fixed bottom-4 right-4 z-50 bg-card border border-red-500/30 rounded-full px-4 py-2.5 shadow-xl cursor-pointer flex items-center gap-2.5 hover:border-red-500/50 transition-all"
+        className="bg-card border border-red-500/30 rounded-full px-4 py-2.5 shadow-xl cursor-pointer flex items-center gap-2.5 hover:border-red-500/50 transition-all"
         onClick={() => setCollapsed(false)}
       >
         <div className="relative">
@@ -129,6 +138,14 @@ export function YouTubeUploadTracker() {
         <span className="text-sm font-medium">
           {hasActive ? `Uploading to YouTube...` : 'YouTube upload complete'}
         </span>
+        {!hasActive && (
+          <button
+            onClick={(e) => { e.stopPropagation(); handleDismiss(); }}
+            className="p-0.5 hover:bg-muted rounded-full ml-1"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
       </div>
     );
   }
@@ -150,8 +167,8 @@ export function YouTubeUploadTracker() {
           </div>
           <div className="flex items-center gap-2">
             {!hasActive && totalItems > 0 && (
-              <Button variant="ghost" size="sm" onClick={clearCompleted} className="text-xs gap-1.5">
-                <Trash2 className="h-3.5 w-3.5" /> Clear
+              <Button variant="ghost" size="sm" onClick={handleDismiss} className="text-xs gap-1.5">
+                <Trash2 className="h-3.5 w-3.5" /> Clear & Close
               </Button>
             )}
             <Button variant="ghost" size="icon" onClick={() => setExpanded(false)}>
@@ -169,7 +186,7 @@ export function YouTubeUploadTracker() {
 
   return (
     <div className={cn(
-      "fixed bottom-4 right-4 z-50 w-[380px] bg-card border border-border/50 rounded-2xl shadow-2xl overflow-hidden",
+      "w-[380px] bg-card border border-border/50 rounded-2xl shadow-2xl overflow-hidden",
       hasActive && "border-red-500/30"
     )}>
       <div className="flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-red-950/40 to-red-950/20 border-b border-red-500/20">
@@ -187,12 +204,12 @@ export function YouTubeUploadTracker() {
             <Maximize2 className="h-3.5 w-3.5" />
           </Button>
           {!hasActive && (
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={clearCompleted} title="Clear">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleDismiss} title="Dismiss">
               <Trash2 className="h-3 w-3" />
             </Button>
           )}
           <button onClick={() => setCollapsed(true)} className="p-1.5 hover:bg-muted rounded-lg">
-            <X className="h-3.5 w-3.5" />
+            <Minimize2 className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
