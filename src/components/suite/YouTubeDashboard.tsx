@@ -1367,11 +1367,14 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                 {trackerInfo && (() => {
                   const timings = computeVideoEditTimings(trackerInfo.stage_history, trackerInfo.video_edit_status, trackerInfo.editor);
 
-                  const TimingRow = ({ icon, iconColor, label, value }: { icon: React.ReactNode; iconColor: string; label: string; value: string | null }) => (
+                   const TimingRow = ({ icon, iconColor, label, value, oldValue }: { icon: React.ReactNode; iconColor: string; label: string; value: string | null; oldValue?: string | null }) => (
                     <div className="flex items-center gap-1.5">
                       <span className={iconColor}>{icon}</span>
                       <span className="text-gray-500">{label}:</span>
-                      <span className="font-semibold text-gray-800">{value || "—"}</span>
+                      <span className="font-semibold text-gray-800">
+                        {value || "—"}
+                        {oldValue && <span className="text-gray-400 font-normal ml-1">(old {oldValue})</span>}
+                      </span>
                     </div>
                   );
 
@@ -1392,7 +1395,7 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                         </div>
                       )}
 
-                      <TimingRow icon={<Clock className="w-3.5 h-3.5" />} iconColor="text-gray-400" label="Edit Lab" value={timings.editLabTime} />
+                      <TimingRow icon={<Clock className="w-3.5 h-3.5" />} iconColor="text-gray-400" label="Edit Lab" value={timings.editLabTime} oldValue={timings.editLabTimeOld} />
 
                       {/* Editing Time with per-editor breakdown */}
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -1403,17 +1406,21 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                             {timings.editTimeBreakdown.map((eb, i) => (
                               <span key={i}>{i > 0 && " "}{eb.editor} ({eb.duration})</span>
                             ))}
+                            {timings.editTimeOld && <span className="text-gray-400 font-normal ml-1">(old {timings.editTimeOld})</span>}
                           </span>
                         ) : (
-                          <span className="font-semibold text-gray-800">{timings.editTime || "—"}</span>
+                          <span className="font-semibold text-gray-800">
+                            {timings.editTime || "—"}
+                            {timings.editTimeOld && <span className="text-gray-400 font-normal ml-1">(old {timings.editTimeOld})</span>}
+                          </span>
                         )}
                       </div>
 
-                      <TimingRow icon={<Clock className="w-3.5 h-3.5" />} iconColor="text-violet-400" label="Color Queue" value={timings.colorQueueTime} />
-                      <TimingRow icon={<Palette className="w-3.5 h-3.5" />} iconColor="text-indigo-500" label="Color Time" value={timings.colorTime} />
-                      <TimingRow icon={<Clock className="w-3.5 h-3.5" />} iconColor="text-cyan-400" label="Export Queue" value={timings.exportQueueTime} />
-                      <TimingRow icon={<Upload className="w-3.5 h-3.5" />} iconColor="text-cyan-500" label="Exported" value={timings.exportedTime} />
-                      <TimingRow icon={<Eye className="w-3.5 h-3.5" />} iconColor="text-sky-500" label="Client Review" value={timings.clientReviewTime} />
+                      <TimingRow icon={<Clock className="w-3.5 h-3.5" />} iconColor="text-violet-400" label="Color Queue" value={timings.colorQueueTime} oldValue={timings.colorQueueTimeOld} />
+                      <TimingRow icon={<Palette className="w-3.5 h-3.5" />} iconColor="text-indigo-500" label="Color Time" value={timings.colorTime} oldValue={timings.colorTimeOld} />
+                      <TimingRow icon={<Clock className="w-3.5 h-3.5" />} iconColor="text-cyan-400" label="Export Queue" value={timings.exportQueueTime} oldValue={timings.exportQueueTimeOld} />
+                      <TimingRow icon={<Upload className="w-3.5 h-3.5" />} iconColor="text-cyan-500" label="Exported" value={timings.exportedTime} oldValue={timings.exportedTimeOld} />
+                      <TimingRow icon={<Eye className="w-3.5 h-3.5" />} iconColor="text-sky-500" label="Client Review" value={timings.clientReviewTime} oldValue={timings.clientReviewTimeOld} />
 
                       {/* Re-edit */}
                       <div className="flex items-center gap-1.5">
