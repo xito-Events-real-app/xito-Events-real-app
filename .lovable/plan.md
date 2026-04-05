@@ -1,28 +1,42 @@
 
 
-# Add "Photos Coming Soon" Message with pCloud Link
+# Add "COLORED" and "NOT COLORED" Subfolders in Project Managers Events
 
-When a folder has no photos on XITO (iDrive E2), the client portal currently shows a generic "No photos in this folder yet" message. Since photos are always uploaded to pCloud first, we should guide the client to pCloud for early access.
+## What Changes
 
-## Current Behavior
-- Empty folder shows: "No photos in this folder yet." with a plain icon
+Inside `buildResearchFolderTree()` in `src/lib/xito-drive-utils.ts`, after each event folder is created under "Project Managers", add two child folders: `COLORED` and `NOT COLORED`.
 
-## New Behavior
-- Empty folder shows: "Photos will appear here soon! For now, view in pCloud" with a pCloud button
-- The pCloud button deep-links to the matching folder path: `/WEDDING TALES NEPAL/{s3Prefix}` (e.g., `MAGH EVENTS 2082/ClientName/Photos/EventName/PhotographerName`)
-- On mobile: opens `pcloud://` app scheme (falls back to pCloud web if app not installed)
-- On desktop: opens pCloud web link
+**Current structure:**
+```text
+Client / Project Managers / WEDDING BOTH SIDES
+```
 
-## Change
+**New structure:**
+```text
+Client / Project Managers / WEDDING BOTH SIDES / COLORED
+Client / Project Managers / WEDDING BOTH SIDES / NOT COLORED
+```
 
-**File: `src/components/client-portal/PortalMyPhotos.tsx`**
+## File to Modify
 
-Replace the empty-state block (lines 313-319) with:
-- A friendlier message: "Photos will appear here soon" with subtext "For now, view them in pCloud"
-- A pCloud button (cloud icon) that builds the path from the current tab's `s3Prefix` and opens:
-  - Mobile: `https://e.pcloud.link/#page=filemanager&folder=/WEDDING TALES NEPAL/{prefix}` (or app scheme)
-  - Direct: `https://my.pcloud.com/#page=filemanager&folder=/WEDDING TALES NEPAL/{prefix}`
-- Keep the existing rose-gold styling consistent with the portal theme
+**`src/lib/xito-drive-utils.ts`** — lines 310-312
 
-The `s3Prefix` from the active tab already contains the exact folder structure (`MONTH EVENTS YEAR/ClientName/Photos/Event/Photographer/`), which maps 1:1 to the pCloud path under `WEDDING TALES NEPAL`.
+Replace:
+```typescript
+for (const ev of client.events) {
+  paths.push(`${pmPath}/${ev.replace(/[/\\]/g, "_")}`);
+}
+```
+
+With:
+```typescript
+for (const ev of client.events) {
+  const evPath = `${pmPath}/${ev.replace(/[/\\]/g, "_")}`;
+  paths.push(evPath);
+  paths.push(`${evPath}/COLORED`);
+  paths.push(`${evPath}/NOT COLORED`);
+}
+```
+
+This also ensures these folders appear as virtual folders in the ResearchBrowser UI and get created during Smart Sync.
 
