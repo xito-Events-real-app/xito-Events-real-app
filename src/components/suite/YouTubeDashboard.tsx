@@ -849,7 +849,7 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
 
         // Bride/groom name matching (higher priority)
         let brideGroomScore = 0;
-        const regDate = rawRow.registered_date_time_ad || '';
+        const regDate = r.registered_date_time_ad || '';
         const contactInfo = contactDetailsMap.get(regDate);
         if (contactInfo) {
           const brideWords = contactInfo.bride.toUpperCase().split(/\s+/).filter(w => w.length >= 3);
