@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { ArrowLeft, Youtube, Search, Upload, ChevronDown, ChevronRight, Send, Loader2, Play, Clock, User, Palette, Calendar, Activity, Globe, RefreshCw, CheckCircle2, Eye } from "lucide-react";
+import { ArrowLeft, Youtube, Search, Upload, ChevronDown, ChevronRight, Send, Loader2, Play, Clock, User, Palette, Calendar, Activity, Globe, RefreshCw, CheckCircle2, Eye, Link2, AlertTriangle } from "lucide-react";
 import { computeVideoEditTimings } from "@/lib/video-edit-time-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
