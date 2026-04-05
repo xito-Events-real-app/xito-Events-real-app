@@ -1,58 +1,50 @@
 
-Goal: make YouTube video details come from the client/event/edit selection made during upload, not from the YouTube title.
 
-What’s actually wrong
-- The upload flow already knows the exact client, event, edit type, and tracker row.
-- But the metadata viewer in `src/components/suite/YouTubeDashboard.tsx` still relies mainly on:
-  1. `video_edit_tracker.youtube_link` string matching
-  2. fragile title parsing (`BRIDE & GROOM ...`)
-- For titles like `BARSHA MAM 6 MONTHS CELEBRATION HIGHLIGHTS || WEDDING TALES NEPAL`, that fallback parsing does not identify the correct tracker row.
-- There is already a `tracker_row_id` column on `youtube_upload_sessions`, but the upload start logic is not saving it. So the app is not using the strongest source of truth it already has.
+# Add "Link to Video Edit Tracker" Fallback for Unmatched YouTube Videos
 
-Implementation plan
+## Problem
+Old videos like "SIMRAN's BRIDE RECEPTION HIGHLIGHTS || WEDDING TALES NEPAL" or custom-titled videos have no linked tracker row, so the metadata section (editor, timings, event age) is completely blank with no way to fix it.
 
-1. Save the exact tracker mapping during upload
-- In `src/contexts/YouTubeUploadContext.tsx`, include `tracker_row_id` when inserting into `youtube_upload_sessions`.
-- Keep writing the final YouTube URL into `video_edit_tracker.youtube_link` after upload success, but preserve clean comma-separated formatting.
+## Solution
+When `trackerInfo` is null, show an "EDITING DETAILS NOT FOUND" state with a "Link Video Edit Tracker" button. This button opens a popup that:
+1. Auto-suggests tracker rows by matching words from the video title against client names (bride/groom from `contact_details_cache`) and event names
+2. Allows searching by client name
+3. Shows each suggestion as: client name, event name, edit type, status
+4. On selection, writes the YouTube video ID into that tracker row's `youtube_link` field, immediately showing the details
 
-2. Make metadata lookup use the upload mapping first
-- In `src/components/suite/YouTubeDashboard.tsx`, load recent/completed upload session mappings needed for active videos:
-  - `youtube_video_id`
-  - `tracker_row_id`
-  - `client_name`
-  - `event_name`
-  - `edit_type`
-- Update `findTrackerForVideo()` so the matching order becomes:
-  1. Exact video-id match against parsed IDs from `video_edit_tracker.youtube_link`
-  2. Upload-session match by `youtube_video_id -> tracker_row_id`
-  3. Upload-session fallback by `client_name + event_name + edit_type`
-  4. Existing title parsing only as legacy fallback
+## File to Modify
+**`src/components/suite/YouTubeDashboard.tsx`** only
 
-3. Stop using loose string matching for YouTube links
-- Replace `youtube_link.includes(videoId)` with exact ID extraction from all stored links.
-- This avoids false matches and supports rows that contain multiple uploaded video URLs.
+### Change 1: Add a `manualLinkOpen` state and search state
+- `const [manualLinkOpen, setManualLinkOpen] = useState(false)`
+- `const [linkSearch, setLinkSearch] = useState("")`
 
-4. Keep old videos working
-- Do not remove the current title-based heuristic completely.
-- Keep it only for older uploads that were created before `tracker_row_id` started being saved.
+### Change 2: Build suggestion logic
+- When the popup opens, compute suggestions from `allTrackerRows`:
+  - Extract significant words (≥3 chars) from the video title (before `||`)
+  - Match against `client_name` and `event_name` fields
+  - Also allow free-text search by `client_name`
+- Show results as a list: **Client Name** · Event Name · Edit Type · Status badge
 
-Files to update
-- `src/contexts/YouTubeUploadContext.tsx`
-- `src/components/suite/YouTubeDashboard.tsx`
+### Change 3: Replace the empty space where `trackerInfo` would be (after line ~1051)
+When `!trackerInfo && activeVideo`:
+- Show a styled "EDITING DETAILS NOT FOUND" message
+- Show a "Link Video Edit Tracker" button that opens the popup dialog
 
-Technical details
-- Add a small helper in `YouTubeDashboard.tsx` (or shared helper) to parse all video IDs from comma-separated `youtube_link` values.
-- Use the upload selection as the authoritative identity for new uploads.
-- No database migration is needed because `youtube_upload_sessions.tracker_row_id` already exists.
-- No UI redesign is needed; this is a data-resolution fix.
+### Change 4: Handle selection
+- On selecting a tracker row, update `video_edit_tracker.youtube_link` by appending the current video URL
+- Set `trackerInfo` to the selected row so details appear immediately
+- Close the dialog
 
-Expected result
-- For Barsha’s uploaded video, the details panel will show the correct metadata for that selected client/edit row even if the title is custom.
-- Videos should behave like Simran’s Bride Reception videos: date/event age, editor, colorist, timings, type, and status should appear from the linked tracker row.
-- Future uploads will no longer depend on the YouTube title format to show details.
+### Change 5: The popup UI
+- Dialog with search input at top
+- Auto-populated suggestions below (title-word matches first, then search results)
+- Each row shows: client name, event name, edit type, status badge
+- Clicking a row links the video and closes
 
-Verification
-- Upload a video with a custom title that does not follow bride/groom naming.
-- Open that exact video in the built-in YouTube dashboard player.
-- Confirm the metadata loads from the selected client/event/edit row.
-- Re-check an older video that already worked to ensure legacy matching still works.
+## Expected Result
+- For any video without auto-matched details, user sees "EDITING DETAILS NOT FOUND" + a link button
+- Clicking it shows matching tracker rows based on video title words and allows searching
+- After selection, details (editor, colorist, timings, event age, type) appear immediately
+- Future plays of this video will auto-match via `youtube_link`
+
