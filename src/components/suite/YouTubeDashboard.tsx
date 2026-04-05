@@ -1364,7 +1364,16 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                 </div>
 
                 {trackerInfo && (() => {
-                  const timings = computeVideoEditTimings(trackerInfo.stage_history, trackerInfo.video_edit_status);
+                  const timings = computeVideoEditTimings(trackerInfo.stage_history, trackerInfo.video_edit_status, trackerInfo.editor);
+
+                  const TimingRow = ({ icon, iconColor, label, value }: { icon: React.ReactNode; iconColor: string; label: string; value: string | null }) => (
+                    <div className="flex items-center gap-1.5">
+                      <span className={iconColor}>{icon}</span>
+                      <span className="text-gray-500">{label}:</span>
+                      <span className="font-semibold text-gray-800">{value || "—"}</span>
+                    </div>
+                  );
+
                   return (
                     <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
                       {trackerInfo.editor && (
@@ -1381,58 +1390,51 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                           <span className="font-semibold text-gray-800">{trackerInfo.colorist}</span>
                         </div>
                       )}
-                      {timings.editTime && (
-                        <div className="flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-orange-500" />
-                          <span className="text-gray-500">Edit Time:</span>
-                          <span className="font-semibold text-gray-800">{timings.editTime}</span>
-                        </div>
-                      )}
-                      {timings.colorTime && (
-                        <div className="flex items-center gap-1.5">
-                          <Palette className="w-3.5 h-3.5 text-indigo-500" />
-                          <span className="text-gray-500">Color Time:</span>
-                          <span className="font-semibold text-gray-800">{timings.colorTime}</span>
-                        </div>
-                      )}
-                      {timings.totalTime && (
-                        <div className="flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-amber-500" />
-                          <span className="text-gray-500">Time till Export:</span>
-                          <span className="font-semibold text-gray-800">{timings.totalTime}</span>
-                        </div>
-                      )}
-                      {timings.actualTime && (
-                        <div className="flex items-center gap-1.5">
-                          <Activity className="w-3.5 h-3.5 text-green-500" />
-                          <span className="text-gray-500">Actual Time:</span>
+
+                      <TimingRow icon={<Clock className="w-3.5 h-3.5" />} iconColor="text-gray-400" label="Edit Lab" value={timings.editLabTime} />
+
+                      {/* Editing Time with per-editor breakdown */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <Clock className="w-3.5 h-3.5 text-orange-500" />
+                        <span className="text-gray-500">Editing Time:</span>
+                        {timings.editTimeBreakdown ? (
                           <span className="font-semibold text-gray-800">
-                            {timings.actualTime}
-                            {timings.pausedTime && <span className="text-gray-400 font-normal"> ({timings.pausedTime} paused)</span>}
+                            {timings.editTimeBreakdown.map((eb, i) => (
+                              <span key={i}>{i > 0 && " "}{eb.editor} ({eb.duration})</span>
+                            ))}
                           </span>
-                        </div>
-                      )}
-                      {timings.exportedTime && (
-                        <div className="flex items-center gap-1.5">
-                          <Upload className="w-3.5 h-3.5 text-cyan-500" />
-                          <span className="text-gray-500">Export Time:</span>
-                          <span className="font-semibold text-gray-800">{timings.exportedTime}</span>
-                        </div>
-                      )}
-                      {timings.finalizedTime && (
-                        <div className="flex items-center gap-1.5">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                          <span className="text-gray-500">Finalized Time:</span>
-                          <span className="font-semibold text-gray-800">{timings.finalizedTime}</span>
-                        </div>
-                      )}
-                      {timings.clientReviewTime && (
-                        <div className="flex items-center gap-1.5">
-                          <Eye className="w-3.5 h-3.5 text-sky-500" />
-                          <span className="text-gray-500">Client Review:</span>
-                          <span className="font-semibold text-gray-800">{timings.clientReviewTime}</span>
-                        </div>
-                      )}
+                        ) : (
+                          <span className="font-semibold text-gray-800">{timings.editTime || "—"}</span>
+                        )}
+                      </div>
+
+                      <TimingRow icon={<Clock className="w-3.5 h-3.5" />} iconColor="text-violet-400" label="Color Queue" value={timings.colorQueueTime} />
+                      <TimingRow icon={<Palette className="w-3.5 h-3.5" />} iconColor="text-indigo-500" label="Color Time" value={timings.colorTime} />
+                      <TimingRow icon={<Clock className="w-3.5 h-3.5" />} iconColor="text-cyan-400" label="Export Queue" value={timings.exportQueueTime} />
+                      <TimingRow icon={<Upload className="w-3.5 h-3.5" />} iconColor="text-cyan-500" label="Exported" value={timings.exportedTime} />
+                      <TimingRow icon={<Eye className="w-3.5 h-3.5" />} iconColor="text-sky-500" label="Client Review" value={timings.clientReviewTime} />
+
+                      {/* Re-edit */}
+                      <div className="flex items-center gap-1.5">
+                        <Activity className="w-3.5 h-3.5 text-red-400" />
+                        <span className="text-gray-500">Re-edit:</span>
+                        <span className="font-semibold text-gray-800">
+                          {timings.reEdit ? (timings.reEditTime || "Yes") : "No"}
+                        </span>
+                      </div>
+
+                      <TimingRow icon={<CheckCircle2 className="w-3.5 h-3.5" />} iconColor="text-emerald-500" label="Finalized" value={timings.finalizedTime} />
+
+                      <TimingRow icon={<Clock className="w-3.5 h-3.5" />} iconColor="text-amber-500" label="Time till Export" value={timings.totalTime} />
+                      <div className="flex items-center gap-1.5">
+                        <Activity className="w-3.5 h-3.5 text-green-500" />
+                        <span className="text-gray-500">Actual Time:</span>
+                        <span className="font-semibold text-gray-800">
+                          {timings.actualTime || "—"}
+                          {timings.pausedTime && <span className="text-gray-400 font-normal"> ({timings.pausedTime} paused)</span>}
+                        </span>
+                      </div>
+
                       {trackerInfo.event_date_ad && (
                         <div className="flex items-center gap-1.5">
                           <Calendar className="w-3.5 h-3.5 text-teal-500" />
