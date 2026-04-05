@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from "@/components/ui/command";
 import { supabase } from "@/integrations/supabase/client";
 import { useFloatingYouTubePlayer, type FloatingYouTubeVideo } from "@/contexts/FloatingYouTubePlayerContext";
+import { syncYouTubeLinksForClient } from "@/lib/youtube-link-sync";
 
 interface ClientEventsData {
   events: string;

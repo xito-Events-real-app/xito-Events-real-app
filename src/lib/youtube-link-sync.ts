@@ -38,6 +38,7 @@ function normalizeForMatch(s: string): string {
   return (s || "")
     .toUpperCase()
     .replace(/['''`]/g, "")
+    .replace(/\+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -47,6 +48,16 @@ function extractEventKeyword(eventName: string): string {
   return norm
     .replace(/^(BRIDES?|GROOMS?)\s+/i, "")
     .trim();
+}
+
+/**
+ * Word-based matching: checks if all significant words (3+ chars)
+ * from the event name appear in the video title.
+ */
+function wordBasedMatch(titleNorm: string, eventNorm: string): boolean {
+  const words = eventNorm.split(/\s+/).filter(w => w.length >= 3);
+  if (words.length === 0) return false;
+  return words.every(w => titleNorm.includes(w));
 }
 
 /**
@@ -156,6 +167,9 @@ export async function syncYouTubeLinks(rows: TrackerRow[]): Promise<number> {
         if (titleNorm.includes(eventNorm)) return true;
         // Strategy 2: keyword fallback (e.g. "MEHNDI" instead of "BRIDES MEHNDI")
         if (eventKeyword && eventKeyword !== eventNorm && titleNorm.includes(eventKeyword)) return true;
+        // Strategy 3: word-based matching (all significant words present)
+        if (wordBasedMatch(titleNorm, eventNorm)) return true;
+        if (eventKeyword && wordBasedMatch(titleNorm, eventKeyword)) return true;
         return false;
       });
 
@@ -178,4 +192,30 @@ export async function syncYouTubeLinks(rows: TrackerRow[]): Promise<number> {
   }
 
   return updatedCount;
+}
+
+/**
+ * Sync YouTube links for a single client's tracker rows.
+ * Useful for triggering from client detail page.
+ */
+export async function syncYouTubeLinksForClient(registeredDateTimeAD: string): Promise<number> {
+  const { data: rows } = await supabase
+    .from("video_edit_tracker")
+    .select("id, registered_date_time_ad, event_name, sub_event_name, edit_type, youtube_link, video_edit_status")
+    .eq("registered_date_time_ad", registeredDateTimeAD)
+    .eq("deleted", false);
+
+  if (!rows || rows.length === 0) return 0;
+
+  const mapped: TrackerRow[] = rows.map((r) => ({
+    id: r.id,
+    registeredDateTimeAD: r.registered_date_time_ad,
+    eventName: r.event_name || "",
+    subEventName: r.sub_event_name || "",
+    editType: r.edit_type || "",
+    youtubeLink: r.youtube_link || "",
+    videoEditStatus: r.video_edit_status || "",
+  }));
+
+  return syncYouTubeLinks(mapped);
 }
