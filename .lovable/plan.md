@@ -1,62 +1,94 @@
 
 
-# Add "Send to Client" Button in YouTube Dashboard Timing Section
+# Event Info Card — Between Player and Playlist Sidebar
 
-## What We're Building
-A "Send to Client" button at the end of the timing/metadata grid that opens a dialog showing all WhatsApp numbers associated with the client (bride, groom, main contact). Clicking a recipient auto-generates a context-aware WhatsApp message about the new video, including the client portal link.
+## Layout Change
 
-## Message Logic
-The message is dynamically generated based on the video title:
-- Extracts **event name** (e.g., "BRIDE RECEPTION") and **edit type** (Full Video / Highlights / Reel / Teaser) from the video title (text before `||`)
-- Includes the client portal link for all photos/videos
-- Warns the client this is for review purposes
+The current layout is:
+- Left column: `flex-1` with `max-w-[900px]` player inside
+- Right column: `w-[480px]` sidebar
 
-Example message:
-> Hello 👋  
-> Greetings from Wedding Tales Nepal 💍✨  
->  
-> Your **Bride Reception Full Video** has been uploaded! 🎬  
-> Please check and let us know if any changes are needed.  
->  
-> 👉 View all your photos & videos here:  
-> https://business.xitoevents.com/client-portal/...  
->  
-> ⚠️ Please do not share this video publicly until finalized.  
->  
-> Warm regards, Wedding Tales Nepal
+The player and sidebar sizes stay exactly the same. The only change is wrapping the player row in a `flex` container so the Event Info Card sits in the gap to the right of the player, matching its height.
 
-## File to Modify
-**`src/components/suite/YouTubeDashboard.tsx`** only
-
-### Change 1: Add state for send dialog
-- `const [sendToClientOpen, setSendToClientOpen] = useState(false)`
-
-### Change 2: Add "Send to Client" button after the timing grid (after line ~1213)
-- A small emerald button with MessageCircle icon: "Send to Client"
-- Only visible when `trackerInfo` exists (we need `registered_date_time_ad` to look up contacts and generate portal link)
-
-### Change 3: Fetch contact details when dialog opens
-- Query `contact_details_cache` by `trackerInfo.registered_date_time_ad` to get bride/groom names and WhatsApp numbers
-- Also use `clients_cache` for main contact/WhatsApp numbers
-- Build recipients list: `[{label: "Bride Name (WhatsApp)", phone}, {label: "Groom Name (WhatsApp)", phone}, {label: "Client (Contact)", phone}]`
-
-### Change 4: Generate context-aware message
-- Parse the video title (before `||`) to extract event name and edit type keywords (Full Video, Highlights, Reel, Teaser)
-- Build a WhatsApp message mentioning the specific video type and event
-- Append the client portal URL using `getClientPortalUrl(registeredDateTimeAD, clientName)`
-
-### Change 5: Render the send dialog
-- Dialog with recipient list (same pattern as `ClientLinkSection`)
-- Each recipient row shows name, phone, and a WhatsApp icon
-- Clicking opens `wa.me` with the pre-filled message
-
-## Data Flow
 ```text
-trackerInfo.registered_date_time_ad
-  → contact_details_cache (bride/groom names + WhatsApp numbers)
-  → clients_cache (main contact + WhatsApp)
-  → Build recipients list
-  → Generate message from video title + portal URL
-  → Open wa.me link
+┌─────────────────────────────────────────────────────────────────────┐
+│ HEADER                                                              │
+├────────────────────────────────────────────────────┬────────────────┤
+│  ┌─ PLAYER (900px max) ─┬── EVENT INFO CARD ─────┐│ PLAYLIST (480) │
+│  │                      │ EVENT: BRIDE RECEPTION  ││                │
+│  │  YouTube Player      │ 👰 Madhav Wagle         ││ [Recent tab]   │
+│  │  (aspect-video)      │ 🤵 Urmila Bashyal       ││ [Playlist tab] │
+│  │  UNCHANGED           │ 📅 Falgun 12 / Mar 23   ││                │
+│  │                      │ 🎥 Barun, Jeewan        ││                │
+│  │                      │ 📷 Ram                   ││                │
+│  │                      │ 💾 300GB · MG LION       ││                │
+│  └──────────────────────┴─────────────────────────┘│                │
+│  Title + Timing grid + Send to Client               │                │
+│  Comments Section                                    │                │
+├──────────────────────────────────────────────────────┴────────────────┤
+│ UPLOAD BAR                                                            │
+└───────────────────────────────────────────────────────────────────────┘
 ```
+
+## File: `src/components/suite/YouTubeDashboard.tsx`
+
+### Change 1: Add state + useEffect for event card data
+
+New state:
+```ts
+const [eventCardData, setEventCardData] = useState<{
+  bride: string; groom: string;
+  eventName: string; eventDateBS: string; eventDateAD: string;
+  videographers: string[]; photographers: string[];
+  totalSizeGB: number; devices: { name: string; paths: string[] }[];
+} | null>(null);
+```
+
+New `useEffect` triggers when `trackerInfo?.registered_date_time_ad` changes. Runs 3 parallel queries:
+- `contact_details_cache` → bride/groom names
+- `freelancer_assignments` → filter by `registered_date_time_ad` + `event` = `trackerInfo.event_name` → extract videographer/photographer names
+- `files_management` → filter by `registered_date_time_ad` + `event_name` + `deleted_or_not=false` → SUM `size_gb`, collect device names + `final_generated_path` grouped by device
+
+Convert `trackerInfo.event_date_ad` to BS using `adToBS()`.
+
+### Change 2: Wrap player in a flex row
+
+Change the player area (line ~1097) from:
+```html
+<div className="w-full max-w-[900px] aspect-video bg-black ...">
+```
+to:
+```html
+<div className="flex gap-3 mb-3">
+  <div className="w-full max-w-[900px] aspect-video bg-black ...">
+    {/* player unchanged */}
+  </div>
+  {/* Event Info Card - fills remaining width, matches player height */}
+  {eventCardData && (
+    <div className="flex-1 min-w-[200px] bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-4 ...">
+      {/* card content */}
+    </div>
+  )}
+</div>
+```
+
+Player size and sidebar size are completely untouched.
+
+### Change 3: Event Info Card content
+
+A dark gradient card with rows:
+- **Event Name**: Bold uppercase text (e.g., "BRIDE RECEPTION")
+- **Bride/Groom**: Names as clickable cyan/pink pills → sets `searchQuery` to filter sidebar
+- **Date**: Formatted as "Falgun 12 / March 23, 2082" using `adToBS()`
+- **Videographers/Photographers**: Names as clickable blue pills → sets `searchQuery`
+- **RAW Files**: Total GB + device name badges. Hover shows `HoverCard` with full `final_generated_path` entries for that device
+
+### Change 4: Clickable name filtering
+
+Clicking any name pill calls `setSearchQuery(name)`. The sidebar already filters by `searchQuery`. No other changes needed — the existing search infrastructure handles it.
+
+### Imports to add
+- `HardDrive, Camera, Video, X` from `lucide-react`
+- `adToBS, nepaliMonthsEnglish` from `@/lib/nepali-date`
+- `HoverCard, HoverCardTrigger, HoverCardContent` from `@/components/ui/hover-card`
 
