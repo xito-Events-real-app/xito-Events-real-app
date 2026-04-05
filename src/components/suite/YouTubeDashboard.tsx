@@ -330,7 +330,8 @@ function RunningTimeBadge({ stageHistory, currentStatus }: { stageHistory: strin
     }).filter(Boolean) as { status: string; date: Date }[];
   }, [stageHistory]);
 
-  const editStart = entries.find(e => e.status === "EDIT_ON_PROGRESS")?.date;
+  // Use EDIT_ON_PROGRESS as primary start, fallback to the very first entry in history
+  const editStart = entries.find(e => e.status === "EDIT_ON_PROGRESS")?.date || (entries.length > 0 ? entries[0].date : null);
   if (!editStart) return null;
 
   const finalized = (() => {
