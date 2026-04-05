@@ -72,6 +72,20 @@ function extractYouTubeVideoId(link: string | null | undefined): string | null {
   return match?.[1] || null;
 }
 
+/** Extract ALL video IDs from a comma-separated youtube_link field */
+function extractAllVideoIds(youtubeLink: string | null | undefined): string[] {
+  if (!youtubeLink) return [];
+  return youtubeLink.split(',').map(s => extractYouTubeVideoId(s.trim())).filter((id): id is string => !!id);
+}
+
+interface UploadSessionMapping {
+  youtube_video_id: string;
+  tracker_row_id: string | null;
+  client_name: string;
+  event_name: string;
+  edit_type: string;
+}
+
 function getTrackerDisplayTitle(row: TrackerRow): string {
   return [row.client_name, row.event_name, row.edit_type].filter(Boolean).join(" ").trim() || "YouTube Video";
 }
