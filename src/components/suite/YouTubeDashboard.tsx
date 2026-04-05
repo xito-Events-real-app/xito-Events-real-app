@@ -1198,28 +1198,34 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                       {linkSearch ? "No matching tracker rows found" : "Type to search or suggestions will appear from video title"}
                     </p>
                   )}
-                  {manualLinkSuggestions.map(row => (
+                  {manualLinkSuggestions.map(item => (
                     <button
-                      key={row.id}
-                      onClick={() => handleManualLink(row)}
+                      key={item.row.id}
+                      onClick={() => handleManualLink(item.row)}
                       className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-accent transition-colors border border-transparent hover:border-border"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-foreground truncate">{row.client_name || 'Unknown'}</span>
+                        <span className="text-xs font-bold text-foreground truncate">{item.row.client_name || 'Unknown'}</span>
                         <span className="text-[10px] text-muted-foreground">·</span>
-                        <span className="text-xs text-muted-foreground truncate">{row.event_name || '-'}</span>
-                        {row.edit_type && (
+                        <span className="text-xs text-muted-foreground truncate">{item.row.event_name || '-'}</span>
+                        {item.row.edit_type && (
                           <>
                             <span className="text-[10px] text-muted-foreground">·</span>
-                            <span className="text-xs text-muted-foreground">{row.edit_type}</span>
+                            <span className="text-xs text-muted-foreground">{item.row.edit_type}</span>
                           </>
                         )}
-                        {row.video_edit_status && (
-                          <Badge className={cn("text-[9px] font-semibold px-1.5 py-0 border-0 ml-auto shrink-0", STAGE_COLORS[row.video_edit_status] || "bg-gray-200 text-gray-600")}>
-                            {row.video_edit_status.replace(/_/g, ' ')}
+                        {item.row.video_edit_status && (
+                          <Badge className={cn("text-[9px] font-semibold px-1.5 py-0 border-0 ml-auto shrink-0", STAGE_COLORS[item.row.video_edit_status] || "bg-gray-200 text-gray-600")}>
+                            {item.row.video_edit_status.replace(/_/g, ' ')}
                           </Badge>
                         )}
                       </div>
+                      {item.contactInfo && (item.contactInfo.bride || item.contactInfo.groom) && (
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          {item.contactInfo.bride && <span className="text-[10px] text-pink-500 font-medium">👰 {item.contactInfo.bride}</span>}
+                          {item.contactInfo.groom && <span className="text-[10px] text-blue-500 font-medium">🤵 {item.contactInfo.groom}</span>}
+                        </div>
+                      )}
                     </button>
                   ))}
                 </div>
