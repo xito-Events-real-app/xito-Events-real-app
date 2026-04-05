@@ -106,23 +106,30 @@ function RemoteJobCard({ session }: { session: RemoteYTSession }) {
 export function YouTubeUploadTracker() {
   const { jobs, remoteJobs, activeCount, clearCompleted, expanded, setExpanded } = useYouTubeUploadContext();
   const [collapsed, setCollapsed] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
 
   // Show remote sessions that aren't already tracked locally
   const localDbIds = new Set(jobs.map(j => j.sessionDbId));
   const remoteOnly = remoteJobs.filter(r => !localDbIds.has(r.id));
 
-  const totalItems = jobs.length + remoteOnly.length;
-  if (totalItems === 0 || dismissed) return null;
+  // Filter out remote sessions that were already dismissed (persisted)
+  const dismissedIds: string[] = JSON.parse(localStorage.getItem('yt_dismissed_sessions') || '[]');
+  const remoteVisible = remoteOnly.filter(r => !dismissedIds.includes(r.id));
 
-  const hasActive = activeCount > 0 || remoteOnly.some(r => r.status === 'uploading' || r.status === 'pending');
+  const totalItems = jobs.length + remoteVisible.length;
+  if (totalItems === 0) return null;
 
-  // Reset dismissed when new uploads start
-  if (hasActive && dismissed) setDismissed(false);
+  const hasActive = activeCount > 0 || remoteVisible.some(r => r.status === 'uploading' || r.status === 'pending');
+
+  // If no active uploads and no local jobs, nothing to show
+  if (!hasActive && jobs.length === 0 && remoteVisible.length === 0) return null;
 
   const handleDismiss = () => {
+    // Persist dismissed remote session IDs so they don't reappear on reload
+    const currentDismissed: string[] = JSON.parse(localStorage.getItem('yt_dismissed_sessions') || '[]');
+    const allRemoteIds = remoteVisible.map(r => r.id);
+    const merged = [...new Set([...currentDismissed, ...allRemoteIds])];
+    localStorage.setItem('yt_dismissed_sessions', JSON.stringify(merged));
     clearCompleted();
-    setDismissed(true);
   };
 
   if (collapsed) {
@@ -178,7 +185,7 @@ export function YouTubeUploadTracker() {
         </div>
         <div className="flex-1 overflow-y-auto p-6 space-y-4 max-w-3xl mx-auto w-full">
           {jobs.map(job => <LocalJobCard key={job.id} job={job} />)}
-          {remoteOnly.map(s => <RemoteJobCard key={s.id} session={s} />)}
+          {remoteVisible.map(s => <RemoteJobCard key={s.id} session={s} />)}
         </div>
       </div>
     );
@@ -215,7 +222,7 @@ export function YouTubeUploadTracker() {
       </div>
       <div className="max-h-72 overflow-y-auto p-3 space-y-3">
         {jobs.map(job => <LocalJobCard key={job.id} job={job} />)}
-        {remoteOnly.map(s => <RemoteJobCard key={s.id} session={s} />)}
+        {remoteVisible.map(s => <RemoteJobCard key={s.id} session={s} />)}
       </div>
     </div>
   );
