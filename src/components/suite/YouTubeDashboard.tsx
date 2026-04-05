@@ -1679,12 +1679,12 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                   <TabsTrigger value="recent" className="flex-1 text-xs font-bold">Recent</TabsTrigger>
                   <TabsTrigger value="playlist" className="flex-1 text-xs font-bold">Playlist</TabsTrigger>
                 </TabsList>
-                {nameFilter && (
+                {(nameFilter || freelancerFilter) && (
                   <div className="mt-2 flex items-center gap-1.5">
                     <span className="text-[10px] text-gray-500">Filtered:</span>
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[11px] font-semibold">
-                      {nameFilter}
-                      <button onClick={clearNameFilter} className="hover:text-blue-900"><X className="w-3 h-3" /></button>
+                      {freelancerFilter ? `🎥 ${freelancerFilter.name}` : nameFilter}
+                      <button onClick={clearAllFilters} className="hover:text-blue-900"><X className="w-3 h-3" /></button>
                     </span>
                   </div>
                 )}
