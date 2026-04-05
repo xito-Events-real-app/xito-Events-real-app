@@ -169,7 +169,12 @@ const ClientLinkSection = ({
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-2 py-2">
-            {recipients.length === 0 ? (
+            {loadingContacts ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-white/40" />
+                <span className="ml-2 text-sm text-white/40">Loading contacts...</span>
+              </div>
+            ) : recipients.length === 0 ? (
               <p className="text-sm text-white/40 text-center py-4">No contact numbers available</p>
             ) : (
               recipients.map((r, i) => (
