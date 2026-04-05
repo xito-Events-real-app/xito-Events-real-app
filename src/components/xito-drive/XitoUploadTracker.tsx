@@ -144,7 +144,7 @@ export function XitoUploadTracker() {
   if (collapsed) {
     return (
       <div
-        className="fixed bottom-4 right-4 z-50 bg-card border border-primary/20 rounded-full px-4 py-2.5 shadow-xl cursor-pointer flex items-center gap-2.5 hover:border-primary/40 transition-all"
+        className="bg-card border border-primary/20 rounded-full px-4 py-2.5 shadow-xl cursor-pointer flex items-center gap-2.5 hover:border-primary/40 transition-all"
         onClick={() => setCollapsed(false)}
       >
         <div className="relative">
@@ -195,7 +195,7 @@ export function XitoUploadTracker() {
 
   return (
     <div className={cn(
-      "fixed bottom-4 right-4 z-50 w-[380px] bg-card border border-border/50 rounded-2xl shadow-2xl overflow-hidden",
+      "w-[380px] bg-card border border-border/50 rounded-2xl shadow-2xl overflow-hidden",
       hasActive && "border-primary/20"
     )}>
       <div className="flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-muted/80 to-muted/40 border-b border-border/50">

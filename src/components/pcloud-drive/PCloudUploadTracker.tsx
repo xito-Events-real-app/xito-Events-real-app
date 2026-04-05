@@ -18,7 +18,7 @@ export function PCloudUploadTracker() {
   if (collapsed) {
     return (
       <div
-        className="fixed bottom-4 right-4 z-50 bg-card border rounded-full px-4 py-2 shadow-lg cursor-pointer flex items-center gap-2"
+        className="bg-card border rounded-full px-4 py-2 shadow-lg cursor-pointer flex items-center gap-2"
         onClick={() => setCollapsed(false)}
       >
         <CloudUpload className="h-4 w-4 text-primary" />
@@ -33,7 +33,7 @@ export function PCloudUploadTracker() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-96 bg-card border rounded-lg shadow-xl overflow-hidden">
+    <div className="w-96 bg-card border rounded-lg shadow-xl overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 bg-muted/50 border-b">
         <div className="flex items-center gap-2">
           <CloudUpload className="h-4 w-4 text-primary" />
