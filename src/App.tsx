@@ -69,12 +69,30 @@ function WtnFilesAnnouncement() {
   return <WtnFilesAnnouncementDialog user={user} onNavigate={() => navigate('/files?section=files')} />;
 }
 
-function AuthenticatedStartupPopup() {
+const PUBLIC_PREFIXES = ['/client-portal', '/crew-schedule', '/editor-portal', '/client-form', '/login'];
+
+function isPublicRoute() {
+  return PUBLIC_PREFIXES.some(p => window.location.pathname.startsWith(p));
+}
+
+function AdminOnlyFeatures() {
   const { user } = useAuthContext();
-  const pathname = window.location.pathname;
-  const isPublicRoute = pathname.startsWith('/client-portal') || pathname.startsWith('/crew-schedule') || pathname.startsWith('/client-form');
-  if (!user || isPublicRoute) return null;
-  return <StartupAnnouncementPopup />;
+  if (!user || isPublicRoute()) return null;
+  return (
+    <>
+      <WtnFilesAnnouncement />
+      <StartupAnnouncementPopup />
+      <SaugatSearch />
+      <FloatingBookingCalendar />
+      <FloatingBenzoKeep />
+      <FloatingYouTubePlayer />
+      <FloatingXitoTransfer />
+      <UploadProgressTracker />
+      <PCloudUploadTracker />
+      <XitoUploadTracker />
+      <YouTubeUploadTracker />
+    </>
+  );
 }
 
 const App = () => (
@@ -91,19 +109,9 @@ const App = () => (
           <BrowserRouter>
            <FloatingYouTubePlayerProvider>
             <AuthProvider>
-              <WtnFilesAnnouncement />
-              <AuthenticatedStartupPopup />
-              <SaugatSearch />
-              <FloatingBookingCalendar />
-              <FloatingBenzoKeep />
-               <FloatingYouTubePlayer />
-               <FloatingXitoTransfer />
+              <AdminOnlyFeatures />
               <Toaster />
               <Sonner />
-              <UploadProgressTracker />
-               <PCloudUploadTracker />
-              <XitoUploadTracker />
-              <YouTubeUploadTracker />
             <Routes>
               {/* Public routes - no auth required */}
               <Route path="/client-form/:clientName/:clientId" element={<ClientContactForm />} />

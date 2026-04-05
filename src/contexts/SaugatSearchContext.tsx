@@ -53,6 +53,9 @@ export function SaugatSearchProvider({ children }: { children: ReactNode }) {
   // Double-space listener (only when not in input/textarea/contenteditable)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      const p = window.location.pathname;
+      if (p.startsWith('/client-portal') || p.startsWith('/crew-schedule') || p.startsWith('/editor-portal') || p.startsWith('/client-form') || p.startsWith('/login')) return;
+
       if (e.key === "Escape" && isOpen) {
         close();
         return;
