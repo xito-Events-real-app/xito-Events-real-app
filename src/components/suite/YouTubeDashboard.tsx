@@ -318,6 +318,7 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<string>("recent");
   const [allTrackerRows, setAllTrackerRows] = useState<TrackerRow[]>([]);
+  const [contactDetailsMap, setContactDetailsMap] = useState<Map<string, { bride: string; groom: string }>>(new Map());
 
   // Infinite scroll
   const [recentNextPageToken, setRecentNextPageToken] = useState<string | null>(null);
