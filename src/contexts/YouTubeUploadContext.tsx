@@ -438,6 +438,7 @@ export function YouTubeUploadProvider({ children }: { children: React.ReactNode 
       status: 'uploading',
       started_by: 'user',
       playlist_id: params.playlistId,
+      tracker_row_id: params.trackerRowId || null,
     }).select('id').single();
 
     // Init resumable upload via edge function
