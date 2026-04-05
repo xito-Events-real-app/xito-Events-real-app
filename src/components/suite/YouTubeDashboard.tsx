@@ -1187,16 +1187,128 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
         <div className="flex-1 flex min-h-0">
           {/* Left: Video Player + Details + Comments */}
           <div className="flex-1 flex flex-col min-w-0 p-4 overflow-y-auto">
-            {/* Player - smaller */}
-            <div className="w-full max-w-[900px] aspect-video bg-black rounded-xl overflow-hidden mb-3">
-              {activeVideo ? (
-                <div ref={playerContainerRef} className="w-full h-full" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-gray-500">
-                  <div className="text-center">
-                    <Youtube className="w-16 h-16 mx-auto mb-3 text-gray-300" />
-                    <p className="text-lg text-gray-400">Select a video to play</p>
+            {/* Player + Event Info Card row */}
+            <div className="flex gap-3 mb-3">
+              {/* Player - unchanged size */}
+              <div className="w-full max-w-[900px] aspect-video bg-black rounded-xl overflow-hidden shrink-0">
+                {activeVideo ? (
+                  <div ref={playerContainerRef} className="w-full h-full" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-gray-500">
+                    <div className="text-center">
+                      <Youtube className="w-16 h-16 mx-auto mb-3 text-gray-300" />
+                      <p className="text-lg text-gray-400">Select a video to play</p>
+                    </div>
                   </div>
+                )}
+              </div>
+
+              {/* Event Info Card - fills gap */}
+              {eventCardData && activeVideo && (
+                <div className="flex-1 min-w-[220px] bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-4 flex flex-col gap-3 overflow-y-auto">
+                  {/* Event Name */}
+                  <div>
+                    <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Event</p>
+                    <p className="text-sm font-bold text-white uppercase tracking-wide">{eventCardData.eventName}</p>
+                  </div>
+
+                  {/* Bride & Groom */}
+                  {(eventCardData.bride || eventCardData.groom) && (
+                    <div className="space-y-1.5">
+                      {eventCardData.bride && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs">👰</span>
+                          <button onClick={() => handleNameFilter(eventCardData.bride)} className="text-xs font-semibold text-pink-400 hover:text-pink-300 hover:underline transition-colors truncate">
+                            {eventCardData.bride}
+                          </button>
+                        </div>
+                      )}
+                      {eventCardData.groom && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs">🤵</span>
+                          <button onClick={() => handleNameFilter(eventCardData.groom)} className="text-xs font-semibold text-cyan-400 hover:text-cyan-300 hover:underline transition-colors truncate">
+                            {eventCardData.groom}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Date */}
+                  {(eventCardData.eventDateBS || eventCardData.eventDateAD) && (
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                      <span className="text-xs text-slate-300">
+                        {eventCardData.eventDateBS}{eventCardData.eventDateBS && eventCardData.eventDateAD && ' / '}{eventCardData.eventDateAD}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Videographers */}
+                  {eventCardData.videographers.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Video className="w-3.5 h-3.5 text-blue-400" />
+                        <span className="text-[10px] text-slate-500 uppercase font-medium">Videographer</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {eventCardData.videographers.map(name => (
+                          <button key={name} onClick={() => handleNameFilter(name)} className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[11px] font-semibold hover:bg-blue-500/40 transition-colors">
+                            {name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Photographers */}
+                  {eventCardData.photographers.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Camera className="w-3.5 h-3.5 text-amber-400" />
+                        <span className="text-[10px] text-slate-500 uppercase font-medium">Photographer</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {eventCardData.photographers.map(name => (
+                          <button key={name} onClick={() => handleNameFilter(name)} className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-semibold hover:bg-amber-500/40 transition-colors">
+                            {name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* RAW Files */}
+                  {eventCardData.devices.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <HardDrive className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-[10px] text-slate-500 uppercase font-medium">RAW Files</span>
+                        <span className="text-xs font-bold text-emerald-400 ml-auto">{eventCardData.totalSizeGB} GB</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        <TooltipProvider delayDuration={200}>
+                          {eventCardData.devices.map(dev => (
+                            <Tooltip key={dev.name}>
+                              <TooltipTrigger asChild>
+                                <span className="px-2 py-0.5 rounded bg-slate-700 text-slate-300 text-[11px] font-medium cursor-default">
+                                  {dev.name}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom" className="max-w-xs">
+                                <div className="space-y-0.5">
+                                  {dev.paths.slice(0, 5).map((p, i) => (
+                                    <p key={i} className="text-[10px] font-mono text-muted-foreground">{p}</p>
+                                  ))}
+                                  {dev.paths.length > 5 && <p className="text-[10px] text-muted-foreground">+{dev.paths.length - 5} more</p>}
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          ))}
+                        </TooltipProvider>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
