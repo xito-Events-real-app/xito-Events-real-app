@@ -1118,6 +1118,13 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                           </span>
                         </div>
                       )}
+                      {timings.exportedTime && (
+                        <div className="flex items-center gap-1.5">
+                          <Upload className="w-3.5 h-3.5 text-cyan-500" />
+                          <span className="text-gray-500">Export Time:</span>
+                          <span className="font-semibold text-gray-800">{timings.exportedTime}</span>
+                        </div>
+                      )}
                       {timings.finalizedTime && (
                         <div className="flex items-center gap-1.5">
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
