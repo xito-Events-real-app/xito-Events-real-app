@@ -65,6 +65,7 @@ interface TrackerRow {
   updated_at: string | null;
   youtube_link: string;
   created_at?: string | null;
+  registered_date_time_ad?: string;
 }
 
 function extractYouTubeVideoId(link: string | null | undefined): string | null {
@@ -318,6 +319,7 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<string>("recent");
   const [allTrackerRows, setAllTrackerRows] = useState<TrackerRow[]>([]);
+  const [contactDetailsMap, setContactDetailsMap] = useState<Map<string, { bride: string; groom: string }>>(new Map());
 
   // Infinite scroll
   const [recentNextPageToken, setRecentNextPageToken] = useState<string | null>(null);
@@ -495,7 +497,7 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
     try {
       const { data: trackerRows } = await supabase
         .from("video_edit_tracker")
-        .select("id, client_name, event_name, edit_type, editor, colorist, video_edit_status, edit_started_at, event_date_ad, stage_history, updated_at, youtube_link, created_at")
+        .select("id, client_name, event_name, edit_type, editor, colorist, video_edit_status, edit_started_at, event_date_ad, stage_history, updated_at, youtube_link, created_at, registered_date_time_ad")
         .neq("youtube_link", "")
         .eq("deleted", false)
         .order("updated_at", { ascending: false })
@@ -676,7 +678,7 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
 
   const loadStats = async () => {
     const today = new Date().toISOString().split('T')[0];
-    const [{ count: todayCount }, { data: trackerData }, { data: sessionData }] = await Promise.all([
+    const [{ count: todayCount }, { data: trackerData }, { data: sessionData }, { data: contactData }] = await Promise.all([
       supabase
         .from('youtube_upload_sessions')
         .select('*', { count: 'exact', head: true })
@@ -684,7 +686,7 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
         .gte('created_at', `${today}T00:00:00`),
       supabase
         .from('video_edit_tracker')
-        .select('id, client_name, event_name, edit_type, editor, colorist, video_edit_status, edit_started_at, event_date_ad, stage_history, updated_at, created_at, youtube_link, deleted')
+        .select('id, client_name, event_name, edit_type, editor, colorist, video_edit_status, edit_started_at, event_date_ad, stage_history, updated_at, created_at, youtube_link, deleted, registered_date_time_ad')
         .eq('deleted', false),
       supabase
         .from('youtube_upload_sessions')
@@ -693,6 +695,9 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
         .neq('youtube_video_id', '')
         .order('created_at', { ascending: false })
         .limit(200),
+      supabase
+        .from('contact_details_cache')
+        .select('registered_date_time_ad, bride_full_name, groom_full_name'),
     ]);
     setTodayUploaded(todayCount || 0);
     if (trackerData) {
@@ -702,6 +707,16 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
     }
     if (sessionData) {
       setUploadSessionMappings(sessionData as UploadSessionMapping[]);
+    }
+    if (contactData) {
+      const map = new Map<string, { bride: string; groom: string }>();
+      for (const c of contactData) {
+        map.set(c.registered_date_time_ad, {
+          bride: (c.bride_full_name || '').trim(),
+          groom: (c.groom_full_name || '').trim(),
+        });
+      }
+      setContactDetailsMap(map);
     }
   };
 
@@ -811,7 +826,7 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
     setTrackerInfo(null);
   };
 
-  // Manual link: compute suggestions from video title
+  // Manual link: compute suggestions from video title, prioritizing bride/groom name matches
   const manualLinkSuggestions = useMemo(() => {
     if (!activeVideo || !manualLinkOpen) return [];
     const titlePart = activeVideo.title.split('||')[0]?.trim() || activeVideo.title;
@@ -832,7 +847,20 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
         const et = (r.edit_type || '').toUpperCase();
         const combined = `${cn} ${en} ${et}`;
 
-        // Title word matches
+        // Bride/groom name matching (higher priority)
+        let brideGroomScore = 0;
+        const regDate = r.registered_date_time_ad || '';
+        const contactInfo = contactDetailsMap.get(regDate);
+        if (contactInfo) {
+          const brideWords = contactInfo.bride.toUpperCase().split(/\s+/).filter(w => w.length >= 3);
+          const groomWords = contactInfo.groom.toUpperCase().split(/\s+/).filter(w => w.length >= 3);
+          for (const w of titleWords) {
+            if (brideWords.some(bw => bw.includes(w) || w.includes(bw))) brideGroomScore += 5;
+            if (groomWords.some(gw => gw.includes(w) || w.includes(gw))) brideGroomScore += 5;
+          }
+        }
+
+        // Title word matches against client_name / event_name
         let titleScore = 0;
         for (const w of titleWords) {
           if (combined.includes(w)) titleScore++;
@@ -841,22 +869,23 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
         // Search filter
         if (searchUpper && !combined.includes(searchUpper)) return null;
 
-        return { row: r, titleScore };
+        return { row: r, totalScore: brideGroomScore + titleScore, brideGroomScore, contactInfo };
       })
-      .filter((x): x is { row: TrackerRow; titleScore: number } => x !== null);
+      .filter((x): x is { row: TrackerRow; totalScore: number; brideGroomScore: number; contactInfo: { bride: string; groom: string } | undefined } => x !== null);
 
-    // Sort: title matches first, then alphabetically
+    // Sort: bride/groom matches first, then title matches, then alphabetically
     scored.sort((a, b) => {
-      if (b.titleScore !== a.titleScore) return b.titleScore - a.titleScore;
+      if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
+      if (b.brideGroomScore !== a.brideGroomScore) return b.brideGroomScore - a.brideGroomScore;
       return (a.row.client_name || '').localeCompare(b.row.client_name || '');
     });
 
-    // Only show rows with title matches or search matches, limit to 30
+    // Only show rows with matches or search matches, limit to 30
     if (!searchUpper) {
-      return scored.filter(s => s.titleScore > 0).slice(0, 30).map(s => s.row);
+      return scored.filter(s => s.totalScore > 0).slice(0, 30);
     }
-    return scored.slice(0, 30).map(s => s.row);
-  }, [activeVideo, manualLinkOpen, linkSearch, allTrackerRows]);
+    return scored.slice(0, 30);
+  }, [activeVideo, manualLinkOpen, linkSearch, allTrackerRows, contactDetailsMap]);
 
   // Handle manual linking
   const handleManualLink = async (row: TrackerRow) => {
@@ -872,7 +901,7 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
 
     // Update local state immediately
     setAllTrackerRows(prev => prev.map(r => r.id === row.id ? { ...r, youtube_link: newLink } : r));
-    setTrackerInfo(row);
+    setTrackerInfo({ ...row, youtube_link: newLink });
     setManualLinkOpen(false);
     setLinkSearch("");
   };
@@ -1075,7 +1104,7 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                       {timings.totalTime && (
                         <div className="flex items-center gap-1.5">
                           <Clock className="w-3.5 h-3.5 text-amber-500" />
-                          <span className="text-gray-500">Total Time:</span>
+                          <span className="text-gray-500">Time till Export:</span>
                           <span className="font-semibold text-gray-800">{timings.totalTime}</span>
                         </div>
                       )}
@@ -1165,28 +1194,34 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                       {linkSearch ? "No matching tracker rows found" : "Type to search or suggestions will appear from video title"}
                     </p>
                   )}
-                  {manualLinkSuggestions.map(row => (
+                  {manualLinkSuggestions.map(item => (
                     <button
-                      key={row.id}
-                      onClick={() => handleManualLink(row)}
+                      key={item.row.id}
+                      onClick={() => handleManualLink(item.row)}
                       className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-accent transition-colors border border-transparent hover:border-border"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-foreground truncate">{row.client_name || 'Unknown'}</span>
+                        <span className="text-xs font-bold text-foreground truncate">{item.row.client_name || 'Unknown'}</span>
                         <span className="text-[10px] text-muted-foreground">·</span>
-                        <span className="text-xs text-muted-foreground truncate">{row.event_name || '-'}</span>
-                        {row.edit_type && (
+                        <span className="text-xs text-muted-foreground truncate">{item.row.event_name || '-'}</span>
+                        {item.row.edit_type && (
                           <>
                             <span className="text-[10px] text-muted-foreground">·</span>
-                            <span className="text-xs text-muted-foreground">{row.edit_type}</span>
+                            <span className="text-xs text-muted-foreground">{item.row.edit_type}</span>
                           </>
                         )}
-                        {row.video_edit_status && (
-                          <Badge className={cn("text-[9px] font-semibold px-1.5 py-0 border-0 ml-auto shrink-0", STAGE_COLORS[row.video_edit_status] || "bg-gray-200 text-gray-600")}>
-                            {row.video_edit_status.replace(/_/g, ' ')}
+                        {item.row.video_edit_status && (
+                          <Badge className={cn("text-[9px] font-semibold px-1.5 py-0 border-0 ml-auto shrink-0", STAGE_COLORS[item.row.video_edit_status] || "bg-gray-200 text-gray-600")}>
+                            {item.row.video_edit_status.replace(/_/g, ' ')}
                           </Badge>
                         )}
                       </div>
+                      {item.contactInfo && (item.contactInfo.bride || item.contactInfo.groom) && (
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          {item.contactInfo.bride && <span className="text-[10px] text-pink-500 font-medium">👰 {item.contactInfo.bride}</span>}
+                          {item.contactInfo.groom && <span className="text-[10px] text-blue-500 font-medium">🤵 {item.contactInfo.groom}</span>}
+                        </div>
+                      )}
                     </button>
                   ))}
                 </div>

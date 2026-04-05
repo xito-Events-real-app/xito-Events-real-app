@@ -213,9 +213,30 @@ export async function updateVideoEditField(id: string, field: string, value: str
 
   const normalizedValue = field === "editType" ? normalizeEditType(value) : value;
 
+  const updateData: Record<string, any> = {
+    [dbField]: normalizedValue,
+    synced_to_sheet: false,
+    updated_at: new Date().toISOString(),
+  };
+
+  // Track editor changes in stage_history
+  if (field === "editor") {
+    const { data: existing } = await supabase
+      .from("video_edit_tracker")
+      .select("editor, stage_history")
+      .eq("id", id)
+      .single();
+
+    if (existing?.editor && existing.editor !== value) {
+      const historyEntry = `EDITOR_CHANGED_FROM_${existing.editor}_TO_${value} [${new Date().toISOString()}]`;
+      const currentHistory = existing.stage_history || "";
+      updateData.stage_history = currentHistory ? `${currentHistory}\n${historyEntry}` : historyEntry;
+    }
+  }
+
   const { error } = await supabase
     .from("video_edit_tracker")
-    .update({ [dbField]: normalizedValue, synced_to_sheet: false, updated_at: new Date().toISOString() })
+    .update(updateData)
     .eq("id", id);
 
   if (error) {
