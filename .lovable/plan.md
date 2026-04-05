@@ -1,75 +1,20 @@
 
 
-# Fix: Hide Admin-Only Features on Public Routes
+# Fix Domain Typo: `busines` → `business`
 
-## Problem
-All admin features (SaugatSearch, FloatingXitoTransfer, FloatingBookingCalendar, FloatingBenzoKeep, FloatingYouTubePlayer, upload trackers, announcements) render globally — including on public routes like `/client-portal`, `/crew-schedule`, `/editor-portal`, and `/client-form`. This leaks internal data to external users.
-
-## Solution
-Create a single wrapper component `AdminOnlyFeatures` that checks the current route path. If the route is public, it renders nothing. Otherwise it renders all admin-only floating components and trackers.
-
-### Public route prefixes to block:
-- `/client-portal`
-- `/crew-schedule`
-- `/editor-portal`
-- `/client-form`
-- `/login`
+The current URLs use `busines.xitoevents.com` (missing an 's'). That's why DNS couldn't resolve it — the domain doesn't exist. The correct domain is `business.xitoevents.com`.
 
 ## Changes
 
-### 1. `src/App.tsx` — Extract admin features into gated wrapper
+Update 3 files, replacing `busines.xitoevents.com` with `business.xitoevents.com`:
 
-Create an `AdminOnlyFeatures` component inside App.tsx (same pattern as `AuthenticatedStartupPopup`):
+| File | Occurrences |
+|------|-------------|
+| `src/lib/client-contact-api.ts` | 2 (client form URL + client portal URL) |
+| `src/components/suite/AllClientsCrewTable.tsx` | 1 (crew schedule URL) |
+| `src/components/video-edit/DesktopVideoEditTracker.tsx` | 1 (editor portal URL) |
 
-```typescript
-function AdminOnlyFeatures() {
-  const { user } = useAuthContext();
-  const pathname = window.location.pathname;
-  const isPublicRoute = 
-    pathname.startsWith('/client-portal') || 
-    pathname.startsWith('/crew-schedule') || 
-    pathname.startsWith('/editor-portal') || 
-    pathname.startsWith('/client-form') ||
-    pathname.startsWith('/login');
-  
-  if (!user || isPublicRoute) return null;
-  
-  return (
-    <>
-      <WtnFilesAnnouncement />
-      <AuthenticatedStartupPopup />
-      <SaugatSearch />
-      <FloatingBookingCalendar />
-      <FloatingBenzoKeep />
-      <FloatingYouTubePlayer />
-      <FloatingXitoTransfer />
-      <UploadProgressTracker />
-      <PCloudUploadTracker />
-      <XitoUploadTracker />
-      <YouTubeUploadTracker />
-    </>
-  );
-}
-```
+This is a simple find-and-replace of `busines.xitoevents.com` → `business.xitoevents.com` across all four occurrences.
 
-Replace the individual renders (lines 94–106) with a single `<AdminOnlyFeatures />`.
-
-### 2. `src/contexts/SaugatSearchContext.tsx` — Disable keyboard listener on public routes
-
-The double-space listener fires even without `SaugatSearch` rendered (context + listener are still active). Add a route check inside the keydown handler to skip on public routes.
-
-### 3. `src/contexts/XitoTransferPopupContext.tsx` — Same fix
-
-The double-X listener also fires on public routes. Add the same public route guard inside the keydown handler.
-
-### 4. `src/contexts/BookingCalendarPopupContext.tsx` — Check for similar shortcut
-
-If it has a global keyboard shortcut, add the same guard.
-
-| File | Change |
-|------|--------|
-| `src/App.tsx` | Wrap admin-only components in route-gated wrapper |
-| `src/contexts/SaugatSearchContext.tsx` | Skip keydown on public routes |
-| `src/contexts/XitoTransferPopupContext.tsx` | Skip keydown on public routes |
-| `src/contexts/BookingCalendarPopupContext.tsx` | Skip keydown on public routes (if applicable) |
+**Note:** The domain `business.xitoevents.com` must be connected to this project via **Project Settings → Domains** for the links to work. If it's not set up yet, we'll need to do that after this change.
 
