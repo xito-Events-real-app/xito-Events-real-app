@@ -1131,21 +1131,38 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
     setActiveVideo({ videoId, title, playlistTitle, publishedAt });
   };
 
-  // Filter
+  // Filter - supports searchQuery and freelancerFilter
   const filteredPlaylists = useMemo(() => {
-    if (!searchQuery.trim()) return playlists;
-    const q = searchQuery.toLowerCase();
-    return playlists.map(p => ({
-      ...p,
-      videos: p.videos.filter(v => v.title.toLowerCase().includes(q)),
-    })).filter(p => p.videos.length > 0 || p.title.toLowerCase().includes(q));
-  }, [playlists, searchQuery]);
+    let filtered = playlists;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.map(p => ({
+        ...p,
+        videos: p.videos.filter(v => v.title.toLowerCase().includes(q)),
+      })).filter(p => p.videos.length > 0 || p.title.toLowerCase().includes(q));
+    }
+    if (freelancerFilter) {
+      const names = freelancerFilter.clientNames.map(n => n.toLowerCase());
+      filtered = filtered.map(p => ({
+        ...p,
+        videos: p.videos.filter(v => names.some(n => v.title.toLowerCase().includes(n))),
+      })).filter(p => p.videos.length > 0);
+    }
+    return filtered;
+  }, [playlists, searchQuery, freelancerFilter]);
 
   const filteredRecentVideos = useMemo(() => {
-    if (!searchQuery.trim()) return recentVideos;
-    const q = searchQuery.toLowerCase();
-    return recentVideos.filter(v => v.title.toLowerCase().includes(q));
-  }, [recentVideos, searchQuery]);
+    let filtered = recentVideos;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(v => v.title.toLowerCase().includes(q));
+    }
+    if (freelancerFilter) {
+      const names = freelancerFilter.clientNames.map(n => n.toLowerCase());
+      filtered = filtered.filter(v => names.some(n => v.title.toLowerCase().includes(n)));
+    }
+    return filtered;
+  }, [recentVideos, searchQuery, freelancerFilter]);
 
   const remainingRows = totalTrackerRows - uploadedRows;
   const activeJobs = jobs.filter(j => j.status === 'uploading');
