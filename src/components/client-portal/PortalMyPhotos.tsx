@@ -316,22 +316,35 @@ const PortalMyPhotos = ({
               <ImageIcon className="h-10 w-10 mx-auto mb-3 text-[hsl(350,80%,65%)] opacity-60" />
               <p className="text-gray-700 font-medium mb-1">Photos will appear here soon!</p>
               <p className="text-gray-400 text-sm mb-4">For now, view them in pCloud</p>
-              <a
-                href={(() => {
+              <button
+                onClick={() => {
                   const activeTab = tabs[activeTabIndex];
-                  const pcloudPath = encodeURIComponent(`/WEDDING TALES NEPAL/${activeTab?.s3Prefix || ''}`);
+                  const folderPath = `/WEDDING TALES NEPAL/${activeTab?.s3Prefix || ''}`;
                   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-                  return isMobile
-                    ? `https://e.pcloud.link/#page=filemanager&folder=${pcloudPath}`
-                    : `https://my.pcloud.com/#page=filemanager&folder=${pcloudPath}`;
-                })()}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[hsl(350,80%,65%)] text-white text-sm font-medium shadow-[0_0_12px_hsl(350,80%,65%/0.4)] hover:bg-[hsl(350,80%,55%)] transition-colors"
+                  if (isMobile) {
+                    // Try app deep link first, fall back to web after timeout
+                    const webUrl = `https://my.pcloud.com/#page=filemanager&folder=${encodeURIComponent(folderPath)}`;
+                    const appUrl = `pcloud://folder?path=${encodeURIComponent(folderPath)}`;
+                    const start = Date.now();
+                    const fallbackTimer = setTimeout(() => {
+                      if (Date.now() - start < 2500) {
+                        window.open(webUrl, '_blank');
+                      }
+                    }, 1500);
+                    window.addEventListener('blur', () => clearTimeout(fallbackTimer), { once: true });
+                    window.location.href = appUrl;
+                  } else {
+                    window.open(`https://my.pcloud.com/#page=filemanager&folder=${encodeURIComponent(folderPath)}`, '_blank');
+                  }
+                }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-white text-sm font-medium shadow-lg hover:opacity-90 transition-opacity"
+                style={{ backgroundColor: '#20BEC6' }}
               >
-                <Cloud className="h-4 w-4" />
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96Z" fill="white"/>
+                </svg>
                 Open in pCloud
-              </a>
+              </button>
             </CardContent>
           </Card>
         ) : (
