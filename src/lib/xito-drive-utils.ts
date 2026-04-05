@@ -308,7 +308,10 @@ export function buildResearchFolderTree(
       const pmPath = `${clientPath}/Project Managers`;
       paths.push(pmPath);
       for (const ev of client.events) {
-        paths.push(`${pmPath}/${ev.replace(/[/\\]/g, "_")}`);
+        const evPath = `${pmPath}/${ev.replace(/[/\\]/g, "_")}`;
+        paths.push(evPath);
+        paths.push(`${evPath}/COLORED`);
+        paths.push(`${evPath}/NOT COLORED`);
       }
       // Lightroom Catalog > events > photographers
       const lrPath = `${clientPath}/Lightroom Catalog`;
