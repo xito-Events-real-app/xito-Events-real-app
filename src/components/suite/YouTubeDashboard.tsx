@@ -1216,6 +1216,37 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                           <span className="font-semibold text-gray-800">{trackerInfo.edit_type}</span>
                         </div>
                       )}
+                      {/* Send to Client button */}
+                      <div className="col-span-full pt-1">
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                          onClick={async () => {
+                            setSendToClientOpen(true);
+                            setLoadingSendContacts(true);
+                            try {
+                              const regId = trackerInfo.registered_date_time_ad;
+                              if (!regId) { setLoadingSendContacts(false); return; }
+                              const [contactRes, clientRes] = await Promise.all([
+                                supabase.from('contact_details_cache').select('bride_full_name, bride_whatsapp_number, groom_full_name, groom_whatsapp_number').eq('registered_date_time_ad', regId).maybeSingle(),
+                                supabase.from('clients_cache').select('client_name, contact_no, whatsapp_no').eq('registered_date_time_ad', regId).eq('sheet_source', 'booked').maybeSingle(),
+                              ]);
+                              const list: { label: string; phone: string }[] = [];
+                              const cd = contactRes.data;
+                              const cl = clientRes.data;
+                              if (cd?.bride_whatsapp_number) list.push({ label: `${cd.bride_full_name || 'Bride'} (WhatsApp)`, phone: cd.bride_whatsapp_number });
+                              if (cd?.groom_whatsapp_number) list.push({ label: `${cd.groom_full_name || 'Groom'} (WhatsApp)`, phone: cd.groom_whatsapp_number });
+                              if (cl?.whatsapp_no) list.push({ label: `${cl.client_name || 'Client'} (WhatsApp)`, phone: cl.whatsapp_no });
+                              if (cl?.contact_no && cl.contact_no !== cl?.whatsapp_no) list.push({ label: `${cl.client_name || 'Client'} (Contact)`, phone: cl.contact_no });
+                              setSendRecipients(list);
+                            } catch { setSendRecipients([]); }
+                            setLoadingSendContacts(false);
+                          }}
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                          Send to Client
+                        </Button>
+                      </div>
                     </div>
                   );
                 })()}
