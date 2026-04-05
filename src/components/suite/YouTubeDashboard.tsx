@@ -1120,8 +1120,78 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                     </div>
                   );
                 })()}
+
+                {/* Fallback: no tracker info found */}
+                {!trackerInfo && activeVideo && (
+                  <div className="mt-3 flex items-center gap-3 p-3 rounded-lg bg-amber-50 border border-amber-200">
+                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span className="text-xs font-semibold text-amber-700">EDITING DETAILS NOT FOUND</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="ml-auto h-7 text-xs gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-100"
+                      onClick={() => { setManualLinkOpen(true); setLinkSearch(""); }}
+                    >
+                      <Link2 className="w-3.5 h-3.5" />
+                      Link Video Edit Tracker
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
+
+            {/* Manual Link Dialog */}
+            <Dialog open={manualLinkOpen} onOpenChange={(o) => { setManualLinkOpen(o); if (!o) setLinkSearch(""); }}>
+              <DialogContent className="max-w-lg max-h-[80vh] flex flex-col">
+                <DialogHeader>
+                  <DialogTitle className="text-sm">Link to Video Edit Tracker</DialogTitle>
+                </DialogHeader>
+                <p className="text-xs text-muted-foreground -mt-1 truncate">
+                  {activeVideo?.title}
+                </p>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by client name..."
+                    value={linkSearch}
+                    onChange={(e) => setLinkSearch(e.target.value)}
+                    className="pl-8 h-9 text-xs"
+                    autoFocus
+                  />
+                </div>
+                <div className="flex-1 overflow-y-auto space-y-1 min-h-[200px] max-h-[400px]">
+                  {manualLinkSuggestions.length === 0 && (
+                    <p className="text-xs text-muted-foreground text-center py-8">
+                      {linkSearch ? "No matching tracker rows found" : "Type to search or suggestions will appear from video title"}
+                    </p>
+                  )}
+                  {manualLinkSuggestions.map(row => (
+                    <button
+                      key={row.id}
+                      onClick={() => handleManualLink(row)}
+                      className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-accent transition-colors border border-transparent hover:border-border"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-foreground truncate">{row.client_name || 'Unknown'}</span>
+                        <span className="text-[10px] text-muted-foreground">·</span>
+                        <span className="text-xs text-muted-foreground truncate">{row.event_name || '-'}</span>
+                        {row.edit_type && (
+                          <>
+                            <span className="text-[10px] text-muted-foreground">·</span>
+                            <span className="text-xs text-muted-foreground">{row.edit_type}</span>
+                          </>
+                        )}
+                        {row.video_edit_status && (
+                          <Badge className={cn("text-[9px] font-semibold px-1.5 py-0 border-0 ml-auto shrink-0", STAGE_COLORS[row.video_edit_status] || "bg-gray-200 text-gray-600")}>
+                            {row.video_edit_status.replace(/_/g, ' ')}
+                          </Badge>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </DialogContent>
+            </Dialog>
 
             {/* Comments Section */}
             {activeVideo && (
