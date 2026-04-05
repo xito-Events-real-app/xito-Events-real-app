@@ -5,6 +5,7 @@
  *   STATUS [ISO_DATE]
  *   PAUSED [ISO_DATE]
  *   RESUMED [ISO_DATE]
+ *   EDITOR_CHANGED_FROM_X_TO_Y [ISO_DATE]
  */
 
 interface StageEntry {
@@ -84,14 +85,22 @@ function computePausedMs(entries: StageEntry[], start: Date, end: Date): number 
   return total;
 }
 
+// Stages that come after EDIT_ON_PROGRESS
+const POST_EDIT_STATUSES = new Set([
+  "COLOR_QUEUE", "COLOR_ON_PROGRESS", "EXPORT_QUEUE", "EXPORTED",
+  "CLIENT_REVIEW", "RE_EDIT_QUEUE", "RE_EDIT_ON_PROGRESS",
+  "FINALIZED", "UPLOADED", "PAUSED", "RESUMED",
+]);
+
 export interface VideoEditTimings {
-  editTime: string | null;        // EDIT_ON_PROGRESS → COLOR_QUEUE
-  colorTime: string | null;       // COLOR_ON_PROGRESS → EXPORT_QUEUE
-  totalTime: string | null;       // EDIT_ON_PROGRESS → EXPORT_QUEUE (or now)
-  actualTime: string | null;      // totalTime minus paused intervals
-  pausedTime: string | null;      // total paused duration
-  finalizedTime: string | null;   // EDIT_ON_PROGRESS → FINALIZED
+  editTime: string | null;         // EDIT_ON_PROGRESS → COLOR_QUEUE (or EXPORT_QUEUE if no color)
+  colorTime: string | null;        // COLOR_ON_PROGRESS → EXPORT_QUEUE
+  totalTime: string | null;        // EDIT_ON_PROGRESS → EXPORT_QUEUE (time till export)
+  actualTime: string | null;       // totalTime minus paused intervals
+  pausedTime: string | null;       // total paused duration
+  finalizedTime: string | null;    // EDIT_ON_PROGRESS → FINALIZED
   clientReviewTime: string | null; // CLIENT_REVIEW → next stage
+  exportedTime: string | null;     // EXPORT_QUEUE → EXPORTED (or FINALIZED if no EXPORTED entry)
 }
 
 export function computeVideoEditTimings(stageHistory: string | null | undefined, currentStatus?: string | null): VideoEditTimings {
@@ -101,32 +110,45 @@ export function computeVideoEditTimings(stageHistory: string | null | undefined,
   const colorQueue = findFirst(entries, "COLOR_QUEUE");
   const colorStart = findFirst(entries, "COLOR_ON_PROGRESS");
   const exportQueue = findFirst(entries, "EXPORT_QUEUE");
+  const exported = findFirst(entries, "EXPORTED");
   const finalized = findLast(entries, "FINALIZED");
   const clientReview = findLast(entries, "CLIENT_REVIEW");
   const afterReview = findFirstOfAny(
     entries.filter((e) => clientReview && e.date > clientReview),
-    ["RE_EDIT_ON_PROGRESS", "FINALIZED"]
+    ["RE_EDIT_ON_PROGRESS", "RE_EDIT_QUEUE", "FINALIZED"]
   );
 
   const now = new Date();
 
-  // Edit Time
+  // Helper: is the current status at or past a given stage?
+  const isAtOrPast = (status: string | null | undefined, stages: Set<string>): boolean => {
+    return !!status && stages.has(status);
+  };
+
+  // Edit Time: EDIT_ON_PROGRESS → COLOR_QUEUE
+  // If no color stage, use EXPORT_QUEUE as the end point
+  // If still in edit, show ongoing
   let editTime: string | null = null;
-  if (editStart && colorQueue) {
-    editTime = formatDuration(colorQueue.getTime() - editStart.getTime());
-  } else if (editStart && !colorQueue && currentStatus === "EDIT_ON_PROGRESS") {
-    editTime = formatDuration(now.getTime() - editStart.getTime()) + " (ongoing)";
+  if (editStart) {
+    const editEnd = colorQueue || exportQueue;
+    if (editEnd) {
+      editTime = formatDuration(editEnd.getTime() - editStart.getTime());
+    } else if (currentStatus === "EDIT_ON_PROGRESS") {
+      editTime = formatDuration(now.getTime() - editStart.getTime()) + " (ongoing)";
+    }
   }
 
-  // Color Time
+  // Color Time: COLOR_ON_PROGRESS → EXPORT_QUEUE
   let colorTime: string | null = null;
-  if (colorStart && exportQueue) {
-    colorTime = formatDuration(exportQueue.getTime() - colorStart.getTime());
-  } else if (colorStart && !exportQueue && currentStatus === "COLOR_ON_PROGRESS") {
-    colorTime = formatDuration(now.getTime() - colorStart.getTime()) + " (ongoing)";
+  if (colorStart) {
+    if (exportQueue) {
+      colorTime = formatDuration(exportQueue.getTime() - colorStart.getTime());
+    } else if (currentStatus === "COLOR_ON_PROGRESS") {
+      colorTime = formatDuration(now.getTime() - colorStart.getTime()) + " (ongoing)";
+    }
   }
 
-  // Total Time (edit start → export queue or now)
+  // Total Time (edit start → export queue = time till export)
   let totalTime: string | null = null;
   if (editStart) {
     const end = exportQueue || now;
@@ -149,13 +171,13 @@ export function computeVideoEditTimings(stageHistory: string | null | undefined,
     }
   }
 
-  // Finalized Time
+  // Finalized Time: EDIT_ON_PROGRESS → FINALIZED
   let finalizedTime: string | null = null;
   if (editStart && finalized) {
     finalizedTime = formatDuration(finalized.getTime() - editStart.getTime());
   }
 
-  // Client Review Time
+  // Client Review Time: CLIENT_REVIEW → next stage
   let clientReviewTime: string | null = null;
   if (clientReview) {
     const reviewEnd = afterReview || (currentStatus === "CLIENT_REVIEW" ? now : null);
@@ -165,5 +187,13 @@ export function computeVideoEditTimings(stageHistory: string | null | undefined,
     }
   }
 
-  return { editTime, colorTime, totalTime, actualTime, pausedTime, finalizedTime, clientReviewTime };
+  // Exported Time: EXPORT_QUEUE → EXPORTED (rendering/export duration)
+  let exportedTime: string | null = null;
+  if (exportQueue && exported) {
+    exportedTime = formatDuration(exported.getTime() - exportQueue.getTime());
+  } else if (exportQueue && !exported && currentStatus === "EXPORT_QUEUE") {
+    exportedTime = formatDuration(now.getTime() - exportQueue.getTime()) + " (ongoing)";
+  }
+
+  return { editTime, colorTime, totalTime, actualTime, pausedTime, finalizedTime, clientReviewTime, exportedTime };
 }
