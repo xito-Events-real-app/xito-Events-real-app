@@ -1341,7 +1341,7 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, o
   ];
 
   const editorInfo = editors.find(e => e.name === editorName);
-  const portalUrl = `https://wtnclienttracker.lovable.app/editor-portal/${encodeURIComponent(editorName)}`;
+  const portalUrl = `https://busines.xitoevents.com/editor-portal/${encodeURIComponent(editorName)}`;
   const mentionOptions = useMemo(() => {
     const names = new Set<string>();
     editors.forEach(e => e.name && names.add(e.name));

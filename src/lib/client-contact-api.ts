@@ -87,7 +87,7 @@ export function getClientFormUrl(registeredDateTimeAD: string, clientName?: stri
   const nameSlug = clientName ? slugifyName(clientName) : 'client';
   // Temporarily using main app URL until custom domain is active
   // TODO: Switch back to https://forms.bookedclientscontactdetails.chickenkiller.com once domain is verified
-  return `https://wtnclienttracker.lovable.app/client-form/${nameSlug}/${encodedId}`;
+  return `https://busines.xitoevents.com/client-form/${nameSlug}/${encodedId}`;
 }
 
 // Generate WhatsApp message with form link
@@ -166,7 +166,7 @@ export function formatWhatsAppLink(phone: string): string {
 export function getClientPortalUrl(registeredDateTimeAD: string, clientName?: string): string {
   const encodedId = encodeURIComponent(registeredDateTimeAD);
   const nameSlug = clientName ? slugifyName(clientName) : 'client';
-  return `https://wtnclienttracker.lovable.app/client-portal/${nameSlug}/${encodedId}`;
+  return `https://busines.xitoevents.com/client-portal/${nameSlug}/${encodedId}`;
 }
 
 // Generate WhatsApp message with portal link
