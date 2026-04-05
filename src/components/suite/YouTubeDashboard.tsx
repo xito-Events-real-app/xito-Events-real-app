@@ -65,6 +65,7 @@ interface TrackerRow {
   updated_at: string | null;
   youtube_link: string;
   created_at?: string | null;
+  registered_date_time_ad?: string;
 }
 
 function extractYouTubeVideoId(link: string | null | undefined): string | null {
