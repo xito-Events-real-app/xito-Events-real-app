@@ -811,7 +811,73 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
     setTrackerInfo(null);
   };
 
-  const loadComments = async (videoId: string) => {
+  // Manual link: compute suggestions from video title
+  const manualLinkSuggestions = useMemo(() => {
+    if (!activeVideo || !manualLinkOpen) return [];
+    const titlePart = activeVideo.title.split('||')[0]?.trim() || activeVideo.title;
+    const titleWords = titlePart
+      .replace(/[^a-zA-Z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(w => w.length >= 3)
+      .map(w => w.toUpperCase());
+
+    const searchUpper = linkSearch.trim().toUpperCase();
+
+    // Score each tracker row
+    const scored = allTrackerRows
+      .filter(r => r.client_name || r.event_name)
+      .map(r => {
+        const cn = (r.client_name || '').toUpperCase();
+        const en = (r.event_name || '').toUpperCase();
+        const et = (r.edit_type || '').toUpperCase();
+        const combined = `${cn} ${en} ${et}`;
+
+        // Title word matches
+        let titleScore = 0;
+        for (const w of titleWords) {
+          if (combined.includes(w)) titleScore++;
+        }
+
+        // Search filter
+        if (searchUpper && !combined.includes(searchUpper)) return null;
+
+        return { row: r, titleScore };
+      })
+      .filter((x): x is { row: TrackerRow; titleScore: number } => x !== null);
+
+    // Sort: title matches first, then alphabetically
+    scored.sort((a, b) => {
+      if (b.titleScore !== a.titleScore) return b.titleScore - a.titleScore;
+      return (a.row.client_name || '').localeCompare(b.row.client_name || '');
+    });
+
+    // Only show rows with title matches or search matches, limit to 30
+    if (!searchUpper) {
+      return scored.filter(s => s.titleScore > 0).slice(0, 30).map(s => s.row);
+    }
+    return scored.slice(0, 30).map(s => s.row);
+  }, [activeVideo, manualLinkOpen, linkSearch, allTrackerRows]);
+
+  // Handle manual linking
+  const handleManualLink = async (row: TrackerRow) => {
+    if (!activeVideo) return;
+    const videoUrl = `https://youtu.be/${activeVideo.videoId}`;
+    const existingLink = (row.youtube_link || '').trim();
+    const newLink = existingLink ? `${existingLink}, ${videoUrl}` : videoUrl;
+
+    await supabase
+      .from('video_edit_tracker')
+      .update({ youtube_link: newLink })
+      .eq('id', row.id);
+
+    // Update local state immediately
+    setAllTrackerRows(prev => prev.map(r => r.id === row.id ? { ...r, youtube_link: newLink } : r));
+    setTrackerInfo(row);
+    setManualLinkOpen(false);
+    setLinkSearch("");
+  };
+
+
     const { data } = await supabase
       .from('youtube_video_comments')
       .select('*')
