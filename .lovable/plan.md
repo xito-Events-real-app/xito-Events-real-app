@@ -1,94 +1,49 @@
 
 
-# Event Info Card — Between Player and Playlist Sidebar
+# Event Info Card Fixes — White Theme, Video-Only Files, Smart Filtering
 
-## Layout Change
+## Changes to `src/components/suite/YouTubeDashboard.tsx`
 
-The current layout is:
-- Left column: `flex-1` with `max-w-[900px]` player inside
-- Right column: `w-[480px]` sidebar
+### 1. Remove Photographers section
+Delete the entire photographers block (lines ~1264-1279). Remove `photographers` from the state type and the fetch logic (remove `photographer_bride`, `photographer_groom`, `extra_photographer` from the query). Remove the `Camera` import if unused elsewhere.
 
-The player and sidebar sizes stay exactly the same. The only change is wrapping the player row in a `flex` container so the Event Info Card sits in the gap to the right of the player, matching its height.
+### 2. White background theme
+Change the card background from `bg-gradient-to-br from-slate-800 to-slate-900` to `bg-white border border-gray-200 shadow-sm`. Update all text colors:
+- Labels: `text-gray-500` instead of `text-slate-500`
+- Values: `text-gray-900` instead of `text-white`
+- Bride pill: `text-pink-600 hover:text-pink-500` instead of `text-pink-400`
+- Groom pill: `text-cyan-600 hover:text-cyan-500` instead of `text-cyan-400`
+- Videographer pills: `bg-blue-100 text-blue-700 hover:bg-blue-200`
+- Device badges: `bg-gray-100 text-gray-700`
+- Date icon: `text-teal-600`, date text: `text-gray-700`
+- GB text: `text-emerald-600`
 
+### 3. Video-only file size
+In the `files_management` query, add a filter for video-related `freelancer_type` codes only. Add `.in('freelancer_type', ['VB', 'VG', 'EV', 'IP', 'DR', 'FP'])` to exclude photo file rows from the size calculation.
+
+### 4. Smart filtering for client names (bride/groom)
+When clicking bride or groom name, instead of searching the exact full name in video titles (which won't match), look up the `clients_cache` `client_name` for this `registered_date_time_ad` and use the **client name** as the search query. Video titles typically contain the client name (e.g., "Madhav x Urmila"), not the full bride/groom name. So we search by the client's last name or the client_name field.
+
+Implementation: Store `clientName` in `eventCardData` (from `trackerInfo.client_name`). When bride/groom is clicked, call `handleNameFilter(eventCardData.clientName)` instead of the bride/groom full name. This surfaces all videos for that client.
+
+### 5. Smart filtering for videographer names
+When clicking a videographer name like "Barun", we need to find all clients where Barun shot video, then filter the sidebar to show those clients' videos.
+
+Implementation:
+- When a videographer pill is clicked, query `freelancer_assignments` for all rows where this person appears in any videographer column (`videographer_bride`, `videographer_groom`, `extra_videographer`)
+- Collect all unique `client_name` values from those rows
+- Build a filter function that checks if any of those client names appear in the video title
+- Store this as a custom filter state (e.g., `freelancerFilter: { name: string; clientNames: string[] }`)
+- Modify `filteredRecentVideos` and `filteredPlaylists` to use this filter: check if any client name from the list appears in the video title (partial, case-insensitive match)
+- Show the filter badge as "🎥 Barun" with × to clear
+
+### 6. Filter badge update
+When `nameFilter` is set, show filter badge. When `freelancerFilter` is set, show "🎥 {name}" badge instead. Clearing either resets both.
+
+## Data Flow for Freelancer Filter
 ```text
-┌─────────────────────────────────────────────────────────────────────┐
-│ HEADER                                                              │
-├────────────────────────────────────────────────────┬────────────────┤
-│  ┌─ PLAYER (900px max) ─┬── EVENT INFO CARD ─────┐│ PLAYLIST (480) │
-│  │                      │ EVENT: BRIDE RECEPTION  ││                │
-│  │  YouTube Player      │ 👰 Madhav Wagle         ││ [Recent tab]   │
-│  │  (aspect-video)      │ 🤵 Urmila Bashyal       ││ [Playlist tab] │
-│  │  UNCHANGED           │ 📅 Falgun 12 / Mar 23   ││                │
-│  │                      │ 🎥 Barun, Jeewan        ││                │
-│  │                      │ 📷 Ram                   ││                │
-│  │                      │ 💾 300GB · MG LION       ││                │
-│  └──────────────────────┴─────────────────────────┘│                │
-│  Title + Timing grid + Send to Client               │                │
-│  Comments Section                                    │                │
-├──────────────────────────────────────────────────────┴────────────────┤
-│ UPLOAD BAR                                                            │
-└───────────────────────────────────────────────────────────────────────┘
+Click "Barun" → query freelancer_assignments WHERE videographer_bride/groom/extra = 'Barun'
+  → collect client_name set: ["Madhav x Urmila", "Ram x Sita", ...]
+  → filter sidebar: video.title.includes(clientName) for any clientName in set
 ```
-
-## File: `src/components/suite/YouTubeDashboard.tsx`
-
-### Change 1: Add state + useEffect for event card data
-
-New state:
-```ts
-const [eventCardData, setEventCardData] = useState<{
-  bride: string; groom: string;
-  eventName: string; eventDateBS: string; eventDateAD: string;
-  videographers: string[]; photographers: string[];
-  totalSizeGB: number; devices: { name: string; paths: string[] }[];
-} | null>(null);
-```
-
-New `useEffect` triggers when `trackerInfo?.registered_date_time_ad` changes. Runs 3 parallel queries:
-- `contact_details_cache` → bride/groom names
-- `freelancer_assignments` → filter by `registered_date_time_ad` + `event` = `trackerInfo.event_name` → extract videographer/photographer names
-- `files_management` → filter by `registered_date_time_ad` + `event_name` + `deleted_or_not=false` → SUM `size_gb`, collect device names + `final_generated_path` grouped by device
-
-Convert `trackerInfo.event_date_ad` to BS using `adToBS()`.
-
-### Change 2: Wrap player in a flex row
-
-Change the player area (line ~1097) from:
-```html
-<div className="w-full max-w-[900px] aspect-video bg-black ...">
-```
-to:
-```html
-<div className="flex gap-3 mb-3">
-  <div className="w-full max-w-[900px] aspect-video bg-black ...">
-    {/* player unchanged */}
-  </div>
-  {/* Event Info Card - fills remaining width, matches player height */}
-  {eventCardData && (
-    <div className="flex-1 min-w-[200px] bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-4 ...">
-      {/* card content */}
-    </div>
-  )}
-</div>
-```
-
-Player size and sidebar size are completely untouched.
-
-### Change 3: Event Info Card content
-
-A dark gradient card with rows:
-- **Event Name**: Bold uppercase text (e.g., "BRIDE RECEPTION")
-- **Bride/Groom**: Names as clickable cyan/pink pills → sets `searchQuery` to filter sidebar
-- **Date**: Formatted as "Falgun 12 / March 23, 2082" using `adToBS()`
-- **Videographers/Photographers**: Names as clickable blue pills → sets `searchQuery`
-- **RAW Files**: Total GB + device name badges. Hover shows `HoverCard` with full `final_generated_path` entries for that device
-
-### Change 4: Clickable name filtering
-
-Clicking any name pill calls `setSearchQuery(name)`. The sidebar already filters by `searchQuery`. No other changes needed — the existing search infrastructure handles it.
-
-### Imports to add
-- `HardDrive, Camera, Video, X` from `lucide-react`
-- `adToBS, nepaliMonthsEnglish` from `@/lib/nepali-date`
-- `HoverCard, HoverCardTrigger, HoverCardContent` from `@/components/ui/hover-card`
 
