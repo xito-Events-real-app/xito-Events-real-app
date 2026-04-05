@@ -19,6 +19,9 @@ export function BookingCalendarPopupProvider({ children }: { children: ReactNode
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      const p = window.location.pathname;
+      if (p.startsWith('/client-portal') || p.startsWith('/crew-schedule') || p.startsWith('/editor-portal') || p.startsWith('/client-form') || p.startsWith('/login')) return;
+
       if (e.key === "Escape" && isOpen) {
         close();
         return;
