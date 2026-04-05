@@ -1,70 +1,75 @@
 
 
-# XITO TRANSFER Module
+# Fix: Hide Admin-Only Features on Public Routes
 
-## What It Does
-A temporary transfer space for files (< 20MB), text notes, and URLs. Everything auto-deletes after 7 days. Items grouped by date (Today, Tomorrow, then "4 April 2026 / 22 Chaitra 2082" format). Accessible globally by pressing X twice.
+## Problem
+All admin features (SaugatSearch, FloatingXitoTransfer, FloatingBookingCalendar, FloatingBenzoKeep, FloatingYouTubePlayer, upload trackers, announcements) render globally — including on public routes like `/client-portal`, `/crew-schedule`, `/editor-portal`, and `/client-form`. This leaks internal data to external users.
 
-## Database
+## Solution
+Create a single wrapper component `AdminOnlyFeatures` that checks the current route path. If the route is public, it renders nothing. Otherwise it renders all admin-only floating components and trackers.
 
-### New table: `xito_transfers`
-```sql
-CREATE TABLE public.xito_transfers (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  created_at timestamptz DEFAULT now(),
-  transfer_type text NOT NULL DEFAULT 'note',  -- 'note' | 'file' | 'url'
-  title text NOT NULL DEFAULT '',
-  content text NOT NULL DEFAULT '',
-  file_url text NOT NULL DEFAULT '',
-  file_name text NOT NULL DEFAULT '',
-  file_size_bytes bigint NOT NULL DEFAULT 0,
-  mime_type text NOT NULL DEFAULT '',
-  url text NOT NULL DEFAULT '',              -- for URL type transfers
-  url_description text NOT NULL DEFAULT '',  -- optional label for the URL
-  expires_at timestamptz NOT NULL DEFAULT (now() + interval '7 days')
-);
--- Public RLS + Realtime enabled
+### Public route prefixes to block:
+- `/client-portal`
+- `/crew-schedule`
+- `/editor-portal`
+- `/client-form`
+- `/login`
+
+## Changes
+
+### 1. `src/App.tsx` — Extract admin features into gated wrapper
+
+Create an `AdminOnlyFeatures` component inside App.tsx (same pattern as `AuthenticatedStartupPopup`):
+
+```typescript
+function AdminOnlyFeatures() {
+  const { user } = useAuthContext();
+  const pathname = window.location.pathname;
+  const isPublicRoute = 
+    pathname.startsWith('/client-portal') || 
+    pathname.startsWith('/crew-schedule') || 
+    pathname.startsWith('/editor-portal') || 
+    pathname.startsWith('/client-form') ||
+    pathname.startsWith('/login');
+  
+  if (!user || isPublicRoute) return null;
+  
+  return (
+    <>
+      <WtnFilesAnnouncement />
+      <AuthenticatedStartupPopup />
+      <SaugatSearch />
+      <FloatingBookingCalendar />
+      <FloatingBenzoKeep />
+      <FloatingYouTubePlayer />
+      <FloatingXitoTransfer />
+      <UploadProgressTracker />
+      <PCloudUploadTracker />
+      <XitoUploadTracker />
+      <YouTubeUploadTracker />
+    </>
+  );
+}
 ```
 
-### New storage bucket: `xito-transfers` (public, 20MB limit enforced client-side)
+Replace the individual renders (lines 94–106) with a single `<AdminOnlyFeatures />`.
 
-### Cleanup Edge Function: `cleanup-xito-transfers`
-Same pattern as `cleanup-potential-deletes` — deletes expired rows + associated storage files.
+### 2. `src/contexts/SaugatSearchContext.tsx` — Disable keyboard listener on public routes
 
-## Three Transfer Types
+The double-space listener fires even without `SaugatSearch` rendered (context + listener are still active). Add a route check inside the keydown handler to skip on public routes.
 
-1. **Note** — title + text content
-2. **File** — upload file (< 20MB), stored in `xito-transfers` bucket
-3. **URL** — save a URL with optional description/label; rendered as clickable link with favicon preview
+### 3. `src/contexts/XitoTransferPopupContext.tsx` — Same fix
 
-## Module Registration
-`src/lib/suite-modules.ts` — add `xito-transfer` entry ABOVE `client-tracker` with `ArrowUpDown` icon, path `/xito-transfer`.
+The double-X listener also fires on public routes. Add the same public route guard inside the keydown handler.
 
-## New Page: `src/pages/XitoTransfer.tsx`
-- Top bar: icon + "XITO TRANSFER" + back
-- Three add buttons: Note, File, URL
-- Items grouped by date: **Today** / **Tomorrow** / formatted date headers
-- Each item shows: type icon, title, preview, time ago, days-remaining badge, delete
-- Files downloadable on click; URLs open in new tab
-- Desktop: sidebar with date list; Mobile: scrollable list
+### 4. `src/contexts/BookingCalendarPopupContext.tsx` — Check for similar shortcut
 
-## Double-X Global Shortcut
-**New context: `src/contexts/XitoTransferPopupContext.tsx`** — same pattern as `SaugatSearchContext` double-space, but listens for "x" key twice within 400ms.
+If it has a global keyboard shortcut, add the same guard.
 
-**New component: `src/components/shared/FloatingXitoTransfer.tsx`** — floating overlay with the full XITO TRANSFER UI.
-
-## Routing
-`src/App.tsx` — protected route `/xito-transfer`, provider + floating component added globally.
-
-## Files Summary
-
-| File | Action |
+| File | Change |
 |------|--------|
-| DB migration | Create `xito_transfers` table + `xito-transfers` bucket |
-| `src/lib/suite-modules.ts` | Add module above Client Tracker |
-| `src/pages/XitoTransfer.tsx` | Create — main page |
-| `src/contexts/XitoTransferPopupContext.tsx` | Create — double-X listener |
-| `src/components/shared/FloatingXitoTransfer.tsx` | Create — floating overlay |
-| `supabase/functions/cleanup-xito-transfers/index.ts` | Create — auto-delete expired |
-| `src/App.tsx` | Add route + provider + floating component |
+| `src/App.tsx` | Wrap admin-only components in route-gated wrapper |
+| `src/contexts/SaugatSearchContext.tsx` | Skip keydown on public routes |
+| `src/contexts/XitoTransferPopupContext.tsx` | Skip keydown on public routes |
+| `src/contexts/BookingCalendarPopupContext.tsx` | Skip keydown on public routes (if applicable) |
 
