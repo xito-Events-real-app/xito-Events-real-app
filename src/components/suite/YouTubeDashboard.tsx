@@ -724,38 +724,60 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
     loadComments(activeVideo.videoId);
   }, [activeVideo?.videoId]);
 
-  // Load tracker info for active video — match by youtube_link OR by title parsing
+  // Load tracker info for active video — match by youtube_link, upload session, OR title parsing
   useEffect(() => {
     if (!activeVideo) { setTrackerInfo(null); return; }
     findTrackerForVideo(activeVideo.videoId, activeVideo.title);
-  }, [activeVideo?.videoId, allTrackerRows]);
+  }, [activeVideo?.videoId, allTrackerRows, uploadSessionMappings]);
 
   const findTrackerForVideo = async (videoId: string, videoTitle: string) => {
-    // 1. Try direct youtube_link match
-    const directMatch = allTrackerRows.find(r => 
-      r.youtube_link && r.youtube_link.includes(videoId)
-    );
+    // 1. Exact video-id match against parsed IDs from youtube_link (not loose .includes)
+    const directMatch = allTrackerRows.find(r => {
+      const ids = extractAllVideoIds(r.youtube_link);
+      return ids.includes(videoId);
+    });
     if (directMatch) {
       setTrackerInfo(directMatch);
       return;
     }
 
-    // 2. Parse video title: pattern "BRIDE & GROOM EVENT TYPE || WEDDING TALES NEPAL"
+    // 2. Upload-session match: youtube_video_id -> tracker_row_id
+    const sessionMatch = uploadSessionMappings.find(s => s.youtube_video_id === videoId);
+    if (sessionMatch) {
+      if (sessionMatch.tracker_row_id) {
+        const trackerMatch = allTrackerRows.find(r => r.id === sessionMatch.tracker_row_id);
+        if (trackerMatch) {
+          setTrackerInfo(trackerMatch);
+          return;
+        }
+      }
+      // 3. Session fallback: match by client_name + event_name + edit_type
+      const metaMatch = allTrackerRows.find(r =>
+        r.client_name && r.event_name && r.edit_type &&
+        r.client_name.toLowerCase() === sessionMatch.client_name.toLowerCase() &&
+        r.event_name.toLowerCase() === sessionMatch.event_name.toLowerCase() &&
+        r.edit_type.toLowerCase() === sessionMatch.edit_type.toLowerCase()
+      );
+      if (metaMatch) {
+        setTrackerInfo(metaMatch);
+        return;
+      }
+    }
+
+    // 4. Legacy: Parse video title pattern "BRIDE & GROOM EVENT TYPE || WEDDING TALES NEPAL"
     const titlePart = videoTitle.split('||')[0]?.trim() || videoTitle;
     const ampersandMatch = titlePart.match(/^(.+?)\s*&\s*(.+?)(?:\s+(WEDDING|MEHNDI|RECEPTION|ENGAGEMENT|HALDI|SANGEET|SWAYAMBAR|BARATYATRA|VIDAI|JANTI|TIKA|MEHENDI|PRE[-\s]?WEDDING).*)$/i);
     
     if (ampersandMatch) {
       const name1 = ampersandMatch[1].trim().toUpperCase();
-      const name2 = ampersandMatch[2].trim().split(/\s+/)[0].toUpperCase(); // First word after &
+      const name2 = ampersandMatch[2].trim().split(/\s+/)[0].toUpperCase();
       
-      // Match against client_name in tracker (client_name usually contains both names)
       const nameMatch = allTrackerRows.find(r => {
         if (!r.client_name) return false;
         const cn = r.client_name.toUpperCase();
         return cn.includes(name1) && cn.includes(name2);
       });
       if (nameMatch) {
-        // Further narrow by edit_type if title contains HIGHLIGHTS/FULL VIDEO/TEASER/REEL
         const titleUpper = titlePart.toUpperCase();
         let typeFilter: string | null = null;
         if (titleUpper.includes('HIGHLIGHT')) typeFilter = 'Highlights';
@@ -763,7 +785,6 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
         else if (titleUpper.includes('TEASER')) typeFilter = 'Teaser';
         else if (titleUpper.includes('REEL')) typeFilter = 'Reel';
         
-        // Try to match with both name + event + type
         const eventWords = titlePart.toUpperCase().match(/(WEDDING|MEHNDI|RECEPTION|ENGAGEMENT|HALDI|SANGEET|SWAYAMBAR|BARATYATRA|VIDAI|JANTI|TIKA|MEHENDI|PRE[-\s]?WEDDING)/gi) || [];
         
         const bestMatch = allTrackerRows.find(r => {
