@@ -142,42 +142,61 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, free
   const [ytLinks, setYtLinks] = useState<Record<string, FloatingYouTubeVideo>>({});
   const { open: openFloatingPlayer } = useFloatingYouTubePlayer();
 
-  // Fetch YouTube links + tracker info for this client's events
+  const fetchYtLinks = useCallback(async () => {
+    if (!registeredDateTimeAD) return;
+    const { data } = await supabase
+      .from("video_edit_tracker")
+      .select("event_name, sub_event_name, edit_type, youtube_link, editor, colorist, edit_started_at, video_edit_status, updated_at, event_date_ad, stage_history")
+      .eq("registered_date_time_ad", registeredDateTimeAD)
+      .neq("youtube_link", "")
+      .eq("deleted", false);
+    if (!data) return;
+    const map: Record<string, FloatingYouTubeVideo> = {};
+    for (const row of data) {
+      const eventKey = (row.event_name || "").trim().toUpperCase();
+      const isFullVideo = (row.edit_type || "").toUpperCase().includes("FULL");
+      const link = row.youtube_link || "";
+      const vidMatch = link.match(/(?:youtu\.be\/|v=|\/embed\/)([a-zA-Z0-9_-]{11})/);
+      if (!vidMatch) continue;
+      if (!map[eventKey] || isFullVideo) {
+        map[eventKey] = {
+          videoId: vidMatch[1],
+          title: `${row.event_name || ""} ${row.edit_type || ""}`.trim(),
+          editor: row.editor || undefined,
+          colorist: row.colorist || undefined,
+          editStartedAt: row.edit_started_at || undefined,
+          videoEditStatus: row.video_edit_status || undefined,
+          updatedAt: row.updated_at || undefined,
+          eventDateAD: row.event_date_ad || undefined,
+          editType: row.edit_type || undefined,
+          stageHistory: row.stage_history || undefined,
+        };
+      }
+    }
+    setYtLinks(map);
+  }, [registeredDateTimeAD]);
+
+  // Fetch YouTube links + run background sync for missing links
   useEffect(() => {
     if (!registeredDateTimeAD) return;
-    (async () => {
-      const { data } = await supabase
+    fetchYtLinks().then(async () => {
+      // Check if any EXPORTED+ rows are missing youtube_link — if so, run background sync
+      const { data: allRows } = await supabase
         .from("video_edit_tracker")
-        .select("event_name, sub_event_name, edit_type, youtube_link, editor, colorist, edit_started_at, video_edit_status, updated_at, event_date_ad, stage_history")
+        .select("video_edit_status, youtube_link")
         .eq("registered_date_time_ad", registeredDateTimeAD)
-        .neq("youtube_link", "")
         .eq("deleted", false);
-      if (!data) return;
-      const map: Record<string, FloatingYouTubeVideo> = {};
-      for (const row of data) {
-        const eventKey = (row.event_name || "").trim().toUpperCase();
-        const isFullVideo = (row.edit_type || "").toUpperCase().includes("FULL");
-        const link = row.youtube_link || "";
-        const vidMatch = link.match(/(?:youtu\.be\/|v=|\/embed\/)([a-zA-Z0-9_-]{11})/);
-        if (!vidMatch) continue;
-        if (!map[eventKey] || isFullVideo) {
-          map[eventKey] = {
-            videoId: vidMatch[1],
-            title: `${row.event_name || ""} ${row.edit_type || ""}`.trim(),
-            editor: row.editor || undefined,
-            colorist: row.colorist || undefined,
-            editStartedAt: row.edit_started_at || undefined,
-            videoEditStatus: row.video_edit_status || undefined,
-            updatedAt: row.updated_at || undefined,
-            eventDateAD: row.event_date_ad || undefined,
-            editType: row.edit_type || undefined,
-            stageHistory: row.stage_history || undefined,
-          };
-        }
+      if (!allRows) return;
+      const SYNC_STAGES = ["EXPORTED", "CLIENT_REVIEW", "RE_EDIT_ON_PROGRESS", "FINALIZED"];
+      const needsSync = allRows.some(r =>
+        SYNC_STAGES.includes((r.video_edit_status || "").toUpperCase()) && !r.youtube_link
+      );
+      if (needsSync) {
+        const updated = await syncYouTubeLinksForClient(registeredDateTimeAD);
+        if (updated > 0) fetchYtLinks(); // Re-fetch to show newly synced icons
       }
-      setYtLinks(map);
-    })();
-  }, [registeredDateTimeAD]);
+    });
+  }, [registeredDateTimeAD, fetchYtLinks]);
 
   if (isLoading) {
     return (
