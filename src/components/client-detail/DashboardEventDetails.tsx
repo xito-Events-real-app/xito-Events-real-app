@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { MapPin, ExternalLink, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { EventDetailsData, EventDetail } from "@/hooks/useEventDetails";
