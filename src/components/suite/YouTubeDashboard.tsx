@@ -401,6 +401,11 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
   const [manualLinkOpen, setManualLinkOpen] = useState(false);
   const [linkSearch, setLinkSearch] = useState("");
 
+  // Send to client dialog
+  const [sendToClientOpen, setSendToClientOpen] = useState(false);
+  const [sendRecipients, setSendRecipients] = useState<{ label: string; phone: string }[]>([]);
+  const [loadingSendContacts, setLoadingSendContacts] = useState(false);
+
   // Player
   const playerRef = useRef<any>(null);
   const playerContainerRef = useRef<HTMLDivElement>(null);
