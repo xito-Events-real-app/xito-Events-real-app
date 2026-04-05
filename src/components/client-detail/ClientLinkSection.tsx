@@ -47,20 +47,23 @@ const ClientLinkSection = ({
   useEffect(() => {
     if (!showSendDialog || contactData) return;
     setLoadingContacts(true);
-    supabase
-      .from('contact_details_cache')
-      .select('bride_full_name, bride_whatsapp_number, groom_full_name, groom_whatsapp_number')
-      .eq('registered_date_time_ad', registeredDateTimeAD)
-      .single()
-      .then(({ data }) => {
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('contact_details_cache')
+          .select('bride_full_name, bride_whatsapp_number, groom_full_name, groom_whatsapp_number')
+          .eq('registered_date_time_ad', registeredDateTimeAD)
+          .single();
         setContactData({
           brideFullName: data?.bride_full_name || '',
           brideWhatsapp: data?.bride_whatsapp_number || '',
           groomFullName: data?.groom_full_name || '',
           groomWhatsapp: data?.groom_whatsapp_number || '',
         });
-      })
-      .finally(() => setLoadingContacts(false));
+      } finally {
+        setLoadingContacts(false);
+      }
+    })();
   }, [showSendDialog, registeredDateTimeAD, contactData]);
 
   const recipients = [
