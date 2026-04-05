@@ -490,14 +490,31 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
     })();
   }, [trackerInfo?.registered_date_time_ad, trackerInfo?.event_name]);
 
-  const handleNameFilter = useCallback((name: string) => {
-    setSearchQuery(name);
-    setNameFilter(name);
+  const handleClientFilter = useCallback((clientName: string) => {
+    setFreelancerFilter(null);
+    setSearchQuery(clientName);
+    setNameFilter(clientName);
   }, []);
 
-  const clearNameFilter = useCallback(() => {
+  const handleFreelancerFilter = useCallback(async (name: string) => {
+    try {
+      const { data } = await supabase.from('freelancer_assignments')
+        .select('client_name')
+        .or(`videographer_bride.eq.${name},videographer_groom.eq.${name},extra_videographer.eq.${name}`);
+      const clientNames = [...new Set((data || []).map(r => r.client_name).filter(Boolean) as string[])];
+      setNameFilter("");
+      setSearchQuery("");
+      setFreelancerFilter({ name, clientNames });
+    } catch {
+      setSearchQuery(name);
+      setNameFilter(name);
+    }
+  }, []);
+
+  const clearAllFilters = useCallback(() => {
     setSearchQuery("");
     setNameFilter("");
+    setFreelancerFilter(null);
   }, []);
 
   // Player
