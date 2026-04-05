@@ -341,6 +341,10 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
   // Video tracker details
   const [trackerInfo, setTrackerInfo] = useState<TrackerRow | null>(null);
 
+  // Manual link dialog
+  const [manualLinkOpen, setManualLinkOpen] = useState(false);
+  const [linkSearch, setLinkSearch] = useState("");
+
   // Player
   const playerRef = useRef<any>(null);
   const playerContainerRef = useRef<HTMLDivElement>(null);
