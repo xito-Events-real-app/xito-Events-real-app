@@ -142,17 +142,24 @@ function computeEditorBreakdown(
 }
 
 export interface VideoEditTimings {
-  editLabTime: string | null;        // EDIT_LAB → EDIT_ON_PROGRESS
-  editTime: string | null;           // EDIT_ON_PROGRESS → COLOR_QUEUE/EXPORT_QUEUE
+  editLabTime: string | null;
+  editLabTimeOld: string | null;
+  editTime: string | null;
+  editTimeOld: string | null;
   editTimeBreakdown: EditorBreakdown[] | null;
-  colorQueueTime: string | null;     // COLOR_QUEUE → COLOR_ON_PROGRESS
-  colorTime: string | null;          // COLOR_ON_PROGRESS → EXPORT_QUEUE
-  exportQueueTime: string | null;    // EXPORT_QUEUE → EXPORTED
-  exportedTime: string | null;       // EXPORTED → CLIENT_REVIEW/FINALIZED
-  clientReviewTime: string | null;   // CLIENT_REVIEW → next stage
+  colorQueueTime: string | null;
+  colorQueueTimeOld: string | null;
+  colorTime: string | null;
+  colorTimeOld: string | null;
+  exportQueueTime: string | null;
+  exportQueueTimeOld: string | null;
+  exportedTime: string | null;
+  exportedTimeOld: string | null;
+  clientReviewTime: string | null;
+  clientReviewTimeOld: string | null;
   reEdit: boolean;
-  reEditTime: string | null;         // RE_EDIT_ON_PROGRESS duration
-  finalizedTime: string | null;      // "Xd ago"
+  reEditTime: string | null;
+  finalizedTime: string | null;
   totalTime: string | null;
   actualTime: string | null;
   pausedTime: string | null;
@@ -166,15 +173,36 @@ export function computeVideoEditTimings(
   const entries = parseStageHistory(stageHistory);
   const now = new Date();
 
-  const editLab = findFirst(entries, "EDIT_LAB");
-  const editStart = findFirst(entries, "EDIT_ON_PROGRESS");
-  const colorQueue = findFirst(entries, "COLOR_QUEUE");
-  const colorStart = findFirst(entries, "COLOR_ON_PROGRESS");
-  const exportQueue = findFirst(entries, "EXPORT_QUEUE");
-  const exported = findFirst(entries, "EXPORTED");
+  // Use findLast for current cycle, findFirst for old cycle
+  const editLabLast = findLast(entries, "EDIT_LAB");
+  const editLabFirst = findFirst(entries, "EDIT_LAB");
+  const editStartLast = findLast(entries, "EDIT_ON_PROGRESS");
+  const editStartFirst = findFirst(entries, "EDIT_ON_PROGRESS");
+  const colorQueueLast = findLast(entries, "COLOR_QUEUE");
+  const colorQueueFirst = findFirst(entries, "COLOR_QUEUE");
+  const colorStartLast = findLast(entries, "COLOR_ON_PROGRESS");
+  const colorStartFirst = findFirst(entries, "COLOR_ON_PROGRESS");
+  const exportQueueLast = findLast(entries, "EXPORT_QUEUE");
+  const exportQueueFirst = findFirst(entries, "EXPORT_QUEUE");
+  const exportedLast = findLast(entries, "EXPORTED");
+  const exportedFirst = findFirst(entries, "EXPORTED");
   const finalized = findLast(entries, "FINALIZED");
-  const clientReview = findLast(entries, "CLIENT_REVIEW");
-  const reEditStart = findFirst(entries, "RE_EDIT_ON_PROGRESS");
+  const clientReviewLast = findLast(entries, "CLIENT_REVIEW");
+  const clientReviewFirst = findFirst(entries, "CLIENT_REVIEW");
+  const reEditStart = findLast(entries, "RE_EDIT_ON_PROGRESS");
+
+  // Alias current cycle
+  const editLab = editLabLast;
+  const editStart = editStartLast;
+  const colorQueue = colorQueueLast;
+  const colorStart = colorStartLast;
+  const exportQueue = exportQueueLast;
+  const exported = exportedLast;
+  const clientReview = clientReviewLast;
+
+  // Helper: has multiple cycles?
+  const hasCycles = (first: Date | null, last: Date | null) =>
+    first && last && first.getTime() !== last.getTime();
   const afterReview = findFirstOfAny(
     entries.filter((e) => clientReview && e.date > clientReview),
     ["RE_EDIT_ON_PROGRESS", "RE_EDIT_QUEUE", "FINALIZED"]
@@ -195,16 +223,23 @@ export function computeVideoEditTimings(
 
   // Edit Lab Time: EDIT_LAB → EDIT_ON_PROGRESS
   const editLabTime = fmt(editLab, editStart, "EDIT_LAB");
+  const editLabTimeOld = hasCycles(editLabFirst, editLabLast)
+    ? fmt(editLabFirst, editStartFirst, "EDIT_LAB") : null;
 
   // Edit Time: EDIT_ON_PROGRESS → COLOR_QUEUE (or EXPORT_QUEUE if no color)
   let editTime: string | null = null;
+  let editTimeOld: string | null = null;
   if (editStart) {
-    const editEnd = colorQueue || exportQueue;
-    if (editEnd) {
-      editTime = formatDuration(editEnd.getTime() - editStart.getTime());
+    const editEndCalc = colorQueue || exportQueue;
+    if (editEndCalc) {
+      editTime = formatDuration(editEndCalc.getTime() - editStart.getTime());
     } else if (currentStatus === "EDIT_ON_PROGRESS") {
       editTime = formatDuration(now.getTime() - editStart.getTime()) + " (ongoing)";
     }
+  }
+  if (hasCycles(editStartFirst, editStartLast) && editStartFirst) {
+    const oldEnd = colorQueueFirst || exportQueueFirst;
+    if (oldEnd) editTimeOld = formatDuration(oldEnd.getTime() - editStartFirst.getTime());
   }
 
   // Per-editor breakdown
@@ -213,9 +248,12 @@ export function computeVideoEditTimings(
 
   // Color Queue Time: COLOR_QUEUE → COLOR_ON_PROGRESS
   const colorQueueTime = fmt(colorQueue, colorStart, "COLOR_QUEUE");
+  const colorQueueTimeOld = hasCycles(colorQueueFirst, colorQueueLast)
+    ? fmt(colorQueueFirst, colorStartFirst, "COLOR_QUEUE") : null;
 
   // Color Time: COLOR_ON_PROGRESS → EXPORT_QUEUE
   let colorTime: string | null = null;
+  let colorTimeOld: string | null = null;
   if (colorStart) {
     if (exportQueue) {
       colorTime = formatDuration(exportQueue.getTime() - colorStart.getTime());
@@ -223,12 +261,18 @@ export function computeVideoEditTimings(
       colorTime = formatDuration(now.getTime() - colorStart.getTime()) + " (ongoing)";
     }
   }
+  if (hasCycles(colorStartFirst, colorStartLast) && colorStartFirst && exportQueueFirst) {
+    colorTimeOld = formatDuration(exportQueueFirst.getTime() - colorStartFirst.getTime());
+  }
 
   // Export Queue Time: EXPORT_QUEUE → EXPORTED
   const exportQueueTime = fmt(exportQueue, exported, "EXPORT_QUEUE");
+  const exportQueueTimeOld = hasCycles(exportQueueFirst, exportQueueLast)
+    ? fmt(exportQueueFirst, exportedFirst, "EXPORT_QUEUE") : null;
 
   // Exported Time: EXPORTED → CLIENT_REVIEW or FINALIZED
   let exportedTime: string | null = null;
+  let exportedTimeOld: string | null = null;
   if (exported) {
     const expEnd = clientReview || finalized;
     if (expEnd) {
@@ -237,15 +281,27 @@ export function computeVideoEditTimings(
       exportedTime = formatDuration(now.getTime() - exported.getTime()) + " (ongoing)";
     }
   }
+  if (hasCycles(exportedFirst, exportedLast) && exportedFirst) {
+    const oldExpEnd = clientReviewFirst || finalized;
+    if (oldExpEnd) exportedTimeOld = formatDuration(oldExpEnd.getTime() - exportedFirst.getTime());
+  }
 
   // Client Review Time
   let clientReviewTime: string | null = null;
+  let clientReviewTimeOld: string | null = null;
   if (clientReview) {
     const reviewEnd = afterReview || (currentStatus === "CLIENT_REVIEW" ? now : null);
     if (reviewEnd) {
       clientReviewTime = formatDuration(reviewEnd.getTime() - clientReview.getTime());
       if (!afterReview) clientReviewTime += " (ongoing)";
     }
+  }
+  if (hasCycles(clientReviewFirst, clientReviewLast) && clientReviewFirst) {
+    const oldAfterReview = findFirstOfAny(
+      entries.filter((e) => clientReviewFirst && e.date > clientReviewFirst),
+      ["RE_EDIT_ON_PROGRESS", "RE_EDIT_QUEUE", "FINALIZED"]
+    );
+    if (oldAfterReview) clientReviewTimeOld = formatDuration(oldAfterReview.getTime() - clientReviewFirst.getTime());
   }
 
   // Re-edit
@@ -299,13 +355,20 @@ export function computeVideoEditTimings(
 
   return {
     editLabTime,
+    editLabTimeOld,
     editTime,
+    editTimeOld,
     editTimeBreakdown,
     colorQueueTime,
+    colorQueueTimeOld,
     colorTime,
+    colorTimeOld,
     exportQueueTime,
+    exportQueueTimeOld,
     exportedTime,
+    exportedTimeOld,
     clientReviewTime,
+    clientReviewTimeOld,
     reEdit,
     reEditTime,
     finalizedTime,
