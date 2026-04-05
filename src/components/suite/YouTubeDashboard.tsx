@@ -497,7 +497,7 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
     try {
       const { data: trackerRows } = await supabase
         .from("video_edit_tracker")
-        .select("id, client_name, event_name, edit_type, editor, colorist, video_edit_status, edit_started_at, event_date_ad, stage_history, updated_at, youtube_link, created_at")
+        .select("id, client_name, event_name, edit_type, editor, colorist, video_edit_status, edit_started_at, event_date_ad, stage_history, updated_at, youtube_link, created_at, registered_date_time_ad")
         .neq("youtube_link", "")
         .eq("deleted", false)
         .order("updated_at", { ascending: false })
