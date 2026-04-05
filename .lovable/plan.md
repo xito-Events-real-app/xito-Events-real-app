@@ -1,59 +1,62 @@
 
 
-# Fix YouTube Dashboard: Bride/Groom Name Priority in Suggestions + Timing Display
+# Add "Send to Client" Button in YouTube Dashboard Timing Section
 
-## Problems Identified
+## What We're Building
+A "Send to Client" button at the end of the timing/metadata grid that opens a dialog showing all WhatsApp numbers associated with the client (bride, groom, main contact). Clicking a recipient auto-generates a context-aware WhatsApp message about the new video, including the client portal link.
 
-1. **Manual link suggestions don't prioritize bride/groom names** - Currently matches generic title words against `client_name` and `event_name`, but doesn't fetch or use bride/groom names from `contact_details_cache` for better matching.
+## Message Logic
+The message is dynamically generated based on the video title:
+- Extracts **event name** (e.g., "BRIDE RECEPTION") and **edit type** (Full Video / Highlights / Reel / Teaser) from the video title (text before `||`)
+- Includes the client portal link for all photos/videos
+- Warns the client this is for review purposes
 
-2. **Timings not showing for linked videos** - The `handleManualLink` function sets `trackerInfo` to the original `row` object before the `youtube_link` update, but the `stage_history` field on that row object is correct. The real issue is that timings only display when the `stage_history` has the right entries. For newly linked videos that actually went through the pipeline, the `stage_history` should already have the data. Need to verify the row passed has `stage_history` populated.
+Example message:
+> Hello 👋  
+> Greetings from Wedding Tales Nepal 💍✨  
+>  
+> Your **Bride Reception Full Video** has been uploaded! 🎬  
+> Please check and let us know if any changes are needed.  
+>  
+> 👉 View all your photos & videos here:  
+> https://business.xitoevents.com/client-portal/...  
+>  
+> ⚠️ Please do not share this video publicly until finalized.  
+>  
+> Warm regards, Wedding Tales Nepal
 
-3. **Editor change time tracking** - When the editor field changes, there's no record of who edited what and for how long. Need to append editor change entries to `stage_history`.
+## File to Modify
+**`src/components/suite/YouTubeDashboard.tsx`** only
 
-4. **Timing definitions need clarification in code** - The user's definitions match what exists but the labels in the YouTube dashboard could be clearer.
+### Change 1: Add state for send dialog
+- `const [sendToClientOpen, setSendToClientOpen] = useState(false)`
 
-## Changes
+### Change 2: Add "Send to Client" button after the timing grid (after line ~1213)
+- A small emerald button with MessageCircle icon: "Send to Client"
+- Only visible when `trackerInfo` exists (we need `registered_date_time_ad` to look up contacts and generate portal link)
 
-### File 1: `src/components/suite/YouTubeDashboard.tsx`
+### Change 3: Fetch contact details when dialog opens
+- Query `contact_details_cache` by `trackerInfo.registered_date_time_ad` to get bride/groom names and WhatsApp numbers
+- Also use `clients_cache` for main contact/WhatsApp numbers
+- Build recipients list: `[{label: "Bride Name (WhatsApp)", phone}, {label: "Groom Name (WhatsApp)", phone}, {label: "Client (Contact)", phone}]`
 
-**Change A: Load bride/groom names for better suggestions**
-- On `loadStats`, also fetch `contact_details_cache` (bride_full_name, groom_full_name, registered_date_time_ad)
-- Store in a state/ref as a map: `registeredDateTimeAD -> { bride, groom }`
-- In `manualLinkSuggestions`, when scoring tracker rows, also check if the bride/groom names from `contact_details_cache` match title words
-- Give bride/groom name matches a higher score (e.g., +5 per match) so they appear first
-- Display bride & groom names in the suggestion row when available
+### Change 4: Generate context-aware message
+- Parse the video title (before `||`) to extract event name and edit type keywords (Full Video, Highlights, Reel, Teaser)
+- Build a WhatsApp message mentioning the specific video type and event
+- Append the client portal URL using `getClientPortalUrl(registeredDateTimeAD, clientName)`
 
-**Change B: Fix handleManualLink to pass the full updated row**
-- After updating the DB, set `trackerInfo` with the updated `youtube_link` field so subsequent lookups work
-- The row already contains `stage_history` from `allTrackerRows`, so timings should compute. Verify the `TrackerRow` interface includes `stage_history` (it does, line 64).
+### Change 5: Render the send dialog
+- Dialog with recipient list (same pattern as `ClientLinkSection`)
+- Each recipient row shows name, phone, and a WhatsApp icon
+- Clicking opens `wa.me` with the pre-filled message
 
-**Change C: Show "Time till Export" label instead of "Total Time"**
-- Rename "Total Time" to "Time till Export" in the timing display grid for clarity
-
-### File 2: `src/lib/video-edit-api.ts`
-
-**Change D: Record editor changes in stage_history**
-- In `updateVideoEditField`, when `field === 'editor'`, fetch current `stage_history` and `editor`, then append `EDITOR_CHANGED_FROM_{old}_TO_{new} [ISO_DATE]` to `stage_history`
-- This preserves a record of who worked on the video and when the handoff happened
-
-### File 3: `src/lib/video-edit-time-utils.ts`
-
-**Change E: Add "Time till Export" timing (rename totalTime)**
-- The existing `totalTime` (EDIT_ON_PROGRESS → EXPORT_QUEUE) already matches "time till export" - just keep as is, the label change is in the dashboard UI
-
-**Change F: Parse EDITOR_CHANGED entries for per-editor time calculation**
-- Add optional `editorTimings` to the return: parse EDITOR_CHANGED entries from stage_history to calculate how long each editor worked
-- This is for future display; the core timing computation stays the same
-
-## Technical Details
-
-- `contact_details_cache` query: `SELECT registered_date_time_ad, bride_full_name, groom_full_name FROM contact_details_cache`
-- Join to tracker rows via `registered_date_time_ad`
-- Bride/groom name matching: extract first significant word from each name, match against video title words
-- Editor change history format: `EDITOR_CHANGED_FROM_BARUN_TO_SAUGAT [2026-04-05T10:30:00.000Z]`
-
-## Files to Modify
-1. `src/components/suite/YouTubeDashboard.tsx` - Suggestions priority + timing labels
-2. `src/lib/video-edit-api.ts` - Editor change tracking in stage_history
-3. `src/lib/video-edit-time-utils.ts` - Parse editor change entries (optional enhancement)
+## Data Flow
+```text
+trackerInfo.registered_date_time_ad
+  → contact_details_cache (bride/groom names + WhatsApp numbers)
+  → clients_cache (main contact + WhatsApp)
+  → Build recipients list
+  → Generate message from video title + portal URL
+  → Open wa.me link
+```
 
