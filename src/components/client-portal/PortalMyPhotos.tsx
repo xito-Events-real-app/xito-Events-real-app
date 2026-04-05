@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback, memo } from "react";
-import { Loader2, Image as ImageIcon, FolderOpen, Download, Cloud } from "lucide-react";
+import { Loader2, Image as ImageIcon, FolderOpen, Download } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { listE2Folder, getE2FileUrls, E2File } from "@/lib/idrive-e2-api";
 import { cacheUrls } from "@/lib/shared-url-cache";
