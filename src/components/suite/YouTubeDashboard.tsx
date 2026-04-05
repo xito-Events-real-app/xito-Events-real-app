@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { ArrowLeft, Youtube, Search, Upload, ChevronDown, ChevronRight, Send, Loader2, Play, Clock, User, Palette, Calendar, Activity, Globe, RefreshCw, CheckCircle2, Eye, Link2, AlertTriangle, MessageCircle, HardDrive, Camera, Video, X } from "lucide-react";
+import { ArrowLeft, Youtube, Search, Upload, ChevronDown, ChevronRight, Send, Loader2, Play, Clock, User, Palette, Calendar, Activity, Globe, RefreshCw, CheckCircle2, Eye, Link2, AlertTriangle, MessageCircle, HardDrive, Video, X } from "lucide-react";
 import { adToBS, nepaliMonthsEnglish } from "@/lib/nepali-date";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
