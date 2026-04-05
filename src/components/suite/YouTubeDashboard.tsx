@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { ArrowLeft, Youtube, Search, Upload, ChevronDown, ChevronRight, Send, Loader2, Play, Clock, User, Palette, Calendar, Activity, Globe, RefreshCw, CheckCircle2, Eye } from "lucide-react";
+import { ArrowLeft, Youtube, Search, Upload, ChevronDown, ChevronRight, Send, Loader2, Play, Clock, User, Palette, Calendar, Activity, Globe, RefreshCw, CheckCircle2, Eye, Link2, AlertTriangle } from "lucide-react";
 import { computeVideoEditTimings } from "@/lib/video-edit-time-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useYouTubeUploadContext } from "@/contexts/YouTubeUploadContext";
 import { YouTubeUploadDialog } from "./YouTubeUploadDialog";
@@ -339,6 +340,10 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
 
   // Video tracker details
   const [trackerInfo, setTrackerInfo] = useState<TrackerRow | null>(null);
+
+  // Manual link dialog
+  const [manualLinkOpen, setManualLinkOpen] = useState(false);
+  const [linkSearch, setLinkSearch] = useState("");
 
   // Player
   const playerRef = useRef<any>(null);
@@ -806,6 +811,72 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
     setTrackerInfo(null);
   };
 
+  // Manual link: compute suggestions from video title
+  const manualLinkSuggestions = useMemo(() => {
+    if (!activeVideo || !manualLinkOpen) return [];
+    const titlePart = activeVideo.title.split('||')[0]?.trim() || activeVideo.title;
+    const titleWords = titlePart
+      .replace(/[^a-zA-Z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(w => w.length >= 3)
+      .map(w => w.toUpperCase());
+
+    const searchUpper = linkSearch.trim().toUpperCase();
+
+    // Score each tracker row
+    const scored = allTrackerRows
+      .filter(r => r.client_name || r.event_name)
+      .map(r => {
+        const cn = (r.client_name || '').toUpperCase();
+        const en = (r.event_name || '').toUpperCase();
+        const et = (r.edit_type || '').toUpperCase();
+        const combined = `${cn} ${en} ${et}`;
+
+        // Title word matches
+        let titleScore = 0;
+        for (const w of titleWords) {
+          if (combined.includes(w)) titleScore++;
+        }
+
+        // Search filter
+        if (searchUpper && !combined.includes(searchUpper)) return null;
+
+        return { row: r, titleScore };
+      })
+      .filter((x): x is { row: TrackerRow; titleScore: number } => x !== null);
+
+    // Sort: title matches first, then alphabetically
+    scored.sort((a, b) => {
+      if (b.titleScore !== a.titleScore) return b.titleScore - a.titleScore;
+      return (a.row.client_name || '').localeCompare(b.row.client_name || '');
+    });
+
+    // Only show rows with title matches or search matches, limit to 30
+    if (!searchUpper) {
+      return scored.filter(s => s.titleScore > 0).slice(0, 30).map(s => s.row);
+    }
+    return scored.slice(0, 30).map(s => s.row);
+  }, [activeVideo, manualLinkOpen, linkSearch, allTrackerRows]);
+
+  // Handle manual linking
+  const handleManualLink = async (row: TrackerRow) => {
+    if (!activeVideo) return;
+    const videoUrl = `https://youtu.be/${activeVideo.videoId}`;
+    const existingLink = (row.youtube_link || '').trim();
+    const newLink = existingLink ? `${existingLink}, ${videoUrl}` : videoUrl;
+
+    await supabase
+      .from('video_edit_tracker')
+      .update({ youtube_link: newLink })
+      .eq('id', row.id);
+
+    // Update local state immediately
+    setAllTrackerRows(prev => prev.map(r => r.id === row.id ? { ...r, youtube_link: newLink } : r));
+    setTrackerInfo(row);
+    setManualLinkOpen(false);
+    setLinkSearch("");
+  };
+
   const loadComments = async (videoId: string) => {
     const { data } = await supabase
       .from('youtube_video_comments')
@@ -1049,8 +1120,78 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                     </div>
                   );
                 })()}
+
+                {/* Fallback: no tracker info found */}
+                {!trackerInfo && activeVideo && (
+                  <div className="mt-3 flex items-center gap-3 p-3 rounded-lg bg-amber-50 border border-amber-200">
+                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span className="text-xs font-semibold text-amber-700">EDITING DETAILS NOT FOUND</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="ml-auto h-7 text-xs gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-100"
+                      onClick={() => { setManualLinkOpen(true); setLinkSearch(""); }}
+                    >
+                      <Link2 className="w-3.5 h-3.5" />
+                      Link Video Edit Tracker
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
+
+            {/* Manual Link Dialog */}
+            <Dialog open={manualLinkOpen} onOpenChange={(o) => { setManualLinkOpen(o); if (!o) setLinkSearch(""); }}>
+              <DialogContent className="max-w-lg max-h-[80vh] flex flex-col">
+                <DialogHeader>
+                  <DialogTitle className="text-sm">Link to Video Edit Tracker</DialogTitle>
+                </DialogHeader>
+                <p className="text-xs text-muted-foreground -mt-1 truncate">
+                  {activeVideo?.title}
+                </p>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by client name..."
+                    value={linkSearch}
+                    onChange={(e) => setLinkSearch(e.target.value)}
+                    className="pl-8 h-9 text-xs"
+                    autoFocus
+                  />
+                </div>
+                <div className="flex-1 overflow-y-auto space-y-1 min-h-[200px] max-h-[400px]">
+                  {manualLinkSuggestions.length === 0 && (
+                    <p className="text-xs text-muted-foreground text-center py-8">
+                      {linkSearch ? "No matching tracker rows found" : "Type to search or suggestions will appear from video title"}
+                    </p>
+                  )}
+                  {manualLinkSuggestions.map(row => (
+                    <button
+                      key={row.id}
+                      onClick={() => handleManualLink(row)}
+                      className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-accent transition-colors border border-transparent hover:border-border"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-foreground truncate">{row.client_name || 'Unknown'}</span>
+                        <span className="text-[10px] text-muted-foreground">·</span>
+                        <span className="text-xs text-muted-foreground truncate">{row.event_name || '-'}</span>
+                        {row.edit_type && (
+                          <>
+                            <span className="text-[10px] text-muted-foreground">·</span>
+                            <span className="text-xs text-muted-foreground">{row.edit_type}</span>
+                          </>
+                        )}
+                        {row.video_edit_status && (
+                          <Badge className={cn("text-[9px] font-semibold px-1.5 py-0 border-0 ml-auto shrink-0", STAGE_COLORS[row.video_edit_status] || "bg-gray-200 text-gray-600")}>
+                            {row.video_edit_status.replace(/_/g, ' ')}
+                          </Badge>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </DialogContent>
+            </Dialog>
 
             {/* Comments Section */}
             {activeVideo && (
