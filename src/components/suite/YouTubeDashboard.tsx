@@ -901,7 +901,7 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
 
     // Update local state immediately
     setAllTrackerRows(prev => prev.map(r => r.id === row.id ? { ...r, youtube_link: newLink } : r));
-    setTrackerInfo(row);
+    setTrackerInfo({ ...row, youtube_link: newLink });
     setManualLinkOpen(false);
     setLinkSearch("");
   };
