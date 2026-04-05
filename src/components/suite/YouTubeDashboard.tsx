@@ -399,6 +399,18 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
     }
   }, [open]);
 
+  // Re-load tracker rows when an upload job completes
+  const prevCompletedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!open) return;
+    const completedIds = new Set<string>(jobs.filter(j => j.status === 'completed').map(j => j.id));
+    const newlyCompleted = Array.from(completedIds).filter(id => !prevCompletedRef.current.has(id));
+    prevCompletedRef.current = completedIds;
+    if (newlyCompleted.length > 0) {
+      loadStats();
+    }
+  }, [open, jobs]);
+
   // Load data on open — show cache first, then call YouTube API only if cache is stale (>30 min)
   useEffect(() => {
     if (!open) return;
