@@ -87,7 +87,7 @@ export function getClientFormUrl(registeredDateTimeAD: string, clientName?: stri
   const nameSlug = clientName ? slugifyName(clientName) : 'client';
   // Temporarily using main app URL until custom domain is active
   // TODO: Switch back to https://forms.bookedclientscontactdetails.chickenkiller.com once domain is verified
-  return `https://busines.xitoevents.com/client-form/${nameSlug}/${encodedId}`;
+  return `https://business.xitoevents.com/client-form/${nameSlug}/${encodedId}`;
 }
 
 // Generate WhatsApp message with form link
