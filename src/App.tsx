@@ -109,19 +109,9 @@ const App = () => (
           <BrowserRouter>
            <FloatingYouTubePlayerProvider>
             <AuthProvider>
-              <WtnFilesAnnouncement />
-              <AuthenticatedStartupPopup />
-              <SaugatSearch />
-              <FloatingBookingCalendar />
-              <FloatingBenzoKeep />
-               <FloatingYouTubePlayer />
-               <FloatingXitoTransfer />
+              <AdminOnlyFeatures />
               <Toaster />
               <Sonner />
-              <UploadProgressTracker />
-               <PCloudUploadTracker />
-              <XitoUploadTracker />
-              <YouTubeUploadTracker />
             <Routes>
               {/* Public routes - no auth required */}
               <Route path="/client-form/:clientName/:clientId" element={<ClientContactForm />} />
