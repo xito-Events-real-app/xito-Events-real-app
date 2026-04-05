@@ -286,6 +286,13 @@ export function FloatingYouTubePlayer() {
                 </span>
               </div>
             )}
+            {timings.exportedTime && (
+              <div className="flex items-center gap-1.5">
+                <Upload className="w-3 h-3 text-cyan-400" />
+                <span className="text-[10px] text-white/40">Export</span>
+                <span className="text-[11px] font-semibold text-white/90">{timings.exportedTime}</span>
+              </div>
+            )}
             {timings.finalizedTime && (
               <div className="flex items-center gap-1.5">
                 <CheckCircle2 className="w-3 h-3 text-emerald-400" />
