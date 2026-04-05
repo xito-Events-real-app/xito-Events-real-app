@@ -247,7 +247,7 @@ export function YouTubeUploadProvider({ children }: { children: React.ReactNode 
           .select('youtube_link')
           .eq('id', job.trackerRowId)
           .maybeSingle();
-        const currentLinks = existing?.youtube_link || '';
+        const currentLinks = (existing?.youtube_link || '').replace(/,\s*$/, '').trim();
         const newLink = currentLinks ? `${currentLinks},${youtubeUrl}` : youtubeUrl;
         await supabase
           .from('video_edit_tracker')
