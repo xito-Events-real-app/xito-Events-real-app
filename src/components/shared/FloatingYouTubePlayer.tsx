@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { X, GripHorizontal, Maximize2, Minimize2, User, Palette, Clock, Calendar, Activity, CheckCircle2, Eye } from "lucide-react";
+import { X, GripHorizontal, Maximize2, Minimize2, User, Palette, Clock, Calendar, Activity, CheckCircle2, Eye, Upload } from "lucide-react";
 import { useFloatingYouTubePlayer } from "@/contexts/FloatingYouTubePlayerContext";
 import { useNavigate } from "react-router-dom";
 import { computeVideoEditTimings } from "@/lib/video-edit-time-utils";
@@ -284,6 +284,13 @@ export function FloatingYouTubePlayer() {
                   {timings.actualTime}
                   {timings.pausedTime && <span className="text-white/30"> ({timings.pausedTime} paused)</span>}
                 </span>
+              </div>
+            )}
+            {timings.exportedTime && (
+              <div className="flex items-center gap-1.5">
+                <Upload className="w-3 h-3 text-cyan-400" />
+                <span className="text-[10px] text-white/40">Export</span>
+                <span className="text-[11px] font-semibold text-white/90">{timings.exportedTime}</span>
               </div>
             )}
             {timings.finalizedTime && (
