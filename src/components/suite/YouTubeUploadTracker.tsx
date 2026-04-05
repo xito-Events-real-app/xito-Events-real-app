@@ -106,19 +106,22 @@ function RemoteJobCard({ session }: { session: RemoteYTSession }) {
 export function YouTubeUploadTracker() {
   const { jobs, remoteJobs, activeCount, clearCompleted, expanded, setExpanded } = useYouTubeUploadContext();
   const [collapsed, setCollapsed] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
 
   // Show remote sessions that aren't already tracked locally
   const localDbIds = new Set(jobs.map(j => j.sessionDbId));
   const remoteOnly = remoteJobs.filter(r => !localDbIds.has(r.id));
 
-  const totalItems = jobs.length + remoteOnly.length;
-  if (totalItems === 0 || dismissed) return null;
+  // Filter out remote sessions that were already dismissed (persisted)
+  const dismissedIds: string[] = JSON.parse(localStorage.getItem('yt_dismissed_sessions') || '[]');
+  const remoteVisible = remoteOnly.filter(r => !dismissedIds.includes(r.id));
 
-  const hasActive = activeCount > 0 || remoteOnly.some(r => r.status === 'uploading' || r.status === 'pending');
+  const totalItems = jobs.length + remoteVisible.length;
+  if (totalItems === 0) return null;
 
-  // Reset dismissed when new uploads start
-  if (hasActive && dismissed) setDismissed(false);
+  const hasActive = activeCount > 0 || remoteVisible.some(r => r.status === 'uploading' || r.status === 'pending');
+
+  // If no active uploads and no local jobs, nothing to show
+  if (!hasActive && jobs.length === 0 && remoteVisible.length === 0) return null;
 
   const handleDismiss = () => {
     clearCompleted();
