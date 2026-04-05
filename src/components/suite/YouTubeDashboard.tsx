@@ -403,8 +403,8 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
   const prevCompletedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!open) return;
-    const completedIds = new Set(jobs.filter(j => j.status === 'completed').map(j => j.id));
-    const newlyCompleted = [...completedIds].filter(id => !prevCompletedRef.current.has(id));
+    const completedIds = new Set<string>(jobs.filter(j => j.status === 'completed').map(j => j.id));
+    const newlyCompleted = Array.from(completedIds).filter(id => !prevCompletedRef.current.has(id));
     prevCompletedRef.current = completedIds;
     if (newlyCompleted.length > 0) {
       loadStats();
