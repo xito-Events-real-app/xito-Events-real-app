@@ -1,9 +1,10 @@
-import { useState } from "react";
-import { ExternalLink, Copy, Send, Check, MessageCircle, Smartphone, Monitor } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ExternalLink, Copy, Send, Check, MessageCircle, Smartphone, Monitor, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getClientPortalUrl, generatePortalWhatsAppMessage } from "@/lib/client-contact-api";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
 interface ClientLinkSectionProps {
@@ -11,10 +12,10 @@ interface ClientLinkSectionProps {
   clientName: string;
   contactNo: string;
   whatsappNo: string;
-  brideFullName: string;
-  brideWhatsapp: string;
-  groomFullName: string;
-  groomWhatsapp: string;
+  brideFullName?: string;
+  brideWhatsapp?: string;
+  groomFullName?: string;
+  groomWhatsapp?: string;
 }
 
 const ClientLinkSection = ({
@@ -22,14 +23,15 @@ const ClientLinkSection = ({
   clientName,
   contactNo,
   whatsappNo,
-  brideFullName,
-  brideWhatsapp,
-  groomFullName,
-  groomWhatsapp,
 }: ClientLinkSectionProps) => {
   const [copied, setCopied] = useState(false);
   const [showSendDialog, setShowSendDialog] = useState(false);
   const [viewMode, setViewMode] = useState<'phone' | 'desktop'>('phone');
+  const [contactData, setContactData] = useState<{
+    brideFullName: string; brideWhatsapp: string;
+    groomFullName: string; groomWhatsapp: string;
+  } | null>(null);
+  const [loadingContacts, setLoadingContacts] = useState(false);
 
   const portalUrl = getClientPortalUrl(registeredDateTimeAD, clientName);
   const message = generatePortalWhatsAppMessage(registeredDateTimeAD, clientName);
@@ -41,11 +43,34 @@ const ClientLinkSection = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Fetch contact details when send dialog opens
+  useEffect(() => {
+    if (!showSendDialog || contactData) return;
+    setLoadingContacts(true);
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('contact_details_cache')
+          .select('bride_full_name, bride_whatsapp_number, groom_full_name, groom_whatsapp_number')
+          .eq('registered_date_time_ad', registeredDateTimeAD)
+          .single();
+        setContactData({
+          brideFullName: data?.bride_full_name || '',
+          brideWhatsapp: data?.bride_whatsapp_number || '',
+          groomFullName: data?.groom_full_name || '',
+          groomWhatsapp: data?.groom_whatsapp_number || '',
+        });
+      } finally {
+        setLoadingContacts(false);
+      }
+    })();
+  }, [showSendDialog, registeredDateTimeAD, contactData]);
+
   const recipients = [
     { label: `${clientName} (Contact)`, phone: contactNo },
     { label: `${clientName} (WhatsApp)`, phone: whatsappNo },
-    { label: `${brideFullName || 'Bride'} (WhatsApp)`, phone: brideWhatsapp },
-    { label: `${groomFullName || 'Groom'} (WhatsApp)`, phone: groomWhatsapp },
+    { label: `${contactData?.brideFullName || 'Bride'} (WhatsApp)`, phone: contactData?.brideWhatsapp || '' },
+    { label: `${contactData?.groomFullName || 'Groom'} (WhatsApp)`, phone: contactData?.groomWhatsapp || '' },
   ].filter(r => r.phone);
 
   const sendToWhatsApp = (phone: string) => {
@@ -144,7 +169,12 @@ const ClientLinkSection = ({
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-2 py-2">
-            {recipients.length === 0 ? (
+            {loadingContacts ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-white/40" />
+                <span className="ml-2 text-sm text-white/40">Loading contacts...</span>
+              </div>
+            ) : recipients.length === 0 ? (
               <p className="text-sm text-white/40 text-center py-4">No contact numbers available</p>
             ) : (
               recipients.map((r, i) => (
