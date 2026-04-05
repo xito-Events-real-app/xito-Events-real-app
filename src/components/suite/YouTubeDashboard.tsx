@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { ArrowLeft, Youtube, Search, Upload, ChevronDown, ChevronRight, Send, Loader2, Play, Clock, User, Palette, Calendar, Activity, Globe, RefreshCw, CheckCircle2, Eye, Link2, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Youtube, Search, Upload, ChevronDown, ChevronRight, Send, Loader2, Play, Clock, User, Palette, Calendar, Activity, Globe, RefreshCw, CheckCircle2, Eye, Link2, AlertTriangle, MessageCircle } from "lucide-react";
 import { computeVideoEditTimings } from "@/lib/video-edit-time-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { getClientPortalUrl } from "@/lib/client-contact-api";
 import { useYouTubeUploadContext } from "@/contexts/YouTubeUploadContext";
 import { YouTubeUploadDialog } from "./YouTubeUploadDialog";
 
@@ -400,6 +401,11 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
   // Manual link dialog
   const [manualLinkOpen, setManualLinkOpen] = useState(false);
   const [linkSearch, setLinkSearch] = useState("");
+
+  // Send to client dialog
+  const [sendToClientOpen, setSendToClientOpen] = useState(false);
+  const [sendRecipients, setSendRecipients] = useState<{ label: string; phone: string }[]>([]);
+  const [loadingSendContacts, setLoadingSendContacts] = useState(false);
 
   // Player
   const playerRef = useRef<any>(null);
@@ -1210,6 +1216,37 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                           <span className="font-semibold text-gray-800">{trackerInfo.edit_type}</span>
                         </div>
                       )}
+                      {/* Send to Client button */}
+                      <div className="col-span-full pt-1">
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                          onClick={async () => {
+                            setSendToClientOpen(true);
+                            setLoadingSendContacts(true);
+                            try {
+                              const regId = trackerInfo.registered_date_time_ad;
+                              if (!regId) { setLoadingSendContacts(false); return; }
+                              const [contactRes, clientRes] = await Promise.all([
+                                supabase.from('contact_details_cache').select('bride_full_name, bride_whatsapp_number, groom_full_name, groom_whatsapp_number').eq('registered_date_time_ad', regId).maybeSingle(),
+                                supabase.from('clients_cache').select('client_name, contact_no, whatsapp_no').eq('registered_date_time_ad', regId).eq('sheet_source', 'booked').maybeSingle(),
+                              ]);
+                              const list: { label: string; phone: string }[] = [];
+                              const cd = contactRes.data;
+                              const cl = clientRes.data;
+                              if (cd?.bride_whatsapp_number) list.push({ label: `${cd.bride_full_name || 'Bride'} (WhatsApp)`, phone: cd.bride_whatsapp_number });
+                              if (cd?.groom_whatsapp_number) list.push({ label: `${cd.groom_full_name || 'Groom'} (WhatsApp)`, phone: cd.groom_whatsapp_number });
+                              if (cl?.whatsapp_no) list.push({ label: `${cl.client_name || 'Client'} (WhatsApp)`, phone: cl.whatsapp_no });
+                              if (cl?.contact_no && cl.contact_no !== cl?.whatsapp_no) list.push({ label: `${cl.client_name || 'Client'} (Contact)`, phone: cl.contact_no });
+                              setSendRecipients(list);
+                            } catch { setSendRecipients([]); }
+                            setLoadingSendContacts(false);
+                          }}
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                          Send to Client
+                        </Button>
+                      </div>
                     </div>
                   );
                 })()}
@@ -1288,6 +1325,62 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                       )}
                     </button>
                   ))}
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Send to Client Dialog */}
+            <Dialog open={sendToClientOpen} onOpenChange={setSendToClientOpen}>
+              <DialogContent className="max-w-sm">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-sm">
+                    <MessageCircle className="h-5 w-5 text-emerald-500" />
+                    Send Video Link to Client
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-2 py-2">
+                  {loadingSendContacts ? (
+                    <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+                  ) : sendRecipients.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">No contact numbers available</p>
+                  ) : (
+                    sendRecipients.map((r, i) => {
+                      const handleSendWa = () => {
+                        const title = activeVideo?.title || '';
+                        const titleBeforePipe = title.split('||')[0].trim();
+                        const titleLower = titleBeforePipe.toLowerCase();
+                        let editType = 'Video';
+                        if (titleLower.includes('full video') || titleLower.includes('full film')) editType = 'Full Video';
+                        else if (titleLower.includes('highlight')) editType = 'Highlights';
+                        else if (titleLower.includes('reel')) editType = 'Reel';
+                        else if (titleLower.includes('teaser')) editType = 'Teaser';
+                        else if (trackerInfo?.edit_type) editType = trackerInfo.edit_type;
+                        const eventName = trackerInfo?.event_name || titleBeforePipe.replace(/full video|highlights|highlight|reel|teaser|full film/gi, '').replace(/[-|]/g, ' ').replace(/\s+/g, ' ').trim() || 'Wedding';
+                        const portalUrl = trackerInfo?.registered_date_time_ad
+                          ? getClientPortalUrl(trackerInfo.registered_date_time_ad, trackerInfo.client_name || undefined)
+                          : '';
+                        const msg = `Hello 👋\nGreetings from Wedding Tales Nepal 💍✨\n\nYour *${eventName} ${editType}* has been uploaded! 🎬\nPlease check and let us know if any changes are needed.\n\n👉 View all your photos & videos here:\n${portalUrl}\n\n⚠️ Please do not share this video publicly until finalized.\n\nWarm regards,\nWedding Tales Nepal\n📞 Contact: 9705255025 / 9749494560 / 9847335279`;
+                        const cleaned = r.phone.replace(/[^\d+]/g, '').replace(/^\+/, '');
+                        window.open(`https://wa.me/${cleaned}?text=${encodeURIComponent(msg)}`, '_blank');
+                        setSendToClientOpen(false);
+                      };
+                      return (
+                        <button
+                          key={i}
+                          onClick={handleSendWa}
+                          className="w-full flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border hover:bg-emerald-50 hover:border-emerald-300 transition-all text-left"
+                        >
+                          <div className="p-2 rounded-full bg-emerald-100">
+                            <MessageCircle className="h-4 w-4 text-emerald-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-foreground truncate">{r.label}</p>
+                            <p className="text-xs text-muted-foreground">{r.phone}</p>
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
                 </div>
               </DialogContent>
             </Dialog>
