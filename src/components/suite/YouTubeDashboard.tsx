@@ -412,12 +412,13 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
 
   // Event Info Card data
   const [eventCardData, setEventCardData] = useState<{
-    bride: string; groom: string;
+    bride: string; groom: string; clientName: string;
     eventName: string; eventDateBS: string; eventDateAD: string;
-    videographers: string[]; photographers: string[];
+    videographers: string[];
     totalSizeGB: number; devices: { name: string; paths: string[] }[];
   } | null>(null);
   const [nameFilter, setNameFilter] = useState("");
+  const [freelancerFilter, setFreelancerFilter] = useState<{ name: string; clientNames: string[] } | null>(null);
 
   // Fetch event card data when trackerInfo changes
   useEffect(() => {
