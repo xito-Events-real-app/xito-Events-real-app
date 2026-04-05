@@ -326,9 +326,21 @@ const PortalMyPhotos = ({
                   if (isMobile) {
                     const webUrl = `https://my.pcloud.com/#page=filemanager&folder=${encodeURIComponent(folderPath)}`;
                     if (isAndroid) {
-                      // Android: use intent URL to open pCloud app, falls back to Play Store
-                      const intentUrl = `intent://folder?path=${encodeURIComponent(folderPath)}#Intent;scheme=pcloud;package=com.pcloud.pcloud;S.browser_fallback_url=${encodeURIComponent(webUrl)};end`;
-                      window.location.href = intentUrl;
+                      // Android: open pCloud app via hidden anchor with intent, fallback to web
+                      const appUrl = `pcloud://folder?path=${encodeURIComponent(folderPath)}`;
+                      const a = document.createElement("a");
+                      a.href = appUrl;
+                      a.style.display = "none";
+                      document.body.appendChild(a);
+                      a.click();
+                      const start = Date.now();
+                      const fallbackTimer = setTimeout(() => {
+                        if (Date.now() - start < 2500) {
+                          window.open(webUrl, '_blank');
+                        }
+                      }, 1500);
+                      window.addEventListener('blur', () => clearTimeout(fallbackTimer), { once: true });
+                      setTimeout(() => document.body.removeChild(a), 100);
                     } else {
                       // iOS: pcloud:// scheme with timeout fallback
                       const appUrl = `pcloud://folder?path=${encodeURIComponent(folderPath)}`;
