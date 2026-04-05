@@ -430,20 +430,18 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
       try {
         const [contactRes, crewRes, filesRes] = await Promise.all([
           supabase.from('contact_details_cache').select('bride_full_name, groom_full_name').eq('registered_date_time_ad', regId).maybeSingle(),
-          supabase.from('freelancer_assignments').select('videographer_bride, videographer_groom, photographer_bride, photographer_groom, extra_photographer, extra_videographer').eq('registered_date_time_ad', regId).eq('event', eventName || ''),
-          supabase.from('files_management').select('size_gb, backup_1_device_name, final_generated_path').eq('registered_date_time_ad', regId).eq('event_name', eventName || '').eq('deleted_or_not', false),
+          supabase.from('freelancer_assignments').select('videographer_bride, videographer_groom, extra_videographer').eq('registered_date_time_ad', regId).eq('event', eventName || ''),
+          supabase.from('files_management').select('size_gb, backup_1_device_name, final_generated_path').eq('registered_date_time_ad', regId).eq('event_name', eventName || '').eq('deleted_or_not', false).in('freelancer_type', ['VB', 'VG', 'EV', 'IP', 'DR', 'FP']),
         ]);
 
         const cd = contactRes.data;
         const crewRows = crewRes.data || [];
         const fileRows = filesRes.data || [];
 
-        // Extract unique crew names
+        // Extract unique videographer names only
         const vidSet = new Set<string>();
-        const photoSet = new Set<string>();
         for (const r of crewRows) {
           [r.videographer_bride, r.videographer_groom, r.extra_videographer].filter(Boolean).forEach(n => vidSet.add(n!.trim()));
-          [r.photographer_bride, r.photographer_groom, r.extra_photographer].filter(Boolean).forEach(n => photoSet.add(n!.trim()));
         }
 
         // Aggregate files
@@ -477,11 +475,11 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
         setEventCardData({
           bride: cd?.bride_full_name || '',
           groom: cd?.groom_full_name || '',
+          clientName: trackerInfo?.client_name || '',
           eventName: eventName || '',
           eventDateBS: bsStr,
           eventDateAD: adStr,
           videographers: Array.from(vidSet).filter(n => n.length > 0),
-          photographers: Array.from(photoSet).filter(n => n.length > 0),
           totalSizeGB: Math.round(totalSize * 10) / 10,
           devices: Array.from(deviceMap.entries()).map(([name, paths]) => ({ name, paths })),
         });
