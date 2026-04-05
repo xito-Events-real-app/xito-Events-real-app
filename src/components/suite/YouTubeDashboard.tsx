@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { getClientPortalUrl } from "@/lib/client-contact-api";
 import { useYouTubeUploadContext } from "@/contexts/YouTubeUploadContext";
 import { YouTubeUploadDialog } from "./YouTubeUploadDialog";
 
