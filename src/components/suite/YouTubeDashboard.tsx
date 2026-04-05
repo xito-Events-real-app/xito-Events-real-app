@@ -1329,6 +1329,62 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
               </DialogContent>
             </Dialog>
 
+            {/* Send to Client Dialog */}
+            <Dialog open={sendToClientOpen} onOpenChange={setSendToClientOpen}>
+              <DialogContent className="max-w-sm">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-sm">
+                    <MessageCircle className="h-5 w-5 text-emerald-500" />
+                    Send Video Link to Client
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-2 py-2">
+                  {loadingSendContacts ? (
+                    <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+                  ) : sendRecipients.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">No contact numbers available</p>
+                  ) : (
+                    sendRecipients.map((r, i) => {
+                      const handleSendWa = () => {
+                        const title = activeVideo?.title || '';
+                        const titleBeforePipe = title.split('||')[0].trim();
+                        const titleLower = titleBeforePipe.toLowerCase();
+                        let editType = 'Video';
+                        if (titleLower.includes('full video') || titleLower.includes('full film')) editType = 'Full Video';
+                        else if (titleLower.includes('highlight')) editType = 'Highlights';
+                        else if (titleLower.includes('reel')) editType = 'Reel';
+                        else if (titleLower.includes('teaser')) editType = 'Teaser';
+                        else if (trackerInfo?.edit_type) editType = trackerInfo.edit_type;
+                        const eventName = trackerInfo?.event_name || titleBeforePipe.replace(/full video|highlights|highlight|reel|teaser|full film/gi, '').replace(/[-|]/g, ' ').replace(/\s+/g, ' ').trim() || 'Wedding';
+                        const portalUrl = trackerInfo?.registered_date_time_ad
+                          ? getClientPortalUrl(trackerInfo.registered_date_time_ad, trackerInfo.client_name || undefined)
+                          : '';
+                        const msg = `Hello 👋\nGreetings from Wedding Tales Nepal 💍✨\n\nYour *${eventName} ${editType}* has been uploaded! 🎬\nPlease check and let us know if any changes are needed.\n\n👉 View all your photos & videos here:\n${portalUrl}\n\n⚠️ Please do not share this video publicly until finalized.\n\nWarm regards,\nWedding Tales Nepal\n📞 Contact: 9705255025 / 9749494560 / 9847335279`;
+                        const cleaned = r.phone.replace(/[^\d+]/g, '').replace(/^\+/, '');
+                        window.open(`https://wa.me/${cleaned}?text=${encodeURIComponent(msg)}`, '_blank');
+                        setSendToClientOpen(false);
+                      };
+                      return (
+                        <button
+                          key={i}
+                          onClick={handleSendWa}
+                          className="w-full flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border hover:bg-emerald-50 hover:border-emerald-300 transition-all text-left"
+                        >
+                          <div className="p-2 rounded-full bg-emerald-100">
+                            <MessageCircle className="h-4 w-4 text-emerald-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-foreground truncate">{r.label}</p>
+                            <p className="text-xs text-muted-foreground">{r.phone}</p>
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+
             {/* Comments Section */}
             {activeVideo && (
               <div className="max-w-[900px] flex-1 min-h-0 flex flex-col bg-gray-50 border border-gray-200 rounded-xl p-4">
