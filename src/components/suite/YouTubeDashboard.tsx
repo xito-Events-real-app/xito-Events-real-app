@@ -328,6 +328,9 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
   const [totalTrackerRows, setTotalTrackerRows] = useState(0);
   const [uploadedRows, setUploadedRows] = useState(0);
 
+  // Upload session mappings for robust video-to-tracker resolution
+  const [uploadSessionMappings, setUploadSessionMappings] = useState<UploadSessionMapping[]>([]);
+
   // Comments
   const [comments, setComments] = useState<VideoComment[]>([]);
   const [commentAuthor, setCommentAuthor] = useState("BENZO");
