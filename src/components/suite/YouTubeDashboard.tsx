@@ -849,10 +849,6 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
 
         // Bride/groom name matching (higher priority)
         let brideGroomScore = 0;
-        const contact = contactDetailsMap.get(r.id.includes('-') ? '' : '');
-        // Look up by registered_date_time_ad - need to find it from tracker row
-        // TrackerRow doesn't have registered_date_time_ad exposed, but allTrackerRows come from video_edit_tracker which has it
-        const rawRow = r as any;
         const regDate = rawRow.registered_date_time_ad || '';
         const contactInfo = contactDetailsMap.get(regDate);
         if (contactInfo) {
