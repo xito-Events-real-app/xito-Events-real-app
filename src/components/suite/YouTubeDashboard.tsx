@@ -1236,13 +1236,13 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                 )}
               </div>
 
-              {/* Event Info Card - fills gap */}
+              {/* Event Info Card - fills gap, white theme */}
               {eventCardData && activeVideo && (
-                <div className="flex-1 min-w-[220px] bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-4 flex flex-col gap-3 overflow-y-auto">
+                <div className="flex-1 min-w-[220px] bg-white border border-gray-200 shadow-sm rounded-xl p-4 flex flex-col gap-3 overflow-y-auto">
                   {/* Event Name */}
                   <div>
-                    <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Event</p>
-                    <p className="text-sm font-bold text-white uppercase tracking-wide">{eventCardData.eventName}</p>
+                    <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">Event</p>
+                    <p className="text-sm font-bold text-gray-900 uppercase tracking-wide">{eventCardData.eventName}</p>
                   </div>
 
                   {/* Bride & Groom */}
@@ -1251,7 +1251,7 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                       {eventCardData.bride && (
                         <div className="flex items-center gap-2">
                           <span className="text-xs">👰</span>
-                          <button onClick={() => handleNameFilter(eventCardData.bride)} className="text-xs font-semibold text-pink-400 hover:text-pink-300 hover:underline transition-colors truncate">
+                          <button onClick={() => handleClientFilter(eventCardData.clientName)} className="text-xs font-semibold text-pink-600 hover:text-pink-500 hover:underline transition-colors truncate">
                             {eventCardData.bride}
                           </button>
                         </div>
@@ -1259,7 +1259,7 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                       {eventCardData.groom && (
                         <div className="flex items-center gap-2">
                           <span className="text-xs">🤵</span>
-                          <button onClick={() => handleNameFilter(eventCardData.groom)} className="text-xs font-semibold text-cyan-400 hover:text-cyan-300 hover:underline transition-colors truncate">
+                          <button onClick={() => handleClientFilter(eventCardData.clientName)} className="text-xs font-semibold text-cyan-600 hover:text-cyan-500 hover:underline transition-colors truncate">
                             {eventCardData.groom}
                           </button>
                         </div>
@@ -1270,8 +1270,8 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                   {/* Date */}
                   {(eventCardData.eventDateBS || eventCardData.eventDateAD) && (
                     <div className="flex items-center gap-2">
-                      <Calendar className="w-3.5 h-3.5 text-teal-400 shrink-0" />
-                      <span className="text-xs text-slate-300">
+                      <Calendar className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                      <span className="text-xs text-gray-700">
                         {eventCardData.eventDateBS}{eventCardData.eventDateBS && eventCardData.eventDateAD && ' / '}{eventCardData.eventDateAD}
                       </span>
                     </div>
@@ -1281,12 +1281,12 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                   {eventCardData.videographers.length > 0 && (
                     <div>
                       <div className="flex items-center gap-1.5 mb-1">
-                        <Video className="w-3.5 h-3.5 text-blue-400" />
-                        <span className="text-[10px] text-slate-500 uppercase font-medium">Videographer</span>
+                        <Video className="w-3.5 h-3.5 text-blue-600" />
+                        <span className="text-[10px] text-gray-500 uppercase font-medium">Videographer</span>
                       </div>
                       <div className="flex flex-wrap gap-1">
                         {eventCardData.videographers.map(name => (
-                          <button key={name} onClick={() => handleNameFilter(name)} className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[11px] font-semibold hover:bg-blue-500/40 transition-colors">
+                          <button key={name} onClick={() => handleFreelancerFilter(name)} className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[11px] font-semibold hover:bg-blue-200 transition-colors">
                             {name}
                           </button>
                         ))}
@@ -1294,37 +1294,20 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                     </div>
                   )}
 
-                  {/* Photographers */}
-                  {eventCardData.photographers.length > 0 && (
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <Camera className="w-3.5 h-3.5 text-amber-400" />
-                        <span className="text-[10px] text-slate-500 uppercase font-medium">Photographer</span>
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {eventCardData.photographers.map(name => (
-                          <button key={name} onClick={() => handleNameFilter(name)} className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-semibold hover:bg-amber-500/40 transition-colors">
-                            {name}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* RAW Files */}
+                  {/* Video RAW Files */}
                   {eventCardData.devices.length > 0 && (
                     <div>
                       <div className="flex items-center gap-1.5 mb-1">
-                        <HardDrive className="w-3.5 h-3.5 text-emerald-400" />
-                        <span className="text-[10px] text-slate-500 uppercase font-medium">RAW Files</span>
-                        <span className="text-xs font-bold text-emerald-400 ml-auto">{eventCardData.totalSizeGB} GB</span>
+                        <HardDrive className="w-3.5 h-3.5 text-emerald-600" />
+                        <span className="text-[10px] text-gray-500 uppercase font-medium">Video Files</span>
+                        <span className="text-xs font-bold text-emerald-600 ml-auto">{eventCardData.totalSizeGB} GB</span>
                       </div>
                       <div className="flex flex-wrap gap-1">
                         <TooltipProvider delayDuration={200}>
                           {eventCardData.devices.map(dev => (
                             <Tooltip key={dev.name}>
                               <TooltipTrigger asChild>
-                                <span className="px-2 py-0.5 rounded bg-slate-700 text-slate-300 text-[11px] font-medium cursor-default">
+                                <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-[11px] font-medium cursor-default">
                                   {dev.name}
                                 </span>
                               </TooltipTrigger>
