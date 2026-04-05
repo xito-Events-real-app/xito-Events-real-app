@@ -185,7 +185,7 @@ export function YouTubeUploadTracker() {
         </div>
         <div className="flex-1 overflow-y-auto p-6 space-y-4 max-w-3xl mx-auto w-full">
           {jobs.map(job => <LocalJobCard key={job.id} job={job} />)}
-          {remoteOnly.map(s => <RemoteJobCard key={s.id} session={s} />)}
+          {remoteVisible.map(s => <RemoteJobCard key={s.id} session={s} />)}
         </div>
       </div>
     );
@@ -222,7 +222,7 @@ export function YouTubeUploadTracker() {
       </div>
       <div className="max-h-72 overflow-y-auto p-3 space-y-3">
         {jobs.map(job => <LocalJobCard key={job.id} job={job} />)}
-        {remoteOnly.map(s => <RemoteJobCard key={s.id} session={s} />)}
+        {remoteVisible.map(s => <RemoteJobCard key={s.id} session={s} />)}
       </div>
     </div>
   );
