@@ -307,6 +307,60 @@ const STAGE_COLORS: Record<string, string> = {
   FINALIZED: "bg-green-100 text-green-700",
 };
 
+function RunningTimeBadge({ stageHistory, currentStatus }: { stageHistory: string | null | undefined; currentStatus: string | null | undefined }) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (currentStatus === "FINALIZED") return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [currentStatus]);
+
+  const entries = useMemo(() => {
+    if (!stageHistory) return [];
+    return stageHistory.split("\n").map(l => l.trim()).filter(Boolean).map(line => {
+      const m = line.match(/^(.+?)\s+\[([^\]]+)\]$/);
+      if (!m) return null;
+      const d = new Date(m[2]);
+      return isNaN(d.getTime()) ? null : { status: m[1].trim(), date: d };
+    }).filter(Boolean) as { status: string; date: Date }[];
+  }, [stageHistory]);
+
+  const editStart = entries.find(e => e.status === "EDIT_ON_PROGRESS")?.date;
+  if (!editStart) return null;
+
+  const finalized = (() => {
+    for (let i = entries.length - 1; i >= 0; i--) {
+      if (entries[i].status === "FINALIZED") return entries[i].date;
+    }
+    return null;
+  })();
+
+  const end = finalized || new Date(now);
+  const ms = end.getTime() - editStart.getTime();
+  if (ms < 0) return null;
+
+  const hours = Math.floor(ms / 3600000);
+  const mins = Math.floor((ms % 3600000) / 60000);
+  const secs = Math.floor((ms % 60000) / 1000);
+
+  const isRunning = !finalized;
+  const display = hours >= 24
+    ? `${Math.floor(hours / 24)}d ${hours % 24}h ${mins}m`
+    : `${hours}h ${mins}m ${secs}s`;
+
+  return (
+    <span className={cn(
+      "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-mono font-bold shrink-0",
+      isRunning ? "bg-red-100 text-red-700 animate-pulse" : "bg-green-100 text-green-700"
+    )}>
+      <Clock className="w-3 h-3" />
+      {display}
+      {isRunning && <span className="w-1.5 h-1.5 rounded-full bg-red-500" />}
+    </span>
+  );
+}
+
 export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSeconds = 0 }: { open: boolean; onClose: () => void; initialVideoId?: string | null; initialStartSeconds?: number }) {
   const { jobs, activeCount } = useYouTubeUploadContext();
   const [playlists, setPlaylists] = useState<PlaylistWithVideos[]>([]);
@@ -1050,7 +1104,10 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
             {/* Video Details */}
             {activeVideo && (
               <div className="max-w-[900px] mb-4">
-                <h2 className="text-base font-bold text-gray-900 leading-tight">{activeVideo.title}</h2>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-base font-bold text-gray-900 leading-tight">{activeVideo.title}</h2>
+                  {trackerInfo && <RunningTimeBadge stageHistory={trackerInfo.stage_history} currentStatus={trackerInfo.video_edit_status} />}
+                </div>
                 {activeVideo.publishedAt && (
                   <div className="flex items-center gap-2 mt-1">
                     <Globe className="w-3.5 h-3.5 text-gray-400" />
