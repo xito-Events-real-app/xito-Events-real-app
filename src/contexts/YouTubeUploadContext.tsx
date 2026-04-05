@@ -303,6 +303,13 @@ export function YouTubeUploadProvider({ children }: { children: React.ReactNode 
       await handleUploadSuccess(job, check2.videoId);
       return true;
     }
+    // Retry 3: wait 10s (final attempt)
+    await new Promise(r => setTimeout(r, 10000));
+    const check3 = await checkUploadStatus(job.uploadUri, job.file.size);
+    if (check3.completed && check3.videoId) {
+      await handleUploadSuccess(job, check3.videoId);
+      return true;
+    }
     return false;
   };
 
@@ -384,7 +391,7 @@ export function YouTubeUploadProvider({ children }: { children: React.ReactNode 
       xhrRef.current.delete(job.id);
       if (!pausedRef.current.has(job.id) && !cancelledRef.current.has(job.id)) {
         // If nearly all bytes uploaded, check if YouTube actually received it
-        if (job.bytesUploaded >= job.file.size * 0.99) {
+        if (job.bytesUploaded >= job.file.size * 0.95) {
           console.warn("[YT-UPLOAD] Network error after 99%+ transfer, checking status...");
           updateJob(job.id, { status: 'uploading', error: undefined });
           const recovered = await retryStatusCheck(job);
