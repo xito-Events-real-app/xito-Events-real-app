@@ -1,50 +1,59 @@
 
 
-# Add "Link to Video Edit Tracker" Fallback for Unmatched YouTube Videos
+# Fix YouTube Dashboard: Bride/Groom Name Priority in Suggestions + Timing Display
 
-## Problem
-Old videos like "SIMRAN's BRIDE RECEPTION HIGHLIGHTS || WEDDING TALES NEPAL" or custom-titled videos have no linked tracker row, so the metadata section (editor, timings, event age) is completely blank with no way to fix it.
+## Problems Identified
 
-## Solution
-When `trackerInfo` is null, show an "EDITING DETAILS NOT FOUND" state with a "Link Video Edit Tracker" button. This button opens a popup that:
-1. Auto-suggests tracker rows by matching words from the video title against client names (bride/groom from `contact_details_cache`) and event names
-2. Allows searching by client name
-3. Shows each suggestion as: client name, event name, edit type, status
-4. On selection, writes the YouTube video ID into that tracker row's `youtube_link` field, immediately showing the details
+1. **Manual link suggestions don't prioritize bride/groom names** - Currently matches generic title words against `client_name` and `event_name`, but doesn't fetch or use bride/groom names from `contact_details_cache` for better matching.
 
-## File to Modify
-**`src/components/suite/YouTubeDashboard.tsx`** only
+2. **Timings not showing for linked videos** - The `handleManualLink` function sets `trackerInfo` to the original `row` object before the `youtube_link` update, but the `stage_history` field on that row object is correct. The real issue is that timings only display when the `stage_history` has the right entries. For newly linked videos that actually went through the pipeline, the `stage_history` should already have the data. Need to verify the row passed has `stage_history` populated.
 
-### Change 1: Add a `manualLinkOpen` state and search state
-- `const [manualLinkOpen, setManualLinkOpen] = useState(false)`
-- `const [linkSearch, setLinkSearch] = useState("")`
+3. **Editor change time tracking** - When the editor field changes, there's no record of who edited what and for how long. Need to append editor change entries to `stage_history`.
 
-### Change 2: Build suggestion logic
-- When the popup opens, compute suggestions from `allTrackerRows`:
-  - Extract significant words (≥3 chars) from the video title (before `||`)
-  - Match against `client_name` and `event_name` fields
-  - Also allow free-text search by `client_name`
-- Show results as a list: **Client Name** · Event Name · Edit Type · Status badge
+4. **Timing definitions need clarification in code** - The user's definitions match what exists but the labels in the YouTube dashboard could be clearer.
 
-### Change 3: Replace the empty space where `trackerInfo` would be (after line ~1051)
-When `!trackerInfo && activeVideo`:
-- Show a styled "EDITING DETAILS NOT FOUND" message
-- Show a "Link Video Edit Tracker" button that opens the popup dialog
+## Changes
 
-### Change 4: Handle selection
-- On selecting a tracker row, update `video_edit_tracker.youtube_link` by appending the current video URL
-- Set `trackerInfo` to the selected row so details appear immediately
-- Close the dialog
+### File 1: `src/components/suite/YouTubeDashboard.tsx`
 
-### Change 5: The popup UI
-- Dialog with search input at top
-- Auto-populated suggestions below (title-word matches first, then search results)
-- Each row shows: client name, event name, edit type, status badge
-- Clicking a row links the video and closes
+**Change A: Load bride/groom names for better suggestions**
+- On `loadStats`, also fetch `contact_details_cache` (bride_full_name, groom_full_name, registered_date_time_ad)
+- Store in a state/ref as a map: `registeredDateTimeAD -> { bride, groom }`
+- In `manualLinkSuggestions`, when scoring tracker rows, also check if the bride/groom names from `contact_details_cache` match title words
+- Give bride/groom name matches a higher score (e.g., +5 per match) so they appear first
+- Display bride & groom names in the suggestion row when available
 
-## Expected Result
-- For any video without auto-matched details, user sees "EDITING DETAILS NOT FOUND" + a link button
-- Clicking it shows matching tracker rows based on video title words and allows searching
-- After selection, details (editor, colorist, timings, event age, type) appear immediately
-- Future plays of this video will auto-match via `youtube_link`
+**Change B: Fix handleManualLink to pass the full updated row**
+- After updating the DB, set `trackerInfo` with the updated `youtube_link` field so subsequent lookups work
+- The row already contains `stage_history` from `allTrackerRows`, so timings should compute. Verify the `TrackerRow` interface includes `stage_history` (it does, line 64).
+
+**Change C: Show "Time till Export" label instead of "Total Time"**
+- Rename "Total Time" to "Time till Export" in the timing display grid for clarity
+
+### File 2: `src/lib/video-edit-api.ts`
+
+**Change D: Record editor changes in stage_history**
+- In `updateVideoEditField`, when `field === 'editor'`, fetch current `stage_history` and `editor`, then append `EDITOR_CHANGED_FROM_{old}_TO_{new} [ISO_DATE]` to `stage_history`
+- This preserves a record of who worked on the video and when the handoff happened
+
+### File 3: `src/lib/video-edit-time-utils.ts`
+
+**Change E: Add "Time till Export" timing (rename totalTime)**
+- The existing `totalTime` (EDIT_ON_PROGRESS → EXPORT_QUEUE) already matches "time till export" - just keep as is, the label change is in the dashboard UI
+
+**Change F: Parse EDITOR_CHANGED entries for per-editor time calculation**
+- Add optional `editorTimings` to the return: parse EDITOR_CHANGED entries from stage_history to calculate how long each editor worked
+- This is for future display; the core timing computation stays the same
+
+## Technical Details
+
+- `contact_details_cache` query: `SELECT registered_date_time_ad, bride_full_name, groom_full_name FROM contact_details_cache`
+- Join to tracker rows via `registered_date_time_ad`
+- Bride/groom name matching: extract first significant word from each name, match against video title words
+- Editor change history format: `EDITOR_CHANGED_FROM_BARUN_TO_SAUGAT [2026-04-05T10:30:00.000Z]`
+
+## Files to Modify
+1. `src/components/suite/YouTubeDashboard.tsx` - Suggestions priority + timing labels
+2. `src/lib/video-edit-api.ts` - Editor change tracking in stage_history
+3. `src/lib/video-edit-time-utils.ts` - Parse editor change entries (optional enhancement)
 
