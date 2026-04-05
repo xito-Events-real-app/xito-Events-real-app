@@ -77,6 +77,23 @@ const YouTubeUploadContext = createContext<YouTubeUploadContextType>({
 
 export const useYouTubeUploadContext = () => useContext(YouTubeUploadContext);
 
+/** Invalidate all YouTube-related localStorage caches */
+function invalidateYTCache(playlistId?: string) {
+  try {
+    // Clear recent cache
+    localStorage.removeItem("yt_cache_recent");
+    localStorage.removeItem("yt_cache_recent_ts");
+    // Clear playlists cache
+    localStorage.removeItem("yt_cache_playlists");
+    localStorage.removeItem("yt_cache_playlists_ts");
+    // Clear specific playlist video cache
+    if (playlistId) {
+      localStorage.removeItem(`yt_cache_plvids_${playlistId}`);
+      localStorage.removeItem(`yt_cache_plvids_ts_${playlistId}`);
+    }
+  } catch {}
+}
+
 export function YouTubeUploadProvider({ children }: { children: React.ReactNode }) {
   const [jobs, setJobs] = useState<YouTubeUploadJob[]>([]);
   const [remoteJobs, setRemoteJobs] = useState<RemoteYTSession[]>([]);
@@ -84,6 +101,8 @@ export function YouTubeUploadProvider({ children }: { children: React.ReactNode 
   const pausedRef = useRef<Set<string>>(new Set());
   const cancelledRef = useRef<Set<string>>(new Set());
   const xhrRef = useRef<Map<string, XMLHttpRequest>>(new Map());
+  // Dedup guard: track recent startUpload calls
+  const startingRef = useRef<Map<string, number>>(new Map());
 
   // Subscribe to realtime updates from youtube_upload_sessions
   useEffect(() => {
@@ -210,28 +229,39 @@ export function YouTubeUploadProvider({ children }: { children: React.ReactNode 
     xhr.onload = async () => {
       xhrRef.current.delete(job.id);
       if (xhr.status >= 200 && xhr.status < 300) {
+        let videoId = '';
+        let youtubeUrl = '';
+
+        // Step 1: Parse response — this is the critical part
         try {
           const result = JSON.parse(xhr.responseText);
-          const videoId = result.id;
-          const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+          videoId = result.id;
+          youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        } catch (err: any) {
+          updateJob(job.id, { status: 'failed', error: `Failed to parse response: ${err.message}` });
+          await updateRemoteSession(job.sessionDbId, { status: 'failed' });
+          return;
+        }
 
-          updateJob(job.id, {
-            status: 'completed',
-            progress: 100,
-            youtubeVideoId: videoId,
-            youtubeLink: youtubeUrl,
-            bytesUploaded: job.file.size,
-          });
+        // Step 2: Mark as COMPLETED immediately — before any post-upload operations
+        updateJob(job.id, {
+          status: 'completed',
+          progress: 100,
+          youtubeVideoId: videoId,
+          youtubeLink: youtubeUrl,
+          bytesUploaded: job.file.size,
+        });
 
-          await updateRemoteSession(job.sessionDbId, {
-            status: 'completed',
-            bytes_uploaded: job.file.size,
-            youtube_video_id: videoId,
-            youtube_link: youtubeUrl,
-          });
+        await updateRemoteSession(job.sessionDbId, {
+          status: 'completed',
+          bytes_uploaded: job.file.size,
+          youtube_video_id: videoId,
+          youtube_link: youtubeUrl,
+        });
 
-          // Update video_edit_tracker youtube_link
-          if (job.trackerRowId) {
+        // Step 3: Update video_edit_tracker youtube_link (best-effort)
+        if (job.trackerRowId) {
+          try {
             const { data: existing } = await supabase
               .from('video_edit_tracker')
               .select('youtube_link')
@@ -244,40 +274,41 @@ export function YouTubeUploadProvider({ children }: { children: React.ReactNode 
               .from('video_edit_tracker')
               .update({ youtube_link: newLink, updated_at: new Date().toISOString() })
               .eq('id', job.trackerRowId);
+          } catch (err) {
+            console.warn("Failed to update tracker youtube_link:", err);
           }
+        }
 
-          // Handle playlist
-          if (job.playlistId && videoId) {
-            try {
-              await supabase.functions.invoke("youtube-upload", {
-                body: { action: "addToPlaylist", playlistId: job.playlistId, videoId },
-              });
-            } catch (err) {
-              console.warn("Failed to add to playlist:", err);
-            }
+        // Step 4: Add to playlist (best-effort — does NOT affect completed status)
+        if (job.playlistId && videoId) {
+          try {
+            await supabase.functions.invoke("youtube-upload", {
+              body: { action: "addToPlaylist", playlistId: job.playlistId, videoId },
+            });
+            // Invalidate cache so YouTube Dashboard shows the new video
+            invalidateYTCache(job.playlistId);
+          } catch (err) {
+            console.warn("Failed to add to playlist:", err);
           }
+        }
 
-          // Handle thumbnail
-          if (job.thumbnailFile && videoId) {
-            try {
-              const reader = new FileReader();
-              const base64 = await new Promise<string>((resolve) => {
-                reader.onload = () => {
-                  const result = reader.result as string;
-                  resolve(result.split(",")[1]);
-                };
-                reader.readAsDataURL(job.thumbnailFile!);
-              });
-              await supabase.functions.invoke("youtube-upload", {
-                body: { action: "setThumbnail", videoId, thumbnailBase64: base64, mimeType: job.thumbnailFile!.type },
-              });
-            } catch (err) {
-              console.warn("Failed to set thumbnail:", err);
-            }
+        // Step 5: Set thumbnail (best-effort)
+        if (job.thumbnailFile && videoId) {
+          try {
+            const reader = new FileReader();
+            const base64 = await new Promise<string>((resolve) => {
+              reader.onload = () => {
+                const result = reader.result as string;
+                resolve(result.split(",")[1]);
+              };
+              reader.readAsDataURL(job.thumbnailFile!);
+            });
+            await supabase.functions.invoke("youtube-upload", {
+              body: { action: "setThumbnail", videoId, thumbnailBase64: base64, mimeType: job.thumbnailFile!.type },
+            });
+          } catch (err) {
+            console.warn("Failed to set thumbnail:", err);
           }
-        } catch (err: any) {
-          updateJob(job.id, { status: 'failed', error: err.message });
-          await updateRemoteSession(job.sessionDbId, { status: 'failed' });
         }
       } else {
         // Check if paused (abort gives status 0)
@@ -300,6 +331,28 @@ export function YouTubeUploadProvider({ children }: { children: React.ReactNode 
   };
 
   const startUpload = useCallback(async (params: StartUploadParams) => {
+    // Dedup guard: prevent double-invocation for the same file within 2 seconds
+    const dedupKey = `${params.file.name}|${params.eventName}|${params.editType}`;
+    const now = Date.now();
+    const lastStart = startingRef.current.get(dedupKey);
+    if (lastStart && now - lastStart < 2000) {
+      console.warn("[YT-UPLOAD] Duplicate upload prevented:", dedupKey);
+      return;
+    }
+    startingRef.current.set(dedupKey, now);
+
+    // Also check if a job with the same key is already active
+    const existingJob = jobs.find(j =>
+      j.file.name === params.file.name &&
+      j.eventName === params.eventName &&
+      j.editType === params.editType &&
+      (j.status === 'uploading' || j.status === 'pending')
+    );
+    if (existingJob) {
+      console.warn("[YT-UPLOAD] Job already in progress:", dedupKey);
+      return;
+    }
+
     const jobId = `yt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     // Create DB session first
@@ -365,7 +418,7 @@ export function YouTubeUploadProvider({ children }: { children: React.ReactNode 
 
     // Start upload
     doUpload(job, 0);
-  }, []);
+  }, [jobs]);
 
   const activeCount = jobs.filter(j => j.status === 'uploading' || j.status === 'pending' || j.status === 'paused').length;
 
