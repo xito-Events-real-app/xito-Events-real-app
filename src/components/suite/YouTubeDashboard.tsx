@@ -686,7 +686,7 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
         .gte('created_at', `${today}T00:00:00`),
       supabase
         .from('video_edit_tracker')
-        .select('id, client_name, event_name, edit_type, editor, colorist, video_edit_status, edit_started_at, event_date_ad, stage_history, updated_at, created_at, youtube_link, deleted')
+        .select('id, client_name, event_name, edit_type, editor, colorist, video_edit_status, edit_started_at, event_date_ad, stage_history, updated_at, created_at, youtube_link, deleted, registered_date_time_ad')
         .eq('deleted', false),
       supabase
         .from('youtube_upload_sessions')
