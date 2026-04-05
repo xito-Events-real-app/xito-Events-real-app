@@ -677,7 +677,7 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
 
   const loadStats = async () => {
     const today = new Date().toISOString().split('T')[0];
-    const [{ count: todayCount }, { data: trackerData }, { data: sessionData }] = await Promise.all([
+    const [{ count: todayCount }, { data: trackerData }, { data: sessionData }, { data: contactData }] = await Promise.all([
       supabase
         .from('youtube_upload_sessions')
         .select('*', { count: 'exact', head: true })
@@ -694,6 +694,9 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
         .neq('youtube_video_id', '')
         .order('created_at', { ascending: false })
         .limit(200),
+      supabase
+        .from('contact_details_cache')
+        .select('registered_date_time_ad, bride_full_name, groom_full_name'),
     ]);
     setTodayUploaded(todayCount || 0);
     if (trackerData) {
@@ -703,6 +706,16 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
     }
     if (sessionData) {
       setUploadSessionMappings(sessionData as UploadSessionMapping[]);
+    }
+    if (contactData) {
+      const map = new Map<string, { bride: string; groom: string }>();
+      for (const c of contactData) {
+        map.set(c.registered_date_time_ad, {
+          bride: (c.bride_full_name || '').trim(),
+          groom: (c.groom_full_name || '').trim(),
+        });
+      }
+      setContactDetailsMap(map);
     }
   };
 
