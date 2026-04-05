@@ -201,6 +201,111 @@ export function YouTubeUploadProvider({ children }: { children: React.ReactNode 
     doUpload(job, startByte);
   };
 
+  const checkUploadStatus = async (uploadUri: string, fileSize: number): Promise<{ completed: boolean; videoId?: string; responseText?: string }> => {
+    try {
+      const resp = await fetch(uploadUri, {
+        method: 'PUT',
+        headers: { 'Content-Range': `bytes */${fileSize}` },
+      });
+      if (resp.status === 200 || resp.status === 201) {
+        const text = await resp.text();
+        try {
+          const data = JSON.parse(text);
+          return { completed: true, videoId: data.id, responseText: text };
+        } catch {
+          return { completed: true, responseText: text };
+        }
+      }
+      return { completed: false };
+    } catch {
+      return { completed: false };
+    }
+  };
+
+  const handleUploadSuccess = async (job: YouTubeUploadJob, videoId: string) => {
+    const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+    updateJob(job.id, {
+      status: 'completed',
+      progress: 100,
+      youtubeVideoId: videoId,
+      youtubeLink: youtubeUrl,
+      bytesUploaded: job.file.size,
+    });
+
+    await updateRemoteSession(job.sessionDbId, {
+      status: 'completed',
+      bytes_uploaded: job.file.size,
+      youtube_video_id: videoId,
+      youtube_link: youtubeUrl,
+    });
+
+    if (job.trackerRowId) {
+      try {
+        const { data: existing } = await supabase
+          .from('video_edit_tracker')
+          .select('youtube_link')
+          .eq('id', job.trackerRowId)
+          .maybeSingle();
+        const currentLinks = existing?.youtube_link || '';
+        const newLink = currentLinks ? `${currentLinks},${youtubeUrl}` : youtubeUrl;
+        await supabase
+          .from('video_edit_tracker')
+          .update({ youtube_link: newLink, updated_at: new Date().toISOString() })
+          .eq('id', job.trackerRowId);
+      } catch (err) {
+        console.warn("Failed to update tracker youtube_link:", err);
+      }
+    }
+
+    if (job.playlistId && videoId) {
+      try {
+        await supabase.functions.invoke("youtube-upload", {
+          body: { action: "addToPlaylist", playlistId: job.playlistId, videoId },
+        });
+        invalidateYTCache(job.playlistId);
+      } catch (err) {
+        console.warn("Failed to add to playlist:", err);
+      }
+    }
+
+    if (job.thumbnailFile && videoId) {
+      try {
+        const reader = new FileReader();
+        const base64 = await new Promise<string>((resolve) => {
+          reader.onload = () => {
+            const result = reader.result as string;
+            resolve(result.split(",")[1]);
+          };
+          reader.readAsDataURL(job.thumbnailFile!);
+        });
+        await supabase.functions.invoke("youtube-upload", {
+          body: { action: "setThumbnail", videoId, thumbnailBase64: base64, mimeType: job.thumbnailFile!.type },
+        });
+      } catch (err) {
+        console.warn("Failed to set thumbnail:", err);
+      }
+    }
+  };
+
+  const retryStatusCheck = async (job: YouTubeUploadJob): Promise<boolean> => {
+    // Retry 1: wait 3s
+    await new Promise(r => setTimeout(r, 3000));
+    const check1 = await checkUploadStatus(job.uploadUri, job.file.size);
+    if (check1.completed && check1.videoId) {
+      await handleUploadSuccess(job, check1.videoId);
+      return true;
+    }
+    // Retry 2: wait 5s
+    await new Promise(r => setTimeout(r, 5000));
+    const check2 = await checkUploadStatus(job.uploadUri, job.file.size);
+    if (check2.completed && check2.videoId) {
+      await handleUploadSuccess(job, check2.videoId);
+      return true;
+    }
+    return false;
+  };
+
   const doUpload = (job: YouTubeUploadJob, startByte: number) => {
     const xhr = new XMLHttpRequest();
     xhrRef.current.set(job.id, xhr);
@@ -219,7 +324,6 @@ export function YouTubeUploadProvider({ children }: { children: React.ReactNode 
         const uploaded = startByte + e.loaded;
         const percent = Math.round((uploaded / job.file.size) * 100);
         updateJob(job.id, { progress: percent, bytesUploaded: uploaded });
-        // Throttled remote update (every 5%)
         if (percent % 5 === 0) {
           updateRemoteSession(job.sessionDbId, { bytes_uploaded: uploaded, status: 'uploading' });
         }
@@ -230,91 +334,48 @@ export function YouTubeUploadProvider({ children }: { children: React.ReactNode 
       xhrRef.current.delete(job.id);
       if (xhr.status >= 200 && xhr.status < 300) {
         let videoId = '';
-        let youtubeUrl = '';
 
-        // Step 1: Parse response — this is the critical part
+        // Try parsing response
         try {
-          const result = JSON.parse(xhr.responseText);
-          videoId = result.id;
-          youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+          const text = xhr.responseText;
+          if (text) {
+            const result = JSON.parse(text);
+            videoId = result.id;
+          }
         } catch (err: any) {
-          updateJob(job.id, { status: 'failed', error: `Failed to parse response: ${err.message}` });
+          console.warn("Failed to parse upload response:", err);
+        }
+
+        // Fallback: if no videoId from response, do a status check
+        if (!videoId) {
+          const check = await checkUploadStatus(job.uploadUri, job.file.size);
+          if (check.completed && check.videoId) {
+            videoId = check.videoId;
+          }
+        }
+
+        if (videoId) {
+          await handleUploadSuccess(job, videoId);
+        } else {
+          updateJob(job.id, { status: 'failed', error: 'Upload completed but could not retrieve video ID' });
           await updateRemoteSession(job.sessionDbId, { status: 'failed' });
-          return;
-        }
-
-        // Step 2: Mark as COMPLETED immediately — before any post-upload operations
-        updateJob(job.id, {
-          status: 'completed',
-          progress: 100,
-          youtubeVideoId: videoId,
-          youtubeLink: youtubeUrl,
-          bytesUploaded: job.file.size,
-        });
-
-        await updateRemoteSession(job.sessionDbId, {
-          status: 'completed',
-          bytes_uploaded: job.file.size,
-          youtube_video_id: videoId,
-          youtube_link: youtubeUrl,
-        });
-
-        // Step 3: Update video_edit_tracker youtube_link (best-effort)
-        if (job.trackerRowId) {
-          try {
-            const { data: existing } = await supabase
-              .from('video_edit_tracker')
-              .select('youtube_link')
-              .eq('id', job.trackerRowId)
-              .maybeSingle();
-
-            const currentLinks = existing?.youtube_link || '';
-            const newLink = currentLinks ? `${currentLinks},${youtubeUrl}` : youtubeUrl;
-            await supabase
-              .from('video_edit_tracker')
-              .update({ youtube_link: newLink, updated_at: new Date().toISOString() })
-              .eq('id', job.trackerRowId);
-          } catch (err) {
-            console.warn("Failed to update tracker youtube_link:", err);
-          }
-        }
-
-        // Step 4: Add to playlist (best-effort — does NOT affect completed status)
-        if (job.playlistId && videoId) {
-          try {
-            await supabase.functions.invoke("youtube-upload", {
-              body: { action: "addToPlaylist", playlistId: job.playlistId, videoId },
-            });
-            // Invalidate cache so YouTube Dashboard shows the new video
-            invalidateYTCache(job.playlistId);
-          } catch (err) {
-            console.warn("Failed to add to playlist:", err);
-          }
-        }
-
-        // Step 5: Set thumbnail (best-effort)
-        if (job.thumbnailFile && videoId) {
-          try {
-            const reader = new FileReader();
-            const base64 = await new Promise<string>((resolve) => {
-              reader.onload = () => {
-                const result = reader.result as string;
-                resolve(result.split(",")[1]);
-              };
-              reader.readAsDataURL(job.thumbnailFile!);
-            });
-            await supabase.functions.invoke("youtube-upload", {
-              body: { action: "setThumbnail", videoId, thumbnailBase64: base64, mimeType: job.thumbnailFile!.type },
-            });
-          } catch (err) {
-            console.warn("Failed to set thumbnail:", err);
-          }
         }
       } else {
-        // Check if paused (abort gives status 0)
+        // Non-2xx: if all bytes were sent, retry status check before failing
         if (!pausedRef.current.has(job.id) && !cancelledRef.current.has(job.id)) {
-          updateJob(job.id, { status: 'failed', error: `Upload failed: ${xhr.status}` });
-          await updateRemoteSession(job.sessionDbId, { status: 'failed' });
+          const allBytesSent = (startByte + fileSlice.size) >= job.file.size;
+          if (allBytesSent) {
+            console.warn(`[YT-UPLOAD] Got ${xhr.status} after full transfer, checking status...`);
+            updateJob(job.id, { status: 'uploading', error: undefined });
+            const recovered = await retryStatusCheck(job);
+            if (!recovered) {
+              updateJob(job.id, { status: 'failed', error: `Upload failed: ${xhr.status} (verified not completed)` });
+              await updateRemoteSession(job.sessionDbId, { status: 'failed' });
+            }
+          } else {
+            updateJob(job.id, { status: 'failed', error: `Upload failed: ${xhr.status}` });
+            await updateRemoteSession(job.sessionDbId, { status: 'failed' });
+          }
         }
       }
     };
@@ -322,8 +383,19 @@ export function YouTubeUploadProvider({ children }: { children: React.ReactNode 
     xhr.onerror = async () => {
       xhrRef.current.delete(job.id);
       if (!pausedRef.current.has(job.id) && !cancelledRef.current.has(job.id)) {
-        updateJob(job.id, { status: 'failed', error: "Network error" });
-        await updateRemoteSession(job.sessionDbId, { status: 'failed' });
+        // If nearly all bytes uploaded, check if YouTube actually received it
+        if (job.bytesUploaded >= job.file.size * 0.99) {
+          console.warn("[YT-UPLOAD] Network error after 99%+ transfer, checking status...");
+          updateJob(job.id, { status: 'uploading', error: undefined });
+          const recovered = await retryStatusCheck(job);
+          if (!recovered) {
+            updateJob(job.id, { status: 'failed', error: "Network error (verified not completed)" });
+            await updateRemoteSession(job.sessionDbId, { status: 'failed' });
+          }
+        } else {
+          updateJob(job.id, { status: 'failed', error: "Network error" });
+          await updateRemoteSession(job.sessionDbId, { status: 'failed' });
+        }
       }
     };
 
