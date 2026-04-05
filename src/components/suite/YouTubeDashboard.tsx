@@ -601,7 +601,16 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
     const newlyCompleted = Array.from(completedIds).filter(id => !prevCompletedRef.current.has(id));
     prevCompletedRef.current = completedIds;
     if (newlyCompleted.length > 0) {
-      loadStats();
+      // Await loadStats then force re-resolve tracker with fresh data
+      (async () => {
+        await loadStats();
+        // Give React a tick to propagate state, then re-resolve
+        setTimeout(() => {
+          if (activeVideo) {
+            findTrackerForVideo(activeVideo.videoId, activeVideo.title);
+          }
+        }, 500);
+      })();
     }
   }, [open, jobs]);
 
