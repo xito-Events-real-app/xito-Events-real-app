@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { X, GripHorizontal, Maximize2, Minimize2, User, Palette, Clock, Calendar, Activity, CheckCircle2, Eye } from "lucide-react";
+import { X, GripHorizontal, Maximize2, Minimize2, User, Palette, Clock, Calendar, Activity, CheckCircle2, Eye, Upload } from "lucide-react";
 import { useFloatingYouTubePlayer } from "@/contexts/FloatingYouTubePlayerContext";
 import { useNavigate } from "react-router-dom";
 import { computeVideoEditTimings } from "@/lib/video-edit-time-utils";
