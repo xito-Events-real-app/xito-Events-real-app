@@ -410,6 +410,97 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
   const [sendRecipients, setSendRecipients] = useState<{ label: string; phone: string }[]>([]);
   const [loadingSendContacts, setLoadingSendContacts] = useState(false);
 
+  // Event Info Card data
+  const [eventCardData, setEventCardData] = useState<{
+    bride: string; groom: string;
+    eventName: string; eventDateBS: string; eventDateAD: string;
+    videographers: string[]; photographers: string[];
+    totalSizeGB: number; devices: { name: string; paths: string[] }[];
+  } | null>(null);
+  const [nameFilter, setNameFilter] = useState("");
+
+  // Fetch event card data when trackerInfo changes
+  useEffect(() => {
+    const regId = trackerInfo?.registered_date_time_ad;
+    const eventName = trackerInfo?.event_name;
+    if (!regId) { setEventCardData(null); return; }
+
+    (async () => {
+      try {
+        const [contactRes, crewRes, filesRes] = await Promise.all([
+          supabase.from('contact_details_cache').select('bride_full_name, groom_full_name').eq('registered_date_time_ad', regId).maybeSingle(),
+          supabase.from('freelancer_assignments').select('videographer_bride, videographer_groom, photographer_bride, photographer_groom, extra_photographer, extra_videographer').eq('registered_date_time_ad', regId).eq('event', eventName || ''),
+          supabase.from('files_management').select('size_gb, backup_1_device_name, final_generated_path').eq('registered_date_time_ad', regId).eq('event_name', eventName || '').eq('deleted_or_not', false),
+        ]);
+
+        const cd = contactRes.data;
+        const crewRows = crewRes.data || [];
+        const fileRows = filesRes.data || [];
+
+        // Extract unique crew names
+        const vidSet = new Set<string>();
+        const photoSet = new Set<string>();
+        for (const r of crewRows) {
+          [r.videographer_bride, r.videographer_groom, r.extra_videographer].filter(Boolean).forEach(n => vidSet.add(n!.trim()));
+          [r.photographer_bride, r.photographer_groom, r.extra_photographer].filter(Boolean).forEach(n => photoSet.add(n!.trim()));
+        }
+
+        // Aggregate files
+        let totalSize = 0;
+        const deviceMap = new Map<string, string[]>();
+        for (const f of fileRows) {
+          totalSize += Number(f.size_gb) || 0;
+          const devName = (f.backup_1_device_name || '').trim();
+          if (devName) {
+            if (!deviceMap.has(devName)) deviceMap.set(devName, []);
+            if (f.final_generated_path) deviceMap.get(devName)!.push(f.final_generated_path);
+          }
+        }
+
+        // Convert event date to BS
+        let bsStr = '';
+        if (trackerInfo?.event_date_ad) {
+          try {
+            const d = new Date(trackerInfo.event_date_ad);
+            if (!isNaN(d.getTime())) {
+              const bs = adToBS(d);
+              bsStr = `${nepaliMonthsEnglish[bs.month - 1]} ${bs.day}`;
+            }
+          } catch {}
+        }
+
+        const adStr = trackerInfo?.event_date_ad
+          ? new Date(trackerInfo.event_date_ad).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          : '';
+
+        setEventCardData({
+          bride: cd?.bride_full_name || '',
+          groom: cd?.groom_full_name || '',
+          eventName: eventName || '',
+          eventDateBS: bsStr,
+          eventDateAD: adStr,
+          videographers: Array.from(vidSet).filter(n => n.length > 0),
+          photographers: Array.from(photoSet).filter(n => n.length > 0),
+          totalSizeGB: Math.round(totalSize * 10) / 10,
+          devices: Array.from(deviceMap.entries()).map(([name, paths]) => ({ name, paths })),
+        });
+      } catch (err) {
+        console.error('Failed to load event card data:', err);
+        setEventCardData(null);
+      }
+    })();
+  }, [trackerInfo?.registered_date_time_ad, trackerInfo?.event_name]);
+
+  const handleNameFilter = useCallback((name: string) => {
+    setSearchQuery(name);
+    setNameFilter(name);
+  }, []);
+
+  const clearNameFilter = useCallback(() => {
+    setSearchQuery("");
+    setNameFilter("");
+  }, []);
+
   // Player
   const playerRef = useRef<any>(null);
   const playerContainerRef = useRef<HTMLDivElement>(null);
