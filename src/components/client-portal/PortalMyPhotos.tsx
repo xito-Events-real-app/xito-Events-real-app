@@ -312,9 +312,26 @@ const PortalMyPhotos = ({
           </div>
         ) : photos.length === 0 ? (
           <Card className="bg-gray-50 border-gray-200">
-            <CardContent className="p-8 text-center text-gray-400">
-              <ImageIcon className="h-10 w-10 mx-auto mb-3 opacity-50" />
-              <p>No photos in this folder yet.</p>
+            <CardContent className="p-8 text-center">
+              <ImageIcon className="h-10 w-10 mx-auto mb-3 text-[hsl(350,80%,65%)] opacity-60" />
+              <p className="text-gray-700 font-medium mb-1">Photos will appear here soon!</p>
+              <p className="text-gray-400 text-sm mb-4">For now, view them in pCloud</p>
+              <a
+                href={(() => {
+                  const activeTab = tabs[activeTabIndex];
+                  const pcloudPath = encodeURIComponent(`/WEDDING TALES NEPAL/${activeTab?.s3Prefix || ''}`);
+                  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                  return isMobile
+                    ? `https://e.pcloud.link/#page=filemanager&folder=${pcloudPath}`
+                    : `https://my.pcloud.com/#page=filemanager&folder=${pcloudPath}`;
+                })()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[hsl(350,80%,65%)] text-white text-sm font-medium shadow-[0_0_12px_hsl(350,80%,65%/0.4)] hover:bg-[hsl(350,80%,55%)] transition-colors"
+              >
+                <Cloud className="h-4 w-4" />
+                Open in pCloud
+              </a>
             </CardContent>
           </Card>
         ) : (
