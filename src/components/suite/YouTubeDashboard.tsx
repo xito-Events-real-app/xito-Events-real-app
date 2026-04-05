@@ -877,7 +877,7 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
     setLinkSearch("");
   };
 
-
+  const loadComments = async (videoId: string) => {
     const { data } = await supabase
       .from('youtube_video_comments')
       .select('*')
