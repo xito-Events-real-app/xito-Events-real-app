@@ -320,19 +320,27 @@ const PortalMyPhotos = ({
                 onClick={() => {
                   const activeTab = tabs[activeTabIndex];
                   const folderPath = `/WEDDING TALES NEPAL/${activeTab?.s3Prefix || ''}`;
-                  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+                  const isAndroid = /Android/i.test(navigator.userAgent);
+                  const isMobile = isIOS || isAndroid;
                   if (isMobile) {
-                    // Try app deep link first, fall back to web after timeout
                     const webUrl = `https://my.pcloud.com/#page=filemanager&folder=${encodeURIComponent(folderPath)}`;
-                    const appUrl = `pcloud://folder?path=${encodeURIComponent(folderPath)}`;
-                    const start = Date.now();
-                    const fallbackTimer = setTimeout(() => {
-                      if (Date.now() - start < 2500) {
-                        window.open(webUrl, '_blank');
-                      }
-                    }, 1500);
-                    window.addEventListener('blur', () => clearTimeout(fallbackTimer), { once: true });
-                    window.location.href = appUrl;
+                    if (isAndroid) {
+                      // Android: use intent URL to open pCloud app, falls back to Play Store
+                      const intentUrl = `intent://folder?path=${encodeURIComponent(folderPath)}#Intent;scheme=pcloud;package=com.pcloud.pcloud;S.browser_fallback_url=${encodeURIComponent(webUrl)};end`;
+                      window.location.href = intentUrl;
+                    } else {
+                      // iOS: pcloud:// scheme with timeout fallback
+                      const appUrl = `pcloud://folder?path=${encodeURIComponent(folderPath)}`;
+                      const start = Date.now();
+                      const fallbackTimer = setTimeout(() => {
+                        if (Date.now() - start < 2500) {
+                          window.open(webUrl, '_blank');
+                        }
+                      }, 1500);
+                      window.addEventListener('blur', () => clearTimeout(fallbackTimer), { once: true });
+                      window.location.href = appUrl;
+                    }
                   } else {
                     window.open(`https://my.pcloud.com/#page=filemanager&folder=${encodeURIComponent(folderPath)}`, '_blank');
                   }
