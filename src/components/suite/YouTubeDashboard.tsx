@@ -1104,7 +1104,7 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                       {timings.totalTime && (
                         <div className="flex items-center gap-1.5">
                           <Clock className="w-3.5 h-3.5 text-amber-500" />
-                          <span className="text-gray-500">Total Time:</span>
+                          <span className="text-gray-500">Time till Export:</span>
                           <span className="font-semibold text-gray-800">{timings.totalTime}</span>
                         </div>
                       )}
