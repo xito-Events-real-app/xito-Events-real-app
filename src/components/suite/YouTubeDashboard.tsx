@@ -978,12 +978,21 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
     if (!activeVideo || !trackerInfo?.registered_date_time_ad) return;
     setUnlinkLoading(true);
     try {
-      await supabase.from('portal_hidden_videos')
+      const { error } = await supabase.from('portal_hidden_videos')
         .delete()
         .eq('registered_date_time_ad', trackerInfo.registered_date_time_ad)
         .eq('video_id', activeVideo.videoId);
-      setIsVideoHidden(false);
-    } catch {}
+      if (error) {
+        console.error('Relink error:', error);
+        toast.error('Failed to relink video: ' + error.message);
+      } else {
+        setIsVideoHidden(false);
+        toast.success('Video re-linked to client portal');
+      }
+    } catch (err: any) {
+      console.error('Relink exception:', err);
+      toast.error('Failed to relink video');
+    }
     setUnlinkLoading(false);
   };
 
