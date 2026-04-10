@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AppSettingsSheet } from "@/components/settings/AppSettingsSheet";
 import { useLocation, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +23,7 @@ import {
   Users,
   MapPin,
   Flame,
+  Settings,
 } from "lucide-react";
 import { NEPALI_MONTHS, getMonthName } from "@/lib/nepali-months";
 
@@ -107,6 +109,7 @@ export function DesktopHeader({
   const location = useLocation();
   const { toggleDesktopMode } = useDesktopMode();
   const [showDateConverter, setShowDateConverter] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   // Build breadcrumbs
   const pathSegments = location.pathname.split("/").filter(Boolean);
@@ -159,6 +162,17 @@ export function DesktopHeader({
             >
               <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} />
               <span className="hidden lg:inline">{isSyncing ? "Syncing..." : "Sync"}</span>
+            </Button>
+
+            {/* Settings */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowSettings(true)}
+              className="gap-2 text-muted-foreground hover:text-foreground"
+            >
+              <Settings className="w-4 h-4" />
+              <span className="hidden lg:inline">Settings</span>
             </Button>
 
             {/* Switch to Mobile */}
@@ -397,6 +411,9 @@ export function DesktopHeader({
         isOpen={showDateConverter}
         onClose={() => setShowDateConverter(false)}
       />
+
+      {/* Settings Sheet */}
+      <AppSettingsSheet open={showSettings} onClose={() => setShowSettings(false)} />
     </>
   );
 }
