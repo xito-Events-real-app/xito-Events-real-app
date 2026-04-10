@@ -1,44 +1,59 @@
 
 
-# Use Video Edit Tracker as Video Source for Client Portal
+# App Settings Panel
 
-## Problem
-The "My Videos" tab in the Client Portal only works when `bride_full_name` and `groom_full_name` exist in `contact_details_cache`. For non-wedding clients like BARSHA(OLD MATERNITY CLIENT), these fields are empty, so videos never load -- even though the `video_edit_tracker` table already has YouTube links for this client.
+## Overview
+Add a Settings gear icon in the top-right header bar of the app (next to the existing buttons in `DesktopSuiteLanding` and `DesktopHeader`). Clicking it opens a slide-over Sheet with tabs for managing three dropdown configurations. All changes persist to the `dropdowns_cache` table in the database.
 
-## Solution
-Add a fallback (or primary) data source: query `video_edit_tracker` for the client's `registered_date_time_ad`, extract YouTube video IDs from the `youtube_link` column, and display them directly -- no playlist matching needed.
+## Architecture
 
-## How It Works
+**No database changes needed** -- the existing `dropdowns_cache` table already stores all these values as JSON arrays keyed by `category`. We just need a UI to edit them.
 
-**File: `src/components/client-portal/PortalMyVideos.tsx`**
+### New File: `src/components/settings/AppSettingsSheet.tsx`
+A Sheet (slide-over panel) with 3 tabs:
 
-1. Accept a new prop `registeredDateTimeAD` (already available in `ClientPortal.tsx`).
-2. On mount, query `video_edit_tracker` where `registered_date_time_ad` matches, `deleted = false`, and `youtube_link` is not empty.
-3. Parse `youtube_link` (may contain comma-separated URLs like `https://youtu.be/HH7VgzKbA_o, https://youtu.be/zAohiy6CJZI`) and extract video IDs.
-4. Build video entries with titles derived from `event_name + edit_type` (e.g. "BIRTHDAY CELEBRATION - Full Video").
-5. Fetch thumbnails using the standard YouTube thumbnail URL pattern (`https://img.youtube.com/vi/{id}/mqdefault.jpg`).
-6. If tracker videos are found, show them immediately. If bride/groom names are also available, still attempt the playlist approach as an enrichment (playlist provides official titles and ordering).
-7. If both sources return results, prefer the playlist data but merge in any tracker-only videos not already in the playlist.
+**Tab 1: Companies**
+- Shows current company names from `dropdowns_cache` where `category = 'companyNames'`
+- List of existing companies with delete (X) buttons
+- Input + "Add" button to add new companies
+- Save writes updated JSON array back to `dropdowns_cache`
 
-**File: `src/pages/ClientPortal.tsx`**
+**Tab 2: Client Sources**
+- Shows current sources from `dropdowns_cache` where `category = 'sources'`
+- Default items (INSTAGRAM, FACEBOOK, TIKTOK, WHATSAPP, HANDLER, OLD CLIENT) shown as non-deletable/locked
+- Additional custom sources with delete buttons
+- Input + "Add" button for custom sources
+- **Special behavior note**: The "OLD CLIENT" and "HANDLER" and "WHATSAPP" sub-options are already handled in the form components -- OLD CLIENT triggers client search, HANDLER shows handler list, WHATSAPP shows handler list. This is existing behavior that will now work with the managed data.
 
-8. Pass `registeredDateTimeAD={decodedId}` to `PortalMyVideos`.
+**Tab 3: Handlers**
+- Shows current handlers from `dropdowns_cache` where `category = 'whatsappOwners'`
+- List with delete buttons, input + "Add" button
+- These handlers are used across the app for: Who Added, Client Handler, WhatsApp owner, Source "HANDLER" sub-option, handler filters on dashboard
 
-## Data Flow
-```text
-PortalMyVideos mount
-  ├─ Query video_edit_tracker (direct DB, no edge function needed)
-  │   → Extract video IDs from youtube_link column
-  │   → Build videos with event_name + edit_type as titles
-  │   → Show immediately (fast, no API call)
-  │
-  └─ If bride/groom names exist → also try playlist matching (existing logic)
-      → Merge/prefer playlist data when available
-```
+### Modified Files
 
-## Key Details
-- No new tables or migrations needed -- uses existing `video_edit_tracker` data
-- No edge function calls for the fallback path -- direct Supabase query, so it's faster and avoids YouTube API quota
-- The "Contact details not available" error is eliminated; videos show as long as tracker rows have YouTube links
-- Thumbnail URLs use `img.youtube.com/vi/{videoId}/mqdefault.jpg` (no API call needed)
+1. **`src/components/suite/DesktopSuiteLanding.tsx`** -- Add Settings gear icon button in the top-right actions area (before Mobile/Logout buttons). Opens `AppSettingsSheet`.
+
+2. **`src/components/desktop/DesktopHeader.tsx`** -- Add Settings gear icon in the right side actions. Opens `AppSettingsSheet`.
+
+3. **`src/components/desktop/DesktopQuickAdd.tsx`** -- Update the Source dropdown:
+   - When "HANDLER" is selected as source, show a sub-dropdown of handlers (same as `whatsappOwners`)
+   - When "WHATSAPP" is selected, show handler sub-dropdown (already exists)
+   - When "OLD CLIENT" is selected, show client search (already exists)
+
+4. **`src/pages/QuickAdd.tsx`** -- Same source dropdown updates as DesktopQuickAdd for mobile.
+
+5. **`src/components/dashboard/ClientDetailSheet.tsx`** -- Same source dropdown updates.
+
+### Data Flow
+- Settings Sheet reads from `dropdowns_cache` via Supabase query
+- On save, upserts the `values_json` column for the relevant category
+- After save, dispatches a `cache-updated` custom event so `useDropdownData` / `useCachedData` picks up changes immediately
+- The `useDropdownData` hook already reads from `dropdowns_cache`, so all forms automatically get updated values
+
+### Source Dropdown Enhancement
+Currently sources are: `FACEBOOK, INSTAGRAM, TIKTOK, WHATSAPP, OLD CLIENT, BENZO, NIKIT, BARUN`. The handler names (BENZO, NIKIT, BARUN) are mixed in as sources. With this change:
+- Sources become: `INSTAGRAM, FACEBOOK, TIKTOK, WHATSAPP, OLD CLIENT, HANDLER` + any custom ones
+- When "HANDLER" is selected as source, a sub-dropdown appears showing all handlers from the handlers list
+- The form stores it as `HANDLER - {handlerName}` in the source field (similar to how WHATSAPP currently works)
 
