@@ -952,24 +952,48 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
   }, [activeVideo?.videoId, trackerInfo?.registered_date_time_ad]);
 
   const handleUnlinkFromPortal = async () => {
-    if (!activeVideo || !trackerInfo?.registered_date_time_ad) return;
+    if (!activeVideo || !trackerInfo?.registered_date_time_ad) {
+      toast.error('Cannot unlink: no client link found for this video');
+      return;
+    }
     setUnlinkLoading(true);
     try {
-      const { error } = await supabase.from('portal_hidden_videos').upsert({
-        registered_date_time_ad: trackerInfo.registered_date_time_ad,
-        video_id: activeVideo.videoId,
-      }, { onConflict: 'registered_date_time_ad,video_id' });
-      if (error) {
-        console.error('Unlink error:', error);
-        toast.error('Failed to unlink video: ' + error.message);
-      } else {
+      const regId = trackerInfo.registered_date_time_ad;
+      const vidId = activeVideo.videoId;
+      const { error: insertError } = await supabase.from('portal_hidden_videos').insert({
+        registered_date_time_ad: regId,
+        video_id: vidId,
+      });
+      if (insertError) {
+        // If duplicate, that's fine — it's already hidden
+        if (insertError.code === '23505') {
+          setIsVideoHidden(true);
+          setUnlinkConfirmOpen(false);
+          toast.success('Video is already unlinked from client portal');
+          setUnlinkLoading(false);
+          return;
+        }
+        console.error('Unlink insert error:', insertError);
+        toast.error('Failed to unlink video: ' + insertError.message);
+        setUnlinkLoading(false);
+        return;
+      }
+      // Verify the row exists
+      const { data: verify } = await supabase.from('portal_hidden_videos')
+        .select('id')
+        .eq('registered_date_time_ad', regId)
+        .eq('video_id', vidId)
+        .maybeSingle();
+      if (verify) {
         setIsVideoHidden(true);
         setUnlinkConfirmOpen(false);
         toast.success('Video unlinked from client portal');
+      } else {
+        toast.error('Unlink failed: row not found after save');
       }
     } catch (err: any) {
       console.error('Unlink exception:', err);
-      toast.error('Failed to unlink video');
+      toast.error('Failed to unlink video: ' + (err.message || 'Unknown error'));
     }
     setUnlinkLoading(false);
   };
@@ -978,16 +1002,29 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
     if (!activeVideo || !trackerInfo?.registered_date_time_ad) return;
     setUnlinkLoading(true);
     try {
+      const regId = trackerInfo.registered_date_time_ad;
+      const vidId = activeVideo.videoId;
       const { error } = await supabase.from('portal_hidden_videos')
         .delete()
-        .eq('registered_date_time_ad', trackerInfo.registered_date_time_ad)
-        .eq('video_id', activeVideo.videoId);
+        .eq('registered_date_time_ad', regId)
+        .eq('video_id', vidId);
       if (error) {
         console.error('Relink error:', error);
         toast.error('Failed to relink video: ' + error.message);
-      } else {
+        setUnlinkLoading(false);
+        return;
+      }
+      // Verify deletion
+      const { data: verify } = await supabase.from('portal_hidden_videos')
+        .select('id')
+        .eq('registered_date_time_ad', regId)
+        .eq('video_id', vidId)
+        .maybeSingle();
+      if (!verify) {
         setIsVideoHidden(false);
         toast.success('Video re-linked to client portal');
+      } else {
+        toast.error('Relink failed: row still exists');
       }
     } catch (err: any) {
       console.error('Relink exception:', err);
@@ -1662,26 +1699,25 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
             </Dialog>
 
             {/* Unlink from Portal Confirmation */}
-            <AlertDialog open={unlinkConfirmOpen} onOpenChange={setUnlinkConfirmOpen}>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Unlink from Client Portal?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This video will no longer appear on the client's portal video page. You can re-link it later.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>No</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleUnlinkFromPortal}
-                    className="bg-red-600 hover:bg-red-700"
-                    disabled={unlinkLoading}
-                  >
-                    {unlinkLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Yes, Unlink"}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <Dialog open={unlinkConfirmOpen} onOpenChange={(open) => { if (!unlinkLoading) setUnlinkConfirmOpen(open); }}>
+              <DialogContent className="max-w-sm">
+                <DialogHeader>
+                  <DialogTitle>Unlink from Client Portal?</DialogTitle>
+                </DialogHeader>
+                <p className="text-sm text-muted-foreground">
+                  This video will no longer appear on the client's portal video page. You can re-link it later.
+                </p>
+                <div className="flex justify-end gap-2 mt-4">
+                  <Button variant="outline" size="sm" disabled={unlinkLoading} onClick={() => setUnlinkConfirmOpen(false)}>
+                    No
+                  </Button>
+                  <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white" disabled={unlinkLoading} onClick={handleUnlinkFromPortal}>
+                    {unlinkLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+                    Yes, Unlink
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             {/* Send to Client Dialog */}
             <Dialog open={sendToClientOpen} onOpenChange={setSendToClientOpen}>
