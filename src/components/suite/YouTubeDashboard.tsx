@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { ArrowLeft, Youtube, Search, Upload, ChevronDown, ChevronRight, Send, Loader2, Play, Clock, User, Palette, Calendar, Activity, Globe, RefreshCw, CheckCircle2, Eye, Link2, AlertTriangle, MessageCircle, HardDrive, Video, X } from "lucide-react";
+import { ArrowLeft, Youtube, Search, Upload, ChevronDown, ChevronRight, Send, Loader2, Play, Clock, User, Palette, Calendar, Activity, Globe, RefreshCw, CheckCircle2, Eye, Link2, AlertTriangle, MessageCircle, HardDrive, Video, X, EyeOff } from "lucide-react";
 import { adToBS, nepaliMonthsEnglish } from "@/lib/nepali-date";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { getClientPortalUrl } from "@/lib/client-contact-api";
 import { useYouTubeUploadContext } from "@/contexts/YouTubeUploadContext";
@@ -405,6 +406,11 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
   // Manual link dialog
   const [manualLinkOpen, setManualLinkOpen] = useState(false);
   const [linkSearch, setLinkSearch] = useState("");
+
+  // Unlink from portal
+  const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false);
+  const [isVideoHidden, setIsVideoHidden] = useState(false);
+  const [unlinkLoading, setUnlinkLoading] = useState(false);
 
   // Send to client dialog
   const [sendToClientOpen, setSendToClientOpen] = useState(false);
@@ -926,9 +932,50 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
 
   // Load tracker info for active video — match by youtube_link, upload session, OR title parsing
   useEffect(() => {
-    if (!activeVideo) { setTrackerInfo(null); return; }
+    if (!activeVideo) { setTrackerInfo(null); setIsVideoHidden(false); return; }
     findTrackerForVideo(activeVideo.videoId, activeVideo.title);
   }, [activeVideo?.videoId, allTrackerRows, uploadSessionMappings]);
+
+  // Check if active video is hidden from portal
+  useEffect(() => {
+    if (!activeVideo || !trackerInfo?.registered_date_time_ad) { setIsVideoHidden(false); return; }
+    (async () => {
+      const { data } = await supabase
+        .from('portal_hidden_videos')
+        .select('id')
+        .eq('registered_date_time_ad', trackerInfo.registered_date_time_ad!)
+        .eq('video_id', activeVideo.videoId)
+        .maybeSingle();
+      setIsVideoHidden(!!data);
+    })();
+  }, [activeVideo?.videoId, trackerInfo?.registered_date_time_ad]);
+
+  const handleUnlinkFromPortal = async () => {
+    if (!activeVideo || !trackerInfo?.registered_date_time_ad) return;
+    setUnlinkLoading(true);
+    try {
+      await supabase.from('portal_hidden_videos').upsert({
+        registered_date_time_ad: trackerInfo.registered_date_time_ad,
+        video_id: activeVideo.videoId,
+      }, { onConflict: 'registered_date_time_ad,video_id' });
+      setIsVideoHidden(true);
+      setUnlinkConfirmOpen(false);
+    } catch {}
+    setUnlinkLoading(false);
+  };
+
+  const handleRelinkToPortal = async () => {
+    if (!activeVideo || !trackerInfo?.registered_date_time_ad) return;
+    setUnlinkLoading(true);
+    try {
+      await supabase.from('portal_hidden_videos')
+        .delete()
+        .eq('registered_date_time_ad', trackerInfo.registered_date_time_ad)
+        .eq('video_id', activeVideo.videoId);
+      setIsVideoHidden(false);
+    } catch {}
+    setUnlinkLoading(false);
+  };
 
   const findTrackerForVideo = async (videoId: string, videoTitle: string) => {
     // 1. Exact video-id match against parsed IDs from youtube_link (not loose .includes)
@@ -1488,6 +1535,31 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                           Send to Client
                         </Button>
                       </div>
+                      {/* Unlink / Relink from Client Portal */}
+                      <div className="col-span-full">
+                        {isVideoHidden ? (
+                          <Button
+                            size="sm"
+                            className="h-7 text-xs gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
+                            disabled={unlinkLoading}
+                            onClick={handleRelinkToPortal}
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            Re-link to Client Portal
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs gap-1.5 border-red-300 text-red-600 hover:bg-red-50"
+                            disabled={unlinkLoading}
+                            onClick={() => setUnlinkConfirmOpen(true)}
+                          >
+                            <EyeOff className="w-3.5 h-3.5" />
+                            Unlink from Client Portal
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   );
                 })()}
@@ -1569,6 +1641,28 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                 </div>
               </DialogContent>
             </Dialog>
+
+            {/* Unlink from Portal Confirmation */}
+            <AlertDialog open={unlinkConfirmOpen} onOpenChange={setUnlinkConfirmOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Unlink from Client Portal?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This video will no longer appear on the client's portal video page. You can re-link it later.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>No</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleUnlinkFromPortal}
+                    className="bg-red-600 hover:bg-red-700"
+                    disabled={unlinkLoading}
+                  >
+                    {unlinkLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Yes, Unlink"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
 
             {/* Send to Client Dialog */}
             <Dialog open={sendToClientOpen} onOpenChange={setSendToClientOpen}>

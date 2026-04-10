@@ -1078,6 +1078,27 @@ export type Database = {
         }
         Relationships: []
       }
+      portal_hidden_videos: {
+        Row: {
+          created_at: string
+          id: string
+          registered_date_time_ad: string
+          video_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          registered_date_time_ad: string
+          video_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          registered_date_time_ad?: string
+          video_id?: string
+        }
+        Relationships: []
+      }
       potential_deletes: {
         Row: {
           approved_by: string

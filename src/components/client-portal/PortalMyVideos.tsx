@@ -224,6 +224,16 @@ const PortalMyVideos = ({ clientName, brideFullName, groomFullName, registeredDa
           setPlaylist(null);
         }
 
+        // --- Filter out hidden videos ---
+        const { data: hiddenRows } = await supabase
+          .from("portal_hidden_videos")
+          .select("video_id")
+          .eq("registered_date_time_ad", registeredDateTimeAD);
+        if (hiddenRows && hiddenRows.length > 0) {
+          const hiddenSet = new Set(hiddenRows.map((r) => r.video_id));
+          finalVideos = finalVideos.filter((v) => !hiddenSet.has(v.videoId));
+        }
+
         setVideos(finalVideos);
         if (finalVideos.length > 0) setActiveVideoId(finalVideos[0].videoId);
         if (finalVideos.length === 0) setError("No videos available yet");
