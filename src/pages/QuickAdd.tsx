@@ -139,6 +139,9 @@ export default function QuickAdd() {
       if (sourceStr.startsWith('WHATSAPP - ')) {
         setSource('WHATSAPP');
         setWhoseWhatsapp(sourceStr.replace('WHATSAPP - ', ''));
+      } else if (sourceStr.startsWith('HANDLER - ')) {
+        setSource('HANDLER');
+        setWhoseWhatsapp(sourceStr.replace('HANDLER - ', ''));
       } else if (sourceStr.startsWith('OLD CLIENT - ')) {
         setSource('OLD CLIENT');
         setOldClientName(sourceStr.replace('OLD CLIENT - ', ''));
