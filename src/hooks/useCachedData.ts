@@ -129,11 +129,14 @@ export function useCachedData(): UseCachedDataResult {
       setClients(freshClients);
       setMemoryClients(freshClients);
 
-      // Reload dropdowns from IndexedDB
-      const cached = await getCachedData();
-      if (cached?.dropdowns) {
-        setDropdowns(cached.dropdowns);
-        setMemoryDropdowns(cached.dropdowns);
+      // Reload dropdowns from Supabase, fall back to IndexedDB
+      const loaded = await loadDropdownsFromSupabase();
+      if (!loaded) {
+        const cached = await getCachedData();
+        if (cached?.dropdowns) {
+          setDropdowns(cached.dropdowns);
+          setMemoryDropdowns(cached.dropdowns);
+        }
       }
 
       setLastSyncedAt(new Date());
@@ -144,7 +147,7 @@ export function useCachedData(): UseCachedDataResult {
     } finally {
       setIsSyncing(false);
     }
-  }, []);
+  }, [loadDropdownsFromSupabase]);
 
   // Track local update timestamps for anti-flicker guard
   const localUpdateTimestamps = useRef<Set<string>>(new Set());
