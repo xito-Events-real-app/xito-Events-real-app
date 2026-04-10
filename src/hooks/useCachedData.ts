@@ -45,6 +45,55 @@ export function useCachedData(): UseCachedDataResult {
   const [pendingSyncs, setPendingSyncs] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
+  // Load dropdowns directly from Supabase dropdowns_cache table
+  const loadDropdownsFromSupabase = useCallback(async () => {
+    try {
+      const { data: cachedRows, error: cacheError } = await supabase
+        .from('dropdowns_cache')
+        .select('category, values_json');
+
+      if (!cacheError && cachedRows && cachedRows.length > 0) {
+        const cached: Record<string, string[]> = {};
+        for (const row of cachedRows) {
+          try {
+            cached[row.category] = JSON.parse(row.values_json || '[]');
+          } catch {
+            cached[row.category] = [];
+          }
+        }
+
+        if (cached.sources && cached.sources.length > 0) {
+          const dropdownData: DropdownData = {
+            sources: cached.sources || [],
+            clientLocations: cached.clientLocations || [],
+            eventLocations: cached.eventLocations || [],
+            preweddingEvents: cached.preweddingEvents || [],
+            weddingEvents: cached.weddingEvents || [],
+            postweddingEvents: cached.postweddingEvents || [],
+            oldClients: cached.oldClients || [],
+            whatsappOwners: cached.whatsappOwners || [],
+            clientStatuses: cached.clientStatuses || [],
+            mindsetOptions: cached.mindsetOptions || [],
+            paymentTypes: cached.paymentTypes || [],
+            banks: cached.banks || [],
+            relationOptions: cached.relationOptions || [],
+            companyNames: cached.companyNames || [],
+            serviceTypes: cached.serviceTypes || [],
+            allEvents: cached.allEvents || [],
+          };
+          setDropdowns(dropdownData);
+          setMemoryDropdowns(dropdownData);
+          // Also persist to IndexedDB for offline use
+          setCachedDropdowns(dropdownData);
+          return true;
+        }
+      }
+    } catch (err) {
+      console.warn('[useCachedData] Failed to load dropdowns from Supabase:', err);
+    }
+    return false;
+  }, []);
+
   const loadData = useCallback(async () => {
     try {
       const cachedClients = await loadAllClients();
@@ -53,18 +102,21 @@ export function useCachedData(): UseCachedDataResult {
       setIsLoading(false);
       setLastSyncedAt(new Date());
 
-      // Load dropdowns from IndexedDB
-      const cached = await getCachedData();
-      if (cached?.dropdowns) {
-        setDropdowns(cached.dropdowns);
-        setMemoryDropdowns(cached.dropdowns);
+      // Try loading dropdowns from Supabase first, fall back to IndexedDB
+      const loaded = await loadDropdownsFromSupabase();
+      if (!loaded) {
+        const cached = await getCachedData();
+        if (cached?.dropdowns) {
+          setDropdowns(cached.dropdowns);
+          setMemoryDropdowns(cached.dropdowns);
+        }
       }
     } catch (err) {
       console.error('Data loading error:', err);
       setError(err instanceof Error ? err.message : 'Failed to load data');
       setIsLoading(false);
     }
-  }, []);
+  }, [loadDropdownsFromSupabase]);
 
   // Refresh: re-read from database cache only
   const refreshData = useCallback(async () => {
@@ -77,11 +129,14 @@ export function useCachedData(): UseCachedDataResult {
       setClients(freshClients);
       setMemoryClients(freshClients);
 
-      // Reload dropdowns from IndexedDB
-      const cached = await getCachedData();
-      if (cached?.dropdowns) {
-        setDropdowns(cached.dropdowns);
-        setMemoryDropdowns(cached.dropdowns);
+      // Reload dropdowns from Supabase, fall back to IndexedDB
+      const loaded = await loadDropdownsFromSupabase();
+      if (!loaded) {
+        const cached = await getCachedData();
+        if (cached?.dropdowns) {
+          setDropdowns(cached.dropdowns);
+          setMemoryDropdowns(cached.dropdowns);
+        }
       }
 
       setLastSyncedAt(new Date());
@@ -92,7 +147,7 @@ export function useCachedData(): UseCachedDataResult {
     } finally {
       setIsSyncing(false);
     }
-  }, []);
+  }, [loadDropdownsFromSupabase]);
 
   // Track local update timestamps for anti-flicker guard
   const localUpdateTimestamps = useRef<Set<string>>(new Set());
@@ -181,6 +236,11 @@ export function useCachedData(): UseCachedDataResult {
   // Listen for cache updates from other operations (but NOT invalidate events)
   useEffect(() => {
     const handleCacheUpdate = (e: CustomEvent<{ type: string; data: unknown }>) => {
+      // Handle bare event from AppSettingsSheet (no detail) — reload dropdowns from Supabase
+      if (!e.detail || !e.detail.type) {
+        loadDropdownsFromSupabase();
+        return;
+      }
       if (e.detail.type === 'clients') {
         if (Array.isArray(e.detail.data)) {
           setClients(e.detail.data as ClientData[]);
@@ -202,7 +262,7 @@ export function useCachedData(): UseCachedDataResult {
 
     window.addEventListener('cache-updated', handleCacheUpdate as EventListener);
     return () => window.removeEventListener('cache-updated', handleCacheUpdate as EventListener);
-  }, []);
+  }, [loadDropdownsFromSupabase]);
 
   // Listen for queue changes
   useEffect(() => {
