@@ -1,59 +1,46 @@
 
 
-# App Settings Panel
+# Unlink Video from Client Portal
 
-## Overview
-Add a Settings gear icon in the top-right header bar of the app (next to the existing buttons in `DesktopSuiteLanding` and `DesktopHeader`). Clicking it opens a slide-over Sheet with tabs for managing three dropdown configurations. All changes persist to the `dropdowns_cache` table in the database.
+## Problem
+Currently all YouTube links in `video_edit_tracker` appear on the Client Portal's "My Videos" tab. You need a way to hide specific videos from clients.
 
-## Architecture
+## Solution
+Create a new `portal_hidden_videos` table to store video IDs that should be hidden from the portal. Add an "Unlink from Client Portal" button in the YouTube Dashboard with a confirmation dialog. Filter hidden videos out in `PortalMyVideos.tsx`.
 
-**No database changes needed** -- the existing `dropdowns_cache` table already stores all these values as JSON arrays keyed by `category`. We just need a UI to edit them.
+## Database Migration
+Create table `portal_hidden_videos`:
+- `id` (uuid, PK)
+- `registered_date_time_ad` (text, not null) — links to client
+- `video_id` (text, not null) — the YouTube video ID to hide
+- `created_at` (timestamptz, default now())
+- Unique constraint on `(registered_date_time_ad, video_id)`
+- RLS: allow all (matches existing pattern)
 
-### New File: `src/components/settings/AppSettingsSheet.tsx`
-A Sheet (slide-over panel) with 3 tabs:
+## File Changes
 
-**Tab 1: Companies**
-- Shows current company names from `dropdowns_cache` where `category = 'companyNames'`
-- List of existing companies with delete (X) buttons
-- Input + "Add" button to add new companies
-- Save writes updated JSON array back to `dropdowns_cache`
+### 1. `src/components/suite/YouTubeDashboard.tsx`
+- Add an "Unlink from Client Portal" button next to the "Send to Client" button (when `trackerInfo` exists)
+- Clicking opens an AlertDialog: "Are you sure? This video will no longer appear on the client's portal."
+- On confirm: insert `{ registered_date_time_ad, video_id }` into `portal_hidden_videos`
+- Show toast confirmation
+- Also show a "Re-link to Portal" button if the video is already hidden (query on active video change)
 
-**Tab 2: Client Sources**
-- Shows current sources from `dropdowns_cache` where `category = 'sources'`
-- Default items (INSTAGRAM, FACEBOOK, TIKTOK, WHATSAPP, HANDLER, OLD CLIENT) shown as non-deletable/locked
-- Additional custom sources with delete buttons
-- Input + "Add" button for custom sources
-- **Special behavior note**: The "OLD CLIENT" and "HANDLER" and "WHATSAPP" sub-options are already handled in the form components -- OLD CLIENT triggers client search, HANDLER shows handler list, WHATSAPP shows handler list. This is existing behavior that will now work with the managed data.
+### 2. `src/components/client-portal/PortalMyVideos.tsx`
+- After building the video list, query `portal_hidden_videos` for the client's `registeredDateTimeAD`
+- Filter out any video whose `videoId` is in the hidden set
+- No UI change on the portal side — hidden videos simply don't appear
 
-**Tab 3: Handlers**
-- Shows current handlers from `dropdowns_cache` where `category = 'whatsappOwners'`
-- List with delete buttons, input + "Add" button
-- These handlers are used across the app for: Who Added, Client Handler, WhatsApp owner, Source "HANDLER" sub-option, handler filters on dashboard
+## Data Flow
+```text
+YouTube Dashboard → "Unlink from Portal" button
+  → AlertDialog confirmation (Yes/No)
+  → Insert into portal_hidden_videos(registered_date_time_ad, video_id)
+  → Toast: "Video unlinked from client portal"
 
-### Modified Files
-
-1. **`src/components/suite/DesktopSuiteLanding.tsx`** -- Add Settings gear icon button in the top-right actions area (before Mobile/Logout buttons). Opens `AppSettingsSheet`.
-
-2. **`src/components/desktop/DesktopHeader.tsx`** -- Add Settings gear icon in the right side actions. Opens `AppSettingsSheet`.
-
-3. **`src/components/desktop/DesktopQuickAdd.tsx`** -- Update the Source dropdown:
-   - When "HANDLER" is selected as source, show a sub-dropdown of handlers (same as `whatsappOwners`)
-   - When "WHATSAPP" is selected, show handler sub-dropdown (already exists)
-   - When "OLD CLIENT" is selected, show client search (already exists)
-
-4. **`src/pages/QuickAdd.tsx`** -- Same source dropdown updates as DesktopQuickAdd for mobile.
-
-5. **`src/components/dashboard/ClientDetailSheet.tsx`** -- Same source dropdown updates.
-
-### Data Flow
-- Settings Sheet reads from `dropdowns_cache` via Supabase query
-- On save, upserts the `values_json` column for the relevant category
-- After save, dispatches a `cache-updated` custom event so `useDropdownData` / `useCachedData` picks up changes immediately
-- The `useDropdownData` hook already reads from `dropdowns_cache`, so all forms automatically get updated values
-
-### Source Dropdown Enhancement
-Currently sources are: `FACEBOOK, INSTAGRAM, TIKTOK, WHATSAPP, OLD CLIENT, BENZO, NIKIT, BARUN`. The handler names (BENZO, NIKIT, BARUN) are mixed in as sources. With this change:
-- Sources become: `INSTAGRAM, FACEBOOK, TIKTOK, WHATSAPP, OLD CLIENT, HANDLER` + any custom ones
-- When "HANDLER" is selected as source, a sub-dropdown appears showing all handlers from the handlers list
-- The form stores it as `HANDLER - {handlerName}` in the source field (similar to how WHATSAPP currently works)
+Client Portal → PortalMyVideos loads videos
+  → Query portal_hidden_videos for this client
+  → Filter out hidden video IDs
+  → Display remaining videos
+```
 
