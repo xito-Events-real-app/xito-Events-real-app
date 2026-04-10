@@ -955,13 +955,22 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
     if (!activeVideo || !trackerInfo?.registered_date_time_ad) return;
     setUnlinkLoading(true);
     try {
-      await supabase.from('portal_hidden_videos').upsert({
+      const { error } = await supabase.from('portal_hidden_videos').upsert({
         registered_date_time_ad: trackerInfo.registered_date_time_ad,
         video_id: activeVideo.videoId,
       }, { onConflict: 'registered_date_time_ad,video_id' });
-      setIsVideoHidden(true);
-      setUnlinkConfirmOpen(false);
-    } catch {}
+      if (error) {
+        console.error('Unlink error:', error);
+        toast.error('Failed to unlink video: ' + error.message);
+      } else {
+        setIsVideoHidden(true);
+        setUnlinkConfirmOpen(false);
+        toast.success('Video unlinked from client portal');
+      }
+    } catch (err: any) {
+      console.error('Unlink exception:', err);
+      toast.error('Failed to unlink video');
+    }
     setUnlinkLoading(false);
   };
 
