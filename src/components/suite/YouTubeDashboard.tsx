@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { toast } from "sonner";
 import { ArrowLeft, Youtube, Search, Upload, ChevronDown, ChevronRight, Send, Loader2, Play, Clock, User, Palette, Calendar, Activity, Globe, RefreshCw, CheckCircle2, Eye, Link2, AlertTriangle, MessageCircle, HardDrive, Video, X, EyeOff } from "lucide-react";
 import { adToBS, nepaliMonthsEnglish } from "@/lib/nepali-date";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
@@ -954,13 +955,22 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
     if (!activeVideo || !trackerInfo?.registered_date_time_ad) return;
     setUnlinkLoading(true);
     try {
-      await supabase.from('portal_hidden_videos').upsert({
+      const { error } = await supabase.from('portal_hidden_videos').upsert({
         registered_date_time_ad: trackerInfo.registered_date_time_ad,
         video_id: activeVideo.videoId,
       }, { onConflict: 'registered_date_time_ad,video_id' });
-      setIsVideoHidden(true);
-      setUnlinkConfirmOpen(false);
-    } catch {}
+      if (error) {
+        console.error('Unlink error:', error);
+        toast.error('Failed to unlink video: ' + error.message);
+      } else {
+        setIsVideoHidden(true);
+        setUnlinkConfirmOpen(false);
+        toast.success('Video unlinked from client portal');
+      }
+    } catch (err: any) {
+      console.error('Unlink exception:', err);
+      toast.error('Failed to unlink video');
+    }
     setUnlinkLoading(false);
   };
 
@@ -968,12 +978,21 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
     if (!activeVideo || !trackerInfo?.registered_date_time_ad) return;
     setUnlinkLoading(true);
     try {
-      await supabase.from('portal_hidden_videos')
+      const { error } = await supabase.from('portal_hidden_videos')
         .delete()
         .eq('registered_date_time_ad', trackerInfo.registered_date_time_ad)
         .eq('video_id', activeVideo.videoId);
-      setIsVideoHidden(false);
-    } catch {}
+      if (error) {
+        console.error('Relink error:', error);
+        toast.error('Failed to relink video: ' + error.message);
+      } else {
+        setIsVideoHidden(false);
+        toast.success('Video re-linked to client portal');
+      }
+    } catch (err: any) {
+      console.error('Relink exception:', err);
+      toast.error('Failed to relink video');
+    }
     setUnlinkLoading(false);
   };
 
