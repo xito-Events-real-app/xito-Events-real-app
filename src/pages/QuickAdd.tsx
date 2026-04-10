@@ -139,6 +139,9 @@ export default function QuickAdd() {
       if (sourceStr.startsWith('WHATSAPP - ')) {
         setSource('WHATSAPP');
         setWhoseWhatsapp(sourceStr.replace('WHATSAPP - ', ''));
+      } else if (sourceStr.startsWith('HANDLER - ')) {
+        setSource('HANDLER');
+        setWhoseWhatsapp(sourceStr.replace('HANDLER - ', ''));
       } else if (sourceStr.startsWith('OLD CLIENT - ')) {
         setSource('OLD CLIENT');
         setOldClientName(sourceStr.replace('OLD CLIENT - ', ''));
@@ -263,6 +266,7 @@ export default function QuickAdd() {
 
   const getSourceValue = () => {
     if (source === "WHATSAPP" && whoseWhatsapp) return `WHATSAPP - ${whoseWhatsapp}`;
+    if (source === "HANDLER" && whoseWhatsapp) return `HANDLER - ${whoseWhatsapp}`;
     if (source === "OLD CLIENT" && oldClientName) return `OLD CLIENT - ${oldClientName}`;
     return source;
   };
@@ -710,6 +714,14 @@ export default function QuickAdd() {
           {source === "WHATSAPP" && (
             <FormSelect 
               label="Whose WhatsApp?" 
+              value={whoseWhatsapp} 
+              onChange={setWhoseWhatsapp} 
+              options={dropdowns?.whatsappOwners || []} 
+            />
+          )}
+          {source === "HANDLER" && (
+            <FormSelect 
+              label="Which Handler?" 
               value={whoseWhatsapp} 
               onChange={setWhoseWhatsapp} 
               options={dropdowns?.whatsappOwners || []} 

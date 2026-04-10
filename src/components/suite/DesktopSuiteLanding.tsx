@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Smartphone, LogOut, Newspaper, RefreshCw, Search, Youtube } from "lucide-react";
+import { Smartphone, LogOut, Newspaper, RefreshCw, Search, Youtube, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useDesktopMode } from "@/hooks/useDesktopMode";
@@ -16,6 +16,7 @@ import { SuiteDashboardContent } from "./SuiteDashboardContent";
 import { AllClientsAnnouncementDialog } from "./AllClientsAnnouncementDialog";
 import { useSaugatSearch } from "@/contexts/SaugatSearchContext";
 import { YouTubeDashboard } from "./YouTubeDashboard";
+import { AppSettingsSheet } from "@/components/settings/AppSettingsSheet";
 
 export function DesktopSuiteLanding() {
   const navigate = useNavigate();
@@ -31,6 +32,7 @@ export function DesktopSuiteLanding() {
   const [showYouTube, setShowYouTube] = useState(false);
   const [youtubeInitVideoId, setYoutubeInitVideoId] = useState<string | null>(null);
   const [youtubeInitStartAt, setYoutubeInitStartAt] = useState(0);
+  const [showSettings, setShowSettings] = useState(false);
 
   // Open YouTube dashboard via URL param
   useEffect(() => {
@@ -74,6 +76,7 @@ export function DesktopSuiteLanding() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex w-full">
+      <AppSettingsSheet open={showSettings} onClose={() => setShowSettings(false)} />
       <AllClientsAnnouncementDialog onNavigate={() => setShowAllClients(true)} />
       <YouTubeDashboard
         open={showYouTube}
@@ -116,6 +119,17 @@ export function DesktopSuiteLanding() {
 
             {/* Right side actions */}
             <div className="flex items-center gap-2">
+              {/* Settings Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSettings(true)}
+                className="gap-2 bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+              >
+                <Settings className="w-4 h-4" />
+                Settings
+              </Button>
+
               {/* YouTube Upload Button */}
               <Button
                 variant="outline"

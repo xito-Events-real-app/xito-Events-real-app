@@ -133,6 +133,9 @@ export function ClientDetailSheet({ client, isOpen, onClose, onSave }: ClientDet
     if (sourceStr.startsWith('WHATSAPP - ')) {
       return { base: 'WHATSAPP', sub: sourceStr.replace('WHATSAPP - ', '') };
     }
+    if (sourceStr.startsWith('HANDLER - ')) {
+      return { base: 'HANDLER', sub: sourceStr.replace('HANDLER - ', '') };
+    }
     if (sourceStr.startsWith('OLD CLIENT - ')) {
       return { base: 'OLD CLIENT', sub: sourceStr.replace('OLD CLIENT - ', '') };
     }
@@ -188,6 +191,7 @@ export function ClientDetailSheet({ client, isOpen, onClose, onSave }: ClientDet
     const { base, sub } = parseSource(client.source || '');
     setSource(base);
     if (base === 'WHATSAPP') setWhoseWhatsapp(sub);
+    else if (base === 'HANDLER') setWhoseWhatsapp(sub);
     else if (base === 'OLD CLIENT') setOldClientName(sub);
     
     setWhoAdded(client.whoAdded || '');
@@ -260,6 +264,7 @@ export function ClientDetailSheet({ client, isOpen, onClose, onSave }: ClientDet
 
   const getSourceValue = () => {
     if (source === "WHATSAPP" && whoseWhatsapp) return `WHATSAPP - ${whoseWhatsapp}`;
+    if (source === "HANDLER" && whoseWhatsapp) return `HANDLER - ${whoseWhatsapp}`;
     if (source === "OLD CLIENT" && oldClientName) return `OLD CLIENT - ${oldClientName}`;
     return source;
   };
@@ -418,6 +423,14 @@ export function ClientDetailSheet({ client, isOpen, onClose, onSave }: ClientDet
               {source === "WHATSAPP" && (
                 <FormSelect 
                   label="Whose WhatsApp?" 
+                  value={whoseWhatsapp} 
+                  onChange={setWhoseWhatsapp} 
+                  options={dropdowns?.whatsappOwners || []} 
+                />
+              )}
+              {source === "HANDLER" && (
+                <FormSelect 
+                  label="Which Handler?" 
                   value={whoseWhatsapp} 
                   onChange={setWhoseWhatsapp} 
                   options={dropdowns?.whatsappOwners || []} 
