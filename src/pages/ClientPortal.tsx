@@ -276,6 +276,7 @@ const ClientPortal = () => {
           eventMonth={majorityMonth}
           brideFullName={contactData?.brideFullName}
           groomFullName={contactData?.groomFullName}
+          registeredDateTimeAD={decodedId}
         />
       )}
       {activeTab === 'payment' && <PortalMyPayment />}
