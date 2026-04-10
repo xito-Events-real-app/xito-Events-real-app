@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { ArrowLeft, Youtube, Search, Upload, ChevronDown, ChevronRight, Send, Loader2, Play, Clock, User, Palette, Calendar, Activity, Globe, RefreshCw, CheckCircle2, Eye, Link2, AlertTriangle, MessageCircle, HardDrive, Video, X } from "lucide-react";
+import { ArrowLeft, Youtube, Search, Upload, ChevronDown, ChevronRight, Send, Loader2, Play, Clock, User, Palette, Calendar, Activity, Globe, RefreshCw, CheckCircle2, Eye, Link2, AlertTriangle, MessageCircle, HardDrive, Video, X, EyeOff } from "lucide-react";
 import { adToBS, nepaliMonthsEnglish } from "@/lib/nepali-date";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { getClientPortalUrl } from "@/lib/client-contact-api";
 import { useYouTubeUploadContext } from "@/contexts/YouTubeUploadContext";
@@ -405,6 +406,11 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
   // Manual link dialog
   const [manualLinkOpen, setManualLinkOpen] = useState(false);
   const [linkSearch, setLinkSearch] = useState("");
+
+  // Unlink from portal
+  const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false);
+  const [isVideoHidden, setIsVideoHidden] = useState(false);
+  const [unlinkLoading, setUnlinkLoading] = useState(false);
 
   // Send to client dialog
   const [sendToClientOpen, setSendToClientOpen] = useState(false);
