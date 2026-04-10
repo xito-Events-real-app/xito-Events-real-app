@@ -75,11 +75,17 @@ export function SaugatSearch() {
   const navigate = useNavigate();
   const { clients, isLoading: isClientsLoading } = useCachedData();
 
+  const rafRef = useRef<number>(0);
   const updateScrollButtons = useCallback(() => {
-    const el = recentRowRef.current;
-    if (!el) return;
-    setCanScrollLeft(el.scrollLeft > 0);
-    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 1);
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      const el = recentRowRef.current;
+      if (!el) return;
+      const left = el.scrollLeft > 0;
+      const right = el.scrollLeft < el.scrollWidth - el.clientWidth - 1;
+      setCanScrollLeft(prev => prev !== left ? left : prev);
+      setCanScrollRight(prev => prev !== right ? right : prev);
+    });
   }, []);
 
   // Load recent searches
