@@ -1535,6 +1535,31 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
                           Send to Client
                         </Button>
                       </div>
+                      {/* Unlink / Relink from Client Portal */}
+                      <div className="col-span-full">
+                        {isVideoHidden ? (
+                          <Button
+                            size="sm"
+                            className="h-7 text-xs gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
+                            disabled={unlinkLoading}
+                            onClick={handleRelinkToPortal}
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            Re-link to Client Portal
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs gap-1.5 border-red-300 text-red-600 hover:bg-red-50"
+                            disabled={unlinkLoading}
+                            onClick={() => setUnlinkConfirmOpen(true)}
+                          >
+                            <EyeOff className="w-3.5 h-3.5" />
+                            Unlink from Client Portal
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   );
                 })()}
