@@ -236,6 +236,11 @@ export function useCachedData(): UseCachedDataResult {
   // Listen for cache updates from other operations (but NOT invalidate events)
   useEffect(() => {
     const handleCacheUpdate = (e: CustomEvent<{ type: string; data: unknown }>) => {
+      // Handle bare event from AppSettingsSheet (no detail) — reload dropdowns from Supabase
+      if (!e.detail || !e.detail.type) {
+        loadDropdownsFromSupabase();
+        return;
+      }
       if (e.detail.type === 'clients') {
         if (Array.isArray(e.detail.data)) {
           setClients(e.detail.data as ClientData[]);
@@ -257,7 +262,7 @@ export function useCachedData(): UseCachedDataResult {
 
     window.addEventListener('cache-updated', handleCacheUpdate as EventListener);
     return () => window.removeEventListener('cache-updated', handleCacheUpdate as EventListener);
-  }, []);
+  }, [loadDropdownsFromSupabase]);
 
   // Listen for queue changes
   useEffect(() => {
