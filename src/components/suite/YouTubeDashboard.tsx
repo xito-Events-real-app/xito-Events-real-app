@@ -1642,6 +1642,28 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
               </DialogContent>
             </Dialog>
 
+            {/* Unlink from Portal Confirmation */}
+            <AlertDialog open={unlinkConfirmOpen} onOpenChange={setUnlinkConfirmOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Unlink from Client Portal?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This video will no longer appear on the client's portal video page. You can re-link it later.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>No</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleUnlinkFromPortal}
+                    className="bg-red-600 hover:bg-red-700"
+                    disabled={unlinkLoading}
+                  >
+                    {unlinkLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Yes, Unlink"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
             {/* Send to Client Dialog */}
             <Dialog open={sendToClientOpen} onOpenChange={setSendToClientOpen}>
               <DialogContent className="max-w-sm">
