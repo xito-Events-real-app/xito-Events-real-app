@@ -932,9 +932,50 @@ export function YouTubeDashboard({ open, onClose, initialVideoId, initialStartSe
 
   // Load tracker info for active video — match by youtube_link, upload session, OR title parsing
   useEffect(() => {
-    if (!activeVideo) { setTrackerInfo(null); return; }
+    if (!activeVideo) { setTrackerInfo(null); setIsVideoHidden(false); return; }
     findTrackerForVideo(activeVideo.videoId, activeVideo.title);
   }, [activeVideo?.videoId, allTrackerRows, uploadSessionMappings]);
+
+  // Check if active video is hidden from portal
+  useEffect(() => {
+    if (!activeVideo || !trackerInfo?.registered_date_time_ad) { setIsVideoHidden(false); return; }
+    (async () => {
+      const { data } = await supabase
+        .from('portal_hidden_videos')
+        .select('id')
+        .eq('registered_date_time_ad', trackerInfo.registered_date_time_ad!)
+        .eq('video_id', activeVideo.videoId)
+        .maybeSingle();
+      setIsVideoHidden(!!data);
+    })();
+  }, [activeVideo?.videoId, trackerInfo?.registered_date_time_ad]);
+
+  const handleUnlinkFromPortal = async () => {
+    if (!activeVideo || !trackerInfo?.registered_date_time_ad) return;
+    setUnlinkLoading(true);
+    try {
+      await supabase.from('portal_hidden_videos').upsert({
+        registered_date_time_ad: trackerInfo.registered_date_time_ad,
+        video_id: activeVideo.videoId,
+      }, { onConflict: 'registered_date_time_ad,video_id' });
+      setIsVideoHidden(true);
+      setUnlinkConfirmOpen(false);
+    } catch {}
+    setUnlinkLoading(false);
+  };
+
+  const handleRelinkToPortal = async () => {
+    if (!activeVideo || !trackerInfo?.registered_date_time_ad) return;
+    setUnlinkLoading(true);
+    try {
+      await supabase.from('portal_hidden_videos')
+        .delete()
+        .eq('registered_date_time_ad', trackerInfo.registered_date_time_ad)
+        .eq('video_id', activeVideo.videoId);
+      setIsVideoHidden(false);
+    } catch {}
+    setUnlinkLoading(false);
+  };
 
   const findTrackerForVideo = async (videoId: string, videoTitle: string) => {
     // 1. Exact video-id match against parsed IDs from youtube_link (not loose .includes)
