@@ -9,6 +9,7 @@ interface PortalMyVideosProps {
   eventMonth: string;
   brideFullName?: string;
   groomFullName?: string;
+  registeredDateTimeAD: string;
 }
 
 interface PlaylistVideo {
@@ -30,7 +31,25 @@ declare global {
   }
 }
 
-const PortalMyVideos = ({ clientName, brideFullName, groomFullName }: PortalMyVideosProps) => {
+/** Extract YouTube video ID from various URL formats */
+const extractVideoId = (url: string): string | null => {
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  // youtu.be/ID
+  const shortMatch = trimmed.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
+  if (shortMatch) return shortMatch[1];
+  // youtube.com/watch?v=ID
+  const longMatch = trimmed.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+  if (longMatch) return longMatch[1];
+  // youtube.com/embed/ID
+  const embedMatch = trimmed.match(/embed\/([a-zA-Z0-9_-]{11})/);
+  if (embedMatch) return embedMatch[1];
+  // bare 11-char ID
+  if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) return trimmed;
+  return null;
+};
+
+const PortalMyVideos = ({ clientName, brideFullName, groomFullName, registeredDateTimeAD }: PortalMyVideosProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [playlist, setPlaylist] = useState<PlaylistInfo | null>(null);
   const [videos, setVideos] = useState<PlaylistVideo[]>([]);
@@ -107,7 +126,6 @@ const PortalMyVideos = ({ clientName, brideFullName, groomFullName }: PortalMyVi
 
     if (tryInit()) return;
 
-    // Poll until API is ready
     const interval = setInterval(() => {
       if (tryInit()) clearInterval(interval);
     }, 200);
@@ -122,68 +140,103 @@ const PortalMyVideos = ({ clientName, brideFullName, groomFullName }: PortalMyVi
     };
   }, []);
 
-  // Fetch playlist data
+  // Fetch videos from tracker + optionally playlist
   useEffect(() => {
-    if (!brideFullName && !groomFullName) {
-      setIsLoading(false);
-      setError("Contact details not available");
-      return;
-    }
-
-    const findPlaylistAndLoadVideos = async () => {
+    const loadVideos = async () => {
       setIsLoading(true);
       setError("");
 
       try {
-        const { data: plData, error: plErr } = await supabase.functions.invoke("youtube-upload", {
-          body: { action: "listPlaylists" },
-        });
-        if (plErr) throw plErr;
+        // --- Source 1: video_edit_tracker (direct DB, fast) ---
+        const { data: trackerRows } = await supabase
+          .from("video_edit_tracker")
+          .select("event_name, edit_type, youtube_link, sub_event_name")
+          .eq("registered_date_time_ad", registeredDateTimeAD)
+          .eq("deleted", false)
+          .neq("youtube_link", "");
 
-        const playlists: PlaylistInfo[] = plData?.playlists || [];
-        const brideFirst = (brideFullName || "").split(" ")[0]?.toLowerCase();
-        const groomFirst = (groomFullName || "").split(" ")[0]?.toLowerCase();
-
-        const fuzzyMatch = (haystack: string, needle: string) => {
-          if (!needle || needle.length < 3) return false;
-          if (haystack.includes(needle)) return true;
-          const prefix = needle.slice(0, Math.min(4, needle.length));
-          return haystack.includes(prefix);
-        };
-
-        const matched = playlists.find((p) => {
-          const t = p.title.toLowerCase();
-          return fuzzyMatch(t, brideFirst) && fuzzyMatch(t, groomFirst);
-        });
-
-        if (!matched) {
-          setError("No playlist found");
-          setIsLoading(false);
-          return;
+        const trackerVideos: PlaylistVideo[] = [];
+        let pos = 0;
+        for (const row of trackerRows || []) {
+          const links = (row.youtube_link || "").split(",");
+          for (const link of links) {
+            const vid = extractVideoId(link);
+            if (!vid) continue;
+            const titleParts = [row.event_name, row.sub_event_name, row.edit_type].filter(Boolean);
+            trackerVideos.push({
+              videoId: vid,
+              title: titleParts.join(" - ") || "Video",
+              thumbnailUrl: `https://img.youtube.com/vi/${vid}/mqdefault.jpg`,
+              position: pos++,
+            });
+          }
         }
 
-        setPlaylist(matched);
+        // --- Source 2: YouTube playlist (only if bride/groom names exist) ---
+        let playlistVideos: PlaylistVideo[] = [];
+        let matchedPlaylist: PlaylistInfo | null = null;
 
-        const { data: vidData, error: vidErr } = await supabase.functions.invoke("youtube-upload", {
-          body: { action: "getPlaylistVideos", playlistId: matched.id },
-        });
-        if (vidErr) throw vidErr;
+        if (brideFullName || groomFullName) {
+          try {
+            const { data: plData } = await supabase.functions.invoke("youtube-upload", {
+              body: { action: "listPlaylists" },
+            });
 
-        const vids: PlaylistVideo[] = (vidData?.videos || []).sort(
-          (a: PlaylistVideo, b: PlaylistVideo) => a.position - b.position
-        );
-        setVideos(vids);
-        if (vids.length > 0) setActiveVideoId(vids[0].videoId);
+            const playlists: PlaylistInfo[] = plData?.playlists || [];
+            const brideFirst = (brideFullName || "").split(" ")[0]?.toLowerCase();
+            const groomFirst = (groomFullName || "").split(" ")[0]?.toLowerCase();
+
+            const fuzzyMatch = (haystack: string, needle: string) => {
+              if (!needle || needle.length < 3) return false;
+              if (haystack.includes(needle)) return true;
+              const prefix = needle.slice(0, Math.min(4, needle.length));
+              return haystack.includes(prefix);
+            };
+
+            const matched = playlists.find((p) => {
+              const t = p.title.toLowerCase();
+              return fuzzyMatch(t, brideFirst) && fuzzyMatch(t, groomFirst);
+            });
+
+            if (matched) {
+              matchedPlaylist = matched;
+              const { data: vidData } = await supabase.functions.invoke("youtube-upload", {
+                body: { action: "getPlaylistVideos", playlistId: matched.id },
+              });
+              playlistVideos = ((vidData?.videos || []) as PlaylistVideo[]).sort(
+                (a, b) => a.position - b.position
+              );
+            }
+          } catch (err) {
+            console.warn("Playlist fetch failed, using tracker data only:", err);
+          }
+        }
+
+        // --- Merge: prefer playlist, supplement with tracker-only videos ---
+        let finalVideos: PlaylistVideo[];
+        if (playlistVideos.length > 0) {
+          const playlistIds = new Set(playlistVideos.map((v) => v.videoId));
+          const trackerOnly = trackerVideos.filter((v) => !playlistIds.has(v.videoId));
+          finalVideos = [...playlistVideos, ...trackerOnly.map((v, i) => ({ ...v, position: playlistVideos.length + i }))];
+          setPlaylist(matchedPlaylist);
+        } else {
+          finalVideos = trackerVideos;
+          setPlaylist(null);
+        }
+
+        setVideos(finalVideos);
+        if (finalVideos.length > 0) setActiveVideoId(finalVideos[0].videoId);
+        if (finalVideos.length === 0) setError("No videos available yet");
       } catch (err: any) {
-        console.error("Failed to load YouTube videos:", err);
+        console.error("Failed to load videos:", err);
         setError("Failed to load videos");
       } finally {
         setIsLoading(false);
       }
     };
 
-    findPlaylistAndLoadVideos();
-  }, [brideFullName, groomFullName]);
+    loadVideos();
+  }, [registeredDateTimeAD, brideFullName, groomFullName]);
 
   const handleVideoClick = (videoId: string) => {
     setActiveVideoId(videoId);
@@ -224,7 +277,7 @@ const PortalMyVideos = ({ clientName, brideFullName, groomFullName }: PortalMyVi
 
   return (
     <div className="pb-24 bg-white">
-      {/* Playlist title with YouTube link */}
+      {/* Playlist title with YouTube link (only if playlist matched) */}
       {playlist && (
         <div className="px-4 pt-4 pb-2 flex items-center justify-between">
           <div>
@@ -241,7 +294,15 @@ const PortalMyVideos = ({ clientName, brideFullName, groomFullName }: PortalMyVi
         </div>
       )}
 
-      {/* YouTube Player (API-controlled) */}
+      {/* Title bar for tracker-only mode */}
+      {!playlist && (
+        <div className="px-4 pt-4 pb-2">
+          <h2 className="text-base font-bold text-gray-900 leading-snug">{clientName} Videos</h2>
+          <p className="text-xs text-gray-400 mt-0.5">{videos.length} videos</p>
+        </div>
+      )}
+
+      {/* YouTube Player */}
       <div className="w-full aspect-video bg-black">
         <div ref={playerContainerRef} className="w-full h-full" />
       </div>
