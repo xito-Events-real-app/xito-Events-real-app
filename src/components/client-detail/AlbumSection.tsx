@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { BookOpen, Image as ImageIcon, Loader2, FolderOpen, Camera, CloudCog, HardDrive, CheckCircle2, AlertTriangle, RefreshCw, ArrowLeft, ArrowRight } from "lucide-react";
+import { BookOpen, Image as ImageIcon, Loader2, FolderOpen, Camera, CloudCog, HardDrive, CheckCircle2, AlertTriangle, RefreshCw, ArrowLeft, ArrowRight, Circle, Send } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -55,6 +56,7 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
   const [albumSelections, setAlbumSelections] = useState<AlbumSelection[]>([]);
   const [loadingAllPcloud, setLoadingAllPcloud] = useState(false);
   const [refreshingXito, setRefreshingXito] = useState(false);
+  const [albumSubmission, setAlbumSubmission] = useState<{ sent_to: string; handled: boolean } | null>(null);
 
   useEffect(() => {
     if (!registeredDateTimeAD) return;
@@ -68,6 +70,22 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     if (!registeredDateTimeAD) return;
     getAlbumDefsFromDeliverables(registeredDateTimeAD).then(setAlbumDefs);
     getAlbumSelections(registeredDateTimeAD).then(setAlbumSelections);
+  }, [registeredDateTimeAD]);
+
+  // Fetch album submission status
+  useEffect(() => {
+    if (!registeredDateTimeAD) return;
+    supabase
+      .from("album_selection_submissions")
+      .select("sent_to, handled")
+      .eq("registered_date_time_ad", registeredDateTimeAD)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setAlbumSubmission({ sent_to: data[0].sent_to, handled: data[0].handled });
+        }
+      });
   }, [registeredDateTimeAD]);
 
   const albumSummary = useMemo(() => {
@@ -205,6 +223,21 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
 
   const allCountsLoaded = tabs.length > 0 && tabs.every(t => tabPhotoCounts[t.id] !== undefined && pcloudCounts[t.id] !== undefined);
 
+  // Compute album workflow status
+  const workflowStatus = useMemo(() => {
+    const steps = [
+      { label: "Uploaded in pCloud", condition: totalPcloudPhotos > 0 },
+      { label: "Uploaded for Album Selection", condition: totalXitoPhotos > 0 },
+      { label: "Album Selection in Progress", condition: albumSelections.length > 0 },
+      { label: albumSubmission ? `Sent for Design → ${albumSubmission.sent_to}` : "Sent for Design", condition: !!albumSubmission },
+    ];
+    let currentStep = 0;
+    for (let i = 0; i < steps.length; i++) {
+      if (steps[i].condition) currentStep = i + 1;
+    }
+    return { steps, currentStep };
+  }, [totalPcloudPhotos, totalXitoPhotos, albumSelections.length, albumSubmission]);
+
   // ===== PHOTOS VIEW LOGIC =====
   useEffect(() => {
     if (tabs.length > 0 && !activeTab) setActiveTab(tabs[0].id);
@@ -321,7 +354,7 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
             </Card>
           ) : (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Card 1: Photos for Album (Xito Drive) */}
                 <Card className="bg-[hsl(220,25%,12%)] border-white/10">
                   <CardContent className="p-5">
@@ -422,6 +455,53 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
                           );
                         })}
                       </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Card 4: Album Workflow Status */}
+                <Card className="bg-[hsl(220,25%,12%)] border-white/10">
+                  <CardContent className="p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Send className="h-5 w-5 text-violet-400" />
+                      <span className="text-base font-bold text-white">Workflow Status</span>
+                    </div>
+                    <div className="space-y-0">
+                      {workflowStatus.steps.map((step, i) => {
+                        const stepNum = i + 1;
+                        const isCompleted = stepNum <= workflowStatus.currentStep;
+                        const isCurrent = stepNum === workflowStatus.currentStep;
+                        const isPending = stepNum > workflowStatus.currentStep;
+                        return (
+                          <div key={i} className="flex items-start gap-3">
+                            {/* Vertical line + icon */}
+                            <div className="flex flex-col items-center">
+                              {isCompleted ? (
+                                <div className={cn("h-6 w-6 rounded-full flex items-center justify-center shrink-0", isCurrent ? "bg-emerald-500" : "bg-emerald-500/60")}>
+                                  <CheckCircle2 className="h-4 w-4 text-white" />
+                                </div>
+                              ) : (
+                                <div className="h-6 w-6 rounded-full border-2 border-white/20 flex items-center justify-center shrink-0">
+                                  <Circle className="h-3 w-3 text-white/20" />
+                                </div>
+                              )}
+                              {i < workflowStatus.steps.length - 1 && (
+                                <div className={cn("w-0.5 h-5", isCompleted ? "bg-emerald-500/40" : "bg-white/10")} />
+                              )}
+                            </div>
+                            <span className={cn(
+                              "text-sm pt-0.5 leading-tight",
+                              isCompleted ? "text-white font-medium" : "text-white/30",
+                              isCurrent && "text-emerald-300 font-semibold"
+                            )}>
+                              {step.label}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {workflowStatus.currentStep === 0 && (
+                      <p className="text-xs text-white/30 mt-3">No activity yet</p>
                     )}
                   </CardContent>
                 </Card>
