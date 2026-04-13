@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      album_selection_submissions: {
+        Row: {
+          album_details: Json
+          bride_name: string
+          client_name: string
+          created_at: string
+          custom_text: string
+          groom_name: string
+          handled: boolean
+          handled_response: string
+          id: string
+          registered_date_time_ad: string
+          selected_date: string
+          sent_to: string
+        }
+        Insert: {
+          album_details?: Json
+          bride_name?: string
+          client_name?: string
+          created_at?: string
+          custom_text?: string
+          groom_name?: string
+          handled?: boolean
+          handled_response?: string
+          id?: string
+          registered_date_time_ad: string
+          selected_date?: string
+          sent_to?: string
+        }
+        Update: {
+          album_details?: Json
+          bride_name?: string
+          client_name?: string
+          created_at?: string
+          custom_text?: string
+          groom_name?: string
+          handled?: boolean
+          handled_response?: string
+          id?: string
+          registered_date_time_ad?: string
+          selected_date?: string
+          sent_to?: string
+        }
+        Relationships: []
+      }
       album_types: {
         Row: {
           created_at: string
