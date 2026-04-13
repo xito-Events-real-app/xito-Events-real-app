@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { BookOpen, Image as ImageIcon, Loader2, FolderOpen, Camera, CloudCog, HardDrive, CheckCircle2, AlertTriangle, RefreshCw, ArrowLeft, ArrowRight, Circle, Send, Settings } from "lucide-react";
+import { BookOpen, Image as ImageIcon, Loader2, FolderOpen, Camera, CloudCog, HardDrive, CheckCircle2, AlertTriangle, RefreshCw, ArrowLeft, ArrowRight, Circle, Send, Settings, Copy, ClipboardCheck } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -107,7 +108,31 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
 
   // Copy HQ Album Photos state
   const [copyStatus, setCopyStatus] = useState<'idle' | 'confirming' | 'copying' | 'done' | 'error'>('idle');
-  const [copyResult, setCopyResult] = useState<{ copied: number; expected: number; errors: string[] } | null>(null);
+  const [copyResult, setCopyResult] = useState<{ copied: number; expected: number; errors: string[]; albumDetails?: { albumType: string; folderName: string; count: number }[]; monthFolder?: string; copiedAt?: string } | null>(null);
+
+  // Load copy history from DB on mount
+  useEffect(() => {
+    if (!registeredDateTimeAD) return;
+    supabase
+      .from("album_copy_history")
+      .select("*")
+      .eq("registered_date_time_ad", registeredDateTimeAD)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          const albums = (data.albums_copied as any[]) || [];
+          setCopyResult({
+            copied: data.total_copied,
+            expected: data.total_expected,
+            errors: data.errors || [],
+            albumDetails: albums,
+            monthFolder: data.month_folder,
+            copiedAt: data.copied_at,
+          });
+          setCopyStatus('done');
+        }
+      });
+  }, [registeredDateTimeAD]);
 
   useEffect(() => {
     if (!registeredDateTimeAD) return;
@@ -410,16 +435,18 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
 
       await Promise.all(folderNames.map(f => createPCloudFolderByPath(`${basePath}/${f}`)));
 
+      const albumDetails: { albumType: string; folderName: string; count: number }[] = [];
+
       // Copy files for each album type
       for (const [albumType, selections] of Object.entries(grouped)) {
         const folderName = albumTypeToFolder[albumType] || albumType.replace(/_/g, ' ').toUpperCase();
         expected += selections.length;
+        let albumCopied = 0;
 
         // Process in batches of 10 to avoid overwhelming pCloud
         for (let i = 0; i < selections.length; i += 10) {
           const batch = selections.slice(i, i + 10);
           const results = await Promise.allSettled(batch.map(async (sel) => {
-            // photo_key is the Xito path like "FALGUN EVENTS 2082/CLIENT NAME/Photos/EVENT/PHOTOGRAPHER/filename.jpg"
             const fileName = sel.photo_key.split('/').pop() || '';
             const sourcePath = `/WEDDING TALES NEPAL/${sel.photo_key}`;
             const destPath = `${basePath}/${folderName}/${fileName}`;
@@ -428,21 +455,38 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
           results.forEach((r, idx) => {
             if (r.status === 'fulfilled') {
               copied++;
+              albumCopied++;
             } else {
               errors.push(`${batch[idx].photo_key}: ${r.reason?.message || 'Copy failed'}`);
             }
           });
         }
+
+        albumDetails.push({ albumType, folderName, count: albumCopied });
       }
 
-      setCopyResult({ copied, expected, errors });
+      const result = { copied, expected, errors, albumDetails, monthFolder, copiedAt: new Date().toISOString() };
+      setCopyResult(result);
       setCopyStatus('done');
+
+      // Save to database
+      await supabase.from("album_copy_history").upsert({
+        registered_date_time_ad: registeredDateTimeAD,
+        client_name: clientName,
+        month_folder: monthFolder,
+        albums_copied: albumDetails,
+        total_copied: copied,
+        total_expected: expected,
+        errors: errors,
+        copied_at: new Date().toISOString(),
+      }, { onConflict: "registered_date_time_ad" });
+
     } catch (err: any) {
       errors.push(err.message || 'Unknown error');
       setCopyResult({ copied, expected, errors });
       setCopyStatus('error');
     }
-  }, [albumSelections, albumDefs, clientName, getMajorityYearMonth, hasFrameDeliverable]);
+  }, [albumSelections, albumDefs, clientName, getMajorityYearMonth, hasFrameDeliverable, registeredDateTimeAD]);
 
   // ===== PHOTOS VIEW LOGIC =====
   useEffect(() => {
@@ -755,69 +799,141 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
                 </Card>
               )}
 
-              {/* Gear Button: Copy HQ Album Photos */}
-              <div className="flex flex-col items-center gap-4 py-8">
-                <div className="relative">
-                  {isCopyEnabled && copyStatus !== 'done' && (
-                    <>
-                      <div className="absolute inset-[-12px] rounded-full border-2 border-violet-400/15 animate-[pulse_3s_ease-in-out_infinite]" />
-                      <div className="absolute inset-[-6px] rounded-full border border-violet-400/20 animate-[pulse_2.5s_ease-in-out_infinite_0.5s]" />
-                    </>
-                  )}
-                  {copyStatus === 'copying' && (
-                    <div className="absolute inset-[-8px] rounded-full border-2 border-t-violet-400 border-r-violet-400/40 border-b-violet-400/10 border-l-violet-400/40 animate-spin" />
-                  )}
-                  <button
-                    onClick={() => isCopyEnabled && copyStatus !== 'copying' && setCopyStatus('confirming')}
-                    disabled={!isCopyEnabled || copyStatus === 'copying'}
-                    className={cn(
-                      "relative h-32 w-32 rounded-full flex items-center justify-center transition-all duration-500",
-                      isCopyEnabled
-                        ? "bg-gradient-to-br from-violet-500/10 via-indigo-500/10 to-sky-500/10 shadow-[0_0_25px_rgba(139,92,246,0.1)] hover:shadow-[0_0_35px_rgba(139,92,246,0.2)] cursor-pointer border-2 border-violet-400/30 hover:border-violet-400/50"
-                        : "bg-white/5 border-2 border-white/10 cursor-not-allowed opacity-30",
-                      copyStatus === 'copying' && "shadow-[0_0_40px_rgba(139,92,246,0.25)]"
+              {/* Gear Button: Copy HQ Album Photos — Horizontal Layout */}
+              <div className="flex flex-col items-center gap-3 py-8">
+                <div className="flex items-center gap-6">
+                  {/* Left Side: Album details */}
+                  <div className="w-40 text-right space-y-1.5">
+                    {copyStatus === 'done' && copyResult?.albumDetails ? (
+                      copyResult.albumDetails.map((a, i) => (
+                        <div key={i} className="text-sm">
+                          <span className="text-white/50">{a.folderName}:</span>{" "}
+                          <span className="text-emerald-400 font-bold">{a.count}</span>
+                        </div>
+                      ))
+                    ) : isCopyEnabled ? (
+                      albumDefs.map((d, i) => {
+                        const count = albumSelections.filter(s => s.album_type === d.type).length;
+                        return (
+                          <div key={i} className="text-sm">
+                            <span className="text-white/30">{d.name.toUpperCase()}:</span>{" "}
+                            <span className="text-white/50 font-medium">{count}</span>
+                          </div>
+                        );
+                      })
+                    ) : null}
+                  </div>
+
+                  {/* Center: Gear */}
+                  <div className="relative">
+                    {isCopyEnabled && copyStatus !== 'done' && copyStatus !== 'copying' && (
+                      <>
+                        <div className="absolute inset-[-12px] rounded-full border-2 border-white/5 animate-[pulse_3s_ease-in-out_infinite]" />
+                        <div className="absolute inset-[-6px] rounded-full border border-white/8 animate-[pulse_2.5s_ease-in-out_infinite_0.5s]" />
+                      </>
                     )}
-                  >
+                    {copyStatus === 'copying' && (
+                      <div className="absolute inset-[-8px] rounded-full border-2 border-t-emerald-400 border-r-emerald-400/40 border-b-emerald-400/10 border-l-emerald-400/40 animate-spin" />
+                    )}
+                    <button
+                      onClick={() => isCopyEnabled && copyStatus !== 'copying' && copyStatus !== 'done' && setCopyStatus('confirming')}
+                      disabled={!isCopyEnabled || copyStatus === 'copying' || copyStatus === 'done'}
+                      className={cn(
+                        "relative h-32 w-32 rounded-full flex items-center justify-center transition-all duration-500",
+                        "bg-[hsl(220,25%,8%)] border-2",
+                        isCopyEnabled
+                          ? copyStatus === 'done'
+                            ? "border-emerald-500/30 shadow-[0_0_20px_rgba(16,185,129,0.1)]"
+                            : "border-white/15 hover:border-white/30 cursor-pointer shadow-[0_0_20px_rgba(255,255,255,0.03)]"
+                          : "border-white/5 cursor-not-allowed opacity-30",
+                        copyStatus === 'copying' && "shadow-[0_0_30px_rgba(16,185,129,0.15)]"
+                      )}
+                    >
+                      {copyStatus === 'done' && copyResult ? (
+                        <div className="flex flex-col items-center justify-center">
+                          <CheckCircle2 className="h-5 w-5 text-emerald-400 mb-1" />
+                          <span className={cn(
+                            "text-3xl font-black",
+                            copyResult.errors.length > 0 ? "text-amber-400" : "text-emerald-400"
+                          )}>
+                            {copyResult.copied}
+                          </span>
+                          <span className="text-[10px] text-white/40 font-medium tracking-wider uppercase">copied</span>
+                        </div>
+                      ) : (
+                        <Settings className={cn(
+                          "h-14 w-14 transition-all duration-300",
+                          isCopyEnabled ? "text-white/30" : "text-white/10",
+                          copyStatus === 'copying' && "animate-spin text-emerald-400/60"
+                        )} />
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Right Side: Status & date */}
+                  <div className="w-40 space-y-1.5">
                     {copyStatus === 'done' && copyResult ? (
-                      <div className="flex flex-col items-center justify-center animate-scale-in">
-                        <span className={cn(
-                          "text-3xl font-black",
-                          copyResult.errors.length > 0 ? "text-amber-400" : "text-emerald-400"
-                        )}>
-                          {copyResult.copied}
-                        </span>
-                        <span className="text-[10px] text-white/50 font-medium tracking-wider uppercase">copied</span>
-                        {copyResult.errors.length > 0 && (
-                          <span className="text-[9px] text-amber-400/80 mt-0.5">{copyResult.errors.length} failed</span>
+                      <>
+                        <div className="text-sm">
+                          {copyResult.errors.length > 0 ? (
+                            <span className="text-amber-400 font-medium">{copyResult.errors.length} failed</span>
+                          ) : (
+                            <span className="text-emerald-400 font-medium">✓ All copied</span>
+                          )}
+                        </div>
+                        <div className="text-xs text-white/30">
+                          {copyResult.monthFolder || ''}
+                        </div>
+                        {copyResult.copiedAt && (
+                          <div className="text-[10px] text-white/20">
+                            {new Date(copyResult.copiedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </div>
                         )}
-                      </div>
+                        <div className="text-xs text-white/30 mt-1">
+                          In pCloud
+                        </div>
+                      </>
+                    ) : isCopyEnabled ? (
+                      <span className="text-xs text-white/30">Ready to copy</span>
                     ) : (
-                      <Settings className={cn(
-                        "h-14 w-14 transition-all duration-300",
-                        isCopyEnabled ? "text-violet-300/80 drop-shadow-[0_0_6px_rgba(139,92,246,0.3)]" : "text-white/15",
-                        copyStatus === 'copying' && "animate-spin"
-                      )} />
+                      <span className="text-xs text-white/20">Waiting for design</span>
                     )}
-                  </button>
+                  </div>
                 </div>
+
                 <span className={cn(
                   "text-sm font-semibold tracking-wide transition-colors",
-                  isCopyEnabled ? "text-violet-300/80" : "text-white/20"
+                  isCopyEnabled ? "text-white/50" : "text-white/15"
                 )}>
                   Copy HQ Album Photos
                 </span>
+
+                {/* Copy Information Button */}
                 {copyStatus === 'done' && copyResult && (
-                  <div className="text-center max-w-xs animate-fade-in">
-                    {copyResult.errors.length > 0 ? (
-                      <p className="text-xs text-amber-400">
-                        {copyResult.copied}/{copyResult.expected} copied · {copyResult.errors.length} failed
-                      </p>
-                    ) : (
-                      <p className="text-xs text-emerald-400 font-medium">
-                        ✓ All {copyResult.copied} photos copied successfully
-                      </p>
-                    )}
-                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-white/10 text-white/60 hover:text-white hover:bg-white/10 gap-2 mt-1"
+                    onClick={() => {
+                      const monthFolder = copyResult.monthFolder || getMajorityYearMonth();
+                      const albumLines = (copyResult.albumDetails || []).map(a => `${a.folderName} (${a.count})`).join(', ');
+                      const total = copyResult.copied;
+                      const pcloudPath = `ALBUM AND FRAME - WEDDING TALES NEPAL/${monthFolder}/${clientName}`;
+                      const text = [
+                        `Client: ${clientName}`,
+                        `Month: ${monthFolder}`,
+                        `Albums: ${albumLines}`,
+                        `Total: ${total} photos`,
+                        `pCloud: pcloud://folder/${pcloudPath}`,
+                      ].join('\n');
+                      navigator.clipboard.writeText(text).then(() => {
+                        toast.success("Information copied!");
+                      });
+                    }}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    Copy Information
+                  </Button>
                 )}
               </div>
 
