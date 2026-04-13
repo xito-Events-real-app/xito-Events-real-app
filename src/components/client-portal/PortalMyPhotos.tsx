@@ -49,6 +49,7 @@ const PortalMyPhotos = ({
   registeredDateTimeAD, albums, albumSelections, onAlbumSelectionsChange
 }: PortalMyPhotosProps) => {
   const [activeTabIndex, setActiveTabIndex] = useState(0);
+  const [initialTabResolved, setInitialTabResolved] = useState(false);
   const [photos, setPhotos] = useState<E2File[]>([]);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
