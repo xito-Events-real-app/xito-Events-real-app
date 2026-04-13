@@ -83,6 +83,7 @@ function AdminOnlyFeatures() {
     <>
       <WtnFilesAnnouncement />
       <StartupAnnouncementPopup />
+      <AlbumSubmissionAlert />
       <SaugatSearch />
       <FloatingBookingCalendar />
       <FloatingBenzoKeep />

@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +42,8 @@ const AlbumLockWizard = ({
   brideName,
   groomName,
   firstEventDateAD,
+  clientName = "",
+  registeredDateTimeAD = "",
 }: AlbumLockWizardProps) => {
   const [step, setStep] = useState(1);
 
