@@ -1,59 +1,43 @@
 
 
-# Album Copy History + Info Copy Button + Gear Redesign
+# Album Copy: Persist History, Enhanced Copy Info, Better Colors
 
-## What gets built
+## What changes
 
-1. **Database table** `album_copy_history` to persist copy results so the gear always shows the last copy status
-2. **Post-copy state** restored from DB on load — if photos were already copied, gear shows the result immediately
-3. **"Copy Information" button** that copies a formatted summary to clipboard (client name, month, albums with counts, pCloud link)
-4. **Gear redesign**: background matches the page dark color (`hsl(220,25%,8%)`), copy result info displayed on left and right sides of the gear instead of inside/below
+### 1. Store existing copy result for KARISHMA SHRESTHA in DB
+Since the copy was already done but not saved to DB, we need to check the pCloud destination folder to verify files exist, then store the result in `album_copy_history`.
 
-## Technical details
+**Approach**: After the gear loads with no DB history, add logic to check if the destination folders already exist in pCloud. If files are found, auto-populate the copy history in the DB and show "done" status. This is a one-time reconciliation.
 
-### 1. New table: `album_copy_history`
-```sql
-CREATE TABLE album_copy_history (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  registered_date_time_ad text NOT NULL UNIQUE,
-  client_name text NOT NULL DEFAULT '',
-  month_folder text NOT NULL DEFAULT '',
-  albums_copied jsonb NOT NULL DEFAULT '[]',
-  total_copied integer NOT NULL DEFAULT 0,
-  total_expected integer NOT NULL DEFAULT 0,
-  errors text[] NOT NULL DEFAULT '{}',
-  copied_at timestamptz NOT NULL DEFAULT now()
-);
-ALTER TABLE album_copy_history ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow all" ON album_copy_history FOR ALL USING (true) WITH CHECK (true);
+### 2. Add bride/groom names to "Copy Information" text
+- Fetch `bride_name` and `groom_name` from `album_selection_submissions` for the client
+- Include in the copy text output
+- Add `https://my.pcloud.com/` link alongside the `pcloud://` deep link
+
+**Updated copy text format:**
+```
+Client: KARISHMA SHRESTHA
+Bride: Krishma
+Groom: Sanish
+Month: FALGUN EVENTS 2082
+Albums: BRIDE ALBUM (140), GROOM ALBUM (140)
+Total: 280 photos
+pCloud: https://my.pcloud.com/
+Path: ALBUM AND FRAME - WEDDING TALES NEPAL/FALGUN EVENTS 2082/KARISHMA SHRESTHA
 ```
 
-`albums_copied` stores: `[{ "album_type": "bride_album", "folder_name": "BRIDE ALBUM", "count": 140 }, ...]`
+### 3. Fix left/right info text colors
+Current colors (`text-white/50`, `text-white/30`, `text-white/20`) are too dim. Change to:
+- Album names: `text-white/80` 
+- Counts: `text-emerald-400 font-bold` (keep)
+- Status text: `text-emerald-300` / `text-amber-300`
+- Month folder: `text-white/60`
+- Date: `text-white/50`
+- "In pCloud": `text-sky-400/80`
 
-### 2. Save copy result after `executeCopy` completes
-- Insert/upsert into `album_copy_history` with the copy result details
-- On component mount, fetch from `album_copy_history` for this client — if exists, set `copyStatus='done'` and `copyResult` immediately
+### 4. Auto-detect already-copied albums from pCloud
+On mount, if no `album_copy_history` exists but `isCopyEnabled` is true, check the pCloud destination folder. If files exist there, save to DB and show done state. This prevents re-copying.
 
-### 3. Gear layout redesign
-- Gear background: `bg-[hsl(220,25%,8%)]` with subtle border — matches page background
-- Layout changes from vertical stack to horizontal: `[Left Info] [Gear] [Right Info]`
-  - Left side: album names + counts (e.g., "BRIDE ALBUM: 140", "GROOM ALBUM: 140")
-  - Right side: status text + date copied
-- Gear stays centered, smaller text flanks it
-
-### 4. "Copy Information" button
-- Small button below the gear area, visible only when `copyStatus === 'done'`
-- On click, builds text like:
-  ```
-  Client: KARISHMA SHRESTHA
-  Month: FALGUN EVENTS 2082
-  Albums: BRIDE ALBUM (140), GROOM ALBUM (140)
-  Total: 280 photos
-  pCloud: pcloud://folder/ALBUM AND FRAME - WEDDING TALES NEPAL/FALGUN EVENTS 2082/KARISHMA SHRESTHA
-  ```
-- Copies to clipboard with toast "Information copied!"
-
-### Files changed
-- **Migration**: new `album_copy_history` table
-- **`src/components/client-detail/AlbumSection.tsx`**: load history on mount, save after copy, redesigned gear layout, copy info button
+## Files changed
+- **`src/components/client-detail/AlbumSection.tsx`**: All UI and logic changes (fetch bride/groom from submissions, reconciliation check, updated copy text, better colors)
 
