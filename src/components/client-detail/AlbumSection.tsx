@@ -350,7 +350,99 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     return { steps, currentStep };
   }, [totalPcloudPhotos, totalXitoPhotos, albumSelections.length, albumSubmission]);
 
-  // ===== PHOTOS VIEW LOGIC =====
+  // Determine the majority month/year from assignments for copy destination
+  const getMajorityYearMonth = useCallback(() => {
+    const counts: Record<string, number> = {};
+    assignments.forEach(a => {
+      const y = String(parseInt(a.eventYear || "0"));
+      const m = parseInt(a.eventMonth || "0");
+      if (y === "0" || !m) return;
+      const monthLabel = NEPALI_MONTHS[m] || `MONTH ${m}`;
+      const key = `${monthLabel} EVENTS ${y}`;
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    let best = "";
+    let bestCount = 0;
+    Object.entries(counts).forEach(([k, v]) => {
+      if (v > bestCount) { best = k; bestCount = v; }
+    });
+    return best;
+  }, [assignments]);
+
+  // Has frame deliverable?
+  const hasFrameDeliverable = useMemo(() => {
+    return deliverables.some(d => d.section === "album" && d.enabled && d.deliverable_type.toLowerCase().includes("frame"));
+  }, [deliverables]);
+
+  const isCopyEnabled = workflowStatus.currentStep >= 4; // Sent for Design
+
+  // Copy HQ album photos orchestration
+  const executeCopy = useCallback(async () => {
+    setCopyStatus('copying');
+    setCopyResult(null);
+    const errors: string[] = [];
+    let copied = 0;
+    let expected = 0;
+
+    try {
+      const monthFolder = getMajorityYearMonth();
+      if (!monthFolder) throw new Error("Could not determine month folder");
+
+      const basePath = `/ALBUM AND FRAME - WEDDING TALES NEPAL/${monthFolder}/${clientName}`;
+
+      // Group selections by album_type
+      const grouped: Record<string, AlbumSelection[]> = {};
+      albumSelections.forEach(s => {
+        if (!grouped[s.album_type]) grouped[s.album_type] = [];
+        grouped[s.album_type].push(s);
+      });
+
+      // Map album_type to folder name
+      const albumTypeToFolder: Record<string, string> = {};
+      albumDefs.forEach(def => {
+        const folderName = def.name.toUpperCase();
+        albumTypeToFolder[def.type] = folderName;
+      });
+
+      // Create all album folders + FRAME if needed
+      const folderNames = Object.values(albumTypeToFolder);
+      if (hasFrameDeliverable) folderNames.push("FRAME");
+
+      await Promise.all(folderNames.map(f => createPCloudFolderByPath(`${basePath}/${f}`)));
+
+      // Copy files for each album type
+      for (const [albumType, selections] of Object.entries(grouped)) {
+        const folderName = albumTypeToFolder[albumType] || albumType.replace(/_/g, ' ').toUpperCase();
+        expected += selections.length;
+
+        // Process in batches of 10 to avoid overwhelming pCloud
+        for (let i = 0; i < selections.length; i += 10) {
+          const batch = selections.slice(i, i + 10);
+          const results = await Promise.allSettled(batch.map(async (sel) => {
+            // photo_key is the Xito path like "FALGUN EVENTS 2082/CLIENT NAME/Photos/EVENT/PHOTOGRAPHER/filename.jpg"
+            const fileName = sel.photo_key.split('/').pop() || '';
+            const sourcePath = `/WEDDING TALES NEPAL/${sel.photo_key}`;
+            const destPath = `${basePath}/${folderName}/${fileName}`;
+            await copyPCloudFileByPath(sourcePath, destPath);
+          }));
+          results.forEach((r, idx) => {
+            if (r.status === 'fulfilled') {
+              copied++;
+            } else {
+              errors.push(`${batch[idx].photo_key}: ${r.reason?.message || 'Copy failed'}`);
+            }
+          });
+        }
+      }
+
+      setCopyResult({ copied, expected, errors });
+      setCopyStatus('done');
+    } catch (err: any) {
+      errors.push(err.message || 'Unknown error');
+      setCopyResult({ copied, expected, errors });
+      setCopyStatus('error');
+    }
+  }, [albumSelections, albumDefs, clientName, getMajorityYearMonth, hasFrameDeliverable]);
   useEffect(() => {
     if (tabs.length > 0 && !activeTab) setActiveTab(tabs[0].id);
   }, [tabs, activeTab]);
