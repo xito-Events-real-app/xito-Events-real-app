@@ -291,6 +291,16 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
           onClose={() => setViewerIndex(null)}
         />
       )}
+
+      <AlbumLockWizard
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        albums={albums}
+        selections={selections}
+        brideName={brideName}
+        groomName={groomName}
+        firstEventDateAD={firstEventDateAD}
+      />
     </>
   );
 };
