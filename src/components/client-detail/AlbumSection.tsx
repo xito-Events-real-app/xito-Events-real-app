@@ -1,10 +1,14 @@
-import { useState, useEffect, useMemo } from "react";
-import { BookOpen, Image as ImageIcon, Loader2, FolderOpen, Camera } from "lucide-react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { BookOpen, Image as ImageIcon, Loader2, FolderOpen, Camera, CloudCog, HardDrive, CheckCircle2, AlertTriangle, RefreshCw } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { loadDeliverables, DeliverableRow } from "@/lib/deliverables-api";
 import { listE2Folder, getE2FileUrls, E2File } from "@/lib/idrive-e2-api";
+import { listPCloudFolderByPath, isPCloudImage, formatPCloudSize } from "@/lib/pcloud-api";
+import { getAlbumSelections, getAlbumDefsFromDeliverables, AlbumSelection, AlbumDef } from "@/lib/album-selection-api";
 import { FreelancerAssignment } from "@/lib/freelancer-assignment-api";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
 import { cn } from "@/lib/utils";
@@ -22,7 +26,9 @@ const isImage = (key: string) => IMAGE_EXTS.some((e) => key.toLowerCase().endsWi
 // Module-level caches — survive unmount/remount within the same browser session
 const albumFolderCache: Record<string, E2File[]> = {};
 const albumUrlCache: Record<string, Record<string, string>> = {};
+const pcloudCountCache: Record<string, { count: number; totalSize: number }> = {};
 
+const MAX_ALBUM_PHOTOS = 140;
 
 interface TabDef {
   id: string;
@@ -30,6 +36,7 @@ interface TabDef {
   eventName: string;
   photographerName: string;
   s3Prefix: string;
+  pcloudPath: string;
 }
 
 const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSectionProps) => {
@@ -41,8 +48,13 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [tabPhotoCounts, setTabPhotoCounts] = useState<Record<string, number>>({});
-  
 
+  // Dashboard state
+  const [pcloudCounts, setPcloudCounts] = useState<Record<string, { count: number; totalSize: number }>>(pcloudCountCache);
+  const [pcloudLoading, setPcloudLoading] = useState<Record<string, boolean>>({});
+  const [albumDefs, setAlbumDefs] = useState<AlbumDef[]>([]);
+  const [albumSelections, setAlbumSelections] = useState<AlbumSelection[]>([]);
+  const [loadingAllPcloud, setLoadingAllPcloud] = useState(false);
 
   // Load deliverables
   useEffect(() => {
@@ -51,6 +63,13 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
       setDeliverables(d);
       setDeliverablesLoaded(true);
     });
+  }, [registeredDateTimeAD]);
+
+  // Load album defs + selections
+  useEffect(() => {
+    if (!registeredDateTimeAD) return;
+    getAlbumDefsFromDeliverables(registeredDateTimeAD).then(setAlbumDefs);
+    getAlbumSelections(registeredDateTimeAD).then(setAlbumSelections);
   }, [registeredDateTimeAD]);
 
   // Album summary from deliverables
@@ -67,7 +86,7 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     return { count: albumRows.length, sides, types };
   }, [deliverables]);
 
-  // Build tabs from assignments — use each assignment's own eventMonth/eventYear
+  // Build tabs from assignments
   const tabs: TabDef[] = useMemo(() => {
     const result: TabDef[] = [];
     const seen = new Set<string>();
@@ -95,43 +114,94 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
           eventName: a.event,
           photographerName: p.name,
           s3Prefix: prefix,
+          pcloudPath: `WEDDING TALES NEPAL/${folderLabel}/${clientName}/Photos/${a.event}/${p.name}`,
         });
       });
     });
     return result;
   }, [assignments, clientName]);
 
-  // Fetch photo count only for the active tab (lazy) — not all tabs on mount
+  // Fetch pCloud count for a single tab
+  const loadPcloudCount = useCallback(async (tab: TabDef) => {
+    if (pcloudCountCache[tab.id]) {
+      setPcloudCounts(prev => ({ ...prev, [tab.id]: pcloudCountCache[tab.id] }));
+      return;
+    }
+    setPcloudLoading(prev => ({ ...prev, [tab.id]: true }));
+    try {
+      const folder = await listPCloudFolderByPath(tab.pcloudPath);
+      const images = folder.contents.filter(isPCloudImage);
+      const totalSize = images.reduce((s, f) => s + (f.size || 0), 0);
+      const result = { count: images.length, totalSize };
+      pcloudCountCache[tab.id] = result;
+      setPcloudCounts(prev => ({ ...prev, [tab.id]: result }));
+    } catch {
+      setPcloudCounts(prev => ({ ...prev, [tab.id]: { count: 0, totalSize: 0 } }));
+    } finally {
+      setPcloudLoading(prev => ({ ...prev, [tab.id]: false }));
+    }
+  }, []);
+
+  // Load pCloud count for active tab lazily
   useEffect(() => {
     if (!activeTab) return;
     const tab = tabs.find(t => t.id === activeTab);
     if (!tab) return;
-    // Already have count? skip
+    if (pcloudCounts[tab.id] !== undefined) return;
+    loadPcloudCount(tab);
+  }, [activeTab, tabs, pcloudCounts, loadPcloudCount]);
+
+  // Load all pCloud counts at once
+  const loadAllPcloudCounts = useCallback(async () => {
+    setLoadingAllPcloud(true);
+    await Promise.all(tabs.map(t => loadPcloudCount(t)));
+    setLoadingAllPcloud(false);
+  }, [tabs, loadPcloudCount]);
+
+  // Fetch photo count only for the active tab (lazy)
+  useEffect(() => {
+    if (!activeTab) return;
+    const tab = tabs.find(t => t.id === activeTab);
+    if (!tab) return;
     if (tabPhotoCounts[tab.id] !== undefined && albumFolderCache[tab.id]) return;
     if (albumFolderCache[tab.id]) {
       setTabPhotoCounts(prev => ({ ...prev, [tab.id]: albumFolderCache[tab.id].length }));
       return;
     }
-    // Will be fetched by the photo loading effect below
   }, [activeTab, tabs]);
 
   // Total photos across loaded tabs
-  const totalPhotos = useMemo(() => {
+  const totalXitoPhotos = useMemo(() => {
     return Object.values(tabPhotoCounts).reduce((sum, c) => sum + c, 0);
   }, [tabPhotoCounts]);
+
+  const totalPcloudPhotos = useMemo(() => {
+    return Object.values(pcloudCounts).reduce((sum, c) => sum + c.count, 0);
+  }, [pcloudCounts]);
+
+  const totalPcloudSize = useMemo(() => {
+    return Object.values(pcloudCounts).reduce((sum, c) => sum + c.totalSize, 0);
+  }, [pcloudCounts]);
+
+  // Album selection counts per album type
+  const albumProgress = useMemo(() => {
+    return albumDefs.map(def => {
+      const count = albumSelections.filter(s => s.album_type === def.type).length;
+      return { ...def, count };
+    });
+  }, [albumDefs, albumSelections]);
 
   // Auto-select first tab
   useEffect(() => {
     if (tabs.length > 0 && !activeTab) setActiveTab(tabs[0].id);
   }, [tabs, activeTab]);
 
-  // Load photos when tab changes — use module-level cache, abort stale requests
+  // Load photos when tab changes
   useEffect(() => {
     const tab = tabs.find((t) => t.id === activeTab);
     if (!tab) return;
     let stale = false;
 
-    // If both folder listing and URLs are cached, load instantly
     if (albumFolderCache[tab.id] && albumUrlCache[tab.id]) {
       setPhotos(albumFolderCache[tab.id]);
       setPhotoUrls(albumUrlCache[tab.id]);
@@ -183,6 +253,9 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     [photos, photoUrls]
   );
 
+  // Check if all tabs have both counts loaded for match comparison
+  const allCountsLoaded = tabs.length > 0 && tabs.every(t => tabPhotoCounts[t.id] !== undefined && pcloudCounts[t.id] !== undefined);
+
   return (
     <div className="space-y-4">
       {/* Album Summary Header */}
@@ -205,7 +278,7 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
             {tabs.length > 0 && (
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10">
                 <Camera className="h-3.5 w-3.5 text-white/50" />
-                <span className="text-sm font-medium text-white/70">{totalPhotos} photos</span>
+                <span className="text-sm font-medium text-white/70">{totalXitoPhotos} photos</span>
               </div>
             )}
           </div>
@@ -226,6 +299,148 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
           )}
         </CardContent>
       </Card>
+
+      {/* ========== DASHBOARD STATUS CARDS ========== */}
+      {tabs.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {/* Card 1: Photos for Album (Xito Drive) */}
+          <Card className="bg-[hsl(220,25%,12%)] border-white/10">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <HardDrive className="h-4 w-4 text-sky-400" />
+                <span className="text-sm font-semibold text-white">Photos for Album</span>
+                <span className="text-[10px] text-white/40 ml-auto">Xito Drive</span>
+              </div>
+              <div className="text-2xl font-bold text-sky-400 mb-2">{totalXitoPhotos}</div>
+              <div className="space-y-1 max-h-32 overflow-y-auto">
+                {tabs.map(t => (
+                  <div key={t.id} className="flex items-center justify-between text-xs">
+                    <span className="text-white/60 truncate mr-2">{t.label}</span>
+                    <span className="text-white/80 font-medium shrink-0">
+                      {tabPhotoCounts[t.id] !== undefined ? tabPhotoCounts[t.id] : '—'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Card 2: Original Edited Photos (pCloud) */}
+          <Card className="bg-[hsl(220,25%,12%)] border-white/10">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <CloudCog className="h-4 w-4 text-amber-400" />
+                <span className="text-sm font-semibold text-white">Original Edited</span>
+                <span className="text-[10px] text-white/40 ml-auto">pCloud</span>
+              </div>
+              <div className="flex items-baseline gap-2 mb-2">
+                <span className="text-2xl font-bold text-amber-400">{totalPcloudPhotos}</span>
+                {totalPcloudSize > 0 && (
+                  <span className="text-xs text-white/40">{formatPCloudSize(totalPcloudSize)}</span>
+                )}
+              </div>
+              <div className="space-y-1 max-h-24 overflow-y-auto">
+                {tabs.map(t => {
+                  const pc = pcloudCounts[t.id];
+                  const loading = pcloudLoading[t.id];
+                  return (
+                    <div key={t.id} className="flex items-center justify-between text-xs">
+                      <span className="text-white/60 truncate mr-2">{t.label}</span>
+                      <span className="text-white/80 font-medium shrink-0">
+                        {loading ? <Loader2 className="h-3 w-3 animate-spin inline" /> : pc ? `${pc.count} · ${formatPCloudSize(pc.totalSize)}` : '—'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              {!allCountsLoaded && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full mt-2 text-xs text-white/50 hover:text-white h-7"
+                  onClick={loadAllPcloudCounts}
+                  disabled={loadingAllPcloud}
+                >
+                  {loadingAllPcloud ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+                  Load All Counts
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Card 3: Album Selection Progress */}
+          <Card className="bg-[hsl(220,25%,12%)] border-white/10">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <BookOpen className="h-4 w-4 text-rose-400" />
+                <span className="text-sm font-semibold text-white">Selection Progress</span>
+              </div>
+              {albumProgress.length === 0 ? (
+                <p className="text-xs text-white/40">No albums configured</p>
+              ) : (
+                <div className="space-y-3">
+                  {albumProgress.map(ap => {
+                    const pct = Math.min(100, Math.round((ap.count / MAX_ALBUM_PHOTOS) * 100));
+                    return (
+                      <div key={ap.type}>
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <span className="text-white/70">{ap.name}</span>
+                          <span className={cn("font-medium", ap.count >= MAX_ALBUM_PHOTOS ? "text-emerald-400" : "text-rose-400")}>
+                            {ap.count}/{MAX_ALBUM_PHOTOS}
+                          </span>
+                        </div>
+                        <Progress value={pct} className="h-2 bg-white/10 [&>div]:bg-rose-500" />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ========== MATCH INDICATOR ========== */}
+      {tabs.length > 0 && allCountsLoaded && (
+        <Card className="bg-[hsl(220,25%,12%)] border-white/10">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs font-semibold text-white/70">Xito ↔ pCloud Match</span>
+              {totalXitoPhotos === totalPcloudPhotos ? (
+                <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[10px]">
+                  <CheckCircle2 className="h-3 w-3 mr-1" /> All Match
+                </Badge>
+              ) : (
+                <Badge className="bg-red-500/20 text-red-300 border-red-500/30 text-[10px]">
+                  <AlertTriangle className="h-3 w-3 mr-1" /> Mismatch
+                </Badge>
+              )}
+            </div>
+            <div className="space-y-1">
+              {tabs.map(t => {
+                const xCount = tabPhotoCounts[t.id] ?? 0;
+                const pCount = pcloudCounts[t.id]?.count ?? 0;
+                const match = xCount === pCount;
+                return (
+                  <div key={t.id} className="flex items-center justify-between text-xs">
+                    <span className="text-white/60 truncate mr-2">{t.label}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-sky-400">{xCount}</span>
+                      <span className="text-white/30">vs</span>
+                      <span className="text-amber-400">{pCount}</span>
+                      {match ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                      ) : (
+                        <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Event / Photographer Tabs */}
       {tabs.length === 0 ? (
