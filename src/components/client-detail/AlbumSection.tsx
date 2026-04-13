@@ -110,26 +110,46 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
   const [copyStatus, setCopyStatus] = useState<'idle' | 'confirming' | 'copying' | 'done' | 'error'>('idle');
   const [copyResult, setCopyResult] = useState<{ copied: number; expected: number; errors: string[]; albumDetails?: { albumType: string; folderName: string; count: number }[]; monthFolder?: string; copiedAt?: string } | null>(null);
 
-  // Load copy history from DB on mount
+  // Bride/groom names from submission
+  const [brideGroom, setBrideGroom] = useState<{ bride: string; groom: string }>({ bride: '', groom: '' });
+
+  // Load copy history from DB on mount + auto-detect from pCloud
+  useEffect(() => {
+    if (!registeredDateTimeAD) return;
+    (async () => {
+      // Check DB first
+      const { data } = await supabase
+        .from("album_copy_history")
+        .select("*")
+        .eq("registered_date_time_ad", registeredDateTimeAD)
+        .maybeSingle();
+      if (data) {
+        const albums = (data.albums_copied as any[]) || [];
+        setCopyResult({
+          copied: data.total_copied,
+          expected: data.total_expected,
+          errors: data.errors || [],
+          albumDetails: albums,
+          monthFolder: data.month_folder,
+          copiedAt: data.copied_at,
+        });
+        setCopyStatus('done');
+      }
+    })();
+  }, [registeredDateTimeAD]);
+
+  // Fetch bride/groom names from submission
   useEffect(() => {
     if (!registeredDateTimeAD) return;
     supabase
-      .from("album_copy_history")
-      .select("*")
+      .from("album_selection_submissions")
+      .select("bride_name, groom_name")
       .eq("registered_date_time_ad", registeredDateTimeAD)
-      .maybeSingle()
+      .order("created_at", { ascending: false })
+      .limit(1)
       .then(({ data }) => {
-        if (data) {
-          const albums = (data.albums_copied as any[]) || [];
-          setCopyResult({
-            copied: data.total_copied,
-            expected: data.total_expected,
-            errors: data.errors || [],
-            albumDetails: albums,
-            monthFolder: data.month_folder,
-            copiedAt: data.copied_at,
-          });
-          setCopyStatus('done');
+        if (data && data.length > 0) {
+          setBrideGroom({ bride: data[0].bride_name || '', groom: data[0].groom_name || '' });
         }
       });
   }, [registeredDateTimeAD]);
@@ -400,6 +420,62 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
   }, [deliverables]);
 
   const isCopyEnabled = workflowStatus.currentStep >= 4; // Sent for Design
+
+  // Auto-detect already-copied albums from pCloud (reconciliation)
+  useEffect(() => {
+    if (!isCopyEnabled || copyStatus !== 'idle' || !registeredDateTimeAD) return;
+    const monthFolder = getMajorityYearMonth();
+    if (!monthFolder) return;
+
+    const basePath = `ALBUM AND FRAME - WEDDING TALES NEPAL/${monthFolder}/${clientName}`;
+    (async () => {
+      try {
+        const folder = await listPCloudFolderByPath(basePath);
+        const subfolders = folder.contents.filter(i => i.isfolder);
+        if (subfolders.length === 0) return;
+
+        // Count files in each subfolder
+        const albumDetails: { albumType: string; folderName: string; count: number }[] = [];
+        let totalCopied = 0;
+        for (const sub of subfolders) {
+          const subFolder = await listPCloudFolderByPath(`${basePath}/${sub.name}`);
+          const imageCount = subFolder.contents.filter(isPCloudImage).length;
+          if (imageCount > 0) {
+            const albumType = sub.name.toLowerCase().replace(/ /g, '_');
+            albumDetails.push({ albumType, folderName: sub.name, count: imageCount });
+            totalCopied += imageCount;
+          }
+        }
+
+        if (totalCopied > 0) {
+          const result = {
+            copied: totalCopied,
+            expected: totalCopied,
+            errors: [] as string[],
+            albumDetails,
+            monthFolder,
+            copiedAt: new Date().toISOString(),
+          };
+          setCopyResult(result);
+          setCopyStatus('done');
+
+          // Save to DB
+          await supabase.from("album_copy_history").upsert({
+            registered_date_time_ad: registeredDateTimeAD,
+            client_name: clientName,
+            month_folder: monthFolder,
+            albums_copied: albumDetails,
+            total_copied: totalCopied,
+            total_expected: totalCopied,
+            errors: [],
+            copied_at: new Date().toISOString(),
+          }, { onConflict: "registered_date_time_ad" });
+        }
+      } catch {
+        // Folder doesn't exist — not copied yet, that's fine
+      }
+    })();
+  }, [isCopyEnabled, copyStatus, registeredDateTimeAD, clientName, getMajorityYearMonth]);
 
   // Copy HQ album photos orchestration
   const executeCopy = useCallback(async () => {
@@ -807,7 +883,7 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
                     {copyStatus === 'done' && copyResult?.albumDetails ? (
                       copyResult.albumDetails.map((a, i) => (
                         <div key={i} className="text-sm">
-                          <span className="text-white/50">{a.folderName}:</span>{" "}
+                          <span className="text-white/80">{a.folderName}:</span>{" "}
                           <span className="text-emerald-400 font-bold">{a.count}</span>
                         </div>
                       ))
@@ -816,8 +892,8 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
                         const count = albumSelections.filter(s => s.album_type === d.type).length;
                         return (
                           <div key={i} className="text-sm">
-                            <span className="text-white/30">{d.name.toUpperCase()}:</span>{" "}
-                            <span className="text-white/50 font-medium">{count}</span>
+                            <span className="text-white/60">{d.name.toUpperCase()}:</span>{" "}
+                            <span className="text-white/80 font-medium">{count}</span>
                           </div>
                         );
                       })
@@ -876,27 +952,27 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
                       <>
                         <div className="text-sm">
                           {copyResult.errors.length > 0 ? (
-                            <span className="text-amber-400 font-medium">{copyResult.errors.length} failed</span>
+                            <span className="text-amber-300 font-medium">{copyResult.errors.length} failed</span>
                           ) : (
-                            <span className="text-emerald-400 font-medium">✓ All copied</span>
+                            <span className="text-emerald-300 font-medium">✓ All copied</span>
                           )}
                         </div>
-                        <div className="text-xs text-white/30">
+                        <div className="text-xs text-white/60">
                           {copyResult.monthFolder || ''}
                         </div>
                         {copyResult.copiedAt && (
-                          <div className="text-[10px] text-white/20">
+                          <div className="text-[10px] text-white/50">
                             {new Date(copyResult.copiedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                           </div>
                         )}
-                        <div className="text-xs text-white/30 mt-1">
-                          In pCloud
+                        <div className="text-xs text-sky-400/80 mt-1">
+                          In pCloud ☁️
                         </div>
                       </>
                     ) : isCopyEnabled ? (
-                      <span className="text-xs text-white/30">Ready to copy</span>
+                      <span className="text-xs text-white/50">Ready to copy</span>
                     ) : (
-                      <span className="text-xs text-white/20">Waiting for design</span>
+                      <span className="text-xs text-white/40">Waiting for design</span>
                     )}
                   </div>
                 </div>
@@ -919,14 +995,19 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
                       const albumLines = (copyResult.albumDetails || []).map(a => `${a.folderName} (${a.count})`).join(', ');
                       const total = copyResult.copied;
                       const pcloudPath = `ALBUM AND FRAME - WEDDING TALES NEPAL/${monthFolder}/${clientName}`;
-                      const text = [
+                      const lines = [
                         `Client: ${clientName}`,
+                      ];
+                      if (brideGroom.bride) lines.push(`Bride: ${brideGroom.bride}`);
+                      if (brideGroom.groom) lines.push(`Groom: ${brideGroom.groom}`);
+                      lines.push(
                         `Month: ${monthFolder}`,
                         `Albums: ${albumLines}`,
                         `Total: ${total} photos`,
-                        `pCloud: pcloud://folder/${pcloudPath}`,
-                      ].join('\n');
-                      navigator.clipboard.writeText(text).then(() => {
+                        `pCloud: https://my.pcloud.com/`,
+                        `Path: ${pcloudPath}`,
+                      );
+                      navigator.clipboard.writeText(lines.join('\n')).then(() => {
                         toast.success("Information copied!");
                       });
                     }}
