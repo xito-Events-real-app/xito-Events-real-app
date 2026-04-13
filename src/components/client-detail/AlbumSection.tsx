@@ -354,7 +354,7 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
             </Card>
           ) : (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Card 1: Photos for Album (Xito Drive) */}
                 <Card className="bg-[hsl(220,25%,12%)] border-white/10">
                   <CardContent className="p-5">
