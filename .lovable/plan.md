@@ -1,45 +1,70 @@
 
 
-# Album Status Tracker in Dashboard
+# "Copy HQ Album Photos" Gear Button Feature
 
 ## What gets built
-A new **4th card** in the Album Overview dashboard showing the current workflow status of the photos, derived automatically from existing data:
 
-```text
-Status Pipeline:
-─────────────────────────────────────────────────────────
- 1. UPLOADED IN PCLOUD          ← pCloud has photos
- 2. UPLOADED FOR ALBUM SELECTION ← Xito Drive has photos
- 3. ALBUM SELECTION IN PROGRESS  ← client started selecting (selections > 0 but < 140)
- 4. SENT FOR DESIGN (to Nikit)   ← submission exists in album_selection_submissions
-─────────────────────────────────────────────────────────
-```
+A circular gear button at the bottom center of the Album Dashboard that copies the client's selected album photos from the main pCloud edited folder into a dedicated "ALBUM AND FRAME - WEDDING TALES NEPAL" pCloud folder structure for print production.
 
-## Status logic (computed from existing data)
+## How it works
 
-| Status | Condition |
-|--------|-----------|
-| **Not Started** | pCloud count = 0 |
-| **UPLOADED IN PCLOUD** | pCloud count > 0, Xito count = 0 |
-| **UPLOADED FOR ALBUM SELECTION** | Xito count > 0, no album selections yet |
-| **ALBUM SELECTION IN PROGRESS** | albumSelections.length > 0 but not all albums full (< 140 each) |
-| **SENT FOR DESIGN** | `album_selection_submissions` row exists for this client with `handled` = true or false. Shows "Sent to Nikit" or "Sent to Benjona" from `sent_to` field |
+### Button behavior
+- **Disabled** until workflow status reaches step 4 ("Sent for Design")
+- When clicked, shows a confirmation dialog with two questions:
+  - "Are names matching?" (Yes/No)
+  - "Is date okay?" (Yes/No)
+- Both must be "Yes" to proceed
+- Once confirmed, the gear icon spins while copying is in progress
+- After completion, the gear shows a summary: files copied count, any mismatches
 
-Each completed step shows a green checkmark; the current active step is highlighted; future steps are dimmed.
+### Copy logic
+
+1. Read `client_album_selections` for this client — grouped by `album_type` (e.g. `bride_album`, `groom_album`)
+2. For each selection, the `photo_key` is the E2/Xito path like `FALGUN EVENTS 2082/CLIENT NAME/Photos/EVENT/PHOTOGRAPHER/filename.jpg`
+3. The same filename exists in pCloud at `WEDDING TALES NEPAL/FALGUN EVENTS 2082/CLIENT NAME/Photos/EVENT/PHOTOGRAPHER/filename.jpg`
+4. Determine the "first month" folder using `getMajorityYearMonth` from assignments
+5. Build target structure:
+   ```
+   ALBUM AND FRAME - WEDDING TALES NEPAL/
+     FALGUN EVENTS 2082/
+       CLIENT NAME/
+         BRIDE ALBUM/
+           140 photos here
+         GROOM ALBUM/
+           140 photos here
+         FRAME/
+           (if deliverables has frame enabled)
+   ```
+6. Use pCloud's `/copyfile` API to copy each file from source to destination (server-side, no download/re-upload needed)
+7. Check `client_deliverables` for frame deliverable — if enabled, create the FRAME folder
+
+### Post-copy summary
+- Gear stops spinning, shows info in center: "280 copied" or "Mismatch: 3 missing"
+- Compares expected count (from selections) vs actual files in destination folders
 
 ## Technical changes
 
-### Modified: `src/components/client-detail/AlbumSection.tsx`
+### 1. Edge function: Add `copyfile` action to `supabase/functions/pcloud-api/index.ts`
+- New case `'copyfile'`: calls pCloud `/copyfile?auth=...&fileid=X&tofolderid=Y` 
+- New case `'copyfilebypath'`: calls pCloud `/copyfile?auth=...&path=X&topath=Y`
 
-1. **Fetch submission data** — On mount, query `album_selection_submissions` for `registered_date_time_ad` to check if client sent WhatsApp and to whom
-2. **New state**: `albumSubmission: { sent_to: string; handled: boolean } | null`
-3. **Compute status** from: `totalPcloudPhotos`, `totalXitoPhotos`, `albumSelections.length`, `albumProgress` (all full?), and `albumSubmission`
-4. **Render 4th card** in the 3-column grid (becomes 2x2 on desktop) — a vertical step indicator showing all 4 stages with:
-   - Green check + strikethrough for completed steps
-   - Highlighted current step with pulsing dot
-   - Gray for pending steps
-   - If "SENT FOR DESIGN", show the recipient name (Nikit/Benjona) prominently
+### 2. Client API: Add copy helper to `src/lib/pcloud-api.ts`
+- `copyPCloudFile(fromPath: string, toPath: string)` — calls edge function with `copyfilebypath` action
 
-### No new files or database changes needed
-All data already exists in `album_selection_submissions` and the existing pCloud/Xito/selection counts.
+### 3. UI: Update `src/components/client-detail/AlbumSection.tsx`
+- Add state: `copyStatus: 'idle' | 'confirming' | 'copying' | 'done' | 'error'`, `copyResult`
+- Add confirmation dialog with the two Yes/No questions
+- Add circular gear button below the dashboard cards (centered)
+- Spinning animation during copy
+- Summary display after completion
+- Logic to:
+  - Group selections by album_type → map to folder names (BRIDE ALBUM, GROOM ALBUM, etc.)
+  - Get first month from assignments via `getMajorityYearMonth`
+  - Create target folders via `createPCloudFolderByPath`
+  - Copy each file via `copyPCloudFile`
+  - Check deliverables for frame → create FRAME folder
+  - Count results and detect mismatches
+
+### No database changes needed
+Uses existing `client_album_selections`, `client_deliverables`, and `freelancer_assignments` data.
 
