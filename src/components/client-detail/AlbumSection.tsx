@@ -108,7 +108,31 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
 
   // Copy HQ Album Photos state
   const [copyStatus, setCopyStatus] = useState<'idle' | 'confirming' | 'copying' | 'done' | 'error'>('idle');
-  const [copyResult, setCopyResult] = useState<{ copied: number; expected: number; errors: string[] } | null>(null);
+  const [copyResult, setCopyResult] = useState<{ copied: number; expected: number; errors: string[]; albumDetails?: { albumType: string; folderName: string; count: number }[]; monthFolder?: string; copiedAt?: string } | null>(null);
+
+  // Load copy history from DB on mount
+  useEffect(() => {
+    if (!registeredDateTimeAD) return;
+    supabase
+      .from("album_copy_history")
+      .select("*")
+      .eq("registered_date_time_ad", registeredDateTimeAD)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          const albums = (data.albums_copied as any[]) || [];
+          setCopyResult({
+            copied: data.total_copied,
+            expected: data.total_expected,
+            errors: data.errors || [],
+            albumDetails: albums,
+            monthFolder: data.month_folder,
+            copiedAt: data.copied_at,
+          });
+          setCopyStatus('done');
+        }
+      });
+  }, [registeredDateTimeAD]);
 
   useEffect(() => {
     if (!registeredDateTimeAD) return;
