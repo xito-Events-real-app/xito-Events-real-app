@@ -1,70 +1,59 @@
 
 
-# "Copy HQ Album Photos" Gear Button Feature
+# Album Copy History + Info Copy Button + Gear Redesign
 
 ## What gets built
 
-A circular gear button at the bottom center of the Album Dashboard that copies the client's selected album photos from the main pCloud edited folder into a dedicated "ALBUM AND FRAME - WEDDING TALES NEPAL" pCloud folder structure for print production.
+1. **Database table** `album_copy_history` to persist copy results so the gear always shows the last copy status
+2. **Post-copy state** restored from DB on load — if photos were already copied, gear shows the result immediately
+3. **"Copy Information" button** that copies a formatted summary to clipboard (client name, month, albums with counts, pCloud link)
+4. **Gear redesign**: background matches the page dark color (`hsl(220,25%,8%)`), copy result info displayed on left and right sides of the gear instead of inside/below
 
-## How it works
+## Technical details
 
-### Button behavior
-- **Disabled** until workflow status reaches step 4 ("Sent for Design")
-- When clicked, shows a confirmation dialog with two questions:
-  - "Are names matching?" (Yes/No)
-  - "Is date okay?" (Yes/No)
-- Both must be "Yes" to proceed
-- Once confirmed, the gear icon spins while copying is in progress
-- After completion, the gear shows a summary: files copied count, any mismatches
+### 1. New table: `album_copy_history`
+```sql
+CREATE TABLE album_copy_history (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  registered_date_time_ad text NOT NULL UNIQUE,
+  client_name text NOT NULL DEFAULT '',
+  month_folder text NOT NULL DEFAULT '',
+  albums_copied jsonb NOT NULL DEFAULT '[]',
+  total_copied integer NOT NULL DEFAULT 0,
+  total_expected integer NOT NULL DEFAULT 0,
+  errors text[] NOT NULL DEFAULT '{}',
+  copied_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE album_copy_history ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all" ON album_copy_history FOR ALL USING (true) WITH CHECK (true);
+```
 
-### Copy logic
+`albums_copied` stores: `[{ "album_type": "bride_album", "folder_name": "BRIDE ALBUM", "count": 140 }, ...]`
 
-1. Read `client_album_selections` for this client — grouped by `album_type` (e.g. `bride_album`, `groom_album`)
-2. For each selection, the `photo_key` is the E2/Xito path like `FALGUN EVENTS 2082/CLIENT NAME/Photos/EVENT/PHOTOGRAPHER/filename.jpg`
-3. The same filename exists in pCloud at `WEDDING TALES NEPAL/FALGUN EVENTS 2082/CLIENT NAME/Photos/EVENT/PHOTOGRAPHER/filename.jpg`
-4. Determine the "first month" folder using `getMajorityYearMonth` from assignments
-5. Build target structure:
-   ```
-   ALBUM AND FRAME - WEDDING TALES NEPAL/
-     FALGUN EVENTS 2082/
-       CLIENT NAME/
-         BRIDE ALBUM/
-           140 photos here
-         GROOM ALBUM/
-           140 photos here
-         FRAME/
-           (if deliverables has frame enabled)
-   ```
-6. Use pCloud's `/copyfile` API to copy each file from source to destination (server-side, no download/re-upload needed)
-7. Check `client_deliverables` for frame deliverable — if enabled, create the FRAME folder
+### 2. Save copy result after `executeCopy` completes
+- Insert/upsert into `album_copy_history` with the copy result details
+- On component mount, fetch from `album_copy_history` for this client — if exists, set `copyStatus='done'` and `copyResult` immediately
 
-### Post-copy summary
-- Gear stops spinning, shows info in center: "280 copied" or "Mismatch: 3 missing"
-- Compares expected count (from selections) vs actual files in destination folders
+### 3. Gear layout redesign
+- Gear background: `bg-[hsl(220,25%,8%)]` with subtle border — matches page background
+- Layout changes from vertical stack to horizontal: `[Left Info] [Gear] [Right Info]`
+  - Left side: album names + counts (e.g., "BRIDE ALBUM: 140", "GROOM ALBUM: 140")
+  - Right side: status text + date copied
+- Gear stays centered, smaller text flanks it
 
-## Technical changes
+### 4. "Copy Information" button
+- Small button below the gear area, visible only when `copyStatus === 'done'`
+- On click, builds text like:
+  ```
+  Client: KARISHMA SHRESTHA
+  Month: FALGUN EVENTS 2082
+  Albums: BRIDE ALBUM (140), GROOM ALBUM (140)
+  Total: 280 photos
+  pCloud: pcloud://folder/ALBUM AND FRAME - WEDDING TALES NEPAL/FALGUN EVENTS 2082/KARISHMA SHRESTHA
+  ```
+- Copies to clipboard with toast "Information copied!"
 
-### 1. Edge function: Add `copyfile` action to `supabase/functions/pcloud-api/index.ts`
-- New case `'copyfile'`: calls pCloud `/copyfile?auth=...&fileid=X&tofolderid=Y` 
-- New case `'copyfilebypath'`: calls pCloud `/copyfile?auth=...&path=X&topath=Y`
-
-### 2. Client API: Add copy helper to `src/lib/pcloud-api.ts`
-- `copyPCloudFile(fromPath: string, toPath: string)` — calls edge function with `copyfilebypath` action
-
-### 3. UI: Update `src/components/client-detail/AlbumSection.tsx`
-- Add state: `copyStatus: 'idle' | 'confirming' | 'copying' | 'done' | 'error'`, `copyResult`
-- Add confirmation dialog with the two Yes/No questions
-- Add circular gear button below the dashboard cards (centered)
-- Spinning animation during copy
-- Summary display after completion
-- Logic to:
-  - Group selections by album_type → map to folder names (BRIDE ALBUM, GROOM ALBUM, etc.)
-  - Get first month from assignments via `getMajorityYearMonth`
-  - Create target folders via `createPCloudFolderByPath`
-  - Copy each file via `copyPCloudFile`
-  - Check deliverables for frame → create FRAME folder
-  - Count results and detect mismatches
-
-### No database changes needed
-Uses existing `client_album_selections`, `client_deliverables`, and `freelancer_assignments` data.
+### Files changed
+- **Migration**: new `album_copy_history` table
+- **`src/components/client-detail/AlbumSection.tsx`**: load history on mount, save after copy, redesigned gear layout, copy info button
 
