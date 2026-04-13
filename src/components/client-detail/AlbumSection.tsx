@@ -458,6 +458,53 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
                     )}
                   </CardContent>
                 </Card>
+
+                {/* Card 4: Album Workflow Status */}
+                <Card className="bg-[hsl(220,25%,12%)] border-white/10">
+                  <CardContent className="p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Send className="h-5 w-5 text-violet-400" />
+                      <span className="text-base font-bold text-white">Workflow Status</span>
+                    </div>
+                    <div className="space-y-0">
+                      {workflowStatus.steps.map((step, i) => {
+                        const stepNum = i + 1;
+                        const isCompleted = stepNum <= workflowStatus.currentStep;
+                        const isCurrent = stepNum === workflowStatus.currentStep;
+                        const isPending = stepNum > workflowStatus.currentStep;
+                        return (
+                          <div key={i} className="flex items-start gap-3">
+                            {/* Vertical line + icon */}
+                            <div className="flex flex-col items-center">
+                              {isCompleted ? (
+                                <div className={cn("h-6 w-6 rounded-full flex items-center justify-center shrink-0", isCurrent ? "bg-emerald-500" : "bg-emerald-500/60")}>
+                                  <CheckCircle2 className="h-4 w-4 text-white" />
+                                </div>
+                              ) : (
+                                <div className="h-6 w-6 rounded-full border-2 border-white/20 flex items-center justify-center shrink-0">
+                                  <Circle className="h-3 w-3 text-white/20" />
+                                </div>
+                              )}
+                              {i < workflowStatus.steps.length - 1 && (
+                                <div className={cn("w-0.5 h-5", isCompleted ? "bg-emerald-500/40" : "bg-white/10")} />
+                              )}
+                            </div>
+                            <span className={cn(
+                              "text-sm pt-0.5 leading-tight",
+                              isCompleted ? "text-white font-medium" : "text-white/30",
+                              isCurrent && "text-emerald-300 font-semibold"
+                            )}>
+                              {step.label}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {workflowStatus.currentStep === 0 && (
+                      <p className="text-xs text-white/30 mt-3">No activity yet</p>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
 
               {/* Match Indicator */}
