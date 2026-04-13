@@ -1,68 +1,55 @@
 
 
-# Lock & Send for Design — Album Completion Flow
+# Album Submission Alert — Admin Popup
 
 ## Overview
-Add a multi-step "Lock & Send for Design" wizard to the `PortalMyAlbum` component, plus an automatic popup when all albums reach 140/140.
+When a client completes the album wizard and sends WhatsApp, save submission details to DB. On admin app open, show a popup with details and action options. Only appears inside `AdminOnlyFeatures` (same place as other popups), never on public routes.
 
-## Flow
+## Database
 
-### Auto-popup (all albums full)
-When every configured album has exactly 140 selections, a Dialog auto-opens: "You've selected all your photos! Ready to send for design?" with "Yes, Proceed" and "Not Yet" buttons.
+**New table: `album_selection_submissions`**
 
-### "Lock & Send for Design" button
-A rose-gold button at the top of the My Album tab. Clicking opens a multi-step Dialog:
+| Column | Type | Default |
+|--------|------|---------|
+| id | uuid | gen_random_uuid() |
+| registered_date_time_ad | text | required |
+| client_name | text | '' |
+| bride_name | text | '' |
+| groom_name | text | '' |
+| selected_date | text | '' |
+| custom_text | text | '' |
+| album_details | jsonb | '[]' |
+| sent_to | text | '' |
+| handled | boolean | false |
+| handled_response | text | '' |
+| created_at | timestamptz | now() |
 
-**Step 1 — Confirmation**
-"Have you finalized your photo selection for all albums?" Yes/No.
+RLS: Allow all access (matches existing pattern).
 
-**Step 2 — Name & Date**
-- Pre-filled Bride first name and Groom first name (from contact data, editable)
-- Date input with AD/BS toggle; each mode shows a calendar defaulting to the client's first event date
-- Free text: "What do you want on your album?" (e.g., the date text they want printed)
+## Changes
 
-**Step 3 — Send via WhatsApp**
-Shows two buttons:
-- **Benjona (9705255025)**
-- **Nikit (9749494560)**
+### 1. `AlbumLockWizard.tsx`
+- Accept `clientName` and `registeredDateTimeAD` as new props
+- On WhatsApp contact click, insert row into `album_selection_submissions` before opening WhatsApp
+- Store bride/groom names, date, custom text, album counts, and `sent_to` (contact name)
 
-Clicking either opens WhatsApp with a pre-filled message:
-```
-Hi {Benjona/Nikit},
+### 2. New: `src/components/suite/AlbumSubmissionAlert.tsx`
+- On mount, query `album_selection_submissions` where `handled = false`
+- If any unhandled rows exist, show Dialog for first one with:
+  - Client name, bride name, groom name, selected date, custom album text
+  - **Sent to: {name}** in large bold text (text-4xl for the contact name)
+  - Four buttons:
+    1. **"Yes, I have sent them for design"** → `handled = true` in DB, popup gone forever
+    2. **"I haven't sent them for design"** → dismiss (reappears next app open)
+    3. **"I don't know"** → dismiss (reappears next app open)
+    4. **"Copy original files"** → navigate to `/client-tracker/client/{registeredDateTimeAD}` then dismiss
 
-Album selection completed! 🎉
+### 3. `App.tsx` — Inside `AdminOnlyFeatures`
+- Add `<AlbumSubmissionAlert />` — this ensures it only renders for logged-in admin users and never on public routes (`/client-portal`, `/crew-schedule`, `/editor-portal`, `/client-form`, `/login`)
 
-Bride: {brideName}
-Groom: {groomName}
-Date: {selectedDate}
+### 4. `PortalMyAlbum.tsx` + `ClientPortal.tsx`
+- Pass `clientName` and `registeredDateTimeAD` through to `AlbumLockWizard`
 
-Album Details:
-- {albumName}: {count} photos
-- {albumName}: {count} photos
-
-Please proceed with the design.
-```
-
-## Technical Details
-
-### New component: `src/components/client-portal/AlbumLockWizard.tsx`
-Multi-step Dialog component receiving:
-- `albums`, `selections` (for counts)
-- `brideName`, `groomName` (from contact data)
-- `firstEventDateAD` (for calendar default)
-- `open`/`onOpenChange`
-
-Uses `Dialog` + internal step state. Step 2 uses the existing `Calendar` component (AD mode) and `NepaliCalendar` (BS mode) with a toggle.
-
-### Modified: `src/pages/ClientPortal.tsx`
-- Pass `contactData` and `eventDetails` down to `PortalMyAlbum` (bride/groom names + first event date)
-
-### Modified: `src/components/client-portal/PortalMyAlbum.tsx`
-- Accept new props: `brideName`, `groomName`, `firstEventDateAD`
-- Add "Lock & Send for Design" button above album tabs
-- Add auto-popup logic: `useEffect` checks if all albums are at MAX_PHOTOS; if so, open the wizard automatically (once per session via a `useRef` flag)
-- Render `AlbumLockWizard`
-
-### No database changes needed
-This is a client-side wizard that opens WhatsApp — no persistence required.
+## Route gating
+The existing `AdminOnlyFeatures` wrapper already checks `isPublicRoute()` and returns `null` for all public prefixes. Placing the alert inside this wrapper guarantees it never appears on client, editor, or freelancer portals.
 
