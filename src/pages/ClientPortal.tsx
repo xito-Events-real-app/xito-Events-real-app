@@ -270,6 +270,7 @@ const ClientPortal = () => {
           brideName={contactData?.brideFullName || ''}
           groomName={contactData?.groomFullName || ''}
           firstEventDateAD={eventDetails[0]?.eventDateAD || ''}
+          clientName={client.clientName}
         />
       )}
       {activeTab === 'videos' && (

@@ -301,10 +301,7 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
         brideName={brideName}
         groomName={groomName}
         firstEventDateAD={firstEventDateAD}
-        clientName={(() => {
-          const parts = registeredDateTimeAD.split('/');
-          return parts.length > 1 ? parts[0] : '';
-        })()}
+        clientName={clientName}
         registeredDateTimeAD={registeredDateTimeAD}
       />
     </>
