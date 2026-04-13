@@ -1,31 +1,39 @@
 
 
-# Fix Copy Info Button Visibility, Add Re-copy with Password, Disable Album Selection After Copy
+# Album Lock Wizard: Smart Date Selection + Copy Info Enhancement
 
-## Issues to fix
+## Changes
 
-1. **"Copy Information" button text invisible** — white text on white-ish background in the `View Photos` mode header area. Fix text/border colors for visibility.
-2. **No re-copy option after album is already copied** — Add a "Re-copy" button when `copyStatus === 'done'`, gated behind password `984124` (same as delete/booked password). First-time copy should also require this password.
-3. **After copy finishes, client portal album tab should show "design is coming soon"** — Check `album_copy_history` in `PortalMyAlbum` and if a record exists, show a message instead of the album grid. Also disable album selection in `PortalMyPhotos`.
+### 1. AlbumLockWizard.tsx — Redesign Step 2 date section
 
-## Technical changes
+**Pass event details to wizard**: Add `events` prop (array of `{eventName, eventDateAD}`) from `ClientPortal → PortalMyAlbum → AlbumLockWizard`.
 
-### 1. Fix text colors (AlbumSection.tsx)
-- The "Copy Information" button already has `text-white/60` which should be visible on dark bg. The issue may be in photos view mode — check if the gear section renders in photos view. It doesn't — the gear only shows in dashboard view. The button uses `border-white/10 text-white/60` which is fine on dark. Will verify and ensure contrast.
+**Smart default date**: Find the event containing "wedding" (case-insensitive) in its name. If found, use its date as default. Otherwise fall back to first event date.
 
-### 2. Password gate for copy (AlbumSection.tsx)
-- Add a password input step before the confirmation dialog
-- When `copyStatus === 'idle'` and user clicks gear → show password dialog first
-- When `copyStatus === 'done'` and user wants to re-copy → show "Re-copy" button → password gate → confirmation → execute
-- Change the gear button to NOT be `disabled` when `copyStatus === 'done'` — instead show a small "Re-copy" button below
-- Use password `984124`
+**Redesigned date flow in Step 2**:
+- Remove the "What do you want on your album?" textarea entirely
+- Add a formal info note: *"This date will be printed on your album. Please choose carefully."* styled as a subtle info box
+- First ask: AD or BS toggle (same as now but cleaner)
+- Then show the calendar picker based on selection
+- Default to the wedding event's date (or first event)
 
-### 3. Client portal changes (PortalMyAlbum.tsx + PortalMyPhotos.tsx)
-- In `PortalMyAlbum`: on mount, check `album_copy_history` for this client. If record exists, show "Your album design is coming soon! 🎨" message instead of the album grid. Disable the Lock & Send button, hide remove buttons.
-- In `PortalMyPhotos`: check `album_copy_history` — if exists, disable the album toggle buttons (prevent adding/removing from albums)
+**Save `selected_date` with date mode info**: Store as `"AD: May 15, 2026"` or `"BS: Jestha 1, 2083"` so the copy info can display it correctly.
+
+### 2. AlbumSection.tsx — Add album date to Copy Information
+
+- Fetch `selected_date` alongside `bride_name, groom_name` from `album_selection_submissions`
+- Add a new line to the copy text: `Album Date: [whatever client chose]`
+- Store in `brideGroom` state (extend to include `albumDate`)
+
+### 3. Prop threading
+
+- **ClientPortal.tsx**: Pass `eventDetails` to `PortalMyAlbum`
+- **PortalMyAlbum.tsx**: Accept `events` prop, pass to `AlbumLockWizard`
+- **AlbumLockWizard.tsx**: Accept `events` prop, use to find wedding date
 
 ### Files changed
-- **`src/components/client-detail/AlbumSection.tsx`**: Password gate state, re-copy button, fix any text visibility issues
-- **`src/components/client-portal/PortalMyAlbum.tsx`**: Check copy history, show "design coming soon" message
-- **`src/components/client-portal/PortalMyPhotos.tsx`**: Check copy history, disable album toggles
+- `src/components/client-portal/AlbumLockWizard.tsx` — Remove albumText, add info note, smart default date from wedding event
+- `src/components/client-portal/PortalMyAlbum.tsx` — Pass events prop through
+- `src/pages/ClientPortal.tsx` — Pass eventDetails to PortalMyAlbum
+- `src/components/client-detail/AlbumSection.tsx` — Fetch and display `selected_date` in copy info
 
