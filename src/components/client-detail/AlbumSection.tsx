@@ -652,7 +652,7 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
             <Button
               variant="outline"
               size="sm"
-              className="border-white/20 text-white/70 hover:text-white hover:bg-white/10"
+              className="border-sky-400/40 text-sky-300 font-semibold hover:text-sky-200 hover:bg-sky-500/15 hover:border-sky-400/60"
               onClick={() => setViewMode(viewMode === 'dashboard' ? 'photos' : 'dashboard')}
             >
               {viewMode === 'dashboard' ? (
@@ -992,8 +992,8 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
                 </div>
 
                 <span className={cn(
-                  "text-sm font-semibold tracking-wide transition-colors",
-                  isCopyEnabled ? "text-white/50" : "text-white/15"
+                  "text-sm font-bold tracking-wide transition-colors",
+                  isCopyEnabled ? "text-white/70" : "text-white/15"
                 )}>
                   Copy HQ Album Photos
                 </span>
@@ -1001,9 +1001,8 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
                 {/* Re-copy Button (only when done) */}
                 {copyStatus === 'done' && (
                   <Button
-                    variant="outline"
                     size="sm"
-                    className="border-amber-500/30 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 gap-2 mt-1"
+                    className="bg-amber-500/20 border border-amber-400/40 text-amber-300 font-semibold hover:bg-amber-500/30 hover:text-amber-200 gap-2 mt-1"
                     onClick={() => {
                       setPendingAction('recopy');
                       setPasswordInput('');
@@ -1019,9 +1018,8 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
                 {/* Copy Information Button */}
                 {copyStatus === 'done' && copyResult && (
                   <Button
-                    variant="outline"
                     size="sm"
-                    className="border-emerald-500/30 text-emerald-300 hover:text-emerald-200 hover:bg-emerald-500/10 gap-2 mt-1"
+                    className="bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-semibold hover:bg-emerald-500/30 hover:text-emerald-200 gap-2 mt-1"
                     onClick={() => {
                       const monthFolder = copyResult.monthFolder || getMajorityYearMonth();
                       const albumLines = (copyResult.albumDetails || []).map(a => `${a.folderName} (${a.count})`).join(', ');
