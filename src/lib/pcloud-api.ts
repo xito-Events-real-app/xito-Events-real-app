@@ -157,6 +157,13 @@ export async function getPCloudThumbsBatch(fileids: number[], size: string = '20
   return data.thumbs || {};
 }
 
+/**
+ * Copy a file within pCloud using full paths (server-side, no download needed).
+ */
+export async function copyPCloudFileByPath(fromPath: string, toPath: string): Promise<any> {
+  return invokePCloudAction('copyfile', { path: fromPath, topath: toPath, noover: true });
+}
+
 export async function deletePCloudFile(fileid: number): Promise<void> {
   await callPCloudDirect('/deletefile', { fileid: String(fileid) });
 }
