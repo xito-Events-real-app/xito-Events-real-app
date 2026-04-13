@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      album_copy_history: {
+        Row: {
+          albums_copied: Json
+          client_name: string
+          copied_at: string
+          errors: string[]
+          id: string
+          month_folder: string
+          registered_date_time_ad: string
+          total_copied: number
+          total_expected: number
+        }
+        Insert: {
+          albums_copied?: Json
+          client_name?: string
+          copied_at?: string
+          errors?: string[]
+          id?: string
+          month_folder?: string
+          registered_date_time_ad: string
+          total_copied?: number
+          total_expected?: number
+        }
+        Update: {
+          albums_copied?: Json
+          client_name?: string
+          copied_at?: string
+          errors?: string[]
+          id?: string
+          month_folder?: string
+          registered_date_time_ad?: string
+          total_copied?: number
+          total_expected?: number
+        }
+        Relationships: []
+      }
       album_dashboard_cache: {
         Row: {
           pcloud_counts: Json
