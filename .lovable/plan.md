@@ -1,43 +1,45 @@
 
 
-# Album Section: Dashboard + Toggle View
+# Album Status Tracker in Dashboard
 
-## What changes
+## What gets built
+A new **4th card** in the Album Overview dashboard showing the current workflow status of the photos, derived automatically from existing data:
 
-Split the Album section into two views controlled by a toggle:
+```text
+Status Pipeline:
+─────────────────────────────────────────────────────────
+ 1. UPLOADED IN PCLOUD          ← pCloud has photos
+ 2. UPLOADED FOR ALBUM SELECTION ← Xito Drive has photos
+ 3. ALBUM SELECTION IN PROGRESS  ← client started selecting (selections > 0 but < 140)
+ 4. SENT FOR DESIGN (to Nikit)   ← submission exists in album_selection_submissions
+─────────────────────────────────────────────────────────
+```
 
-1. **Dashboard view (default)** — Shows on load, no photos fetched automatically
-2. **Album Photos view** — Shows photo gallery tabs (existing behavior), only loads when toggled
+## Status logic (computed from existing data)
 
-## UI improvements
+| Status | Condition |
+|--------|-----------|
+| **Not Started** | pCloud count = 0 |
+| **UPLOADED IN PCLOUD** | pCloud count > 0, Xito count = 0 |
+| **UPLOADED FOR ALBUM SELECTION** | Xito count > 0, no album selections yet |
+| **ALBUM SELECTION IN PROGRESS** | albumSelections.length > 0 but not all albums full (< 140 each) |
+| **SENT FOR DESIGN** | `album_selection_submissions` row exists for this client with `handled` = true or false. Shows "Sent to Nikit" or "Sent to Benjona" from `sent_to` field |
 
-### Dashboard view (larger, better layout)
-- **Album Overview header** — stays at top, larger text
-- **3-card grid** — each card gets more vertical space, larger fonts/numbers:
-  - **Photos for Album (Xito Drive)**: Large count, per-tab breakdown, **Refresh button** to re-fetch E2 counts (clears cache and reloads)
-  - **Original Edited (pCloud)**: Large count + total size, per-tab breakdown with sizes, "Load All Counts" button
-  - **Selection Progress**: Bigger progress bars, album names more prominent
-- **Match Indicator** — shown below cards when all counts loaded, same as current but with slightly larger text
-- **Toggle button** at bottom: "View Album Photos →" to switch to gallery view
+Each completed step shows a green checkmark; the current active step is highlighted; future steps are dimmed.
 
-### Album Photos view
-- A "← Back to Dashboard" button at top
-- Existing tabs + photo grid (unchanged logic)
-- Photos only load when this view is active
-
-### Refresh button for Xito Drive
-- Clears `albumFolderCache` entries and `tabPhotoCounts` state
-- Re-fetches E2 folder listing for all tabs
-- Shows loading spinner during refresh
-
-## Technical details
+## Technical changes
 
 ### Modified: `src/components/client-detail/AlbumSection.tsx`
-- Add `viewMode` state: `'dashboard' | 'photos'` (default: `'dashboard'`)
-- Move photo-loading `useEffect` to only run when `viewMode === 'photos'`
-- Add `refreshXitoCounts` callback that clears caches and re-lists all tabs
-- Restructure render: conditionally show dashboard cards OR photo gallery based on `viewMode`
-- Increase card padding, font sizes, and spacing for dashboard view
+
+1. **Fetch submission data** — On mount, query `album_selection_submissions` for `registered_date_time_ad` to check if client sent WhatsApp and to whom
+2. **New state**: `albumSubmission: { sent_to: string; handled: boolean } | null`
+3. **Compute status** from: `totalPcloudPhotos`, `totalXitoPhotos`, `albumSelections.length`, `albumProgress` (all full?), and `albumSubmission`
+4. **Render 4th card** in the 3-column grid (becomes 2x2 on desktop) — a vertical step indicator showing all 4 stages with:
+   - Green check + strikethrough for completed steps
+   - Highlighted current step with pulsing dot
+   - Gray for pending steps
+   - If "SENT FOR DESIGN", show the recipient name (Nikit/Benjona) prominently
 
 ### No new files or database changes needed
+All data already exists in `album_selection_submissions` and the existing pCloud/Xito/selection counts.
 
