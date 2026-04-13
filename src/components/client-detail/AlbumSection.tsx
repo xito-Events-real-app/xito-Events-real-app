@@ -105,6 +105,10 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
   const [albumSubmission, setAlbumSubmission] = useState<{ sent_to: string; handled: boolean } | null>(null);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
 
+  // Copy HQ Album Photos state
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'confirming' | 'copying' | 'done' | 'error'>('idle');
+  const [copyResult, setCopyResult] = useState<{ copied: number; expected: number; errors: string[] } | null>(null);
+
   useEffect(() => {
     if (!registeredDateTimeAD) return;
     loadDeliverables(registeredDateTimeAD).then((d) => {
