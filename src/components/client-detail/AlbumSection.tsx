@@ -56,6 +56,7 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
   const [albumSelections, setAlbumSelections] = useState<AlbumSelection[]>([]);
   const [loadingAllPcloud, setLoadingAllPcloud] = useState(false);
   const [refreshingXito, setRefreshingXito] = useState(false);
+  const [albumSubmission, setAlbumSubmission] = useState<{ sent_to: string; handled: boolean } | null>(null);
 
   useEffect(() => {
     if (!registeredDateTimeAD) return;
