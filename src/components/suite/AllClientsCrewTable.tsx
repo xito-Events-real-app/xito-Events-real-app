@@ -1593,12 +1593,13 @@ function EventLogisticsPanel({ eventDetail, contactDetail, settings: settingsPro
     );
   }
 
-  const showBride = localSettings.some((s: any) => s.show_bride_details);
-  const showBrideLocation = localSettings.some((s: any) => s.show_bride_location);
-  const showGroom = localSettings.some((s: any) => s.show_groom_details);
-  const showGroomLocation = localSettings.some((s: any) => s.show_groom_location);
-  const showVenue = localSettings.some((s: any) => s.show_venue_details);
-  const showParlour = localSettings.some((s: any) => s.show_parlour_details);
+  const noSettings = localSettings.length === 0;
+  const showBride = noSettings || localSettings.some((s: any) => s.show_bride_details);
+  const showBrideLocation = noSettings || localSettings.some((s: any) => s.show_bride_location);
+  const showGroom = noSettings || localSettings.some((s: any) => s.show_groom_details);
+  const showGroomLocation = noSettings || localSettings.some((s: any) => s.show_groom_location);
+  const showVenue = noSettings || localSettings.some((s: any) => s.show_venue_details);
+  const showParlour = noSettings || localSettings.some((s: any) => s.show_parlour_details);
 
   const cards: React.ReactNode[] = [];
 
