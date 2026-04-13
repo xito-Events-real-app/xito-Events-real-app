@@ -4,16 +4,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, CheckCircle2, ArrowRight, ArrowLeft, Lock, MessageCircle } from "lucide-react";
+import { CalendarIcon, CheckCircle2, ArrowRight, ArrowLeft, Lock, MessageCircle, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { AlbumDef, AlbumSelection } from "@/lib/album-selection-api";
 import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { NepaliCalendar } from "@/components/form/NepaliCalendar";
 import { NepaliDateObject, getCurrentBSDate, formatBSDate, adToBS } from "@/lib/nepali-date";
+
+interface EventInfo {
+  eventName: string;
+  eventDateAD: string;
+}
 
 interface AlbumLockWizardProps {
   open: boolean;
@@ -25,6 +29,7 @@ interface AlbumLockWizardProps {
   firstEventDateAD: string;
   clientName?: string;
   registeredDateTimeAD?: string;
+  events?: EventInfo[];
 }
 
 type DateMode = "ad" | "bs";
@@ -44,36 +49,37 @@ const AlbumLockWizard = ({
   firstEventDateAD,
   clientName = "",
   registeredDateTimeAD = "",
+  events = [],
 }: AlbumLockWizardProps) => {
   const [step, setStep] = useState(1);
 
   // Step 2 state
   const [editBride, setEditBride] = useState(brideName.split(" ")[0] || "");
   const [editGroom, setEditGroom] = useState(groomName.split(" ")[0] || "");
-  const [dateMode, setDateMode] = useState<DateMode>("ad");
-  const [albumText, setAlbumText] = useState("");
+  const [dateMode, setDateMode] = useState<DateMode | null>(null);
 
-  // AD date state
-  const defaultADDate = useMemo(() => {
+  // Smart default date: find wedding event, else first event
+  const smartDefaultDateAD = useMemo(() => {
+    const weddingEvent = events.find(e => e.eventName.toLowerCase().includes('wedding'));
+    const target = weddingEvent || events[0];
+    if (target?.eventDateAD) {
+      const d = new Date(target.eventDateAD);
+      if (!isNaN(d.getTime())) return d;
+    }
     if (firstEventDateAD) {
       const d = new Date(firstEventDateAD);
       if (!isNaN(d.getTime())) return d;
     }
     return new Date();
-  }, [firstEventDateAD]);
+  }, [events, firstEventDateAD]);
 
-  const [adDate, setAdDate] = useState<Date | undefined>(defaultADDate);
+  const [adDate, setAdDate] = useState<Date | undefined>(smartDefaultDateAD);
 
-  // BS date state
-  const defaultBSDate = useMemo(() => {
-    if (firstEventDateAD) {
-      const d = new Date(firstEventDateAD);
-      if (!isNaN(d.getTime())) return adToBS(d);
-    }
-    return getCurrentBSDate();
-  }, [firstEventDateAD]);
+  const smartDefaultBS = useMemo(() => {
+    return adToBS(smartDefaultDateAD);
+  }, [smartDefaultDateAD]);
 
-  const [bsDates, setBsDates] = useState<NepaliDateObject[]>([defaultBSDate]);
+  const [bsDates, setBsDates] = useState<NepaliDateObject[]>([smartDefaultBS]);
 
   const albumCounts = useMemo(() => {
     return albums.map(a => ({
@@ -84,8 +90,8 @@ const AlbumLockWizard = ({
   }, [albums, selections]);
 
   const selectedDateDisplay = useMemo(() => {
-    if (dateMode === "ad" && adDate) return format(adDate, "PPP");
-    if (dateMode === "bs" && bsDates.length > 0) return formatBSDate(bsDates[0]);
+    if (dateMode === "ad" && adDate) return `AD: ${format(adDate, "PPP")}`;
+    if (dateMode === "bs" && bsDates.length > 0) return `BS: ${formatBSDate(bsDates[0])}`;
     return "No date selected";
   }, [dateMode, adDate, bsDates]);
 
@@ -101,7 +107,7 @@ Album selection completed! 🎉
 Bride: ${editBride}
 Groom: ${editGroom}
 Date: ${selectedDateDisplay}
-${albumText ? `Album Text: ${albumText}\n` : ""}
+
 Album Details:
 ${albumLines}
 
@@ -186,35 +192,44 @@ Please proceed with the design.`;
                 </div>
               </div>
 
-              {/* Date mode toggle */}
+              {/* Formal info note */}
+              <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-50 border border-amber-200">
+                <Info className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                <p className="text-xs text-amber-800 leading-relaxed">
+                  The date you select below will be printed on your album. Please ensure it is accurate before proceeding.
+                </p>
+              </div>
+
+              {/* Date mode selection */}
               <div>
-                <Label className="text-xs text-gray-500 mb-1.5 block">Date for Album</Label>
-                <div className="flex items-center gap-2 mb-2">
+                <Label className="text-xs text-gray-500 mb-2 block">Choose date format</Label>
+                <div className="flex items-center gap-2 mb-3">
                   <button
                     onClick={() => setDateMode("ad")}
                     className={cn(
-                      "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                      "flex-1 px-4 py-2.5 rounded-xl text-sm font-medium border-2 transition-all",
                       dateMode === "ad"
-                        ? "bg-[hsl(350,80%,65%)] text-white border-[hsl(350,80%,65%)]"
-                        : "bg-gray-50 text-gray-500 border-gray-200"
+                        ? "bg-[hsl(350,80%,65%)] text-white border-[hsl(350,80%,65%)] shadow-md"
+                        : "bg-gray-50 text-gray-600 border-gray-200 hover:border-gray-300"
                     )}
                   >
-                    AD
+                    AD (English)
                   </button>
                   <button
                     onClick={() => setDateMode("bs")}
                     className={cn(
-                      "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                      "flex-1 px-4 py-2.5 rounded-xl text-sm font-medium border-2 transition-all",
                       dateMode === "bs"
-                        ? "bg-[hsl(350,80%,65%)] text-white border-[hsl(350,80%,65%)]"
-                        : "bg-gray-50 text-gray-500 border-gray-200"
+                        ? "bg-[hsl(350,80%,65%)] text-white border-[hsl(350,80%,65%)] shadow-md"
+                        : "bg-gray-50 text-gray-600 border-gray-200 hover:border-gray-300"
                     )}
                   >
-                    BS
+                    BS (Nepali)
                   </button>
                 </div>
 
-                {dateMode === "ad" ? (
+                {/* Show calendar only after choosing date mode */}
+                {dateMode === "ad" && (
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button variant="outline" className={cn("w-full justify-start text-left font-normal h-10", !adDate && "text-muted-foreground")}>
@@ -227,12 +242,14 @@ Please proceed with the design.`;
                         mode="single"
                         selected={adDate}
                         onSelect={setAdDate}
-                        defaultMonth={defaultADDate}
+                        defaultMonth={smartDefaultDateAD}
                         className={cn("p-3 pointer-events-auto")}
                       />
                     </PopoverContent>
                   </Popover>
-                ) : (
+                )}
+
+                {dateMode === "bs" && (
                   <div className="max-h-[260px] overflow-auto rounded-lg border border-gray-200">
                     <NepaliCalendar
                       selectedDates={bsDates}
@@ -241,17 +258,6 @@ Please proceed with the design.`;
                     />
                   </div>
                 )}
-              </div>
-
-              <div>
-                <Label className="text-xs text-gray-500">What do you want on your album?</Label>
-                <Textarea
-                  value={albumText}
-                  onChange={e => setAlbumText(e.target.value)}
-                  placeholder="e.g. the date text you want printed"
-                  className="mt-1 min-h-[60px] text-sm"
-                  maxLength={200}
-                />
               </div>
             </div>
 
@@ -262,7 +268,7 @@ Please proceed with the design.`;
               <Button
                 className="flex-1 bg-[hsl(350,80%,65%)] hover:bg-[hsl(350,80%,58%)] text-white"
                 onClick={() => setStep(3)}
-                disabled={!editBride || !editGroom}
+                disabled={!editBride || !editGroom || !dateMode}
               >
                 Next <ArrowRight className="ml-1.5 h-4 w-4" />
               </Button>
@@ -284,7 +290,6 @@ Please proceed with the design.`;
               <p><span className="font-medium">Bride:</span> {editBride}</p>
               <p><span className="font-medium">Groom:</span> {editGroom}</p>
               <p><span className="font-medium">Date:</span> {selectedDateDisplay}</p>
-              {albumText && <p><span className="font-medium">Album Text:</span> {albumText}</p>}
               {albumCounts.map(a => (
                 <p key={a.type}>• {a.name}: {a.count} photos</p>
               ))}
@@ -302,7 +307,7 @@ Please proceed with the design.`;
                         bride_name: editBride,
                         groom_name: editGroom,
                         selected_date: selectedDateDisplay,
-                        custom_text: albumText,
+                        custom_text: "",
                         album_details: albumCounts.map(a => ({ name: a.name, count: a.count })),
                         sent_to: c.name,
                       } as any);

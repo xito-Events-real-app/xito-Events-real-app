@@ -111,7 +111,7 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
   const [copyResult, setCopyResult] = useState<{ copied: number; expected: number; errors: string[]; albumDetails?: { albumType: string; folderName: string; count: number }[]; monthFolder?: string; copiedAt?: string } | null>(null);
 
   // Bride/groom names from submission
-  const [brideGroom, setBrideGroom] = useState<{ bride: string; groom: string }>({ bride: '', groom: '' });
+  const [brideGroom, setBrideGroom] = useState<{ bride: string; groom: string; albumDate: string }>({ bride: '', groom: '', albumDate: '' });
 
   // Password gate state
   const [showPasswordGate, setShowPasswordGate] = useState(false);
@@ -150,13 +150,17 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     if (!registeredDateTimeAD) return;
     supabase
       .from("album_selection_submissions")
-      .select("bride_name, groom_name")
+      .select("bride_name, groom_name, selected_date")
       .eq("registered_date_time_ad", registeredDateTimeAD)
       .order("created_at", { ascending: false })
       .limit(1)
       .then(({ data }) => {
         if (data && data.length > 0) {
-          setBrideGroom({ bride: data[0].bride_name || '', groom: data[0].groom_name || '' });
+          setBrideGroom({
+            bride: data[0].bride_name || '',
+            groom: data[0].groom_name || '',
+            albumDate: data[0].selected_date || '',
+          });
         }
       });
   }, [registeredDateTimeAD]);
@@ -1030,6 +1034,7 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
                       ];
                       if (brideGroom.bride) lines.push(`Bride: ${brideGroom.bride}`);
                       if (brideGroom.groom) lines.push(`Groom: ${brideGroom.groom}`);
+                      if (brideGroom.albumDate) lines.push(`Album Date: ${brideGroom.albumDate}`);
                       lines.push(
                         `Month: ${monthFolder}`,
                         `Albums: ${albumLines}`,

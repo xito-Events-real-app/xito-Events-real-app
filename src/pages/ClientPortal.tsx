@@ -271,6 +271,7 @@ const ClientPortal = () => {
           groomName={contactData?.groomFullName || ''}
           firstEventDateAD={eventDetails[0]?.eventDateAD || ''}
           clientName={client.clientName}
+          events={eventDetails.map(e => ({ eventName: e.eventName, eventDateAD: e.eventDateAD }))}
         />
       )}
       {activeTab === 'videos' && (

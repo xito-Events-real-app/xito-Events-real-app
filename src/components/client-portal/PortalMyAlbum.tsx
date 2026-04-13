@@ -10,6 +10,11 @@ import AlbumLockWizard from "@/components/client-portal/AlbumLockWizard";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
+interface EventInfo {
+  eventName: string;
+  eventDateAD: string;
+}
+
 interface PortalMyAlbumProps {
   registeredDateTimeAD: string;
   albums: AlbumDef[];
@@ -19,6 +24,7 @@ interface PortalMyAlbumProps {
   groomName?: string;
   firstEventDateAD?: string;
   clientName?: string;
+  events?: EventInfo[];
 }
 
 const MAX_PHOTOS = 140;
@@ -49,7 +55,7 @@ async function downloadFromPCloud(photoKey: string) {
   a.click();
 }
 
-const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsChange, brideName = "", groomName = "", firstEventDateAD = "", clientName = "" }: PortalMyAlbumProps) => {
+const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsChange, brideName = "", groomName = "", firstEventDateAD = "", clientName = "", events = [] }: PortalMyAlbumProps) => {
   const [activeAlbumIndex, setActiveAlbumIndex] = useState(0);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [loadingUrls, setLoadingUrls] = useState(false);
@@ -344,6 +350,7 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
         firstEventDateAD={firstEventDateAD}
         clientName={clientName}
         registeredDateTimeAD={registeredDateTimeAD}
+        events={events}
       />
     </>
   );
