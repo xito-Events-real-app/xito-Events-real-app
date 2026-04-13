@@ -1,54 +1,43 @@
 
 
-# Album Dashboard — Photo Status Overview
+# Album Section: Dashboard + Toggle View
 
-## What gets built
-A dashboard card section at the top of the Album section (before the photo gallery tabs) showing three status cards:
+## What changes
 
-1. **Photos for Album (Xito Drive / E2)** — Low-quality photos uploaded for client selection. Count per event/photographer tab.
-2. **Original Edited Photos (pCloud)** — High-quality edited photos. Count and total size per event/photographer folder from `WEDDING TALES NEPAL/{monthFolder}/{clientName}/Photos/{event}/{photographer}/`.
-3. **Album Selection Progress** — Per-album selection counts vs 140 max, with progress bars.
+Split the Album section into two views controlled by a toggle:
 
-Plus a **match indicator** showing whether Xito Drive count matches pCloud count per tab (green check if matching, red warning if not).
+1. **Dashboard view (default)** — Shows on load, no photos fetched automatically
+2. **Album Photos view** — Shows photo gallery tabs (existing behavior), only loads when toggled
 
-## Technical Details
+## UI improvements
+
+### Dashboard view (larger, better layout)
+- **Album Overview header** — stays at top, larger text
+- **3-card grid** — each card gets more vertical space, larger fonts/numbers:
+  - **Photos for Album (Xito Drive)**: Large count, per-tab breakdown, **Refresh button** to re-fetch E2 counts (clears cache and reloads)
+  - **Original Edited (pCloud)**: Large count + total size, per-tab breakdown with sizes, "Load All Counts" button
+  - **Selection Progress**: Bigger progress bars, album names more prominent
+- **Match Indicator** — shown below cards when all counts loaded, same as current but with slightly larger text
+- **Toggle button** at bottom: "View Album Photos →" to switch to gallery view
+
+### Album Photos view
+- A "← Back to Dashboard" button at top
+- Existing tabs + photo grid (unchanged logic)
+- Photos only load when this view is active
+
+### Refresh button for Xito Drive
+- Clears `albumFolderCache` entries and `tabPhotoCounts` state
+- Re-fetches E2 folder listing for all tabs
+- Shows loading spinner during refresh
+
+## Technical details
 
 ### Modified: `src/components/client-detail/AlbumSection.tsx`
+- Add `viewMode` state: `'dashboard' | 'photos'` (default: `'dashboard'`)
+- Move photo-loading `useEffect` to only run when `viewMode === 'photos'`
+- Add `refreshXitoCounts` callback that clears caches and re-lists all tabs
+- Restructure render: conditionally show dashboard cards OR photo gallery based on `viewMode`
+- Increase card padding, font sizes, and spacing for dashboard view
 
-**New data loading:**
-- Import `listPCloudFolderByPath`, `isPCloudImage`, `formatPCloudSize` from `pcloud-api`
-- Import `getAlbumSelections`, `getAlbumDefsFromDeliverables` from `album-selection-api`
-- For each tab, build the pCloud path: `WEDDING TALES NEPAL/{monthFolder}/{clientName}/Photos/{event}/{photographer}/`
-- List pCloud folder contents, count images, sum file sizes
-- Cache pCloud results in a module-level cache (like existing `albumFolderCache`)
-- Fetch album defs and selections on mount
-
-**New state:**
-- `pcloudCounts: Record<tabId, { count: number; totalSize: number }>` — per-tab pCloud photo count and total size
-- `albumDefs: AlbumDef[]` — configured albums
-- `albumSelections: AlbumSelection[]` — current selections
-- `pcloudLoading: boolean`
-
-**Dashboard cards (3-column grid above tabs):**
-
-| Card | Content |
-|------|---------|
-| Photos for Album (Xito Drive) | Per-tab count breakdown, total count |
-| Original Edited Photos (pCloud) | Per-tab count + size breakdown, total count + total size |
-| Album Selection | Per-album progress bar (e.g. "Bride Album: 87/140"), uses `Progress` component |
-
-**Match indicator per tab:**
-- Compare E2 count vs pCloud count
-- Show green "Match" badge or red "Mismatch: E2 has X, pCloud has Y" warning
-- Also show total match status in a summary row
-
-**Loading strategy:**
-- pCloud counts load lazily per tab (same pattern as E2) to avoid hammering the API
-- A "Load All Counts" button fetches all tabs at once for the full comparison view
-
-### No new files needed
-All changes in `AlbumSection.tsx` using existing APIs.
-
-### No database changes needed
-Uses existing `client_album_selections` and `client_deliverables` tables plus E2/pCloud APIs.
+### No new files or database changes needed
 
