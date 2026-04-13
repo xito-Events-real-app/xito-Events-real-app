@@ -227,8 +227,33 @@ const PortalMyPhotos = ({
     return result;
   }, [assignments, clientName]);
 
+  // On mount, probe tabs in parallel to find first non-empty folder
+  useEffect(() => {
+    if (tabs.length === 0) { setInitialTabResolved(true); return; }
+    let stale = false;
+
+    const probe = async () => {
+      const promises = tabs.map(async (tab) => {
+        if (folderCache[tab.id]) return folderCache[tab.id];
+        const result = await listE2Folder(tab.s3Prefix);
+        const imgs = result.files.filter(f => isImage(f.key));
+        folderCache[tab.id] = imgs;
+        return imgs;
+      });
+      const results = await Promise.all(promises);
+      if (stale) return;
+      const idx = results.findIndex(r => r.length > 0);
+      setActiveTabIndex(idx >= 0 ? idx : 0);
+      setInitialTabResolved(true);
+    };
+    probe().catch(() => { if (!stale) setInitialTabResolved(true); });
+
+    return () => { stale = true; };
+  }, [tabs]);
+
   // Load photos when tab changes — use module-level cache, abort stale requests
   useEffect(() => {
+    if (!initialTabResolved) return;
     const tab = tabs[activeTabIndex];
     if (!tab) return;
     let stale = false;
@@ -273,7 +298,7 @@ const PortalMyPhotos = ({
     }
 
     return () => { stale = true; };
-  }, [activeTabIndex, tabs]);
+  }, [activeTabIndex, tabs, initialTabResolved]);
 
   const viewerImages = useMemo(
     () => photos.map(p => ({ key: p.key, url: photoUrls[p.key] || "" })).filter(i => i.url),
