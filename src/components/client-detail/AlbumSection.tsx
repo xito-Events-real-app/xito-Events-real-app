@@ -72,6 +72,22 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     getAlbumSelections(registeredDateTimeAD).then(setAlbumSelections);
   }, [registeredDateTimeAD]);
 
+  // Fetch album submission status
+  useEffect(() => {
+    if (!registeredDateTimeAD) return;
+    supabase
+      .from("album_selection_submissions")
+      .select("sent_to, handled")
+      .eq("registered_date_time_ad", registeredDateTimeAD)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setAlbumSubmission({ sent_to: data[0].sent_to, handled: data[0].handled });
+        }
+      });
+  }, [registeredDateTimeAD]);
+
   const albumSummary = useMemo(() => {
     const albumRows = deliverables.filter((d) => d.section === "album" && d.enabled);
     const sides: string[] = [];
