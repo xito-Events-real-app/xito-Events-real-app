@@ -223,6 +223,21 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
 
   const allCountsLoaded = tabs.length > 0 && tabs.every(t => tabPhotoCounts[t.id] !== undefined && pcloudCounts[t.id] !== undefined);
 
+  // Compute album workflow status
+  const workflowStatus = useMemo(() => {
+    const steps = [
+      { label: "Uploaded in pCloud", condition: totalPcloudPhotos > 0 },
+      { label: "Uploaded for Album Selection", condition: totalXitoPhotos > 0 },
+      { label: "Album Selection in Progress", condition: albumSelections.length > 0 },
+      { label: albumSubmission ? `Sent for Design → ${albumSubmission.sent_to}` : "Sent for Design", condition: !!albumSubmission },
+    ];
+    let currentStep = 0;
+    for (let i = 0; i < steps.length; i++) {
+      if (steps[i].condition) currentStep = i + 1;
+    }
+    return { steps, currentStep };
+  }, [totalPcloudPhotos, totalXitoPhotos, albumSelections.length, albumSubmission]);
+
   // ===== PHOTOS VIEW LOGIC =====
   useEffect(() => {
     if (tabs.length > 0 && !activeTab) setActiveTab(tabs[0].id);
