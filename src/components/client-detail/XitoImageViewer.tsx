@@ -39,15 +39,37 @@ const XitoImageViewer = ({
     if (currentIndex < total - 1) setCurrentIndex(currentIndex + 1);
   }, [currentIndex, total]);
 
+  // Build a shortcut map: first letter of album type → album
+  const albumShortcuts = useRef<Record<string, AlbumInfo>>({});
+  useEffect(() => {
+    const map: Record<string, AlbumInfo> = {};
+    if (albums) {
+      albums.forEach(a => {
+        // Use first letter of type, e.g. "bride_album" → "b", "groom_album" → "g"
+        const letter = a.type.charAt(0).toLowerCase();
+        if (!map[letter]) map[letter] = a;
+      });
+    }
+    albumShortcuts.current = map;
+  }, [albums]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
       else if (e.key === "ArrowLeft") goPrev();
       else if (e.key === "ArrowRight") goNext();
+      else if (onToggleAlbum && albums && albums.length > 0) {
+        const key = e.key.toLowerCase();
+        const album = albumShortcuts.current[key];
+        if (album) {
+          const photoKey = images[currentIndex]?.key;
+          if (photoKey) onToggleAlbum(photoKey, album.type, album.name);
+        }
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [goPrev, goNext, onClose]);
+  }, [goPrev, goNext, onClose, onToggleAlbum, albums, images, currentIndex]);
 
   const onTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
   const onTouchEnd = (e: React.TouchEvent) => {
