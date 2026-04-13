@@ -443,6 +443,8 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
       setCopyStatus('error');
     }
   }, [albumSelections, albumDefs, clientName, getMajorityYearMonth, hasFrameDeliverable]);
+
+  // ===== PHOTOS VIEW LOGIC =====
   useEffect(() => {
     if (tabs.length > 0 && !activeTab) setActiveTab(tabs[0].id);
   }, [tabs, activeTab]);
