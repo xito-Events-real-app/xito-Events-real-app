@@ -312,9 +312,8 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     setPcloudCounts(pcloudResults);
     if (clientDashboardCache[registeredDateTimeAD]) {
       clientDashboardCache[registeredDateTimeAD].pcloudCounts = pcloudResults;
-      clientDashboardCache[registeredDateTimeAD].timestamp = Date.now();
-      saveDashboardCache(clientDashboardCache);
     }
+    saveCacheToDB(registeredDateTimeAD, clientDashboardCache[registeredDateTimeAD]?.xitoCounts || {}, pcloudResults);
     setLoadingAllPcloud(false);
   }, [tabs, registeredDateTimeAD]);
 
