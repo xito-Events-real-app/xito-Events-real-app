@@ -1,14 +1,15 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { BookOpen, Image as ImageIcon, Loader2, FolderOpen, Camera, CloudCog, HardDrive, CheckCircle2, AlertTriangle, RefreshCw, ArrowLeft, ArrowRight, Circle, Send } from "lucide-react";
+import { BookOpen, Image as ImageIcon, Loader2, FolderOpen, Camera, CloudCog, HardDrive, CheckCircle2, AlertTriangle, RefreshCw, ArrowLeft, ArrowRight, Circle, Send, Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { loadDeliverables, DeliverableRow } from "@/lib/deliverables-api";
 import { listE2Folder, getE2FileUrls, E2File } from "@/lib/idrive-e2-api";
-import { listPCloudFolderByPath, isPCloudImage, formatPCloudSize } from "@/lib/pcloud-api";
+import { listPCloudFolderByPath, isPCloudImage, formatPCloudSize, createPCloudFolderByPath, copyPCloudFileByPath } from "@/lib/pcloud-api";
 import { getAlbumSelections, getAlbumDefsFromDeliverables, AlbumSelection, AlbumDef } from "@/lib/album-selection-api";
 import { FreelancerAssignment } from "@/lib/freelancer-assignment-api";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
