@@ -305,15 +305,22 @@ const PortalMyPhotos = ({
     [photos, photoUrls]
   );
 
-  if (tabs.length === 0) {
+  if (tabs.length === 0 || !initialTabResolved) {
     return (
       <div className="pb-20 px-4 pt-4">
-        <Card className="bg-gray-50 border-gray-200">
-          <CardContent className="p-8 text-center text-gray-400">
-            <FolderOpen className="h-10 w-10 mx-auto mb-3 opacity-50" />
-            <p>No photos available yet.</p>
-          </CardContent>
-        </Card>
+        {tabs.length === 0 ? (
+          <Card className="bg-gray-50 border-gray-200">
+            <CardContent className="p-8 text-center text-gray-400">
+              <FolderOpen className="h-10 w-10 mx-auto mb-3 opacity-50" />
+              <p>No photos available yet.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-8 w-8 animate-spin text-[hsl(350,80%,65%)]" />
+            <span className="ml-3 text-gray-400">Finding your photos...</span>
+          </div>
+        )}
       </div>
     );
   }
