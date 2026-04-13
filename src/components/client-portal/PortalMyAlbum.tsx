@@ -47,12 +47,14 @@ async function downloadFromPCloud(photoKey: string) {
   a.click();
 }
 
-const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsChange }: PortalMyAlbumProps) => {
+const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsChange, brideName = "", groomName = "", firstEventDateAD = "" }: PortalMyAlbumProps) => {
   const [activeAlbumIndex, setActiveAlbumIndex] = useState(0);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [loadingUrls, setLoadingUrls] = useState(false);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [removingKey, setRemovingKey] = useState<string | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const autoPopupShown = useRef(false);
 
   const activeAlbum = albums[activeAlbumIndex];
 
