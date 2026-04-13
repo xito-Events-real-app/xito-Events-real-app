@@ -756,43 +756,66 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
               )}
 
               {/* Gear Button: Copy HQ Album Photos */}
-              <div className="flex flex-col items-center gap-3 py-4">
-                <button
-                  onClick={() => isCopyEnabled && setCopyStatus('confirming')}
-                  disabled={!isCopyEnabled || copyStatus === 'copying'}
-                  className={cn(
-                    "relative h-24 w-24 rounded-full border-4 flex items-center justify-center transition-all",
-                    isCopyEnabled
-                      ? "border-primary bg-primary/10 hover:bg-primary/20 cursor-pointer"
-                      : "border-white/10 bg-white/5 cursor-not-allowed opacity-40"
+              <div className="flex flex-col items-center gap-4 py-8">
+                <div className="relative">
+                  {/* Outer glow rings */}
+                  {isCopyEnabled && copyStatus !== 'done' && (
+                    <>
+                      <div className="absolute inset-[-12px] rounded-full border-2 border-primary/20 animate-[pulse_3s_ease-in-out_infinite]" />
+                      <div className="absolute inset-[-6px] rounded-full border border-primary/30 animate-[pulse_2.5s_ease-in-out_infinite_0.5s]" />
+                    </>
                   )}
-                >
-                  <Settings className={cn(
-                    "h-10 w-10",
-                    isCopyEnabled ? "text-primary" : "text-white/30",
-                    copyStatus === 'copying' && "animate-spin text-primary"
-                  )} />
-                  {copyStatus === 'done' && copyResult && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/90 rounded-full">
-                      <span className={cn("text-lg font-black", copyResult.errors.length > 0 ? "text-amber-400" : "text-emerald-400")}>
-                        {copyResult.copied}
-                      </span>
-                      <span className="text-[9px] text-white/50">copied</span>
-                    </div>
+                  {copyStatus === 'copying' && (
+                    <div className="absolute inset-[-8px] rounded-full border-2 border-t-primary border-r-primary/50 border-b-primary/20 border-l-primary/50 animate-spin" />
                   )}
-                </button>
-                <span className={cn("text-xs font-medium", isCopyEnabled ? "text-primary" : "text-white/30")}>
+                  <button
+                    onClick={() => isCopyEnabled && copyStatus !== 'copying' && setCopyStatus('confirming')}
+                    disabled={!isCopyEnabled || copyStatus === 'copying'}
+                    className={cn(
+                      "relative h-32 w-32 rounded-full flex items-center justify-center transition-all duration-500",
+                      isCopyEnabled
+                        ? "bg-gradient-to-br from-primary/20 via-accent/10 to-secondary/20 shadow-[0_0_30px_hsl(var(--primary)/0.15)] hover:shadow-[0_0_40px_hsl(var(--primary)/0.3)] cursor-pointer border-2 border-primary/40 hover:border-primary/60"
+                        : "bg-white/5 border-2 border-white/10 cursor-not-allowed opacity-30",
+                      copyStatus === 'copying' && "shadow-[0_0_50px_hsl(var(--primary)/0.4)]"
+                    )}
+                  >
+                    {copyStatus === 'done' && copyResult ? (
+                      <div className="flex flex-col items-center justify-center animate-scale-in">
+                        <span className={cn(
+                          "text-3xl font-black",
+                          copyResult.errors.length > 0 ? "text-amber-400" : "text-emerald-400"
+                        )}>
+                          {copyResult.copied}
+                        </span>
+                        <span className="text-[10px] text-white/60 font-medium tracking-wider uppercase">copied</span>
+                        {copyResult.errors.length > 0 && (
+                          <span className="text-[9px] text-amber-400/80 mt-0.5">{copyResult.errors.length} failed</span>
+                        )}
+                      </div>
+                    ) : (
+                      <Settings className={cn(
+                        "h-14 w-14 transition-all duration-300",
+                        isCopyEnabled ? "text-primary drop-shadow-[0_0_8px_hsl(var(--primary)/0.5)]" : "text-white/20",
+                        copyStatus === 'copying' && "animate-spin"
+                      )} />
+                    )}
+                  </button>
+                </div>
+                <span className={cn(
+                  "text-sm font-semibold tracking-wide transition-colors",
+                  isCopyEnabled ? "text-primary" : "text-white/25"
+                )}>
                   Copy HQ Album Photos
                 </span>
                 {copyStatus === 'done' && copyResult && (
-                  <div className="text-center max-w-xs">
+                  <div className="text-center max-w-xs animate-fade-in">
                     {copyResult.errors.length > 0 ? (
                       <p className="text-xs text-amber-400">
                         {copyResult.copied}/{copyResult.expected} copied · {copyResult.errors.length} failed
                       </p>
                     ) : (
-                      <p className="text-xs text-emerald-400">
-                        All {copyResult.copied} photos copied successfully
+                      <p className="text-xs text-emerald-400 font-medium">
+                        ✓ All {copyResult.copied} photos copied successfully
                       </p>
                     )}
                   </div>
@@ -803,23 +826,22 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
               <Dialog open={copyStatus === 'confirming'} onOpenChange={(open) => { if (!open) setCopyStatus('idle'); }}>
                 <DialogContent className="bg-[hsl(220,25%,12%)] border-white/10 max-w-sm">
                   <DialogHeader>
-                    <DialogTitle className="text-white text-lg">Copy HQ Album Photos</DialogTitle>
+                    <DialogTitle className="text-white text-lg flex items-center gap-2">
+                      <Settings className="h-5 w-5 text-primary" />
+                      Copy HQ Album Photos
+                    </DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4 py-2">
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-white/70">Are names matching?</span>
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20" onClick={() => {}}>Yes</Button>
-                      </div>
+                      <Button size="sm" variant="outline" className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20" onClick={() => {}}>Yes</Button>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-white/70">Is date okay?</span>
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20" onClick={() => {}}>Yes</Button>
-                      </div>
+                      <Button size="sm" variant="outline" className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20" onClick={() => {}}>Yes</Button>
                     </div>
-                    <div className="text-xs text-white/40 pt-2">
-                      This will copy {albumSelections.length} selected photos into the "ALBUM AND FRAME" folder structure in pCloud.
+                    <div className="text-xs text-white/40 pt-2 border-t border-white/5">
+                      This will copy <span className="text-white/70 font-medium">{albumSelections.length}</span> selected photos into the "ALBUM AND FRAME" folder in pCloud.
                       {hasFrameDeliverable && " A FRAME folder will also be created."}
                     </div>
                   </div>
