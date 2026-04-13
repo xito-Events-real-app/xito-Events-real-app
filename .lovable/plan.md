@@ -1,37 +1,68 @@
 
-Problem found:
-- The hide table is still empty: `portal_hidden_videos` has no rows right now, so the unlink action is not actually being saved.
-- The failure is happening on the YouTube Dashboard side, not on the Client Portal filter side.
-- There is also a React warning on this exact confirmation dialog path (`Function components cannot be given refs` in `YouTubeDashboard`), so the confirm flow is unstable.
-- Even when the portal-side filter is correct, the portal only refreshes its hidden-video list on load, so verification can feel inconsistent unless the page reloads.
 
-Fix plan:
-1. Stabilize the confirmation flow in `src/components/suite/YouTubeDashboard.tsx`
-   - Replace the current fragile confirm action flow with a fully controlled confirm dialog.
-   - Keep the dialog open while saving, disable both buttons during the request, and only close it after a confirmed successful save.
-   - Add a hard guard so unlink cannot run if the selected video has no resolved client/tracker link.
+# Lock & Send for Design — Album Completion Flow
 
-2. Make unlink/relink persistence verifiable
-   - Change unlink and relink handlers to verify the database result instead of only flipping local state.
-   - After unlink: save, then immediately re-read `portal_hidden_videos` for that client + video and update `isVideoHidden` from the database result.
-   - After relink: delete, then re-read and confirm the row is gone.
-   - Show exact error toasts when save/delete fails.
+## Overview
+Add a multi-step "Lock & Send for Design" wizard to the `PortalMyAlbum` component, plus an automatic popup when all albums reach 140/140.
 
-3. Fix the dialog-related bug/warning
-   - Clean up the AlertDialog usage in `YouTubeDashboard` so it no longer triggers the ref warning seen in console.
-   - If needed, switch the action buttons in this dialog to plain controlled buttons instead of relying on the Radix auto-close action path.
+## Flow
 
-4. Make portal verification reliable
-   - Update `src/components/client-portal/PortalMyVideos.tsx` to refresh hidden-video state not only on first mount, but also when the tab/page becomes active again.
-   - This makes “unlink → open client portal → verify” behave consistently without stale data confusion.
+### Auto-popup (all albums full)
+When every configured album has exactly 140 selections, a Dialog auto-opens: "You've selected all your photos! Ready to send for design?" with "Yes, Proceed" and "Not Yet" buttons.
 
-5. End-to-end verification after fix
-   - Test with one known video that has a resolved `registered_date_time_ad`.
-   - Confirm row appears in `portal_hidden_videos`.
-   - Confirm the same video disappears from the client portal video page.
-   - Confirm “Re-link to Client Portal” removes the row and the video appears again.
+### "Lock & Send for Design" button
+A rose-gold button at the top of the My Album tab. Clicking opens a multi-step Dialog:
 
-Technical notes:
-- No new table is needed; `portal_hidden_videos` already exists.
-- The main bug is that the dashboard action is not persisting rows reliably.
-- Secondary issue: the portal UI can look unchanged until it refreshes its hidden-video query.
+**Step 1 — Confirmation**
+"Have you finalized your photo selection for all albums?" Yes/No.
+
+**Step 2 — Name & Date**
+- Pre-filled Bride first name and Groom first name (from contact data, editable)
+- Date input with AD/BS toggle; each mode shows a calendar defaulting to the client's first event date
+- Free text: "What do you want on your album?" (e.g., the date text they want printed)
+
+**Step 3 — Send via WhatsApp**
+Shows two buttons:
+- **Benjona (9705255025)**
+- **Nikit (9749494560)**
+
+Clicking either opens WhatsApp with a pre-filled message:
+```
+Hi {Benjona/Nikit},
+
+Album selection completed! 🎉
+
+Bride: {brideName}
+Groom: {groomName}
+Date: {selectedDate}
+
+Album Details:
+- {albumName}: {count} photos
+- {albumName}: {count} photos
+
+Please proceed with the design.
+```
+
+## Technical Details
+
+### New component: `src/components/client-portal/AlbumLockWizard.tsx`
+Multi-step Dialog component receiving:
+- `albums`, `selections` (for counts)
+- `brideName`, `groomName` (from contact data)
+- `firstEventDateAD` (for calendar default)
+- `open`/`onOpenChange`
+
+Uses `Dialog` + internal step state. Step 2 uses the existing `Calendar` component (AD mode) and `NepaliCalendar` (BS mode) with a toggle.
+
+### Modified: `src/pages/ClientPortal.tsx`
+- Pass `contactData` and `eventDetails` down to `PortalMyAlbum` (bride/groom names + first event date)
+
+### Modified: `src/components/client-portal/PortalMyAlbum.tsx`
+- Accept new props: `brideName`, `groomName`, `firstEventDateAD`
+- Add "Lock & Send for Design" button above album tabs
+- Add auto-popup logic: `useEffect` checks if all albums are at MAX_PHOTOS; if so, open the wizard automatically (once per session via a `useRef` flag)
+- Render `AlbumLockWizard`
+
+### No database changes needed
+This is a client-side wizard that opens WhatsApp — no persistence required.
+
