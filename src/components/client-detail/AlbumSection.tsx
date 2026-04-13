@@ -28,13 +28,37 @@ const albumFolderCache: Record<string, E2File[]> = {};
 const albumUrlCache: Record<string, Record<string, string>> = {};
 const pcloudCountCache: Record<string, { count: number; totalSize: number }> = {};
 
-// Per-client dashboard cache to avoid re-fetching on every mount
+// Per-client dashboard cache persisted to localStorage
 interface ClientDashboardCache {
   xitoCounts: Record<string, number>;
   pcloudCounts: Record<string, { count: number; totalSize: number }>;
   fetched: boolean;
+  timestamp: number;
 }
-const clientDashboardCache: Record<string, ClientDashboardCache> = {};
+
+const CACHE_KEY = "album_dashboard_cache";
+const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+function loadDashboardCache(): Record<string, ClientDashboardCache> {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, ClientDashboardCache>;
+    // Prune expired entries
+    const now = Date.now();
+    const valid: Record<string, ClientDashboardCache> = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      if (v.timestamp && now - v.timestamp < CACHE_TTL) valid[k] = v;
+    }
+    return valid;
+  } catch { return {}; }
+}
+
+function saveDashboardCache(cache: Record<string, ClientDashboardCache>) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); } catch {}
+}
+
+const clientDashboardCache: Record<string, ClientDashboardCache> = loadDashboardCache();
 
 const MAX_ALBUM_PHOTOS = 140;
 
