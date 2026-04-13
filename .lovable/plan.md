@@ -1,28 +1,33 @@
 
 
-# Auto-select first folder with uploaded photos
+# Fix "Expand All" showing incomplete information
 
 ## Problem
-Currently the Photos tab in the client portal always starts on the first tab (index 0), which may be an empty folder. The user wants the default tab to be the first one that actually has photos uploaded in XITO Drive (E2).
+When clicking "Expand All" in the All Clients crew table, most rows show "No details configured for this event's freelancers" or only minimal info. This happens because `EventLogisticsPanel` gates venue/bride/groom/parlour display behind `freelancer_event_settings` flags (`show_bride_details`, `show_venue_details`, etc.). Those settings are per-freelancer visibility toggles meant for the crew schedule — not for the admin overview.
 
-## Approach
-On mount, before selecting a tab, probe each tab's E2 folder to find the first non-empty one. Set `activeTabIndex` to that tab.
+Only events where freelancer settings have been individually configured show their details. That is why "only Baisakh 1" shows info — it is the only one with settings configured.
 
-### Changes in `src/components/client-portal/PortalMyPhotos.tsx`
+## Solution
+In the admin "All Clients" view, always show all available information (venue, parlour, bride, groom contacts) when expanded, ignoring the freelancer-specific visibility settings.
 
-1. Add a new state `initialTabResolved` (boolean, default `false`) to prevent rendering tabs until the check is done
-2. Add a `useEffect` that runs when `tabs` are built:
-   - Iterate through tabs sequentially (or in parallel for speed)
-   - For each tab, call `listE2Folder(tab.s3Prefix)` and check if it has image files
-   - Set `activeTabIndex` to the first tab index that has files
-   - If no tabs have files, default to index 0
-   - Set `initialTabResolved = true`
-   - Cache the folder results in `folderCache` so the subsequent photo-loading effect doesn't re-fetch
-3. Show a brief loading spinner while resolving the initial tab
-4. The existing photo-loading `useEffect` continues to work as before once the tab is set
+### Changes in `src/components/suite/AllClientsCrewTable.tsx`
 
-This keeps the UX snappy — parallel folder checks complete fast since they're just listing, and the result is cached for instant photo display.
+**`EventLogisticsPanel`** (around line 1596):
+- When `localSettings` is empty (no freelancer settings configured), default all visibility flags to `true` so venue, parlour, bride, and groom info always shows
+- Change the logic from:
+  ```
+  const showBride = localSettings.some(s => s.show_bride_details);
+  ```
+  To:
+  ```
+  const noSettings = localSettings.length === 0;
+  const showBride = noSettings || localSettings.some(s => s.show_bride_details);
+  const showVenue = noSettings || localSettings.some(s => s.show_venue_details);
+  // etc for all flags
+  ```
+- This ensures that when no per-freelancer settings exist, all available event/contact data is displayed
+- When settings DO exist, the current behavior is preserved
 
 ### File changed
-- `src/components/client-portal/PortalMyPhotos.tsx`
+- `src/components/suite/AllClientsCrewTable.tsx` — 6 lines changed in `EventLogisticsPanel`
 
