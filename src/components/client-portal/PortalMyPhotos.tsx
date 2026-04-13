@@ -9,6 +9,7 @@ import XitoImageViewer, { AlbumInfo } from "@/components/client-detail/XitoImage
 import { AlbumSelection, addToAlbum, removeFromAlbum } from "@/lib/album-selection-api";
 import { toast } from "sonner";
 import { getPCloudFileLinkByPath } from "@/lib/pcloud-api";
+import { supabase } from "@/integrations/supabase/client";
 
 const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".tiff", ".bmp", ".heic"];
 const isImage = (key: string) => IMAGE_EXTS.some((e) => key.toLowerCase().endsWith(e));
@@ -52,6 +53,20 @@ const PortalMyPhotos = ({
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [albumsLocked, setAlbumsLocked] = useState(false);
+
+  // Check if albums are locked (copy history exists)
+  useEffect(() => {
+    if (!registeredDateTimeAD) return;
+    supabase
+      .from("album_copy_history")
+      .select("id")
+      .eq("registered_date_time_ad", registeredDateTimeAD)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setAlbumsLocked(true);
+      });
+  }, [registeredDateTimeAD]);
   
 
   // Local album state for optimistic UI — only synced to parent on unmount

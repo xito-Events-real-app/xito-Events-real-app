@@ -175,6 +175,30 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
     [albumPhotos, photoUrls]
   );
 
+  if (checkingHistory) {
+    return (
+      <div className="pb-24 px-4 pt-6 flex items-center justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-[hsl(350,80%,65%)]" />
+      </div>
+    );
+  }
+
+  if (designInProgress) {
+    return (
+      <div className="pb-24 px-4 pt-6">
+        <div className="text-center py-20">
+          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-[hsl(350,80%,65%)]/20 to-purple-500/20 flex items-center justify-center">
+            <Palette className="h-10 w-10 text-[hsl(350,80%,65%)]" />
+          </div>
+          <h3 className="text-xl font-bold text-gray-800 mb-2">Your Album Design is Coming Soon! 🎨</h3>
+          <p className="text-gray-500 text-sm max-w-xs mx-auto">
+            Your selected photos have been sent for professional album design. We'll notify you when it's ready!
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (albums.length === 0) {
     return (
       <div className="pb-24 px-4 pt-6">
