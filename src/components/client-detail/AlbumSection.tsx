@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { BookOpen, Image as ImageIcon, Loader2, FolderOpen, Camera, CloudCog, HardDrive, CheckCircle2, AlertTriangle, RefreshCw } from "lucide-react";
+import { BookOpen, Image as ImageIcon, Loader2, FolderOpen, Camera, CloudCog, HardDrive, CheckCircle2, AlertTriangle, RefreshCw, ArrowLeft, ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -23,7 +23,6 @@ interface AlbumSectionProps {
 const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".tiff", ".bmp", ".heic"];
 const isImage = (key: string) => IMAGE_EXTS.some((e) => key.toLowerCase().endsWith(e));
 
-// Module-level caches — survive unmount/remount within the same browser session
 const albumFolderCache: Record<string, E2File[]> = {};
 const albumUrlCache: Record<string, Record<string, string>> = {};
 const pcloudCountCache: Record<string, { count: number; totalSize: number }> = {};
@@ -40,6 +39,7 @@ interface TabDef {
 }
 
 const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSectionProps) => {
+  const [viewMode, setViewMode] = useState<'dashboard' | 'photos'>('dashboard');
   const [deliverables, setDeliverables] = useState<DeliverableRow[]>([]);
   const [deliverablesLoaded, setDeliverablesLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState("");
@@ -49,14 +49,13 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [tabPhotoCounts, setTabPhotoCounts] = useState<Record<string, number>>({});
 
-  // Dashboard state
   const [pcloudCounts, setPcloudCounts] = useState<Record<string, { count: number; totalSize: number }>>(pcloudCountCache);
   const [pcloudLoading, setPcloudLoading] = useState<Record<string, boolean>>({});
   const [albumDefs, setAlbumDefs] = useState<AlbumDef[]>([]);
   const [albumSelections, setAlbumSelections] = useState<AlbumSelection[]>([]);
   const [loadingAllPcloud, setLoadingAllPcloud] = useState(false);
+  const [refreshingXito, setRefreshingXito] = useState(false);
 
-  // Load deliverables
   useEffect(() => {
     if (!registeredDateTimeAD) return;
     loadDeliverables(registeredDateTimeAD).then((d) => {
@@ -65,14 +64,12 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     });
   }, [registeredDateTimeAD]);
 
-  // Load album defs + selections
   useEffect(() => {
     if (!registeredDateTimeAD) return;
     getAlbumDefsFromDeliverables(registeredDateTimeAD).then(setAlbumDefs);
     getAlbumSelections(registeredDateTimeAD).then(setAlbumSelections);
   }, [registeredDateTimeAD]);
 
-  // Album summary from deliverables
   const albumSummary = useMemo(() => {
     const albumRows = deliverables.filter((d) => d.section === "album" && d.enabled);
     const sides: string[] = [];
@@ -86,23 +83,19 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     return { count: albumRows.length, sides, types };
   }, [deliverables]);
 
-  // Build tabs from assignments
   const tabs: TabDef[] = useMemo(() => {
     const result: TabDef[] = [];
     const seen = new Set<string>();
-
     assignments.forEach((a) => {
       const photographers: { name: string }[] = [];
       if (a.photographerBride) photographers.push({ name: a.photographerBride });
       if (a.photographerGroom) photographers.push({ name: a.photographerGroom });
       if (a.extraPhotographer) photographers.push({ name: a.extraPhotographer });
-
       const y = String(parseInt(a.eventYear || "0"));
       const m = parseInt(a.eventMonth || "0");
       if (!y || y === "0" || !m) return;
       const monthLabel = NEPALI_MONTHS[m] || `MONTH ${m}`;
       const folderLabel = `${monthLabel} EVENTS ${y}`;
-
       photographers.forEach((p) => {
         const tabId = `${a.event}-${p.name}`;
         if (seen.has(tabId)) return;
@@ -121,7 +114,6 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     return result;
   }, [assignments, clientName]);
 
-  // Fetch pCloud count for a single tab
   const loadPcloudCount = useCallback(async (tab: TabDef) => {
     if (pcloudCountCache[tab.id]) {
       setPcloudCounts(prev => ({ ...prev, [tab.id]: pcloudCountCache[tab.id] }));
@@ -142,48 +134,68 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     }
   }, []);
 
-  // Load pCloud count for active tab lazily
-  useEffect(() => {
-    if (!activeTab) return;
-    const tab = tabs.find(t => t.id === activeTab);
-    if (!tab) return;
-    if (pcloudCounts[tab.id] !== undefined) return;
-    loadPcloudCount(tab);
-  }, [activeTab, tabs, pcloudCounts, loadPcloudCount]);
+  // Load xito counts for dashboard (lazy per tab on dashboard, or when switching to dashboard)
+  const loadXitoCountForTab = useCallback(async (tab: TabDef) => {
+    if (albumFolderCache[tab.id]) {
+      setTabPhotoCounts(prev => ({ ...prev, [tab.id]: albumFolderCache[tab.id].length }));
+      return;
+    }
+    try {
+      const result = await listE2Folder(tab.s3Prefix);
+      const imageFiles = result.files.filter((f) => isImage(f.key));
+      albumFolderCache[tab.id] = imageFiles;
+      setTabPhotoCounts(prev => ({ ...prev, [tab.id]: imageFiles.length }));
+    } catch {
+      setTabPhotoCounts(prev => ({ ...prev, [tab.id]: 0 }));
+    }
+  }, []);
 
-  // Load all pCloud counts at once
+  // On dashboard mount, load xito counts for all tabs
+  useEffect(() => {
+    if (viewMode !== 'dashboard' || tabs.length === 0) return;
+    tabs.forEach(t => {
+      if (tabPhotoCounts[t.id] === undefined) loadXitoCountForTab(t);
+    });
+  }, [viewMode, tabs, tabPhotoCounts, loadXitoCountForTab]);
+
+  // Load pcloud for active tab lazily on dashboard
+  useEffect(() => {
+    if (viewMode !== 'dashboard' || tabs.length === 0) return;
+    tabs.forEach(t => {
+      if (pcloudCounts[t.id] === undefined) loadPcloudCount(t);
+    });
+  }, [viewMode, tabs, pcloudCounts, loadPcloudCount]);
+
   const loadAllPcloudCounts = useCallback(async () => {
     setLoadingAllPcloud(true);
     await Promise.all(tabs.map(t => loadPcloudCount(t)));
     setLoadingAllPcloud(false);
   }, [tabs, loadPcloudCount]);
 
-  // Fetch photo count only for the active tab (lazy)
-  useEffect(() => {
-    if (!activeTab) return;
-    const tab = tabs.find(t => t.id === activeTab);
-    if (!tab) return;
-    if (tabPhotoCounts[tab.id] !== undefined && albumFolderCache[tab.id]) return;
-    if (albumFolderCache[tab.id]) {
-      setTabPhotoCounts(prev => ({ ...prev, [tab.id]: albumFolderCache[tab.id].length }));
-      return;
-    }
-  }, [activeTab, tabs]);
+  const refreshXitoCounts = useCallback(async () => {
+    setRefreshingXito(true);
+    // Clear caches for all tabs
+    tabs.forEach(t => {
+      delete albumFolderCache[t.id];
+      delete albumUrlCache[t.id];
+    });
+    setTabPhotoCounts({});
+    await Promise.all(tabs.map(t => loadXitoCountForTab(t)));
+    setRefreshingXito(false);
+  }, [tabs, loadXitoCountForTab]);
 
-  // Total photos across loaded tabs
-  const totalXitoPhotos = useMemo(() => {
-    return Object.values(tabPhotoCounts).reduce((sum, c) => sum + c, 0);
-  }, [tabPhotoCounts]);
+  const refreshPcloudCounts = useCallback(async () => {
+    setLoadingAllPcloud(true);
+    tabs.forEach(t => { delete pcloudCountCache[t.id]; });
+    setPcloudCounts({});
+    await Promise.all(tabs.map(t => loadPcloudCount(t)));
+    setLoadingAllPcloud(false);
+  }, [tabs, loadPcloudCount]);
 
-  const totalPcloudPhotos = useMemo(() => {
-    return Object.values(pcloudCounts).reduce((sum, c) => sum + c.count, 0);
-  }, [pcloudCounts]);
+  const totalXitoPhotos = useMemo(() => Object.values(tabPhotoCounts).reduce((sum, c) => sum + c, 0), [tabPhotoCounts]);
+  const totalPcloudPhotos = useMemo(() => Object.values(pcloudCounts).reduce((sum, c) => sum + c.count, 0), [pcloudCounts]);
+  const totalPcloudSize = useMemo(() => Object.values(pcloudCounts).reduce((sum, c) => sum + c.totalSize, 0), [pcloudCounts]);
 
-  const totalPcloudSize = useMemo(() => {
-    return Object.values(pcloudCounts).reduce((sum, c) => sum + c.totalSize, 0);
-  }, [pcloudCounts]);
-
-  // Album selection counts per album type
   const albumProgress = useMemo(() => {
     return albumDefs.map(def => {
       const count = albumSelections.filter(s => s.album_type === def.type).length;
@@ -191,13 +203,15 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     });
   }, [albumDefs, albumSelections]);
 
-  // Auto-select first tab
+  const allCountsLoaded = tabs.length > 0 && tabs.every(t => tabPhotoCounts[t.id] !== undefined && pcloudCounts[t.id] !== undefined);
+
+  // ===== PHOTOS VIEW LOGIC =====
   useEffect(() => {
     if (tabs.length > 0 && !activeTab) setActiveTab(tabs[0].id);
   }, [tabs, activeTab]);
 
-  // Load photos when tab changes
   useEffect(() => {
+    if (viewMode !== 'photos') return;
     const tab = tabs.find((t) => t.id === activeTab);
     if (!tab) return;
     let stale = false;
@@ -237,292 +251,307 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
           albumFolderCache[tab.id] = imageFiles;
           return loadPhotos(imageFiles);
         })
-        .catch((err) => {
+        .catch(() => {
           if (stale) return;
-          console.error("Failed to load album photos:", err);
           setTabPhotoCounts(prev => ({ ...prev, [tab.id]: 0 }));
           setIsLoadingPhotos(false);
         });
     }
 
     return () => { stale = true; };
-  }, [activeTab, tabs]);
+  }, [viewMode, activeTab, tabs]);
 
   const viewerImages = useMemo(
     () => photos.map((p) => ({ key: p.key, url: photoUrls[p.key] || "" })).filter((i) => i.url),
     [photos, photoUrls]
   );
 
-  // Check if all tabs have both counts loaded for match comparison
-  const allCountsLoaded = tabs.length > 0 && tabs.every(t => tabPhotoCounts[t.id] !== undefined && pcloudCounts[t.id] !== undefined);
-
   return (
     <div className="space-y-4">
       {/* Album Summary Header */}
       <Card className="bg-[hsl(220,25%,12%)] border-white/10">
-        <CardContent className="p-4">
+        <CardContent className="p-5">
           <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 rounded-lg bg-primary/20">
-              <BookOpen className="h-5 w-5 text-primary" />
+            <div className="p-2.5 rounded-lg bg-primary/20">
+              <BookOpen className="h-6 w-6 text-primary" />
             </div>
             <div className="flex-1">
-              <h3 className="text-lg font-semibold text-white">Album Overview</h3>
+              <h3 className="text-xl font-bold text-white">Album Overview</h3>
               {deliverablesLoaded && (
                 <p className="text-sm text-white/50">
-                  {albumSummary.count === 0
-                    ? "No albums configured in deliverables"
-                    : `Total Albums: ${albumSummary.count}`}
+                  {albumSummary.count === 0 ? "No albums configured in deliverables" : `Total Albums: ${albumSummary.count}`}
                 </p>
               )}
             </div>
-            {tabs.length > 0 && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10">
-                <Camera className="h-3.5 w-3.5 text-white/50" />
-                <span className="text-sm font-medium text-white/70">{totalXitoPhotos} photos</span>
-              </div>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-white/20 text-white/70 hover:text-white hover:bg-white/10"
+              onClick={() => setViewMode(viewMode === 'dashboard' ? 'photos' : 'dashboard')}
+            >
+              {viewMode === 'dashboard' ? (
+                <>View Photos <ArrowRight className="h-4 w-4 ml-1" /></>
+              ) : (
+                <><ArrowLeft className="h-4 w-4 mr-1" /> Dashboard</>
+              )}
+            </Button>
           </div>
-
           {albumSummary.count > 0 && (
             <div className="flex flex-wrap gap-2">
               {albumSummary.sides.map((s) => (
-                <Badge key={s} className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30">
-                  {s} Album
-                </Badge>
+                <Badge key={s} className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30">{s} Album</Badge>
               ))}
               {albumSummary.types.map((t, i) => (
-                <Badge key={i} variant="outline" className="border-white/20 text-white/70">
-                  Type: {t}
-                </Badge>
+                <Badge key={i} variant="outline" className="border-white/20 text-white/70">Type: {t}</Badge>
               ))}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* ========== DASHBOARD STATUS CARDS ========== */}
-      {tabs.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {/* Card 1: Photos for Album (Xito Drive) */}
-          <Card className="bg-[hsl(220,25%,12%)] border-white/10">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <HardDrive className="h-4 w-4 text-sky-400" />
-                <span className="text-sm font-semibold text-white">Photos for Album</span>
-                <span className="text-[10px] text-white/40 ml-auto">Xito Drive</span>
-              </div>
-              <div className="text-2xl font-bold text-sky-400 mb-2">{totalXitoPhotos}</div>
-              <div className="space-y-1 max-h-32 overflow-y-auto">
-                {tabs.map(t => (
-                  <div key={t.id} className="flex items-center justify-between text-xs">
-                    <span className="text-white/60 truncate mr-2">{t.label}</span>
-                    <span className="text-white/80 font-medium shrink-0">
-                      {tabPhotoCounts[t.id] !== undefined ? tabPhotoCounts[t.id] : '—'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Card 2: Original Edited Photos (pCloud) */}
-          <Card className="bg-[hsl(220,25%,12%)] border-white/10">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <CloudCog className="h-4 w-4 text-amber-400" />
-                <span className="text-sm font-semibold text-white">Original Edited</span>
-                <span className="text-[10px] text-white/40 ml-auto">pCloud</span>
-              </div>
-              <div className="flex items-baseline gap-2 mb-2">
-                <span className="text-2xl font-bold text-amber-400">{totalPcloudPhotos}</span>
-                {totalPcloudSize > 0 && (
-                  <span className="text-xs text-white/40">{formatPCloudSize(totalPcloudSize)}</span>
-                )}
-              </div>
-              <div className="space-y-1 max-h-24 overflow-y-auto">
-                {tabs.map(t => {
-                  const pc = pcloudCounts[t.id];
-                  const loading = pcloudLoading[t.id];
-                  return (
-                    <div key={t.id} className="flex items-center justify-between text-xs">
-                      <span className="text-white/60 truncate mr-2">{t.label}</span>
-                      <span className="text-white/80 font-medium shrink-0">
-                        {loading ? <Loader2 className="h-3 w-3 animate-spin inline" /> : pc ? `${pc.count} · ${formatPCloudSize(pc.totalSize)}` : '—'}
-                      </span>
+      {/* ===== DASHBOARD VIEW ===== */}
+      {viewMode === 'dashboard' && (
+        <>
+          {tabs.length === 0 ? (
+            <Card className="bg-[hsl(220,25%,12%)] border-white/10">
+              <CardContent className="p-10 text-center text-white/40">
+                <FolderOpen className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                <p className="text-lg">No photographer assignments found for this client.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Card 1: Photos for Album (Xito Drive) */}
+                <Card className="bg-[hsl(220,25%,12%)] border-white/10">
+                  <CardContent className="p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <HardDrive className="h-5 w-5 text-sky-400" />
+                      <span className="text-base font-bold text-white">Photos for Album</span>
+                      <span className="text-[10px] text-white/40 ml-auto">Xito Drive</span>
                     </div>
-                  );
-                })}
-              </div>
-              {!allCountsLoaded && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full mt-2 text-xs text-white/50 hover:text-white h-7"
-                  onClick={loadAllPcloudCounts}
-                  disabled={loadingAllPcloud}
-                >
-                  {loadingAllPcloud ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
-                  Load All Counts
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Card 3: Album Selection Progress */}
-          <Card className="bg-[hsl(220,25%,12%)] border-white/10">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <BookOpen className="h-4 w-4 text-rose-400" />
-                <span className="text-sm font-semibold text-white">Selection Progress</span>
-              </div>
-              {albumProgress.length === 0 ? (
-                <p className="text-xs text-white/40">No albums configured</p>
-              ) : (
-                <div className="space-y-3">
-                  {albumProgress.map(ap => {
-                    const pct = Math.min(100, Math.round((ap.count / MAX_ALBUM_PHOTOS) * 100));
-                    return (
-                      <div key={ap.type}>
-                        <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="text-white/70">{ap.name}</span>
-                          <span className={cn("font-medium", ap.count >= MAX_ALBUM_PHOTOS ? "text-emerald-400" : "text-rose-400")}>
-                            {ap.count}/{MAX_ALBUM_PHOTOS}
+                    <div className="flex items-baseline gap-3 mb-4">
+                      <span className="text-4xl font-black text-sky-400">{totalXitoPhotos}</span>
+                      <span className="text-sm text-white/40">photos</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="ml-auto h-8 w-8 text-white/40 hover:text-white"
+                        onClick={refreshXitoCounts}
+                        disabled={refreshingXito}
+                      >
+                        <RefreshCw className={cn("h-4 w-4", refreshingXito && "animate-spin")} />
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      {tabs.map(t => (
+                        <div key={t.id} className="flex items-center justify-between text-sm">
+                          <span className="text-white/60 truncate mr-2">{t.label}</span>
+                          <span className="text-white/90 font-semibold shrink-0">
+                            {tabPhotoCounts[t.id] !== undefined ? tabPhotoCounts[t.id] : <Loader2 className="h-3 w-3 animate-spin inline" />}
                           </span>
                         </div>
-                        <Progress value={pct} className="h-2 bg-white/10 [&>div]:bg-rose-500" />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* ========== MATCH INDICATOR ========== */}
-      {tabs.length > 0 && allCountsLoaded && (
-        <Card className="bg-[hsl(220,25%,12%)] border-white/10">
-          <CardContent className="p-3">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-xs font-semibold text-white/70">Xito ↔ pCloud Match</span>
-              {totalXitoPhotos === totalPcloudPhotos ? (
-                <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[10px]">
-                  <CheckCircle2 className="h-3 w-3 mr-1" /> All Match
-                </Badge>
-              ) : (
-                <Badge className="bg-red-500/20 text-red-300 border-red-500/30 text-[10px]">
-                  <AlertTriangle className="h-3 w-3 mr-1" /> Mismatch
-                </Badge>
-              )}
-            </div>
-            <div className="space-y-1">
-              {tabs.map(t => {
-                const xCount = tabPhotoCounts[t.id] ?? 0;
-                const pCount = pcloudCounts[t.id]?.count ?? 0;
-                const match = xCount === pCount;
-                return (
-                  <div key={t.id} className="flex items-center justify-between text-xs">
-                    <span className="text-white/60 truncate mr-2">{t.label}</span>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-sky-400">{xCount}</span>
-                      <span className="text-white/30">vs</span>
-                      <span className="text-amber-400">{pCount}</span>
-                      {match ? (
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                      ) : (
-                        <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
-                      )}
+                      ))}
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Event / Photographer Tabs */}
-      {tabs.length === 0 ? (
-        <Card className="bg-[hsl(220,25%,12%)] border-white/10">
-          <CardContent className="p-8 text-center text-white/40">
-            <FolderOpen className="h-10 w-10 mx-auto mb-3 opacity-50" />
-            <p>No photographer assignments found for this client.</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full flex-wrap h-auto gap-1 bg-[hsl(220,25%,10%)] p-1.5">
-            {tabs.map((tab) => {
-              const count = tabPhotoCounts[tab.id];
-              return (
-                <TabsTrigger
-                  key={tab.id}
-                  value={tab.id}
-                  className="text-xs px-3 py-1.5 data-[state=active]:bg-primary data-[state=active]:text-white text-white/60"
-                >
-                  {tab.label}{count !== undefined ? ` · ${count}` : ""}
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
-
-          {tabs.map((tab) => (
-            <TabsContent key={tab.id} value={tab.id} className="mt-3">
-              {isLoadingPhotos ? (
-                <div className="flex items-center justify-center py-16">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  <span className="ml-3 text-white/50">Loading photos...</span>
-                </div>
-              ) : photos.length === 0 ? (
-                <Card className="bg-[hsl(220,25%,12%)] border-white/10">
-                  <CardContent className="p-8 text-center text-white/40">
-                    <ImageIcon className="h-10 w-10 mx-auto mb-3 opacity-50" />
-                    <p>No photos found in this folder yet.</p>
-                    <p className="text-xs mt-1 text-white/30">{tab.s3Prefix}</p>
                   </CardContent>
                 </Card>
-              ) : (
-                <>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm text-white/50">{photos.length} photos</span>
-                  </div>
-                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-1.5">
-                    {photos.map((file, idx) => {
-                      const url = photoUrls[file.key];
-                      return (
-                        <button
-                          key={file.key}
-                          onClick={() => url && setViewerIndex(idx)}
-                          className={cn(
-                            "aspect-square rounded-md overflow-hidden bg-white/5 border border-white/10 hover:border-primary/50 transition-all relative group cursor-pointer"
-                          )}
-                        >
-                          {url ? (
-                            <img
-                              src={url}
-                              alt=""
-                              className="w-full h-full object-cover"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <Loader2 className="h-4 w-4 animate-spin text-white/30" />
+
+                {/* Card 2: Original Edited Photos (pCloud) */}
+                <Card className="bg-[hsl(220,25%,12%)] border-white/10">
+                  <CardContent className="p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <CloudCog className="h-5 w-5 text-amber-400" />
+                      <span className="text-base font-bold text-white">Original Edited</span>
+                      <span className="text-[10px] text-white/40 ml-auto">pCloud</span>
+                    </div>
+                    <div className="flex items-baseline gap-3 mb-4">
+                      <span className="text-4xl font-black text-amber-400">{totalPcloudPhotos}</span>
+                      {totalPcloudSize > 0 && (
+                        <span className="text-sm text-white/40">{formatPCloudSize(totalPcloudSize)}</span>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="ml-auto h-8 w-8 text-white/40 hover:text-white"
+                        onClick={refreshPcloudCounts}
+                        disabled={loadingAllPcloud}
+                      >
+                        <RefreshCw className={cn("h-4 w-4", loadingAllPcloud && "animate-spin")} />
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      {tabs.map(t => {
+                        const pc = pcloudCounts[t.id];
+                        const loading = pcloudLoading[t.id];
+                        return (
+                          <div key={t.id} className="flex items-center justify-between text-sm">
+                            <span className="text-white/60 truncate mr-2">{t.label}</span>
+                            <span className="text-white/90 font-semibold shrink-0">
+                              {loading ? <Loader2 className="h-3 w-3 animate-spin inline" /> : pc ? `${pc.count} · ${formatPCloudSize(pc.totalSize)}` : <Loader2 className="h-3 w-3 animate-spin inline" />}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Card 3: Album Selection Progress */}
+                <Card className="bg-[hsl(220,25%,12%)] border-white/10">
+                  <CardContent className="p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <BookOpen className="h-5 w-5 text-rose-400" />
+                      <span className="text-base font-bold text-white">Selection Progress</span>
+                    </div>
+                    {albumProgress.length === 0 ? (
+                      <p className="text-sm text-white/40 mt-4">No albums configured</p>
+                    ) : (
+                      <div className="space-y-4 mt-2">
+                        {albumProgress.map(ap => {
+                          const pct = Math.min(100, Math.round((ap.count / MAX_ALBUM_PHOTOS) * 100));
+                          return (
+                            <div key={ap.type}>
+                              <div className="flex items-center justify-between text-sm mb-1.5">
+                                <span className="text-white/80 font-medium">{ap.name}</span>
+                                <span className={cn("font-bold text-base", ap.count >= MAX_ALBUM_PHOTOS ? "text-emerald-400" : "text-rose-400")}>
+                                  {ap.count}/{MAX_ALBUM_PHOTOS}
+                                </span>
+                              </div>
+                              <Progress value={pct} className="h-3 bg-white/10 [&>div]:bg-rose-500" />
                             </div>
-                          )}
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all" />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Match Indicator */}
+              {allCountsLoaded && (
+                <Card className="bg-[hsl(220,25%,12%)] border-white/10">
+                  <CardContent className="p-5">
+                    <div className="flex items-center gap-3 mb-3">
+                      <span className="text-sm font-bold text-white/80">Xito ↔ pCloud Match</span>
+                      {totalXitoPhotos === totalPcloudPhotos ? (
+                        <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-xs">
+                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> All Match
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-red-500/20 text-red-300 border-red-500/30 text-xs">
+                          <AlertTriangle className="h-3.5 w-3.5 mr-1" /> Mismatch
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      {tabs.map(t => {
+                        const xCount = tabPhotoCounts[t.id] ?? 0;
+                        const pCount = pcloudCounts[t.id]?.count ?? 0;
+                        const match = xCount === pCount;
+                        return (
+                          <div key={t.id} className="flex items-center justify-between text-sm">
+                            <span className="text-white/60 truncate mr-2">{t.label}</span>
+                            <div className="flex items-center gap-3 shrink-0">
+                              <span className="text-sky-400 font-semibold">{xCount}</span>
+                              <span className="text-white/30">vs</span>
+                              <span className="text-amber-400 font-semibold">{pCount}</span>
+                              {match ? (
+                                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                              ) : (
+                                <AlertTriangle className="h-4 w-4 text-red-400" />
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
               )}
-            </TabsContent>
-          ))}
-        </Tabs>
+            </>
+          )}
+        </>
       )}
 
-      {/* XITO IMAGE VIEWER */}
+      {/* ===== PHOTOS VIEW ===== */}
+      {viewMode === 'photos' && (
+        <>
+          {tabs.length === 0 ? (
+            <Card className="bg-[hsl(220,25%,12%)] border-white/10">
+              <CardContent className="p-8 text-center text-white/40">
+                <FolderOpen className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                <p>No photographer assignments found for this client.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="w-full flex-wrap h-auto gap-1 bg-[hsl(220,25%,10%)] p-1.5">
+                {tabs.map((tab) => {
+                  const count = tabPhotoCounts[tab.id];
+                  return (
+                    <TabsTrigger
+                      key={tab.id}
+                      value={tab.id}
+                      className="text-xs px-3 py-1.5 data-[state=active]:bg-primary data-[state=active]:text-white text-white/60"
+                    >
+                      {tab.label}{count !== undefined ? ` · ${count}` : ""}
+                    </TabsTrigger>
+                  );
+                })}
+              </TabsList>
+
+              {tabs.map((tab) => (
+                <TabsContent key={tab.id} value={tab.id} className="mt-3">
+                  {isLoadingPhotos ? (
+                    <div className="flex items-center justify-center py-16">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      <span className="ml-3 text-white/50">Loading photos...</span>
+                    </div>
+                  ) : photos.length === 0 ? (
+                    <Card className="bg-[hsl(220,25%,12%)] border-white/10">
+                      <CardContent className="p-8 text-center text-white/40">
+                        <ImageIcon className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                        <p>No photos found in this folder yet.</p>
+                        <p className="text-xs mt-1 text-white/30">{tab.s3Prefix}</p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-sm text-white/50">{photos.length} photos</span>
+                      </div>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-1.5">
+                        {photos.map((file, idx) => {
+                          const url = photoUrls[file.key];
+                          return (
+                            <button
+                              key={file.key}
+                              onClick={() => url && setViewerIndex(idx)}
+                              className={cn(
+                                "aspect-square rounded-md overflow-hidden bg-white/5 border border-white/10 hover:border-primary/50 transition-all relative group cursor-pointer"
+                              )}
+                            >
+                              {url ? (
+                                <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <Loader2 className="h-4 w-4 animate-spin text-white/30" />
+                                </div>
+                              )}
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </TabsContent>
+              ))}
+            </Tabs>
+          )}
+        </>
+      )}
+
       {viewerIndex !== null && viewerImages.length > 0 && (
         <XitoImageViewer
           images={viewerImages}
