@@ -275,9 +275,10 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
       } catch { xitoResults[t.id] = 0; }
     }));
     setTabPhotoCounts(xitoResults);
-    // Update per-client cache
     if (clientDashboardCache[registeredDateTimeAD]) {
       clientDashboardCache[registeredDateTimeAD].xitoCounts = xitoResults;
+      clientDashboardCache[registeredDateTimeAD].timestamp = Date.now();
+      saveDashboardCache(clientDashboardCache);
     }
     setRefreshingXito(false);
   }, [tabs, registeredDateTimeAD]);
