@@ -71,6 +71,19 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
     return counts;
   }, [selections, albums]);
 
+  // Auto-popup when ALL albums are full
+  const allAlbumsFull = useMemo(() => {
+    if (albums.length === 0) return false;
+    return albums.every(a => (albumCounts[a.type] || 0) >= MAX_PHOTOS);
+  }, [albums, albumCounts]);
+
+  useEffect(() => {
+    if (allAlbumsFull && !autoPopupShown.current) {
+      autoPopupShown.current = true;
+      setWizardOpen(true);
+    }
+  }, [allAlbumsFull]);
+
   useEffect(() => {
     if (albumPhotos.length === 0) {
       setPhotoUrls({});
@@ -159,9 +172,19 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
   return (
     <>
       <div className="pb-28 px-3 pt-3">
-        <div className="flex items-center gap-2 mb-4 px-1">
-          <BookOpen className="h-4 w-4 text-[hsl(350,80%,65%)]" />
-          <span className="text-sm font-semibold text-gray-700">My Albums</span>
+        {/* Lock & Send button */}
+        <div className="flex items-center justify-between mb-4 px-1">
+          <div className="flex items-center gap-2">
+            <BookOpen className="h-4 w-4 text-[hsl(350,80%,65%)]" />
+            <span className="text-sm font-semibold text-gray-700">My Albums</span>
+          </div>
+          <button
+            onClick={() => setWizardOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[hsl(350,80%,65%)] text-white text-xs font-medium shadow-sm hover:bg-[hsl(350,80%,58%)] transition-colors"
+          >
+            <Lock className="h-3 w-3" />
+            Lock & Send for Design
+          </button>
         </div>
 
         <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 scrollbar-hide">
