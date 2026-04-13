@@ -1,11 +1,12 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { BookOpen, Loader2, Trash2, ImageIcon, Download } from "lucide-react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { BookOpen, Loader2, Trash2, ImageIcon, Download, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AlbumDef, AlbumSelection, removeFromAlbum, getAlbumSelections } from "@/lib/album-selection-api";
 import { getE2FileUrls } from "@/lib/idrive-e2-api";
 import { lookupUrls, cacheUrls } from "@/lib/shared-url-cache";
 import { getPCloudFileLinkByPath } from "@/lib/pcloud-api";
 import XitoImageViewer from "@/components/client-detail/XitoImageViewer";
+import AlbumLockWizard from "@/components/client-portal/AlbumLockWizard";
 import { toast } from "sonner";
 
 interface PortalMyAlbumProps {
@@ -13,6 +14,9 @@ interface PortalMyAlbumProps {
   albums: AlbumDef[];
   selections: AlbumSelection[];
   onSelectionsChange: (selections: AlbumSelection[]) => void;
+  brideName?: string;
+  groomName?: string;
+  firstEventDateAD?: string;
 }
 
 const MAX_PHOTOS = 140;
