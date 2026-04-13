@@ -343,6 +343,20 @@ serve(async (req) => {
         query.set('toname', params.toname);
         break;
 
+      case 'copyfile': {
+        const copyParams = new URLSearchParams({ auth });
+        if (params.path) copyParams.set('path', params.path);
+        if (params.fileid) copyParams.set('fileid', String(params.fileid));
+        if (params.topath) copyParams.set('topath', params.topath);
+        if (params.tofolderid) copyParams.set('tofolderid', String(params.tofolderid));
+        if (params.noover) copyParams.set('noover', '1');
+        const copyRes = await fetch(`${PCLOUD_API}/copyfile?${copyParams}`);
+        const copyData = await copyRes.json();
+        return new Response(JSON.stringify(copyData), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       default:
         throw new Error(`Unknown action: ${action}`);
     }

@@ -1,14 +1,15 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { BookOpen, Image as ImageIcon, Loader2, FolderOpen, Camera, CloudCog, HardDrive, CheckCircle2, AlertTriangle, RefreshCw, ArrowLeft, ArrowRight, Circle, Send } from "lucide-react";
+import { BookOpen, Image as ImageIcon, Loader2, FolderOpen, Camera, CloudCog, HardDrive, CheckCircle2, AlertTriangle, RefreshCw, ArrowLeft, ArrowRight, Circle, Send, Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { loadDeliverables, DeliverableRow } from "@/lib/deliverables-api";
 import { listE2Folder, getE2FileUrls, E2File } from "@/lib/idrive-e2-api";
-import { listPCloudFolderByPath, isPCloudImage, formatPCloudSize } from "@/lib/pcloud-api";
+import { listPCloudFolderByPath, isPCloudImage, formatPCloudSize, createPCloudFolderByPath, copyPCloudFileByPath } from "@/lib/pcloud-api";
 import { getAlbumSelections, getAlbumDefsFromDeliverables, AlbumSelection, AlbumDef } from "@/lib/album-selection-api";
 import { FreelancerAssignment } from "@/lib/freelancer-assignment-api";
 import { NEPALI_MONTHS } from "@/lib/nepali-months";
@@ -103,6 +104,10 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
   const [refreshingXito, setRefreshingXito] = useState(false);
   const [albumSubmission, setAlbumSubmission] = useState<{ sent_to: string; handled: boolean } | null>(null);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
+
+  // Copy HQ Album Photos state
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'confirming' | 'copying' | 'done' | 'error'>('idle');
+  const [copyResult, setCopyResult] = useState<{ copied: number; expected: number; errors: string[] } | null>(null);
 
   useEffect(() => {
     if (!registeredDateTimeAD) return;
@@ -344,6 +349,100 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     }
     return { steps, currentStep };
   }, [totalPcloudPhotos, totalXitoPhotos, albumSelections.length, albumSubmission]);
+
+  // Determine the majority month/year from assignments for copy destination
+  const getMajorityYearMonth = useCallback(() => {
+    const counts: Record<string, number> = {};
+    assignments.forEach(a => {
+      const y = String(parseInt(a.eventYear || "0"));
+      const m = parseInt(a.eventMonth || "0");
+      if (y === "0" || !m) return;
+      const monthLabel = NEPALI_MONTHS[m] || `MONTH ${m}`;
+      const key = `${monthLabel} EVENTS ${y}`;
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    let best = "";
+    let bestCount = 0;
+    Object.entries(counts).forEach(([k, v]) => {
+      if (v > bestCount) { best = k; bestCount = v; }
+    });
+    return best;
+  }, [assignments]);
+
+  // Has frame deliverable?
+  const hasFrameDeliverable = useMemo(() => {
+    return deliverables.some(d => d.section === "album" && d.enabled && d.deliverable_type.toLowerCase().includes("frame"));
+  }, [deliverables]);
+
+  const isCopyEnabled = workflowStatus.currentStep >= 4; // Sent for Design
+
+  // Copy HQ album photos orchestration
+  const executeCopy = useCallback(async () => {
+    setCopyStatus('copying');
+    setCopyResult(null);
+    const errors: string[] = [];
+    let copied = 0;
+    let expected = 0;
+
+    try {
+      const monthFolder = getMajorityYearMonth();
+      if (!monthFolder) throw new Error("Could not determine month folder");
+
+      const basePath = `/ALBUM AND FRAME - WEDDING TALES NEPAL/${monthFolder}/${clientName}`;
+
+      // Group selections by album_type
+      const grouped: Record<string, AlbumSelection[]> = {};
+      albumSelections.forEach(s => {
+        if (!grouped[s.album_type]) grouped[s.album_type] = [];
+        grouped[s.album_type].push(s);
+      });
+
+      // Map album_type to folder name
+      const albumTypeToFolder: Record<string, string> = {};
+      albumDefs.forEach(def => {
+        const folderName = def.name.toUpperCase();
+        albumTypeToFolder[def.type] = folderName;
+      });
+
+      // Create all album folders + FRAME if needed
+      const folderNames = Object.values(albumTypeToFolder);
+      if (hasFrameDeliverable) folderNames.push("FRAME");
+
+      await Promise.all(folderNames.map(f => createPCloudFolderByPath(`${basePath}/${f}`)));
+
+      // Copy files for each album type
+      for (const [albumType, selections] of Object.entries(grouped)) {
+        const folderName = albumTypeToFolder[albumType] || albumType.replace(/_/g, ' ').toUpperCase();
+        expected += selections.length;
+
+        // Process in batches of 10 to avoid overwhelming pCloud
+        for (let i = 0; i < selections.length; i += 10) {
+          const batch = selections.slice(i, i + 10);
+          const results = await Promise.allSettled(batch.map(async (sel) => {
+            // photo_key is the Xito path like "FALGUN EVENTS 2082/CLIENT NAME/Photos/EVENT/PHOTOGRAPHER/filename.jpg"
+            const fileName = sel.photo_key.split('/').pop() || '';
+            const sourcePath = `/WEDDING TALES NEPAL/${sel.photo_key}`;
+            const destPath = `${basePath}/${folderName}/${fileName}`;
+            await copyPCloudFileByPath(sourcePath, destPath);
+          }));
+          results.forEach((r, idx) => {
+            if (r.status === 'fulfilled') {
+              copied++;
+            } else {
+              errors.push(`${batch[idx].photo_key}: ${r.reason?.message || 'Copy failed'}`);
+            }
+          });
+        }
+      }
+
+      setCopyResult({ copied, expected, errors });
+      setCopyStatus('done');
+    } catch (err: any) {
+      errors.push(err.message || 'Unknown error');
+      setCopyResult({ copied, expected, errors });
+      setCopyStatus('error');
+    }
+  }, [albumSelections, albumDefs, clientName, getMajorityYearMonth, hasFrameDeliverable]);
 
   // ===== PHOTOS VIEW LOGIC =====
   useEffect(() => {
@@ -655,6 +754,83 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
                   </CardContent>
                 </Card>
               )}
+
+              {/* Gear Button: Copy HQ Album Photos */}
+              <div className="flex flex-col items-center gap-3 py-4">
+                <button
+                  onClick={() => isCopyEnabled && setCopyStatus('confirming')}
+                  disabled={!isCopyEnabled || copyStatus === 'copying'}
+                  className={cn(
+                    "relative h-24 w-24 rounded-full border-4 flex items-center justify-center transition-all",
+                    isCopyEnabled
+                      ? "border-primary bg-primary/10 hover:bg-primary/20 cursor-pointer"
+                      : "border-white/10 bg-white/5 cursor-not-allowed opacity-40"
+                  )}
+                >
+                  <Settings className={cn(
+                    "h-10 w-10",
+                    isCopyEnabled ? "text-primary" : "text-white/30",
+                    copyStatus === 'copying' && "animate-spin text-primary"
+                  )} />
+                  {copyStatus === 'done' && copyResult && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/90 rounded-full">
+                      <span className={cn("text-lg font-black", copyResult.errors.length > 0 ? "text-amber-400" : "text-emerald-400")}>
+                        {copyResult.copied}
+                      </span>
+                      <span className="text-[9px] text-white/50">copied</span>
+                    </div>
+                  )}
+                </button>
+                <span className={cn("text-xs font-medium", isCopyEnabled ? "text-primary" : "text-white/30")}>
+                  Copy HQ Album Photos
+                </span>
+                {copyStatus === 'done' && copyResult && (
+                  <div className="text-center max-w-xs">
+                    {copyResult.errors.length > 0 ? (
+                      <p className="text-xs text-amber-400">
+                        {copyResult.copied}/{copyResult.expected} copied · {copyResult.errors.length} failed
+                      </p>
+                    ) : (
+                      <p className="text-xs text-emerald-400">
+                        All {copyResult.copied} photos copied successfully
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Confirmation Dialog */}
+              <Dialog open={copyStatus === 'confirming'} onOpenChange={(open) => { if (!open) setCopyStatus('idle'); }}>
+                <DialogContent className="bg-[hsl(220,25%,12%)] border-white/10 max-w-sm">
+                  <DialogHeader>
+                    <DialogTitle className="text-white text-lg">Copy HQ Album Photos</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-white/70">Are names matching?</span>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20" onClick={() => {}}>Yes</Button>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-white/70">Is date okay?</span>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20" onClick={() => {}}>Yes</Button>
+                      </div>
+                    </div>
+                    <div className="text-xs text-white/40 pt-2">
+                      This will copy {albumSelections.length} selected photos into the "ALBUM AND FRAME" folder structure in pCloud.
+                      {hasFrameDeliverable && " A FRAME folder will also be created."}
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="ghost" className="text-white/50" onClick={() => setCopyStatus('idle')}>Cancel</Button>
+                    <Button className="bg-primary text-primary-foreground" onClick={() => executeCopy()}>
+                      Start Copying
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </>
           )}
         </>
