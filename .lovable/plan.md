@@ -1,39 +1,28 @@
 
 
-# Album Lock Wizard: Smart Date Selection + Copy Info Enhancement
+# Auto-select first folder with uploaded photos
 
-## Changes
+## Problem
+Currently the Photos tab in the client portal always starts on the first tab (index 0), which may be an empty folder. The user wants the default tab to be the first one that actually has photos uploaded in XITO Drive (E2).
 
-### 1. AlbumLockWizard.tsx — Redesign Step 2 date section
+## Approach
+On mount, before selecting a tab, probe each tab's E2 folder to find the first non-empty one. Set `activeTabIndex` to that tab.
 
-**Pass event details to wizard**: Add `events` prop (array of `{eventName, eventDateAD}`) from `ClientPortal → PortalMyAlbum → AlbumLockWizard`.
+### Changes in `src/components/client-portal/PortalMyPhotos.tsx`
 
-**Smart default date**: Find the event containing "wedding" (case-insensitive) in its name. If found, use its date as default. Otherwise fall back to first event date.
+1. Add a new state `initialTabResolved` (boolean, default `false`) to prevent rendering tabs until the check is done
+2. Add a `useEffect` that runs when `tabs` are built:
+   - Iterate through tabs sequentially (or in parallel for speed)
+   - For each tab, call `listE2Folder(tab.s3Prefix)` and check if it has image files
+   - Set `activeTabIndex` to the first tab index that has files
+   - If no tabs have files, default to index 0
+   - Set `initialTabResolved = true`
+   - Cache the folder results in `folderCache` so the subsequent photo-loading effect doesn't re-fetch
+3. Show a brief loading spinner while resolving the initial tab
+4. The existing photo-loading `useEffect` continues to work as before once the tab is set
 
-**Redesigned date flow in Step 2**:
-- Remove the "What do you want on your album?" textarea entirely
-- Add a formal info note: *"This date will be printed on your album. Please choose carefully."* styled as a subtle info box
-- First ask: AD or BS toggle (same as now but cleaner)
-- Then show the calendar picker based on selection
-- Default to the wedding event's date (or first event)
+This keeps the UX snappy — parallel folder checks complete fast since they're just listing, and the result is cached for instant photo display.
 
-**Save `selected_date` with date mode info**: Store as `"AD: May 15, 2026"` or `"BS: Jestha 1, 2083"` so the copy info can display it correctly.
-
-### 2. AlbumSection.tsx — Add album date to Copy Information
-
-- Fetch `selected_date` alongside `bride_name, groom_name` from `album_selection_submissions`
-- Add a new line to the copy text: `Album Date: [whatever client chose]`
-- Store in `brideGroom` state (extend to include `albumDate`)
-
-### 3. Prop threading
-
-- **ClientPortal.tsx**: Pass `eventDetails` to `PortalMyAlbum`
-- **PortalMyAlbum.tsx**: Accept `events` prop, pass to `AlbumLockWizard`
-- **AlbumLockWizard.tsx**: Accept `events` prop, use to find wedding date
-
-### Files changed
-- `src/components/client-portal/AlbumLockWizard.tsx` — Remove albumText, add info note, smart default date from wedding event
-- `src/components/client-portal/PortalMyAlbum.tsx` — Pass events prop through
-- `src/pages/ClientPortal.tsx` — Pass eventDetails to PortalMyAlbum
-- `src/components/client-detail/AlbumSection.tsx` — Fetch and display `selected_date` in copy info
+### File changed
+- `src/components/client-portal/PortalMyPhotos.tsx`
 
