@@ -49,6 +49,7 @@ const PortalMyPhotos = ({
   registeredDateTimeAD, albums, albumSelections, onAlbumSelectionsChange
 }: PortalMyPhotosProps) => {
   const [activeTabIndex, setActiveTabIndex] = useState(0);
+  const [initialTabResolved, setInitialTabResolved] = useState(false);
   const [photos, setPhotos] = useState<E2File[]>([]);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
@@ -226,8 +227,33 @@ const PortalMyPhotos = ({
     return result;
   }, [assignments, clientName]);
 
+  // On mount, probe tabs in parallel to find first non-empty folder
+  useEffect(() => {
+    if (tabs.length === 0) { setInitialTabResolved(true); return; }
+    let stale = false;
+
+    const probe = async () => {
+      const promises = tabs.map(async (tab) => {
+        if (folderCache[tab.id]) return folderCache[tab.id];
+        const result = await listE2Folder(tab.s3Prefix);
+        const imgs = result.files.filter(f => isImage(f.key));
+        folderCache[tab.id] = imgs;
+        return imgs;
+      });
+      const results = await Promise.all(promises);
+      if (stale) return;
+      const idx = results.findIndex(r => r.length > 0);
+      setActiveTabIndex(idx >= 0 ? idx : 0);
+      setInitialTabResolved(true);
+    };
+    probe().catch(() => { if (!stale) setInitialTabResolved(true); });
+
+    return () => { stale = true; };
+  }, [tabs]);
+
   // Load photos when tab changes — use module-level cache, abort stale requests
   useEffect(() => {
+    if (!initialTabResolved) return;
     const tab = tabs[activeTabIndex];
     if (!tab) return;
     let stale = false;
@@ -272,22 +298,29 @@ const PortalMyPhotos = ({
     }
 
     return () => { stale = true; };
-  }, [activeTabIndex, tabs]);
+  }, [activeTabIndex, tabs, initialTabResolved]);
 
   const viewerImages = useMemo(
     () => photos.map(p => ({ key: p.key, url: photoUrls[p.key] || "" })).filter(i => i.url),
     [photos, photoUrls]
   );
 
-  if (tabs.length === 0) {
+  if (tabs.length === 0 || !initialTabResolved) {
     return (
       <div className="pb-20 px-4 pt-4">
-        <Card className="bg-gray-50 border-gray-200">
-          <CardContent className="p-8 text-center text-gray-400">
-            <FolderOpen className="h-10 w-10 mx-auto mb-3 opacity-50" />
-            <p>No photos available yet.</p>
-          </CardContent>
-        </Card>
+        {tabs.length === 0 ? (
+          <Card className="bg-gray-50 border-gray-200">
+            <CardContent className="p-8 text-center text-gray-400">
+              <FolderOpen className="h-10 w-10 mx-auto mb-3 opacity-50" />
+              <p>No photos available yet.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-8 w-8 animate-spin text-[hsl(350,80%,65%)]" />
+            <span className="ml-3 text-gray-400">Finding your photos...</span>
+          </div>
+        )}
       </div>
     );
   }
