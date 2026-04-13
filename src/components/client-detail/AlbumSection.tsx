@@ -28,6 +28,14 @@ const albumFolderCache: Record<string, E2File[]> = {};
 const albumUrlCache: Record<string, Record<string, string>> = {};
 const pcloudCountCache: Record<string, { count: number; totalSize: number }> = {};
 
+// Per-client dashboard cache to avoid re-fetching on every mount
+interface ClientDashboardCache {
+  xitoCounts: Record<string, number>;
+  pcloudCounts: Record<string, { count: number; totalSize: number }>;
+  fetched: boolean;
+}
+const clientDashboardCache: Record<string, ClientDashboardCache> = {};
+
 const MAX_ALBUM_PHOTOS = 140;
 
 interface TabDef {
@@ -50,13 +58,14 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [tabPhotoCounts, setTabPhotoCounts] = useState<Record<string, number>>({});
 
-  const [pcloudCounts, setPcloudCounts] = useState<Record<string, { count: number; totalSize: number }>>(pcloudCountCache);
+  const [pcloudCounts, setPcloudCounts] = useState<Record<string, { count: number; totalSize: number }>>({});
   const [pcloudLoading, setPcloudLoading] = useState<Record<string, boolean>>({});
   const [albumDefs, setAlbumDefs] = useState<AlbumDef[]>([]);
   const [albumSelections, setAlbumSelections] = useState<AlbumSelection[]>([]);
   const [loadingAllPcloud, setLoadingAllPcloud] = useState(false);
   const [refreshingXito, setRefreshingXito] = useState(false);
   const [albumSubmission, setAlbumSubmission] = useState<{ sent_to: string; handled: boolean } | null>(null);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
 
   useEffect(() => {
     if (!registeredDateTimeAD) return;
@@ -168,47 +177,106 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     }
   }, []);
 
-  // On dashboard mount, load xito counts for all tabs
+  // On first mount per client: restore from cache or auto-fetch
   useEffect(() => {
-    if (viewMode !== 'dashboard' || tabs.length === 0) return;
-    tabs.forEach(t => {
-      if (tabPhotoCounts[t.id] === undefined) loadXitoCountForTab(t);
-    });
-  }, [viewMode, tabs, tabPhotoCounts, loadXitoCountForTab]);
+    if (tabs.length === 0 || initialLoadDone) return;
+    const cached = clientDashboardCache[registeredDateTimeAD];
+    if (cached?.fetched) {
+      // Restore from per-client cache — no API calls
+      setTabPhotoCounts(cached.xitoCounts);
+      setPcloudCounts(cached.pcloudCounts);
+      setInitialLoadDone(true);
+    } else {
+      // First time visiting this client — auto-fetch all counts
+      setInitialLoadDone(true);
+      const fetchAll = async () => {
+        setRefreshingXito(true);
+        setLoadingAllPcloud(true);
+        const xitoResults: Record<string, number> = {};
+        const pcloudResults: Record<string, { count: number; totalSize: number }> = {};
 
-  // Load pcloud for active tab lazily on dashboard
-  useEffect(() => {
-    if (viewMode !== 'dashboard' || tabs.length === 0) return;
-    tabs.forEach(t => {
-      if (pcloudCounts[t.id] === undefined) loadPcloudCount(t);
-    });
-  }, [viewMode, tabs, pcloudCounts, loadPcloudCount]);
+        await Promise.all(tabs.map(async (t) => {
+          // Xito
+          try {
+            if (albumFolderCache[t.id]) {
+              xitoResults[t.id] = albumFolderCache[t.id].length;
+            } else {
+              const result = await listE2Folder(t.s3Prefix);
+              const imageFiles = result.files.filter((f) => isImage(f.key));
+              albumFolderCache[t.id] = imageFiles;
+              xitoResults[t.id] = imageFiles.length;
+            }
+          } catch {
+            xitoResults[t.id] = 0;
+          }
+          // pCloud
+          try {
+            if (pcloudCountCache[t.id]) {
+              pcloudResults[t.id] = pcloudCountCache[t.id];
+            } else {
+              const folder = await listPCloudFolderByPath(t.pcloudPath);
+              const images = folder.contents.filter(isPCloudImage);
+              const totalSize = images.reduce((s, f) => s + (f.size || 0), 0);
+              const r = { count: images.length, totalSize };
+              pcloudCountCache[t.id] = r;
+              pcloudResults[t.id] = r;
+            }
+          } catch {
+            pcloudResults[t.id] = { count: 0, totalSize: 0 };
+          }
+        }));
 
-  const loadAllPcloudCounts = useCallback(async () => {
-    setLoadingAllPcloud(true);
-    await Promise.all(tabs.map(t => loadPcloudCount(t)));
-    setLoadingAllPcloud(false);
-  }, [tabs, loadPcloudCount]);
+        setTabPhotoCounts(xitoResults);
+        setPcloudCounts(pcloudResults);
+        // Save to per-client cache
+        clientDashboardCache[registeredDateTimeAD] = { xitoCounts: xitoResults, pcloudCounts: pcloudResults, fetched: true };
+        setRefreshingXito(false);
+        setLoadingAllPcloud(false);
+      };
+      fetchAll();
+    }
+  }, [tabs, initialLoadDone, registeredDateTimeAD]);
 
   const refreshXitoCounts = useCallback(async () => {
     setRefreshingXito(true);
-    // Clear caches for all tabs
-    tabs.forEach(t => {
-      delete albumFolderCache[t.id];
-      delete albumUrlCache[t.id];
-    });
-    setTabPhotoCounts({});
-    await Promise.all(tabs.map(t => loadXitoCountForTab(t)));
+    tabs.forEach(t => { delete albumFolderCache[t.id]; delete albumUrlCache[t.id]; });
+    const xitoResults: Record<string, number> = {};
+    await Promise.all(tabs.map(async (t) => {
+      try {
+        const result = await listE2Folder(t.s3Prefix);
+        const imageFiles = result.files.filter((f) => isImage(f.key));
+        albumFolderCache[t.id] = imageFiles;
+        xitoResults[t.id] = imageFiles.length;
+      } catch { xitoResults[t.id] = 0; }
+    }));
+    setTabPhotoCounts(xitoResults);
+    // Update per-client cache
+    if (clientDashboardCache[registeredDateTimeAD]) {
+      clientDashboardCache[registeredDateTimeAD].xitoCounts = xitoResults;
+    }
     setRefreshingXito(false);
-  }, [tabs, loadXitoCountForTab]);
+  }, [tabs, registeredDateTimeAD]);
 
   const refreshPcloudCounts = useCallback(async () => {
     setLoadingAllPcloud(true);
     tabs.forEach(t => { delete pcloudCountCache[t.id]; });
-    setPcloudCounts({});
-    await Promise.all(tabs.map(t => loadPcloudCount(t)));
+    const pcloudResults: Record<string, { count: number; totalSize: number }> = {};
+    await Promise.all(tabs.map(async (t) => {
+      try {
+        const folder = await listPCloudFolderByPath(t.pcloudPath);
+        const images = folder.contents.filter(isPCloudImage);
+        const totalSize = images.reduce((s, f) => s + (f.size || 0), 0);
+        const r = { count: images.length, totalSize };
+        pcloudCountCache[t.id] = r;
+        pcloudResults[t.id] = r;
+      } catch { pcloudResults[t.id] = { count: 0, totalSize: 0 }; }
+    }));
+    setPcloudCounts(pcloudResults);
+    if (clientDashboardCache[registeredDateTimeAD]) {
+      clientDashboardCache[registeredDateTimeAD].pcloudCounts = pcloudResults;
+    }
     setLoadingAllPcloud(false);
-  }, [tabs, loadPcloudCount]);
+  }, [tabs, registeredDateTimeAD]);
 
   const totalXitoPhotos = useMemo(() => Object.values(tabPhotoCounts).reduce((sum, c) => sum + c, 0), [tabPhotoCounts]);
   const totalPcloudPhotos = useMemo(() => Object.values(pcloudCounts).reduce((sum, c) => sum + c.count, 0), [pcloudCounts]);
