@@ -758,15 +758,14 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
               {/* Gear Button: Copy HQ Album Photos */}
               <div className="flex flex-col items-center gap-4 py-8">
                 <div className="relative">
-                  {/* Outer glow rings */}
                   {isCopyEnabled && copyStatus !== 'done' && (
                     <>
-                      <div className="absolute inset-[-12px] rounded-full border-2 border-primary/20 animate-[pulse_3s_ease-in-out_infinite]" />
-                      <div className="absolute inset-[-6px] rounded-full border border-primary/30 animate-[pulse_2.5s_ease-in-out_infinite_0.5s]" />
+                      <div className="absolute inset-[-12px] rounded-full border-2 border-violet-400/15 animate-[pulse_3s_ease-in-out_infinite]" />
+                      <div className="absolute inset-[-6px] rounded-full border border-violet-400/20 animate-[pulse_2.5s_ease-in-out_infinite_0.5s]" />
                     </>
                   )}
                   {copyStatus === 'copying' && (
-                    <div className="absolute inset-[-8px] rounded-full border-2 border-t-primary border-r-primary/50 border-b-primary/20 border-l-primary/50 animate-spin" />
+                    <div className="absolute inset-[-8px] rounded-full border-2 border-t-violet-400 border-r-violet-400/40 border-b-violet-400/10 border-l-violet-400/40 animate-spin" />
                   )}
                   <button
                     onClick={() => isCopyEnabled && copyStatus !== 'copying' && setCopyStatus('confirming')}
@@ -774,9 +773,9 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
                     className={cn(
                       "relative h-32 w-32 rounded-full flex items-center justify-center transition-all duration-500",
                       isCopyEnabled
-                        ? "bg-gradient-to-br from-primary/20 via-accent/10 to-secondary/20 shadow-[0_0_30px_hsl(var(--primary)/0.15)] hover:shadow-[0_0_40px_hsl(var(--primary)/0.3)] cursor-pointer border-2 border-primary/40 hover:border-primary/60"
+                        ? "bg-gradient-to-br from-violet-500/10 via-indigo-500/10 to-sky-500/10 shadow-[0_0_25px_rgba(139,92,246,0.1)] hover:shadow-[0_0_35px_rgba(139,92,246,0.2)] cursor-pointer border-2 border-violet-400/30 hover:border-violet-400/50"
                         : "bg-white/5 border-2 border-white/10 cursor-not-allowed opacity-30",
-                      copyStatus === 'copying' && "shadow-[0_0_50px_hsl(var(--primary)/0.4)]"
+                      copyStatus === 'copying' && "shadow-[0_0_40px_rgba(139,92,246,0.25)]"
                     )}
                   >
                     {copyStatus === 'done' && copyResult ? (
@@ -787,7 +786,7 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
                         )}>
                           {copyResult.copied}
                         </span>
-                        <span className="text-[10px] text-white/60 font-medium tracking-wider uppercase">copied</span>
+                        <span className="text-[10px] text-white/50 font-medium tracking-wider uppercase">copied</span>
                         {copyResult.errors.length > 0 && (
                           <span className="text-[9px] text-amber-400/80 mt-0.5">{copyResult.errors.length} failed</span>
                         )}
@@ -795,7 +794,7 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
                     ) : (
                       <Settings className={cn(
                         "h-14 w-14 transition-all duration-300",
-                        isCopyEnabled ? "text-primary drop-shadow-[0_0_8px_hsl(var(--primary)/0.5)]" : "text-white/20",
+                        isCopyEnabled ? "text-violet-300/80 drop-shadow-[0_0_6px_rgba(139,92,246,0.3)]" : "text-white/15",
                         copyStatus === 'copying' && "animate-spin"
                       )} />
                     )}
@@ -803,7 +802,7 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
                 </div>
                 <span className={cn(
                   "text-sm font-semibold tracking-wide transition-colors",
-                  isCopyEnabled ? "text-primary" : "text-white/25"
+                  isCopyEnabled ? "text-violet-300/80" : "text-white/20"
                 )}>
                   Copy HQ Album Photos
                 </span>
