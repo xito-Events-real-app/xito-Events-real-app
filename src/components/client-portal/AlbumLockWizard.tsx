@@ -63,10 +63,7 @@ const AlbumLockWizard = ({
   const defaultBSDate = useMemo(() => {
     if (firstEventDateAD) {
       const d = new Date(firstEventDateAD);
-      if (!isNaN(d.getTime())) {
-        const bs = adToBS(d.getFullYear(), d.getMonth() + 1, d.getDate());
-        if (bs) return bs;
-      }
+      if (!isNaN(d.getTime())) return adToBS(d);
     }
     return getCurrentBSDate();
   }, [firstEventDateAD]);
