@@ -28,6 +28,14 @@ const albumFolderCache: Record<string, E2File[]> = {};
 const albumUrlCache: Record<string, Record<string, string>> = {};
 const pcloudCountCache: Record<string, { count: number; totalSize: number }> = {};
 
+// Per-client dashboard cache to avoid re-fetching on every mount
+interface ClientDashboardCache {
+  xitoCounts: Record<string, number>;
+  pcloudCounts: Record<string, { count: number; totalSize: number }>;
+  fetched: boolean;
+}
+const clientDashboardCache: Record<string, ClientDashboardCache> = {};
+
 const MAX_ALBUM_PHOTOS = 140;
 
 interface TabDef {
