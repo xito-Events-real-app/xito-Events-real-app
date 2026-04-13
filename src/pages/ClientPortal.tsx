@@ -267,6 +267,9 @@ const ClientPortal = () => {
           albums={albumDefs}
           selections={albumSelections}
           onSelectionsChange={setAlbumSelections}
+          brideName={contactData?.brideFullName || ''}
+          groomName={contactData?.groomFullName || ''}
+          firstEventDateAD={eventDetails[0]?.eventDateAD || ''}
         />
       )}
       {activeTab === 'videos' && (

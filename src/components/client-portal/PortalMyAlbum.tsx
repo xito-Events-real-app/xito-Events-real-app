@@ -1,11 +1,12 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { BookOpen, Loader2, Trash2, ImageIcon, Download } from "lucide-react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { BookOpen, Loader2, Trash2, ImageIcon, Download, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AlbumDef, AlbumSelection, removeFromAlbum, getAlbumSelections } from "@/lib/album-selection-api";
 import { getE2FileUrls } from "@/lib/idrive-e2-api";
 import { lookupUrls, cacheUrls } from "@/lib/shared-url-cache";
 import { getPCloudFileLinkByPath } from "@/lib/pcloud-api";
 import XitoImageViewer from "@/components/client-detail/XitoImageViewer";
+import AlbumLockWizard from "@/components/client-portal/AlbumLockWizard";
 import { toast } from "sonner";
 
 interface PortalMyAlbumProps {
@@ -13,6 +14,9 @@ interface PortalMyAlbumProps {
   albums: AlbumDef[];
   selections: AlbumSelection[];
   onSelectionsChange: (selections: AlbumSelection[]) => void;
+  brideName?: string;
+  groomName?: string;
+  firstEventDateAD?: string;
 }
 
 const MAX_PHOTOS = 140;
@@ -43,12 +47,14 @@ async function downloadFromPCloud(photoKey: string) {
   a.click();
 }
 
-const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsChange }: PortalMyAlbumProps) => {
+const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsChange, brideName = "", groomName = "", firstEventDateAD = "" }: PortalMyAlbumProps) => {
   const [activeAlbumIndex, setActiveAlbumIndex] = useState(0);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [loadingUrls, setLoadingUrls] = useState(false);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [removingKey, setRemovingKey] = useState<string | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const autoPopupShown = useRef(false);
 
   const activeAlbum = albums[activeAlbumIndex];
 
@@ -64,6 +70,19 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
     });
     return counts;
   }, [selections, albums]);
+
+  // Auto-popup when ALL albums are full
+  const allAlbumsFull = useMemo(() => {
+    if (albums.length === 0) return false;
+    return albums.every(a => (albumCounts[a.type] || 0) >= MAX_PHOTOS);
+  }, [albums, albumCounts]);
+
+  useEffect(() => {
+    if (allAlbumsFull && !autoPopupShown.current) {
+      autoPopupShown.current = true;
+      setWizardOpen(true);
+    }
+  }, [allAlbumsFull]);
 
   useEffect(() => {
     if (albumPhotos.length === 0) {
@@ -153,9 +172,19 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
   return (
     <>
       <div className="pb-28 px-3 pt-3">
-        <div className="flex items-center gap-2 mb-4 px-1">
-          <BookOpen className="h-4 w-4 text-[hsl(350,80%,65%)]" />
-          <span className="text-sm font-semibold text-gray-700">My Albums</span>
+        {/* Lock & Send button */}
+        <div className="flex items-center justify-between mb-4 px-1">
+          <div className="flex items-center gap-2">
+            <BookOpen className="h-4 w-4 text-[hsl(350,80%,65%)]" />
+            <span className="text-sm font-semibold text-gray-700">My Albums</span>
+          </div>
+          <button
+            onClick={() => setWizardOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[hsl(350,80%,65%)] text-white text-xs font-medium shadow-sm hover:bg-[hsl(350,80%,58%)] transition-colors"
+          >
+            <Lock className="h-3 w-3" />
+            Lock & Send for Design
+          </button>
         </div>
 
         <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 scrollbar-hide">
@@ -262,6 +291,16 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
           onClose={() => setViewerIndex(null)}
         />
       )}
+
+      <AlbumLockWizard
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        albums={albums}
+        selections={selections}
+        brideName={brideName}
+        groomName={groomName}
+        firstEventDateAD={firstEventDateAD}
+      />
     </>
   );
 };
