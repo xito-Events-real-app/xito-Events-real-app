@@ -113,6 +113,13 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
   // Bride/groom names from submission
   const [brideGroom, setBrideGroom] = useState<{ bride: string; groom: string }>({ bride: '', groom: '' });
 
+  // Password gate state
+  const [showPasswordGate, setShowPasswordGate] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [passwordError, setPasswordError] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'copy' | 'recopy' | null>(null);
+  const COPY_PASSWORD = "984124";
+
   // Load copy history from DB on mount + auto-detect from pCloud
   useEffect(() => {
     if (!registeredDateTimeAD) return;
@@ -912,7 +919,14 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
                       <div className="absolute inset-[-8px] rounded-full border-2 border-t-emerald-400 border-r-emerald-400/40 border-b-emerald-400/10 border-l-emerald-400/40 animate-spin" />
                     )}
                     <button
-                      onClick={() => isCopyEnabled && copyStatus !== 'copying' && copyStatus !== 'done' && setCopyStatus('confirming')}
+                      onClick={() => {
+                        if (!isCopyEnabled || copyStatus === 'copying') return;
+                        if (copyStatus === 'done') return; // use re-copy button instead
+                        setPendingAction('copy');
+                        setPasswordInput('');
+                        setPasswordError(false);
+                        setShowPasswordGate(true);
+                      }}
                       disabled={!isCopyEnabled || copyStatus === 'copying' || copyStatus === 'done'}
                       className={cn(
                         "relative h-32 w-32 rounded-full flex items-center justify-center transition-all duration-500",
@@ -984,12 +998,30 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
                   Copy HQ Album Photos
                 </span>
 
+                {/* Re-copy Button (only when done) */}
+                {copyStatus === 'done' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-amber-500/30 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 gap-2 mt-1"
+                    onClick={() => {
+                      setPendingAction('recopy');
+                      setPasswordInput('');
+                      setPasswordError(false);
+                      setShowPasswordGate(true);
+                    }}
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Re-copy Photos
+                  </Button>
+                )}
+
                 {/* Copy Information Button */}
                 {copyStatus === 'done' && copyResult && (
                   <Button
                     variant="outline"
                     size="sm"
-                    className="border-white/10 text-white/60 hover:text-white hover:bg-white/10 gap-2 mt-1"
+                    className="border-emerald-500/30 text-emerald-300 hover:text-emerald-200 hover:bg-emerald-500/10 gap-2 mt-1"
                     onClick={() => {
                       const monthFolder = copyResult.monthFolder || getMajorityYearMonth();
                       const albumLines = (copyResult.albumDetails || []).map(a => `${a.folderName} (${a.count})`).join(', ');
@@ -1017,6 +1049,85 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
                   </Button>
                 )}
               </div>
+
+              {/* Password Gate Dialog */}
+              <Dialog open={showPasswordGate} onOpenChange={(open) => { if (!open) { setShowPasswordGate(false); setPendingAction(null); } }}>
+                <DialogContent className="bg-slate-900 border-0 max-w-sm p-0 overflow-hidden">
+                  <div className="p-6 space-y-5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+                        <Settings className="h-5 w-5 text-amber-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-white">
+                          {pendingAction === 'recopy' ? 'Re-copy Protected' : 'Copy Protected'}
+                        </h3>
+                        <p className="text-sm text-white/50">Enter admin code to proceed</p>
+                      </div>
+                    </div>
+                    <div className={`transition-transform ${passwordError ? "animate-shake" : ""}`}>
+                      <input
+                        type="password"
+                        placeholder="Enter code"
+                        value={passwordInput}
+                        onChange={(e) => setPasswordInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            if (passwordInput === COPY_PASSWORD) {
+                              setShowPasswordGate(false);
+                              if (pendingAction === 'recopy') {
+                                setCopyStatus('confirming');
+                              } else {
+                                setCopyStatus('confirming');
+                              }
+                              setPendingAction(null);
+                            } else {
+                              setPasswordError(true);
+                              toast.error("Wrong code. Access denied.");
+                              setTimeout(() => setPasswordError(false), 600);
+                            }
+                          }
+                        }}
+                        className="w-full bg-slate-800 border border-slate-700 text-white placeholder:text-white/30 h-12 text-center text-lg tracking-widest rounded-md outline-none focus:border-amber-500/50"
+                        autoFocus
+                      />
+                    </div>
+                    <div className="flex gap-3">
+                      <Button
+                        variant="outline"
+                        className="flex-1 border-slate-700 text-white/70 hover:bg-slate-800"
+                        onClick={() => { setShowPasswordGate(false); setPendingAction(null); }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        className="flex-1 bg-amber-600 hover:bg-amber-700 text-white"
+                        onClick={() => {
+                          if (passwordInput === COPY_PASSWORD) {
+                            setShowPasswordGate(false);
+                            setCopyStatus('confirming');
+                            setPendingAction(null);
+                          } else {
+                            setPasswordError(true);
+                            toast.error("Wrong code. Access denied.");
+                            setTimeout(() => setPasswordError(false), 600);
+                          }
+                        }}
+                      >
+                        Unlock
+                      </Button>
+                    </div>
+                  </div>
+                  <style>{`
+                    @keyframes shake {
+                      0%, 100% { transform: translateX(0); }
+                      10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+                      20%, 40%, 60%, 80% { transform: translateX(4px); }
+                    }
+                    .animate-shake { animation: shake 0.5s ease-in-out; }
+                  `}</style>
+                </DialogContent>
+              </Dialog>
 
               {/* Confirmation Dialog */}
               <Dialog open={copyStatus === 'confirming'} onOpenChange={(open) => { if (!open) setCopyStatus('idle'); }}>

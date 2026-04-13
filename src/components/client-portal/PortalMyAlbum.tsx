@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { BookOpen, Loader2, Trash2, ImageIcon, Download, Lock } from "lucide-react";
+import { BookOpen, Loader2, Trash2, ImageIcon, Download, Lock, Palette } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AlbumDef, AlbumSelection, removeFromAlbum, getAlbumSelections } from "@/lib/album-selection-api";
 import { getE2FileUrls } from "@/lib/idrive-e2-api";
@@ -8,6 +8,7 @@ import { getPCloudFileLinkByPath } from "@/lib/pcloud-api";
 import XitoImageViewer from "@/components/client-detail/XitoImageViewer";
 import AlbumLockWizard from "@/components/client-portal/AlbumLockWizard";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 interface PortalMyAlbumProps {
   registeredDateTimeAD: string;
@@ -56,6 +57,22 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
   const [removingKey, setRemovingKey] = useState<string | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const autoPopupShown = useRef(false);
+  const [designInProgress, setDesignInProgress] = useState(false);
+  const [checkingHistory, setCheckingHistory] = useState(true);
+
+  // Check if album has been copied (design in progress)
+  useEffect(() => {
+    if (!registeredDateTimeAD) { setCheckingHistory(false); return; }
+    supabase
+      .from("album_copy_history")
+      .select("id")
+      .eq("registered_date_time_ad", registeredDateTimeAD)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setDesignInProgress(true);
+        setCheckingHistory(false);
+      });
+  }, [registeredDateTimeAD]);
 
   const activeAlbum = albums[activeAlbumIndex];
 
