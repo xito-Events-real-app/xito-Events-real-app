@@ -22,6 +22,8 @@ interface AlbumLockWizardProps {
   brideName: string;
   groomName: string;
   firstEventDateAD: string;
+  clientName?: string;
+  registeredDateTimeAD?: string;
 }
 
 type DateMode = "ad" | "bs";

@@ -59,6 +59,7 @@ import { YouTubeUploadTracker } from "./components/suite/YouTubeUploadTracker";
 import { StartupAnnouncementPopup } from "./components/suite/StartupAnnouncementPopup";
 import { XitoTransferPopupProvider } from "./contexts/XitoTransferPopupContext";
 import { FloatingXitoTransfer } from "./components/shared/FloatingXitoTransfer";
+import AlbumSubmissionAlert from "./components/suite/AlbumSubmissionAlert";
 import XitoTransfer from "./pages/XitoTransfer";
 
 const queryClient = new QueryClient();
