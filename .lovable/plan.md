@@ -1,55 +1,54 @@
 
 
-# Album Submission Alert — Admin Popup
+# Album Dashboard — Photo Status Overview
 
-## Overview
-When a client completes the album wizard and sends WhatsApp, save submission details to DB. On admin app open, show a popup with details and action options. Only appears inside `AdminOnlyFeatures` (same place as other popups), never on public routes.
+## What gets built
+A dashboard card section at the top of the Album section (before the photo gallery tabs) showing three status cards:
 
-## Database
+1. **Photos for Album (Xito Drive / E2)** — Low-quality photos uploaded for client selection. Count per event/photographer tab.
+2. **Original Edited Photos (pCloud)** — High-quality edited photos. Count and total size per event/photographer folder from `WEDDING TALES NEPAL/{monthFolder}/{clientName}/Photos/{event}/{photographer}/`.
+3. **Album Selection Progress** — Per-album selection counts vs 140 max, with progress bars.
 
-**New table: `album_selection_submissions`**
+Plus a **match indicator** showing whether Xito Drive count matches pCloud count per tab (green check if matching, red warning if not).
 
-| Column | Type | Default |
-|--------|------|---------|
-| id | uuid | gen_random_uuid() |
-| registered_date_time_ad | text | required |
-| client_name | text | '' |
-| bride_name | text | '' |
-| groom_name | text | '' |
-| selected_date | text | '' |
-| custom_text | text | '' |
-| album_details | jsonb | '[]' |
-| sent_to | text | '' |
-| handled | boolean | false |
-| handled_response | text | '' |
-| created_at | timestamptz | now() |
+## Technical Details
 
-RLS: Allow all access (matches existing pattern).
+### Modified: `src/components/client-detail/AlbumSection.tsx`
 
-## Changes
+**New data loading:**
+- Import `listPCloudFolderByPath`, `isPCloudImage`, `formatPCloudSize` from `pcloud-api`
+- Import `getAlbumSelections`, `getAlbumDefsFromDeliverables` from `album-selection-api`
+- For each tab, build the pCloud path: `WEDDING TALES NEPAL/{monthFolder}/{clientName}/Photos/{event}/{photographer}/`
+- List pCloud folder contents, count images, sum file sizes
+- Cache pCloud results in a module-level cache (like existing `albumFolderCache`)
+- Fetch album defs and selections on mount
 
-### 1. `AlbumLockWizard.tsx`
-- Accept `clientName` and `registeredDateTimeAD` as new props
-- On WhatsApp contact click, insert row into `album_selection_submissions` before opening WhatsApp
-- Store bride/groom names, date, custom text, album counts, and `sent_to` (contact name)
+**New state:**
+- `pcloudCounts: Record<tabId, { count: number; totalSize: number }>` — per-tab pCloud photo count and total size
+- `albumDefs: AlbumDef[]` — configured albums
+- `albumSelections: AlbumSelection[]` — current selections
+- `pcloudLoading: boolean`
 
-### 2. New: `src/components/suite/AlbumSubmissionAlert.tsx`
-- On mount, query `album_selection_submissions` where `handled = false`
-- If any unhandled rows exist, show Dialog for first one with:
-  - Client name, bride name, groom name, selected date, custom album text
-  - **Sent to: {name}** in large bold text (text-4xl for the contact name)
-  - Four buttons:
-    1. **"Yes, I have sent them for design"** → `handled = true` in DB, popup gone forever
-    2. **"I haven't sent them for design"** → dismiss (reappears next app open)
-    3. **"I don't know"** → dismiss (reappears next app open)
-    4. **"Copy original files"** → navigate to `/client-tracker/client/{registeredDateTimeAD}` then dismiss
+**Dashboard cards (3-column grid above tabs):**
 
-### 3. `App.tsx` — Inside `AdminOnlyFeatures`
-- Add `<AlbumSubmissionAlert />` — this ensures it only renders for logged-in admin users and never on public routes (`/client-portal`, `/crew-schedule`, `/editor-portal`, `/client-form`, `/login`)
+| Card | Content |
+|------|---------|
+| Photos for Album (Xito Drive) | Per-tab count breakdown, total count |
+| Original Edited Photos (pCloud) | Per-tab count + size breakdown, total count + total size |
+| Album Selection | Per-album progress bar (e.g. "Bride Album: 87/140"), uses `Progress` component |
 
-### 4. `PortalMyAlbum.tsx` + `ClientPortal.tsx`
-- Pass `clientName` and `registeredDateTimeAD` through to `AlbumLockWizard`
+**Match indicator per tab:**
+- Compare E2 count vs pCloud count
+- Show green "Match" badge or red "Mismatch: E2 has X, pCloud has Y" warning
+- Also show total match status in a summary row
 
-## Route gating
-The existing `AdminOnlyFeatures` wrapper already checks `isPublicRoute()` and returns `null` for all public prefixes. Placing the alert inside this wrapper guarantees it never appears on client, editor, or freelancer portals.
+**Loading strategy:**
+- pCloud counts load lazily per tab (same pattern as E2) to avoid hammering the API
+- A "Load All Counts" button fetches all tabs at once for the full comparison view
+
+### No new files needed
+All changes in `AlbumSection.tsx` using existing APIs.
+
+### No database changes needed
+Uses existing `client_album_selections` and `client_deliverables` tables plus E2/pCloud APIs.
 
