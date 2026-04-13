@@ -754,6 +754,83 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
                   </CardContent>
                 </Card>
               )}
+
+              {/* Gear Button: Copy HQ Album Photos */}
+              <div className="flex flex-col items-center gap-3 py-4">
+                <button
+                  onClick={() => isCopyEnabled && setCopyStatus('confirming')}
+                  disabled={!isCopyEnabled || copyStatus === 'copying'}
+                  className={cn(
+                    "relative h-24 w-24 rounded-full border-4 flex items-center justify-center transition-all",
+                    isCopyEnabled
+                      ? "border-primary bg-primary/10 hover:bg-primary/20 cursor-pointer"
+                      : "border-white/10 bg-white/5 cursor-not-allowed opacity-40"
+                  )}
+                >
+                  <Settings className={cn(
+                    "h-10 w-10",
+                    isCopyEnabled ? "text-primary" : "text-white/30",
+                    copyStatus === 'copying' && "animate-spin text-primary"
+                  )} />
+                  {copyStatus === 'done' && copyResult && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/90 rounded-full">
+                      <span className={cn("text-lg font-black", copyResult.errors.length > 0 ? "text-amber-400" : "text-emerald-400")}>
+                        {copyResult.copied}
+                      </span>
+                      <span className="text-[9px] text-white/50">copied</span>
+                    </div>
+                  )}
+                </button>
+                <span className={cn("text-xs font-medium", isCopyEnabled ? "text-primary" : "text-white/30")}>
+                  Copy HQ Album Photos
+                </span>
+                {copyStatus === 'done' && copyResult && (
+                  <div className="text-center max-w-xs">
+                    {copyResult.errors.length > 0 ? (
+                      <p className="text-xs text-amber-400">
+                        {copyResult.copied}/{copyResult.expected} copied · {copyResult.errors.length} failed
+                      </p>
+                    ) : (
+                      <p className="text-xs text-emerald-400">
+                        All {copyResult.copied} photos copied successfully
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Confirmation Dialog */}
+              <Dialog open={copyStatus === 'confirming'} onOpenChange={(open) => { if (!open) setCopyStatus('idle'); }}>
+                <DialogContent className="bg-[hsl(220,25%,12%)] border-white/10 max-w-sm">
+                  <DialogHeader>
+                    <DialogTitle className="text-white text-lg">Copy HQ Album Photos</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-white/70">Are names matching?</span>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20" onClick={() => {}}>Yes</Button>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-white/70">Is date okay?</span>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20" onClick={() => {}}>Yes</Button>
+                      </div>
+                    </div>
+                    <div className="text-xs text-white/40 pt-2">
+                      This will copy {albumSelections.length} selected photos into the "ALBUM AND FRAME" folder structure in pCloud.
+                      {hasFrameDeliverable && " A FRAME folder will also be created."}
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="ghost" className="text-white/50" onClick={() => setCopyStatus('idle')}>Cancel</Button>
+                    <Button className="bg-primary text-primary-foreground" onClick={() => executeCopy()}>
+                      Start Copying
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </>
           )}
         </>
