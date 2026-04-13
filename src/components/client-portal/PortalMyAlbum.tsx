@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { BookOpen, Loader2, Trash2, ImageIcon, Download, Lock } from "lucide-react";
+import { BookOpen, Loader2, Trash2, ImageIcon, Download, Lock, Palette } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AlbumDef, AlbumSelection, removeFromAlbum, getAlbumSelections } from "@/lib/album-selection-api";
 import { getE2FileUrls } from "@/lib/idrive-e2-api";
@@ -8,6 +8,7 @@ import { getPCloudFileLinkByPath } from "@/lib/pcloud-api";
 import XitoImageViewer from "@/components/client-detail/XitoImageViewer";
 import AlbumLockWizard from "@/components/client-portal/AlbumLockWizard";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 interface PortalMyAlbumProps {
   registeredDateTimeAD: string;
@@ -56,6 +57,22 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
   const [removingKey, setRemovingKey] = useState<string | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const autoPopupShown = useRef(false);
+  const [designInProgress, setDesignInProgress] = useState(false);
+  const [checkingHistory, setCheckingHistory] = useState(true);
+
+  // Check if album has been copied (design in progress)
+  useEffect(() => {
+    if (!registeredDateTimeAD) { setCheckingHistory(false); return; }
+    supabase
+      .from("album_copy_history")
+      .select("id")
+      .eq("registered_date_time_ad", registeredDateTimeAD)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setDesignInProgress(true);
+        setCheckingHistory(false);
+      });
+  }, [registeredDateTimeAD]);
 
   const activeAlbum = albums[activeAlbumIndex];
 
@@ -157,6 +174,30 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
     albumPhotos.map(p => ({ key: p.photo_key, url: photoUrls[p.photo_key] || "" })).filter(i => i.url),
     [albumPhotos, photoUrls]
   );
+
+  if (checkingHistory) {
+    return (
+      <div className="pb-24 px-4 pt-6 flex items-center justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-[hsl(350,80%,65%)]" />
+      </div>
+    );
+  }
+
+  if (designInProgress) {
+    return (
+      <div className="pb-24 px-4 pt-6">
+        <div className="text-center py-20">
+          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-[hsl(350,80%,65%)]/20 to-purple-500/20 flex items-center justify-center">
+            <Palette className="h-10 w-10 text-[hsl(350,80%,65%)]" />
+          </div>
+          <h3 className="text-xl font-bold text-gray-800 mb-2">Your Album Design is Coming Soon! 🎨</h3>
+          <p className="text-gray-500 text-sm max-w-xs mx-auto">
+            Your selected photos have been sent for professional album design. We'll notify you when it's ready!
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (albums.length === 0) {
     return (
