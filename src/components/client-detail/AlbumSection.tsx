@@ -28,37 +28,50 @@ const albumFolderCache: Record<string, E2File[]> = {};
 const albumUrlCache: Record<string, Record<string, string>> = {};
 const pcloudCountCache: Record<string, { count: number; totalSize: number }> = {};
 
-// Per-client dashboard cache persisted to localStorage
+// Per-client dashboard cache backed by Supabase database
 interface ClientDashboardCache {
   xitoCounts: Record<string, number>;
   pcloudCounts: Record<string, { count: number; totalSize: number }>;
   fetched: boolean;
-  timestamp: number;
 }
 
-const CACHE_KEY = "album_dashboard_cache";
-const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+// In-memory cache for current session (avoids repeated DB reads)
+const clientDashboardCache: Record<string, ClientDashboardCache> = {};
 
-function loadDashboardCache(): Record<string, ClientDashboardCache> {
+async function loadCacheFromDB(registeredDateTimeAD: string): Promise<ClientDashboardCache | null> {
   try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as Record<string, ClientDashboardCache>;
-    // Prune expired entries
-    const now = Date.now();
-    const valid: Record<string, ClientDashboardCache> = {};
-    for (const [k, v] of Object.entries(parsed)) {
-      if (v.timestamp && now - v.timestamp < CACHE_TTL) valid[k] = v;
+    const { data } = await supabase
+      .from("album_dashboard_cache")
+      .select("xito_counts, pcloud_counts")
+      .eq("registered_date_time_ad", registeredDateTimeAD)
+      .maybeSingle();
+    if (data && data.xito_counts && data.pcloud_counts) {
+      return {
+        xitoCounts: data.xito_counts as Record<string, number>,
+        pcloudCounts: data.pcloud_counts as Record<string, { count: number; totalSize: number }>,
+        fetched: true,
+      };
     }
-    return valid;
-  } catch { return {}; }
+    return null;
+  } catch { return null; }
 }
 
-function saveDashboardCache(cache: Record<string, ClientDashboardCache>) {
-  try { localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); } catch {}
+async function saveCacheToDB(
+  registeredDateTimeAD: string,
+  xitoCounts: Record<string, number>,
+  pcloudCounts: Record<string, { count: number; totalSize: number }>
+) {
+  try {
+    await supabase
+      .from("album_dashboard_cache")
+      .upsert({
+        registered_date_time_ad: registeredDateTimeAD,
+        xito_counts: xitoCounts,
+        pcloud_counts: pcloudCounts,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "registered_date_time_ad" });
+  } catch {}
 }
-
-const clientDashboardCache: Record<string, ClientDashboardCache> = loadDashboardCache();
 
 const MAX_ALBUM_PHOTOS = 140;
 
@@ -201,65 +214,65 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     }
   }, []);
 
-  // On first mount per client: restore from cache or auto-fetch
+  // On first mount per client: restore from DB cache or auto-fetch
   useEffect(() => {
     if (tabs.length === 0 || initialLoadDone) return;
-    const cached = clientDashboardCache[registeredDateTimeAD];
-    if (cached?.fetched) {
-      // Restore from per-client cache — no API calls
-      setTabPhotoCounts(cached.xitoCounts);
-      setPcloudCounts(cached.pcloudCounts);
+    const memCached = clientDashboardCache[registeredDateTimeAD];
+    if (memCached?.fetched) {
+      setTabPhotoCounts(memCached.xitoCounts);
+      setPcloudCounts(memCached.pcloudCounts);
       setInitialLoadDone(true);
-    } else {
-      // First time visiting this client — auto-fetch all counts
-      setInitialLoadDone(true);
-      const fetchAll = async () => {
-        setRefreshingXito(true);
-        setLoadingAllPcloud(true);
-        const xitoResults: Record<string, number> = {};
-        const pcloudResults: Record<string, { count: number; totalSize: number }> = {};
-
-        await Promise.all(tabs.map(async (t) => {
-          // Xito
-          try {
-            if (albumFolderCache[t.id]) {
-              xitoResults[t.id] = albumFolderCache[t.id].length;
-            } else {
-              const result = await listE2Folder(t.s3Prefix);
-              const imageFiles = result.files.filter((f) => isImage(f.key));
-              albumFolderCache[t.id] = imageFiles;
-              xitoResults[t.id] = imageFiles.length;
-            }
-          } catch {
-            xitoResults[t.id] = 0;
-          }
-          // pCloud
-          try {
-            if (pcloudCountCache[t.id]) {
-              pcloudResults[t.id] = pcloudCountCache[t.id];
-            } else {
-              const folder = await listPCloudFolderByPath(t.pcloudPath);
-              const images = folder.contents.filter(isPCloudImage);
-              const totalSize = images.reduce((s, f) => s + (f.size || 0), 0);
-              const r = { count: images.length, totalSize };
-              pcloudCountCache[t.id] = r;
-              pcloudResults[t.id] = r;
-            }
-          } catch {
-            pcloudResults[t.id] = { count: 0, totalSize: 0 };
-          }
-        }));
-
-        setTabPhotoCounts(xitoResults);
-        setPcloudCounts(pcloudResults);
-        // Save to per-client cache
-        clientDashboardCache[registeredDateTimeAD] = { xitoCounts: xitoResults, pcloudCounts: pcloudResults, fetched: true, timestamp: Date.now() };
-        saveDashboardCache(clientDashboardCache);
-        setRefreshingXito(false);
-        setLoadingAllPcloud(false);
-      };
-      fetchAll();
+      return;
     }
+    // Try loading from database first
+    setInitialLoadDone(true);
+    const init = async () => {
+      const dbCached = await loadCacheFromDB(registeredDateTimeAD);
+      if (dbCached) {
+        clientDashboardCache[registeredDateTimeAD] = dbCached;
+        setTabPhotoCounts(dbCached.xitoCounts);
+        setPcloudCounts(dbCached.pcloudCounts);
+        return;
+      }
+      // First time — auto-fetch all counts
+      setRefreshingXito(true);
+      setLoadingAllPcloud(true);
+      const xitoResults: Record<string, number> = {};
+      const pcloudResults: Record<string, { count: number; totalSize: number }> = {};
+
+      await Promise.all(tabs.map(async (t) => {
+        try {
+          if (albumFolderCache[t.id]) {
+            xitoResults[t.id] = albumFolderCache[t.id].length;
+          } else {
+            const result = await listE2Folder(t.s3Prefix);
+            const imageFiles = result.files.filter((f) => isImage(f.key));
+            albumFolderCache[t.id] = imageFiles;
+            xitoResults[t.id] = imageFiles.length;
+          }
+        } catch { xitoResults[t.id] = 0; }
+        try {
+          if (pcloudCountCache[t.id]) {
+            pcloudResults[t.id] = pcloudCountCache[t.id];
+          } else {
+            const folder = await listPCloudFolderByPath(t.pcloudPath);
+            const images = folder.contents.filter(isPCloudImage);
+            const totalSize = images.reduce((s, f) => s + (f.size || 0), 0);
+            const r = { count: images.length, totalSize };
+            pcloudCountCache[t.id] = r;
+            pcloudResults[t.id] = r;
+          }
+        } catch { pcloudResults[t.id] = { count: 0, totalSize: 0 }; }
+      }));
+
+      setTabPhotoCounts(xitoResults);
+      setPcloudCounts(pcloudResults);
+      clientDashboardCache[registeredDateTimeAD] = { xitoCounts: xitoResults, pcloudCounts: pcloudResults, fetched: true };
+      saveCacheToDB(registeredDateTimeAD, xitoResults, pcloudResults);
+      setRefreshingXito(false);
+      setLoadingAllPcloud(false);
+    };
+    init();
   }, [tabs, initialLoadDone, registeredDateTimeAD]);
 
   const refreshXitoCounts = useCallback(async () => {
@@ -277,9 +290,8 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     setTabPhotoCounts(xitoResults);
     if (clientDashboardCache[registeredDateTimeAD]) {
       clientDashboardCache[registeredDateTimeAD].xitoCounts = xitoResults;
-      clientDashboardCache[registeredDateTimeAD].timestamp = Date.now();
-      saveDashboardCache(clientDashboardCache);
     }
+    saveCacheToDB(registeredDateTimeAD, xitoResults, clientDashboardCache[registeredDateTimeAD]?.pcloudCounts || {});
     setRefreshingXito(false);
   }, [tabs, registeredDateTimeAD]);
 
@@ -300,9 +312,8 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     setPcloudCounts(pcloudResults);
     if (clientDashboardCache[registeredDateTimeAD]) {
       clientDashboardCache[registeredDateTimeAD].pcloudCounts = pcloudResults;
-      clientDashboardCache[registeredDateTimeAD].timestamp = Date.now();
-      saveDashboardCache(clientDashboardCache);
     }
+    saveCacheToDB(registeredDateTimeAD, clientDashboardCache[registeredDateTimeAD]?.xitoCounts || {}, pcloudResults);
     setLoadingAllPcloud(false);
   }, [tabs, registeredDateTimeAD]);
 
