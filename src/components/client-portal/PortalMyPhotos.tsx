@@ -438,10 +438,10 @@ const PortalMyPhotos = ({
           images={viewerImages}
           initialIndex={viewerIndex}
           onClose={() => setViewerIndex(null)}
-          albums={albums.length > 0 ? albums : undefined}
-          albumCounts={albums.length > 0 ? albumCounts : undefined}
-          selectedAlbums={albums.length > 0 ? selectedAlbumsMap : undefined}
-          onToggleAlbum={albums.length > 0 ? handleToggleAlbum : undefined}
+          albums={albums.length > 0 && !albumsLocked ? albums : undefined}
+          albumCounts={albums.length > 0 && !albumsLocked ? albumCounts : undefined}
+          selectedAlbums={albums.length > 0 && !albumsLocked ? selectedAlbumsMap : undefined}
+          onToggleAlbum={albums.length > 0 && !albumsLocked ? handleToggleAlbum : undefined}
           onDownloadHQ={handleDownloadHQ}
         />
       )}
