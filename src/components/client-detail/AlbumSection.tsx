@@ -290,9 +290,8 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
     setTabPhotoCounts(xitoResults);
     if (clientDashboardCache[registeredDateTimeAD]) {
       clientDashboardCache[registeredDateTimeAD].xitoCounts = xitoResults;
-      clientDashboardCache[registeredDateTimeAD].timestamp = Date.now();
-      saveDashboardCache(clientDashboardCache);
     }
+    saveCacheToDB(registeredDateTimeAD, xitoResults, clientDashboardCache[registeredDateTimeAD]?.pcloudCounts || {});
     setRefreshingXito(false);
   }, [tabs, registeredDateTimeAD]);
 
