@@ -17,6 +17,7 @@ interface PortalMyAlbumProps {
   brideName?: string;
   groomName?: string;
   firstEventDateAD?: string;
+  clientName?: string;
 }
 
 const MAX_PHOTOS = 140;
@@ -47,7 +48,7 @@ async function downloadFromPCloud(photoKey: string) {
   a.click();
 }
 
-const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsChange, brideName = "", groomName = "", firstEventDateAD = "" }: PortalMyAlbumProps) => {
+const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsChange, brideName = "", groomName = "", firstEventDateAD = "", clientName = "" }: PortalMyAlbumProps) => {
   const [activeAlbumIndex, setActiveAlbumIndex] = useState(0);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [loadingUrls, setLoadingUrls] = useState(false);
@@ -300,6 +301,8 @@ const PortalMyAlbum = ({ registeredDateTimeAD, albums, selections, onSelectionsC
         brideName={brideName}
         groomName={groomName}
         firstEventDateAD={firstEventDateAD}
+        clientName={clientName}
+        registeredDateTimeAD={registeredDateTimeAD}
       />
     </>
   );
