@@ -39,15 +39,37 @@ const XitoImageViewer = ({
     if (currentIndex < total - 1) setCurrentIndex(currentIndex + 1);
   }, [currentIndex, total]);
 
+  // Build a shortcut map: first letter of album type → album
+  const albumShortcuts = useRef<Record<string, AlbumInfo>>({});
+  useEffect(() => {
+    const map: Record<string, AlbumInfo> = {};
+    if (albums) {
+      albums.forEach(a => {
+        // Use first letter of type, e.g. "bride_album" → "b", "groom_album" → "g"
+        const letter = a.type.charAt(0).toLowerCase();
+        if (!map[letter]) map[letter] = a;
+      });
+    }
+    albumShortcuts.current = map;
+  }, [albums]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
       else if (e.key === "ArrowLeft") goPrev();
       else if (e.key === "ArrowRight") goNext();
+      else if (onToggleAlbum && albums && albums.length > 0) {
+        const key = e.key.toLowerCase();
+        const album = albumShortcuts.current[key];
+        if (album) {
+          const photoKey = images[currentIndex]?.key;
+          if (photoKey) onToggleAlbum(photoKey, album.type, album.name);
+        }
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [goPrev, goNext, onClose]);
+  }, [goPrev, goNext, onClose, onToggleAlbum, albums, images, currentIndex]);
 
   const onTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
   const onTouchEnd = (e: React.TouchEvent) => {
@@ -148,47 +170,60 @@ const XitoImageViewer = ({
 
       {/* Album Selection Bar + Download */}
       {hasAlbums && (
-        <div className="px-3 py-3 bg-black/90 backdrop-blur-md border-t border-white/[0.08] z-10">
+        <div className="px-3 py-2.5 bg-black/90 backdrop-blur-md border-t border-white/[0.08] z-10">
           <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
-            {albums!.map((album) => {
+            {albums!.map((album, idx) => {
               const isSelected = currentAlbumTypes.includes(album.type);
               const count = albumCounts?.[album.type] || 0;
               const isFull = count >= MAX_ALBUM_PHOTOS && !isSelected;
+              const shortcutKey = album.type.charAt(0).toUpperCase();
+              // Distinct colors per album
+              const colors = [
+                { bg: 'hsl(330,85%,60%)', glow: 'hsl(330,85%,60%/0.4)', text: 'hsl(330,90%,75%)', border: 'hsl(330,85%,60%/0.5)' },
+                { bg: 'hsl(210,90%,55%)', glow: 'hsl(210,90%,55%/0.4)', text: 'hsl(210,95%,75%)', border: 'hsl(210,90%,55%/0.5)' },
+                { bg: 'hsl(45,95%,55%)', glow: 'hsl(45,95%,55%/0.4)', text: 'hsl(45,95%,70%)', border: 'hsl(45,95%,55%/0.5)' },
+                { bg: 'hsl(160,80%,45%)', glow: 'hsl(160,80%,45%/0.4)', text: 'hsl(160,85%,70%)', border: 'hsl(160,80%,45%/0.5)' },
+              ];
+              const c = colors[idx % colors.length];
               return (
                 <button
                   key={album.type}
                   disabled={isFull}
                   onClick={() => onToggleAlbum!(currentPhotoKey, album.type, album.name)}
                   className={cn(
-                    "shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-all duration-200",
-                    isSelected
-                      ? "bg-[hsl(350,80%,65%)] text-white border-[hsl(350,80%,65%)] shadow-[0_0_12px_hsl(350,80%,65%/0.4)]"
-                      : isFull
-                        ? "bg-white/[0.03] text-white/20 border-white/[0.06] cursor-not-allowed"
-                        : "bg-white/[0.06] text-white/60 border-white/10 hover:bg-white/10 active:scale-95"
+                    "shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all duration-200",
+                    isFull && "cursor-not-allowed opacity-30"
                   )}
+                  style={isSelected ? {
+                    backgroundColor: c.bg,
+                    borderColor: c.bg,
+                    color: 'white',
+                    boxShadow: `0 0 14px ${c.glow}`,
+                  } : !isFull ? {
+                    backgroundColor: 'rgba(255,255,255,0.06)',
+                    borderColor: c.border,
+                    color: c.text,
+                  } : {
+                    backgroundColor: 'rgba(255,255,255,0.03)',
+                    borderColor: 'rgba(255,255,255,0.06)',
+                    color: 'rgba(255,255,255,0.2)',
+                  }}
                 >
                   <span className={cn(
-                    "flex items-center justify-center w-4 h-4 rounded-full transition-all",
+                    "flex items-center justify-center w-5 h-5 rounded text-[10px] font-bold",
                     isSelected ? "bg-white/25" : "bg-white/10"
                   )}>
-                    {isSelected
-                      ? <Check className="h-2.5 w-2.5" />
-                      : <Plus className="h-2.5 w-2.5" />
-                    }
+                    {shortcutKey}
                   </span>
                   <span>{album.name}</span>
-                  <span className={cn(
-                    "text-[10px] ml-0.5",
-                    isSelected ? "text-white/70" : "text-white/30"
-                  )}>
+                  <span className="text-[10px] ml-0.5 opacity-70">
                     ({count}/{MAX_ALBUM_PHOTOS})
                   </span>
                 </button>
               );
             })}
 
-            {/* Download button — always visible at the end */}
+            {/* Download button */}
             {onDownloadHQ && (
               <button
                 onClick={handleDownload}
@@ -202,6 +237,21 @@ const XitoImageViewer = ({
                 <span>Download</span>
               </button>
             )}
+          </div>
+          {/* Keyboard shortcut hint */}
+          <div className="flex items-center justify-center gap-3 mt-1.5 text-[10px] text-white/35">
+            {albums!.map((album) => {
+              const key = album.type.charAt(0).toUpperCase();
+              return (
+                <span key={album.type} className="flex items-center gap-1">
+                  Press <kbd className="px-1 py-0.5 rounded bg-white/10 text-white/50 font-mono text-[9px]">{key}</kbd> for {album.name}
+                </span>
+              );
+            })}
+            <span className="flex items-center gap-1">
+              <kbd className="px-1 py-0.5 rounded bg-white/10 text-white/50 font-mono text-[9px]">←</kbd>
+              <kbd className="px-1 py-0.5 rounded bg-white/10 text-white/50 font-mono text-[9px]">→</kbd> Navigate
+            </span>
           </div>
         </div>
       )}
