@@ -435,16 +435,18 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
 
       await Promise.all(folderNames.map(f => createPCloudFolderByPath(`${basePath}/${f}`)));
 
+      const albumDetails: { albumType: string; folderName: string; count: number }[] = [];
+
       // Copy files for each album type
       for (const [albumType, selections] of Object.entries(grouped)) {
         const folderName = albumTypeToFolder[albumType] || albumType.replace(/_/g, ' ').toUpperCase();
         expected += selections.length;
+        let albumCopied = 0;
 
         // Process in batches of 10 to avoid overwhelming pCloud
         for (let i = 0; i < selections.length; i += 10) {
           const batch = selections.slice(i, i + 10);
           const results = await Promise.allSettled(batch.map(async (sel) => {
-            // photo_key is the Xito path like "FALGUN EVENTS 2082/CLIENT NAME/Photos/EVENT/PHOTOGRAPHER/filename.jpg"
             const fileName = sel.photo_key.split('/').pop() || '';
             const sourcePath = `/WEDDING TALES NEPAL/${sel.photo_key}`;
             const destPath = `${basePath}/${folderName}/${fileName}`;
@@ -453,21 +455,38 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
           results.forEach((r, idx) => {
             if (r.status === 'fulfilled') {
               copied++;
+              albumCopied++;
             } else {
               errors.push(`${batch[idx].photo_key}: ${r.reason?.message || 'Copy failed'}`);
             }
           });
         }
+
+        albumDetails.push({ albumType, folderName, count: albumCopied });
       }
 
-      setCopyResult({ copied, expected, errors });
+      const result = { copied, expected, errors, albumDetails, monthFolder, copiedAt: new Date().toISOString() };
+      setCopyResult(result);
       setCopyStatus('done');
+
+      // Save to database
+      await supabase.from("album_copy_history").upsert({
+        registered_date_time_ad: registeredDateTimeAD,
+        client_name: clientName,
+        month_folder: monthFolder,
+        albums_copied: albumDetails,
+        total_copied: copied,
+        total_expected: expected,
+        errors: errors,
+        copied_at: new Date().toISOString(),
+      }, { onConflict: "registered_date_time_ad" });
+
     } catch (err: any) {
       errors.push(err.message || 'Unknown error');
       setCopyResult({ copied, expected, errors });
       setCopyStatus('error');
     }
-  }, [albumSelections, albumDefs, clientName, getMajorityYearMonth, hasFrameDeliverable]);
+  }, [albumSelections, albumDefs, clientName, getMajorityYearMonth, hasFrameDeliverable, registeredDateTimeAD]);
 
   // ===== PHOTOS VIEW LOGIC =====
   useEffect(() => {
