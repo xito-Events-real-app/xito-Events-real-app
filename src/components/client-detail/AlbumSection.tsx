@@ -110,26 +110,46 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
   const [copyStatus, setCopyStatus] = useState<'idle' | 'confirming' | 'copying' | 'done' | 'error'>('idle');
   const [copyResult, setCopyResult] = useState<{ copied: number; expected: number; errors: string[]; albumDetails?: { albumType: string; folderName: string; count: number }[]; monthFolder?: string; copiedAt?: string } | null>(null);
 
-  // Load copy history from DB on mount
+  // Bride/groom names from submission
+  const [brideGroom, setBrideGroom] = useState<{ bride: string; groom: string }>({ bride: '', groom: '' });
+
+  // Load copy history from DB on mount + auto-detect from pCloud
+  useEffect(() => {
+    if (!registeredDateTimeAD) return;
+    (async () => {
+      // Check DB first
+      const { data } = await supabase
+        .from("album_copy_history")
+        .select("*")
+        .eq("registered_date_time_ad", registeredDateTimeAD)
+        .maybeSingle();
+      if (data) {
+        const albums = (data.albums_copied as any[]) || [];
+        setCopyResult({
+          copied: data.total_copied,
+          expected: data.total_expected,
+          errors: data.errors || [],
+          albumDetails: albums,
+          monthFolder: data.month_folder,
+          copiedAt: data.copied_at,
+        });
+        setCopyStatus('done');
+      }
+    })();
+  }, [registeredDateTimeAD]);
+
+  // Fetch bride/groom names from submission
   useEffect(() => {
     if (!registeredDateTimeAD) return;
     supabase
-      .from("album_copy_history")
-      .select("*")
+      .from("album_selection_submissions")
+      .select("bride_name, groom_name")
       .eq("registered_date_time_ad", registeredDateTimeAD)
-      .maybeSingle()
+      .order("created_at", { ascending: false })
+      .limit(1)
       .then(({ data }) => {
-        if (data) {
-          const albums = (data.albums_copied as any[]) || [];
-          setCopyResult({
-            copied: data.total_copied,
-            expected: data.total_expected,
-            errors: data.errors || [],
-            albumDetails: albums,
-            monthFolder: data.month_folder,
-            copiedAt: data.copied_at,
-          });
-          setCopyStatus('done');
+        if (data && data.length > 0) {
+          setBrideGroom({ bride: data[0].bride_name || '', groom: data[0].groom_name || '' });
         }
       });
   }, [registeredDateTimeAD]);
