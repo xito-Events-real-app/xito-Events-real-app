@@ -58,13 +58,14 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [tabPhotoCounts, setTabPhotoCounts] = useState<Record<string, number>>({});
 
-  const [pcloudCounts, setPcloudCounts] = useState<Record<string, { count: number; totalSize: number }>>(pcloudCountCache);
+  const [pcloudCounts, setPcloudCounts] = useState<Record<string, { count: number; totalSize: number }>>({});
   const [pcloudLoading, setPcloudLoading] = useState<Record<string, boolean>>({});
   const [albumDefs, setAlbumDefs] = useState<AlbumDef[]>([]);
   const [albumSelections, setAlbumSelections] = useState<AlbumSelection[]>([]);
   const [loadingAllPcloud, setLoadingAllPcloud] = useState(false);
   const [refreshingXito, setRefreshingXito] = useState(false);
   const [albumSubmission, setAlbumSubmission] = useState<{ sent_to: string; handled: boolean } | null>(null);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
 
   useEffect(() => {
     if (!registeredDateTimeAD) return;
