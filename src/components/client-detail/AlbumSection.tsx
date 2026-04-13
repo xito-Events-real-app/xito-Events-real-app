@@ -253,7 +253,8 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
         setTabPhotoCounts(xitoResults);
         setPcloudCounts(pcloudResults);
         // Save to per-client cache
-        clientDashboardCache[registeredDateTimeAD] = { xitoCounts: xitoResults, pcloudCounts: pcloudResults, fetched: true };
+        clientDashboardCache[registeredDateTimeAD] = { xitoCounts: xitoResults, pcloudCounts: pcloudResults, fetched: true, timestamp: Date.now() };
+        saveDashboardCache(clientDashboardCache);
         setRefreshingXito(false);
         setLoadingAllPcloud(false);
       };
