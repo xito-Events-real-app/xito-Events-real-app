@@ -294,7 +294,21 @@ Please proceed with the design.`;
               {CONTACTS.map(c => (
                 <button
                   key={c.phone}
-                  onClick={() => {
+                  onClick={async () => {
+                    try {
+                      await supabase.from("album_selection_submissions").insert({
+                        registered_date_time_ad: registeredDateTimeAD,
+                        client_name: clientName,
+                        bride_name: editBride,
+                        groom_name: editGroom,
+                        selected_date: selectedDateDisplay,
+                        custom_text: albumText,
+                        album_details: albumCounts.map(a => ({ name: a.name, count: a.count })),
+                        sent_to: c.name,
+                      } as any);
+                    } catch (e) {
+                      console.error("Failed to save album submission", e);
+                    }
                     openWhatsApp(c.phone, buildWhatsAppMessage(c.name));
                     handleOpenChange(false);
                   }}
