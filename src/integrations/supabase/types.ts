@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      album_dashboard_cache: {
+        Row: {
+          pcloud_counts: Json
+          registered_date_time_ad: string
+          updated_at: string
+          xito_counts: Json
+        }
+        Insert: {
+          pcloud_counts?: Json
+          registered_date_time_ad: string
+          updated_at?: string
+          xito_counts?: Json
+        }
+        Update: {
+          pcloud_counts?: Json
+          registered_date_time_ad?: string
+          updated_at?: string
+          xito_counts?: Json
+        }
+        Relationships: []
+      }
       album_selection_submissions: {
         Row: {
           album_details: Json
