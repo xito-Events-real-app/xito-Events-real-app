@@ -421,6 +421,62 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
 
   const isCopyEnabled = workflowStatus.currentStep >= 4; // Sent for Design
 
+  // Auto-detect already-copied albums from pCloud (reconciliation)
+  useEffect(() => {
+    if (!isCopyEnabled || copyStatus !== 'idle' || !registeredDateTimeAD) return;
+    const monthFolder = getMajorityYearMonth();
+    if (!monthFolder) return;
+
+    const basePath = `ALBUM AND FRAME - WEDDING TALES NEPAL/${monthFolder}/${clientName}`;
+    (async () => {
+      try {
+        const folder = await listPCloudFolderByPath(basePath);
+        const subfolders = folder.contents.filter(i => i.isfolder);
+        if (subfolders.length === 0) return;
+
+        // Count files in each subfolder
+        const albumDetails: { albumType: string; folderName: string; count: number }[] = [];
+        let totalCopied = 0;
+        for (const sub of subfolders) {
+          const subFolder = await listPCloudFolderByPath(`${basePath}/${sub.name}`);
+          const imageCount = subFolder.contents.filter(isPCloudImage).length;
+          if (imageCount > 0) {
+            const albumType = sub.name.toLowerCase().replace(/ /g, '_');
+            albumDetails.push({ albumType, folderName: sub.name, count: imageCount });
+            totalCopied += imageCount;
+          }
+        }
+
+        if (totalCopied > 0) {
+          const result = {
+            copied: totalCopied,
+            expected: totalCopied,
+            errors: [] as string[],
+            albumDetails,
+            monthFolder,
+            copiedAt: new Date().toISOString(),
+          };
+          setCopyResult(result);
+          setCopyStatus('done');
+
+          // Save to DB
+          await supabase.from("album_copy_history").upsert({
+            registered_date_time_ad: registeredDateTimeAD,
+            client_name: clientName,
+            month_folder: monthFolder,
+            albums_copied: albumDetails,
+            total_copied: totalCopied,
+            total_expected: totalCopied,
+            errors: [],
+            copied_at: new Date().toISOString(),
+          }, { onConflict: "registered_date_time_ad" });
+        }
+      } catch {
+        // Folder doesn't exist — not copied yet, that's fine
+      }
+    })();
+  }, [isCopyEnabled, copyStatus, registeredDateTimeAD, clientName, getMajorityYearMonth]);
+
   // Copy HQ album photos orchestration
   const executeCopy = useCallback(async () => {
     setCopyStatus('copying');
