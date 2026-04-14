@@ -45,7 +45,7 @@ const ClientLinkSection = ({
   const [albumGroups, setAlbumGroups] = useState<GroupedAlbum[]>([]);
   const [loadingAlbums, setLoadingAlbums] = useState(true);
   const [viewerOpen, setViewerOpen] = useState(false);
-  const [viewerImages, setViewerImages] = useState<{ url: string; name: string }[]>([]);
+  const [viewerImages, setViewerImages] = useState<{ key: string; url: string }[]>([]);
   const [viewerStartIndex, setViewerStartIndex] = useState(0);
 
   const portalUrl = getClientPortalUrl(registeredDateTimeAD, clientName);
