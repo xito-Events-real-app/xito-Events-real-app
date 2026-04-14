@@ -94,11 +94,18 @@ export function PCloudEmailNotificationPopup() {
 
   const handleInvite = async (entry: EmailEntry) => {
     const client = clientInfoMap[entry.registered_date_time_ad];
-    if (!client?.event_month || !client?.event_year || !client?.client_name) {
+    const NEPALI_MONTHS: Record<number, string> = {
+      1: "BAISAKH", 2: "JESTHA", 3: "ASHADH", 4: "SHRAWAN",
+      5: "BHADRA", 6: "ASHWIN", 7: "KARTIK", 8: "MANGSIR",
+      9: "POUSH", 10: "MAGH", 11: "FALGUN", 12: "CHAITRA",
+    };
+    const monthNum = parseInt(client?.event_month || '', 10);
+    const monthName = NEPALI_MONTHS[monthNum];
+    if (!monthName || !client?.event_year || !client?.client_name) {
       toast.error('Client folder info not available');
       return;
     }
-    const folderPath = `/WEDDING TALES NEPAL/${client.event_month} EVENTS ${client.event_year}/${client.client_name}`;
+    const folderPath = `/${monthName} EVENTS ${client.event_year}/${client.client_name}`;
     setInvitingId(entry.id);
     try {
       await sharePCloudFolder(folderPath, entry.email);
