@@ -1,17 +1,13 @@
 import { useState, useEffect } from "react";
-import { ExternalLink, Copy, Send, Check, MessageCircle, Smartphone, Monitor, Loader2, HardDrive, Cloud, FolderOpen } from "lucide-react";
+import { ExternalLink, Copy, Send, Check, MessageCircle, Smartphone, Monitor, Loader2, Images } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getClientPortalUrl, generatePortalWhatsAppMessage } from "@/lib/client-contact-api";
 import { supabase } from "@/integrations/supabase/client";
+import { getE2FileUrls } from "@/lib/idrive-e2-api";
 import { toast } from "@/hooks/use-toast";
-
-const NEPALI_MONTHS: Record<number, string> = {
-  1: "BAISAKH", 2: "JESTHA", 3: "ASHADH", 4: "SHRAWAN",
-  5: "BHADRA", 6: "ASHWIN", 7: "KARTIK", 8: "MANGSIR",
-  9: "POUSH", 10: "MAGH", 11: "FALGUN", 12: "CHAITRA",
-};
+import XitoImageViewer from "@/components/client-detail/XitoImageViewer";
 
 interface ClientLinkSectionProps {
   registeredDateTimeAD: string;
@@ -22,8 +18,12 @@ interface ClientLinkSectionProps {
   brideWhatsapp?: string;
   groomFullName?: string;
   groomWhatsapp?: string;
-  eventMonth?: string;
-  eventYear?: string;
+}
+
+interface GroupedAlbum {
+  albumType: string;
+  albumName: string;
+  photos: { key: string; url: string }[];
 }
 
 const ClientLinkSection = ({
@@ -31,8 +31,6 @@ const ClientLinkSection = ({
   clientName,
   contactNo,
   whatsappNo,
-  eventMonth,
-  eventYear,
 }: ClientLinkSectionProps) => {
   const [copied, setCopied] = useState(false);
   const [showSendDialog, setShowSendDialog] = useState(false);
@@ -43,6 +41,13 @@ const ClientLinkSection = ({
   } | null>(null);
   const [loadingContacts, setLoadingContacts] = useState(false);
 
+  // Album selections state
+  const [albumGroups, setAlbumGroups] = useState<GroupedAlbum[]>([]);
+  const [loadingAlbums, setLoadingAlbums] = useState(true);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerImages, setViewerImages] = useState<{ key: string; url: string }[]>([]);
+  const [viewerStartIndex, setViewerStartIndex] = useState(0);
+
   const portalUrl = getClientPortalUrl(registeredDateTimeAD, clientName);
   const message = generatePortalWhatsAppMessage(registeredDateTimeAD, clientName);
 
@@ -52,6 +57,55 @@ const ClientLinkSection = ({
     toast({ title: "Link copied!" });
     setTimeout(() => setCopied(false), 2000);
   };
+
+  // Load album selections
+  useEffect(() => {
+    let stale = false;
+    (async () => {
+      setLoadingAlbums(true);
+      try {
+        const { data } = await supabase
+          .from('client_album_selections')
+          .select('album_type, album_name, photo_key')
+          .eq('registered_date_time_ad', registeredDateTimeAD)
+          .order('album_type')
+          .order('selected_at', { ascending: true });
+
+        if (stale || !data || data.length === 0) {
+          if (!stale) setAlbumGroups([]);
+          return;
+        }
+
+        // Group by album_type
+        const groupMap: Record<string, { albumName: string; keys: string[] }> = {};
+        for (const row of data) {
+          if (!groupMap[row.album_type]) {
+            groupMap[row.album_type] = { albumName: row.album_name || row.album_type, keys: [] };
+          }
+          groupMap[row.album_type].keys.push(row.photo_key);
+        }
+
+        // Batch fetch signed URLs
+        const allKeys = data.map(d => d.photo_key);
+        const urlMap = await getE2FileUrls(allKeys);
+
+        if (stale) return;
+
+        const groups: GroupedAlbum[] = Object.entries(groupMap).map(([type, info]) => ({
+          albumType: type,
+          albumName: info.albumName,
+          photos: info.keys.map(k => ({ key: k, url: urlMap[k] || '' })).filter(p => p.url),
+        }));
+
+        setAlbumGroups(groups);
+      } catch (err) {
+        console.error('Error loading album selections:', err);
+      } finally {
+        if (!stale) setLoadingAlbums(false);
+      }
+    })();
+    return () => { stale = true; };
+  }, [registeredDateTimeAD]);
 
   // Fetch contact details when send dialog opens
   useEffect(() => {
@@ -90,6 +144,17 @@ const ClientLinkSection = ({
     setShowSendDialog(false);
   };
 
+  const openViewer = (group: GroupedAlbum, photoIndex: number) => {
+    setViewerImages(group.photos.map(p => ({
+      key: p.key,
+      url: p.url,
+    })));
+    setViewerStartIndex(photoIndex);
+    setViewerOpen(true);
+  };
+
+  const totalSelections = albumGroups.reduce((sum, g) => sum + g.photos.length, 0);
+
   return (
     <div className="space-y-4">
       {/* Actions Bar */}
@@ -103,7 +168,6 @@ const ClientLinkSection = ({
               <h3 className="text-lg font-semibold text-white">Client Portal</h3>
               <p className="text-xs text-white/40">Live preview — exactly what client sees</p>
             </div>
-            {/* View toggle */}
             <div className="flex items-center gap-1 bg-white/5 rounded-full p-0.5">
               <button
                 onClick={() => setViewMode('phone')}
@@ -120,7 +184,6 @@ const ClientLinkSection = ({
             </div>
           </div>
 
-          {/* Quick actions */}
           <div className="flex gap-2">
             <Button
               onClick={handleCopy}
@@ -143,41 +206,58 @@ const ClientLinkSection = ({
         </CardContent>
       </Card>
 
-      {/* Selection Folders */}
-      {(() => {
-        const monthNum = parseInt(eventMonth || '');
-        const monthName = Number.isFinite(monthNum) ? NEPALI_MONTHS[monthNum] : '';
-        const year = eventYear || '';
-        if (!monthName || !year || !clientName) return null;
-        const xitoPath = `/${monthName} EVENTS ${year}/${clientName}`;
-        const pcloudPath = `/WEDDING TALES NEPAL/${monthName} EVENTS ${year}/${clientName}`;
-        return (
-          <Card className="bg-[hsl(220,25%,12%)] border-white/10">
-            <CardContent className="p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <FolderOpen className="h-4 w-4 text-amber-400" />
-                <h3 className="text-sm font-semibold text-white">Selection Folders</h3>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center gap-3 p-2.5 rounded-lg bg-white/5 border border-white/10">
-                  <HardDrive className="h-4 w-4 text-sky-400 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[11px] text-white/40">XITO Drive</p>
-                    <p className="text-xs text-white font-mono truncate">{xitoPath}</p>
+      {/* Selected Photos Gallery */}
+      <Card className="bg-[hsl(220,25%,12%)] border-white/10">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Images className="h-4 w-4 text-amber-400" />
+            <h3 className="text-sm font-semibold text-white">Selected Photos</h3>
+            {totalSelections > 0 && (
+              <span className="text-xs text-white/40 ml-auto">{totalSelections} total</span>
+            )}
+          </div>
+
+          {loadingAlbums ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-white/40" />
+              <span className="ml-2 text-sm text-white/40">Loading selections...</span>
+            </div>
+          ) : albumGroups.length === 0 ? (
+            <p className="text-sm text-white/30 text-center py-6">No photos selected yet</p>
+          ) : (
+            <div className="space-y-4">
+              {albumGroups.map((group) => (
+                <div key={group.albumType}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <h4 className="text-xs font-medium text-white/60 uppercase tracking-wider">
+                      {group.albumName}
+                    </h4>
+                    <span className="text-[10px] text-white/30 bg-white/5 px-1.5 py-0.5 rounded">
+                      {group.photos.length}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {group.photos.map((photo, idx) => (
+                      <button
+                        key={photo.key}
+                        onClick={() => openViewer(group, idx)}
+                        className="aspect-square rounded-md overflow-hidden bg-white/5 hover:ring-2 hover:ring-primary/50 transition-all"
+                      >
+                        <img
+                          src={photo.url}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      </button>
+                    ))}
                   </div>
                 </div>
-                <div className="flex items-center gap-3 p-2.5 rounded-lg bg-white/5 border border-white/10">
-                  <Cloud className="h-4 w-4 text-green-400 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[11px] text-white/40">pCloud</p>
-                    <p className="text-xs text-white font-mono truncate">{pcloudPath}</p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })()}
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Live Preview */}
       <div className="flex justify-center">
@@ -191,7 +271,6 @@ const ClientLinkSection = ({
             background: 'linear-gradient(145deg, hsl(220,25%,15%), hsl(220,25%,8%))',
           } : undefined}
         >
-          {/* Phone notch */}
           {viewMode === 'phone' && (
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[120px] h-[24px] bg-black rounded-b-2xl z-10" />
           )}
@@ -242,6 +321,15 @@ const ClientLinkSection = ({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Xito Image Viewer */}
+      {viewerOpen && (
+        <XitoImageViewer
+          images={viewerImages}
+          initialIndex={viewerStartIndex}
+          onClose={() => setViewerOpen(false)}
+        />
+      )}
     </div>
   );
 };

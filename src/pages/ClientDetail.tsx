@@ -1775,18 +1775,16 @@ const ClientDetail = () => {
 
           {/* Client Link Section */}
           {activeSection === 'clientLink' && client?.registeredDateTimeAD && (
-            <ClientLinkSection
-              registeredDateTimeAD={client.registeredDateTimeAD}
-              clientName={client.clientName || ''}
-              contactNo={client.contactNo || ''}
-              whatsappNo={client.whatsappNo || ''}
-              brideFullName={contactDetailsData?.brideFullName || ''}
-              brideWhatsapp={contactDetailsData?.brideWhatsappNumber || ''}
-              groomFullName={contactDetailsData?.groomFullName || ''}
-              groomWhatsapp={contactDetailsData?.groomWhatsappNumber || ''}
-              eventMonth={(client.eventMonth || '').split('\n')[0]}
-              eventYear={(client.eventYear || '').split('\n')[0]}
-            />
+              <ClientLinkSection
+                registeredDateTimeAD={client.registeredDateTimeAD}
+                clientName={client.clientName || ''}
+                contactNo={client.contactNo || ''}
+                whatsappNo={client.whatsappNo || ''}
+                brideFullName={contactDetailsData?.brideFullName || ''}
+                brideWhatsapp={contactDetailsData?.brideWhatsappNumber || ''}
+                groomFullName={contactDetailsData?.groomFullName || ''}
+                groomWhatsapp={contactDetailsData?.groomWhatsappNumber || ''}
+              />
           )}
 
           {activeSection === 'freelancers' && client?.registeredDateTimeAD && (
