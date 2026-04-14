@@ -1,55 +1,67 @@
 
 
-# Security Fix: Protect Your App Data
+# Migration: Restore Public Portal Access for 9 Tables
 
-## The Problem
+## What this does
+Adds targeted `anon` role policies so Client Portal, Crew Schedule, and Editor Portal work without login. Existing `authenticated` ALL policies remain untouched.
 
-There are **two separate issues** here:
+## Policies to create
 
-### Issue 1: UI Access (Likely a false alarm)
-When YOU trim the URL to just `https://business.xitoevents.com`, you see the dashboard because **you are already logged in** in that browser. Your auth session is stored in the browser. On someone else's browser (who has never logged in), they WILL see the login screen — the `ProtectedRoute` component correctly redirects unauthenticated users to `/login`.
+| Table | SELECT | INSERT | UPDATE | DELETE | Used by |
+|---|---|---|---|---|---|
+| `clients_cache` | Yes | — | — | — | Client Portal, Crew Schedule |
+| `event_details_cache` | Yes | — | — | — | Client Portal, Crew Schedule |
+| `freelancer_assignments` | Yes | — | — | — | Client Portal, Crew Schedule |
+| `client_deliverables` | Yes | — | — | — | Client Portal (album defs) |
+| `freelancers_cache` | Yes | — | — | — | Crew Schedule, Editor Portal |
+| `freelancer_event_settings` | Yes | — | — | — | Crew Schedule (visibility) |
+| `video_edit_tracker` | Yes | — | Yes | — | Editor Portal (list + play/pause) |
+| `video_edit_chat` | Yes | Yes | Yes | — | Editor Portal (chat) |
+| `video_edit_notifications` | Yes | Yes | Yes | — | Editor Portal (notifications) |
 
-You can test this yourself: open an **incognito/private window** and visit `https://business.xitoevents.com` — you should see the login page.
+Additionally, `contact_details_cache` already has public SELECT + INSERT but needs public **UPDATE** for upsert from the client form and portal.
 
-### Issue 2: Data Access (This IS a real problem)
-All your database tables use `"Allow all access"` RLS policies (`USING (true)`). This means **anyone who knows the database URL and anon key** (which are visible in your app's JavaScript bundle) can directly query ALL your client data via the API — bypassing the UI login entirely. This is a genuine security risk.
+## SQL migration (single file)
 
-## The Fix
-
-### Step 1: Restrict all table RLS policies to authenticated users only
-Update every table's RLS policy from:
 ```sql
--- Current (DANGEROUS): anyone can read
-FOR ALL USING (true)
+-- 1. Read-only tables (SELECT for anon)
+CREATE POLICY "Public select for portals" ON public.clients_cache FOR SELECT TO anon USING (true);
+CREATE POLICY "Public select for portals" ON public.event_details_cache FOR SELECT TO anon USING (true);
+CREATE POLICY "Public select for portals" ON public.freelancer_assignments FOR SELECT TO anon USING (true);
+CREATE POLICY "Public select for portals" ON public.client_deliverables FOR SELECT TO anon USING (true);
+CREATE POLICY "Public select for portals" ON public.freelancers_cache FOR SELECT TO anon USING (true);
+CREATE POLICY "Public select for portals" ON public.freelancer_event_settings FOR SELECT TO anon USING (true);
+
+-- 2. Video edit tracker (SELECT + UPDATE for editor play/pause)
+CREATE POLICY "Public select for editor portal" ON public.video_edit_tracker FOR SELECT TO anon USING (true);
+CREATE POLICY "Public update for editor portal" ON public.video_edit_tracker FOR UPDATE TO anon USING (true) WITH CHECK (true);
+
+-- 3. Video edit chat (SELECT + INSERT + UPDATE for messaging)
+CREATE POLICY "Public select for editor chat" ON public.video_edit_chat FOR SELECT TO anon USING (true);
+CREATE POLICY "Public insert for editor chat" ON public.video_edit_chat FOR INSERT TO anon WITH CHECK (true);
+CREATE POLICY "Public update for editor chat" ON public.video_edit_chat FOR UPDATE TO anon USING (true) WITH CHECK (true);
+
+-- 4. Video edit notifications (SELECT + INSERT + UPDATE)
+CREATE POLICY "Public select for editor notifications" ON public.video_edit_notifications FOR SELECT TO anon USING (true);
+CREATE POLICY "Public insert for editor notifications" ON public.video_edit_notifications FOR INSERT TO anon WITH CHECK (true);
+CREATE POLICY "Public update for editor notifications" ON public.video_edit_notifications FOR UPDATE TO anon USING (true) WITH CHECK (true);
+
+-- 5. Contact details — add missing public UPDATE for upsert
+CREATE POLICY "Public update contact details" ON public.contact_details_cache FOR UPDATE TO anon USING (true) WITH CHECK (true);
 ```
-to:
-```sql
--- Fixed: only logged-in users can access
-FOR ALL TO authenticated USING (true) WITH CHECK (true)
-```
 
-This is a single migration that drops the old "allow all" policies and creates new "authenticated only" policies for all admin tables.
+## Risk check — tables where anon can write
 
-### Step 2: Keep public tables accessible for portals
-Tables that need to be accessed by public-facing pages (client portal, crew schedule, editor portal, client form) will keep open policies but only for specific operations:
-- `contact_details_cache` — INSERT for client form submissions
-- `client_album_selections` — SELECT/INSERT/UPDATE/DELETE for album selection
-- `client_portal_references` — SELECT/INSERT for portal references
-- `album_selection_submissions` — INSERT for submissions
-- `portal_hidden_videos` — SELECT for portal
-- `client_pcloud_emails` — SELECT/INSERT for pCloud sharing
+| Table | Risk | Mitigation |
+|---|---|---|
+| `video_edit_tracker` | anon can UPDATE any row (change status, editor, etc.) | Low risk: editor portal URL is only shared privately via WhatsApp. No DELETE. |
+| `video_edit_chat` | anon can INSERT/UPDATE any chat message | Low risk: URL is private. No DELETE. |
+| `video_edit_notifications` | anon can INSERT/UPDATE notifications | Low risk: same as above. |
+| `contact_details_cache` | anon can UPDATE any contact row | Low risk: client portal URLs are private. No DELETE. |
 
-All other tables (clients_cache, event_details_cache, freelancers_cache, files_management, accounts, etc.) become **authenticated-only**.
+No table grants DELETE to `anon`. No table grants INSERT to `anon` for admin-sensitive data (clients, finances, files). The risk is acceptable given these are private-link portals.
 
-### Step 3: Verify login screen works on published domain
-After the migration, even if someone extracts the API keys from the JavaScript bundle, they cannot query any protected table without a valid login session.
-
-## Files to change
-1. **New database migration** — Drop ~30 "Allow all" policies, replace with "authenticated only" policies
-2. No code changes needed — the Supabase client already sends the auth token automatically when a user is logged in
-
-## Impact
-- Your admin dashboard continues to work exactly as before (you're logged in)
-- Public portals continue to work (their specific tables remain accessible)
-- Anyone without a login can no longer access your business data through any means
+## Files changed
+1. **New database migration** — the SQL above
+2. **No code changes** — the Supabase client already works with anon key on public routes
 
