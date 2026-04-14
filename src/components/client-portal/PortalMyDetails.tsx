@@ -240,6 +240,20 @@ const PortalMyDetails = ({ registeredDateTimeAD, initialData, onSaved }: PortalM
       setPcloudEmails(prev => [...prev, { id: data.id, email: data.email }]);
       setNewEmail('');
       toast({ title: "Email added ✓" });
+
+      // Auto-invite to pCloud folder (fire-and-forget)
+      const monthYear = initialData?.event_month && initialData?.event_year
+        ? `${initialData.event_month} EVENTS ${initialData.event_year}`
+        : null;
+      const clientFolder = initialData?.client_name;
+      if (monthYear && clientFolder) {
+        const folderPath = `/WEDDING TALES NEPAL/${monthYear}/${clientFolder}`;
+        sharePCloudFolder(folderPath, email).then(() => {
+          toast({ title: "pCloud invitation sent", description: `Invited ${email} to folder` });
+        }).catch(err => {
+          console.warn('Auto pCloud share failed:', err);
+        });
+      }
     } catch {
       toast({ title: "Error", description: "Failed to add email", variant: "destructive" });
     } finally {
