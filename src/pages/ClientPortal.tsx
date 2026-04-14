@@ -9,6 +9,7 @@ import PortalMyVideos from "@/components/client-portal/PortalMyVideos";
 import PortalMyPayment from "@/components/client-portal/PortalMyPayment";
 import PortalMyDetails from "@/components/client-portal/PortalMyDetails";
 import PortalMyAlbum from "@/components/client-portal/PortalMyAlbum";
+import PortalMyReferences from "@/components/client-portal/PortalMyReferences";
 import { AlbumSelection, getAlbumSelections, getAlbumDefsFromDeliverables, AlbumDef } from "@/lib/album-selection-api";
 
 interface ClientData {
@@ -248,6 +249,7 @@ const ClientPortal = () => {
           assignments={assignments}
           hasFilledContact={hasFilledContact}
           onGoToDetails={() => setActiveTab('details')}
+          onGoToReferences={() => setActiveTab('references')}
         />
       )}
       {activeTab === 'photos' && (
@@ -285,6 +287,12 @@ const ClientPortal = () => {
         />
       )}
       {activeTab === 'payment' && <PortalMyPayment />}
+      {activeTab === 'references' && (
+        <PortalMyReferences
+          registeredDateTimeAD={decodedId}
+          events={eventDetails.map(e => ({ eventName: e.eventName }))}
+        />
+      )}
       {activeTab === 'details' && (
         <PortalMyDetails
           registeredDateTimeAD={decodedId}
