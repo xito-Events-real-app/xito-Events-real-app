@@ -242,12 +242,17 @@ const PortalMyDetails = ({ registeredDateTimeAD, initialData, onSaved }: PortalM
       toast({ title: "Email added ✓" });
 
       // Auto-invite to pCloud folder (fire-and-forget)
-      const monthYear = initialData?.event_month && initialData?.event_year
-        ? `${initialData.event_month} EVENTS ${initialData.event_year}`
-        : null;
+      const NEPALI_MONTHS: Record<number, string> = {
+        1: "BAISAKH", 2: "JESTHA", 3: "ASHADH", 4: "SHRAWAN",
+        5: "BHADRA", 6: "ASHWIN", 7: "KARTIK", 8: "MANGSIR",
+        9: "POUSH", 10: "MAGH", 11: "FALGUN", 12: "CHAITRA",
+      };
+      const monthNum = parseInt(initialData?.event_month || '', 10);
+      const monthName = NEPALI_MONTHS[monthNum];
+      const eventYear = initialData?.event_year;
       const clientFolder = initialData?.client_name;
-      if (monthYear && clientFolder) {
-        const folderPath = `/WEDDING TALES NEPAL/${monthYear}/${clientFolder}`;
+      if (monthName && eventYear && clientFolder) {
+        const folderPath = `/${monthName} EVENTS ${eventYear}/${clientFolder}`;
         sharePCloudFolder(folderPath, email).then(() => {
           toast({ title: "pCloud invitation sent", description: `Invited ${email} to folder` });
         }).catch(err => {
