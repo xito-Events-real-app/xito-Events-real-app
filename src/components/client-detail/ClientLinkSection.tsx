@@ -146,8 +146,8 @@ const ClientLinkSection = ({
 
   const openViewer = (group: GroupedAlbum, photoIndex: number) => {
     setViewerImages(group.photos.map(p => ({
+      key: p.key,
       url: p.url,
-      name: p.key.split('/').pop() || p.key,
     })));
     setViewerStartIndex(photoIndex);
     setViewerOpen(true);
