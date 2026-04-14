@@ -150,7 +150,7 @@ export default function CrewScheduleEventSheet({ open, onOpenChange, assignment,
       if (data) {
         setVisibility(data as VisibilitySettings);
       } else {
-        setVisibility({ show_bride_details: false, show_groom_details: false, show_venue_details: false, show_parlour_details: false, show_bride_location: false, show_groom_location: false, personal_note: '' });
+        setVisibility({ show_bride_details: true, show_groom_details: true, show_venue_details: true, show_parlour_details: true, show_bride_location: true, show_groom_location: true, personal_note: '' });
       }
     };
     fetchVisibility();
