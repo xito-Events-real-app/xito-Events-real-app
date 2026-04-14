@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { CloudUpload, Copy, Check, X } from "lucide-react";
+import { CloudUpload, Copy, Check, X, Send, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { sharePCloudFolder } from "@/lib/pcloud-api";
 
 const LS_KEY = 'pcloud-email-notif';
 const MAX_SHOWS = 3;
@@ -12,6 +13,7 @@ interface EmailEntry {
   id: string;
   email: string;
   client_name: string;
+  registered_date_time_ad: string;
   created_at: string;
 }
 
@@ -39,12 +41,16 @@ export function PCloudEmailNotificationPopup() {
   const [entries, setEntries] = useState<EmailEntry[]>([]);
   const [open, setOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [invitingId, setInvitingId] = useState<string | null>(null);
+  const [invitedIds, setInvitedIds] = useState<Set<string>>(new Set());
+  // Cache client info for folder path resolution
+  const [clientInfoMap, setClientInfoMap] = useState<Record<string, { event_month?: string; event_year?: string; client_name?: string }>>({}); 
 
   useEffect(() => {
     if (!canShow()) return;
     const check = async () => {
       const { data } = await supabase.from('client_pcloud_emails')
-        .select('id, email, client_name, created_at')
+        .select('id, email, client_name, registered_date_time_ad, created_at')
         .eq('is_seen', false)
         .order('created_at', { ascending: false })
         .limit(20);
@@ -52,16 +58,27 @@ export function PCloudEmailNotificationPopup() {
         setEntries(data as EmailEntry[]);
         setOpen(true);
         recordShow();
+
+        // Fetch client info for folder path building
+        const uniqueIds = [...new Set(data.map(d => d.registered_date_time_ad))];
+        const { data: clients } = await supabase.from('clients_cache')
+          .select('registered_date_time_ad, client_name, event_month, event_year')
+          .in('registered_date_time_ad', uniqueIds);
+        if (clients) {
+          const map: Record<string, any> = {};
+          for (const c of clients) {
+            map[c.registered_date_time_ad] = c;
+          }
+          setClientInfoMap(map);
+        }
       }
     };
-    // Delay check slightly
     const t = setTimeout(check, 3000);
     return () => clearTimeout(t);
   }, []);
 
   const handleDismiss = useCallback(async () => {
     setOpen(false);
-    // Mark as seen
     if (entries.length > 0) {
       const ids = entries.map(e => e.id);
       await supabase.from('client_pcloud_emails').update({ is_seen: true } as any).in('id', ids);
@@ -75,9 +92,27 @@ export function PCloudEmailNotificationPopup() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const handleInvite = async (entry: EmailEntry) => {
+    const client = clientInfoMap[entry.registered_date_time_ad];
+    if (!client?.event_month || !client?.event_year || !client?.client_name) {
+      toast.error('Client folder info not available');
+      return;
+    }
+    const folderPath = `/WEDDING TALES NEPAL/${client.event_month} EVENTS ${client.event_year}/${client.client_name}`;
+    setInvitingId(entry.id);
+    try {
+      await sharePCloudFolder(folderPath, entry.email);
+      setInvitedIds(prev => new Set(prev).add(entry.id));
+      toast.success(`Invited ${entry.email} to pCloud folder`);
+    } catch (err: any) {
+      toast.error(`Invite failed: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setInvitingId(null);
+    }
+  };
+
   if (!open || entries.length === 0) return null;
 
-  // Group by client name
   const grouped = entries.reduce<Record<string, EmailEntry[]>>((acc, e) => {
     const key = e.client_name || 'Unknown';
     if (!acc[key]) acc[key] = [];
@@ -113,6 +148,20 @@ export function PCloudEmailNotificationPopup() {
                 {emails.map(e => (
                   <div key={e.id} className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2.5">
                     <span className="text-sm text-gray-700 flex-1 truncate">{e.email}</span>
+                    <button
+                      onClick={() => handleInvite(e)}
+                      disabled={invitingId === e.id || invitedIds.has(e.id)}
+                      className="p-1.5 rounded-lg hover:bg-violet-100 text-gray-400 hover:text-violet-600 transition-colors disabled:opacity-50"
+                      title="Invite to pCloud folder"
+                    >
+                      {invitingId === e.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-500" />
+                      ) : invitedIds.has(e.id) ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-500" />
+                      ) : (
+                        <Send className="w-3.5 h-3.5" />
+                      )}
+                    </button>
                     <button
                       onClick={() => handleCopy(e.email, e.id)}
                       className="p-1.5 rounded-lg hover:bg-violet-100 text-gray-400 hover:text-violet-600 transition-colors"

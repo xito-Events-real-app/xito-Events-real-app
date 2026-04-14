@@ -343,6 +343,20 @@ serve(async (req) => {
         query.set('toname', params.toname);
         break;
 
+      case 'sharefolder': {
+        const shareQuery = new URLSearchParams({ auth });
+        if (params.folderid) shareQuery.set('folderid', String(params.folderid));
+        if (params.path) shareQuery.set('path', params.path);
+        shareQuery.set('mail', params.mail);
+        shareQuery.set('permissions', String(params.permissions ?? 0));
+        shareQuery.set('message', params.message || 'You have been invited to view your photos and videos.');
+        const shareRes = await fetch(`${PCLOUD_API}/sharefolder?${shareQuery}`);
+        const shareData = await shareRes.json();
+        return new Response(JSON.stringify(shareData), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       case 'copyfile': {
         const copyParams = new URLSearchParams({ auth });
         if (params.path) copyParams.set('path', params.path);
