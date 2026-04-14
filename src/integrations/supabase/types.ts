@@ -212,6 +212,42 @@ export type Database = {
         }
         Relationships: []
       }
+      client_portal_references: {
+        Row: {
+          created_at: string
+          description: string
+          entry_type: string
+          event_name: string
+          id: string
+          link_title: string
+          link_url: string
+          platform: string
+          registered_date_time_ad: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          entry_type?: string
+          event_name?: string
+          id?: string
+          link_title?: string
+          link_url?: string
+          platform?: string
+          registered_date_time_ad: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          entry_type?: string
+          event_name?: string
+          id?: string
+          link_title?: string
+          link_url?: string
+          platform?: string
+          registered_date_time_ad?: string
+        }
+        Relationships: []
+      }
       clients_cache: {
         Row: {
           benzo_keep_notes: string | null
