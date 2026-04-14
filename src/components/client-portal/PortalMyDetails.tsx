@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { sharePCloudFolder } from "@/lib/pcloud-api";
+import { getMonthName } from "@/lib/nepali-months";
 
 const DEFAULT_RELATION_OPTIONS = ["Mother", "Father", "Sister", "Brother", "Spouse", "Friend", "Other"];
 
@@ -199,21 +200,33 @@ const PortalMyDetails = ({ registeredDateTimeAD, initialData, onSaved }: PortalM
   const [pcloudEmails, setPcloudEmails] = useState<{ id: string; email: string }[]>([]);
   const [newEmail, setNewEmail] = useState('');
   const [addingEmail, setAddingEmail] = useState(false);
+  const [pcloudClientInfo, setPcloudClientInfo] = useState<{ client_name?: string | null; event_month?: string | null; event_year?: string | null } | null>(null);
 
   useEffect(() => {
-    const loadEmails = async () => {
-      const { data } = await supabase.from('client_pcloud_emails')
-        .select('id, email')
-        .eq('registered_date_time_ad', registeredDateTimeAD)
-        .order('created_at', { ascending: true });
-      if (data) setPcloudEmails(data.map(d => ({ id: d.id, email: d.email })));
+    const loadPcloudData = async () => {
+      const [{ data: emails }, { data: clientInfo }] = await Promise.all([
+        supabase
+          .from('client_pcloud_emails')
+          .select('id, email')
+          .eq('registered_date_time_ad', registeredDateTimeAD)
+          .order('created_at', { ascending: true }),
+        supabase
+          .from('clients_cache')
+          .select('client_name, event_month, event_year')
+          .eq('registered_date_time_ad', registeredDateTimeAD)
+          .maybeSingle(),
+      ]);
+
+      if (emails) setPcloudEmails(emails.map(d => ({ id: d.id, email: d.email })));
+      if (clientInfo) setPcloudClientInfo(clientInfo);
     };
-    loadEmails();
+
+    loadPcloudData();
   }, [registeredDateTimeAD]);
 
-  const clientNameForEmails = bride.fullName && groom.fullName
+  const clientNameForEmails = pcloudClientInfo?.client_name || (bride.fullName && groom.fullName
     ? `${bride.fullName.split(' ')[0]} & ${groom.fullName.split(' ')[0]}`
-    : bride.fullName || groom.fullName || '';
+    : bride.fullName || groom.fullName || '');
 
   const handleAddEmail = async () => {
     const email = newEmail.trim().toLowerCase();
@@ -242,21 +255,23 @@ const PortalMyDetails = ({ registeredDateTimeAD, initialData, onSaved }: PortalM
       toast({ title: "Email added ✓" });
 
       // Auto-invite to pCloud folder (fire-and-forget)
-      const NEPALI_MONTHS: Record<number, string> = {
-        1: "BAISAKH", 2: "JESTHA", 3: "ASHADH", 4: "SHRAWAN",
-        5: "BHADRA", 6: "ASHWIN", 7: "KARTIK", 8: "MANGSIR",
-        9: "POUSH", 10: "MAGH", 11: "FALGUN", 12: "CHAITRA",
-      };
-      const monthNum = parseInt(initialData?.event_month || '', 10);
-      const monthName = NEPALI_MONTHS[monthNum];
-      const eventYear = initialData?.event_year;
-      const clientFolder = initialData?.client_name;
+      const monthRaw = pcloudClientInfo?.event_month?.split('\n').find(Boolean)?.trim() || '';
+      const yearRaw = pcloudClientInfo?.event_year?.split('\n').find(Boolean)?.trim() || '';
+      const monthNum = parseInt(monthRaw, 10);
+      const monthName = Number.isFinite(monthNum) ? getMonthName(monthNum) : '';
+      const eventYear = yearRaw;
+      const clientFolder = pcloudClientInfo?.client_name?.trim();
       if (monthName && eventYear && clientFolder) {
-        const folderPath = `/${monthName} EVENTS ${eventYear}/${clientFolder}`;
+        const folderPath = `/WEDDING TALES NEPAL/${monthName} EVENTS ${eventYear}/${clientFolder}`;
         sharePCloudFolder(folderPath, email).then(() => {
           toast({ title: "pCloud invitation sent", description: `Invited ${email} to folder` });
         }).catch(err => {
           console.warn('Auto pCloud share failed:', err);
+        });
+      } else {
+        console.warn('Auto pCloud share skipped: missing client folder metadata', {
+          registeredDateTimeAD,
+          pcloudClientInfo,
         });
       }
     } catch {
