@@ -1,13 +1,11 @@
 import { useState, useEffect } from "react";
-import { ExternalLink, Copy, Send, Check, MessageCircle, Smartphone, Monitor, Loader2, Images } from "lucide-react";
+import { ExternalLink, Copy, Send, Check, MessageCircle, Smartphone, Monitor, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getClientPortalUrl, generatePortalWhatsAppMessage } from "@/lib/client-contact-api";
 import { supabase } from "@/integrations/supabase/client";
-import { getE2FileUrls } from "@/lib/idrive-e2-api";
 import { toast } from "@/hooks/use-toast";
-import XitoImageViewer from "@/components/client-detail/XitoImageViewer";
 
 interface ClientLinkSectionProps {
   registeredDateTimeAD: string;
@@ -18,12 +16,6 @@ interface ClientLinkSectionProps {
   brideWhatsapp?: string;
   groomFullName?: string;
   groomWhatsapp?: string;
-}
-
-interface GroupedAlbum {
-  albumType: string;
-  albumName: string;
-  photos: { key: string; url: string }[];
 }
 
 const ClientLinkSection = ({
@@ -41,13 +33,6 @@ const ClientLinkSection = ({
   } | null>(null);
   const [loadingContacts, setLoadingContacts] = useState(false);
 
-  // Album selections state
-  const [albumGroups, setAlbumGroups] = useState<GroupedAlbum[]>([]);
-  const [loadingAlbums, setLoadingAlbums] = useState(true);
-  const [viewerOpen, setViewerOpen] = useState(false);
-  const [viewerImages, setViewerImages] = useState<{ key: string; url: string }[]>([]);
-  const [viewerStartIndex, setViewerStartIndex] = useState(0);
-
   const portalUrl = getClientPortalUrl(registeredDateTimeAD, clientName);
   const message = generatePortalWhatsAppMessage(registeredDateTimeAD, clientName);
 
@@ -57,55 +42,6 @@ const ClientLinkSection = ({
     toast({ title: "Link copied!" });
     setTimeout(() => setCopied(false), 2000);
   };
-
-  // Load album selections
-  useEffect(() => {
-    let stale = false;
-    (async () => {
-      setLoadingAlbums(true);
-      try {
-        const { data } = await supabase
-          .from('client_album_selections')
-          .select('album_type, album_name, photo_key')
-          .eq('registered_date_time_ad', registeredDateTimeAD)
-          .order('album_type')
-          .order('selected_at', { ascending: true });
-
-        if (stale || !data || data.length === 0) {
-          if (!stale) setAlbumGroups([]);
-          return;
-        }
-
-        // Group by album_type
-        const groupMap: Record<string, { albumName: string; keys: string[] }> = {};
-        for (const row of data) {
-          if (!groupMap[row.album_type]) {
-            groupMap[row.album_type] = { albumName: row.album_name || row.album_type, keys: [] };
-          }
-          groupMap[row.album_type].keys.push(row.photo_key);
-        }
-
-        // Batch fetch signed URLs
-        const allKeys = data.map(d => d.photo_key);
-        const urlMap = await getE2FileUrls(allKeys);
-
-        if (stale) return;
-
-        const groups: GroupedAlbum[] = Object.entries(groupMap).map(([type, info]) => ({
-          albumType: type,
-          albumName: info.albumName,
-          photos: info.keys.map(k => ({ key: k, url: urlMap[k] || '' })).filter(p => p.url),
-        }));
-
-        setAlbumGroups(groups);
-      } catch (err) {
-        console.error('Error loading album selections:', err);
-      } finally {
-        if (!stale) setLoadingAlbums(false);
-      }
-    })();
-    return () => { stale = true; };
-  }, [registeredDateTimeAD]);
 
   // Fetch contact details when send dialog opens
   useEffect(() => {
@@ -143,17 +79,6 @@ const ClientLinkSection = ({
     window.open(url, '_blank');
     setShowSendDialog(false);
   };
-
-  const openViewer = (group: GroupedAlbum, photoIndex: number) => {
-    setViewerImages(group.photos.map(p => ({
-      key: p.key,
-      url: p.url,
-    })));
-    setViewerStartIndex(photoIndex);
-    setViewerOpen(true);
-  };
-
-  const totalSelections = albumGroups.reduce((sum, g) => sum + g.photos.length, 0);
 
   return (
     <div className="space-y-4">
@@ -203,59 +128,6 @@ const ClientLinkSection = ({
               Send via WhatsApp
             </Button>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Selected Photos Gallery */}
-      <Card className="bg-[hsl(220,25%,12%)] border-white/10">
-        <CardContent className="p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <Images className="h-4 w-4 text-amber-400" />
-            <h3 className="text-sm font-semibold text-white">Selected Photos</h3>
-            {totalSelections > 0 && (
-              <span className="text-xs text-white/40 ml-auto">{totalSelections} total</span>
-            )}
-          </div>
-
-          {loadingAlbums ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-5 w-5 animate-spin text-white/40" />
-              <span className="ml-2 text-sm text-white/40">Loading selections...</span>
-            </div>
-          ) : albumGroups.length === 0 ? (
-            <p className="text-sm text-white/30 text-center py-6">No photos selected yet</p>
-          ) : (
-            <div className="space-y-4">
-              {albumGroups.map((group) => (
-                <div key={group.albumType}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <h4 className="text-xs font-medium text-white/60 uppercase tracking-wider">
-                      {group.albumName}
-                    </h4>
-                    <span className="text-[10px] text-white/30 bg-white/5 px-1.5 py-0.5 rounded">
-                      {group.photos.length}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {group.photos.map((photo, idx) => (
-                      <button
-                        key={photo.key}
-                        onClick={() => openViewer(group, idx)}
-                        className="aspect-square rounded-md overflow-hidden bg-white/5 hover:ring-2 hover:ring-primary/50 transition-all"
-                      >
-                        <img
-                          src={photo.url}
-                          alt=""
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                        />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -321,15 +193,6 @@ const ClientLinkSection = ({
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Xito Image Viewer */}
-      {viewerOpen && (
-        <XitoImageViewer
-          images={viewerImages}
-          initialIndex={viewerStartIndex}
-          onClose={() => setViewerOpen(false)}
-        />
-      )}
     </div>
   );
 };
