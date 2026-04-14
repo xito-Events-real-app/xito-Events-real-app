@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { sharePCloudFolder } from "@/lib/pcloud-api";
+import { getMonthName } from "@/lib/nepali-months";
 
 const LS_KEY = 'pcloud-email-notif';
 const MAX_SHOWS = 3;
@@ -94,18 +95,15 @@ export function PCloudEmailNotificationPopup() {
 
   const handleInvite = async (entry: EmailEntry) => {
     const client = clientInfoMap[entry.registered_date_time_ad];
-    const NEPALI_MONTHS: Record<number, string> = {
-      1: "BAISAKH", 2: "JESTHA", 3: "ASHADH", 4: "SHRAWAN",
-      5: "BHADRA", 6: "ASHWIN", 7: "KARTIK", 8: "MANGSIR",
-      9: "POUSH", 10: "MAGH", 11: "FALGUN", 12: "CHAITRA",
-    };
-    const monthNum = parseInt(client?.event_month || '', 10);
-    const monthName = NEPALI_MONTHS[monthNum];
+    const monthRaw = client?.event_month?.split('\n').find(Boolean)?.trim() || '';
+    const yearRaw = client?.event_year?.split('\n').find(Boolean)?.trim() || '';
+    const monthNum = parseInt(monthRaw, 10);
+    const monthName = Number.isFinite(monthNum) ? getMonthName(monthNum) : '';
     if (!monthName || !client?.event_year || !client?.client_name) {
       toast.error('Client folder info not available');
       return;
     }
-    const folderPath = `/${monthName} EVENTS ${client.event_year}/${client.client_name}`;
+    const folderPath = `/WEDDING TALES NEPAL/${monthName} EVENTS ${yearRaw}/${client.client_name}`;
     setInvitingId(entry.id);
     try {
       await sharePCloudFolder(folderPath, entry.email);
