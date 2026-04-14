@@ -1,108 +1,23 @@
 
-# Fix the wrong implementation and add real "Selected" folders where you meant
 
-## What I found
-You were right: the wrong thing was added.
+# Move "Selected" Folder Tabs to First Position + Fix Mobile Chrome Error
 
-Right now:
-- `ClientLinkSection.tsx` has a **new top card called "Selected Photos"**. That is the mistake and should be removed.
-- The **actual mobile screen inside Client Link** is the portal iframe, and its photo folders come from `PortalMyPhotos.tsx`.
-- The **Album** page uses `AlbumSection.tsx`, where folder rows/counts are built from `tabs`.
+## Changes
 
-Also important:
-- The project already expects a real folder path called:
-  - Xito: `[MONTH] EVENTS [YEAR] / [Client] / Photos / Selected`
-  - pCloud: `WEDDING TALES NEPAL / [MONTH] EVENTS [YEAR] / [Client] / Photos / Selected`
-- This is already reflected in `src/lib/xito-drive-utils.ts`, so the UI should match that structure.
+### 1. Move Selected tabs to the beginning (PortalMyPhotos.tsx)
+In the `tabs` useMemo (lines 199-248), move the "Selected" folder entries to be inserted at the **start** of the `result` array instead of pushed at the end. The rule is: whichever folder gets files first should appear first, and Selected always qualifies.
 
-## What I will change
+**How**: After building the `monthYearEntries`, create the Selected tabs first, then spread the photographer tabs after them. Or use `unshift` / prepend logic.
 
-### 1) Undo the wrong Client Link change
-Remove the whole **Selected Photos** card from:
-- `src/components/client-detail/ClientLinkSection.tsx`
+### 2. Move Selected tabs to the beginning (AlbumSection.tsx)
+Same change in the `tabs` useMemo (lines 211-265). Selected entries should be prepended, not appended.
 
-That section should go back to only being:
-- portal link actions
-- WhatsApp send
-- live portal preview
+### 3. Fix Chrome mobile crash
+The probe logic on mount (PortalMyPhotos.tsx lines 250-268) fires `listE2Folder` for **all tabs in parallel**. On mobile Chrome with many tabs, this can exhaust memory or trigger the "can't open this page" error.
 
-No top “Selected Photos” gallery there.
+**Fix**: Add error handling around the parallel probe and limit concurrency. Use a simple sequential probe or batch of 3 at a time instead of `Promise.all` on all tabs. Also add a `try/catch` around each individual probe to prevent one failure from crashing the whole page.
 
-### 2) Add real "Selected" folder tabs inside the portal photo screen
-Update:
-- `src/components/client-portal/PortalMyPhotos.tsx`
+## Files to edit
+1. `src/components/client-portal/PortalMyPhotos.tsx` — prepend Selected tabs + fix mobile probe concurrency
+2. `src/components/client-detail/AlbumSection.tsx` — prepend Selected tabs
 
-Change the tab-building logic so it includes:
-- existing event + freelancer tabs
-- plus **Selected** folder tabs
-
-How it will work:
-- For each unique month/year used by the client’s photo assignments, create one extra tab for:
-  - `.../Photos/Selected/`
-- This Selected tab will behave exactly like the other tabs:
-  - load Xito photos
-  - show thumbnails
-  - open image viewer
-  - support pCloud fallback/open-in-pCloud behavior when needed
-
-For single-month clients like your example, it will look like one natural extra folder.
-For multi-month clients, it will create one Selected tab per month-year so the path stays correct.
-
-### 3) Add "Selected" rows inside Album overview cards
-Update:
-- `src/components/client-detail/AlbumSection.tsx`
-
-Its folder list currently only shows event/freelancer tabs.
-I’ll extend the same `tabs` source so it also includes Selected entries.
-
-That will make **both** of these cards include Selected:
-- **Photos for Album** (Xito Drive)
-- **Original Edited** (pCloud)
-
-So Selected will appear there just like the other folder rows with counts.
-
-### 4) Add Selected tab inside Album photo browser
-Still in:
-- `src/components/client-detail/AlbumSection.tsx`
-
-The **View Photos** mode currently shows only the freelancer/event tabs from Xito.
-I’ll add the same Selected tabs there too, so you can open the Selected folder in the album photo browser as part of the same tab list.
-
-## Technical approach
-I’ll keep this clean by fixing the folder source, not by adding another custom block.
-
-### Shared idea
-Where tabs are built, I’ll add synthetic folder entries like:
-
-```text
-Xito:
-[MAGH EVENTS 2082]/Client Name/Photos/Selected/
-
-pCloud:
-WEDDING TALES NEPAL/[MAGH EVENTS 2082]/Client Name/Photos/Selected
-```
-
-### Labeling
-To avoid confusion:
-- normal tabs remain: `WEDDING (ARJUN)`
-- selected tabs become something like:
-  - `Selected`
-  - or `Selected (MAGH)` when there are multiple month folders
-
-### Result
-After this fix:
-- the wrong top “Selected Photos” section disappears
-- the actual phone preview inside Client Link gets a real **Selected** folder tab
-- the Album section shows Selected in both Xito and pCloud folder summaries
-- the Album photo browser also gets the Selected folder tab
-
-## Files to update
-- `src/components/client-detail/ClientLinkSection.tsx`
-- `src/components/client-portal/PortalMyPhotos.tsx`
-- `src/components/client-detail/AlbumSection.tsx`
-
-## Notes
-- No database change is needed.
-- No backend change is needed.
-- This is a UI/data-path correction using the folder structure that already exists in the app.
-- I will preserve the current freelancer/event tabs and only add Selected alongside them.
