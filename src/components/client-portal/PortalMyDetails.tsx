@@ -274,24 +274,36 @@ const PortalMyDetails = ({ registeredDateTimeAD, initialData, onSaved }: PortalM
     updatePerson(selectedPerson, field, value);
   };
 
+  const inputClass = `h-11 bg-gray-50/80 border-gray-200 rounded-xl text-sm placeholder:text-gray-300 transition-colors ${borderAccent} ${ringAccent}`;
+  const labelClass = "text-xs font-medium text-gray-500 uppercase tracking-wide";
+  const sectionCardClass = "bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-4";
+
   return (
-    <div className="flex flex-col min-h-[calc(100vh-100px)]">
+    <div className="flex flex-col min-h-[calc(100vh-100px)] bg-gray-50/50">
       {/* Sticky Header */}
-      <div className="sticky top-[41px] z-30 bg-white/95 backdrop-blur-xl border-b border-gray-200">
+      <div className="sticky top-[41px] z-30 bg-white/98 backdrop-blur-xl border-b border-gray-100 shadow-sm">
         <div className="flex items-center justify-between px-4 py-3">
-          <button onClick={() => setSelectedPerson(null)} className="flex items-center gap-1.5 text-gray-600 active:text-gray-900">
+          <button onClick={() => setSelectedPerson(null)} className="flex items-center gap-1.5 text-gray-500 active:text-gray-900 transition-colors">
             <ArrowLeft className="w-4 h-4" />
-            <span className="text-sm">Back</span>
+            <span className="text-xs font-medium">Back</span>
           </button>
-          <h3 className={cn("text-sm font-semibold", isBride ? "text-rose-600" : "text-sky-600")}>
-            {isBride ? 'Bride' : 'Groom'} Details
-          </h3>
+          <div className="flex items-center gap-2">
+            <div className={cn(
+              "w-6 h-6 rounded-full flex items-center justify-center",
+              isBride ? "bg-rose-100" : "bg-sky-100"
+            )}>
+              <User className={cn("w-3 h-3", isBride ? "text-rose-500" : "text-sky-500")} />
+            </div>
+            <h3 className={cn("text-sm font-semibold", isBride ? "text-rose-600" : "text-sky-600")}>
+              {isBride ? 'Bride' : 'Groom'}
+            </h3>
+          </div>
           <Button
             onClick={handleSave}
             disabled={saving}
             size="sm"
             className={cn(
-              "h-8 rounded-lg text-xs font-semibold text-white",
+              "h-8 rounded-xl text-xs font-semibold text-white shadow-md",
               `bg-gradient-to-r ${accentFrom} ${accentTo}`
             )}
           >
@@ -301,154 +313,161 @@ const PortalMyDetails = ({ registeredDateTimeAD, initialData, onSaved }: PortalM
       </div>
 
       {/* Form Content */}
-      <div className="flex-1 px-4 py-5 pb-28 space-y-5">
-        {/* Name */}
-        <div className="space-y-2">
-          <Label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-            <User className="w-4 h-4 text-gray-400" /> Full Name *
-          </Label>
-          <Input
-            placeholder="Enter full name"
-            value={person.fullName}
-            onChange={e => onChange('fullName', e.target.value)}
-            className={`h-12 bg-white border-gray-200 ${borderAccent} ${ringAccent}`}
-          />
-        </div>
-
-        {/* Contact Numbers */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-              <Phone className="w-4 h-4 text-gray-400" /> Contact *
-            </Label>
-            <Input
-              type="tel" inputMode="numeric" maxLength={10}
-              placeholder="98XXXXXXXX"
-              value={person.contactNumber}
-              onChange={e => onChange('contactNumber', sanitizePhone(e.target.value))}
-              className={`h-12 bg-white border-gray-200 ${borderAccent} ${ringAccent}`}
-            />
+      <div className="flex-1 px-4 py-4 pb-28 space-y-3">
+        {/* Personal Info Card */}
+        <div className={sectionCardClass}>
+          <div className="flex items-center gap-2 pb-1">
+            <User className={cn("w-4 h-4", isBride ? "text-rose-400" : "text-sky-400")} />
+            <span className="text-sm font-semibold text-gray-800">Personal Info</span>
           </div>
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-gray-700">WhatsApp *</Label>
-            <Input
-              type="tel" maxLength={10}
-              placeholder="98XXXXXXXX"
-              value={person.whatsappNumber}
-              onChange={e => onChange('whatsappNumber', e.target.value)}
-              className={`h-12 bg-white border-gray-200 ${borderAccent} ${ringAccent}`}
-            />
+          <div className="space-y-3">
+            <div>
+              <Label className={labelClass}>Full Name *</Label>
+              <Input
+                placeholder="Enter full name"
+                value={person.fullName}
+                onChange={e => onChange('fullName', e.target.value)}
+                className={`${inputClass} mt-1.5`}
+              />
+            </div>
+            <div>
+              <Label className={cn(labelClass, "flex items-center gap-1.5")}>
+                <Instagram className="w-3 h-3" /> Instagram Handle
+              </Label>
+              <Input
+                placeholder="username (without @)"
+                value={person.instagram}
+                onChange={e => onChange('instagram', e.target.value)}
+                className={`${inputClass} mt-1.5`}
+              />
+            </div>
           </div>
         </div>
 
-        {/* Backup 1 */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-gray-700">Backup Number 1</Label>
-            <Input
-              type="tel" inputMode="numeric" maxLength={10}
-              placeholder="98XXXXXXXX"
-              value={person.backupNumber1}
-              onChange={e => onChange('backupNumber1', sanitizePhone(e.target.value))}
-              className={`h-12 bg-white border-gray-200 ${borderAccent} ${ringAccent}`}
-            />
+        {/* Contact Numbers Card */}
+        <div className={sectionCardClass}>
+          <div className="flex items-center gap-2 pb-1">
+            <Phone className={cn("w-4 h-4", isBride ? "text-rose-400" : "text-sky-400")} />
+            <span className="text-sm font-semibold text-gray-800">Contact Numbers</span>
           </div>
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-gray-700">Relation</Label>
-            <Select value={person.backupRelation1} onValueChange={v => onChange('backupRelation1', v)}>
-              <SelectTrigger className={`h-12 bg-white border-gray-200 ${borderAccent} ${ringAccent}`}>
-                <SelectValue placeholder="Select" />
-              </SelectTrigger>
-              <SelectContent className="bg-white border border-gray-200 shadow-lg z-[9999]">
-                {relationOptions.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className={labelClass}>Contact *</Label>
+              <Input
+                type="tel" inputMode="numeric" maxLength={10}
+                placeholder="98XXXXXXXX"
+                value={person.contactNumber}
+                onChange={e => onChange('contactNumber', sanitizePhone(e.target.value))}
+                className={`${inputClass} mt-1.5`}
+              />
+            </div>
+            <div>
+              <Label className={labelClass}>WhatsApp *</Label>
+              <Input
+                type="tel" maxLength={10}
+                placeholder="98XXXXXXXX"
+                value={person.whatsappNumber}
+                onChange={e => onChange('whatsappNumber', e.target.value)}
+                className={`${inputClass} mt-1.5`}
+              />
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-gray-50">
+            <p className="text-[10px] text-gray-400 mb-2">Backup Contacts</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className={labelClass}>Number 1</Label>
+                <Input
+                  type="tel" inputMode="numeric" maxLength={10}
+                  placeholder="98XXXXXXXX"
+                  value={person.backupNumber1}
+                  onChange={e => onChange('backupNumber1', sanitizePhone(e.target.value))}
+                  className={`${inputClass} mt-1.5`}
+                />
+              </div>
+              <div>
+                <Label className={labelClass}>Relation</Label>
+                <Select value={person.backupRelation1} onValueChange={v => onChange('backupRelation1', v)}>
+                  <SelectTrigger className={`${inputClass} mt-1.5`}>
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border border-gray-200 shadow-lg z-[9999]">
+                    {relationOptions.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <div>
+                <Label className={labelClass}>Number 2</Label>
+                <Input
+                  type="tel" inputMode="numeric" maxLength={10}
+                  placeholder="98XXXXXXXX"
+                  value={person.backupNumber2}
+                  onChange={e => onChange('backupNumber2', sanitizePhone(e.target.value))}
+                  className={`${inputClass} mt-1.5`}
+                />
+              </div>
+              <div>
+                <Label className={labelClass}>Relation</Label>
+                <Select value={person.backupRelation2} onValueChange={v => onChange('backupRelation2', v)}>
+                  <SelectTrigger className={`${inputClass} mt-1.5`}>
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border border-gray-200 shadow-lg z-[9999]">
+                    {relationOptions.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Backup 2 */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-gray-700">Backup Number 2</Label>
-            <Input
-              type="tel" inputMode="numeric" maxLength={10}
-              placeholder="98XXXXXXXX"
-              value={person.backupNumber2}
-              onChange={e => onChange('backupNumber2', sanitizePhone(e.target.value))}
-              className={`h-12 bg-white border-gray-200 ${borderAccent} ${ringAccent}`}
-            />
+        {/* Home Address Card */}
+        <div className={sectionCardClass}>
+          <div className="flex items-center gap-2 pb-1">
+            <MapPin className={cn("w-4 h-4", isBride ? "text-rose-400" : "text-sky-400")} />
+            <span className="text-sm font-semibold text-gray-800">Home Address</span>
           </div>
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-gray-700">Relation</Label>
-            <Select value={person.backupRelation2} onValueChange={v => onChange('backupRelation2', v)}>
-              <SelectTrigger className={`h-12 bg-white border-gray-200 ${borderAccent} ${ringAccent}`}>
-                <SelectValue placeholder="Select" />
-              </SelectTrigger>
-              <SelectContent className="bg-white border border-gray-200 shadow-lg z-[9999]">
-                {relationOptions.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Instagram */}
-        <div className="space-y-2">
-          <Label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-            <Instagram className="w-4 h-4 text-gray-400" /> Instagram Handle
-          </Label>
-          <Input
-            placeholder="username (without @)"
-            value={person.instagram}
-            onChange={e => onChange('instagram', e.target.value)}
-            className={`h-12 bg-white border-gray-200 ${borderAccent} ${ringAccent}`}
-          />
-        </div>
-
-        {/* Home Address */}
-        <div className="pt-2 border-t border-gray-100">
-          <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-4">
-            <MapPin className="w-4 h-4 text-gray-400" /> Home Address
-          </Label>
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <div className="space-y-2">
-              <Label className="text-xs text-gray-500">City</Label>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className={labelClass}>City</Label>
               <Input
                 placeholder="e.g., Kathmandu"
                 value={person.homeCity}
                 onChange={e => onChange('homeCity', e.target.value)}
-                className={`h-12 bg-white border-gray-200 ${borderAccent} ${ringAccent}`}
+                className={`${inputClass} mt-1.5`}
               />
             </div>
-            <div className="space-y-2">
-              <Label className="text-xs text-gray-500">Area / Tole</Label>
+            <div>
+              <Label className={labelClass}>Area / Tole</Label>
               <Input
                 placeholder="e.g., Baneshwor"
                 value={person.homeArea}
                 onChange={e => onChange('homeArea', e.target.value)}
-                className={`h-12 bg-white border-gray-200 ${borderAccent} ${ringAccent}`}
+                className={`${inputClass} mt-1.5`}
               />
             </div>
           </div>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-xs text-gray-500">Google Maps Link</Label>
-              <Input
-                type="url"
-                placeholder="https://maps.google.com/..."
-                value={person.homeMapLink}
-                onChange={e => onChange('homeMapLink', e.target.value)}
-                className={`h-12 bg-white border-gray-200 ${borderAccent} ${ringAccent}`}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs text-gray-500">Landmark</Label>
-              <Textarea
-                placeholder="Near temple, opposite to..."
-                value={person.homeLandmark}
-                onChange={e => onChange('homeLandmark', e.target.value)}
-                className={`min-h-[80px] bg-white border-gray-200 ${borderAccent} ${ringAccent} resize-none`}
-              />
-            </div>
+          <div>
+            <Label className={labelClass}>Google Maps Link</Label>
+            <Input
+              type="url"
+              placeholder="https://maps.google.com/..."
+              value={person.homeMapLink}
+              onChange={e => onChange('homeMapLink', e.target.value)}
+              className={`${inputClass} mt-1.5`}
+            />
+          </div>
+          <div>
+            <Label className={labelClass}>Landmark</Label>
+            <Textarea
+              placeholder="Near temple, opposite to..."
+              value={person.homeLandmark}
+              onChange={e => onChange('homeLandmark', e.target.value)}
+              className={`min-h-[70px] bg-gray-50/80 border-gray-200 rounded-xl text-sm placeholder:text-gray-300 ${borderAccent} ${ringAccent} resize-none mt-1.5`}
+            />
           </div>
         </div>
       </div>
