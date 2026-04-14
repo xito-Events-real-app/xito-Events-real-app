@@ -1784,6 +1784,8 @@ const ClientDetail = () => {
               brideWhatsapp={contactDetailsData?.brideWhatsappNumber || ''}
               groomFullName={contactDetailsData?.groomFullName || ''}
               groomWhatsapp={contactDetailsData?.groomWhatsappNumber || ''}
+              eventMonth={(client.eventMonth || '').split('\n')[0]}
+              eventYear={(client.eventYear || '').split('\n')[0]}
             />
           )}
 

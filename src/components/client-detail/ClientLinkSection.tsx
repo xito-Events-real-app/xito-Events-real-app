@@ -1,11 +1,17 @@
 import { useState, useEffect } from "react";
-import { ExternalLink, Copy, Send, Check, MessageCircle, Smartphone, Monitor, Loader2 } from "lucide-react";
+import { ExternalLink, Copy, Send, Check, MessageCircle, Smartphone, Monitor, Loader2, HardDrive, Cloud, FolderOpen } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getClientPortalUrl, generatePortalWhatsAppMessage } from "@/lib/client-contact-api";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+
+const NEPALI_MONTHS: Record<number, string> = {
+  1: "BAISAKH", 2: "JESTHA", 3: "ASHADH", 4: "SHRAWAN",
+  5: "BHADRA", 6: "ASHWIN", 7: "KARTIK", 8: "MANGSIR",
+  9: "POUSH", 10: "MAGH", 11: "FALGUN", 12: "CHAITRA",
+};
 
 interface ClientLinkSectionProps {
   registeredDateTimeAD: string;
@@ -16,6 +22,8 @@ interface ClientLinkSectionProps {
   brideWhatsapp?: string;
   groomFullName?: string;
   groomWhatsapp?: string;
+  eventMonth?: string;
+  eventYear?: string;
 }
 
 const ClientLinkSection = ({
@@ -23,6 +31,8 @@ const ClientLinkSection = ({
   clientName,
   contactNo,
   whatsappNo,
+  eventMonth,
+  eventYear,
 }: ClientLinkSectionProps) => {
   const [copied, setCopied] = useState(false);
   const [showSendDialog, setShowSendDialog] = useState(false);
@@ -132,6 +142,42 @@ const ClientLinkSection = ({
           </div>
         </CardContent>
       </Card>
+
+      {/* Selection Folders */}
+      {(() => {
+        const monthNum = parseInt(eventMonth || '');
+        const monthName = Number.isFinite(monthNum) ? NEPALI_MONTHS[monthNum] : '';
+        const year = eventYear || '';
+        if (!monthName || !year || !clientName) return null;
+        const xitoPath = `/${monthName} EVENTS ${year}/${clientName}`;
+        const pcloudPath = `/WEDDING TALES NEPAL/${monthName} EVENTS ${year}/${clientName}`;
+        return (
+          <Card className="bg-[hsl(220,25%,12%)] border-white/10">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <FolderOpen className="h-4 w-4 text-amber-400" />
+                <h3 className="text-sm font-semibold text-white">Selection Folders</h3>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-3 p-2.5 rounded-lg bg-white/5 border border-white/10">
+                  <HardDrive className="h-4 w-4 text-sky-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] text-white/40">XITO Drive</p>
+                    <p className="text-xs text-white font-mono truncate">{xitoPath}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-2.5 rounded-lg bg-white/5 border border-white/10">
+                  <Cloud className="h-4 w-4 text-green-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] text-white/40">pCloud</p>
+                    <p className="text-xs text-white font-mono truncate">{pcloudPath}</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* Live Preview */}
       <div className="flex justify-center">
