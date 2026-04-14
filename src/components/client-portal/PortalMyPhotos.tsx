@@ -230,21 +230,22 @@ const PortalMyPhotos = ({
       });
     });
 
-    // Add "Selected" folder tabs for each unique month/year
+    // Prepend "Selected" folder tabs for each unique month/year
     const monthYearEntries = Array.from(seenMonthYears);
+    const selectedTabs: TabDef[] = [];
     monthYearEntries.forEach((entry) => {
       const [, folderLabel] = entry.split('|');
       const tabId = `selected-${folderLabel}`;
       if (seen.has(tabId)) return;
       seen.add(tabId);
-      result.push({
+      selectedTabs.push({
         id: tabId,
         label: monthYearEntries.length > 1 ? `Selected (${folderLabel.split(' ')[0]})` : 'Selected',
         s3Prefix: `${folderLabel}/${clientName}/Photos/Selected/`,
       });
     });
 
-    return result;
+    return [...selectedTabs, ...result];
   }, [assignments, clientName]);
 
   // On mount, probe tabs in parallel to find first non-empty folder
@@ -253,14 +254,23 @@ const PortalMyPhotos = ({
     let stale = false;
 
     const probe = async () => {
-      const promises = tabs.map(async (tab) => {
-        if (folderCache[tab.id]) return folderCache[tab.id];
-        const result = await listE2Folder(tab.s3Prefix);
-        const imgs = result.files.filter(f => isImage(f.key));
-        folderCache[tab.id] = imgs;
-        return imgs;
-      });
-      const results = await Promise.all(promises);
+      const results: E2File[][] = [];
+      // Sequential probe to avoid mobile Chrome memory exhaustion
+      for (const tab of tabs) {
+        if (stale) return;
+        try {
+          if (folderCache[tab.id]) {
+            results.push(folderCache[tab.id]);
+          } else {
+            const result = await listE2Folder(tab.s3Prefix);
+            const imgs = result.files.filter(f => isImage(f.key));
+            folderCache[tab.id] = imgs;
+            results.push(imgs);
+          }
+        } catch {
+          results.push([]);
+        }
+      }
       if (stale) return;
       const idx = results.findIndex(r => r.length > 0);
       setActiveTabIndex(idx >= 0 ? idx : 0);
