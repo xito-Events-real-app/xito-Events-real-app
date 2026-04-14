@@ -199,6 +199,7 @@ const PortalMyPhotos = ({
   const tabs: TabDef[] = useMemo(() => {
     const result: TabDef[] = [];
     const seen = new Set<string>();
+    const seenMonthYears = new Set<string>();
 
     assignments.forEach((a) => {
       const photographers: string[] = [];
@@ -212,6 +213,10 @@ const PortalMyPhotos = ({
       const monthLabel = NEPALI_MONTHS[m] || `MONTH ${m}`;
       const folderLabel = `${monthLabel} EVENTS ${y}`;
 
+      // Track unique month/year combos for Selected folders
+      const monthYearKey = `${m}-${y}`;
+      seenMonthYears.add(`${monthYearKey}|${folderLabel}`);
+
       photographers.forEach((pName) => {
         const tabId = `${a.event}-${pName}`;
         if (seen.has(tabId)) return;
@@ -224,6 +229,21 @@ const PortalMyPhotos = ({
         });
       });
     });
+
+    // Add "Selected" folder tabs for each unique month/year
+    const monthYearEntries = Array.from(seenMonthYears);
+    monthYearEntries.forEach((entry) => {
+      const [, folderLabel] = entry.split('|');
+      const tabId = `selected-${folderLabel}`;
+      if (seen.has(tabId)) return;
+      seen.add(tabId);
+      result.push({
+        id: tabId,
+        label: monthYearEntries.length > 1 ? `Selected (${folderLabel.split(' ')[0]})` : 'Selected',
+        s3Prefix: `${folderLabel}/${clientName}/Photos/Selected/`,
+      });
+    });
+
     return result;
   }, [assignments, clientName]);
 

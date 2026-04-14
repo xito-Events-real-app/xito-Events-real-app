@@ -211,6 +211,8 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
   const tabs: TabDef[] = useMemo(() => {
     const result: TabDef[] = [];
     const seen = new Set<string>();
+    const seenMonthYears = new Set<string>();
+
     assignments.forEach((a) => {
       const photographers: { name: string }[] = [];
       if (a.photographerBride) photographers.push({ name: a.photographerBride });
@@ -221,6 +223,11 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
       if (!y || y === "0" || !m) return;
       const monthLabel = NEPALI_MONTHS[m] || `MONTH ${m}`;
       const folderLabel = `${monthLabel} EVENTS ${y}`;
+
+      // Track unique month/year combos for Selected folders
+      const monthYearKey = `${m}-${y}`;
+      seenMonthYears.add(`${monthYearKey}|${folderLabel}`);
+
       photographers.forEach((p) => {
         const tabId = `${a.event}-${p.name}`;
         if (seen.has(tabId)) return;
@@ -236,6 +243,24 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
         });
       });
     });
+
+    // Add "Selected" folder tabs for each unique month/year
+    const monthYearEntries = Array.from(seenMonthYears);
+    monthYearEntries.forEach((entry) => {
+      const [, folderLabel] = entry.split('|');
+      const tabId = `selected-${folderLabel}`;
+      if (seen.has(tabId)) return;
+      seen.add(tabId);
+      result.push({
+        id: tabId,
+        label: monthYearEntries.length > 1 ? `Selected (${folderLabel.split(' ')[0]})` : 'Selected',
+        eventName: 'Selected',
+        photographerName: '',
+        s3Prefix: `${folderLabel}/${clientName}/Photos/Selected/`,
+        pcloudPath: `WEDDING TALES NEPAL/${folderLabel}/${clientName}/Photos/Selected`,
+      });
+    });
+
     return result;
   }, [assignments, clientName]);
 
