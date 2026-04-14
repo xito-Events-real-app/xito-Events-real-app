@@ -1,44 +1,53 @@
 
 
-# Rename "My Info" to "My Profile" + Full Contact Form with Bride/Groom Buttons
+# pCloud Emails Feature in Client Portal
 
 ## Overview
-Replace the current simplified details form with a two-button landing page. Each button opens the full contact form (same fields as ClientContactForm) for either Bride or Groom. Save button is sticky at the top. The existing `contact_details_cache` table already has all the needed columns — no database changes required.
+Add a "pCloud Sharing" section to the My Profile landing page where clients can add up to 10 email addresses. These emails are used later to invite them to pCloud folders. When a client adds an email, a notification popup appears on the admin side (Suite/Client Detail page) showing the client name and new email, with a copy button. The popup appears max 3 times, every 6 hours.
+
+## Database
+
+**New table: `client_pcloud_emails`**
+```sql
+id uuid PK default gen_random_uuid()
+registered_date_time_ad text NOT NULL
+email text NOT NULL DEFAULT ''
+client_name text NOT NULL DEFAULT ''
+created_at timestamptz NOT NULL DEFAULT now()
+is_seen boolean NOT NULL DEFAULT false
+```
+RLS: Allow all access (same pattern as other tables).
 
 ## Changes
 
-### 1. `src/components/client-portal/PortalBottomNav.tsx`
-- Change label from `"My Info"` to `"My Profile"`
+### 1. `src/components/client-portal/PortalMyDetails.tsx`
+- Add a third button on the landing page below Bride/Groom: **"pCloud Sharing"** with a cloud/pCloud icon (using `CloudUpload` from lucide), purple gradient theme
+- Shows count of emails added (e.g., "3/10")
+- When tapped, opens a form view with:
+  - Sticky header (Back + title)
+  - List of saved emails with delete buttons
+  - "Add Email" input + button (max 10)
+  - Small explanation text: "Add email addresses to be invited to your photo/video folders"
+- Saves to `client_pcloud_emails` table
 
-### 2. `src/components/client-portal/PortalMyDetails.tsx` — Full rewrite
-- **Landing view**: Two styled buttons — "Bride Details" (pink) and "Groom Details" (sky blue) with completion indicators
-- **Form view**: When a button is tapped, show the full person form (matching `ClientContactForm`'s `PersonForm` fields):
-  - Full Name, Contact Number, WhatsApp Number
-  - Backup Number 1 + Relation (dropdown)
-  - Backup Number 2 + Relation (dropdown)
-  - Instagram
-  - Home City, Home Area, Google Maps Link, Landmark
-- **Sticky top bar**: Fixed header with back arrow, person label ("Bride Details" / "Groom Details"), and Save button — does not scroll with content
-- **Data**: Load from and save to `contact_details_cache` (all columns already exist: `bride_backup_number2`, `bride_backup_relation2`, `bride_home_map`, `bride_home_landmark`, and groom equivalents)
-- **Relation options**: Fetch from `google-sheets` edge function (`getPublicFormData`) same as `ClientContactForm`, with fallback defaults
+### 2. `src/components/shared/PCloudEmailNotificationPopup.tsx` (new)
+- Queries `client_pcloud_emails` where `is_seen = false`
+- Shows a dialog with client name + email entries + copy button for each
+- Marks entries as `is_seen = true` when dismissed
+- localStorage key tracks show count and timing: max 3 times, every 6 hours
+- Copy button copies the email to clipboard
 
-### 3. `src/pages/ClientPortal.tsx`
-- No tab type changes needed (already uses `'details'`)
-- Pass the same props
+### 3. `src/components/suite/DesktopSuiteLanding.tsx` / `MobileSuiteLanding.tsx`
+- Render `<PCloudEmailNotificationPopup />` on the main landing page
 
-### 4. `src/pages/ClientContactForm.tsx` — Make read-only
-- Add a banner: "Your details are now managed through your Client Portal"
-- Disable all form inputs (read-only display of current data)
-- Remove submit button, show info text instead
+### 4. Dashboard card (PortalDashboard.tsx)
+- Add a small pCloud icon indicator on the profile completion section showing email count
 
-## Technical Notes
-- The `contact_details_cache` table already has all 28+ columns (backup2, map, landmark for both)
-- The current `PortalMyDetails` only saves 16 fields — the new version will save all fields
-- No database migration needed
-- Form validation: 10-digit phone check (same as existing)
-
-### Files changed
-- `src/components/client-portal/PortalBottomNav.tsx` — label rename
-- `src/components/client-portal/PortalMyDetails.tsx` — full rewrite with two-button UX + full form
-- `src/pages/ClientContactForm.tsx` — make read-only with portal redirect banner
+## Files
+- **New migration** — `client_pcloud_emails` table
+- **New**: `src/components/shared/PCloudEmailNotificationPopup.tsx`
+- **Edit**: `src/components/client-portal/PortalMyDetails.tsx` — add pCloud emails section
+- **Edit**: `src/components/client-portal/PortalDashboard.tsx` — add pCloud email count indicator
+- **Edit**: `src/components/suite/MobileSuiteLanding.tsx` — render notification popup
+- **Edit**: `src/components/suite/DesktopSuiteLanding.tsx` — render notification popup
 
