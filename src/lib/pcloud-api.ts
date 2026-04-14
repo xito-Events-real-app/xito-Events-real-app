@@ -164,6 +164,14 @@ export async function copyPCloudFileByPath(fromPath: string, toPath: string): Pr
   return invokePCloudAction('copyfile', { path: fromPath, topath: toPath, noover: true });
 }
 
+/**
+ * Share a pCloud folder with an email address (read-only by default).
+ * Uses the edge function to call pCloud's /sharefolder API.
+ */
+export async function sharePCloudFolder(folderPath: string, email: string, permissions: number = 0): Promise<void> {
+  await invokePCloudAction('sharefolder', { path: folderPath, mail: email, permissions });
+}
+
 export async function deletePCloudFile(fileid: number): Promise<void> {
   await callPCloudDirect('/deletefile', { fileid: String(fileid) });
 }
