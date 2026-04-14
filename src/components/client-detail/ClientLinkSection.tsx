@@ -326,7 +326,7 @@ const ClientLinkSection = ({
       {viewerOpen && (
         <XitoImageViewer
           images={viewerImages}
-          startIndex={viewerStartIndex}
+          initialIndex={viewerStartIndex}
           onClose={() => setViewerOpen(false)}
         />
       )}
