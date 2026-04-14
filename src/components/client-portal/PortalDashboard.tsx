@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Calendar, MapPin, Clock, Heart, ChevronDown, Camera, Video, Plane, Smartphone, Users, AlertCircle } from "lucide-react";
+import { Calendar, MapPin, Clock, Heart, ChevronDown, Camera, Video, Plane, Smartphone, Users, AlertCircle, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -35,6 +35,7 @@ interface PortalDashboardProps {
   assignments: FullAssignment[];
   hasFilledContact: boolean;
   onGoToDetails: () => void;
+  onGoToReferences: () => void;
 }
 
 function getDaysUntil(dateStr: string): number | null {
@@ -72,7 +73,7 @@ const crewRoles: { key: keyof FullAssignment; label: string; icon: React.Element
   { key: 'assistant', label: 'Assistant', icon: Users, color: 'text-gray-400' },
 ];
 
-const PortalDashboard = ({ clientName, brideFullName, groomFullName, events, assignments, hasFilledContact, onGoToDetails }: PortalDashboardProps) => {
+const PortalDashboard = ({ clientName, brideFullName, groomFullName, events, assignments, hasFilledContact, onGoToDetails, onGoToReferences }: PortalDashboardProps) => {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
 
   const soonest = events.reduce<EventInfo | null>((best, e) => {
@@ -145,6 +146,23 @@ const PortalDashboard = ({ clientName, brideFullName, groomFullName, events, ass
           </div>
         </div>
       )}
+
+      {/* References Button */}
+      <div className="mx-4">
+        <button
+          onClick={onGoToReferences}
+          className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-gradient-to-r from-[hsl(350,60%,95%)] to-[hsl(280,40%,96%)] border border-[hsl(350,80%,65%/0.15)] text-left transition-all active:scale-[0.98]"
+        >
+          <div className="h-9 w-9 rounded-full bg-[hsl(350,80%,65%/0.12)] flex items-center justify-center flex-shrink-0">
+            <Sparkles className="h-4.5 w-4.5 text-[hsl(350,80%,65%)]" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-900">Add My References</p>
+            <p className="text-[11px] text-gray-400">Share your inspiration so our crew can capture your vision perfectly</p>
+          </div>
+          <ChevronDown className="h-4 w-4 text-gray-300 -rotate-90" />
+        </button>
+      </div>
 
       {/* Events */}
       <div className="px-4 space-y-3">

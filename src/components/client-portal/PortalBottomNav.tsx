@@ -1,8 +1,7 @@
-import { LayoutDashboard, Image, Film, CreditCard, UserCircle, BookOpen } from "lucide-react";
+import { LayoutDashboard, Image, Film, CreditCard, UserCircle, BookOpen, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type PortalTab = 'dashboard' | 'photos' | 'videos' | 'payment' | 'details' | 'album';
-
+export type PortalTab = 'dashboard' | 'photos' | 'videos' | 'payment' | 'details' | 'album' | 'references';
 interface PortalBottomNavProps {
   activeTab: PortalTab;
   onTabChange: (tab: PortalTab) => void;
@@ -11,6 +10,7 @@ interface PortalBottomNavProps {
 
 const tabs: { id: PortalTab; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Home', icon: LayoutDashboard },
+  { id: 'references', label: 'Ideas', icon: Sparkles },
   { id: 'photos', label: 'Photos', icon: Image },
   { id: 'album', label: 'My Album', icon: BookOpen },
   { id: 'videos', label: 'Videos', icon: Film },
