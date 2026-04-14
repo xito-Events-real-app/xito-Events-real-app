@@ -1,25 +1,108 @@
 
+# Fix the wrong implementation and add real "Selected" folders where you meant
 
-# Display Album Selection Photos in Client Link Section
+## What I found
+You were right: the wrong thing was added.
 
-## What went wrong
-The previous change added folder path text to the Client Link section. The user actually wants to see the **actual selected photos** from the album selections (stored in `client_album_selections` table) displayed as a photo gallery within the Client Link section.
+Right now:
+- `ClientLinkSection.tsx` has a **new top card called "Selected Photos"**. That is the mistake and should be removed.
+- The **actual mobile screen inside Client Link** is the portal iframe, and its photo folders come from `PortalMyPhotos.tsx`.
+- The **Album** page uses `AlbumSection.tsx`, where folder rows/counts are built from `tabs`.
 
-## What to build
-- **Undo** the "Selection Folders" path display card from `ClientLinkSection.tsx`
-- **Remove** the `eventMonth`/`eventYear` props and `NEPALI_MONTHS` map that were added
-- **Add** a new "Selected Photos" section that loads photos from `client_album_selections` for this client
-- Display the photos in a grid, grouped by album type, with thumbnails loaded from XITO Drive (E2) signed URLs
-- Show album name headers with photo counts
-- Clicking a photo opens the existing `XitoImageViewer`
+Also important:
+- The project already expects a real folder path called:
+  - Xito: `[MONTH] EVENTS [YEAR] / [Client] / Photos / Selected`
+  - pCloud: `WEDDING TALES NEPAL / [MONTH] EVENTS [YEAR] / [Client] / Photos / Selected`
+- This is already reflected in `src/lib/xito-drive-utils.ts`, so the UI should match that structure.
+
+## What I will change
+
+### 1) Undo the wrong Client Link change
+Remove the whole **Selected Photos** card from:
+- `src/components/client-detail/ClientLinkSection.tsx`
+
+That section should go back to only being:
+- portal link actions
+- WhatsApp send
+- live portal preview
+
+No top “Selected Photos” gallery there.
+
+### 2) Add real "Selected" folder tabs inside the portal photo screen
+Update:
+- `src/components/client-portal/PortalMyPhotos.tsx`
+
+Change the tab-building logic so it includes:
+- existing event + freelancer tabs
+- plus **Selected** folder tabs
+
+How it will work:
+- For each unique month/year used by the client’s photo assignments, create one extra tab for:
+  - `.../Photos/Selected/`
+- This Selected tab will behave exactly like the other tabs:
+  - load Xito photos
+  - show thumbnails
+  - open image viewer
+  - support pCloud fallback/open-in-pCloud behavior when needed
+
+For single-month clients like your example, it will look like one natural extra folder.
+For multi-month clients, it will create one Selected tab per month-year so the path stays correct.
+
+### 3) Add "Selected" rows inside Album overview cards
+Update:
+- `src/components/client-detail/AlbumSection.tsx`
+
+Its folder list currently only shows event/freelancer tabs.
+I’ll extend the same `tabs` source so it also includes Selected entries.
+
+That will make **both** of these cards include Selected:
+- **Photos for Album** (Xito Drive)
+- **Original Edited** (pCloud)
+
+So Selected will appear there just like the other folder rows with counts.
+
+### 4) Add Selected tab inside Album photo browser
+Still in:
+- `src/components/client-detail/AlbumSection.tsx`
+
+The **View Photos** mode currently shows only the freelancer/event tabs from Xito.
+I’ll add the same Selected tabs there too, so you can open the Selected folder in the album photo browser as part of the same tab list.
 
 ## Technical approach
-- Query `client_album_selections` by `registered_date_time_ad` to get all selected photos
-- Use `getE2FileUrls()` to batch-fetch signed URLs for the photo keys
-- Render a compact grid (3 or 4 columns) grouped by `album_type`
-- Reuse `XitoImageViewer` for fullscreen viewing
+I’ll keep this clean by fixing the folder source, not by adding another custom block.
 
-## Files changed
-1. **`src/components/client-detail/ClientLinkSection.tsx`** — Remove Selection Folders card, remove `eventMonth`/`eventYear` props and `NEPALI_MONTHS`. Add album selections photo gallery with E2 URL fetching and `XitoImageViewer`.
-2. **`src/pages/ClientDetail.tsx`** — Remove `eventMonth`/`eventYear` props from `<ClientLinkSection>`.
+### Shared idea
+Where tabs are built, I’ll add synthetic folder entries like:
 
+```text
+Xito:
+[MAGH EVENTS 2082]/Client Name/Photos/Selected/
+
+pCloud:
+WEDDING TALES NEPAL/[MAGH EVENTS 2082]/Client Name/Photos/Selected
+```
+
+### Labeling
+To avoid confusion:
+- normal tabs remain: `WEDDING (ARJUN)`
+- selected tabs become something like:
+  - `Selected`
+  - or `Selected (MAGH)` when there are multiple month folders
+
+### Result
+After this fix:
+- the wrong top “Selected Photos” section disappears
+- the actual phone preview inside Client Link gets a real **Selected** folder tab
+- the Album section shows Selected in both Xito and pCloud folder summaries
+- the Album photo browser also gets the Selected folder tab
+
+## Files to update
+- `src/components/client-detail/ClientLinkSection.tsx`
+- `src/components/client-portal/PortalMyPhotos.tsx`
+- `src/components/client-detail/AlbumSection.tsx`
+
+## Notes
+- No database change is needed.
+- No backend change is needed.
+- This is a UI/data-path correction using the folder structure that already exists in the app.
+- I will preserve the current freelancer/event tabs and only add Selected alongside them.
