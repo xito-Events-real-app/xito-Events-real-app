@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, Save, Heart, Check, Loader2, User, Phone, MapPin, Instagram, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Save, Heart, Check, Loader2, User, Phone, MapPin, Instagram, CheckCircle2, CloudUpload, Trash2, Plus, Mail } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -193,7 +193,140 @@ const PortalMyDetails = ({ registeredDateTimeAD, initialData, onSaved }: PortalM
     }
   };
 
-  // Landing view — two buttons
+  // pCloud emails state
+  const [pcloudView, setPcloudView] = useState(false);
+  const [pcloudEmails, setPcloudEmails] = useState<{ id: string; email: string }[]>([]);
+  const [newEmail, setNewEmail] = useState('');
+  const [addingEmail, setAddingEmail] = useState(false);
+
+  useEffect(() => {
+    const loadEmails = async () => {
+      const { data } = await supabase.from('client_pcloud_emails')
+        .select('id, email')
+        .eq('registered_date_time_ad', registeredDateTimeAD)
+        .order('created_at', { ascending: true });
+      if (data) setPcloudEmails(data.map(d => ({ id: d.id, email: d.email })));
+    };
+    loadEmails();
+  }, [registeredDateTimeAD]);
+
+  const clientNameForEmails = bride.fullName && groom.fullName
+    ? `${bride.fullName.split(' ')[0]} & ${groom.fullName.split(' ')[0]}`
+    : bride.fullName || groom.fullName || '';
+
+  const handleAddEmail = async () => {
+    const email = newEmail.trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast({ title: "Invalid email", description: "Please enter a valid email address", variant: "destructive" });
+      return;
+    }
+    if (pcloudEmails.length >= 10) {
+      toast({ title: "Limit reached", description: "Maximum 10 emails allowed", variant: "destructive" });
+      return;
+    }
+    if (pcloudEmails.some(e => e.email === email)) {
+      toast({ title: "Duplicate", description: "This email is already added", variant: "destructive" });
+      return;
+    }
+    setAddingEmail(true);
+    try {
+      const { data, error } = await supabase.from('client_pcloud_emails').insert({
+        registered_date_time_ad: registeredDateTimeAD,
+        email,
+        client_name: clientNameForEmails,
+      } as any).select('id, email').single();
+      if (error) throw error;
+      setPcloudEmails(prev => [...prev, { id: data.id, email: data.email }]);
+      setNewEmail('');
+      toast({ title: "Email added ✓" });
+    } catch {
+      toast({ title: "Error", description: "Failed to add email", variant: "destructive" });
+    } finally {
+      setAddingEmail(false);
+    }
+  };
+
+  const handleDeleteEmail = async (id: string) => {
+    const { error } = await supabase.from('client_pcloud_emails').delete().eq('id', id);
+    if (!error) setPcloudEmails(prev => prev.filter(e => e.id !== id));
+  };
+
+  // pCloud emails form view
+  if (pcloudView) {
+    return (
+      <div className="flex flex-col min-h-[calc(100vh-100px)] bg-gray-50/50">
+        <div className="sticky top-[41px] z-30 bg-white/98 backdrop-blur-xl border-b border-gray-100 shadow-sm">
+          <div className="flex items-center justify-between px-4 py-3">
+            <button onClick={() => setPcloudView(false)} className="flex items-center gap-1.5 text-gray-500 active:text-gray-900 transition-colors">
+              <ArrowLeft className="w-4 h-4" />
+              <span className="text-xs font-medium">Back</span>
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-full bg-violet-100 flex items-center justify-center">
+                <CloudUpload className="w-3 h-3 text-violet-500" />
+              </div>
+              <h3 className="text-sm font-semibold text-violet-600">pCloud Sharing</h3>
+            </div>
+            <div className="w-16" />
+          </div>
+        </div>
+
+        <div className="flex-1 px-4 py-4 pb-28 space-y-4">
+          <div className="bg-violet-50 rounded-xl p-3 border border-violet-100">
+            <p className="text-xs text-violet-600 leading-relaxed">
+              Add email addresses to be invited to your photo/video folders on pCloud. You can add up to 10 emails.
+            </p>
+          </div>
+
+          {/* Email list */}
+          <div className="space-y-2">
+            {pcloudEmails.map((item) => (
+              <div key={item.id} className="flex items-center gap-2 bg-white rounded-xl border border-gray-100 shadow-sm px-3 py-2.5">
+                <Mail className="w-4 h-4 text-violet-400 flex-shrink-0" />
+                <span className="text-sm text-gray-700 flex-1 truncate">{item.email}</span>
+                <button onClick={() => handleDeleteEmail(item.id)} className="p-1 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500 transition-colors">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {/* Add email */}
+          {pcloudEmails.length < 10 && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3">
+              <Label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Add Email</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="email"
+                  placeholder="email@example.com"
+                  value={newEmail}
+                  onChange={e => setNewEmail(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAddEmail()}
+                  className="h-11 bg-gray-50/80 border-gray-200 rounded-xl text-sm placeholder:text-gray-300 focus:border-violet-400 focus:ring-violet-200"
+                />
+                <Button
+                  onClick={handleAddEmail}
+                  disabled={addingEmail || !newEmail.trim()}
+                  className="h-11 bg-gradient-to-r from-violet-500 to-purple-500 text-white rounded-xl px-4 shadow-md"
+                >
+                  {addingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {pcloudEmails.length === 0 && (
+            <div className="text-center py-8">
+              <CloudUpload className="w-10 h-10 text-gray-200 mx-auto mb-2" />
+              <p className="text-sm text-gray-400">No emails added yet</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Landing view — two buttons + pCloud
   if (!selectedPerson) {
     const brideCount = countFilledFields(bride);
     const groomCount = countFilledFields(groom);
@@ -255,6 +388,34 @@ const PortalMyDetails = ({ registeredDateTimeAD, initialData, onSaved }: PortalM
                 </span>
               )}
               {groomCount >= 3 && <CheckCircle2 className="w-5 h-5 text-emerald-500" />}
+            </div>
+          </div>
+        </button>
+
+        {/* pCloud Sharing */}
+        <button
+          onClick={() => setPcloudView(true)}
+          className="w-full rounded-2xl bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 p-5 text-left transition-all active:scale-[0.98] hover:shadow-md"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center shadow-lg shadow-violet-200">
+                <CloudUpload className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">pCloud Sharing</h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Add emails for photo/video access
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {pcloudEmails.length > 0 && (
+                <span className="text-[10px] font-medium text-violet-500 bg-violet-100 px-2 py-0.5 rounded-full">
+                  {pcloudEmails.length}/10
+                </span>
+              )}
+              {pcloudEmails.length > 0 && <CheckCircle2 className="w-5 h-5 text-emerald-500" />}
             </div>
           </div>
         </button>

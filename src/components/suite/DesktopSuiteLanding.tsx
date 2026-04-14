@@ -17,6 +17,7 @@ import { AllClientsAnnouncementDialog } from "./AllClientsAnnouncementDialog";
 import { useSaugatSearch } from "@/contexts/SaugatSearchContext";
 import { YouTubeDashboard } from "./YouTubeDashboard";
 import { AppSettingsSheet } from "@/components/settings/AppSettingsSheet";
+import { PCloudEmailNotificationPopup } from "@/components/shared/PCloudEmailNotificationPopup";
 
 export function DesktopSuiteLanding() {
   const navigate = useNavigate();
@@ -77,6 +78,7 @@ export function DesktopSuiteLanding() {
   return (
     <div className="min-h-screen bg-gray-50 flex w-full">
       <AppSettingsSheet open={showSettings} onClose={() => setShowSettings(false)} />
+      <PCloudEmailNotificationPopup />
       <AllClientsAnnouncementDialog onNavigate={() => setShowAllClients(true)} />
       <YouTubeDashboard
         open={showYouTube}

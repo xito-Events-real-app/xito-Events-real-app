@@ -212,6 +212,33 @@ export type Database = {
         }
         Relationships: []
       }
+      client_pcloud_emails: {
+        Row: {
+          client_name: string
+          created_at: string
+          email: string
+          id: string
+          is_seen: boolean
+          registered_date_time_ad: string
+        }
+        Insert: {
+          client_name?: string
+          created_at?: string
+          email?: string
+          id?: string
+          is_seen?: boolean
+          registered_date_time_ad: string
+        }
+        Update: {
+          client_name?: string
+          created_at?: string
+          email?: string
+          id?: string
+          is_seen?: boolean
+          registered_date_time_ad?: string
+        }
+        Relationships: []
+      }
       client_portal_references: {
         Row: {
           created_at: string
