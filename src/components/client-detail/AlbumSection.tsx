@@ -244,14 +244,15 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
       });
     });
 
-    // Add "Selected" folder tabs for each unique month/year
+    // Prepend "Selected" folder tabs for each unique month/year
     const monthYearEntries = Array.from(seenMonthYears);
+    const selectedTabs: TabDef[] = [];
     monthYearEntries.forEach((entry) => {
       const [, folderLabel] = entry.split('|');
       const tabId = `selected-${folderLabel}`;
       if (seen.has(tabId)) return;
       seen.add(tabId);
-      result.push({
+      selectedTabs.push({
         id: tabId,
         label: monthYearEntries.length > 1 ? `Selected (${folderLabel.split(' ')[0]})` : 'Selected',
         eventName: 'Selected',
@@ -261,7 +262,7 @@ const AlbumSection = ({ registeredDateTimeAD, clientName, assignments }: AlbumSe
       });
     });
 
-    return result;
+    return [...selectedTabs, ...result];
   }, [assignments, clientName]);
 
   const loadPcloudCount = useCallback(async (tab: TabDef) => {
