@@ -15,7 +15,7 @@ const tabs: { id: PortalTab; label: string; icon: React.ElementType }[] = [
   { id: 'album', label: 'My Album', icon: BookOpen },
   { id: 'videos', label: 'Videos', icon: Film },
   { id: 'payment', label: 'Payment', icon: CreditCard },
-  { id: 'details', label: 'My Info', icon: UserCircle },
+  { id: 'details', label: 'My Profile', icon: UserCircle },
 ];
 
 const PortalBottomNav = ({ activeTab, onTabChange, albumCount }: PortalBottomNavProps) => {

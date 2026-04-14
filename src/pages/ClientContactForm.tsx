@@ -365,21 +365,28 @@ export default function ClientContactForm() {
 
       {/* Form Content */}
       <main className="max-w-2xl mx-auto px-4 py-6 pb-24">
+        {/* Read-only Banner */}
+        <div className="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 text-center">
+          <p className="text-sm font-medium text-amber-800">
+            Your details are now managed through your Client Portal
+          </p>
+          <p className="text-xs text-amber-600 mt-1">
+            This form is view-only. Please use the My Profile section in your portal to update your information.
+          </p>
+        </div>
+
         {/* Welcome Message */}
         <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Contact Details Form</h2>
-          <p className="text-gray-600 text-sm leading-relaxed max-w-md mx-auto">
-            Dear Sir/Ma'am, please fill in your contact details below. This information will be used only for wedding coordination purposes.
-          </p>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Contact Details</h2>
           {dataLoaded && (
             <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-full text-xs font-medium">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              Your previously saved data has been loaded
+              Your saved data is shown below (read-only)
             </div>
           )}
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <div className="space-y-8 opacity-75 pointer-events-none">
           {/* Bride Section */}
           <Card className="border-0 shadow-lg overflow-hidden">
             <CardHeader className="bg-gradient-to-r from-rose-500 to-pink-500 text-white py-4 px-5">
@@ -396,7 +403,7 @@ export default function ClientContactForm() {
             <CardContent className="p-5 space-y-5 bg-gradient-to-b from-rose-50/50 to-white">
               <PersonForm
                 person={bride}
-                onChange={updateBride}
+                onChange={() => {}}
                 accentColor="rose"
                 relationOptions={relationOptions}
               />
@@ -419,39 +426,18 @@ export default function ClientContactForm() {
             <CardContent className="p-5 space-y-5 bg-gradient-to-b from-sky-50/50 to-white">
               <PersonForm
                 person={groom}
-                onChange={updateGroom}
+                onChange={() => {}}
                 accentColor="sky"
                 relationOptions={relationOptions}
               />
             </CardContent>
           </Card>
+        </div>
 
-          {/* Submit Button */}
-          <div className="pt-4">
-            <Button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-rose-500 via-pink-500 to-rose-500 hover:from-rose-600 hover:via-pink-600 hover:to-rose-600 shadow-lg shadow-rose-200"
-            >
-              {isSubmitting ? (
-                <span className="flex items-center gap-2">
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Submitting...
-                </span>
-              ) : (
-                <span className="flex items-center gap-2">
-                  <Send className="w-5 h-5" />
-                  Submit Details
-                </span>
-              )}
-            </Button>
-          </div>
-
-          {/* Privacy Note */}
-          <p className="text-center text-xs text-gray-500 px-4">
-            Your information is kept strictly confidential and will only be used for wedding coordination purposes.
-          </p>
-        </form>
+        {/* Privacy Note */}
+        <p className="text-center text-xs text-gray-500 px-4 mt-6">
+          Your information is kept strictly confidential and will only be used for wedding coordination purposes.
+        </p>
       </main>
 
       {/* Footer */}
