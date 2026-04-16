@@ -35,6 +35,7 @@ export default function QuickAdd() {
 
   const { dropdowns, isLoading: dropdownsLoading, isFromCache, isSyncing, refreshData, updateClient: updateClientCache } = useCachedData();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [duplicateWarningShown, setDuplicateWarningShown] = useState(false);
   
   // Form state
   const [clientName, setClientName] = useState("");
@@ -290,6 +291,25 @@ export default function QuickAdd() {
       if (!price || parseInt(price) <= 0) {
         toast({ title: "Error", description: "Please enter the price for the selected package", variant: "destructive" });
         return;
+      }
+    }
+
+    // Duplicate phone number detection (skip in edit mode and after warning was shown)
+    if (!isEditMode && !duplicateWarningShown && contactNo.trim()) {
+      const phoneToCheck = contactNo.trim();
+      const { data: duplicates } = await supabase
+        .from('clients_cache')
+        .select('client_name, contact_no, sheet_source, status_log')
+        .or(`contact_no.eq.${phoneToCheck},whatsapp_no.eq.${phoneToCheck}`)
+        .limit(5);
+
+      if (duplicates && duplicates.length > 0) {
+        const dupNames = duplicates.map(d => `${d.client_name} (${d.sheet_source})`).join(', ');
+        const confirmed = window.confirm(
+          `⚠️ Duplicate phone number detected!\n\nThe number "${phoneToCheck}" already exists for:\n${dupNames}\n\nAre you sure you want to add this client anyway?`
+        );
+        if (!confirmed) return;
+        setDuplicateWarningShown(true);
       }
     }
 
