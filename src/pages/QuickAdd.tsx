@@ -35,6 +35,7 @@ export default function QuickAdd() {
 
   const { dropdowns, isLoading: dropdownsLoading, isFromCache, isSyncing, refreshData, updateClient: updateClientCache } = useCachedData();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [duplicateWarningShown, setDuplicateWarningShown] = useState(false);
   
   // Form state
   const [clientName, setClientName] = useState("");
