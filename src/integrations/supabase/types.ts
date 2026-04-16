@@ -82,6 +82,7 @@ export type Database = {
           handled: boolean
           handled_response: string
           id: string
+          popup_view_count: number
           registered_date_time_ad: string
           selected_date: string
           sent_to: string
@@ -96,6 +97,7 @@ export type Database = {
           handled?: boolean
           handled_response?: string
           id?: string
+          popup_view_count?: number
           registered_date_time_ad: string
           selected_date?: string
           sent_to?: string
@@ -110,6 +112,7 @@ export type Database = {
           handled?: boolean
           handled_response?: string
           id?: string
+          popup_view_count?: number
           registered_date_time_ad?: string
           selected_date?: string
           sent_to?: string
