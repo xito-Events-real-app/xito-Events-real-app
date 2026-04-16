@@ -12,16 +12,19 @@ interface EventDetailsSummaryCardProps {
 
 // Count how many fields are filled
 function getFilledCount(event: EventDetail): { filled: number; total: number } {
+  const isWedding = isWeddingEvent(event.eventName);
   const fields = [
     event.venueType,
     event.venueName,
     event.venueCity,
     event.venueArea,
-    event.eventStartTime,
-    event.eventEndTime,
+    isWedding ? event.brideStartTime : event.eventStartTime,
+    isWedding ? event.brideEndTime : event.eventEndTime,
+    isWedding ? event.groomStartTime : undefined,
+    isWedding ? event.groomEndTime : undefined,
     event.parlourName,
     event.guestCount,
-  ];
+  ].filter(f => f !== undefined);
   const filled = fields.filter(f => f && f.trim()).length;
   return { filled, total: fields.length };
 }
@@ -153,7 +156,30 @@ export function EventDetailsSummaryCard({ event, onEdit }: EventDetailsSummaryCa
         )}
 
         {/* Event Timing Section */}
-        {(event.eventStartTime || event.eventEndTime) && (
+        {isWeddingEvent(event.eventName) && (event.brideStartTime || event.groomStartTime) ? (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-xs font-medium text-white/50 uppercase tracking-wide">
+              <Clock className="h-3.5 w-3.5" />
+              Wedding Timings
+            </div>
+            <div className="space-y-1.5">
+              {(event.brideStartTime || event.brideEndTime) && (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-rose-400 font-medium text-xs">🌸 Bride:</span>
+                  {event.brideStartTime && <span className="text-white font-medium">{formatTime(event.brideStartTime)}</span>}
+                  {event.brideEndTime && <span className="text-white/40">- {formatTime(event.brideEndTime)}</span>}
+                </div>
+              )}
+              {(event.groomStartTime || event.groomEndTime) && (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-sky-400 font-medium text-xs">🤵 Groom:</span>
+                  {event.groomStartTime && <span className="text-white font-medium">{formatTime(event.groomStartTime)}</span>}
+                  {event.groomEndTime && <span className="text-white/40">- {formatTime(event.groomEndTime)}</span>}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (event.eventStartTime || event.eventEndTime) ? (
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-xs font-medium text-white/50 uppercase tracking-wide">
               <Clock className="h-3.5 w-3.5" />
@@ -174,7 +200,7 @@ export function EventDetailsSummaryCard({ event, onEdit }: EventDetailsSummaryCa
               )}
             </div>
           </div>
-        )}
+        ) : null}
 
         {/* Parlour Details Section */}
         {(event.parlourType || event.parlourName || event.parlourCity || event.parlourArea) && (
