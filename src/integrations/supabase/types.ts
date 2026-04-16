@@ -637,6 +637,8 @@ export type Database = {
       }
       event_details_cache: {
         Row: {
+          bride_end_time: string | null
+          bride_start_time: string | null
           do_groom_come_in_mehndi: string | null
           event_date_ad: string | null
           event_day: string | null
@@ -648,6 +650,8 @@ export type Database = {
           event_references: string | null
           event_start_time: string | null
           event_year: string | null
+          groom_end_time: string | null
+          groom_start_time: string | null
           guest_count: string | null
           id: string
           parlour_area: string | null
@@ -667,6 +671,8 @@ export type Database = {
           venue_type: string | null
         }
         Insert: {
+          bride_end_time?: string | null
+          bride_start_time?: string | null
           do_groom_come_in_mehndi?: string | null
           event_date_ad?: string | null
           event_day?: string | null
@@ -678,6 +684,8 @@ export type Database = {
           event_references?: string | null
           event_start_time?: string | null
           event_year?: string | null
+          groom_end_time?: string | null
+          groom_start_time?: string | null
           guest_count?: string | null
           id?: string
           parlour_area?: string | null
@@ -697,6 +705,8 @@ export type Database = {
           venue_type?: string | null
         }
         Update: {
+          bride_end_time?: string | null
+          bride_start_time?: string | null
           do_groom_come_in_mehndi?: string | null
           event_date_ad?: string | null
           event_day?: string | null
@@ -708,6 +718,8 @@ export type Database = {
           event_references?: string | null
           event_start_time?: string | null
           event_year?: string | null
+          groom_end_time?: string | null
+          groom_start_time?: string | null
           guest_count?: string | null
           id?: string
           parlour_area?: string | null
