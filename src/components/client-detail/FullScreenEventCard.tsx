@@ -164,6 +164,10 @@ export const FullScreenEventCard = ({
     setVenueMap(event.venueMap || '');
     setEventStartTime(event.eventStartTime || '');
     setEventEndTime(event.eventEndTime || '');
+    setBrideStartTime(event.brideStartTime || '');
+    setBrideEndTime(event.brideEndTime || '');
+    setGroomStartTime(event.groomStartTime || '');
+    setGroomEndTime(event.groomEndTime || '');
     setParlourType(event.parlourType || '');
     setParlourName(event.parlourName || '');
     setParlourCity(event.parlourCity || '');
@@ -332,14 +336,20 @@ export const FullScreenEventCard = ({
         await addNewParlour(parlourType, parlourName.trim(), parlourCity, parlourArea, parlourMap);
       }
 
-      const updates = {
+      const isWedding = isWeddingEvent(eventName);
+      
+      const updates: any = {
         venueType,
         venueName,
         venueCity,
         venueArea,
         venueMap,
-        eventStartTime,
-        eventEndTime,
+        eventStartTime: isWedding ? (brideStartTime || eventStartTime) : eventStartTime,
+        eventEndTime: isWedding ? (brideEndTime || eventEndTime) : eventEndTime,
+        brideStartTime: isWedding ? brideStartTime : '',
+        brideEndTime: isWedding ? brideEndTime : '',
+        groomStartTime: isWedding ? groomStartTime : '',
+        groomEndTime: isWedding ? groomEndTime : '',
         parlourType,
         parlourName,
         parlourCity,
@@ -371,6 +381,10 @@ export const FullScreenEventCard = ({
     setVenueMap(event.venueMap || '');
     setEventStartTime(event.eventStartTime || '');
     setEventEndTime(event.eventEndTime || '');
+    setBrideStartTime(event.brideStartTime || '');
+    setBrideEndTime(event.brideEndTime || '');
+    setGroomStartTime(event.groomStartTime || '');
+    setGroomEndTime(event.groomEndTime || '');
     setParlourType(event.parlourType || '');
     setParlourName(event.parlourName || '');
     setParlourCity(event.parlourCity || '');
