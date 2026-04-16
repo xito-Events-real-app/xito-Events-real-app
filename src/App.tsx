@@ -56,7 +56,7 @@ import { XitoDriveUploadProvider } from "./contexts/XitoDriveUploadContext";
 import { XitoUploadTracker } from "./components/xito-drive/XitoUploadTracker";
 import { YouTubeUploadProvider } from "./contexts/YouTubeUploadContext";
 import { YouTubeUploadTracker } from "./components/suite/YouTubeUploadTracker";
-import { StartupAnnouncementPopup } from "./components/suite/StartupAnnouncementPopup";
+
 import { XitoTransferPopupProvider } from "./contexts/XitoTransferPopupContext";
 import { FloatingXitoTransfer } from "./components/shared/FloatingXitoTransfer";
 import AlbumSubmissionAlert from "./components/suite/AlbumSubmissionAlert";
@@ -82,7 +82,7 @@ function AdminOnlyFeatures() {
   return (
     <>
       <WtnFilesAnnouncement />
-      <StartupAnnouncementPopup />
+      
       <AlbumSubmissionAlert />
       <SaugatSearch />
       <FloatingBookingCalendar />
