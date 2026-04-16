@@ -448,9 +448,16 @@ export const FullScreenEventCard = ({
   };
 
   // Build venue time range
-  const venueTimeRange = event.eventStartTime && event.eventEndTime
-    ? `${formatTime(event.eventStartTime)} - ${formatTime(event.eventEndTime)}`
-    : event.eventStartTime ? formatTime(event.eventStartTime) : '';
+  const isWedding = isWeddingEvent(eventName);
+  const venueTimeRange = isWedding
+    ? (() => {
+        const brideRange = event.brideStartTime ? `Bride: ${formatTime(event.brideStartTime)}${event.brideEndTime ? ` - ${formatTime(event.brideEndTime)}` : ''}` : '';
+        const groomRange = event.groomStartTime ? `Groom: ${formatTime(event.groomStartTime)}${event.groomEndTime ? ` - ${formatTime(event.groomEndTime)}` : ''}` : '';
+        return [brideRange, groomRange].filter(Boolean).join(' · ') || '';
+      })()
+    : event.eventStartTime && event.eventEndTime
+      ? `${formatTime(event.eventStartTime)} - ${formatTime(event.eventEndTime)}`
+      : event.eventStartTime ? formatTime(event.eventStartTime) : '';
 
   // Build parlour time range  
   const parlourTimeRange = event.parlourStartTime && event.parlourEndTime
