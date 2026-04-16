@@ -7,6 +7,7 @@ import { openWhatsApp } from "@/lib/whatsapp-utils";
 import { nepaliMonthsEnglish } from "@/lib/nepali-date";
 import { AssignmentRow } from "./types";
 import { supabase } from "@/integrations/supabase/client";
+import { isWeddingEvent, getFreelancerRoleKey, getFreelancerTimingSide } from "@/lib/wedding-timing-utils";
 
 const ROLE_LABELS: { key: keyof AssignmentRow; label: string; color: string }[] = [
   { key: "photographer_bride", label: "PB", color: "bg-rose-500/30 text-rose-300" },
@@ -288,12 +289,57 @@ export default function CrewScheduleEventSheet({ open, onOpenChange, assignment,
               <InfoRow label="Type" value={eventDetail.venueType} />
               <InfoRow label="Name" value={eventDetail.venueName} />
               <InfoRow label="Location" value={[eventDetail.venueCity, eventDetail.venueArea].filter(Boolean).join(", ")} />
-              {(eventDetail.eventStartTime || eventDetail.eventEndTime) && (
+              {/* Wedding side timings */}
+              {isWeddingEvent(assignment.event || '') && (eventDetail.brideStartTime || eventDetail.groomStartTime) ? (() => {
+                const roleKey = freelancerName ? getFreelancerRoleKey(freelancerName, assignment) : '';
+                const side = getFreelancerTimingSide(roleKey);
+                const brideTime = [eventDetail.brideStartTime, eventDetail.brideEndTime].filter(Boolean).join(" - ");
+                const groomTime = [eventDetail.groomStartTime, eventDetail.groomEndTime].filter(Boolean).join(" - ");
+                
+                if (side === 'bride') {
+                  return (
+                    <div className="px-2 py-1 space-y-0.5">
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-rose-400" />
+                        <span className="text-rose-300 text-[11px] font-semibold">🌸 Bride: {brideTime}</span>
+                      </div>
+                      {groomTime && <p className="text-[9px] text-white/40 pl-4">Groom: {groomTime}</p>}
+                    </div>
+                  );
+                } else if (side === 'groom') {
+                  return (
+                    <div className="px-2 py-1 space-y-0.5">
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-sky-400" />
+                        <span className="text-sky-300 text-[11px] font-semibold">🤵 Groom: {groomTime}</span>
+                      </div>
+                      {brideTime && <p className="text-[9px] text-white/40 pl-4">Bride: {brideTime}</p>}
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div className="px-2 py-1 space-y-0.5">
+                      {brideTime && (
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-rose-400" />
+                          <span className="text-rose-300 text-[11px] font-medium">🌸 Bride: {brideTime}</span>
+                        </div>
+                      )}
+                      {groomTime && (
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-sky-400" />
+                          <span className="text-sky-300 text-[11px] font-medium">🤵 Groom: {groomTime}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+              })() : (eventDetail.eventStartTime || eventDetail.eventEndTime) ? (
                 <div className="flex items-center gap-1 py-0.5 px-2">
                   <Clock className="w-3 h-3 text-white/40" />
                   <span className="text-white/70 text-[11px]">{[eventDetail.eventStartTime, eventDetail.eventEndTime].filter(Boolean).join(" - ")}</span>
                 </div>
-              )}
+              ) : null}
               <MapRow value={eventDetail.venueMap} />
             </div>
           )}

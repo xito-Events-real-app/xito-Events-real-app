@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { isWeddingEvent } from '@/lib/wedding-timing-utils';
 import { Calendar, MapPin, Clock, Users, Scissors, ChevronDown, ChevronUp, Save, X, Loader2, ExternalLink, FileText, Link2, Plus, Trash2, AlertTriangle, Check, ChevronsUpDown, UserCog } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -131,6 +132,10 @@ export const FullScreenEventCard = ({
   const [venueMap, setVenueMap] = useState(event.venueMap || '');
   const [eventStartTime, setEventStartTime] = useState(event.eventStartTime || '');
   const [eventEndTime, setEventEndTime] = useState(event.eventEndTime || '');
+  const [brideStartTime, setBrideStartTime] = useState(event.brideStartTime || '');
+  const [brideEndTime, setBrideEndTime] = useState(event.brideEndTime || '');
+  const [groomStartTime, setGroomStartTime] = useState(event.groomStartTime || '');
+  const [groomEndTime, setGroomEndTime] = useState(event.groomEndTime || '');
   
   const [parlourType, setParlourType] = useState(event.parlourType || '');
   const [parlourName, setParlourName] = useState(event.parlourName || '');
@@ -159,6 +164,10 @@ export const FullScreenEventCard = ({
     setVenueMap(event.venueMap || '');
     setEventStartTime(event.eventStartTime || '');
     setEventEndTime(event.eventEndTime || '');
+    setBrideStartTime(event.brideStartTime || '');
+    setBrideEndTime(event.brideEndTime || '');
+    setGroomStartTime(event.groomStartTime || '');
+    setGroomEndTime(event.groomEndTime || '');
     setParlourType(event.parlourType || '');
     setParlourName(event.parlourName || '');
     setParlourCity(event.parlourCity || '');
@@ -327,14 +336,20 @@ export const FullScreenEventCard = ({
         await addNewParlour(parlourType, parlourName.trim(), parlourCity, parlourArea, parlourMap);
       }
 
-      const updates = {
+      const isWedding = isWeddingEvent(eventName);
+      
+      const updates: any = {
         venueType,
         venueName,
         venueCity,
         venueArea,
         venueMap,
-        eventStartTime,
-        eventEndTime,
+        eventStartTime: isWedding ? (brideStartTime || eventStartTime) : eventStartTime,
+        eventEndTime: isWedding ? (brideEndTime || eventEndTime) : eventEndTime,
+        brideStartTime: isWedding ? brideStartTime : '',
+        brideEndTime: isWedding ? brideEndTime : '',
+        groomStartTime: isWedding ? groomStartTime : '',
+        groomEndTime: isWedding ? groomEndTime : '',
         parlourType,
         parlourName,
         parlourCity,
@@ -366,6 +381,10 @@ export const FullScreenEventCard = ({
     setVenueMap(event.venueMap || '');
     setEventStartTime(event.eventStartTime || '');
     setEventEndTime(event.eventEndTime || '');
+    setBrideStartTime(event.brideStartTime || '');
+    setBrideEndTime(event.brideEndTime || '');
+    setGroomStartTime(event.groomStartTime || '');
+    setGroomEndTime(event.groomEndTime || '');
     setParlourType(event.parlourType || '');
     setParlourName(event.parlourName || '');
     setParlourCity(event.parlourCity || '');
@@ -429,9 +448,16 @@ export const FullScreenEventCard = ({
   };
 
   // Build venue time range
-  const venueTimeRange = event.eventStartTime && event.eventEndTime
-    ? `${formatTime(event.eventStartTime)} - ${formatTime(event.eventEndTime)}`
-    : event.eventStartTime ? formatTime(event.eventStartTime) : '';
+  const isWedding = isWeddingEvent(eventName);
+  const venueTimeRange = isWedding
+    ? (() => {
+        const brideRange = event.brideStartTime ? `Bride: ${formatTime(event.brideStartTime)}${event.brideEndTime ? ` - ${formatTime(event.brideEndTime)}` : ''}` : '';
+        const groomRange = event.groomStartTime ? `Groom: ${formatTime(event.groomStartTime)}${event.groomEndTime ? ` - ${formatTime(event.groomEndTime)}` : ''}` : '';
+        return [brideRange, groomRange].filter(Boolean).join(' · ') || '';
+      })()
+    : event.eventStartTime && event.eventEndTime
+      ? `${formatTime(event.eventStartTime)} - ${formatTime(event.eventEndTime)}`
+      : event.eventStartTime ? formatTime(event.eventStartTime) : '';
 
   // Build parlour time range  
   const parlourTimeRange = event.parlourStartTime && event.parlourEndTime
@@ -837,32 +863,92 @@ export const FullScreenEventCard = ({
           </div>
 
           {/* Event Timing Section */}
-          <div className="space-y-3 bg-slate-800/40 rounded-lg p-4 border border-slate-700/40">
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-emerald-400" />
-              <span className="text-sm font-semibold text-emerald-400">Event Timing</span>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-emerald-400/80">Start Time</Label>
-                <Input 
-                  type="time"
-                  value={eventStartTime} 
-                  onChange={e => setEventStartTime(e.target.value)}
-                  className="bg-slate-900/60 border-slate-600/50 text-white hover:border-emerald-400/50 focus:border-emerald-400"
-                />
+          {isWedding ? (
+            <>
+              {/* Bride Side Timing */}
+              <div className="space-y-3 bg-slate-800/40 rounded-lg p-4 border border-rose-500/30">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-rose-400" />
+                  <span className="text-sm font-semibold text-rose-400">🌸 Bride Side Timing</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-rose-400/80">Start Time</Label>
+                    <Input 
+                      type="time"
+                      value={brideStartTime} 
+                      onChange={e => setBrideStartTime(e.target.value)}
+                      className="bg-slate-900/60 border-rose-500/30 text-white hover:border-rose-400/50 focus:border-rose-400"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-rose-400/80">End Time</Label>
+                    <Input 
+                      type="time"
+                      value={brideEndTime} 
+                      onChange={e => setBrideEndTime(e.target.value)}
+                      className="bg-slate-900/60 border-rose-500/30 text-white hover:border-rose-400/50 focus:border-rose-400"
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-emerald-400/80">End Time</Label>
-                <Input 
-                  type="time"
-                  value={eventEndTime} 
-                  onChange={e => setEventEndTime(e.target.value)}
-                  className="bg-slate-900/60 border-slate-600/50 text-white hover:border-emerald-400/50 focus:border-emerald-400"
-                />
+
+              {/* Groom Side Timing */}
+              <div className="space-y-3 bg-slate-800/40 rounded-lg p-4 border border-sky-500/30">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-sky-400" />
+                  <span className="text-sm font-semibold text-sky-400">🤵 Groom Side Timing</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-sky-400/80">Start Time</Label>
+                    <Input 
+                      type="time"
+                      value={groomStartTime} 
+                      onChange={e => setGroomStartTime(e.target.value)}
+                      className="bg-slate-900/60 border-sky-500/30 text-white hover:border-sky-400/50 focus:border-sky-400"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-sky-400/80">End Time</Label>
+                    <Input 
+                      type="time"
+                      value={groomEndTime} 
+                      onChange={e => setGroomEndTime(e.target.value)}
+                      className="bg-slate-900/60 border-sky-500/30 text-white hover:border-sky-400/50 focus:border-sky-400"
+                    />
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-3 bg-slate-800/40 rounded-lg p-4 border border-slate-700/40">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-emerald-400" />
+                <span className="text-sm font-semibold text-emerald-400">Event Timing</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-emerald-400/80">Start Time</Label>
+                  <Input 
+                    type="time"
+                    value={eventStartTime} 
+                    onChange={e => setEventStartTime(e.target.value)}
+                    className="bg-slate-900/60 border-slate-600/50 text-white hover:border-emerald-400/50 focus:border-emerald-400"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-emerald-400/80">End Time</Label>
+                  <Input 
+                    type="time"
+                    value={eventEndTime} 
+                    onChange={e => setEventEndTime(e.target.value)}
+                    className="bg-slate-900/60 border-slate-600/50 text-white hover:border-emerald-400/50 focus:border-emerald-400"
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Parlour Details Section */}
           <div className="space-y-3 bg-slate-800/40 rounded-lg p-4 border border-slate-700/40">

@@ -16,6 +16,10 @@ export interface EventDetail {
   venueMap: string;
   eventStartTime: string;
   eventEndTime: string;
+  brideStartTime: string;
+  brideEndTime: string;
+  groomStartTime: string;
+  groomEndTime: string;
   parlourType: string;
   parlourName: string;
   parlourCity: string;
@@ -62,6 +66,10 @@ function cacheRowToEventDetail(row: any): EventDetail {
     venueMap: row.venue_map || '',
     eventStartTime: row.event_start_time || '',
     eventEndTime: row.event_end_time || '',
+    brideStartTime: row.bride_start_time || '',
+    brideEndTime: row.bride_end_time || '',
+    groomStartTime: row.groom_start_time || '',
+    groomEndTime: row.groom_end_time || '',
     parlourType: row.parlour_type || '',
     parlourName: row.parlour_name || '',
     parlourCity: row.parlour_city || '',
@@ -219,6 +227,10 @@ export function useEventDetails(registeredDateTimeAD: string | undefined) {
       if (updates.venueMap !== undefined) updatePayload.venue_map = updates.venueMap;
       if (updates.eventStartTime !== undefined) updatePayload.event_start_time = updates.eventStartTime;
       if (updates.eventEndTime !== undefined) updatePayload.event_end_time = updates.eventEndTime;
+      if (updates.brideStartTime !== undefined) updatePayload.bride_start_time = updates.brideStartTime;
+      if (updates.brideEndTime !== undefined) updatePayload.bride_end_time = updates.brideEndTime;
+      if (updates.groomStartTime !== undefined) updatePayload.groom_start_time = updates.groomStartTime;
+      if (updates.groomEndTime !== undefined) updatePayload.groom_end_time = updates.groomEndTime;
       if (updates.parlourType !== undefined) updatePayload.parlour_type = updates.parlourType;
       if (updates.parlourName !== undefined) updatePayload.parlour_name = updates.parlourName;
       if (updates.parlourCity !== undefined) updatePayload.parlour_city = updates.parlourCity;
