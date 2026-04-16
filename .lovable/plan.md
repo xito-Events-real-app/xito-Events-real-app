@@ -1,25 +1,50 @@
 
 
-# Bug Analysis: ASHISH POUDYAL showing ADVANCE PENDING
+# Remove "What's New" + Revamp Album Submission Alert
 
-## Root Cause: Duplicate Entry (Not a Logic Bug)
+## 1. Remove StartupAnnouncementPopup
+- Remove `<StartupAnnouncementPopup />` from `AdminOnlyFeatures` in `src/App.tsx`
+- Remove the import line
 
-This client was entered **twice** with different name spellings:
+## 2. Database Migration
+Add `popup_view_count` to track cross-device views per submission:
+```sql
+ALTER TABLE public.album_selection_submissions
+  ADD COLUMN popup_view_count integer NOT NULL DEFAULT 0;
+```
 
-| Entry | Name | Source | Status | Date Added |
-|---|---|---|---|---|
-| Old (stale) | ASHISH **POUDYAL** | tracker | ADVANCE PENDING | Apr 11 |
-| Current (correct) | ASHISH **PAUDYAL** | booked | BOOKED ✅ | Apr 14 |
+## 3. Rewrite `AlbumSubmissionAlert.tsx`
 
-Both have the same phone number (9860675002), confirming they are the same person. The system treats them as separate clients because they have different `registered_date_time_ad` values and different name spellings.
+### Data fetch
+- Fetch **all** unhandled submissions, ordered by `created_at ascending` (oldest first)
+- On open, increment `popup_view_count` by 1 for each displayed submission
 
-## Fix
+### Display — scrollable list of cards (oldest first)
+Each card shows:
+- Client name, bride/groom names
+- Album details (counts)
+- Sent to (prominent)
+- **"X days ago"** — calculated from `created_at` vs now
+- Per-card action buttons: "Yes, sent for design" (marks `handled: true`) and "Copy original files" (navigates to client detail)
 
-**Delete the stale tracker row** for "ASHISH POUDYAL" (registered_date_time_ad: `2026-04-11T06:00:16.103Z`) from `clients_cache`.
+### Emergency mode (any single submission has `popup_view_count > 35`)
+- Red emergency banner at top
+- 10-second forced countdown timer
+- **All buttons disabled** during countdown (CSS `pointer-events-none` + `opacity-50`)
+- After 10s, buttons unlock — user must act on at least the oldest one
+- Dialog cannot be dismissed during countdown (`onOpenChange` blocked)
 
-This is a one-time data cleanup — no code changes needed.
+### Normal mode (all submissions have count ≤ 35)
+- Standard dismissible dialog
+- All buttons immediately active
+- User can close without acting
 
-## Optional: Prevent Future Duplicates
+### Per-submission counting rule
+- Each album submission counts independently (its own `popup_view_count`)
+- If one submission has count 24 and another has count 1, no emergency — emergency only triggers when **any single** submission exceeds 35
 
-To avoid this happening again, we could add a **duplicate detection warning** when adding a new client: if the phone number already exists in the database, show a warning before saving. This would catch re-entries with slightly different name spellings.
+## Files Changed
+1. **New migration** — `popup_view_count` column
+2. `src/components/suite/AlbumSubmissionAlert.tsx` — full rewrite
+3. `src/App.tsx` — remove StartupAnnouncementPopup
 
