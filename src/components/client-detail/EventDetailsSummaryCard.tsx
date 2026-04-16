@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { EventDetail } from '@/hooks/useEventDetails';
+import { isWeddingEvent } from '@/lib/wedding-timing-utils';
+import { EventDetail } from '@/hooks/useEventDetails';
 
 interface EventDetailsSummaryCardProps {
   event: EventDetail;

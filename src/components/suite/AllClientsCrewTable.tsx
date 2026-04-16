@@ -1684,16 +1684,43 @@ function EventLogisticsPanel({ eventDetail, contactDetail, settings: settingsPro
         {eventDetail?.venue_map && (
           <a href={eventDetail.venue_map} target="_blank" rel="noopener noreferrer" className="text-[10px] text-violet-600 hover:underline mt-0.5 block">Map →</a>
         )}
-        {/* Start time BIG */}
-        {eventDetail?.event_start_time && (
-          <div className="mt-1.5">
-            <p className="text-[9px] text-gray-400 uppercase tracking-wide">Starts at</p>
-            <p className="text-base font-black text-violet-700 leading-tight">{eventDetail.event_start_time}</p>
-          </div>
-        )}
-        {eventDetail?.event_end_time && (
-          <p className="text-[10px] text-gray-400 mt-0.5">Ends at {eventDetail.event_end_time}</p>
-        )}
+        {/* Start time BIG — wedding side timings */}
+        {(() => {
+          const isWedding = (row.event || '').toUpperCase().includes('WEDDING');
+          if (isWedding && (eventDetail?.bride_start_time || eventDetail?.groom_start_time)) {
+            return (
+              <div className="mt-1.5 space-y-1">
+                {eventDetail?.bride_start_time && (
+                  <div>
+                    <p className="text-[9px] text-rose-400 uppercase tracking-wide">🌸 Bride Starts</p>
+                    <p className="text-sm font-black text-rose-500 leading-tight">{eventDetail.bride_start_time}</p>
+                    {eventDetail?.bride_end_time && <p className="text-[10px] text-gray-400">Ends {eventDetail.bride_end_time}</p>}
+                  </div>
+                )}
+                {eventDetail?.groom_start_time && (
+                  <div>
+                    <p className="text-[9px] text-sky-400 uppercase tracking-wide">🤵 Groom Starts</p>
+                    <p className="text-sm font-black text-sky-500 leading-tight">{eventDetail.groom_start_time}</p>
+                    {eventDetail?.groom_end_time && <p className="text-[10px] text-gray-400">Ends {eventDetail.groom_end_time}</p>}
+                  </div>
+                )}
+              </div>
+            );
+          }
+          return (
+            <>
+              {eventDetail?.event_start_time && (
+                <div className="mt-1.5">
+                  <p className="text-[9px] text-gray-400 uppercase tracking-wide">Starts at</p>
+                  <p className="text-base font-black text-violet-700 leading-tight">{eventDetail.event_start_time}</p>
+                </div>
+              )}
+              {eventDetail?.event_end_time && (
+                <p className="text-[10px] text-gray-400 mt-0.5">Ends at {eventDetail.event_end_time}</p>
+              )}
+            </>
+          );
+        })()}
       </div>
     );
   }
