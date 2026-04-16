@@ -16,6 +16,10 @@ export interface EventDetail {
   venueMap: string;
   eventStartTime: string;
   eventEndTime: string;
+  brideStartTime: string;
+  brideEndTime: string;
+  groomStartTime: string;
+  groomEndTime: string;
   parlourType: string;
   parlourName: string;
   parlourCity: string;
