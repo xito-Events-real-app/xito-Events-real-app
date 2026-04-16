@@ -61,6 +61,7 @@ function buildBasicEvents(clientData?: ClientEventsData): EventDetail[] {
       eventDateAD: '',
       venueType: '', venueName: '', venueArea: '', venueCity: '', venueMap: '',
       eventStartTime: '', eventEndTime: '',
+      brideStartTime: '', brideEndTime: '', groomStartTime: '', groomEndTime: '',
       parlourType: '', parlourName: '', parlourArea: '', parlourCity: '', parlourMap: '',
       parlourStartTime: '', parlourEndTime: '',
       doGroomComeInMehndi: '', guestCount: '',
