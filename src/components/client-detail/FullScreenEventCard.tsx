@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { isWeddingEvent } from '@/lib/wedding-timing-utils';
 import { Calendar, MapPin, Clock, Users, Scissors, ChevronDown, ChevronUp, Save, X, Loader2, ExternalLink, FileText, Link2, Plus, Trash2, AlertTriangle, Check, ChevronsUpDown, UserCog } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -131,6 +132,10 @@ export const FullScreenEventCard = ({
   const [venueMap, setVenueMap] = useState(event.venueMap || '');
   const [eventStartTime, setEventStartTime] = useState(event.eventStartTime || '');
   const [eventEndTime, setEventEndTime] = useState(event.eventEndTime || '');
+  const [brideStartTime, setBrideStartTime] = useState(event.brideStartTime || '');
+  const [brideEndTime, setBrideEndTime] = useState(event.brideEndTime || '');
+  const [groomStartTime, setGroomStartTime] = useState(event.groomStartTime || '');
+  const [groomEndTime, setGroomEndTime] = useState(event.groomEndTime || '');
   
   const [parlourType, setParlourType] = useState(event.parlourType || '');
   const [parlourName, setParlourName] = useState(event.parlourName || '');
