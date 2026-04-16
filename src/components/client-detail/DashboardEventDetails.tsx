@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { MapPin, ExternalLink, Plus } from "lucide-react";
+import { isWeddingEvent } from "@/lib/wedding-timing-utils";
 import { useNavigate } from "react-router-dom";
 import { EventDetailsData, EventDetail } from "@/hooks/useEventDetails";
 import { getMonthName } from "@/lib/nepali-months";
@@ -239,9 +240,16 @@ const DashboardEventDetails = ({ eventDetailsData, isLoading, clientEvents, free
         {events.map((event, idx) => {
           const monthName = getMonthName(parseInt(event.eventMonth) || 0);
           const venueLocation = [event.venueName, event.venueArea, event.venueCity].filter(Boolean).join(', ');
-          const venueTimeRange = event.eventStartTime && event.eventEndTime
-            ? `${formatTime(event.eventStartTime)} - ${formatTime(event.eventEndTime)}`
-            : event.eventStartTime ? formatTime(event.eventStartTime) : '';
+          const isWedding = isWeddingEvent(event.eventName);
+          const venueTimeRange = isWedding && (event.brideStartTime || event.groomStartTime)
+            ? (() => {
+                const brideRange = event.brideStartTime ? `Bride: ${formatTime(event.brideStartTime)}${event.brideEndTime ? ` - ${formatTime(event.brideEndTime)}` : ''}` : '';
+                const groomRange = event.groomStartTime ? `Groom: ${formatTime(event.groomStartTime)}${event.groomEndTime ? ` - ${formatTime(event.groomEndTime)}` : ''}` : '';
+                return [brideRange, groomRange].filter(Boolean).join(' · ');
+              })()
+            : event.eventStartTime && event.eventEndTime
+              ? `${formatTime(event.eventStartTime)} - ${formatTime(event.eventEndTime)}`
+              : event.eventStartTime ? formatTime(event.eventStartTime) : '';
           const parlourLocation = [event.parlourName, event.parlourArea, event.parlourCity].filter(Boolean).join(', ');
           const parlourTimeRange = event.parlourStartTime && event.parlourEndTime
             ? `${formatTime(event.parlourStartTime)} - ${formatTime(event.parlourEndTime)}`
