@@ -320,6 +320,10 @@ const PortalMyPhotos = ({
       // Sequential probe to avoid mobile Chrome memory exhaustion
       for (const tab of tabs) {
         if (stale) return;
+        if (tab.id === FAVOURITES_TAB_ID) {
+          results.push([]); // skip — never auto-select favourites
+          continue;
+        }
         try {
           if (folderCache[tab.id]) {
             results.push(folderCache[tab.id]);
@@ -348,6 +352,11 @@ const PortalMyPhotos = ({
     if (!initialTabResolved) return;
     const tab = tabs[activeTabIndex];
     if (!tab) return;
+    if (tab.id === FAVOURITES_TAB_ID) {
+      // Favourites tab — don't load from S3; render handled separately
+      setIsLoadingPhotos(false);
+      return;
+    }
     let stale = false;
 
     // If both folder listing and URLs are cached, load instantly
