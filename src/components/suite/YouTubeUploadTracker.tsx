@@ -103,8 +103,7 @@ function RemoteJobCard({ session }: { session: RemoteYTSession }) {
 }
 
 export function YouTubeUploadTracker() {
-  const { jobs, remoteJobs, activeCount, clearCompleted, expanded, setExpanded } = useYouTubeUploadContext();
-  const [collapsed, setCollapsed] = useState(false);
+  const { jobs, remoteJobs, activeCount, clearCompleted } = useYouTubeUploadContext();
 
   // Show remote sessions that aren't already tracked locally
   const localDbIds = new Set(jobs.map(j => j.sessionDbId));
@@ -114,81 +113,30 @@ export function YouTubeUploadTracker() {
   const dismissedIds: string[] = JSON.parse(localStorage.getItem('yt_dismissed_sessions') || '[]');
   const remoteVisible = remoteOnly.filter(r => !dismissedIds.includes(r.id));
 
-  const totalItems = jobs.length + remoteVisible.length;
+  // Filter out local jobs that were dismissed too
+  const dismissedLocalIds: string[] = JSON.parse(localStorage.getItem('yt_dismissed_local_jobs') || '[]');
+  const jobsVisible = jobs.filter(j => !dismissedLocalIds.includes(j.id));
+
+  const totalItems = jobsVisible.length + remoteVisible.length;
   if (totalItems === 0) return null;
 
   const hasActive = activeCount > 0 || remoteVisible.some(r => r.status === 'uploading' || r.status === 'pending');
 
-  // If no active uploads and no local jobs, nothing to show
-  if (!hasActive && jobs.length === 0 && remoteVisible.length === 0) return null;
-
   const handleDismiss = () => {
-    // Persist dismissed remote session IDs so they don't reappear on reload
+    // Persist dismissed remote session IDs so they don't reappear on reload (cross-device via session id reuse check)
     const currentDismissed: string[] = JSON.parse(localStorage.getItem('yt_dismissed_sessions') || '[]');
-    const allRemoteIds = remoteVisible.map(r => r.id);
+    const allRemoteIds = remoteOnly.map(r => r.id);
     const merged = [...new Set([...currentDismissed, ...allRemoteIds])];
     localStorage.setItem('yt_dismissed_sessions', JSON.stringify(merged));
+
+    // Also dismiss local jobs by id so they hide until a new upload starts
+    const currentLocal: string[] = JSON.parse(localStorage.getItem('yt_dismissed_local_jobs') || '[]');
+    const allLocalIds = jobs.map(j => j.id);
+    const mergedLocal = [...new Set([...currentLocal, ...allLocalIds])];
+    localStorage.setItem('yt_dismissed_local_jobs', JSON.stringify(mergedLocal));
+
     clearCompleted();
   };
-
-  if (collapsed) {
-    return (
-      <div
-        className="bg-card border border-red-500/30 rounded-full px-4 py-2.5 shadow-xl cursor-pointer flex items-center gap-2.5 hover:border-red-500/50 transition-all"
-        onClick={() => setCollapsed(false)}
-      >
-        <div className="relative">
-          <Youtube className="h-4 w-4 text-red-500" />
-          {hasActive && <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500 animate-pulse" />}
-        </div>
-        <span className="text-sm font-medium">
-          {hasActive ? `Uploading to YouTube...` : 'YouTube upload complete'}
-        </span>
-        {!hasActive && (
-          <button
-            onClick={(e) => { e.stopPropagation(); handleDismiss(); }}
-            className="p-0.5 hover:bg-muted rounded-full ml-1"
-          >
-            <X className="h-3 w-3" />
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  if (expanded) {
-    return (
-      <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-red-500/20">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-red-500/20">
-              <Youtube className="h-5 w-5 text-red-500" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold">YouTube Uploads</h2>
-              <p className="text-xs text-muted-foreground">
-                {hasActive ? `Uploading...` : 'All uploads complete'}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {!hasActive && totalItems > 0 && (
-              <Button variant="ghost" size="sm" onClick={handleDismiss} className="text-xs gap-1.5">
-                <Trash2 className="h-3.5 w-3.5" /> Clear & Close
-              </Button>
-            )}
-            <Button variant="ghost" size="icon" onClick={() => setExpanded(false)}>
-              <Minimize2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 max-w-3xl mx-auto w-full">
-          {jobs.map(job => <LocalJobCard key={job.id} job={job} />)}
-          {remoteVisible.map(s => <RemoteJobCard key={s.id} session={s} />)}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className={cn(
@@ -205,22 +153,12 @@ export function YouTubeUploadTracker() {
             {hasActive ? `YouTube Upload` : 'Upload Complete'}
           </span>
         </div>
-        <div className="flex items-center gap-0.5">
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setExpanded(true)} title="Expand">
-            <Maximize2 className="h-3.5 w-3.5" />
-          </Button>
-          {!hasActive && (
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleDismiss} title="Dismiss">
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          )}
-          <button onClick={() => setCollapsed(true)} className="p-1.5 hover:bg-muted rounded-lg">
-            <Minimize2 className="h-3.5 w-3.5" />
-          </button>
-        </div>
+        <button onClick={handleDismiss} className="p-1.5 hover:bg-muted rounded-lg" title="Close">
+          <X className="h-3.5 w-3.5" />
+        </button>
       </div>
       <div className="max-h-72 overflow-y-auto p-3 space-y-3">
-        {jobs.map(job => <LocalJobCard key={job.id} job={job} />)}
+        {jobsVisible.map(job => <LocalJobCard key={job.id} job={job} />)}
         {remoteVisible.map(s => <RemoteJobCard key={s.id} session={s} />)}
       </div>
     </div>
