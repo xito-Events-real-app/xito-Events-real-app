@@ -401,9 +401,38 @@ const PortalMyPhotos = ({
     return () => { stale = true; };
   }, [activeTabIndex, tabs, initialTabResolved]);
 
+  const activeTab = tabs[activeTabIndex];
+  const isFavTab = activeTab?.id === FAVOURITES_TAB_ID;
+
+  // Resolve any missing favourite URLs (e.g. older saves without photo_url, or expired)
+  useEffect(() => {
+    if (!isFavTab || favourites.length === 0) return;
+    const missing = favourites
+      .map(f => f.photo_key)
+      .filter(key => !favouritesUrls[key]);
+    if (missing.length === 0) return;
+    let stale = false;
+    getE2FileUrls(missing).then(urls => {
+      if (stale) return;
+      cacheUrls(urls);
+      setFavouritesUrls(prev => ({ ...prev, ...urls }));
+    }).catch(() => {});
+    return () => { stale = true; };
+  }, [isFavTab, favourites, favouritesUrls]);
+
+  // Photos to render — favourites or regular tab
+  const displayPhotos = useMemo(() => {
+    if (isFavTab) {
+      return favourites.map(f => ({ key: f.photo_key } as E2File));
+    }
+    return photos;
+  }, [isFavTab, favourites, photos]);
+
+  const displayUrls = isFavTab ? favouritesUrls : photoUrls;
+
   const viewerImages = useMemo(
-    () => photos.map(p => ({ key: p.key, url: photoUrls[p.key] || "" })).filter(i => i.url),
-    [photos, photoUrls]
+    () => displayPhotos.map(p => ({ key: p.key, url: displayUrls[p.key] || "" })).filter(i => i.url),
+    [displayPhotos, displayUrls]
   );
 
   if (tabs.length === 0 || !initialTabResolved) {
