@@ -15,9 +15,11 @@ export function VenueTypeSidebar({
   onSelectType,
   totalCount,
 }: VenueTypeSidebarProps) {
-  const officialSet = new Set<string>(OFFICIAL_VENUE_TYPES as readonly string[]);
+  const officialLowerSet = new Set<string>(
+    (OFFICIAL_VENUE_TYPES as readonly string[]).map(t => t.toLowerCase())
+  );
   const legacyTypes = Object.keys(typeCounts)
-    .filter(t => !officialSet.has(t))
+    .filter(t => !officialLowerSet.has((t || "").toLowerCase()))
     .sort();
 
   return (

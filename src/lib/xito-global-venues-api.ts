@@ -15,6 +15,13 @@ export const OFFICIAL_VENUE_TYPES = [
   "Home",
 ] as const;
 
+/** Normalize a venue type string to Title Case (e.g. "BANQUET" → "Banquet"). */
+export function normalizeVenueType(input: string): string {
+  const t = (input || "").trim();
+  if (!t) return "";
+  return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+}
+
 export interface XitoGlobalVenue {
   id: string;
   venue_type: string;
@@ -125,7 +132,7 @@ export async function mirrorVenueFromEventDetails(input: {
 }): Promise<void> {
   try {
     const payload = {
-      venue_type: input.venueType || "Other",
+      venue_type: normalizeVenueType(input.venueType) || "Other",
       venue_name: input.name || "",
       city: input.city || "",
       area: input.area || "",
