@@ -1705,6 +1705,90 @@ export type Database = {
         }
         Relationships: []
       }
+      xito_global_all_venues: {
+        Row: {
+          area: string
+          city: string
+          company_contact: string
+          company_whatsapp: string
+          created_at: string
+          facebook: string
+          gmail: string
+          google_map: string
+          id: string
+          instagram: string
+          location_briefing: string
+          owner1_contact: string
+          owner1_name: string
+          owner1_whatsapp: string
+          owner2_contact: string
+          owner2_name: string
+          owner2_whatsapp: string
+          rating: number
+          source: string
+          tiktok: string
+          updated_at: string
+          venue_name: string
+          venue_type: string
+          website: string
+          youtube: string
+        }
+        Insert: {
+          area?: string
+          city?: string
+          company_contact?: string
+          company_whatsapp?: string
+          created_at?: string
+          facebook?: string
+          gmail?: string
+          google_map?: string
+          id?: string
+          instagram?: string
+          location_briefing?: string
+          owner1_contact?: string
+          owner1_name?: string
+          owner1_whatsapp?: string
+          owner2_contact?: string
+          owner2_name?: string
+          owner2_whatsapp?: string
+          rating?: number
+          source?: string
+          tiktok?: string
+          updated_at?: string
+          venue_name?: string
+          venue_type?: string
+          website?: string
+          youtube?: string
+        }
+        Update: {
+          area?: string
+          city?: string
+          company_contact?: string
+          company_whatsapp?: string
+          created_at?: string
+          facebook?: string
+          gmail?: string
+          google_map?: string
+          id?: string
+          instagram?: string
+          location_briefing?: string
+          owner1_contact?: string
+          owner1_name?: string
+          owner1_whatsapp?: string
+          owner2_contact?: string
+          owner2_name?: string
+          owner2_whatsapp?: string
+          rating?: number
+          source?: string
+          tiktok?: string
+          updated_at?: string
+          venue_name?: string
+          venue_type?: string
+          website?: string
+          youtube?: string
+        }
+        Relationships: []
+      }
       xito_transfers: {
         Row: {
           content: string
