@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, memo } from "react";
-import { X, ChevronLeft, ChevronRight, Download, ImageIcon, Check, Plus, Loader2 } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, Download, ImageIcon, Check, Plus, Loader2, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface AlbumInfo {
@@ -16,13 +16,16 @@ interface XitoImageViewerProps {
   selectedAlbums?: Record<string, string[]>; // photoKey → albumTypes[]
   onToggleAlbum?: (photoKey: string, albumType: string, albumName: string) => void;
   onDownloadHQ?: (photoKey: string) => Promise<void>;
+  isFavourite?: (photoKey: string) => boolean;
+  onToggleFavourite?: (photoKey: string) => void;
 }
 
 const MAX_ALBUM_PHOTOS = 140;
 
 const XitoImageViewer = ({
   images, initialIndex, onClose,
-  albums, albumCounts, selectedAlbums, onToggleAlbum, onDownloadHQ
+  albums, albumCounts, selectedAlbums, onToggleAlbum, onDownloadHQ,
+  isFavourite, onToggleFavourite
 }: XitoImageViewerProps) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [isDownloading, setIsDownloading] = useState(false);
