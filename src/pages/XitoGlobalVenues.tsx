@@ -192,32 +192,48 @@ export default function XitoGlobalVenues() {
         {sidebar}
 
         <main className="flex-1 p-4 min-w-0">
-          {loading ? (
+          {loading && (
             <div className="flex items-center justify-center py-20 text-muted-foreground">
               <Loader2 className="h-6 w-6 animate-spin mr-2" />
               Loading venues...
             </div>
-          ) : view === "table" ? (
-            <div className="hidden md:block">
-              <VenueTable venues={filtered} bookings={bookings} onEdit={openEdit} />
-            </div>
-          ) : null}
+          )}
 
-          {!loading && (view === "grid" || true) && (
-            <div className={view === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" : "md:hidden grid grid-cols-1 gap-3"}>
-              {(view === "grid" || true) &&
-                filtered.map(v => (
-                  <div key={v.id} className={view === "grid" ? "" : "md:hidden"}>
-                    {(view === "grid" || window.matchMedia?.("(max-width: 767px)")?.matches) && (
-                      <VenueCard
-                        venue={v}
-                        bookings={bookings[v.venue_name.toLowerCase()] || []}
-                        onClick={() => openEdit(v)}
-                      />
-                    )}
-                  </div>
+          {!loading && view === "table" && (
+            <>
+              {/* Desktop: table */}
+              <div className="hidden md:block">
+                <VenueTable venues={filtered} bookings={bookings} onEdit={openEdit} />
+              </div>
+              {/* Mobile: cards */}
+              <div className="md:hidden grid grid-cols-1 gap-3">
+                {filtered.map(v => (
+                  <VenueCard
+                    key={v.id}
+                    venue={v}
+                    bookings={bookings[v.venue_name.toLowerCase()] || []}
+                    onClick={() => openEdit(v)}
+                  />
                 ))}
+              </div>
+            </>
+          )}
+
+          {!loading && view === "grid" && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {filtered.map(v => (
+                <VenueCard
+                  key={v.id}
+                  venue={v}
+                  bookings={bookings[v.venue_name.toLowerCase()] || []}
+                  onClick={() => openEdit(v)}
+                />
+              ))}
             </div>
+          )}
+
+          {!loading && filtered.length === 0 && view === "grid" && (
+            <div className="text-center py-20 text-muted-foreground">No venues match the current filters.</div>
           )}
         </main>
       </div>
