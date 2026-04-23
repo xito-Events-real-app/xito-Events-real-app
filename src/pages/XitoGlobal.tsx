@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Building2, ArrowLeft, Globe } from "lucide-react";
+import { Building2, ArrowLeft, Globe, ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -14,6 +14,14 @@ export default function XitoGlobal() {
       icon: Building2,
       path: "/xito-global/venues",
       gradient: "from-violet-500 to-purple-600",
+    },
+    {
+      id: "event-details-questions",
+      name: "Event Details Questions",
+      description: "Master list of questions clients answer about their events.",
+      icon: ClipboardList,
+      path: "/xito-global/event-details-questions",
+      gradient: "from-amber-500 to-orange-600",
     },
   ];
 

@@ -1789,6 +1789,54 @@ export type Database = {
         }
         Relationships: []
       }
+      xito_global_event_details_questions: {
+        Row: {
+          created_at: string
+          dropdown_enabled: boolean
+          dropdown_options: Json
+          id: string
+          is_active: boolean
+          number_input_enabled: boolean
+          number_input_hint: string
+          question: string
+          sort_order: number
+          sub_question: string
+          tags: Json
+          text_input_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          dropdown_enabled?: boolean
+          dropdown_options?: Json
+          id?: string
+          is_active?: boolean
+          number_input_enabled?: boolean
+          number_input_hint?: string
+          question?: string
+          sort_order?: number
+          sub_question?: string
+          tags?: Json
+          text_input_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          dropdown_enabled?: boolean
+          dropdown_options?: Json
+          id?: string
+          is_active?: boolean
+          number_input_enabled?: boolean
+          number_input_hint?: string
+          question?: string
+          sort_order?: number
+          sub_question?: string
+          tags?: Json
+          text_input_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       xito_transfers: {
         Row: {
           content: string
