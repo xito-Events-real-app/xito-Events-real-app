@@ -50,6 +50,7 @@ import ClientPortal from "./pages/ClientPortal";
 import EditorPortal from "./pages/EditorPortal";
 import XitoGlobal from "./pages/XitoGlobal";
 import XitoGlobalVenues from "./pages/XitoGlobalVenues";
+import XitoGlobalEventDetailsQuestions from "./pages/XitoGlobalEventDetailsQuestions";
 import { EditedFilesUploadProvider } from "./components/edited-files/EditedFilesUploadContext";
 import { UploadProgressTracker } from "./components/edited-files/UploadProgressTracker";
 import { PCloudUploadProvider } from "./contexts/PCloudUploadContext";
@@ -169,6 +170,7 @@ const App = () => (
               <Route path="/baruns-research" element={<ProtectedRoute><BarunsResearch /></ProtectedRoute>} />
               <Route path="/xito-global" element={<ProtectedRoute><XitoGlobal /></ProtectedRoute>} />
               <Route path="/xito-global/venues" element={<ProtectedRoute><XitoGlobalVenues /></ProtectedRoute>} />
+              <Route path="/xito-global/event-details-questions" element={<ProtectedRoute><XitoGlobalEventDetailsQuestions /></ProtectedRoute>} />
               
               <Route path="*" element={<NotFound />} />
             </Routes>
