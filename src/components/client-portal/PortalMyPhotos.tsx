@@ -57,6 +57,61 @@ const PortalMyPhotos = ({
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [albumsLocked, setAlbumsLocked] = useState(false);
 
+  // Favourites — DB-backed personal shortlist
+  const [favourites, setFavourites] = useState<Favourite[]>([]);
+  const favouritesSet = useMemo(() => new Set(favourites.map(f => f.photo_key)), [favourites]);
+  const favouritesSetRef = useRef(favouritesSet);
+  favouritesSetRef.current = favouritesSet;
+  const [favouritesUrls, setFavouritesUrls] = useState<Record<string, string>>({});
+  const [isLoadingFavourites, setIsLoadingFavourites] = useState(false);
+
+  // Load favourites on mount
+  useEffect(() => {
+    if (!registeredDateTimeAD) return;
+    getFavourites(registeredDateTimeAD).then(data => {
+      setFavourites(data);
+      const urls: Record<string, string> = {};
+      data.forEach(f => {
+        if (f.photo_url) urls[f.photo_key] = f.photo_url;
+      });
+      setFavouritesUrls(urls);
+    });
+  }, [registeredDateTimeAD]);
+
+  // Optimistic favourite toggle
+  const handleToggleFavourite = useCallback((photoKey: string) => {
+    const isFav = favouritesSetRef.current.has(photoKey);
+    const url = photoUrlsRef.current[photoKey] || favouritesUrls[photoKey] || '';
+
+    if (isFav) {
+      setFavourites(prev => prev.filter(f => f.photo_key !== photoKey));
+      removeFavourite(registeredDateTimeAD, photoKey).then(success => {
+        if (!success) {
+          toast.error("Failed to remove favourite");
+          getFavourites(registeredDateTimeAD).then(setFavourites);
+        }
+      });
+    } else {
+      const newFav: Favourite = {
+        id: crypto.randomUUID(),
+        registered_date_time_ad: registeredDateTimeAD,
+        photo_key: photoKey,
+        photo_url: url,
+        created_at: new Date().toISOString(),
+      };
+      setFavourites(prev => [...prev, newFav]);
+      if (url) setFavouritesUrls(prev => ({ ...prev, [photoKey]: url }));
+      addFavourite(registeredDateTimeAD, photoKey, url).then(success => {
+        if (!success) {
+          toast.error("Failed to favourite");
+          setFavourites(prev => prev.filter(f => f.photo_key !== photoKey));
+        }
+      });
+    }
+  }, [registeredDateTimeAD, favouritesUrls]);
+
+  const checkIsFavourite = useCallback((photoKey: string) => favouritesSetRef.current.has(photoKey), []);
+
   // Check if albums are locked (copy history exists)
   useEffect(() => {
     if (!registeredDateTimeAD) return;
