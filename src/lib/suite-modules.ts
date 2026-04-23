@@ -15,6 +15,7 @@ import {
   Cloud,
   BookOpen,
   ArrowUpDown,
+  Globe,
   LucideIcon,
 } from "lucide-react";
 
@@ -188,5 +189,14 @@ export const suiteModules: SuiteModule[] = [
     path: '/baruns-research',
     status: 'active',
     gradient: 'from-violet-500 to-purple-600',
+  },
+  {
+    id: 'xito-global',
+    name: 'XITO GLOBAL',
+    description: 'Master data: venues, parlours & more',
+    icon: Globe,
+    path: '/xito-global',
+    status: 'active',
+    gradient: 'from-violet-500 to-fuchsia-600',
   },
 ];
