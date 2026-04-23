@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback, memo } from "react";
-import { Loader2, Image as ImageIcon, FolderOpen, Download } from "lucide-react";
+import { Loader2, Image as ImageIcon, FolderOpen, Download, Star } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { listE2Folder, getE2FileUrls, E2File } from "@/lib/idrive-e2-api";
 import { cacheUrls } from "@/lib/shared-url-cache";
@@ -7,6 +7,7 @@ import { NEPALI_MONTHS } from "@/lib/nepali-months";
 import { cn } from "@/lib/utils";
 import XitoImageViewer, { AlbumInfo } from "@/components/client-detail/XitoImageViewer";
 import { AlbumSelection, addToAlbum, removeFromAlbum } from "@/lib/album-selection-api";
+import { getFavourites, addFavourite, removeFavourite, Favourite } from "@/lib/favourites-api";
 import { toast } from "sonner";
 import { getPCloudFileLinkByPath } from "@/lib/pcloud-api";
 import { supabase } from "@/integrations/supabase/client";
@@ -48,13 +49,69 @@ const PortalMyPhotos = ({
   clientName, assignments, onShowBottomNav,
   registeredDateTimeAD, albums, albumSelections, onAlbumSelectionsChange
 }: PortalMyPhotosProps) => {
-  const [activeTabIndex, setActiveTabIndex] = useState(0);
+  const FAVOURITES_TAB_ID = "__favourites__";
+  const [activeTabIndex, setActiveTabIndex] = useState(1); // start at 1, skip favourites
   const [initialTabResolved, setInitialTabResolved] = useState(false);
   const [photos, setPhotos] = useState<E2File[]>([]);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [albumsLocked, setAlbumsLocked] = useState(false);
+
+  // Favourites — DB-backed personal shortlist
+  const [favourites, setFavourites] = useState<Favourite[]>([]);
+  const favouritesSet = useMemo(() => new Set(favourites.map(f => f.photo_key)), [favourites]);
+  const favouritesSetRef = useRef(favouritesSet);
+  favouritesSetRef.current = favouritesSet;
+  const [favouritesUrls, setFavouritesUrls] = useState<Record<string, string>>({});
+  const [isLoadingFavourites, setIsLoadingFavourites] = useState(false);
+
+  // Load favourites on mount
+  useEffect(() => {
+    if (!registeredDateTimeAD) return;
+    getFavourites(registeredDateTimeAD).then(data => {
+      setFavourites(data);
+      const urls: Record<string, string> = {};
+      data.forEach(f => {
+        if (f.photo_url) urls[f.photo_key] = f.photo_url;
+      });
+      setFavouritesUrls(urls);
+    });
+  }, [registeredDateTimeAD]);
+
+  // Optimistic favourite toggle
+  const handleToggleFavourite = useCallback((photoKey: string) => {
+    const isFav = favouritesSetRef.current.has(photoKey);
+    const url = photoUrlsRef.current[photoKey] || favouritesUrls[photoKey] || '';
+
+    if (isFav) {
+      setFavourites(prev => prev.filter(f => f.photo_key !== photoKey));
+      removeFavourite(registeredDateTimeAD, photoKey).then(success => {
+        if (!success) {
+          toast.error("Failed to remove favourite");
+          getFavourites(registeredDateTimeAD).then(setFavourites);
+        }
+      });
+    } else {
+      const newFav: Favourite = {
+        id: crypto.randomUUID(),
+        registered_date_time_ad: registeredDateTimeAD,
+        photo_key: photoKey,
+        photo_url: url,
+        created_at: new Date().toISOString(),
+      };
+      setFavourites(prev => [...prev, newFav]);
+      if (url) setFavouritesUrls(prev => ({ ...prev, [photoKey]: url }));
+      addFavourite(registeredDateTimeAD, photoKey, url).then(success => {
+        if (!success) {
+          toast.error("Failed to favourite");
+          setFavourites(prev => prev.filter(f => f.photo_key !== photoKey));
+        }
+      });
+    }
+  }, [registeredDateTimeAD, favouritesUrls]);
+
+  const checkIsFavourite = useCallback((photoKey: string) => favouritesSetRef.current.has(photoKey), []);
 
   // Check if albums are locked (copy history exists)
   useEffect(() => {
@@ -245,7 +302,12 @@ const PortalMyPhotos = ({
       });
     });
 
-    return [...selectedTabs, ...result];
+    const favTab: TabDef = {
+      id: FAVOURITES_TAB_ID,
+      label: `★ Favourites`,
+      s3Prefix: '',
+    };
+    return [favTab, ...selectedTabs, ...result];
   }, [assignments, clientName]);
 
   // On mount, probe tabs in parallel to find first non-empty folder
@@ -258,6 +320,10 @@ const PortalMyPhotos = ({
       // Sequential probe to avoid mobile Chrome memory exhaustion
       for (const tab of tabs) {
         if (stale) return;
+        if (tab.id === FAVOURITES_TAB_ID) {
+          results.push([]); // skip — never auto-select favourites
+          continue;
+        }
         try {
           if (folderCache[tab.id]) {
             results.push(folderCache[tab.id]);
@@ -286,6 +352,11 @@ const PortalMyPhotos = ({
     if (!initialTabResolved) return;
     const tab = tabs[activeTabIndex];
     if (!tab) return;
+    if (tab.id === FAVOURITES_TAB_ID) {
+      // Favourites tab — don't load from S3; render handled separately
+      setIsLoadingPhotos(false);
+      return;
+    }
     let stale = false;
 
     // If both folder listing and URLs are cached, load instantly
@@ -330,9 +401,38 @@ const PortalMyPhotos = ({
     return () => { stale = true; };
   }, [activeTabIndex, tabs, initialTabResolved]);
 
+  const activeTab = tabs[activeTabIndex];
+  const isFavTab = activeTab?.id === FAVOURITES_TAB_ID;
+
+  // Resolve any missing favourite URLs (e.g. older saves without photo_url, or expired)
+  useEffect(() => {
+    if (!isFavTab || favourites.length === 0) return;
+    const missing = favourites
+      .map(f => f.photo_key)
+      .filter(key => !favouritesUrls[key]);
+    if (missing.length === 0) return;
+    let stale = false;
+    getE2FileUrls(missing).then(urls => {
+      if (stale) return;
+      cacheUrls(urls);
+      setFavouritesUrls(prev => ({ ...prev, ...urls }));
+    }).catch(() => {});
+    return () => { stale = true; };
+  }, [isFavTab, favourites, favouritesUrls]);
+
+  // Photos to render — favourites or regular tab
+  const displayPhotos = useMemo(() => {
+    if (isFavTab) {
+      return favourites.map(f => ({ key: f.photo_key } as E2File));
+    }
+    return photos;
+  }, [isFavTab, favourites, photos]);
+
+  const displayUrls = isFavTab ? favouritesUrls : photoUrls;
+
   const viewerImages = useMemo(
-    () => photos.map(p => ({ key: p.key, url: photoUrls[p.key] || "" })).filter(i => i.url),
-    [photos, photoUrls]
+    () => displayPhotos.map(p => ({ key: p.key, url: displayUrls[p.key] || "" })).filter(i => i.url),
+    [displayPhotos, displayUrls]
   );
 
   if (tabs.length === 0 || !initialTabResolved) {
@@ -372,7 +472,9 @@ const PortalMyPhotos = ({
                     : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100 hover:text-gray-700"
                 )}
               >
-                {tab.label}
+                {tab.id === FAVOURITES_TAB_ID
+                  ? `★ Favourites${favourites.length > 0 ? ` (${favourites.length})` : ''}`
+                  : tab.label}
               </button>
             ))}
           </div>
@@ -383,7 +485,63 @@ const PortalMyPhotos = ({
           </div>
         )}
 
-        {isLoadingPhotos ? (
+        {isFavTab ? (
+          favourites.length === 0 ? (
+            <Card className="bg-amber-50/50 border-amber-200/60">
+              <CardContent className="p-6 text-center">
+                <Star className="h-9 w-9 mx-auto mb-3 text-amber-400 fill-amber-400" />
+                <p className="text-gray-700 font-medium mb-1.5 text-sm">No favourites yet</p>
+                <p className="text-gray-500 text-xs leading-relaxed max-w-xs mx-auto">
+                  Tip: Tap the ★ on any photo to save it here. This makes album selection faster — you can shortlist your favourites first, then pick the final ones for your album.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <div className="text-sm text-gray-500 mb-2">{favourites.length} favourite{favourites.length === 1 ? '' : 's'}</div>
+              <div className="grid grid-cols-3 gap-1">
+                {displayPhotos.map((file, idx) => {
+                  const url = displayUrls[file.key];
+                  const isFav = favouritesSet.has(file.key);
+                  return (
+                    <div
+                      key={file.key}
+                      className="aspect-square rounded-sm overflow-hidden bg-gray-100 relative group"
+                    >
+                      <button
+                        onClick={() => url && setViewerIndex(idx)}
+                        className="w-full h-full"
+                      >
+                        {url ? (
+                          <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Loader2 className="h-4 w-4 animate-spin text-gray-300" />
+                          </div>
+                        )}
+                      </button>
+                      <button
+                        className="absolute top-1 right-1 p-1.5 rounded-full bg-black/60 hover:bg-black/80 transition-colors"
+                        onClick={(e) => { e.stopPropagation(); handleToggleFavourite(file.key); }}
+                        aria-label="Remove from favourites"
+                      >
+                        <Star className={cn("h-3 w-3", isFav ? "fill-amber-400 text-amber-400" : "text-white/80")} />
+                      </button>
+                      {url && (
+                        <button
+                          className="absolute bottom-1 right-1 p-1.5 rounded-full bg-black/60 text-white/80 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
+                          onClick={(e) => { e.stopPropagation(); handleDownloadHQ(file.key); }}
+                        >
+                          <Download className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )
+        ) : isLoadingPhotos ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-8 w-8 animate-spin text-[hsl(350,80%,65%)]" />
             <span className="ml-3 text-gray-400">Loading photos...</span>
@@ -452,6 +610,7 @@ const PortalMyPhotos = ({
               {photos.map((file, idx) => {
                 const url = photoUrls[file.key];
                 const fileAlbums = selectedAlbumsMap[file.key] || [];
+                const isFav = favouritesSet.has(file.key);
                 return (
                   <div
                     key={file.key}
@@ -475,6 +634,20 @@ const PortalMyPhotos = ({
                           <div key={at} className="w-2 h-2 rounded-full bg-[hsl(350,80%,65%)] shadow-[0_0_4px_hsl(350,80%,65%/0.6)]" />
                         ))}
                       </div>
+                    )}
+                    {url && (
+                      <button
+                        className={cn(
+                          "absolute top-1 right-1 p-1.5 rounded-full transition-all",
+                          isFav
+                            ? "bg-black/60 opacity-100"
+                            : "bg-black/40 opacity-0 group-hover:opacity-100 hover:bg-black/70"
+                        )}
+                        onClick={(e) => { e.stopPropagation(); handleToggleFavourite(file.key); }}
+                        aria-label={isFav ? "Remove from favourites" : "Add to favourites"}
+                      >
+                        <Star className={cn("h-3 w-3", isFav ? "fill-amber-400 text-amber-400" : "text-white/90")} />
+                      </button>
                     )}
                     {url && (
                       <button
@@ -506,6 +679,8 @@ const PortalMyPhotos = ({
           selectedAlbums={albums.length > 0 && !albumsLocked ? selectedAlbumsMap : undefined}
           onToggleAlbum={albums.length > 0 && !albumsLocked ? handleToggleAlbum : undefined}
           onDownloadHQ={handleDownloadHQ}
+          isFavourite={checkIsFavourite}
+          onToggleFavourite={handleToggleFavourite}
         />
       )}
     </>

@@ -215,6 +215,30 @@ export type Database = {
         }
         Relationships: []
       }
+      client_favourite_photos: {
+        Row: {
+          created_at: string
+          id: string
+          photo_key: string
+          photo_url: string | null
+          registered_date_time_ad: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          photo_key: string
+          photo_url?: string | null
+          registered_date_time_ad: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          photo_key?: string
+          photo_url?: string | null
+          registered_date_time_ad?: string
+        }
+        Relationships: []
+      }
       client_pcloud_emails: {
         Row: {
           client_name: string
