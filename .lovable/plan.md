@@ -1,50 +1,75 @@
 
 
-# Remove "What's New" + Revamp Album Submission Alert
+# Add Favourites Folder Inside Photos Tab
 
-## 1. Remove StartupAnnouncementPopup
-- Remove `<StartupAnnouncementPopup />` from `AdminOnlyFeatures` in `src/App.tsx`
-- Remove the import line
+A "Favourites" folder that lives **inside** the existing Photos tab (not a separate bottom-nav item). Tap a star on any photo to add it to Favourites. Helps clients shortlist photos quickly before doing the actual album selection.
 
-## 2. Database Migration
-Add `popup_view_count` to track cross-device views per submission:
-```sql
-ALTER TABLE public.album_selection_submissions
-  ADD COLUMN popup_view_count integer NOT NULL DEFAULT 0;
-```
+## What the user will see
 
-## 3. Rewrite `AlbumSubmissionAlert.tsx`
+**Inside the Photos tab — new "★ Favourites" pill at the start of the tab strip**
+- Sits before the event/photographer tabs (e.g. `★ Favourites · Wedding (Bride) · Wedding (Groom) · ...`).
+- Shows a count badge: `★ Favourites (12)`.
+- Empty by default. Only fills as the user stars photos.
 
-### Data fetch
-- Fetch **all** unhandled submissions, ordered by `created_at ascending` (oldest first)
-- On open, increment `popup_view_count` by 1 for each displayed submission
+**Small helper message under the tab strip (only on Favourites tab when empty)**
+> Tip: Tap the ★ on any photo to save it here. This makes album selection faster — you can shortlist your favourites first, then pick the final ones for your album.
 
-### Display — scrollable list of cards (oldest first)
-Each card shows:
-- Client name, bride/groom names
-- Album details (counts)
-- Sent to (prominent)
-- **"X days ago"** — calculated from `created_at` vs now
-- Per-card action buttons: "Yes, sent for design" (marks `handled: true`) and "Copy original files" (navigates to client detail)
+**Star icon on every photo (in both grid and full-screen viewer)**
+- Grid tile: small star button top-right corner. Filled gold when favourited.
+- Viewer top bar: prominent star button (next to Download). Press `F` to toggle.
+- Tap to add/remove. Optimistic — instant feedback.
 
-### Emergency mode (any single submission has `popup_view_count > 35`)
-- Red emergency banner at top
-- 10-second forced countdown timer
-- **All buttons disabled** during countdown (CSS `pointer-events-none` + `opacity-50`)
-- After 10s, buttons unlock — user must act on at least the oldest one
-- Dialog cannot be dismissed during countdown (`onOpenChange` blocked)
+**Favourites view itself**
+- Same 3-column grid layout as the regular Photos grid.
+- Each tile has the star (filled, tap to remove) and a download button.
+- Tap to open in `XitoImageViewer` — same viewer, with star + arrows working normally.
+- Cleanly empty when nothing starred (shows the helper message above).
 
-### Normal mode (all submissions have count ≤ 35)
-- Standard dismissible dialog
-- All buttons immediately active
-- User can close without acting
+## What this is NOT
+- Not a folder in pCloud or S3 — nothing is copied or duplicated.
+- Not a replacement for the existing **My Album** selection — works alongside it. Stars are a personal shortlist; album selections still go through the existing flow.
+- No bottom-nav changes.
 
-### Per-submission counting rule
-- Each album submission counts independently (its own `popup_view_count`)
-- If one submission has count 24 and another has count 1, no emergency — emergency only triggers when **any single** submission exceeds 35
+## How it works
+
+### Database (1 new table)
+`client_favourite_photos`:
+- `id` (uuid, PK)
+- `registered_date_time_ad` (text)
+- `photo_key` (text) — the S3 key
+- `photo_url` (text, nullable) — cached for fast loading inside Favourites
+- `created_at` (timestamp)
+- Unique on `(registered_date_time_ad, photo_key)`
+- RLS: `Public access for favourites` (anon ALL) — matches `client_album_selections`.
+
+### New API helper — `src/lib/favourites-api.ts`
+- `getFavourites(registeredDateTimeAD)` → list (with `photo_url`)
+- `addFavourite(registeredDateTimeAD, photoKey, photoUrl?)` → upsert
+- `removeFavourite(registeredDateTimeAD, photoKey)` → delete
+
+### Photo viewer (`XitoImageViewer.tsx`)
+- New optional props: `isFavourite?: boolean`, `onToggleFavourite?: (photoKey: string) => void`.
+- Star button in top bar (gold when active).
+- `F` keyboard shortcut.
+- Existing call sites unaffected when props omitted.
+
+### Photos tab (`PortalMyPhotos.tsx`)
+- Load favourites on mount → keep in `Set<photoKey>` for O(1) lookup.
+- Prepend `★ Favourites` pill (with count) to the existing tab strip.
+- When `★ Favourites` tab is active:
+  - If set is empty → show helper message centered.
+  - Else → render grid using cached `photo_url`s; resolve any missing via `getE2FileUrls`.
+- On every grid tile and inside `XitoImageViewer`: render star button wired to optimistic toggle (`addFavourite` / `removeFavourite`).
+- Star also works inside the regular event tabs — toggling there updates the Favourites set immediately.
 
 ## Files Changed
-1. **New migration** — `popup_view_count` column
-2. `src/components/suite/AlbumSubmissionAlert.tsx` — full rewrite
-3. `src/App.tsx` — remove StartupAnnouncementPopup
+1. **New migration** — `client_favourite_photos` table + public RLS policy
+2. **New** `src/lib/favourites-api.ts`
+3. `src/components/client-detail/XitoImageViewer.tsx` — star button + `F` shortcut
+4. `src/components/client-portal/PortalMyPhotos.tsx` — Favourites pill at start of tab strip, helper message, star overlay on tiles, Favourites grid view
+
+## Confirmations
+- No folders created anywhere outside the database — purely DB-backed.
+- No changes to bottom nav.
+- Existing My Album system untouched and works in parallel.
 
