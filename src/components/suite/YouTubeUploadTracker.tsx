@@ -1,8 +1,7 @@
 import { useYouTubeUploadContext, YouTubeUploadJob, RemoteYTSession } from "@/contexts/YouTubeUploadContext";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { X, CheckCircle, AlertCircle, Maximize2, Minimize2, Trash2, Pause, Play, Ban, Youtube } from "lucide-react";
-import { useState } from "react";
+import { X, CheckCircle, AlertCircle, Pause, Play, Ban, Youtube } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function formatBytes(bytes: number): string {
