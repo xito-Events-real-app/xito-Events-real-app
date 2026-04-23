@@ -472,7 +472,9 @@ const PortalMyPhotos = ({
                     : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100 hover:text-gray-700"
                 )}
               >
-                {tab.label}
+                {tab.id === FAVOURITES_TAB_ID
+                  ? `★ Favourites${favourites.length > 0 ? ` (${favourites.length})` : ''}`
+                  : tab.label}
               </button>
             ))}
           </div>
@@ -483,7 +485,63 @@ const PortalMyPhotos = ({
           </div>
         )}
 
-        {isLoadingPhotos ? (
+        {isFavTab ? (
+          favourites.length === 0 ? (
+            <Card className="bg-amber-50/50 border-amber-200/60">
+              <CardContent className="p-6 text-center">
+                <Star className="h-9 w-9 mx-auto mb-3 text-amber-400 fill-amber-400" />
+                <p className="text-gray-700 font-medium mb-1.5 text-sm">No favourites yet</p>
+                <p className="text-gray-500 text-xs leading-relaxed max-w-xs mx-auto">
+                  Tip: Tap the ★ on any photo to save it here. This makes album selection faster — you can shortlist your favourites first, then pick the final ones for your album.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <div className="text-sm text-gray-500 mb-2">{favourites.length} favourite{favourites.length === 1 ? '' : 's'}</div>
+              <div className="grid grid-cols-3 gap-1">
+                {displayPhotos.map((file, idx) => {
+                  const url = displayUrls[file.key];
+                  const isFav = favouritesSet.has(file.key);
+                  return (
+                    <div
+                      key={file.key}
+                      className="aspect-square rounded-sm overflow-hidden bg-gray-100 relative group"
+                    >
+                      <button
+                        onClick={() => url && setViewerIndex(idx)}
+                        className="w-full h-full"
+                      >
+                        {url ? (
+                          <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Loader2 className="h-4 w-4 animate-spin text-gray-300" />
+                          </div>
+                        )}
+                      </button>
+                      <button
+                        className="absolute top-1 right-1 p-1.5 rounded-full bg-black/60 hover:bg-black/80 transition-colors"
+                        onClick={(e) => { e.stopPropagation(); handleToggleFavourite(file.key); }}
+                        aria-label="Remove from favourites"
+                      >
+                        <Star className={cn("h-3 w-3", isFav ? "fill-amber-400 text-amber-400" : "text-white/80")} />
+                      </button>
+                      {url && (
+                        <button
+                          className="absolute bottom-1 right-1 p-1.5 rounded-full bg-black/60 text-white/80 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
+                          onClick={(e) => { e.stopPropagation(); handleDownloadHQ(file.key); }}
+                        >
+                          <Download className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )
+        ) : isLoadingPhotos ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-8 w-8 animate-spin text-[hsl(350,80%,65%)]" />
             <span className="ml-3 text-gray-400">Loading photos...</span>
