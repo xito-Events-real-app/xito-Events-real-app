@@ -302,7 +302,12 @@ const PortalMyPhotos = ({
       });
     });
 
-    return [...selectedTabs, ...result];
+    const favTab: TabDef = {
+      id: FAVOURITES_TAB_ID,
+      label: `★ Favourites`,
+      s3Prefix: '',
+    };
+    return [favTab, ...selectedTabs, ...result];
   }, [assignments, clientName]);
 
   // On mount, probe tabs in parallel to find first non-empty folder
