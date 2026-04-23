@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { mirrorVenueFromEventDetails } from "@/lib/xito-global-venues-api";
 
 export interface VenueEntry {
   rowNumber: number;
@@ -138,6 +139,15 @@ export async function addVenueEntry(
   } catch (err) {
     console.warn('[event-venue-api] Cache insert after add failed:', err);
   }
+
+  // Mirror into XITO GLOBAL master list (best-effort, never blocks)
+  void mirrorVenueFromEventDetails({
+    venueType,
+    name: venueData.name,
+    city: venueData.city,
+    area: venueData.area,
+    googleMap: venueData.googleMap,
+  });
 }
 
 // refreshClientVendorData removed — no more Sheets reads
