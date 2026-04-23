@@ -1074,6 +1074,7 @@ export function AllClientsCrewTable({ onClose, readOnly = false, onStatsReady }:
         )}
         <div className="ml-auto flex items-center gap-3">
           <div className="flex items-center gap-2 text-sm">
+            <span className="bg-white/20 px-3 py-1 rounded-full font-semibold">{new Set(filteredRows.map(r => (r.clientName || '').trim().toLowerCase()).filter(Boolean)).size} clients</span>
             <span className="bg-white/20 px-3 py-1 rounded-full font-semibold">{filteredRows.length} events</span>
             <span className="bg-emerald-500/80 px-3 py-1 rounded-full font-medium text-xs">{assignedCount}/{requiredCells} assigned</span>
             {remainingCount > 0 && (
