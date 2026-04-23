@@ -49,7 +49,8 @@ const PortalMyPhotos = ({
   clientName, assignments, onShowBottomNav,
   registeredDateTimeAD, albums, albumSelections, onAlbumSelectionsChange
 }: PortalMyPhotosProps) => {
-  const [activeTabIndex, setActiveTabIndex] = useState(0);
+  const FAVOURITES_TAB_ID = "__favourites__";
+  const [activeTabIndex, setActiveTabIndex] = useState(1); // start at 1, skip favourites
   const [initialTabResolved, setInitialTabResolved] = useState(false);
   const [photos, setPhotos] = useState<E2File[]>([]);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
