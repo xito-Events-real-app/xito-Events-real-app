@@ -610,6 +610,7 @@ const PortalMyPhotos = ({
               {photos.map((file, idx) => {
                 const url = photoUrls[file.key];
                 const fileAlbums = selectedAlbumsMap[file.key] || [];
+                const isFav = favouritesSet.has(file.key);
                 return (
                   <div
                     key={file.key}
@@ -633,6 +634,20 @@ const PortalMyPhotos = ({
                           <div key={at} className="w-2 h-2 rounded-full bg-[hsl(350,80%,65%)] shadow-[0_0_4px_hsl(350,80%,65%/0.6)]" />
                         ))}
                       </div>
+                    )}
+                    {url && (
+                      <button
+                        className={cn(
+                          "absolute top-1 right-1 p-1.5 rounded-full transition-all",
+                          isFav
+                            ? "bg-black/60 opacity-100"
+                            : "bg-black/40 opacity-0 group-hover:opacity-100 hover:bg-black/70"
+                        )}
+                        onClick={(e) => { e.stopPropagation(); handleToggleFavourite(file.key); }}
+                        aria-label={isFav ? "Remove from favourites" : "Add to favourites"}
+                      >
+                        <Star className={cn("h-3 w-3", isFav ? "fill-amber-400 text-amber-400" : "text-white/90")} />
+                      </button>
                     )}
                     {url && (
                       <button
@@ -664,6 +679,8 @@ const PortalMyPhotos = ({
           selectedAlbums={albums.length > 0 && !albumsLocked ? selectedAlbumsMap : undefined}
           onToggleAlbum={albums.length > 0 && !albumsLocked ? handleToggleAlbum : undefined}
           onDownloadHQ={handleDownloadHQ}
+          isFavourite={checkIsFavourite}
+          onToggleFavourite={handleToggleFavourite}
         />
       )}
     </>
