@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback, memo } from "react";
-import { Loader2, Image as ImageIcon, FolderOpen, Download } from "lucide-react";
+import { Loader2, Image as ImageIcon, FolderOpen, Download, Star } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { listE2Folder, getE2FileUrls, E2File } from "@/lib/idrive-e2-api";
 import { cacheUrls } from "@/lib/shared-url-cache";
@@ -7,6 +7,7 @@ import { NEPALI_MONTHS } from "@/lib/nepali-months";
 import { cn } from "@/lib/utils";
 import XitoImageViewer, { AlbumInfo } from "@/components/client-detail/XitoImageViewer";
 import { AlbumSelection, addToAlbum, removeFromAlbum } from "@/lib/album-selection-api";
+import { getFavourites, addFavourite, removeFavourite, Favourite } from "@/lib/favourites-api";
 import { toast } from "sonner";
 import { getPCloudFileLinkByPath } from "@/lib/pcloud-api";
 import { supabase } from "@/integrations/supabase/client";
