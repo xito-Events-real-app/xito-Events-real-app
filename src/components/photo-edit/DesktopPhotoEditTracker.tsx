@@ -36,11 +36,7 @@ const STAGE_CARD_COLORS: Record<string, string> = {
   QUEUE: "border-l-gray-400",
   EDIT_LAB: "border-l-blue-400",
   EDIT_ON_PROGRESS: "border-l-blue-600",
-  COLOR_QUEUE: "border-l-purple-400",
-  COLOR_LAB: "border-l-purple-600",
-  COLOR_ON_PROGRESS: "border-l-violet-600",
-  EXPORT_QUEUE: "border-l-amber-400",
-  EXPORTED: "border-l-amber-600",
+          EXPORTED: "border-l-amber-600",
   CLIENT_REVIEW: "border-l-orange-500",
   RE_EDIT_ON_PROGRESS: "border-l-red-500",
   FINALIZED: "border-l-green-500",
@@ -96,9 +92,9 @@ function getTimeAgo(isoDate: string): string | null {
 
 /* ── Live Edit Timer ── */
 const NO_TIMER_STAGES: string[] = [];
-const PROGRESS_STAGES_SET = new Set(['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS', 'COLOR_QUEUE', 'COLOR_LAB', 'EXPORT_QUEUE', 'EXPORTED', 'CLIENT_REVIEW', 'FINALIZED']);
-const COLORIST_STAGES = new Set(['COLOR_QUEUE', 'COLOR_LAB', 'COLOR_ON_PROGRESS', 'EXPORT_QUEUE', 'EXPORTED', 'CLIENT_REVIEW', 'RE_EDIT_ON_PROGRESS', 'FINALIZED']);
-const YT_STAGES = new Set(['EXPORTED', 'CLIENT_REVIEW', 'RE_EDIT_ON_PROGRESS', 'FINALIZED']);
+const PROGRESS_STAGES_SET = new Set(['EDIT_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS', 'EXPORTED', 'CLIENT_REVIEW', 'FINALIZED']);
+const COLORIST_STAGES = new Set<string>([]);
+const YT_STAGES = new Set<string>([]);
 const REVIEW_STAGES = new Set(['CLIENT_REVIEW']);
 
 function LiveEditTimer({
@@ -405,7 +401,7 @@ function PhotoEditTable({
     const trackerIds = rows.flatMap(r => r.mergedIds?.length ? r.mergedIds : [r.id]);
     if (trackerIds.length === 0) return;
     supabase
-      .from('youtube_video_comments')
+      .from('photo_edit_tracker')
       .select('tracker_row_id, author, comment, created_at')
       .in('tracker_row_id', trackerIds)
       .order('created_at', { ascending: false })
@@ -460,8 +456,8 @@ function PhotoEditTable({
               <React.Fragment key={row.id}>
               <TableRow className={cn(
                 "hover:bg-muted/30",
-                ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'].includes(currentStageKey) && row.isPlaying && "animate-editing-glow",
-                ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'].includes(currentStageKey) && !row.isPlaying && "opacity-60"
+                ['EDIT_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'].includes(currentStageKey) && row.isPlaying && "animate-editing-glow",
+                ['EDIT_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'].includes(currentStageKey) && !row.isPlaying && "opacity-60"
               )}>
               <TableCell className="text-center p-1">
                 <button
@@ -648,9 +644,9 @@ function PhotoEditTable({
               </TableCell>
               {YT_STAGES.has(currentStageKey) && (
               <TableCell className="text-center">
-                {row.youtubeLink ? (
+                {false ? (
                   <div className="flex items-center justify-center gap-1">
-                    {row.youtubeLink.split(',').map((link, i) => (
+                    {row.reference.split(',').map((link, i) => (
                       <a key={i} href={link.trim()} target="_blank" rel="noopener noreferrer" className="text-red-600 hover:text-red-500">
                         <Image className="w-4 h-4" />
                       </a>
@@ -793,10 +789,9 @@ function DashboardView({
   const [assignDialogEditor, setAssignDialogEditor] = useState<string | null>(null);
 
   // WTN Ongoing Edits: combine EDIT_ON_PROGRESS, COLOR_ON_PROGRESS, RE_EDIT_ON_PROGRESS
-  const PROGRESS_STAGES = ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'] as const;
+  const PROGRESS_STAGES = ['EDIT_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'] as const;
   const STAGE_SHORT_LABEL: Record<string, string> = {
     EDIT_ON_PROGRESS: 'Edit on Progress',
-    COLOR_ON_PROGRESS: 'Color on Progress',
     RE_EDIT_ON_PROGRESS: 'Re-Edit on Progress',
   };
 
@@ -1180,13 +1175,12 @@ function DashboardView({
 }
 
 /* ── Editor View ── */
-const EDITOR_STAGE_ORDER = ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS', 'EDIT_LAB', 'QUEUE', 'COLOR_QUEUE', 'COLOR_LAB', 'EXPORT_QUEUE', 'EXPORTED', 'CLIENT_REVIEW', 'FINALIZED'];
+const EDITOR_STAGE_ORDER = ['EDIT_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS', 'EDIT_LAB', 'QUEUE', 'EXPORTED', 'CLIENT_REVIEW', 'FINALIZED'];
 
-const NEXT_UP_PRIORITY_STAGES = ['EDIT_LAB', 'RE_EDIT_ON_PROGRESS', 'COLOR_QUEUE', 'QUEUE'];
+const NEXT_UP_PRIORITY_STAGES = ['EDIT_LAB', 'RE_EDIT_ON_PROGRESS', 'QUEUE'];
 const NEXT_UP_STAGE_COLORS: Record<string, string> = {
   'EDIT_LAB': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
   'RE_EDIT_ON_PROGRESS': 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200',
-  'COLOR_QUEUE': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
   'QUEUE': 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
 };
 
@@ -1341,7 +1335,7 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, o
   ];
 
   const editorInfo = editors.find(e => e.name === editorName);
-  const portalUrl = `https://business.xitoevents.com/editor-portal/${encodeURIComponent(editorName)}`;
+  const portalUrl = `https://business.xitoevents.com/photo-editor-portal/${encodeURIComponent(editorName)}`;
   const mentionOptions = useMemo(() => {
     const names = new Set<string>();
     editors.forEach(e => e.name && names.add(e.name));
@@ -1413,7 +1407,7 @@ function EditorView({ editorName, rowsByStatus, onPushToStatus, onUpdateField, o
               </h3>
               <div className="grid gap-2">
                 {group.rows.map(row => {
-                  const isProgressStage = ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'].includes(group.key);
+                  const isProgressStage = ['EDIT_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'].includes(group.key);
                   const isPaused = isProgressStage && !row.isPlaying;
                   const isRunning = isProgressStage && row.isPlaying;
                   const age = getEventAge(row.eventDateAD);
@@ -1670,7 +1664,7 @@ function PhotoEditSidebar({
 
 /* ── Main Component ── */
 export function DesktopPhotoEditTracker() {
-  const { rowsByStatus, allRows, isLoading, updateField, pushToStatus, splitRow, mergeRow, togglePlaying, updateDeadline, syncYouTubeLinks } = usePhotoEditTracker();
+  const { rowsByStatus, allRows, isLoading, updateField, pushToStatus, splitRow, mergeRow, togglePlaying, updateDeadline } = usePhotoEditTracker();
   const [editors, setEditors] = useState<{ name: string; isPhotoEditor: boolean; whatsapp?: string }[]>([]);
   const [activeView, setActiveView] = useState<ActiveView>('dashboard');
   const [filterClient, setFilterClient] = useState<string | null>(null);
@@ -1777,7 +1771,7 @@ export function DesktopPhotoEditTracker() {
 
   // Editors currently in active progress (green dot)
   const activeProgressEditors = useMemo(() => {
-    const progressStages = ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'];
+    const progressStages = ['EDIT_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'];
     const editors = new Set<string>();
     for (const stageKey of progressStages) {
       (rowsByStatus[stageKey] || []).forEach(r => { if (r.editor) editors.add(r.editor); });
@@ -1787,7 +1781,7 @@ export function DesktopPhotoEditTracker() {
 
   // Editors with actively playing rows
   const playingEditors = useMemo(() => {
-    const progressStages = ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'];
+    const progressStages = ['EDIT_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'];
     const playing = new Set<string>();
     for (const stageKey of progressStages) {
       (rowsByStatus[stageKey] || []).forEach(r => { if (r.editor && r.isPlaying) playing.add(r.editor); });
@@ -1879,7 +1873,7 @@ export function DesktopPhotoEditTracker() {
 
   // Compute editor stage groups for sidebar
   const editorStageGroups = useMemo(() => {
-    const progressStages = ['EDIT_ON_PROGRESS', 'COLOR_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'];
+    const progressStages = ['EDIT_ON_PROGRESS', 'RE_EDIT_ON_PROGRESS'];
     const photoEditorNames = editors.filter(e => e.isPhotoEditor && e.name).map(e => e.name);
     
     const active: string[] = [];
