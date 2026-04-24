@@ -1,192 +1,94 @@
-# Photo Edit Tracker module
+# Photo Edit Tracker — Photographer-based rows + Photo file expander
 
-A new module called **Photo Edit Tracker** that behaves like the current Video Edit Tracker, but is driven by the **photo deliverables** section instead of video deliverables.
+Two changes to make the Photo Edit Tracker behave like a true photo workflow:
 
-## What will be built
+## 1. Expandable row should show PHOTOS, not videos
 
-### 1) New Photo Edit Tracker page
+The dropdown/expander on each row currently re-uses `FileDetailsExpander`, which is hard-coded to video roles (VB/VG/EV/DRONE/FPV/IPHONE) and shows "Video Size".
 
-Replace the current `/photo-edit` coming-soon page with a full tracker.
+**New component**: `src/components/photo-edit/PhotoFileDetailsExpander.tsx` — a dedicated photo version that:
+- Filters `files_management` to photo roles only: **PB, PG, EP**
+- Shows "**Photo Size: X GB**" instead of "Video Size"
+- Lists photographers in a table with the same columns (Role, Freelancer, Side, Card, Size, Format, Copied By, 1x/2x/3x/☁, Path)
+- "ALL VIDEO FILES COPIED" → "ALL PHOTO FILES COPIED"
 
-It will keep the same overall structure as Video Edit Tracker:
+Swap `FileDetailsExpander` → `PhotoFileDetailsExpander` in:
+- `DesktopPhotoEditTracker.tsx` (line 699)
+- `PhotoPipelineView.tsx` (line 343)
+- `MobilePhotoEditTracker.tsx` (if used there)
 
-- **Dashboard** view
-- **Classic** view
-- **Pipeline** view
-- editor list in the left sidebar
-- active / paused / on queue / available editor groupings
-- deadline support
-- editor assignment
-- editor portal link
+## 2. Queue rows must be per-photographer (only for "All Photos")
 
-### 2) Photo-specific workflow stages
+Today: photo tracker creates **1 row per enabled photo deliverable** (e.g. one "All Photos" row per event).
 
-The photo tracker will use a reduced pipeline:
+New behavior: **only the "All Photos" deliverable** generates per-photographer rows. "Selected Photos" and "Insta Post" continue to be created via the existing selection button in the deliverables module — the tracker does **not** auto-generate rows for them.
 
-- Queue
-- Edit Lab
-- Edit on Progress
-- Exported
-- Client Review
-- Re-Edit on Progress
-- Finalized
+### New row generation logic (rewrite `ensurePhotoEditRows` + `syncPhotoRowsWithDeliverables`)
 
-Removed for photos:
+For each booked event past today:
+1. Read `freelancer_assignments` for that event → grab `photographer_bride`, `photographer_groom`, `extra_photographer` (each may be empty / comma-separated for multiple EPs).
+2. For each non-empty photographer, generate **one "All Photos" tracker row** with:
+   - `edit_type` = `"All Photos"`
+   - `reference` = photographer name
+   - New persisted fields (see DB migration):
+     - `photographer_name` text
+     - `photographer_role` text — one of `PB` / `PG` / `EP`
+     - `photographer_side` text — `BRIDE SIDE`, `GROOM SIDE`, or `` for EP
+3. **Skip** any other deliverable types (`selected_photos`, `insta_post`) — those rows are created by the deliverables selection workflow as they are today.
+4. Composite uniqueness key for "already exists" check becomes:
+   `registered_date_time_ad || event_name || edit_type || photographer_role || photographer_name`
 
-- Color Queue
-- Color Lab
-- Color on Progress
-- Export Queue
+### Sync behavior
+`syncPhotoRowsWithDeliverables` is rewritten so:
+- "All Photos" rows are soft-deleted when the corresponding photographer is removed from `freelancer_assignments` (e.g. PB cleared → that row goes away).
+- Non-"All Photos" rows (selected/insta) are left untouched — they remain owned by the deliverables selection workflow.
 
-### 3) Auto-create rows from photo deliverables
+## 3. New columns in the Queue table (and other stages)
 
-Rows will be generated from the **photo deliverables** section in `client_deliverables`.
+In `DesktopPhotoEditTracker.tsx` `PhotoEditTable`, add **two new columns immediately after "Event"**:
 
-Per your confirmation:
+| Photographer | Role |
+|---|---|
+| Lajja Uprety | Bride Side (PB) |
 
-- generate rows for **all enabled photo deliverables**
-- this includes the default photo deliverable behavior from Deliverables, where **All Photos** is on by default
-- queue will auto-fill from booked events, same pattern as video tracker
+- **Photographer** column: shows `row.photographerName` (falls back to `row.reference`).
+- **Role** column: colored pill:
+  - **PB** → `Bride Side` — pink/rose pill (`bg-pink-100 text-pink-800 border-pink-300`)
+  - **PG** → `Groom Side` — sky/blue pill (`bg-sky-100 text-sky-800 border-sky-300`)
+  - **EP** → `Extra` — amber pill (`bg-amber-100 text-amber-800 border-amber-300`)
 
-Planned row mapping:
+Non-"All Photos" rows (selected/insta) won't have a photographer → both cells render `—`.
 
-- `all_photos` -> `All Photos`
-- `selected_photos` -> `Selected Photos`
-- `insta_post` -> `Insta Post`
+Mirror the same data in `MobilePhotoEditTracker.tsx` cards (small badge under event name) and `PhotoPipelineView.tsx` cards.
 
-If quantity/item names exist for a photo deliverable, rows will be expanded using the same style as video tracker where practical.
+## 4. Filters
 
-### 4) Chaitra auto-finalization rule
+Add new filter dropdowns next to the existing client/edit-type/year/month/editor filters:
+- **Photographer** filter (distinct names from current rows).
+- **Side / Role** filter with three colored chips: Bride Side / Groom Side / Extra. Same colors as the column pill.
 
-Per your answer, every photo edit row whose event date is **up to the end of Chaitra 2082** will be created or moved directly into:
+Wire both into `applyFiltersAndSort`.
 
-- **Finalized**
+## 5. Database migration
 
-Later dates will follow the normal flow starting from Queue.
+```sql
+ALTER TABLE public.photo_edit_tracker
+  ADD COLUMN IF NOT EXISTS photographer_name text NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS photographer_role text NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS photographer_side text NOT NULL DEFAULT '';
 
-### 5) Dedicated photo editor portal
+CREATE INDEX IF NOT EXISTS idx_photo_edit_tracker_photographer
+  ON public.photo_edit_tracker (photographer_role, photographer_name);
+```
 
-Add a separate public portal route for photo editors, parallel to the current video editor portal.
+Existing auto-generated "All Photos" rows are soft-deleted (`UPDATE photo_edit_tracker SET deleted = true WHERE edit_type ILIKE 'All Photos'`) so the new logic regenerates them cleanly per-photographer on next load. Selected-photos / insta-post rows are preserved.
 
-This page will include the editor cards you requested inside the editor page:
+## Files touched
 
-- Current
-- Next Up
-- Last Finalized
-- Finalized
-- Re-Edits
-
-It will also support:
-
-- play/pause style work state
-- grouped rows by stage
-- live updates
-- deadline visibility
-
-## Data model
-
-Create a new table for photo edit tracking instead of mixing with video data.
-
-### New table
-
-`photo_edit_tracker`
-
-It will mirror the video tracker structure closely so the UI can be reused safely, including fields like:
-
-- client/event identity
-- event date parts
-- photo edit status
-- urgency
-- edit type
-- editor
-- company notes / client demand / reference
-- deadline
-- stage history
-- play/pause state
-- edit started time
-- deleted flag
-- synced flag
-- timestamps
-
-RLS will match the existing internal tracker pattern:
-
-- authenticated users: full access
-- optional public read/update policy only for the dedicated photo editor portal route, if needed
-
-## Files likely to be added or changed
-
-### New photo tracker logic
-
-- `src/lib/photo-edit-api.ts`
-- `src/lib/photo-edit-push-scheduler.ts` if sheet sync is kept
-- `src/hooks/usePhotoEditTracker.ts`
-- `src/pages/PhotoEditTracker.tsx`
-- `src/pages/PhotoEditorPortal.tsx`
-
-### Reused / adapted UI
-
-Either:
-
-- extract shared tracker UI from the video tracker into reusable components, or
-- clone the video tracker components into photo-specific versions and remove color-stage logic
-
-Likely touched:
-
-- `src/App.tsx`
-- `src/lib/suite-modules.ts`
-- `src/components/video-edit/DesktopVideoEditTracker.tsx` or shared replacements
-- `src/components/video-edit/MobileVideoEditTracker.tsx` or shared replacements
-- `src/components/video-edit/WtnPipelineView.tsx` or shared replacements
-
-### Database
-
-- new migration for `photo_edit_tracker`
-- type generation update will follow automatically
-
-## Technical details
-
-### Row generation source
-
-The implementation will follow the same pattern as `ensureVideoEditRows()` and `syncWithDeliverables()` in `src/lib/video-edit-api.ts`, but for photo sections:
-
-- read booked events from `event_details_cache`
-- confirm booked clients from `clients_cache`
-- read photo deliverables from `client_deliverables` where section is `photos`
-- treat `all_photos` as default-on unless explicitly disabled
-- create missing tracker rows
-- soft-delete stale queue rows when a photo deliverable is disabled
-
-### Editor source
-
-Available editors will come from `freelancers_cache.photo_editor = YES`, just like video uses `video_editor = YES`.
-
-### Portal separation
-
-The existing `/editor-portal/:editorName` is video-specific today. I will create a separate route for photo editors so both systems stay clean, for example:
-
-- `/photo-editor-portal/:editorName`
-
-### Stage ordering in editor page
-
-The photo editor page will keep your requested summary cards and a grouped task list, but will use the photo stage order only.
-
-### Sync to sheets
-
-I need to verify whether you want photo edits pushed to sheets the same way as video edits. The current video tracker already invokes the heavy Google Sheets function, which has timeout risk. I will keep the photo tracker functional even if sheet sync is deferred or disabled initially.
-
-## Expected result
-
-After implementation:
-
-- **Photo Edit Tracker** opens as a real module from `/photo-edit`
-- photo rows auto-appear from photo deliverables
-- rows for events up to **Chaitra 2082** land straight in **Finalized**
-- dashboard / classic / pipeline views match the current tracker style
-- active / paused / on queue / available editor sections remain
-- deadlines remain
-- photo editors get their own portal page
-- **Current / Next Up / Last Finalized / Finalized / Re-Edits** appear inside the photo editor page
-
-## One important implementation choice
-
-To keep this stable and fast, I will **not** connect the new photo tracker to the existing Google Sheets edge function in the first pass unless the current sheet path is clearly defined and safe. The main tracker UI, database flow, and editor portal will work first; external sync can be added after that without blocking the module.
+- New: `src/components/photo-edit/PhotoFileDetailsExpander.tsx`
+- Edited: `src/lib/photo-edit-api.ts` (rewrite ensure/sync, add fields, change composite key, restrict generation to "All Photos")
+- Edited: `src/hooks/usePhotoEditTracker.ts` (expose new fields on `PhotoEditRow`)
+- Edited: `src/components/photo-edit/DesktopPhotoEditTracker.tsx` (columns, filters, expander swap, color pills)
+- Edited: `src/components/photo-edit/MobilePhotoEditTracker.tsx` (badge under event)
+- Edited: `src/components/photo-edit/PhotoPipelineView.tsx` (badge + expander swap)
+- Migration: add 3 columns + soft-delete existing "All Photos" rows

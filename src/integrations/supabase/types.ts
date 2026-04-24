@@ -1301,6 +1301,9 @@ export type Database = {
           id: string
           is_playing: boolean
           photo_edit_status: string | null
+          photographer_name: string
+          photographer_role: string
+          photographer_side: string
           playing_since: string | null
           reference: string | null
           registered_date_bs: string | null
@@ -1328,6 +1331,9 @@ export type Database = {
           id?: string
           is_playing?: boolean
           photo_edit_status?: string | null
+          photographer_name?: string
+          photographer_role?: string
+          photographer_side?: string
           playing_since?: string | null
           reference?: string | null
           registered_date_bs?: string | null
@@ -1355,6 +1361,9 @@ export type Database = {
           id?: string
           is_playing?: boolean
           photo_edit_status?: string | null
+          photographer_name?: string
+          photographer_role?: string
+          photographer_side?: string
           playing_since?: string | null
           reference?: string | null
           registered_date_bs?: string | null
